@@ -3,20 +3,32 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node --max-old-space-size=4096 node_modules/next/dist/bin/next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --max-old-space-size=4096 node_modules/jest/bin/jest.js",
+    "test:watch": "node --max-old-space-size=4096 node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --max-old-space-size=4096 node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
+    "googleapis": "^173.0.0",
     "next": "16.2.9",
+    "openai": "^6.42.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

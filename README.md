@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Content Pipeline Studio
 
-## Getting Started
+Mobile-first AI TikTok carousel idea builder for CHRGD.
 
-First, run the development server:
+## Quick start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 on mobile or in DevTools mobile view (360px+).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Mock mode
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Works out of the box — no API keys needed. All 8 builder stages run with realistic CHRGD example data.
 
-## Learn More
+## Add live AI
 
-To learn more about Next.js, take a look at the following resources:
+Copy `.env.example` to `.env.local` and add:
+- `OPENAI_API_KEY` — enables live idea generation
+- `NEXT_PUBLIC_OPENAI_API_KEY` — same value, used client-side
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Add Google Sheets export
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Add to `.env.local`:
+- `GOOGLE_SERVICE_ACCOUNT_EMAIL`
+- `GOOGLE_PRIVATE_KEY`
+- `GOOGLE_SHEET_ID`
+- `GOOGLE_SHEET_TAB` (default: Content Pipeline)
 
-## Deploy on Vercel
+Share your Sheet with the service account email.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## User journey (8 stages)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Idea Spark — type a topic or tap a quick chip
+2. Swipe cards — swipe through AI-generated ideas
+3. Pressure test — scores across 10 dimensions
+4. Carousel builder — 5-slide structure
+5. Interaction optimiser — comments / saves / shares / etc.
+6. Visual director — style system for your n8n image pipeline
+7. Claim safety — flags risky supplement/health language
+8. TikTok preview + Export review — append to Google Sheets as queued
+
+## Stack
+
+Next.js 15 · App Router · TypeScript · Tailwind CSS v4 · OpenAI API · Google Sheets API

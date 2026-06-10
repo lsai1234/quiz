@@ -1,0 +1,338 @@
+import type {
+  ContentIdea,
+  ContentExperienceType,
+  ScoreBreakdown,
+  CarouselSlide,
+  InteractionOptimisation,
+  VisualDirection,
+  ClaimSafetyResult,
+  ExportRow,
+  AppSettings,
+} from './types'
+
+export interface ExperienceTypeConfig {
+  type: ContentExperienceType
+  label: string
+  emoji: string
+  tagline: string
+  mechanism: string
+  slideRoles: string[]
+  example: string
+}
+
+export const EXPERIENCE_TYPES: ExperienceTypeConfig[] = [
+  {
+    type: 'myth-buster',
+    label: 'Myth Buster',
+    emoji: '💥',
+    tagline: 'Let them agree first — then destroy the belief',
+    mechanism: 'State a popular belief they hold → introduce the contradiction → back it with specifics → reframe their behaviour → invite the debate',
+    slideRoles: ['The belief they hold', 'Here\'s the problem with that', 'The actual evidence', 'What to do instead', 'Change my mind 👇'],
+    example: '"Everyone thinks more protein = more muscle. Here\'s why that\'s costing you money."',
+  },
+  {
+    type: 'the-reveal',
+    label: 'The Reveal',
+    emoji: '🔍',
+    tagline: 'Tease something shocking. Make them swipe to find out.',
+    mechanism: 'Tease the shocking conclusion → raise the stakes → first breadcrumb → near reveal → the payoff',
+    slideRoles: ['Tease without revealing', 'Why this matters to them', 'First clue (builds tension)', 'Almost there', 'The reveal + what it means'],
+    example: '"I checked the labels on 12 popular UK protein brands. What I found made me switch immediately."',
+  },
+  {
+    type: 'insider-leak',
+    label: 'Insider Leak',
+    emoji: '🕵️',
+    tagline: 'Expose what brands or PTs don\'t want known',
+    mechanism: '"I shouldn\'t be saying this" energy → who benefits from you not knowing → the hidden information → how to use it → share before it\'s buried',
+    slideRoles: ['The thing they don\'t want you knowing', 'Who profits from your ignorance', 'The actual information', 'How to use this against them', 'Pass this on before it\'s buried'],
+    example: '"Supplement brands pay gym staff to recommend specific products. Here\'s the list we were given."',
+  },
+  {
+    type: 'identity-mirror',
+    label: 'Identity Mirror',
+    emoji: '🪞',
+    tagline: 'Hold up a mirror. Make them see themselves.',
+    mechanism: 'Call out a specific behaviour → reveal what it says about them → go deeper (unexpected truth) → offer the reframe → "is this you?"',
+    slideRoles: ['If you do this one thing...', 'You\'re probably also doing this', 'And here\'s what that really means', 'The reframe that changes everything', 'Is this you? Tell me below 👇'],
+    example: '"If you track your macros but skip rest days, this post is literally about you."',
+  },
+  {
+    type: 'confession',
+    label: 'Confession',
+    emoji: '🎤',
+    tagline: 'Vulnerability + hard-won insight. Deeply shareable.',
+    mechanism: 'What you thought / what you did → the expectation everyone has → the reality no one admits → what actually works → "save this, I wish someone told me"',
+    slideRoles: ['I spent [time/money] doing X', 'What everyone told me would happen', 'What actually happened', 'What I know now that I didn\'t then', 'Save this. I wish someone showed me this earlier.'],
+    example: '"I spent £2,000 on supplements in my first year of training. Here\'s what actually moved the needle."',
+  },
+  {
+    type: 'plot-twist',
+    label: 'Plot Twist',
+    emoji: '🌀',
+    tagline: 'Set up the obvious. Then flip it completely.',
+    mechanism: 'Present the obvious narrative → let them agree → "actually, wait" → the thing that changes the frame → the new way of seeing it',
+    slideRoles: ['The obvious setup (let them nod)', '"Actually... wait."', 'The thing that changes everything', 'The new framework', '"Did you see that coming? 👇"'],
+    example: '"Working out more isn\'t the problem. Working out more is literally the problem."',
+  },
+  {
+    type: 'debate-starter',
+    label: 'Debate Starter',
+    emoji: '⚡',
+    tagline: 'Take a real side. No hedging. Watch the comments ignite.',
+    mechanism: 'State a divisive position with conviction → back it with uncomfortable evidence → steelman the other side → explain why you still believe it → open the floor',
+    slideRoles: ['The take (no hedging)', 'Why the evidence supports this', 'The counterargument (be fair)', 'Why you still believe it anyway', '"Prove me wrong. I\'ll wait 👇"'],
+    example: '"Cardio is making your gains worse. I said what I said."',
+  },
+  {
+    type: 'the-challenge',
+    label: 'The Challenge',
+    emoji: '🏆',
+    tagline: 'Dare them. Make them test themselves.',
+    mechanism: '"Most people can\'t X" → set up the test → the challenge itself → the answer / result → "tag someone who needs to see this"',
+    slideRoles: ['"Most people can\'t do this..."', 'The setup — before you look at slide 3', 'The actual test', 'The answer + what it reveals', '"Tag someone who needs to try this 👇"'],
+    example: '"Most gym-goers can\'t answer this basic question about their own training. Can you?"',
+  },
+]
+
+export const MOCK_IDEAS: ContentIdea[] = [
+  {
+    id: 'mock-1',
+    title: 'The Pre-Workout Lie Nobody Talks About',
+    hook: 'Your pre-workout is probably underdosed. Here\'s how to check.',
+    target_viewer: 'Gym-goers who take pre-workout supplements',
+    pain_point: 'Wasting money on under-effective supplements',
+    core_tension: 'You trust the label — but the label is lying',
+    content_category: 'Supplement Education',
+    post_type: 'carousel',
+    interaction_goal: 'saves',
+    visual_potential: 'Side-by-side label comparison with highlighted doses',
+    claim_risk_initial: 'medium',
+    initial_score: 84,
+  },
+  {
+    id: 'mock-2',
+    title: 'Beginner Chest Day Mistake That Kills Gains',
+    hook: 'Still doing flat bench first? That\'s your problem.',
+    target_viewer: 'Beginner to intermediate gym-goers aged 18–25',
+    pain_point: 'Chest not growing despite consistent training',
+    core_tension: 'The "correct" exercise order is backward',
+    content_category: 'Training Tips',
+    post_type: 'carousel',
+    interaction_goal: 'comments',
+    visual_potential: 'Before/after training sequence visual with muscle activation overlay',
+    claim_risk_initial: 'low',
+    initial_score: 91,
+  },
+  {
+    id: 'mock-3',
+    title: 'Creatine Myths Your PT Still Believes',
+    hook: '3 creatine myths your personal trainer still believes in 2024.',
+    target_viewer: 'Science-interested gym members questioning bro-science',
+    pain_point: 'Conflicting advice making supplements feel risky',
+    core_tension: 'The guy charging £60/hr knows less than your research',
+    content_category: 'Myth Busting',
+    post_type: 'carousel',
+    interaction_goal: 'debate',
+    visual_potential: 'Bold text myth vs. reality cards with CHRGD orange/black split',
+    claim_risk_initial: 'low',
+    initial_score: 88,
+  },
+  {
+    id: 'mock-4',
+    title: 'Tag a Mate Who Still Skips Leg Day',
+    hook: 'Leg day skippers have a type. Tag yours.',
+    target_viewer: 'Regular gym-goers with a gym crew',
+    pain_point: 'Uneven physique from imbalanced training',
+    core_tension: 'You know who you are. So does everyone else.',
+    content_category: 'Gym Culture',
+    post_type: 'carousel',
+    interaction_goal: 'tags',
+    visual_potential: 'Funny gym archetype illustrations with recognisable body types',
+    claim_risk_initial: 'low',
+    initial_score: 79,
+  },
+  {
+    id: 'mock-5',
+    title: 'The Caffeine Sweet Spot for Gym Performance',
+    hook: 'Most gym-goers are taking caffeine wrong. Here\'s the science.',
+    target_viewer: 'Performance-focused gym members aged 20–30',
+    pain_point: 'Inconsistent energy and crashes mid-session',
+    core_tension: 'More caffeine isn\'t better — optimal dose beats max dose',
+    content_category: 'Supplement Education',
+    post_type: 'carousel',
+    interaction_goal: 'saves',
+    visual_potential: 'Clean graph showing performance curve with dose markers',
+    claim_risk_initial: 'medium',
+    initial_score: 86,
+  },
+]
+
+export const MOCK_PRESSURE_TEST: ScoreBreakdown = {
+  overall: 84,
+  hook_strength: 88,
+  relatability: 82,
+  curiosity_gap: 91,
+  comment_potential: 75,
+  share_potential: 79,
+  save_potential: 92,
+  visual_potential: 85,
+  brand_fit: 90,
+  claim_safety: 72,
+  pipeline_readiness: 88,
+  strengths: [
+    'Strong curiosity gap — viewer needs to swipe to resolve the tension',
+    'High save potential as actionable supplement advice',
+    'Brand-native topic for CHRGD science-smart positioning',
+  ],
+  weaknesses: [
+    'Claim safety needs attention — dosage language may trigger platform flags',
+    'Comment trigger on slide 5 needs to be more specific',
+  ],
+  improvements: [
+    'Replace "probably underdosed" with specific serving size language',
+    'Add a relatable hook variation that starts with the viewer\'s frustration',
+    'Include a stronger comment CTA that invites confession-style replies',
+  ],
+}
+
+export const MOCK_SLIDES: CarouselSlide[] = [
+  {
+    slide_number: 1,
+    role: 'The belief they hold',
+    text: 'Everyone in the gym believes:\n\n"More protein = more muscle"\n\nYou\'ve probably been eating 200g+ to prove it.\n\nSwipe. We need to talk.',
+    visual_note: 'Black background. Giant white text: "MORE PROTEIN = MORE MUSCLE" with a thin orange line striking through it — but the strikethrough only appears as you look. Not obviously edited. The viewer has to notice it. Confrontational energy.',
+    text_position: 'middle',
+  },
+  {
+    slide_number: 2,
+    role: "Here's the problem with that",
+    text: "The research has an answer.\n\nAnd it's not what the protein shake brands want you to know.\n\nOnce you hit a specific threshold...\n\nadditional protein contributes almost nothing.\n\nFor most people training 4x a week, that number is lower than you think.",
+    visual_note: 'A graph with a curve that plateaus sharply — rendered in CHRGD orange on black. The plateau is highlighted. No labels yet — save that for slide 3. The mystery is the point.',
+    text_position: 'top',
+  },
+  {
+    slide_number: 3,
+    role: 'The actual evidence',
+    text: 'A 2022 meta-analysis across 49 studies.\n\nThe ceiling: ~1.6g protein per kg of bodyweight.\n\nFor an 80kg person?\n\nThat\'s 128g.\n\nNot 200g. Not 250g. 128g.\n\nEverything above that is expensive pee.',
+    visual_note: 'The same graph as slide 2, now with the x-axis labelled. "128g" circled in orange for an 80kg person. Small footnote-style text: "Source: Morton et al., 2022 meta-analysis, 49 studies." Feels like a screenshot from a research paper — but styled CHRGD.',
+    text_position: 'bottom',
+  },
+  {
+    slide_number: 4,
+    role: 'What to do instead',
+    text: "Where that extra budget actually moves the needle:\n\n→ Creatine monohydrate (3–5g/day, the only supplement with this evidence base)\n→ Sleep (muscle is literally built here, not the gym)\n→ Progressive overload (the real driver, full stop)\n\nProtein is the floor, not the ceiling.",
+    visual_note: 'Clean saveable card. Black background. Three rows: Creatine / Sleep / Progressive overload — each with an orange arrow. The word "floor" underlined at the bottom. This should look like something worth screenshotting.',
+    text_position: 'middle',
+  },
+  {
+    slide_number: 5,
+    role: 'Change my mind 👇',
+    text: "Drop your bodyweight and daily protein intake below.\n\nI'll tell you if you're in range or genuinely over-spending.\n\nSave this first — it's the most useful thing you'll read this week.\n\n(And yes, our pre-workout has the right doses. Check the label.)",
+    visual_note: 'CHRGD product shot — clinical, not hype. Clean label visible. Text overlay: "Check. The. Label." The last line is a soft product mention — not a hard sell, just a logical landing. Arrow pointing to the comment section.',
+    text_position: 'bottom',
+  },
+]
+
+export const MOCK_OPTIMISATION: InteractionOptimisation = {
+  goal: 'saves',
+  slide_1_hook: "Everyone thinks more protein = more muscle.\n\nThe research disagrees. Save this before you spend another £40.",
+  slide_5_cta: "Drop your bodyweight + daily protein below.\nI'll tell you if you're over-spending.\n\nSave this — share it with someone still eating 250g/day 👇",
+  caption_angle: "The protein myth that's costing gym-goers £30–50/month — and the actual number backed by 49 studies.",
+  comment_trigger: 'Drop your bodyweight and daily protein target below. I\'ll tell you if you\'re in range or throwing money away.',
+  hashtags_hint: '#proteinmyth #gymscience #supplementtruth #chrgd #gymtips #musclegain #proteintips #fitnessfacts',
+}
+
+export const MOCK_VISUAL_DIRECTION: VisualDirection = {
+  visual_style_hint: 'Dark studio environment. CHRGD black background with orange/yellow accent lighting hitting the product. High-contrast, editorial feel — not generic gym stock. First image should show a supplement label close-up with a "WARNING" style orange highlight box over the dosage section. Unexpected detail: magnifying glass held over label revealing suspiciously small numbers.',
+  ai_visual_priority: 'high',
+  safe_zone_priority: 'high',
+  preferred_text_position: 'bottom',
+  text_density: 'low',
+  layout_risk: 'low',
+  platform_ui_risk: 'medium',
+  double_take_detail: 'A magnifying glass hovering over a supplement label revealing that the "200mg caffeine" is actually printed in tiny font as part of a 201mg blend — the viewer does a double-take when they read the fine print.',
+}
+
+export const MOCK_CLAIM_SAFETY: ClaimSafetyResult = {
+  claim_risk: 'medium',
+  claim_safety_notes: 'Two phrases require attention before export. The core concept is safe — educating on label reading is informational, not a medical claim. Avoid implying specific performance outcomes from specific doses.',
+  risky_phrases: [
+    {
+      phrase: 'clinically studied amounts',
+      issue: 'Implies clinical efficacy without citing a specific study — could be seen as a health claim',
+      safer_rewrite: 'doses used in published research',
+    },
+    {
+      phrase: "your sessions still feel flat",
+      issue: 'Could imply supplement deficiency causes performance issues — avoid absolute causation language',
+      safer_rewrite: 'your sessions might not be hitting their potential',
+    },
+  ],
+  overridden: false,
+}
+
+export const MOCK_EXPORT_ROW: ExportRow = {
+  idea_id: 'G-042',
+  status: 'priority_queued',
+  priority: 'high',
+  title: 'The Protein Myth Costing You £30/Month',
+  content_category: 'Myth Busting',
+  target_viewer: 'Gym-goers eating 200g+ protein daily, intermediate lifters aged 18–30',
+  pain_point: 'Spending £30–50/month on excess protein that their body cannot use',
+  core_tension: "They believe more protein is always better — but the research says there's a ceiling and they've long passed it",
+  experience_type: 'myth-buster',
+  post_type: 'carousel',
+  carousel_story_arc: 'State the belief (they nod) → Introduce the contradiction → Back with specific data (49 studies, 1.6g/kg ceiling) → What actually moves the needle instead → Invite the debate',
+  slide_count: 5,
+  slide_1_role: 'The belief they hold',
+  slide_1_hook: "Everyone thinks more protein = more muscle. The research disagrees. Save this before you spend another £40.",
+  slide_2_role: "Here's the problem with that",
+  slide_2_problem: "Once you hit a specific threshold, additional protein contributes almost nothing. For most people training 4x/week, that number is lower than you think.",
+  slide_3_role: 'The actual evidence',
+  slide_3_mechanism: '49-study meta-analysis: ceiling is ~1.6g/kg bodyweight. For 80kg person = 128g. Everything above = expensive pee.',
+  slide_4_role: 'What to do instead',
+  slide_4_takeaway: 'Creatine monohydrate (3–5g/day), sleep quality, progressive overload. Protein is the floor, not the ceiling.',
+  slide_5_role: 'Change my mind 👇',
+  slide_5_cta: "Drop your bodyweight + daily protein below. I'll tell you if you're over-spending. Save this — share with someone still eating 250g/day.",
+  visual_style_hint: 'Black background. Striking graph showing protein plateau curve in CHRGD orange. "128g" circled. Research citation in small text. Clean saveable card for slide 4.',
+  ai_visual_priority: 'high',
+  safe_zone_priority: 'high',
+  preferred_text_position: 'bottom',
+  text_density: 'low',
+  layout_risk: 'low',
+  platform_ui_risk: 'medium',
+  claim_risk: 'medium',
+  claim_safety_notes: 'Research citation added. "Expensive pee" is colloquial, not a health claim. Ceiling framing is informational.',
+  caption: "The protein myth costing gym-goers £30–50/month — and the actual number backed by 49 studies.\n\nDrop your bodyweight + daily protein below. I'll tell you if you're in range or throwing money away.\n\n#proteinmyth #gymscience #supplementtruth #chrgd #gymtips #musclegain #proteintips #fitnessfacts",
+  caption_angle: "The protein myth that's costing gym-goers £30–50/month — and the ceiling backed by 49 studies.",
+  comment_trigger: 'Drop your bodyweight and daily protein target below. In range or over-spending?',
+  hashtags_hint: '#proteinmyth #gymscience #supplementtruth #chrgd #gymtips #musclegain #proteintips #fitnessfacts',
+  generated_at: new Date().toISOString(),
+  learning_tag: 'myth-busting',
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  brandVoice: 'Sharp, gym-native, slightly witty, science-smart, premium, visual-first. Not corporate, not overly salesy, never making medical claims.',
+  targetAudience: '18–30 year old gym-goers in the UK. Intermediate lifters. Value science over bro-science. Want to look and perform better.',
+  bannedPhrases: ['guaranteed results', 'cure', 'treat', 'diagnose', 'scientifically proven to'],
+  defaultContentCategories: ['Supplement Education', 'Training Tips', 'Myth Busting', 'Gym Culture', 'Nutrition'],
+  defaultInteractionGoal: 'saves',
+  visualStyleGuidance: 'Dark, premium, bold. CHRGD orange/yellow on black. No generic gym stock. Unexpected visual detail that creates a double-take.',
+  claimSafetyRules: 'No medical claims. No guaranteed outcomes. No disease references. No universal-effect language ("will always", "everyone who"). Supplement claims must reference general efficacy, not specific cures.',
+  minimumIdeaScore: 70,
+  googleSheetId: '',
+  sheetTabName: 'Content Pipeline',
+  openAIModel: 'gpt-4o',
+}
+
+export const PROMPT_CHIPS = [
+  { label: 'Gym myth', emoji: '💪' },
+  { label: 'Beginner mistake', emoji: '🔰' },
+  { label: 'Hot take', emoji: '🔥' },
+  { label: 'Funny relatable', emoji: '😂' },
+  { label: 'Supplement confusion', emoji: '❓' },
+  { label: 'Tag a mate', emoji: '👥' },
+  { label: 'Saveable tip', emoji: '🔖' },
+  { label: 'Debate bait', emoji: '⚡' },
+]
