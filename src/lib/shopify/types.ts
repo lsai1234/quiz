@@ -1,0 +1,49 @@
+export interface ShopifyMoneyV2 {
+  amount: string
+  currencyCode: string
+}
+
+export interface ShopifyImage {
+  url: string
+  altText: string | null
+  width: number
+  height: number
+}
+
+export interface ShopifyVariant {
+  id: string
+  title: string
+  priceV2: ShopifyMoneyV2
+  compareAtPriceV2: ShopifyMoneyV2 | null
+  image: ShopifyImage | null
+  availableForSale: boolean
+  product: { title: string; handle: string; images: { edges: { node: ShopifyImage }[] } }
+}
+
+export interface ShopifyProduct {
+  id: string
+  title: string
+  handle: string
+  description: string
+  images: { edges: { node: ShopifyImage }[] }
+  variants: { edges: { node: ShopifyVariant }[] }
+}
+
+export interface CartLineItem {
+  id: string
+  variantId: string
+  quantity: number
+  variant: ShopifyVariant
+  // personalisation reason added by recommendation engine
+  reason?: string
+}
+
+export interface ShopifyCart {
+  id: string
+  lines: CartLineItem[]
+  estimatedCost: {
+    totalAmount: ShopifyMoneyV2
+    subtotalAmount: ShopifyMoneyV2
+  }
+  checkoutUrl: string
+}
