@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="450" viewBox="0 0 300 450">
+  <!-- Bottle body -->
+  <rect x="60" y="90" width="180" height="330" rx="36" fill="#1a1a2e"/>
+  <rect x="60" y="90" width="180" height="330" rx="36" fill="none" stroke="#00D4FF" stroke-width="2" opacity="0.6"/>
+  <!-- Shoulder taper -->
+  <path d="M100 90 Q60 90 60 120 L60 90Z" fill="#1a1a2e"/>
+  <path d="M200 90 Q240 90 240 120 L240 90Z" fill="#1a1a2e"/>
+  <!-- Neck -->
+  <rect x="112" y="42" width="76" height="52" rx="10" fill="#1a1a2e"/>
+  <rect x="112" y="42" width="76" height="52" rx="10" fill="none" stroke="#00D4FF" stroke-width="1.5" opacity="0.5"/>
+  <!-- Label band -->
+  <rect x="70" y="160" width="160" height="180" rx="8" fill="#00D4FF" opacity="0.12"/>
+  <rect x="70" y="160" width="160" height="180" rx="8" fill="none" stroke="#00D4FF" stroke-width="1" opacity="0.3"/>
+  <!-- Brand mark: lightning bolt -->
+  <path d="M162 190L138 240H155L140 290L172 232H155L162 190Z" fill="#00D4FF" opacity="0.9"/>
+  <!-- Horizontal lines -->
+  <rect x="82" y="355" width="136" height="2" rx="1" fill="#00D4FF" opacity="0.2"/>
+  <rect x="82" y="365" width="100" height="2" rx="1" fill="#00D4FF" opacity="0.15"/>
+  <!-- Highlight -->
+  <rect x="68" y="110" width="12" height="280" rx="6" fill="white" opacity="0.04"/>
+</svg>
