@@ -394,12 +394,15 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         gsap.ticker.add(tick)
 
         const onTouchStart = (e: TouchEvent) => {
+          // Let taps on buttons/links pass through so the CTA still works
+          if ((e.target as Element).closest('button, a')) return
           e.preventDefault()
-          velocity = 0  // new touch cancels existing coast
+          velocity = 0
           samples = [{ y: e.touches[0].clientY, t: performance.now() }]
         }
 
         const onTouchMove = (e: TouchEvent) => {
+          if (!samples.length) return  // touchstart was not intercepted (interactive target)
           e.preventDefault()
           const y = e.touches[0].clientY
           const t = performance.now()
