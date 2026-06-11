@@ -382,7 +382,8 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         start:   'top top',
         end:     `+=${L.mobile ? '300%' : '400%'}`,
         pin:     true,
-        scrub:   1,
+        scrub:       L.mobile ? 0.5 : 1,
+        fastScrollEnd: L.mobile,
         animation: tl,
         anticipatePin: 1,
       })

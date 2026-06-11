@@ -56,64 +56,64 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
 // ─── Step data ────────────────────────────────────────────────────────────────
 
 const STEP_META = [
-  { section: 'YOUR GOALS',   q: 'What are you training for?',           hint: 'Select everything that applies.' },
-  { section: 'TRAINING',     q: 'How often do you train?',              hint: 'Pick your typical week.' },
-  { section: 'TRAINING',     q: 'What type of training?',               hint: 'Choose what fits best.' },
-  { section: 'LIFESTYLE',    q: 'Any lifestyle factors?',               hint: 'Helps fine-tune your selections.' },
-  { section: 'NUTRITION',    q: 'How clean is your diet?',              hint: 'Honest answer = better results.' },
-  { section: 'SUPPLEMENTS',  q: "What are you already taking?",         hint: "We won't double up." },
-  { section: 'CAFFEINE',     q: "What's your caffeine tolerance?",      hint: 'Affects pre-workout choice.' },
-  { section: 'BUDGET',       q: "Monthly budget?",                      hint: "We'll build within it." },
-  { section: 'YOUR ROUTINE', q: 'How complete should your routine be?', hint: 'Sets how many products we recommend.' },
+  { section: 'YOUR GOAL',     q: "What's the main goal?",           hint: "Pick everything that applies — we'll prioritise by what you choose most." },
+  { section: 'TRAINING',      q: 'How often do you train?',         hint: 'Your frequency shapes the whole stack.' },
+  { section: 'TRAINING',      q: "What's your training style?",     hint: 'Choose what fits closest.' },
+  { section: 'LIFESTYLE',     q: 'Tell us about yourself',          hint: 'Select anything that applies — helps us fine-tune.' },
+  { section: 'NUTRITION',     q: "How's the diet?",                 hint: 'Honest answer = better results.' },
+  { section: 'WHAT YOU HAVE', q: 'Already using any of these?',     hint: "We won't recommend what you've already got." },
+  { section: 'ENERGY',        q: 'How do you handle caffeine?',     hint: 'Shapes your pre-workout recommendation.' },
+  { section: 'BUDGET',        q: 'Monthly supplement budget?',      hint: "We'll build the best stack within your range." },
+  { section: 'YOUR STACK',    q: 'How do you want to build?',       hint: "Last one. Let's lock in your stack." },
 ]
 
 const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
-  { id: 'muscle',      label: 'Build muscle',   icon: '💪' },
-  { id: 'energy',      label: 'Boost energy',   icon: '⚡' },
-  { id: 'performance', label: 'Performance',    icon: '🏆' },
-  { id: 'hydration',   label: 'Hydration',      icon: '💧' },
-  { id: 'recovery',    label: 'Recovery',       icon: '🔄' },
-  { id: 'health',      label: 'General health', icon: '🌿' },
-  { id: 'cutting',     label: 'Lose body fat',  icon: '🔥' },
-  { id: 'bulking',     label: 'Gain mass',      icon: '📈' },
+  { id: 'muscle',      label: 'Build muscle',     icon: '💪' },
+  { id: 'cutting',     label: 'Get lean',         icon: '🔥' },
+  { id: 'energy',      label: 'More energy',      icon: '⚡' },
+  { id: 'performance', label: 'Peak performance', icon: '🏆' },
+  { id: 'recovery',    label: 'Recover faster',   icon: '😴' },
+  { id: 'health',      label: 'Feel healthier',   icon: '🌿' },
+  { id: 'bulking',     label: 'Gain mass',        icon: '📈' },
+  { id: 'hydration',   label: 'Stay hydrated',    icon: '💧' },
 ]
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
-  { id: '1-2x',  label: '1–2× per week', sub: 'Occasional' },
-  { id: '3-4x',  label: '3–4× per week', sub: 'Regular training' },
-  { id: '5-6x',  label: '5–6× per week', sub: 'Serious athlete' },
-  { id: 'daily', label: 'Every day',     sub: 'Elite / professional' },
+  { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
+  { id: '3-4x',  label: '3–4× a week',  sub: 'Regular training' },
+  { id: '5-6x',  label: '5–6× a week',  sub: 'Serious athlete' },
+  { id: 'daily', label: 'Every day',    sub: 'Elite / professional level' },
 ]
 const TYPE_DATA: Array<{ id: TrainingType; label: string; sub: string }> = [
-  { id: 'strength', label: 'Strength / Weights', sub: 'Lifting, powerlifting' },
-  { id: 'cardio',   label: 'Cardio / Endurance', sub: 'Running, cycling' },
+  { id: 'strength', label: 'Weights / Lifting',  sub: 'Gym, powerlifting, bodybuilding' },
+  { id: 'cardio',   label: 'Cardio / Endurance', sub: 'Running, cycling, swimming' },
   { id: 'hiit',     label: 'HIIT / CrossFit',    sub: 'High-intensity intervals' },
-  { id: 'sport',    label: 'Team / Field Sport',  sub: 'Football, rugby, basketball' },
-  { id: 'mixed',    label: 'Mixed / General',     sub: 'Combination of styles' },
+  { id: 'sport',    label: 'Sport',              sub: 'Football, rugby, basketball…' },
+  { id: 'mixed',    label: 'Mixed training',     sub: 'Bit of everything' },
 ]
 const LIFESTYLE_DATA = [
-  { id: 'vegan',       label: 'Plant-based diet',    icon: '🌱' },
-  { id: 'poor-sleep',  label: 'Poor sleep / stress', icon: '😴' },
-  { id: 'desk-job',    label: 'Desk-based job',      icon: '💻' },
-  { id: 'high-stress', label: 'High stress',         icon: '🧠' },
+  { id: 'vegan',       label: 'Plant-based',            icon: '🌱' },
+  { id: 'poor-sleep',  label: 'Struggling with sleep',  icon: '😴' },
+  { id: 'desk-job',    label: 'Desk job / sedentary',   icon: '💻' },
+  { id: 'high-stress', label: 'High stress levels',     icon: '🧠' },
 ]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
-  { id: 'clean',        label: 'Very clean',      sub: 'High protein, tracked macros' },
-  { id: 'mostly-good',  label: 'Mostly on point', sub: 'Healthy most of the time' },
-  { id: 'inconsistent', label: 'Inconsistent',    sub: 'Good and bad days' },
-  { id: 'poor',         label: 'Needs work',      sub: 'Convenience-led' },
+  { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
+  { id: 'mostly-good',  label: 'Pretty good',            sub: 'Healthy most of the time' },
+  { id: 'inconsistent', label: 'Hit and miss',           sub: 'Good days and bad days' },
+  { id: 'poor',         label: 'Room for improvement',   sub: 'Convenience-first right now' },
 ]
 const SUPPS_DATA = [
-  { id: 'protein',     label: 'Protein',     icon: '🥤' },
-  { id: 'creatine',    label: 'Creatine',    icon: '⚗️' },
-  { id: 'pre-workout', label: 'Pre-workout', icon: '🚀' },
-  { id: 'vitamins',    label: 'Vitamins',    icon: '💊' },
-  { id: 'none',        label: 'None yet',    icon: '✕' },
+  { id: 'protein',     label: 'Protein',        icon: '🥤' },
+  { id: 'creatine',    label: 'Creatine',       icon: '⚗️' },
+  { id: 'pre-workout', label: 'Pre-workout',    icon: '⚡' },
+  { id: 'vitamins',    label: 'Vitamins',       icon: '💊' },
+  { id: 'none',        label: 'Starting fresh', icon: '✦' },
 ]
 const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = [
-  { id: 'none',   label: 'None',             sub: 'Avoid stimulants completely' },
-  { id: 'low',    label: 'Low / occasional', sub: 'One coffee occasionally' },
-  { id: 'medium', label: 'Moderate',         sub: '1–2 coffees daily' },
-  { id: 'high',   label: 'High tolerance',   sub: '3+ coffees, used to stims' },
+  { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
+  { id: 'low',    label: 'Occasionally',    sub: 'One coffee here and there' },
+  { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
+  { id: 'high',   label: 'High tolerance',  sub: '3+ coffees, used to pre-workout' },
 ]
 const BUDGET_DATA: Array<{ id: Budget; label: string; sub: string }> = [
   { id: 'under-50', label: 'Under £50/mo', sub: '2–3 core essentials' },
@@ -122,12 +122,39 @@ const BUDGET_DATA: Array<{ id: Budget; label: string; sub: string }> = [
   { id: '150-plus', label: '£150+/mo',     sub: '7+ products, complete coverage' },
 ]
 const PREF_DATA: Array<{ id: StackPreference; label: string; sub: string }> = [
-  { id: 'simple',   label: 'Just the essentials', sub: '2–3 products — the ones that move the needle most' },
-  { id: 'balanced', label: 'A solid routine',      sub: '4–5 products for well-rounded coverage' },
-  { id: 'complete', label: 'All-in',               sub: '6+ products — every angle covered' },
+  { id: 'simple',   label: 'Quick wins',    sub: '2–3 products — the ones that actually move the needle' },
+  { id: 'balanced', label: 'Proper stack',  sub: '4–5 products — solid, well-rounded coverage' },
+  { id: 'complete', label: 'Full throttle', sub: '6+ products — every angle covered' },
 ]
 
 const TOTAL = STEP_META.length
+
+// ─── Stack progress — 5 capsule pills that fill as you answer questions ──────
+
+function StackProgress({ step, total }: { step: number; total: number }) {
+  // Maps 9 steps onto 5 capsules: each lights up every ~2 steps
+  const filled = Math.round(((step + 1) / total) * 5)
+  return (
+    <div className="flex items-center gap-1.5" aria-label={`${filled} of 5 stack ingredients chosen`}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const active     = i < filled
+        const justFilled = i === filled - 1
+        return (
+          <div
+            key={i}
+            className="h-2 rounded-full transition-all duration-500"
+            style={{
+              width:     active ? 26 : 18,
+              background: active ? '#00D4FF' : 'rgba(255,255,255,0.15)',
+              boxShadow: active ? '0 0 8px rgba(0,212,255,0.65)' : undefined,
+              animation: justFilled ? 'scale-in 0.4s cubic-bezier(0.34,1.56,0.64,1) both' : undefined,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
 
 // ─── Single option component used by every question ───────────────────────────
 // Fully controlled — no internal state. selected comes only from props.
@@ -325,40 +352,47 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
       {/* Generating overlay */}
       {isGenerating && (
-        <div className="fixed inset-0 z-50 bg-[#0A0A0A] flex flex-col items-center justify-center">
-          <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-[#00D4FF] animate-spin mb-5" />
-          <p className="text-sm text-white/50" style={{ fontFamily: 'var(--font-display)' }}>
-            Analysing your profile…
-          </p>
+        <div className="fixed inset-0 z-50 bg-[#0A0A0A] flex flex-col items-center justify-center gap-6">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-2 border-[#00D4FF]/20 border-t-[#00D4FF] animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <CHRGDIcon size={24} />
+            </div>
+          </div>
+          <div className="text-center">
+            <p className="text-xl font-black text-white mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
+              Building your stack…
+            </p>
+            <p className="text-sm text-white/35">Personalising every pick</p>
+          </div>
+          <div className="flex gap-1.5 mt-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="h-2 w-6 rounded-full bg-[#00D4FF] animate-pulse"
+                style={{ boxShadow: '0 0 8px rgba(0,212,255,0.6)', animationDelay: `${i * 0.18}s` }}
+              />
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 z-40 h-0.5 bg-white/8">
-        <div
-          className="h-full bg-[#00D4FF] transition-all duration-500 ease-out"
-          style={{ width: `${((step + 1) / TOTAL) * 100}%` }}
-        />
-      </div>
-
-      {/* Top bar */}
-      <div className="fixed top-3 left-0 right-0 z-40 flex items-center justify-between px-5">
+      {/* Top bar — logo left, capsule stack-progress right */}
+      <div className="fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between px-5">
         <div className="flex items-center gap-2">
           <CHRGDIcon size={18} />
           <span className="text-white/50 text-xs font-bold tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>
             getCHRGD
           </span>
         </div>
-        <span className="text-[11px] font-bold tracking-widest text-white/25" style={{ fontFamily: 'var(--font-display)' }}>
-          {step + 1} / {TOTAL}
-        </span>
+        <StackProgress step={step} total={TOTAL} />
       </div>
 
       {/* Back button */}
       {step > 0 && (
         <button
           onClick={goBack}
-          className="fixed top-[52px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50"
+          className="fixed top-[58px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50"
           aria-label="Back"
         >
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
@@ -368,7 +402,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       )}
 
       {/* Step content — key forces re-mount on step change, CSS slide handles transition */}
-      <div className="min-h-screen flex flex-col justify-center px-5 pt-24 pb-32 max-w-lg mx-auto">
+      <div className="min-h-screen flex flex-col justify-center px-5 pt-28 pb-32 max-w-lg mx-auto">
         <div key={`${step}-${animKey}`} className={slideClass}>
 
           {/* Section + question */}
@@ -447,7 +481,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               ))}
               <AnswerOption
                 key="3-none"
-                icon="✓" label="None" multi
+                icon="✓" label="None of these" multi
                 selected={answers.lifestyle.length === 0}
                 onClick={() => setAnswer('lifestyle', [])}
               />
@@ -599,7 +633,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 ...(answers.stackPreference ? { animation: 'pulse-glow 2s ease-in-out infinite' } : {}),
               }}
             >
-              Reveal my stack identity →
+              Build my stack →
             </button>
           </div>
         </div>
