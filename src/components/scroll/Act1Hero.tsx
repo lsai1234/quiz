@@ -395,13 +395,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
 
         <div className="flex flex-col md:flex-row items-center gap-12 max-w-4xl mx-auto pt-16">
           <div className="relative shrink-0">
-            <img src={LID_SRC}    alt="" width={LID_W}    height={LID_H}    className="absolute left-1/2 -translate-x-1/2 -top-8 object-contain" />
-            <img src={BOTTLE_SRC} alt="" width={BOTTLE_W} height={BOTTLE_H} className="object-contain" style={{ maxHeight: 240 }} />
+            <img src={LID_SRC}    alt="" width={LID_W}    height={LID_H}    className="absolute left-1/2 -translate-x-1/2 -top-8 object-contain" style={{ mixBlendMode: 'screen' }} />
+            <img src={BOTTLE_SRC} alt="" width={BOTTLE_W} height={BOTTLE_H} className="object-contain" style={{ maxHeight: 240, mixBlendMode: 'screen' }} />
           </div>
           <div className="flex flex-col gap-4">
             {INGREDIENTS.map((ing, i) => (
               <div key={i} className="flex items-center gap-3">
-                <img src={ing.img} alt="" width={CAP_W * 0.75} height={CAP_H * 0.75} className="object-contain shrink-0" />
+                <img src={ing.img} alt="" width={CAP_W * 0.75} height={CAP_H * 0.75} className="object-contain shrink-0" style={{ mixBlendMode: 'screen' }} />
                 <div>
                   <p className="text-white text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{ing.name}</p>
                   <p className="text-white/40 text-xs mt-0.5">{ing.benefit}</p>
@@ -495,6 +495,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           left: 0, top: 0,
           willChange: 'transform, opacity',
           opacity: assetsReady ? 1 : 0,
+          mixBlendMode: 'screen',
         }}
       />
 
@@ -511,6 +512,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           left: 0, top: 0,
           willChange: 'transform, opacity',
           opacity: assetsReady ? 1 : 0,
+          mixBlendMode: 'screen',
         }}
       />
 
@@ -525,7 +527,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           height={CAP_H}
           draggable={false}
           className="absolute object-contain pointer-events-none z-20"
-          style={{ left: 0, top: 0, willChange: 'transform, opacity', opacity: 0 }}
+          style={{ left: 0, top: 0, willChange: 'transform, opacity', opacity: 0, mixBlendMode: 'screen' }}
         />
       ))}
 
