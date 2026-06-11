@@ -158,23 +158,14 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     // Shelf positions (where each capsule lands)
     let shelf: Pos[]
     if (mobile) {
-      // Visual bottom of the bottle in its Beat-3 position (shift + scale via transform-origin:centre)
+      // Single column — pill on the left, text to its right.
+      // Each row is CAP_H tall so text sits vertically centred beside the pill
+      // with no wrapping or row-overlap issues.
       const bottleVisualBottomB3 = (bottleY + bottleShiftY) + BOTTLE_H * (1 + bottleScaleB3) / 2
-      const shelfStartY = bottleVisualBottomB3 + 20
-      const shelfRowH   = Math.max(56, (vh * 0.88 - shelfStartY) / 3)
-      // Center the two-column grid symmetrically around the viewport midpoint
-      const colGap = 24
-      const col0 = vw / 2 - CAP_W - colGap / 2
-      const col1 = vw / 2 + colGap / 2
-      const centerX = (vw - CAP_W) / 2
-      const isOdd = INGREDIENTS.length % 2 !== 0
-      shelf = INGREDIENTS.map((_, i) => {
-        const isLoneLastItem = isOdd && i === INGREDIENTS.length - 1
-        return {
-          x: isLoneLastItem ? centerX : (i % 2 === 0 ? col0 : col1),
-          y: shelfStartY + Math.floor(i / 2) * shelfRowH,
-        }
-      })
+      const shelfStartY = bottleVisualBottomB3 + 24
+      const rowH = Math.max(52, (vh * 0.86 - shelfStartY) / INGREDIENTS.length)
+      const col  = Math.round(vw * 0.06)
+      shelf = INGREDIENTS.map((_, i) => ({ x: col, y: shelfStartY + i * rowH }))
     } else {
       const shelfX = vw * 0.58
       const shelfY = vh * 0.18
@@ -182,12 +173,11 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       shelf = INGREDIENTS.map((_, i) => ({ x: shelfX, y: shelfY + i * rowH }))
     }
 
-    // Caption positions: right of capsule (desktop) or below (mobile)
-    const captions: Pos[] = shelf.map((s) =>
-      mobile
-        ? { x: s.x, y: s.y + CAP_H + 8 }
-        : { x: s.x + CAP_W + 10, y: s.y + CAP_H / 2 - 10 },
-    )
+    // Caption positions: right of capsule, vertically centred (same formula mobile + desktop)
+    const captions: Pos[] = shelf.map((s) => ({
+      x: s.x + CAP_W + 10,
+      y: s.y + CAP_H / 2 - 10,
+    }))
 
     return { vw, vh, mobile, bottleX, bottleY, lidX, lidY, capStartX, capStartY, ringX, ringY,
              shelf, captions, bottleShiftX, bottleShiftY, bottleScaleB3, lidLift }
@@ -627,15 +617,15 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           key={i}
           ref={(el) => { captionRefs.current[i] = el }}
           className="absolute pointer-events-none z-20"
-          style={{ left: 0, top: 0, width: CAP_W, willChange: 'transform, opacity', opacity: 0 }}
+          style={{ left: 0, top: 0, willChange: 'transform, opacity', opacity: 0 }}
         >
           <p
-            className="text-white text-[11px] font-semibold leading-tight"
+            className="text-white text-[11px] font-semibold leading-none whitespace-nowrap"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {ing.name}
           </p>
-          <p className="text-white/40 text-[10px] mt-1 leading-tight">
+          <p className="text-white/40 text-[10px] mt-1 whitespace-nowrap leading-none">
             {ing.benefit}
           </p>
         </div>
