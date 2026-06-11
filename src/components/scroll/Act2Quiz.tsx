@@ -9,6 +9,71 @@ import type {
   TrainingExperience, StimPreference,
 } from '@/lib/types'
 
+// ─── Capsule flight ───────────────────────────────────────────────────────────
+// getBoundingClientRect called once in pointer event handler, never in scroll
+
+const STEP_CAPSULE_COLORS = [
+  '#00D4FF', '#80E8FF', '#00AACC',
+  '#00D4FF', '#80E8FF', '#00AACC',
+  '#00D4FF', '#80E8FF', '#00AACC',
+]
+
+function fireCapsule(fromEl: HTMLElement, color: string, onLand?: () => void) {
+  const fromRect = fromEl.getBoundingClientRect()
+  const collectorEl = document.querySelector('[data-collector-bottle]') as HTMLElement | null
+  const toRect = collectorEl?.getBoundingClientRect() ?? {
+    left: window.innerWidth - 56, top: window.innerHeight - 90, width: 48, height: 96,
+  }
+
+  const startX = fromRect.left + fromRect.width / 2 - 5
+  const startY = fromRect.top + fromRect.height / 2 - 11
+
+  const clone = document.createElement('div')
+  Object.assign(clone.style, {
+    position: 'fixed',
+    width: '10px',
+    height: '22px',
+    borderRadius: '5px',
+    background: color,
+    boxShadow: `0 0 10px ${color}99`,
+    left: `${startX}px`,
+    top: `${startY}px`,
+    pointerEvents: 'none',
+    zIndex: '9999',
+  })
+  document.body.appendChild(clone)
+
+  const endX = toRect.left + toRect.width / 2 - 5 - startX
+  const endY = toRect.top + toRect.height / 2 - 11 - startY
+
+  // Asymmetric eases create a natural arc
+  gsap.to(clone, { x: endX, duration: 0.7, ease: 'power1.inOut' })
+  gsap.to(clone, {
+    y: endY,
+    duration: 0.7,
+    ease: 'power3.in',
+    onComplete: () => {
+      clone.remove()
+      // Squash/stretch the collector bottle
+      const bottle = document.querySelector('[data-collector-bottle]') as HTMLElement | null
+      if (bottle) {
+        gsap.fromTo(bottle,
+          { scaleX: 1, scaleY: 1 },
+          {
+            keyframes: [
+              { scaleX: 1.15, scaleY: 0.85, duration: 0.09, ease: 'power2.in' },
+              { scaleX: 0.94, scaleY: 1.06, duration: 0.1, ease: 'power2.out' },
+              { scaleX: 1, scaleY: 1, duration: 0.12, ease: 'power2.inOut' },
+            ],
+            overwrite: true,
+          },
+        )
+      }
+      onLand?.()
+    },
+  })
+}
+
 // ─── getCHRGD icon ────────────────────────────────────────────────────────────
 
 function CHRGDIcon({ size = 20 }: { size?: number }) {
@@ -42,11 +107,15 @@ const PARTICLE_CFG = [
 
 function AmbientParticles() {
   const [show, setShow] = useState(false)
-  useEffect(() => setShow(true), [])
+  const [count, setCount] = useState(12)
+  useEffect(() => {
+    setCount(window.innerWidth < 768 ? 5 : 12)
+    setShow(true)
+  }, [])
   if (!show) return null
   return (
     <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-      {PARTICLE_CFG.map((p, i) => (
+      {PARTICLE_CFG.slice(0, count).map((p, i) => (
         <div
           key={i}
           className="absolute rounded-full bg-[#00D4FF]"
@@ -251,9 +320,10 @@ const PREF_DATA: Array<{ id: StackPreference; label: string; sub: string }> = [
 // No active:scale CSS — that fights GSAP transform. No CSS animation on shimmer span.
 
 function OptionBtn({
-  label, sub, icon, selected, multi, onClick,
+  label, sub, icon, selected, multi, capsuleColor, onClick,
 }: {
-  label: string; sub?: string; icon?: string; selected: boolean; multi?: boolean; onClick: () => void
+  label: string; sub?: string; icon?: string; selected: boolean; multi?: boolean
+  capsuleColor?: string; onClick: () => void
 }) {
   const btnRef = useRef<HTMLButtonElement>(null)
 
@@ -264,20 +334,18 @@ function OptionBtn({
     const btn = btnRef.current
     if (!btn) return
 
-    // GSAP press bounce — clean, no CSS pseudo-class conflict
     gsap.killTweensOf(btn, 'scale')
     gsap.fromTo(btn, { scale: 0.96 }, { scale: 1, duration: 0.32, ease: 'back.out(2.2)', overwrite: 'auto' })
 
-    // Light sweep only on selection (not deselection)
     if (justSelected) {
       const shimmer = btn.querySelector('[data-shimmer]') as HTMLElement | null
       if (shimmer) {
         gsap.killTweensOf(shimmer, 'x')
-        gsap.fromTo(
-          shimmer,
-          { x: '-115%' },
-          { x: '230%', duration: 0.48, ease: 'power2.out', overwrite: true },
-        )
+        gsap.fromTo(shimmer, { x: '-115%' }, { x: '230%', duration: 0.48, ease: 'power2.out', overwrite: true })
+      }
+      // Fire capsule for single-select only (multi-select fires on Continue)
+      if (capsuleColor) {
+        fireCapsule(btn, capsuleColor)
       }
     }
   }
@@ -288,9 +356,11 @@ function OptionBtn({
       onClick={handleClick}
       onPointerDown={createRipple}
       data-option
+      data-selected={selected ? 'true' : 'false'}
       className={`
         relative flex items-center gap-4 w-full px-5 py-4 rounded-2xl border
         overflow-hidden text-left
+        focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20 focus-visible:ring-offset-0
         ${selected
           ? multi
             ? 'bg-[#00D4FF] border-[#00D4FF] text-[#0A0A0A]'
@@ -319,7 +389,7 @@ function OptionBtn({
         )}
       </div>
 
-      {/* Check mark — only mounts when selected, so check-pop only fires once */}
+      {/* Single-select check — mounts only when selected so pop fires once */}
       {selected && !multi && (
         <div
           className="w-5 h-5 rounded-full bg-[#00D4FF] flex-shrink-0 flex items-center justify-center"
@@ -327,6 +397,17 @@ function OptionBtn({
         >
           <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
             <path d="M1 4L3.5 6.5L9 1" stroke="#0A0A0A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      )}
+      {/* Multi-select check badge — corner indicator */}
+      {selected && multi && (
+        <div
+          className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#0A0A0A]/20 flex items-center justify-center"
+          style={{ animation: 'check-pop 0.2s cubic-bezier(0.34,1.56,0.64,1) both' }}
+        >
+          <svg width="7" height="6" viewBox="0 0 8 7" fill="none">
+            <path d="M1 3.5L3 5.5L7 1" stroke="#0A0A0A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
       )}
@@ -353,12 +434,15 @@ interface Props {
 }
 
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
-  const { step, answers, nextStep, prevStep, setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel } =
-    useQuizStore()
+  const {
+    step, answers, nextStep, prevStep, setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
+    addCollectorCapsules, removeCollectorCapsulesForStep,
+  } = useQuizStore()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const sectionRefs = useRef<(HTMLDivElement | null)[]>([])
   const prevStepRef = useRef(step)
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [subQuestion, setSubQuestion] = useState<SubQuestion | null>(null)
   const [subAnswerId, setSubAnswerId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -366,14 +450,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const TOTAL = 9
 
   // ─── Step entrance: pre-set invisible BEFORE paint to eliminate flash ─────
-  // useLayoutEffect fires synchronously after DOM mutation, before the browser paints.
-  // This means the new step's content is never briefly visible at opacity:1.
   useLayoutEffect(() => {
     const el = sectionRefs.current[step]
     if (!el || reducedMotion) return
     const dir = step > prevStepRef.current ? 1 : -1
     gsap.set(el.querySelectorAll('[data-word]'), { x: dir * 26, opacity: 0, scale: 0.96 })
-    gsap.set(el.querySelectorAll('[data-anim]'), { y: 14, opacity: 0 })
+    gsap.set(el.querySelectorAll('[data-anim]'), { y: 24, opacity: 0 })
   }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Animate in after paint ───────────────────────────────────────────────
@@ -381,9 +463,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     const el = sectionRefs.current[step]
     if (!el) return
 
-    // Scroll to section instantly — GSAP handles the visual transition
     sectionRefs.current[step]?.scrollIntoView({ behavior: 'instant' as ScrollBehavior })
-
     prevStepRef.current = step
 
     if (reducedMotion) {
@@ -391,15 +471,19 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       return
     }
 
-    const words = el.querySelectorAll('[data-word]')
-    const items = el.querySelectorAll('[data-anim]')
+    const ctx = gsap.context(() => {
+      const words = el.querySelectorAll('[data-word]')
+      const items = el.querySelectorAll('[data-anim]')
 
-    if (words.length > 0) {
-      gsap.to(words, { x: 0, opacity: 1, scale: 1, stagger: 0.03, duration: 0.34, ease: 'power3.out', overwrite: true })
-    }
-    if (items.length > 0) {
-      gsap.to(items, { y: 0, opacity: 1, stagger: 0.05, duration: 0.36, ease: 'power2.out', delay: 0.07, overwrite: true })
-    }
+      if (words.length > 0) {
+        gsap.to(words, { x: 0, opacity: 1, scale: 1, stagger: 0.03, duration: 0.4, ease: 'power2.out', overwrite: true })
+      }
+      if (items.length > 0) {
+        gsap.to(items, { y: 0, opacity: 1, stagger: 0.05, duration: 0.42, ease: 'power2.out', delay: 0.07, overwrite: true })
+      }
+    }, el)
+
+    return () => ctx.revert()
   }, [step, reducedMotion])
 
   // ─── Step transitions ─────────────────────────────────────────────────────
@@ -409,22 +493,44 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (!el || reducedMotion) { onDone(); return }
     const items = [...el.querySelectorAll('[data-anim]'), ...el.querySelectorAll('[data-word]')]
     gsap.to(items, {
-      x: dir * -22, opacity: 0, scale: 0.97,
-      stagger: -0.015, duration: 0.16, ease: 'power2.in',
+      x: dir * -24, opacity: 0, scale: 0.97,
+      stagger: -0.012, duration: 0.18, ease: 'power2.in',
       overwrite: true,
       onComplete: onDone,
     })
   }
 
   function advance() {
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
     setSubQuestion(null)
     setSubAnswerId(null)
+
+    // Multi-select steps: fire one capsule per selected option, staggered 80ms
+    const MULTI_STEPS = [0, 3, 5]
+    if (MULTI_STEPS.includes(step)) {
+      const el = sectionRefs.current[step]
+      const selectedBtns = el?.querySelectorAll('[data-option][data-selected="true"]')
+      const count = selectedBtns?.length ?? 0
+      if (count > 0) {
+        selectedBtns!.forEach((btn, i) => {
+          setTimeout(() => {
+            fireCapsule(btn as HTMLElement, STEP_CAPSULE_COLORS[step])
+          }, i * 80)
+        })
+        addCollectorCapsules(step, count)
+      }
+    }
+
     if (step >= TOTAL - 1) { handleFinish(); return }
     animateOut(1, () => nextStep())
   }
 
   function goBack() {
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
     setSubQuestion(null)
+    setSubAnswerId(null)
+    // Remove capsules for the step we're going back to (user will re-answer)
+    removeCollectorCapsulesForStep(step - 1)
     animateOut(-1, () => prevStep())
   }
 
@@ -433,12 +539,16 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const handleSingle = useCallback(
     (key: string, value: string) => {
       setAnswer(key as keyof typeof answers, value as never)
+      // Record capsule for single-select step (capsule visual fires from OptionBtn via capsuleColor prop)
+      addCollectorCapsules(step, 1)
       const sub = getSubQuestion(step, value)
       if (sub) {
-        setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub) }, 180)
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+        pendingTimerRef.current = setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub) }, 180)
         return
       }
-      setTimeout(() => advance(), 320)
+      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+      pendingTimerRef.current = setTimeout(() => advance(), 320)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [step],
@@ -449,7 +559,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (subId === 'experience') setAnswer('trainingExperience', optId as TrainingExperience)
     else if (subId === 'strengthFocus' || subId === 'sportType') setAnswer('trainingFocus', optId)
     else if (subId === 'stim') setAnswer('stimPreference', optId as StimPreference)
-    setTimeout(() => advance(), 320)
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+    pendingTimerRef.current = setTimeout(() => advance(), 320)
   }
 
   async function handleFinish() {
@@ -595,6 +706,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   {FREQ_DATA.map(({ id, label, sub }) => (
                     <OptionBtn key={id} label={label} sub={sub}
                       selected={answers.trainingFrequency === id}
+                      capsuleColor={STEP_CAPSULE_COLORS[1]}
                       onClick={() => handleSingle('trainingFrequency', id)} />
                   ))}
                 </div>
@@ -606,6 +718,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   {TYPE_DATA.map(({ id, label, sub }) => (
                     <OptionBtn key={id} label={label} sub={sub}
                       selected={answers.trainingType === id}
+                      capsuleColor={STEP_CAPSULE_COLORS[2]}
                       onClick={() => handleSingle('trainingType', id)} />
                   ))}
                 </div>
@@ -633,6 +746,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   {DIET_DATA.map(({ id, label, sub }) => (
                     <OptionBtn key={id} label={label} sub={sub}
                       selected={answers.diet === id}
+                      capsuleColor={STEP_CAPSULE_COLORS[4]}
                       onClick={() => handleSingle('diet', id)} />
                   ))}
                 </div>
@@ -659,6 +773,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   {CAFFEINE_DATA.map(({ id, label, sub }) => (
                     <OptionBtn key={id} label={label} sub={sub}
                       selected={answers.caffeineLevel === id}
+                      capsuleColor={STEP_CAPSULE_COLORS[6]}
                       onClick={() => handleSingle('caffeineLevel', id)} />
                   ))}
                 </div>
@@ -670,6 +785,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   {BUDGET_DATA.map(({ id, label, sub }) => (
                     <OptionBtn key={id} label={label} sub={sub}
                       selected={answers.budget === id}
+                      capsuleColor={STEP_CAPSULE_COLORS[7]}
                       onClick={() => handleSingle('budget', id)} />
                   ))}
                 </div>
@@ -681,7 +797,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   {PREF_DATA.map(({ id, label, sub }) => (
                     <OptionBtn key={id} label={label} sub={sub}
                       selected={answers.stackPreference === id}
-                      onClick={() => setAnswer('stackPreference', id)} />
+                      capsuleColor={STEP_CAPSULE_COLORS[8]}
+                      onClick={() => {
+                        setAnswer('stackPreference', id)
+                        addCollectorCapsules(8, 1)
+                      }} />
                   ))}
                 </div>
               )}
