@@ -41,13 +41,13 @@ const INGREDIENTS = [
 ]
 
 // Rendered dimensions — derived from real PNG aspect ratios:
-//   bottle   1024 × 1536  → 2:3  → render at 240 × 360
-//   lid      1536 × 1024  → 3:2  → render at 120 × 80
-//   capsules 1983 × 793   → 2.5:1 → render at 100 × 40
+//   bottle   1024 × 1536  → 2:3   → 240 × 360
+//   lid      1536 × 1024  → 3:2   → 200 × 133  (covers full bottle shoulder)
+//   capsules 1983 × 793   → 2.5:1 → 100 × 40
 const BOTTLE_W  = 240
 const BOTTLE_H  = 360
-const LID_W     = 120
-const LID_H     = 80
+const LID_W     = 200
+const LID_H     = 133
 const CAP_W     = 100
 const CAP_H     = 40
 
@@ -127,10 +127,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     const bottleX = (vw - BOTTLE_W) / 2
     const bottleY = (vh - BOTTLE_H) / 2
 
-    // Lid: centred over bottle, bottom of lid overlaps top of bottle by ~18px
-    // so it looks physically seated. Adjust the overlap value if the seam is visible.
+    // Lid: centred over bottle. The lid PNG origin is at the bottom of the cap
+    // (per spec), so lidY bottom = bottleY + neckDepth where neckDepth is how far
+    // the bottle neck sits below the bottle's top edge (~10% of bottle height).
+    // Increase neckDepth to move the lid DOWN; decrease to raise it.
+    const neckDepth = Math.round(BOTTLE_H * 0.08)  // ≈ 29px — tweak if seam looks wrong
     const lidX = (vw - LID_W) / 2
-    const lidY = bottleY - LID_H + 18
+    const lidY = bottleY + neckDepth - LID_H
 
     // Capsule starting position: at bottle mouth (neck centre ~18% down bottle)
     const capStartX = (vw - CAP_W) / 2
@@ -247,11 +250,11 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(sweepRef.current, { opacity: 0, duration: 0.25, ease: 'none' }, 0.85)
 
       // ── Beat 2 · THE OPENING (t 1.2 → 2.8) ──────────────────────────────
-      // Lid lifts: -120px, -14° rotation, 60% opacity
+      // Lid lifts: -140px, -14° rotation, 60% opacity
       tl.to(lidRef.current, {
-        x: L.lidX - L.vw * 0.025,
-        y: L.lidY - 120,
-        rotation: -14, scale: 1.04, opacity: 0.6,
+        x: L.lidX - L.vw * 0.02,
+        y: L.lidY - 140,
+        rotation: -14, scale: 1.03, opacity: 0.6,
         duration: 1.6, ease: 'none',
       }, 1.2)
       // Bottle counter-reaction: slight dip then recover
@@ -269,7 +272,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       }, 2.8)
       // Lid follows bottle leftward (keep relative to bottle neck)
       tl.to(lidRef.current, {
-        x: L.lidX + L.bottleShiftX - L.vw * 0.025,
+        x: L.lidX + L.bottleShiftX - L.vw * 0.02,
         duration: 1.3, ease: 'none',
       }, 2.8)
 
