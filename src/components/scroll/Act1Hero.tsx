@@ -220,7 +220,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     // normalizeScroll intercepts iOS touch events and replaces the browser's
     // runaway momentum with GSAP's controlled deceleration — the animation
     // follows finger speed without flying through on a fast flick.
-    const normalizer = L.mobile ? ScrollTrigger.normalizeScroll(true) : null
+    // momentum: 0.3 caps post-lift inertia to 30% of natural iOS momentum.
+    const normalizer = L.mobile
+      ? ScrollTrigger.normalizeScroll({ momentum: 0.3, allowNestedScroll: true })
+      : null
     const ctx = gsap.context(() => {
 
       // ── Set every element to its correct starting position ──────────────
@@ -393,9 +396,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       ScrollTrigger.create({
         trigger:       section,
         start:         'top top',
-        end:           '+=400%',
+        // 600vh on mobile: a fast flick covers far less of the animation
+        // than with 400vh, without making slow deliberate scrolls feel sluggish.
+        end:           `+=${L.mobile ? '600%' : '400%'}`,
         pin:           true,
-        scrub:         L.mobile ? 0.5 : 1,
+        // scrub: 0.25 on mobile — quick enough that slow drags feel live,
+        // but still smooths out micro-jitter between scroll ticks.
+        scrub:         L.mobile ? 0.25 : 1,
         animation:     tl,
         anticipatePin: 1,
       })
