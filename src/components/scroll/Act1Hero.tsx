@@ -217,6 +217,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     if (!section) return
 
     const L = getLayout()
+    let mobileObserver: { kill: () => void } | null = null
     const ctx = gsap.context(() => {
 
       // ── Set every element to its correct starting position ──────────────
@@ -383,36 +384,56 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(headline2Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.65)
       tl.to(ctaRef.current,       { opacity: 1, y: 0, duration: 0.55, ease: 'none' }, hStart + 1.1)
 
-      // ── ScrollTrigger — pin + scrub ───────────────────────────────────────
-      // Mobile snap points: beat 2 open → each of 5 capsule landings → reassembly → CTA
-      // Derived from timeline (total 10 units): t/10 gives 0-1 progress fraction.
-      // Snap makes each swipe advance to the next intentional state rather than
-      // landing mid-animation, which eliminates the jittery "wrong direction" glitch.
-      const mobileCapsuleSnaps = INGREDIENTS.map((_, i) => {
-        const perCap = 4.0 / INGREDIENTS.length  // 0.8 each
-        const landT  = 3.0 + i * perCap + perCap * 0.75
-        return Math.round((landT / 10) * 1000) / 1000
-      })
-      ScrollTrigger.create({
-        trigger: section,
-        start:   'top top',
-        end:     `+=${L.mobile ? '400%' : '400%'}`,
-        pin:     true,
-        scrub:       L.mobile ? 0.8 : 1,
-        fastScrollEnd: L.mobile,
-        animation: tl,
-        anticipatePin: 1,
-        snap: L.mobile ? {
-          snapTo:   [0, 0.28, ...mobileCapsuleSnaps, 0.86, 1.0],
-          duration: { min: 0.25, max: 0.55 },
-          delay:    0.05,
-          ease:     'power2.inOut',
-        } : false,
-      })
+      // ── Mobile: touch-driven beat navigation ─────────────────────────────
+      // ScrollTrigger scrub ties animation to scroll position — on a fast flick,
+      // iOS momentum carries scroll far past the intended point.  Instead we pin
+      // the section via CSS and use ScrollTrigger.observe, which fires once per
+      // gesture (directional intent, not position), so one swipe = one beat.
+      if (L.mobile) {
+        gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
+
+        // Timeline time values for each snap beat (timeline total = 10 units)
+        const BEAT_TIMES = [0, 2.8, 3.6, 4.4, 5.2, 6.0, 6.8, 8.6, 10.0]
+        let beatIdx = 0
+        let busy    = false
+
+        const goTo = (nextIdx: number) => {
+          const i = Math.max(0, Math.min(BEAT_TIMES.length - 1, nextIdx))
+          if (busy || i === beatIdx) return
+          busy = true
+          beatIdx = i
+          gsap.to(tl, {
+            time: BEAT_TIMES[i], duration: 0.55, ease: 'power2.inOut',
+            overwrite: true, onComplete: () => { busy = false },
+          })
+        }
+
+        mobileObserver = ScrollTrigger.observe({
+          target:         section,
+          type:           'touch',
+          onDown:         () => goTo(beatIdx + 1),   // finger up → advance
+          onUp:           () => goTo(beatIdx - 1),   // finger down → retreat
+          preventDefault: true,
+          tolerance:      15,
+          debounce:       true,
+        })
+
+      // ── Desktop: scroll-scrubbed ──────────────────────────────────────────
+      } else {
+        ScrollTrigger.create({
+          trigger:       section,
+          start:         'top top',
+          end:           '+=400%',
+          pin:           true,
+          scrub:         1,
+          animation:     tl,
+          anticipatePin: 1,
+        })
+      }
 
     }, section)  // scope gsap.context to the section element
 
-    return () => ctx.revert()  // kills timeline + ScrollTrigger on cleanup
+    return () => { mobileObserver?.kill(); ctx.revert() }
   }, [assetsReady, reducedMotion, getLayout, resizeKey])
 
   // ── Reduced-motion: static composed layout ────────────────────────────────
@@ -618,10 +639,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         </button>
       </div>
 
-      {/* Scroll hint */}
+      {/* Scroll / swipe hint */}
       <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none z-20">
         <div className="w-px h-8 bg-white/20 animate-[scroll-hint_2s_ease-in-out_infinite]" />
-        <p className="text-[10px] tracking-widest uppercase text-white/30">Scroll to reveal</p>
+        <p className="text-[10px] tracking-widest uppercase text-white/30">
+          <span className="md:hidden">Swipe to reveal</span>
+          <span className="hidden md:inline">Scroll to reveal</span>
+        </p>
       </div>
     </section>
   )
