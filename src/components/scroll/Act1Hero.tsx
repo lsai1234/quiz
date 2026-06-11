@@ -391,7 +391,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         // to a stop, just like a page decelerating after a scroll.
         gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
 
-        const FRICTION    = 0.96    // velocity multiplier per 16.67 ms frame
+        const FRICTION    = 0.985   // velocity multiplier per 16.67 ms frame — higher = longer coast
         const MAX_VEL     = 0.00035 // progress/ms cap
         const PX_SCALE    = 0.00015 // converts px/ms swipe speed → progress/ms
         const STOP_BELOW  = 0.000001
@@ -424,9 +424,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
             const prev = samples[samples.length - 2]
             const dt = t - prev.t
             if (dt > 0) {
-              // finger up (prev.y > y) = positive = advance
-              const v = ((prev.y - y) / dt) * PX_SCALE
-              velocity = Math.max(-MAX_VEL, Math.min(MAX_VEL, v))
+              // Lerp towards target velocity so acceleration feels gradual
+              const target = ((prev.y - y) / dt) * PX_SCALE
+              const clamped = Math.max(-MAX_VEL, Math.min(MAX_VEL, target))
+              velocity = velocity * 0.75 + clamped * 0.25
             }
           }
         }
