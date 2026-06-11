@@ -250,16 +250,15 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         })
       })
 
-      // ── ONE timeline, total = 10 time units → maps to 400vh via scrub ──
+      // ── ONE timeline — G = breathing gap between major beats ────────────
       const tl = gsap.timeline({ paused: true })
+      const G = 0.7  // pause between beats (time units)
 
       // ── Beat 1 · ARRIVAL (t 0 → 1.2) ────────────────────────────────────
-      // Bottle settles: scale 1.1→1.0, drifts down 20px
       tl.to(bottleRef.current, {
         scale: 1.0, y: L.bottleY,
         duration: 1.2, ease: 'none',
       }, 0)
-      // Light sweep crosses diagonally once
       tl.fromTo(sweepRef.current,
         { x: '-110%', opacity: 0 },
         { x: '130%',  opacity: 0.5, duration: 0.8, ease: 'none' },
@@ -267,69 +266,60 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       )
       tl.to(sweepRef.current, { opacity: 0, duration: 0.25, ease: 'none' }, 0.85)
 
-      // ── Beat 2 · THE OPENING (t 1.2 → 2.8) ──────────────────────────────
-      // Lid lifts by L.lidLift px (capped on mobile to stay on-screen), -14°, 60% opacity
+      // ── Beat 2 · THE OPENING (after G gap) ───────────────────────────────
+      const b2 = 1.2 + G
       tl.to(lidRef.current, {
         x: L.lidX - L.vw * 0.02,
         y: L.lidY - L.lidLift,
         rotation: -14, scale: 1.03, opacity: 0.6,
         duration: 1.6, ease: 'none',
-      }, 1.2)
-      // Bottle counter-reaction: slight dip then recover
-      tl.to(bottleRef.current, { scale: 0.98, duration: 0.5, ease: 'none' }, 1.35)
-      tl.to(bottleRef.current, { scale: 1.0,  duration: 0.8, ease: 'none' }, 1.85)
-      // Ring pulse from bottle mouth
-      tl.to(ringRef.current, { scale: 2.6, opacity: 0.5, duration: 0.5, ease: 'none' }, 1.5)
-      tl.to(ringRef.current, { opacity: 0,                duration: 0.6, ease: 'none' }, 1.8)
+      }, b2)
+      tl.to(bottleRef.current, { scale: 0.98, duration: 0.5, ease: 'none' }, b2 + 0.15)
+      tl.to(bottleRef.current, { scale: 1.0,  duration: 0.8, ease: 'none' }, b2 + 0.65)
+      tl.to(ringRef.current, { scale: 2.6, opacity: 0.5, duration: 0.5, ease: 'none' }, b2 + 0.3)
+      tl.to(ringRef.current, { opacity: 0,                duration: 0.6, ease: 'none' }, b2 + 0.6)
 
-      // ── Beat 3 · THE INGREDIENTS (t 2.8 → 7.0) ──────────────────────────
-      // Desktop: bottle slides left + shrinks. Mobile: bottle shrinks + rises to clear capsule grid.
+      // ── Beat 3 · THE INGREDIENTS (after another G gap) ───────────────────
+      const b3 = b2 + 1.6 + G
       tl.to(bottleRef.current, {
         x: L.bottleX + L.bottleShiftX,
         y: L.bottleY + L.bottleShiftY,
         scale: L.bottleScaleB3,
         duration: 1.3, ease: 'none',
-      }, 2.8)
-      // Lid follows bottle (X only — it's floating above and Y is maintained from Beat 2)
+      }, b3)
       tl.to(lidRef.current, {
         x: L.lidX + L.bottleShiftX - L.vw * 0.02,
         duration: 1.3, ease: 'none',
-      }, 2.8)
+      }, b3)
 
-      // Capsules rise one at a time, staggered across t 3.0 → 7.0
-      const capsuleWindow = 4.0
-      const perCap        = capsuleWindow / INGREDIENTS.length  // 0.8 each
+      // Capsules rise one at a time — wider window gives breathing room between each
+      const capFirst      = b3 + 0.2
+      const capsuleWindow = 7.5
+      const perCap        = capsuleWindow / INGREDIENTS.length  // 1.5 each
 
       INGREDIENTS.forEach((_, i) => {
-        const t0  = 3.0 + i * perCap         // capsule starts rising
-        const t1  = t0 + perCap * 0.50       // arc peak
-        const t2  = t0 + perCap * 0.75       // capsule lands at shelf
-        const tCap = t0 + perCap * 0.85      // caption fades in
+        const t0   = capFirst + i * perCap
+        const t1   = t0 + perCap * 0.50
+        const tCap = t0 + perCap * 0.85
 
         const el  = capsuleRefs.current[i]
         const cap = captionRefs.current[i]
         if (!el) return
 
-        // Arc midpoint: rise up and start bending outward
         const arcX = L.capStartX + (L.shelf[i].x - L.capStartX) * 0.3
                      + (i % 2 === 0 ? -18 : 18)
         const arcY = L.capStartY - L.vh * 0.13
 
-        // Appear + rise to arc peak
         tl.to(el, {
           x: arcX, y: arcY,
           opacity: 1, scale: 0.82, rotation: 7,
           duration: perCap * 0.50, ease: 'none',
         }, t0)
-
-        // Settle to shelf position
         tl.to(el, {
           x: L.shelf[i].x, y: L.shelf[i].y,
           scale: 1, rotation: 0,
           duration: perCap * 0.35, ease: 'none',
         }, t1)
-
-        // Caption nudges into view beside its capsule
         if (cap) {
           tl.to(cap, {
             x: L.captions[i].x, opacity: 1,
@@ -338,15 +328,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         }
       })
 
-      // ── Beat 4 · REASSEMBLY (t 7.0 → 8.6) ───────────────────────────────
-      const rStart = 7.0
+      // ── Beat 4 · REASSEMBLY (after G gap past last capsule) ──────────────
+      const rStart = capFirst + capsuleWindow + G
 
-      // Captions fade out fast
       captionRefs.current.forEach((el) => {
         if (el) tl.to(el, { opacity: 0, x: `+=8`, duration: 0.3, ease: 'none' }, rStart)
       })
 
-      // Capsules fly back in reverse order with tight stagger
       const returnPer = 0.20
       ;[...INGREDIENTS].reverse().forEach((_, ri) => {
         const i  = INGREDIENTS.length - 1 - ri
@@ -359,14 +347,11 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         }, rStart + 0.28 + ri * returnPer)
       })
 
-      // Bottle returns to centre (x, y, scale all restored)
       const bReturn = rStart + 0.15
       tl.to(bottleRef.current, {
         x: L.bottleX, y: L.bottleY, scale: 1.0,
         duration: 1.05, ease: 'none',
       }, bReturn)
-
-      // Lid: follow bottle back, overshoot 4px then settle
       tl.to(lidRef.current, {
         x: L.lidX, y: L.lidY - 4,
         rotation: 0, scale: 1.0, opacity: 1,
@@ -377,8 +362,8 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         duration: 0.32, ease: 'none',
       }, bReturn + 0.95)
 
-      // ── Beat 5 · HANDOFF (t 8.6 → 10.0) ─────────────────────────────────
-      const hStart = 8.6
+      // ── Beat 5 · HANDOFF (after G gap past reassembly) ───────────────────
+      const hStart = rStart + 1.6 + G
       tl.to(bottleRef.current, { opacity: 0.8, duration: 0.45, ease: 'none' }, hStart)
       tl.to(headline1Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.15)
       tl.to(headline2Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.65)
