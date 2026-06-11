@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useCallback, useState } from 'react'
-import gsap from 'gsap'
+import { useRef, useState, useCallback } from 'react'
 import { useQuizStore } from '@/lib/store'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
@@ -9,194 +8,7 @@ import type {
   TrainingExperience, StimPreference,
 } from '@/lib/types'
 
-// ─── Capsule flight ───────────────────────────────────────────────────────────
-// getBoundingClientRect called once in pointer event handler, never in scroll
-
-const STEP_CAPSULE_COLORS = [
-  '#00D4FF', '#80E8FF', '#00AACC',
-  '#00D4FF', '#80E8FF', '#00AACC',
-  '#00D4FF', '#80E8FF', '#00AACC',
-]
-
-function fireCapsule(fromEl: HTMLElement, color: string, onLand?: () => void) {
-  const fromRect = fromEl.getBoundingClientRect()
-  const collectorEl = document.querySelector('[data-collector-bottle]') as HTMLElement | null
-  const toRect = collectorEl?.getBoundingClientRect() ?? {
-    left: window.innerWidth - 56, top: window.innerHeight - 90, width: 48, height: 96,
-  }
-
-  const startX = fromRect.left + fromRect.width / 2 - 5
-  const startY = fromRect.top + fromRect.height / 2 - 11
-
-  const clone = document.createElement('div')
-  Object.assign(clone.style, {
-    position: 'fixed',
-    width: '10px',
-    height: '22px',
-    borderRadius: '5px',
-    background: color,
-    boxShadow: `0 0 10px ${color}99`,
-    left: `${startX}px`,
-    top: `${startY}px`,
-    pointerEvents: 'none',
-    zIndex: '9999',
-  })
-  document.body.appendChild(clone)
-
-  const endX = toRect.left + toRect.width / 2 - 5 - startX
-  const endY = toRect.top + toRect.height / 2 - 11 - startY
-
-  // Asymmetric eases create a natural arc
-  gsap.to(clone, { x: endX, duration: 0.7, ease: 'power1.inOut' })
-  gsap.to(clone, {
-    y: endY,
-    duration: 0.7,
-    ease: 'power3.in',
-    onComplete: () => {
-      clone.remove()
-      // Squash/stretch the collector bottle
-      const bottle = document.querySelector('[data-collector-bottle]') as HTMLElement | null
-      if (bottle) {
-        gsap.fromTo(bottle,
-          { scaleX: 1, scaleY: 1 },
-          {
-            keyframes: [
-              { scaleX: 1.15, scaleY: 0.85, duration: 0.09, ease: 'power2.in' },
-              { scaleX: 0.94, scaleY: 1.06, duration: 0.1, ease: 'power2.out' },
-              { scaleX: 1, scaleY: 1, duration: 0.12, ease: 'power2.inOut' },
-            ],
-            overwrite: true,
-          },
-        )
-      }
-      onLand?.()
-    },
-  })
-}
-
-// ─── getCHRGD icon ────────────────────────────────────────────────────────────
-
-function CHRGDIcon({ size = 20 }: { size?: number }) {
-  return (
-    <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
-      <rect x="36" y="1" width="28" height="13" rx="6" fill="white" />
-      <rect x="6" y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
-      <rect x="19" y="28" width="62" height="13" rx="4" fill="white" />
-      <rect x="19" y="48" width="62" height="13" rx="4" fill="white" />
-      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#00D4FF" />
-    </svg>
-  )
-}
-
-// ─── Ambient floating particles ───────────────────────────────────────────────
-
-const PARTICLE_CFG = [
-  { x: 8,  y: 15, s: 1.5, d: 14, t: 0    },
-  { x: 22, y: 72, s: 1,   d: 18, t: -3.5 },
-  { x: 38, y: 45, s: 2,   d: 12, t: -6   },
-  { x: 55, y: 28, s: 1.5, d: 16, t: -2   },
-  { x: 72, y: 82, s: 1,   d: 20, t: -8.5 },
-  { x: 88, y: 18, s: 2,   d: 15, t: -4   },
-  { x: 15, y: 88, s: 1,   d: 22, t: -11  },
-  { x: 65, y: 92, s: 1.5, d: 13, t: -1.5 },
-  { x: 45, y: 10, s: 1,   d: 17, t: -5   },
-  { x: 92, y: 62, s: 2,   d: 19, t: -7   },
-  { x: 30, y: 52, s: 1,   d: 11, t: -9.5 },
-  { x: 78, y: 38, s: 1.5, d: 16, t: -3   },
-]
-
-function AmbientParticles() {
-  const [show, setShow] = useState(false)
-  const [count, setCount] = useState(12)
-  useEffect(() => {
-    setCount(window.innerWidth < 768 ? 5 : 12)
-    setShow(true)
-  }, [])
-  if (!show) return null
-  return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-      {PARTICLE_CFG.slice(0, count).map((p, i) => (
-        <div
-          key={i}
-          className="absolute rounded-full bg-[#00D4FF]"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: `${p.s}px`,
-            height: `${p.s}px`,
-            animation: `float-particle ${p.d}s ease-in-out ${p.t}s infinite`,
-          }}
-        />
-      ))}
-    </div>
-  )
-}
-
-// ─── Scramble label ───────────────────────────────────────────────────────────
-
-function ScrambleLabel({ text, stepKey }: { text: string; stepKey: number }) {
-  const ref = useRef<HTMLSpanElement>(null)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ·'
-    let frame = 0
-    const totalFrames = 20
-    let raf: number
-    const run = () => {
-      el.textContent = text
-        .split('')
-        .map((char, idx) => {
-          if (char === ' ') return ' '
-          if (idx < (frame / totalFrames) * text.length) return char
-          return chars[Math.floor(Math.random() * chars.length)]
-        })
-        .join('')
-      frame++
-      if (frame <= totalFrames) raf = requestAnimationFrame(run)
-      else el.textContent = text
-    }
-    const timeout = setTimeout(() => { raf = requestAnimationFrame(run) }, 60)
-    return () => { clearTimeout(timeout); cancelAnimationFrame(raf) }
-  }, [stepKey]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <span
-      ref={ref}
-      className="text-[10px] font-bold tracking-[0.28em] uppercase text-[#00D4FF] mb-4 block"
-      style={{ fontFamily: 'var(--font-display)', textShadow: '0 0 14px rgba(0,212,255,0.55)' }}
-    >
-      {text}
-    </span>
-  )
-}
-
-// ─── Tap ripple ───────────────────────────────────────────────────────────────
-
-function createRipple(e: React.PointerEvent<HTMLButtonElement>) {
-  const btn = e.currentTarget
-  const rect = btn.getBoundingClientRect()
-  const size = Math.max(rect.width, rect.height)
-  const x = e.clientX - rect.left - size / 2
-  const y = e.clientY - rect.top - size / 2
-  const el = document.createElement('span')
-  Object.assign(el.style, {
-    position: 'absolute',
-    width: `${size}px`,
-    height: `${size}px`,
-    left: `${x}px`,
-    top: `${y}px`,
-    borderRadius: '50%',
-    background: 'rgba(0, 212, 255, 0.18)',
-    pointerEvents: 'none',
-    animation: 'ripple-out 0.5s ease-out both',
-  })
-  btn.appendChild(el)
-  el.addEventListener('animationend', () => el.remove())
-}
-
-// ─── Sub-question helpers ─────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SubOption { id: string; label: string; sub?: string }
 interface SubQuestion { id: string; question: string; hint: string; options: SubOption[] }
@@ -215,9 +27,9 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
     id: 'strengthFocus', question: "Primary goal with weights?",
     hint: 'Directs the products we prioritise',
     options: [
-      { id: 'hypertrophy', label: 'Build size',       sub: 'Hypertrophy / bodybuilding' },
-      { id: 'powerlifting', label: 'Raw strength',    sub: 'Powerlifting / compound focus' },
-      { id: 'general',      label: 'General fitness', sub: 'Well-rounded strength' },
+      { id: 'hypertrophy',  label: 'Build size',       sub: 'Hypertrophy / bodybuilding' },
+      { id: 'powerlifting', label: 'Raw strength',     sub: 'Powerlifting / compound focus' },
+      { id: 'general',      label: 'General fitness',  sub: 'Well-rounded strength' },
     ],
   }
   if (step === 2 && value === 'sport') return {
@@ -241,17 +53,17 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
   return null
 }
 
-// ─── Step data ─────────────────────────────────────────────────────────────────
+// ─── Step data ────────────────────────────────────────────────────────────────
 
 const STEP_META = [
-  { section: 'YOUR GOALS',   q: 'What are you training for?',         hint: 'Select all that apply.' },
-  { section: 'TRAINING',     q: 'How often do you train?',            hint: 'Pick your typical week.' },
-  { section: 'TRAINING',     q: 'What type of training?',             hint: 'Choose what fits best.' },
-  { section: 'LIFESTYLE',    q: 'Any lifestyle factors?',             hint: 'Fine-tunes the selections.' },
-  { section: 'NUTRITION',    q: 'How clean is your diet?',            hint: 'Honest = better results.' },
-  { section: 'SUPPLEMENTS',  q: "What are you already taking?",       hint: "We won't double up." },
-  { section: 'CAFFEINE',     q: "What's your caffeine tolerance?",    hint: 'Affects pre-workout choice.' },
-  { section: 'BUDGET',       q: "Monthly budget?",                    hint: "We'll build within it." },
+  { section: 'YOUR GOALS',   q: 'What are you training for?',           hint: 'Select everything that applies.' },
+  { section: 'TRAINING',     q: 'How often do you train?',              hint: 'Pick your typical week.' },
+  { section: 'TRAINING',     q: 'What type of training?',               hint: 'Choose what fits best.' },
+  { section: 'LIFESTYLE',    q: 'Any lifestyle factors?',               hint: 'Helps fine-tune your selections.' },
+  { section: 'NUTRITION',    q: 'How clean is your diet?',              hint: 'Honest answer = better results.' },
+  { section: 'SUPPLEMENTS',  q: "What are you already taking?",         hint: "We won't double up." },
+  { section: 'CAFFEINE',     q: "What's your caffeine tolerance?",      hint: 'Affects pre-workout choice.' },
+  { section: 'BUDGET',       q: "Monthly budget?",                      hint: "We'll build within it." },
   { section: 'YOUR ROUTINE', q: 'How complete should your routine be?', hint: 'Sets how many products we recommend.' },
 ]
 
@@ -265,18 +77,18 @@ const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
   { id: 'cutting',     label: 'Lose body fat',  icon: '🔥' },
   { id: 'bulking',     label: 'Gain mass',      icon: '📈' },
 ]
-const FREQ_DATA = [
-  { id: '1-2x' as TrainingFrequency,  label: '1–2× per week', sub: 'Occasional' },
-  { id: '3-4x' as TrainingFrequency,  label: '3–4× per week', sub: 'Regular training' },
-  { id: '5-6x' as TrainingFrequency,  label: '5–6× per week', sub: 'Serious athlete' },
-  { id: 'daily' as TrainingFrequency, label: 'Every day',     sub: 'Elite / professional' },
+const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
+  { id: '1-2x',  label: '1–2× per week', sub: 'Occasional' },
+  { id: '3-4x',  label: '3–4× per week', sub: 'Regular training' },
+  { id: '5-6x',  label: '5–6× per week', sub: 'Serious athlete' },
+  { id: 'daily', label: 'Every day',     sub: 'Elite / professional' },
 ]
-const TYPE_DATA = [
-  { id: 'strength' as TrainingType, label: 'Strength / Weights', sub: 'Lifting, powerlifting' },
-  { id: 'cardio'   as TrainingType, label: 'Cardio / Endurance', sub: 'Running, cycling' },
-  { id: 'hiit'     as TrainingType, label: 'HIIT / CrossFit',    sub: 'High-intensity intervals' },
-  { id: 'sport'    as TrainingType, label: 'Team / Field Sport', sub: 'Football, rugby, basketball' },
-  { id: 'mixed'    as TrainingType, label: 'Mixed / General',    sub: 'Combination of styles' },
+const TYPE_DATA: Array<{ id: TrainingType; label: string; sub: string }> = [
+  { id: 'strength', label: 'Strength / Weights', sub: 'Lifting, powerlifting' },
+  { id: 'cardio',   label: 'Cardio / Endurance', sub: 'Running, cycling' },
+  { id: 'hiit',     label: 'HIIT / CrossFit',    sub: 'High-intensity intervals' },
+  { id: 'sport',    label: 'Team / Field Sport',  sub: 'Football, rugby, basketball' },
+  { id: 'mixed',    label: 'Mixed / General',     sub: 'Combination of styles' },
 ]
 const LIFESTYLE_DATA = [
   { id: 'vegan',       label: 'Plant-based diet',    icon: '🌱' },
@@ -312,87 +124,63 @@ const BUDGET_DATA: Array<{ id: Budget; label: string; sub: string }> = [
 const PREF_DATA: Array<{ id: StackPreference; label: string; sub: string }> = [
   { id: 'simple',   label: 'Just the essentials', sub: '2–3 products — the ones that move the needle most' },
   { id: 'balanced', label: 'A solid routine',      sub: '4–5 products for well-rounded coverage' },
-  { id: 'complete', label: 'All-in',               sub: '6+ products — every angle covered, nothing missing' },
+  { id: 'complete', label: 'All-in',               sub: '6+ products — every angle covered' },
 ]
 
-// ─── Option button ────────────────────────────────────────────────────────────
-// GSAP handles ALL motion: press bounce (handleClick) + shimmer sweep (on selection).
-// No active:scale CSS — that fights GSAP transform. No CSS animation on shimmer span.
+const TOTAL = STEP_META.length
 
-function OptionBtn({
-  label, sub, icon, selected, multi, capsuleColor, onClick,
+// ─── Single option component used by every question ───────────────────────────
+// Fully controlled — no internal state. selected comes only from props.
+// Hover styles guarded inside globals.css with @media (hover: hover).
+
+function AnswerOption({
+  label, sub, icon, selected, multi, onClick,
 }: {
-  label: string; sub?: string; icon?: string; selected: boolean; multi?: boolean
-  capsuleColor?: string; onClick: () => void
+  label: string; sub?: string; icon?: string; selected: boolean
+  multi?: boolean; onClick: () => void
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null)
-
-  function handleClick() {
-    const justSelected = !selected
-    onClick()
-
-    const btn = btnRef.current
-    if (!btn) return
-
-    gsap.killTweensOf(btn, 'scale')
-    gsap.fromTo(btn, { scale: 0.96 }, { scale: 1, duration: 0.32, ease: 'back.out(2.2)', overwrite: 'auto' })
-
-    if (justSelected) {
-      const shimmer = btn.querySelector('[data-shimmer]') as HTMLElement | null
-      if (shimmer) {
-        gsap.killTweensOf(shimmer, 'x')
-        gsap.fromTo(shimmer, { x: '-115%' }, { x: '230%', duration: 0.48, ease: 'power2.out', overwrite: true })
-      }
-      // Fire capsule for single-select only (multi-select fires on Continue)
-      if (capsuleColor) {
-        fireCapsule(btn, capsuleColor)
-      }
-    }
+  if (multi) {
+    return (
+      <button
+        onClick={onClick}
+        aria-pressed={selected}
+        className={[
+          'flex flex-col items-start gap-1.5 px-4 py-4 rounded-2xl border text-left w-full',
+          'transition-[background-color,border-color] duration-150',
+          'active:scale-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50',
+          selected
+            ? 'border-[#00D4FF] bg-[#00D4FF] text-[#0A0A0A]'
+            : 'border-white/10 bg-white/[0.04] text-white/65 option-hover',
+        ].join(' ')}
+      >
+        {icon && <span className="text-xl leading-none">{icon}</span>}
+        <span className="text-xs font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
+      </button>
+    )
   }
 
   return (
     <button
-      ref={btnRef}
-      onClick={handleClick}
-      onPointerDown={createRipple}
-      data-option
-      data-selected={selected ? 'true' : 'false'}
-      className={`
-        relative flex items-center gap-4 w-full px-5 py-4 rounded-2xl border
-        overflow-hidden text-left
-        focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20 focus-visible:ring-offset-0
-        ${selected
-          ? multi
-            ? 'bg-[#00D4FF] border-[#00D4FF] text-[#0A0A0A]'
-            : 'bg-[#00D4FF]/10 border-[#00D4FF] text-white'
-          : 'bg-white/[0.04] border-white/[0.08] text-white/70 hover:bg-white/[0.07]'}
-      `}
-      style={selected && !multi ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.3), 0 0 24px rgba(0,212,255,0.15)' } : undefined}
+      onClick={onClick}
+      aria-pressed={selected}
+      className={[
+        'w-full flex items-center gap-4 px-5 py-4 rounded-2xl border text-left',
+        'transition-[background-color,border-color,box-shadow] duration-150',
+        'active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50',
+        selected
+          ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-white'
+          : 'border-white/10 bg-white/[0.04] text-white/70 option-hover',
+      ].join(' ')}
+      style={selected ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.25), inset 0 0 20px rgba(0,212,255,0.06)' } : undefined}
     >
-      {icon && <span className="text-xl flex-shrink-0">{icon}</span>}
-      {!multi && (
-        <div
-          className={`flex-shrink-0 w-1 h-7 rounded-full ${selected ? 'bg-[#00D4FF]' : 'bg-transparent'}`}
-        />
-      )}
+      <div className={`shrink-0 w-1 h-7 rounded-full transition-colors duration-150 ${selected ? 'bg-[#00D4FF]' : 'bg-transparent'}`} />
       <div className="flex-1 min-w-0">
-        <div
-          className={`text-sm font-semibold ${selected && multi ? 'text-[#0A0A0A]' : ''}`}
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {label}
-        </div>
-        {sub && (
-          <div className={`text-xs mt-0.5 ${selected && multi ? 'text-[#0A0A0A]/60' : 'text-white/35'}`}>
-            {sub}
-          </div>
-        )}
+        <div className="text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+        {sub && <div className="text-xs mt-0.5 text-white/35">{sub}</div>}
       </div>
-
-      {/* Single-select check — mounts only when selected so pop fires once */}
-      {selected && !multi && (
+      {selected && (
         <div
-          className="w-5 h-5 rounded-full bg-[#00D4FF] flex-shrink-0 flex items-center justify-center"
+          className="shrink-0 w-5 h-5 rounded-full bg-[#00D4FF] flex items-center justify-center"
           style={{ animation: 'check-pop 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}
         >
           <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
@@ -400,154 +188,80 @@ function OptionBtn({
           </svg>
         </div>
       )}
-      {/* Multi-select check badge — corner indicator */}
-      {selected && multi && (
-        <div
-          className="absolute top-2 right-2 w-4 h-4 rounded-full bg-[#0A0A0A]/20 flex items-center justify-center"
-          style={{ animation: 'check-pop 0.2s cubic-bezier(0.34,1.56,0.64,1) both' }}
-        >
-          <svg width="7" height="6" viewBox="0 0 8 7" fill="none">
-            <path d="M1 3.5L3 5.5L7 1" stroke="#0A0A0A" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
-      )}
-
-      {/* Shimmer — always present, GSAP sweeps it on selection click */}
-      <span
-        data-shimmer
-        aria-hidden
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          background: 'linear-gradient(105deg, transparent 32%, rgba(255,255,255,0.14) 50%, transparent 68%)',
-          transform: 'translateX(-115%)',
-        }}
-      />
     </button>
+  )
+}
+
+// ─── getCHRGD icon ────────────────────────────────────────────────────────────
+
+function CHRGDIcon({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
+      <rect x="36" y="1" width="28" height="13" rx="6" fill="white" />
+      <rect x="6" y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
+      <rect x="19" y="28" width="62" height="13" rx="4" fill="white" />
+      <rect x="19" y="48" width="62" height="13" rx="4" fill="white" />
+      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#00D4FF" />
+    </svg>
   )
 }
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
-interface Props {
-  onComplete: () => void
-  reducedMotion: boolean
-}
+interface Props { onComplete: () => void; reducedMotion: boolean }
 
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
-    step, answers, nextStep, prevStep, setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
-    addCollectorCapsules, removeCollectorCapsulesForStep,
+    step, answers, nextStep, prevStep,
+    setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
   } = useQuizStore()
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const sectionRefs = useRef<(HTMLDivElement | null)[]>([])
-  const prevStepRef = useRef(step)
-  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [animKey, setAnimKey] = useState(0)
+  const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   const [subQuestion, setSubQuestion] = useState<SubQuestion | null>(null)
   const [subAnswerId, setSubAnswerId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const TOTAL = 9
+  // ─── Navigation ─────────────────────────────────────────────────────────────
 
-  // ─── Step entrance: pre-set invisible BEFORE paint to eliminate flash ─────
-  useLayoutEffect(() => {
-    const el = sectionRefs.current[step]
-    if (!el || reducedMotion) return
-    const dir = step > prevStepRef.current ? 1 : -1
-    gsap.set(el.querySelectorAll('[data-word]'), { x: dir * 26, opacity: 0, scale: 0.96 })
-    gsap.set(el.querySelectorAll('[data-anim]'), { y: 24, opacity: 0 })
-  }, [step]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ─── Animate in after paint ───────────────────────────────────────────────
-  useEffect(() => {
-    const el = sectionRefs.current[step]
-    if (!el) return
-
-    sectionRefs.current[step]?.scrollIntoView({ behavior: 'instant' as ScrollBehavior })
-    prevStepRef.current = step
-
-    if (reducedMotion) {
-      gsap.set(el.querySelectorAll('[data-word], [data-anim]'), { clearProps: 'x,y,opacity,scale' })
-      return
-    }
-
-    const ctx = gsap.context(() => {
-      const words = el.querySelectorAll('[data-word]')
-      const items = el.querySelectorAll('[data-anim]')
-
-      if (words.length > 0) {
-        gsap.to(words, { x: 0, opacity: 1, scale: 1, stagger: 0.03, duration: 0.4, ease: 'power2.out', overwrite: true })
-      }
-      if (items.length > 0) {
-        gsap.to(items, { y: 0, opacity: 1, stagger: 0.05, duration: 0.42, ease: 'power2.out', delay: 0.07, overwrite: true })
-      }
-    }, el)
-
-    return () => ctx.revert()
-  }, [step, reducedMotion])
-
-  // ─── Step transitions ─────────────────────────────────────────────────────
-
-  function animateOut(dir: 1 | -1, onDone: () => void) {
-    const el = sectionRefs.current[step]
-    if (!el || reducedMotion) { onDone(); return }
-    const items = [...el.querySelectorAll('[data-anim]'), ...el.querySelectorAll('[data-word]')]
-    gsap.to(items, {
-      x: dir * -24, opacity: 0, scale: 0.97,
-      stagger: -0.012, duration: 0.18, ease: 'power2.in',
-      overwrite: true,
-      onComplete: onDone,
-    })
+  function clearPending() {
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+    pendingTimerRef.current = null
   }
 
   function advance() {
-    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+    clearPending()
     setSubQuestion(null)
     setSubAnswerId(null)
-
-    // Multi-select steps: fire one capsule per selected option, staggered 80ms
-    const MULTI_STEPS = [0, 3, 5]
-    if (MULTI_STEPS.includes(step)) {
-      const el = sectionRefs.current[step]
-      const selectedBtns = el?.querySelectorAll('[data-option][data-selected="true"]')
-      const count = selectedBtns?.length ?? 0
-      if (count > 0) {
-        selectedBtns!.forEach((btn, i) => {
-          setTimeout(() => {
-            fireCapsule(btn as HTMLElement, STEP_CAPSULE_COLORS[step])
-          }, i * 80)
-        })
-        addCollectorCapsules(step, count)
-      }
-    }
-
     if (step >= TOTAL - 1) { handleFinish(); return }
-    animateOut(1, () => nextStep())
+    setDirection('forward')
+    setAnimKey((k) => k + 1)
+    nextStep()
   }
 
   function goBack() {
-    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+    clearPending()
     setSubQuestion(null)
     setSubAnswerId(null)
-    // Remove capsules for the step we're going back to (user will re-answer)
-    removeCollectorCapsulesForStep(step - 1)
-    animateOut(-1, () => prevStep())
+    setDirection('back')
+    setAnimKey((k) => k + 1)
+    prevStep()
   }
 
-  // ─── Single-select with auto-advance ─────────────────────────────────────
-
+  // Single-select: auto-advance after 320ms so the user sees their selection
   const handleSingle = useCallback(
     (key: string, value: string) => {
       setAnswer(key as keyof typeof answers, value as never)
-      // Record capsule for single-select step (capsule visual fires from OptionBtn via capsuleColor prop)
-      addCollectorCapsules(step, 1)
+      clearPending()
       const sub = getSubQuestion(step, value)
       if (sub) {
-        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
-        pendingTimerRef.current = setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub) }, 180)
+        pendingTimerRef.current = setTimeout(() => {
+          setSubAnswerId(null)
+          setSubQuestion(sub)
+        }, 200)
         return
       }
-      if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
       pendingTimerRef.current = setTimeout(() => advance(), 320)
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -559,7 +273,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (subId === 'experience') setAnswer('trainingExperience', optId as TrainingExperience)
     else if (subId === 'strengthFocus' || subId === 'sportType') setAnswer('trainingFocus', optId)
     else if (subId === 'stim') setAnswer('stimPreference', optId as StimPreference)
-    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current)
+    clearPending()
     pendingTimerRef.current = setTimeout(() => advance(), 320)
   }
 
@@ -585,6 +299,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     } catch { setIsGenerating(false) }
   }
 
+  // ─── Derived state ───────────────────────────────────────────────────────────
+
   const canContinue = (() => {
     switch (step) {
       case 0: return answers.goals.length > 0
@@ -594,17 +310,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     }
   })()
 
-  return (
-    <div className="relative w-full min-h-screen bg-[#0A0A0A]">
-      <AmbientParticles />
+  const slideClass = reducedMotion
+    ? ''
+    : direction === 'forward'
+      ? 'animate-[slide-from-right_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
+      : 'animate-[slide-from-left_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
 
-      {/* Background glow — shifts cyan as you progress */}
-      <div
-        className="fixed inset-0 pointer-events-none transition-all duration-1000"
-        style={{
-          background: `radial-gradient(ellipse 70% 50% at 50% ${20 + (step / (TOTAL - 1)) * 60}%, rgba(0,212,255,0.045), transparent)`,
-        }}
-      />
+  const { section, q, hint } = STEP_META[step]
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="relative min-h-screen bg-[#0A0A0A] text-white">
 
       {/* Generating overlay */}
       {isGenerating && (
@@ -616,19 +333,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </div>
       )}
 
-      {/* Progress bar with glowing leading dot */}
-      <div className="fixed top-0 left-0 right-0 z-40" style={{ height: '2px', overflow: 'visible' }}>
-        <div className="absolute inset-0 bg-white/8" />
+      {/* Progress bar */}
+      <div className="fixed top-0 left-0 right-0 z-40 h-0.5 bg-white/8">
         <div
-          className="absolute inset-y-0 left-0 bg-[#00D4FF] transition-all duration-500 ease-out"
+          className="h-full bg-[#00D4FF] transition-all duration-500 ease-out"
           style={{ width: `${((step + 1) / TOTAL) * 100}%` }}
-        />
-        <div
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3 h-3 rounded-full bg-white transition-all duration-500 ease-out"
-          style={{
-            left: `${((step + 1) / TOTAL) * 100}%`,
-            boxShadow: '0 0 8px 3px rgba(0,212,255,0.9), 0 0 20px 6px rgba(0,212,255,0.4)',
-          }}
         />
       </div>
 
@@ -649,8 +358,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       {step > 0 && (
         <button
           onClick={goBack}
-          className="fixed top-[52px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50 overflow-hidden"
-          onPointerDown={createRipple}
+          className="fixed top-[52px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50"
           aria-label="Back"
         >
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
@@ -659,224 +367,243 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </button>
       )}
 
-      {/* Steps */}
-      <div ref={containerRef} className="w-full overflow-hidden">
-        {STEP_META.map((meta, i) => (
-          <div
-            key={i}
-            ref={(el) => { sectionRefs.current[i] = el }}
-            className="min-h-screen flex flex-col justify-center px-5 py-20 max-w-lg mx-auto"
-            style={{ display: step === i ? 'flex' : 'none' }}
-          >
-            {/* Section label with scramble */}
-            <ScrambleLabel text={meta.section} stepKey={step} />
+      {/* Step content — key forces re-mount on step change, CSS slide handles transition */}
+      <div className="min-h-screen flex flex-col justify-center px-5 pt-24 pb-32 max-w-lg mx-auto">
+        <div key={`${step}-${animKey}`} className={slideClass}>
 
-            {/* Question — split into words for stagger animation */}
-            <h2
-              className="text-[2.1rem] font-black leading-tight tracking-tight text-white mb-2"
+          {/* Section + question */}
+          <span
+            className="text-[10px] font-bold tracking-[0.28em] uppercase text-[#00D4FF] mb-3 block"
+            style={{ fontFamily: 'var(--font-display)', textShadow: '0 0 14px rgba(0,212,255,0.4)' }}
+          >
+            {section}
+          </span>
+          <h2
+            className="text-[1.9rem] font-black leading-tight tracking-tight text-white mb-2"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            {q}
+          </h2>
+          <p className="text-sm text-white/35 mb-7">{hint}</p>
+
+          {/* ── Step 0: Goals (multi) ── */}
+          {step === 0 && (
+            <div className="grid grid-cols-2 gap-2.5">
+              {GOALS_DATA.map(({ id, label, icon }) => (
+                <AnswerOption
+                  key={`0-${id}`}
+                  icon={icon} label={label} multi
+                  selected={answers.goals.includes(id)}
+                  onClick={() => {
+                    const c = answers.goals
+                    setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 1: Frequency (single) ── */}
+          {step === 1 && (
+            <div className="flex flex-col gap-2.5">
+              {FREQ_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`1-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.trainingFrequency === id}
+                  onClick={() => handleSingle('trainingFrequency', id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 2: Type (single) ── */}
+          {step === 2 && (
+            <div className="flex flex-col gap-2.5">
+              {TYPE_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`2-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.trainingType === id}
+                  onClick={() => handleSingle('trainingType', id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 3: Lifestyle (multi) ── */}
+          {step === 3 && (
+            <div className="grid grid-cols-2 gap-2.5">
+              {LIFESTYLE_DATA.map(({ id, label, icon }) => (
+                <AnswerOption
+                  key={`3-${id}`}
+                  icon={icon} label={label} multi
+                  selected={answers.lifestyle.includes(id)}
+                  onClick={() => {
+                    const c = answers.lifestyle
+                    setAnswer('lifestyle', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                  }}
+                />
+              ))}
+              <AnswerOption
+                key="3-none"
+                icon="✓" label="None" multi
+                selected={answers.lifestyle.length === 0}
+                onClick={() => setAnswer('lifestyle', [])}
+              />
+            </div>
+          )}
+
+          {/* ── Step 4: Diet (single) ── */}
+          {step === 4 && (
+            <div className="flex flex-col gap-2.5">
+              {DIET_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`4-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.diet === id}
+                  onClick={() => handleSingle('diet', id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 5: Current supps (multi) ── */}
+          {step === 5 && (
+            <div className="grid grid-cols-2 gap-2.5">
+              {SUPPS_DATA.map(({ id, label, icon }) => (
+                <AnswerOption
+                  key={`5-${id}`}
+                  icon={icon} label={label} multi
+                  selected={id === 'none' ? answers.currentSupplements.length === 0 : answers.currentSupplements.includes(id)}
+                  onClick={() => {
+                    if (id === 'none') { setAnswer('currentSupplements', []); return }
+                    const c = answers.currentSupplements.filter(x => x !== 'none')
+                    setAnswer('currentSupplements', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 6: Caffeine (single) ── */}
+          {step === 6 && (
+            <div className="flex flex-col gap-2.5">
+              {CAFFEINE_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`6-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.caffeineLevel === id}
+                  onClick={() => handleSingle('caffeineLevel', id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 7: Budget (single) ── */}
+          {step === 7 && (
+            <div className="flex flex-col gap-2.5">
+              {BUDGET_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`7-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.budget === id}
+                  onClick={() => handleSingle('budget', id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 8: Stack pref (single, explicit CTA) ── */}
+          {step === 8 && (
+            <div className="flex flex-col gap-2.5">
+              {PREF_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`8-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.stackPreference === id}
+                  onClick={() => setAnswer('stackPreference', id)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Sub-question */}
+          {subQuestion && (
+            <div
+              className="mt-8 pt-6 border-t border-white/8"
+              style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <div className="w-px h-4 bg-[#00D4FF]" />
+                <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
+                  style={{ fontFamily: 'var(--font-display)' }}>
+                  Follow-up
+                </span>
+              </div>
+              <p className="text-base font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                {subQuestion.question}
+              </p>
+              <p className="text-xs text-white/35 mb-4">{subQuestion.hint}</p>
+              <div className="flex flex-col gap-2">
+                {subQuestion.options.map((opt) => (
+                  <AnswerOption
+                    key={`sub-${subQuestion.id}-${opt.id}`}
+                    label={opt.label} sub={opt.sub}
+                    selected={subAnswerId === opt.id}
+                    onClick={() => handleSubAnswer(subQuestion.id, opt.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+
+      {/* CTA — multi-select steps and final step */}
+      {[0, 3, 5].includes(step) && (
+        <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
+          <div className="max-w-lg mx-auto">
+            <button
+              onClick={advance}
+              disabled={!canContinue}
+              className={`w-full py-4 rounded-2xl text-sm font-bold tracking-wide transition-opacity active:scale-95 ${
+                canContinue
+                  ? 'bg-white text-[#0A0A0A]'
+                  : 'bg-white/8 text-white/20 cursor-not-allowed'
+              }`}
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {meta.q.split(' ').map((word, wi) => (
-                <span key={wi} data-word className="inline-block mr-[0.25em]">{word}</span>
-              ))}
-            </h2>
-
-            <p data-anim className="text-sm text-white/35 mb-8">{meta.hint}</p>
-
-            {/* Options */}
-            <div data-anim>
-
-              {/* Step 0: Goals grid */}
-              {i === 0 && (
-                <div className="grid grid-cols-2 gap-2.5 quiz-options">
-                  {GOALS_DATA.map(({ id, label, icon }) => (
-                    <OptionBtn key={id} icon={icon} label={label} multi
-                      selected={answers.goals.includes(id)}
-                      onClick={() => {
-                        const c = answers.goals
-                        setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
-                      }} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 1: Frequency */}
-              {i === 1 && (
-                <div className="flex flex-col gap-2.5 quiz-options">
-                  {FREQ_DATA.map(({ id, label, sub }) => (
-                    <OptionBtn key={id} label={label} sub={sub}
-                      selected={answers.trainingFrequency === id}
-                      capsuleColor={STEP_CAPSULE_COLORS[1]}
-                      onClick={() => handleSingle('trainingFrequency', id)} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 2: Type */}
-              {i === 2 && (
-                <div className="flex flex-col gap-2.5 quiz-options">
-                  {TYPE_DATA.map(({ id, label, sub }) => (
-                    <OptionBtn key={id} label={label} sub={sub}
-                      selected={answers.trainingType === id}
-                      capsuleColor={STEP_CAPSULE_COLORS[2]}
-                      onClick={() => handleSingle('trainingType', id)} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 3: Lifestyle */}
-              {i === 3 && (
-                <div className="grid grid-cols-2 gap-2.5 quiz-options">
-                  {LIFESTYLE_DATA.map(({ id, label, icon }) => (
-                    <OptionBtn key={id} icon={icon} label={label} multi
-                      selected={answers.lifestyle.includes(id)}
-                      onClick={() => {
-                        const c = answers.lifestyle
-                        setAnswer('lifestyle', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
-                      }} />
-                  ))}
-                  <OptionBtn icon="✓" label="None" multi selected={answers.lifestyle.length === 0}
-                    onClick={() => setAnswer('lifestyle', [])} />
-                </div>
-              )}
-
-              {/* Step 4: Diet */}
-              {i === 4 && (
-                <div className="flex flex-col gap-2.5 quiz-options">
-                  {DIET_DATA.map(({ id, label, sub }) => (
-                    <OptionBtn key={id} label={label} sub={sub}
-                      selected={answers.diet === id}
-                      capsuleColor={STEP_CAPSULE_COLORS[4]}
-                      onClick={() => handleSingle('diet', id)} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 5: Current supps */}
-              {i === 5 && (
-                <div className="grid grid-cols-2 gap-2.5 quiz-options">
-                  {SUPPS_DATA.map(({ id, label, icon }) => (
-                    <OptionBtn key={id} icon={icon} label={label} multi
-                      selected={id === 'none' ? answers.currentSupplements.length === 0 : answers.currentSupplements.includes(id)}
-                      onClick={() => {
-                        if (id === 'none') { setAnswer('currentSupplements', []); return }
-                        const c = answers.currentSupplements.filter(x => x !== 'none')
-                        setAnswer('currentSupplements', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
-                      }} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 6: Caffeine */}
-              {i === 6 && (
-                <div className="flex flex-col gap-2.5 quiz-options">
-                  {CAFFEINE_DATA.map(({ id, label, sub }) => (
-                    <OptionBtn key={id} label={label} sub={sub}
-                      selected={answers.caffeineLevel === id}
-                      capsuleColor={STEP_CAPSULE_COLORS[6]}
-                      onClick={() => handleSingle('caffeineLevel', id)} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 7: Budget */}
-              {i === 7 && (
-                <div className="flex flex-col gap-2.5 quiz-options">
-                  {BUDGET_DATA.map(({ id, label, sub }) => (
-                    <OptionBtn key={id} label={label} sub={sub}
-                      selected={answers.budget === id}
-                      capsuleColor={STEP_CAPSULE_COLORS[7]}
-                      onClick={() => handleSingle('budget', id)} />
-                  ))}
-                </div>
-              )}
-
-              {/* Step 8: Stack pref */}
-              {i === 8 && (
-                <div className="flex flex-col gap-2.5 quiz-options">
-                  {PREF_DATA.map(({ id, label, sub }) => (
-                    <OptionBtn key={id} label={label} sub={sub}
-                      selected={answers.stackPreference === id}
-                      capsuleColor={STEP_CAPSULE_COLORS[8]}
-                      onClick={() => {
-                        setAnswer('stackPreference', id)
-                        addCollectorCapsules(8, 1)
-                      }} />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Inline sub-question */}
-            {subQuestion && step === i && (
-              <div
-                className="mt-8 pt-6 border-t border-white/8"
-                style={{ animation: 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-px h-4 bg-[#00D4FF]" style={{ boxShadow: '0 0 6px rgba(0,212,255,0.7)' }} />
-                  <span
-                    className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
-                    style={{ fontFamily: 'var(--font-display)', textShadow: '0 0 10px rgba(0,212,255,0.5)' }}
-                  >
-                    Follow-up
-                  </span>
-                </div>
-                <p className="text-base font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-                  {subQuestion.question}
-                </p>
-                <p className="text-xs text-white/35 mb-4">{subQuestion.hint}</p>
-                <div className="flex flex-col gap-2 quiz-options">
-                  {subQuestion.options.map((opt) => (
-                    <OptionBtn key={opt.id} label={opt.label} sub={opt.sub}
-                      selected={subAnswerId === opt.id}
-                      onClick={() => handleSubAnswer(subQuestion.id, opt.id)} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* CTA for multi-select steps */}
-            {[0, 3, 5].includes(i) && step === i && (
-              <button
-                onClick={advance}
-                onPointerDown={createRipple}
-                disabled={!canContinue}
-                className={`mt-8 w-full py-4 rounded-2xl text-sm font-bold tracking-wide relative overflow-hidden active:scale-95 transition-transform ${
-                  canContinue
-                    ? 'bg-white text-[#0A0A0A]'
-                    : 'bg-white/8 text-white/20 cursor-not-allowed'
-                }`}
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                {i === 0 && answers.goals.length > 0
-                  ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''} →`
-                  : 'Continue →'}
-              </button>
-            )}
-
-            {/* Final step reveal CTA */}
-            {i === 8 && step === 8 && (
-              <button
-                onClick={advance}
-                onPointerDown={createRipple}
-                disabled={!answers.stackPreference}
-                className={`mt-8 w-full py-4 rounded-2xl text-sm font-bold tracking-wide relative overflow-hidden active:scale-95 transition-transform ${
-                  answers.stackPreference
-                    ? 'bg-[#00D4FF] text-[#0A0A0A]'
-                    : 'bg-white/8 text-white/20 cursor-not-allowed'
-                }`}
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  ...(answers.stackPreference ? { animation: 'pulse-glow 2s ease-in-out infinite' } : {}),
-                }}
-              >
-                Reveal my stack identity →
-              </button>
-            )}
+              {step === 0 && answers.goals.length > 0
+                ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''} →`
+                : 'Continue →'}
+            </button>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
+
+      {step === 8 && (
+        <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
+          <div className="max-w-lg mx-auto">
+            <button
+              onClick={advance}
+              disabled={!answers.stackPreference}
+              className={`w-full py-4 rounded-2xl text-sm font-bold tracking-wide transition-all active:scale-95 ${
+                answers.stackPreference
+                  ? 'bg-[#00D4FF] text-[#0A0A0A]'
+                  : 'bg-white/8 text-white/20 cursor-not-allowed'
+              }`}
+              style={{
+                fontFamily: 'var(--font-display)',
+                ...(answers.stackPreference ? { animation: 'pulse-glow 2s ease-in-out infinite' } : {}),
+              }}
+            >
+              Reveal my stack identity →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
