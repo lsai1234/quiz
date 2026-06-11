@@ -217,13 +217,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     if (!section) return
 
     const L = getLayout()
-    // normalizeScroll intercepts iOS touch events and replaces the browser's
-    // runaway momentum with GSAP's controlled deceleration — the animation
-    // follows finger speed without flying through on a fast flick.
-    // momentum: 0.3 caps post-lift inertia to 30% of natural iOS momentum.
-    const normalizer = L.mobile
-      ? ScrollTrigger.normalizeScroll({ momentum: 0.3, allowNestedScroll: true })
-      : null
+    let mobileCleanup: (() => void) | null = null
     const ctx = gsap.context(() => {
 
       // ── Set every element to its correct starting position ──────────────
@@ -390,26 +384,101 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(headline2Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.65)
       tl.to(ctaRef.current,       { opacity: 1, y: 0, duration: 0.55, ease: 'none' }, hStart + 1.1)
 
-      // ── ScrollTrigger — pin + scrub (mobile & desktop) ───────────────────
-      // normalizeScroll (applied above) tames iOS momentum so the animation
-      // tracks finger speed without flying through on a fast flick.
-      ScrollTrigger.create({
-        trigger:       section,
-        start:         'top top',
-        // 600vh on mobile: a fast flick covers far less of the animation
-        // than with 400vh, without making slow deliberate scrolls feel sluggish.
-        end:           `+=${L.mobile ? '600%' : '400%'}`,
-        pin:           true,
-        // scrub: 0.25 on mobile — quick enough that slow drags feel live,
-        // but still smooths out micro-jitter between scroll ticks.
-        scrub:         L.mobile ? 0.25 : 1,
-        animation:     tl,
-        anticipatePin: 1,
-      })
+      if (L.mobile) {
+        // ── Mobile: physics momentum ────────────────────────────────────────
+        // The section is fixed in the viewport. Touch events feed a velocity
+        // into a friction loop: big flick → animation plays fast then coasts
+        // to a stop, just like a page decelerating after a scroll.
+        gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
+
+        const FRICTION    = 0.96    // velocity multiplier per 16.67 ms frame
+        const MAX_VEL     = 0.0018  // progress/ms cap — full anim in ~1.5s at max
+        const PX_SCALE    = 0.00075 // converts px/ms swipe speed → progress/ms
+        const STOP_BELOW  = 0.000001
+
+        let velocity = 0
+        let samples: { y: number; t: number }[] = []
+
+        // Each frame: apply friction and advance timeline by current velocity
+        const tick = (_time: number, deltaTime: number) => {
+          if (Math.abs(velocity) < STOP_BELOW) { velocity = 0; return }
+          const dt = Math.min(deltaTime, 50)
+          velocity *= Math.pow(FRICTION, dt / 16.67)
+          tl.progress(Math.max(0, Math.min(1, tl.progress() + velocity * dt)))
+        }
+        gsap.ticker.add(tick)
+
+        const onTouchStart = (e: TouchEvent) => {
+          e.preventDefault()
+          velocity = 0  // new touch cancels existing coast
+          samples = [{ y: e.touches[0].clientY, t: performance.now() }]
+        }
+
+        const onTouchMove = (e: TouchEvent) => {
+          e.preventDefault()
+          const y = e.touches[0].clientY
+          const t = performance.now()
+          samples.push({ y, t })
+          if (samples.length > 6) samples.shift()
+          if (samples.length >= 2) {
+            const prev = samples[samples.length - 2]
+            const dt = t - prev.t
+            if (dt > 0) {
+              // finger up (prev.y > y) = positive = advance
+              const v = ((prev.y - y) / dt) * PX_SCALE
+              velocity = Math.max(-MAX_VEL, Math.min(MAX_VEL, v))
+            }
+          }
+        }
+
+        const onTouchEnd = () => {
+          // Launch with the velocity measured just before lift
+          if (samples.length >= 2) {
+            const now = performance.now()
+            const recent = samples.filter(s => now - s.t < 120)
+            if (recent.length >= 2) {
+              const first = recent[0], last = recent[recent.length - 1]
+              const dt = last.t - first.t
+              if (dt > 0) {
+                const v = ((first.y - last.y) / dt) * PX_SCALE
+                velocity = Math.max(-MAX_VEL, Math.min(MAX_VEL, v))
+              }
+            } else {
+              velocity *= 0.4  // stale samples — dampen heavily
+            }
+          }
+          samples = []
+        }
+
+        section.addEventListener('touchstart',  onTouchStart, { passive: false })
+        section.addEventListener('touchmove',   onTouchMove,  { passive: false })
+        section.addEventListener('touchend',    onTouchEnd,   { passive: true })
+        section.addEventListener('touchcancel', onTouchEnd,   { passive: true })
+
+        mobileCleanup = () => {
+          gsap.ticker.remove(tick)
+          section.removeEventListener('touchstart',  onTouchStart)
+          section.removeEventListener('touchmove',   onTouchMove)
+          section.removeEventListener('touchend',    onTouchEnd)
+          section.removeEventListener('touchcancel', onTouchEnd)
+        }
+
+      } else {
+        // ── Desktop: scroll-scrubbed ────────────────────────────────────────
+        ScrollTrigger.create({
+          trigger:       section,
+          start:         'top top',
+          end:           '+=400%',
+          pin:           true,
+          scrub:         1,
+          animation:     tl,
+          anticipatePin: 1,
+        })
+      }
 
     }, section)  // scope gsap.context to the section element
 
-    return () => { normalizer?.kill(); ctx.revert() }
+    return () => { mobileCleanup?.(); ctx.revert() }
   }, [assetsReady, reducedMotion, getLayout, resizeKey])
 
   // ── Reduced-motion: static composed layout ────────────────────────────────
