@@ -185,7 +185,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     // Caption positions: right of capsule (desktop) or below (mobile)
     const captions: Pos[] = shelf.map((s) =>
       mobile
-        ? { x: s.x, y: s.y + CAP_H + 4 }
+        ? { x: s.x, y: s.y + CAP_H + 8 }
         : { x: s.x + CAP_W + 10, y: s.y + CAP_H / 2 - 10 },
     )
 
@@ -627,15 +627,15 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           key={i}
           ref={(el) => { captionRefs.current[i] = el }}
           className="absolute pointer-events-none z-20"
-          style={{ left: 0, top: 0, willChange: 'transform, opacity', opacity: 0 }}
+          style={{ left: 0, top: 0, width: CAP_W, willChange: 'transform, opacity', opacity: 0 }}
         >
           <p
-            className="text-white text-[11px] font-semibold leading-none whitespace-nowrap"
+            className="text-white text-[11px] font-semibold leading-tight"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {ing.name}
           </p>
-          <p className="text-white/40 text-[10px] mt-1 whitespace-nowrap leading-none">
+          <p className="text-white/40 text-[10px] mt-1 leading-tight">
             {ing.benefit}
           </p>
         </div>
