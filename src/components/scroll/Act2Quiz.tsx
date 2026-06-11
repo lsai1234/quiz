@@ -341,7 +341,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   const canContinue = (() => {
     switch (step) {
-      case 0: return !!localName.trim() && !!localAge
+      case 0: return !!localAge
       case 1: return answers.goals.length > 0
       case 4: return true
       case 6: return true
@@ -440,7 +440,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block"
                   style={{ fontFamily: 'var(--font-display)' }}
                 >
-                  First name
+                  First name <span className="normal-case font-normal tracking-normal text-white/15">· optional</span>
                 </label>
                 <input
                   type="text"
@@ -448,10 +448,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   onChange={(e) => setLocalName(e.target.value)}
                   placeholder="Your first name"
                   autoFocus
-                  onKeyDown={(e) => { if (e.key === 'Enter' && localName.trim() && localAge) advance() }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && localAge) advance() }}
                   className="w-full px-5 py-4 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-sm font-medium placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors"
                   style={{ fontFamily: 'var(--font-display)' }}
                 />
+                <p className="text-[11px] text-white/20 mt-2">Personalises your results</p>
               </div>
 
               <div>
