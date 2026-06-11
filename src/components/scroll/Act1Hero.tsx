@@ -384,15 +384,30 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(ctaRef.current,       { opacity: 1, y: 0, duration: 0.55, ease: 'none' }, hStart + 1.1)
 
       // ── ScrollTrigger — pin + scrub ───────────────────────────────────────
+      // Mobile snap points: beat 2 open → each of 5 capsule landings → reassembly → CTA
+      // Derived from timeline (total 10 units): t/10 gives 0-1 progress fraction.
+      // Snap makes each swipe advance to the next intentional state rather than
+      // landing mid-animation, which eliminates the jittery "wrong direction" glitch.
+      const mobileCapsuleSnaps = INGREDIENTS.map((_, i) => {
+        const perCap = 4.0 / INGREDIENTS.length  // 0.8 each
+        const landT  = 3.0 + i * perCap + perCap * 0.75
+        return Math.round((landT / 10) * 1000) / 1000
+      })
       ScrollTrigger.create({
         trigger: section,
         start:   'top top',
-        end:     `+=${L.mobile ? '300%' : '400%'}`,
+        end:     `+=${L.mobile ? '400%' : '400%'}`,
         pin:     true,
-        scrub:       L.mobile ? true : 1,
+        scrub:       L.mobile ? 0.8 : 1,
         fastScrollEnd: L.mobile,
         animation: tl,
         anticipatePin: 1,
+        snap: L.mobile ? {
+          snapTo:   [0, 0.28, ...mobileCapsuleSnaps, 0.86, 1.0],
+          duration: { min: 0.25, max: 0.55 },
+          delay:    0.05,
+          ease:     'power2.inOut',
+        } : false,
       })
 
     }, section)  // scope gsap.context to the section element
