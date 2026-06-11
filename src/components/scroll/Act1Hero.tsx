@@ -412,10 +412,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         </div>
 
         <div className="text-center mt-12 max-w-xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+          <h1 className="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight" style={{ fontFamily: 'var(--font-display)', textShadow: '0 2px 16px rgba(0,0,0,0.9)' }}>
             Every body is different.
           </h1>
-          <p className="text-4xl md:text-5xl font-black leading-tight tracking-tight mt-1" style={{ fontFamily: 'var(--font-display)', color: '#00D4FF' }}>
+          <p className="text-4xl md:text-5xl font-black leading-tight tracking-tight mt-1" style={{ fontFamily: 'var(--font-display)', color: '#00D4FF', textShadow: '0 0 28px rgba(0,212,255,0.55), 0 2px 12px rgba(0,0,0,0.95)' }}>
             Find your stack.
           </p>
           <button
@@ -556,7 +556,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         <div ref={headline1Ref} style={{ willChange: 'transform, opacity' }}>
           <h1
             className="text-4xl sm:text-[3.5rem] font-black text-white leading-tight tracking-tight"
-            style={{ fontFamily: 'var(--font-display)' }}
+            style={{ fontFamily: 'var(--font-display)', textShadow: '0 2px 16px rgba(0,0,0,0.9)' }}
           >
             Every body is different.
           </h1>
@@ -564,7 +564,11 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         <div ref={headline2Ref} className="mt-1" style={{ willChange: 'transform, opacity' }}>
           <p
             className="text-4xl sm:text-[3.5rem] font-black leading-tight tracking-tight"
-            style={{ fontFamily: 'var(--font-display)', color: '#00D4FF' }}
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: '#00D4FF',
+              textShadow: '0 0 28px rgba(0,212,255,0.55), 0 2px 12px rgba(0,0,0,0.95)',
+            }}
           >
             Find your stack.
           </p>
