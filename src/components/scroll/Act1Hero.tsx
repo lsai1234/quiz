@@ -217,7 +217,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     if (!section) return
 
     const L = getLayout()
-    let mobileObserver: { kill: () => void } | null = null
+    // normalizeScroll intercepts iOS touch events and replaces the browser's
+    // runaway momentum with GSAP's controlled deceleration — the animation
+    // follows finger speed without flying through on a fast flick.
+    const normalizer = L.mobile ? ScrollTrigger.normalizeScroll(true) : null
     const ctx = gsap.context(() => {
 
       // ── Set every element to its correct starting position ──────────────
@@ -384,56 +387,22 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(headline2Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.65)
       tl.to(ctaRef.current,       { opacity: 1, y: 0, duration: 0.55, ease: 'none' }, hStart + 1.1)
 
-      // ── Mobile: touch-driven beat navigation ─────────────────────────────
-      // ScrollTrigger scrub ties animation to scroll position — on a fast flick,
-      // iOS momentum carries scroll far past the intended point.  Instead we pin
-      // the section via CSS and use ScrollTrigger.observe, which fires once per
-      // gesture (directional intent, not position), so one swipe = one beat.
-      if (L.mobile) {
-        gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
-
-        // Timeline time values for each snap beat (timeline total = 10 units)
-        const BEAT_TIMES = [0, 2.8, 3.6, 4.4, 5.2, 6.0, 6.8, 8.6, 10.0]
-        let beatIdx = 0
-        let busy    = false
-
-        const goTo = (nextIdx: number) => {
-          const i = Math.max(0, Math.min(BEAT_TIMES.length - 1, nextIdx))
-          if (busy || i === beatIdx) return
-          busy = true
-          beatIdx = i
-          gsap.to(tl, {
-            time: BEAT_TIMES[i], duration: 0.55, ease: 'power2.inOut',
-            overwrite: true, onComplete: () => { busy = false },
-          })
-        }
-
-        mobileObserver = ScrollTrigger.observe({
-          target:         section,
-          type:           'touch',
-          onDown:         () => goTo(beatIdx + 1),   // finger up → advance
-          onUp:           () => goTo(beatIdx - 1),   // finger down → retreat
-          preventDefault: true,
-          tolerance:      15,
-          debounce:       true,
-        })
-
-      // ── Desktop: scroll-scrubbed ──────────────────────────────────────────
-      } else {
-        ScrollTrigger.create({
-          trigger:       section,
-          start:         'top top',
-          end:           '+=400%',
-          pin:           true,
-          scrub:         1,
-          animation:     tl,
-          anticipatePin: 1,
-        })
-      }
+      // ── ScrollTrigger — pin + scrub (mobile & desktop) ───────────────────
+      // normalizeScroll (applied above) tames iOS momentum so the animation
+      // tracks finger speed without flying through on a fast flick.
+      ScrollTrigger.create({
+        trigger:       section,
+        start:         'top top',
+        end:           '+=400%',
+        pin:           true,
+        scrub:         L.mobile ? 0.5 : 1,
+        animation:     tl,
+        anticipatePin: 1,
+      })
 
     }, section)  // scope gsap.context to the section element
 
-    return () => { mobileObserver?.kill(); ctx.revert() }
+    return () => { normalizer?.kill(); ctx.revert() }
   }, [assetsReady, reducedMotion, getLayout, resizeKey])
 
   // ── Reduced-motion: static composed layout ────────────────────────────────
