@@ -33,23 +33,26 @@ gsap.registerPlugin(ScrollTrigger)
 // ── Ingredient config ─────────────────────────────────────────────────────────
 // Edit names / benefits here. `img` must match a file in /public/hero/.
 const INGREDIENTS = [
-  { name: 'Creatine Monohydrate', benefit: 'Strength + power output', img: '/hero/capsule-1.svg' },
-  { name: 'Whey Isolate',         benefit: 'Fast muscle recovery',    img: '/hero/capsule-2.svg' },
-  { name: 'Beta-Alanine',         benefit: 'Endurance + buffer',      img: '/hero/capsule-3.svg' },
-  { name: 'Electrolyte Complex',  benefit: 'Hydration + performance', img: '/hero/capsule-4.svg' },
-  { name: 'Ashwagandha KSM-66',   benefit: 'Stress + sleep quality',  img: '/hero/capsule-5.svg' },
+  { name: 'Creatine Monohydrate', benefit: 'Strength + power output', img: '/hero/capsule-1.png' },
+  { name: 'Whey Isolate',         benefit: 'Fast muscle recovery',    img: '/hero/capsule-2.png' },
+  { name: 'Beta-Alanine',         benefit: 'Endurance + buffer',      img: '/hero/capsule-3.png' },
+  { name: 'Electrolyte Complex',  benefit: 'Hydration + performance', img: '/hero/capsule-4.png' },
+  { name: 'Ashwagandha KSM-66',   benefit: 'Stress + sleep quality',  img: '/hero/capsule-5.png' },
 ]
 
-// Rendered dimensions — match your real PNG canvas sizes (not content sizes)
+// Rendered dimensions — derived from real PNG aspect ratios:
+//   bottle   1024 × 1536  → 2:3  → render at 240 × 360
+//   lid      1536 × 1024  → 3:2  → render at 120 × 80
+//   capsules 1983 × 793   → 2.5:1 → render at 100 × 40
 const BOTTLE_W  = 240
 const BOTTLE_H  = 360
-const LID_W     = 80
-const LID_H     = 45
-const CAP_W     = 96   // capsule
-const CAP_H     = 38
+const LID_W     = 120
+const LID_H     = 80
+const CAP_W     = 100
+const CAP_H     = 40
 
-const BOTTLE_SRC = '/hero/bottle.svg'
-const LID_SRC    = '/hero/lid.svg'
+const BOTTLE_SRC = '/hero/bottle.png'
+const LID_SRC    = '/hero/lid.png'
 
 // ── Image preloader ───────────────────────────────────────────────────────────
 
@@ -124,15 +127,15 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     const bottleX = (vw - BOTTLE_W) / 2
     const bottleY = (vh - BOTTLE_H) / 2
 
-    // Lid: sits on top of the bottle neck.
-    // Bottle SVG neck starts ~9% from top of the 450px viewBox → ~32px at 360px render.
-    // Lid bottom aligns to that point: lidTop = bottleY + 32 - LID_H
+    // Lid: centred over bottle, bottom of lid overlaps top of bottle by ~18px
+    // so it looks physically seated. Adjust the overlap value if the seam is visible.
     const lidX = (vw - LID_W) / 2
-    const lidY = bottleY + 32 - LID_H   // ≈ bottleY - 13
+    const lidY = bottleY - LID_H + 18
 
     // Capsule starting position: at bottle mouth (neck centre ~18% down bottle)
     const capStartX = (vw - CAP_W) / 2
-    const capStartY = bottleY + Math.round(BOTTLE_H * 0.18)  // ≈ 65px from bottle top
+    // Capsule spawn point: just below the bottle mouth (≈ 12% from top of bottle)
+    const capStartY = bottleY + Math.round(BOTTLE_H * 0.12)
 
     // Ring pulse: same centre as the bottle mouth
     const ringSize = 80
