@@ -27,10 +27,16 @@ export async function POST(req: NextRequest) {
     const budget = answers.budget ?? '50-100'
     const pref = answers.stackPreference ?? 'balanced'
     const lifestyle = answers.lifestyle.length > 0 ? answers.lifestyle.join(', ') : 'standard'
+    const firstName = answers.name?.split(' ')[0]?.trim() || null
+    const age = answers.ageBracket ?? null
+    const gender = answers.gender && answers.gender !== 'not-specified' ? answers.gender : null
 
     const prompt = `You are a specialist sports nutrition advisor for CHRGD, a premium UK supplement brand.
 
 Create a personalised supplement stack identity for an athlete with this profile:
+${firstName ? `- Name: ${firstName}` : ''}
+${age ? `- Age group: ${age}` : ''}
+${gender ? `- Gender: ${gender}` : ''}
 - Goals: ${goalText}
 - Training: ${freq} per week, ${type}-focused sessions
 - Diet: ${diet}
@@ -39,16 +45,16 @@ Create a personalised supplement stack identity for an athlete with this profile
 - Budget: £${budget}/month
 - Stack preference: ${pref}
 
-Return ONLY a JSON object (no markdown, no explanation) with exactly these fields:
+Return ONLY a JSON object (no markdown, no explanation, no asterisks in any field) with exactly these fields:
 {
-  "name": "A punchy 2-3 word stack name (e.g. 'Iron Foundations', 'Peak Protocol', 'Lean Machine'). Make it bold and memorable.",
+  "name": "A punchy 2-3 word stack name (e.g. 'Iron Foundations', 'Peak Protocol', 'Lean Machine'). Plain text only — no asterisks or markdown.",
   "archetype": "A 2-4 word athlete archetype label (e.g. 'The Strength Builder', 'The Endurance Athlete', 'The Weekend Warrior')",
-  "description": "A 2-sentence description of this person's training identity and why this stack suits them. Use 'your' not 'the user's'. Do NOT make medical claims. Say 'may support' not 'will improve'.",
+  "description": "${firstName ? `Start by addressing ${firstName} directly. ` : ''}A 2-sentence description of this person's training identity and why this stack suits them. Use 'your' not 'the user's'. Do NOT make medical claims. Say 'may support' not 'will improve'.",
   "focusAreas": ["3 short focus area labels, e.g. 'Strength Output', 'Faster Recovery', 'Daily Energy'"],
   "routineFitScore": <integer 72-96, how well this stack fits their specific routine>
 }
 
-Rules: No medical claims. No guaranteed outcomes. Use 'selected based on your goals', 'may suit your routine', 'commonly used by athletes with similar profiles'. Keep it premium, confident, direct.`
+Rules: No medical claims. No guaranteed outcomes. Use 'selected based on your goals', 'may suit your routine', 'commonly used by athletes with similar profiles'. Keep it premium, confident, direct. No markdown formatting anywhere in the response.`
 
     const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',
@@ -59,6 +65,12 @@ Rules: No medical claims. No guaranteed outcomes. Use 'selected based on your go
 
     const raw = completion.choices[0]?.message?.content?.trim() ?? ''
     const identity: StackIdentity = JSON.parse(raw)
+
+    // Strip any markdown formatting the model may have added
+    const stripMd = (s: string) => s.replace(/\*+/g, '').replace(/_{2,}/g, '').trim()
+    identity.name = stripMd(identity.name)
+    identity.archetype = stripMd(identity.archetype)
+    identity.description = stripMd(identity.description)
 
     return NextResponse.json(identity)
   } catch (err) {

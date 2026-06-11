@@ -61,6 +61,7 @@ function ScoreRing({ score }: { score: number }) {
 
 export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
   const { identity, answers, selectedProducts } = useQuizStore()
+  const firstName = answers.name?.split(' ')[0]?.trim() || null
   const cardsRef = useRef<HTMLDivElement>(null)
   const headlineRef = useRef<HTMLDivElement>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -102,7 +103,7 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
             className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#00D4FF] mb-4 block"
             data-word style={{ fontFamily: 'var(--font-display)' }}
           >
-            Your supplement identity
+            {firstName ? `${firstName}'s supplement identity` : 'Your supplement identity'}
           </span>
           <h2
             className="text-5xl font-black leading-tight tracking-tight text-[#0A0A0A]"

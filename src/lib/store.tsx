@@ -23,6 +23,9 @@ interface QuizStore {
 }
 
 const defaultAnswers: QuizAnswers = {
+  name: '',
+  ageBracket: null,
+  gender: null,
   goals: [],
   trainingFrequency: null,
   trainingType: null,

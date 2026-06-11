@@ -1,3 +1,6 @@
+export type AgeBracket = '16-24' | '25-34' | '35-44' | '45+'
+export type Gender = 'male' | 'female' | 'nonbinary' | 'not-specified'
+
 export type Goal =
   | 'muscle'
   | 'energy'
@@ -19,6 +22,9 @@ export type TrainingExperience = 'new' | 'intermediate' | 'experienced'
 export type StimPreference = 'yes' | 'no'
 
 export interface QuizAnswers {
+  name: string
+  ageBracket: AgeBracket | null
+  gender: Gender | null
   goals: Goal[]
   trainingFrequency: TrainingFrequency | null
   trainingType: TrainingType | null

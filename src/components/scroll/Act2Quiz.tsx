@@ -5,7 +5,7 @@ import { useQuizStore } from '@/lib/store'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
-  TrainingExperience, StimPreference,
+  TrainingExperience, StimPreference, AgeBracket, Gender,
 } from '@/lib/types'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -14,7 +14,7 @@ interface SubOption { id: string; label: string; sub?: string }
 interface SubQuestion { id: string; question: string; hint: string; options: SubOption[] }
 
 function getSubQuestion(step: number, value: string): SubQuestion | null {
-  if (step === 1 && (value === '5-6x' || value === 'daily')) return {
+  if (step === 2 && (value === '5-6x' || value === 'daily')) return {
     id: 'experience', question: 'How long at this training level?',
     hint: 'Shapes product selection and dosage approach',
     options: [
@@ -23,7 +23,7 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
       { id: 'experienced',  label: 'Established athlete',  sub: '2+ years' },
     ],
   }
-  if (step === 2 && value === 'strength') return {
+  if (step === 3 && value === 'strength') return {
     id: 'strengthFocus', question: "Primary goal with weights?",
     hint: 'Directs the products we prioritise',
     options: [
@@ -32,7 +32,7 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
       { id: 'general',      label: 'General fitness',  sub: 'Well-rounded strength' },
     ],
   }
-  if (step === 2 && value === 'sport') return {
+  if (step === 3 && value === 'sport') return {
     id: 'sportType', question: 'Which sport?',
     hint: 'Different sports have different demand profiles',
     options: [
@@ -42,7 +42,7 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
       { id: 'other',      label: 'Another sport' },
     ],
   }
-  if (step === 6 && value === 'high') return {
+  if (step === 7 && value === 'high') return {
     id: 'stim', question: 'Want stim pre-workout in your stack?',
     hint: 'Some athletes prefer to control caffeine separately',
     options: [
@@ -56,6 +56,7 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
 // ─── Step data ────────────────────────────────────────────────────────────────
 
 const STEP_META = [
+  { section: 'ABOUT YOU',     q: "Let's start with you.",           hint: "Helps us build a stack that's actually personal to you." },
   { section: 'YOUR GOAL',     q: "What's the main goal?",           hint: "Pick everything that applies — we'll prioritise by what you choose most." },
   { section: 'TRAINING',      q: 'How often do you train?',         hint: 'Your frequency shapes the whole stack.' },
   { section: 'TRAINING',      q: "What's your training style?",     hint: 'Choose what fits closest.' },
@@ -250,6 +251,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Personal info step local state
+  const [localName, setLocalName] = useState(answers.name || '')
+  const [localAge, setLocalAge] = useState<AgeBracket | ''>(answers.ageBracket || '')
+  const [localGender, setLocalGender] = useState<Gender | ''>(answers.gender || '')
+
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
   function clearPending() {
@@ -261,6 +267,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     setSubQuestion(null)
     setSubAnswerId(null)
+    if (step === 0) {
+      setAnswer('name', localName.trim())
+      if (localAge) setAnswer('ageBracket', localAge as AgeBracket)
+      if (localGender) setAnswer('gender', localGender as Gender)
+    }
     if (step >= TOTAL - 1) { handleFinish(); return }
     setDirection('forward')
     setAnimKey((k) => k + 1)
@@ -330,9 +341,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   const canContinue = (() => {
     switch (step) {
-      case 0: return answers.goals.length > 0
-      case 3: return true
-      case 5: return true
+      case 0: return !!localName.trim() && !!localAge
+      case 1: return answers.goals.length > 0
+      case 4: return true
+      case 6: return true
       default: return false
     }
   })()
@@ -420,12 +432,84 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           </h2>
           <p className="text-sm text-white/35 mb-7">{hint}</p>
 
-          {/* ── Step 0: Goals (multi) ── */}
+          {/* ── Step 0: Personal info ── */}
           {step === 0 && (
+            <div className="flex flex-col gap-6">
+              <div>
+                <label
+                  className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  First name
+                </label>
+                <input
+                  type="text"
+                  value={localName}
+                  onChange={(e) => setLocalName(e.target.value)}
+                  placeholder="Your first name"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter' && localName.trim() && localAge) advance() }}
+                  className="w-full px-5 py-4 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-sm font-medium placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                />
+              </div>
+
+              <div>
+                <label
+                  className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Age
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {([
+                    { id: '16-24' as AgeBracket, label: 'Under 25' },
+                    { id: '25-34' as AgeBracket, label: '25–34' },
+                    { id: '35-44' as AgeBracket, label: '35–44' },
+                    { id: '45+'  as AgeBracket, label: '45+' },
+                  ]).map(({ id, label }) => (
+                    <AnswerOption
+                      key={`age-${id}`}
+                      label={label} multi
+                      selected={localAge === id}
+                      onClick={() => setLocalAge(id)}
+                    />
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label
+                  className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block"
+                  style={{ fontFamily: 'var(--font-display)' }}
+                >
+                  Gender <span className="normal-case font-normal tracking-normal text-white/15">· optional</span>
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {([
+                    { id: 'male'          as Gender, label: 'Male' },
+                    { id: 'female'        as Gender, label: 'Female' },
+                    { id: 'nonbinary'     as Gender, label: 'Non-binary' },
+                    { id: 'not-specified' as Gender, label: 'Prefer not to say' },
+                  ]).map(({ id, label }) => (
+                    <AnswerOption
+                      key={`gender-${id}`}
+                      label={label} multi
+                      selected={localGender === id}
+                      onClick={() => setLocalGender(prev => prev === id ? '' : id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Step 1: Goals (multi) ── */}
+          {step === 1 && (
             <div className="grid grid-cols-2 gap-2.5">
               {GOALS_DATA.map(({ id, label, icon }) => (
                 <AnswerOption
-                  key={`0-${id}`}
+                  key={`1-${id}`}
                   icon={icon} label={label} multi
                   selected={answers.goals.includes(id)}
                   onClick={() => {
@@ -437,12 +521,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 1: Frequency (single) ── */}
-          {step === 1 && (
+          {/* ── Step 2: Frequency (single) ── */}
+          {step === 2 && (
             <div className="flex flex-col gap-2.5">
               {FREQ_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`1-${id}`}
+                  key={`2-${id}`}
                   label={label} sub={sub}
                   selected={answers.trainingFrequency === id}
                   onClick={() => handleSingle('trainingFrequency', id)}
@@ -451,12 +535,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 2: Type (single) ── */}
-          {step === 2 && (
+          {/* ── Step 3: Type (single) ── */}
+          {step === 3 && (
             <div className="flex flex-col gap-2.5">
               {TYPE_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`2-${id}`}
+                  key={`3-${id}`}
                   label={label} sub={sub}
                   selected={answers.trainingType === id}
                   onClick={() => handleSingle('trainingType', id)}
@@ -465,12 +549,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 3: Lifestyle (multi) ── */}
-          {step === 3 && (
+          {/* ── Step 4: Lifestyle (multi) ── */}
+          {step === 4 && (
             <div className="grid grid-cols-2 gap-2.5">
               {LIFESTYLE_DATA.map(({ id, label, icon }) => (
                 <AnswerOption
-                  key={`3-${id}`}
+                  key={`4-${id}`}
                   icon={icon} label={label} multi
                   selected={answers.lifestyle.includes(id)}
                   onClick={() => {
@@ -480,7 +564,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 />
               ))}
               <AnswerOption
-                key="3-none"
+                key="4-none"
                 icon="✓" label="None of these" multi
                 selected={answers.lifestyle.length === 0}
                 onClick={() => setAnswer('lifestyle', [])}
@@ -488,12 +572,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 4: Diet (single) ── */}
-          {step === 4 && (
+          {/* ── Step 5: Diet (single) ── */}
+          {step === 5 && (
             <div className="flex flex-col gap-2.5">
               {DIET_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`4-${id}`}
+                  key={`5-${id}`}
                   label={label} sub={sub}
                   selected={answers.diet === id}
                   onClick={() => handleSingle('diet', id)}
@@ -502,12 +586,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 5: Current supps (multi) ── */}
-          {step === 5 && (
+          {/* ── Step 6: Current supps (multi) ── */}
+          {step === 6 && (
             <div className="grid grid-cols-2 gap-2.5">
               {SUPPS_DATA.map(({ id, label, icon }) => (
                 <AnswerOption
-                  key={`5-${id}`}
+                  key={`6-${id}`}
                   icon={icon} label={label} multi
                   selected={id === 'none' ? answers.currentSupplements.length === 0 : answers.currentSupplements.includes(id)}
                   onClick={() => {
@@ -520,12 +604,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 6: Caffeine (single) ── */}
-          {step === 6 && (
+          {/* ── Step 7: Caffeine (single) ── */}
+          {step === 7 && (
             <div className="flex flex-col gap-2.5">
               {CAFFEINE_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`6-${id}`}
+                  key={`7-${id}`}
                   label={label} sub={sub}
                   selected={answers.caffeineLevel === id}
                   onClick={() => handleSingle('caffeineLevel', id)}
@@ -534,12 +618,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 7: Budget (single) ── */}
-          {step === 7 && (
+          {/* ── Step 8: Budget (single) ── */}
+          {step === 8 && (
             <div className="flex flex-col gap-2.5">
               {BUDGET_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`7-${id}`}
+                  key={`8-${id}`}
                   label={label} sub={sub}
                   selected={answers.budget === id}
                   onClick={() => handleSingle('budget', id)}
@@ -548,12 +632,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 8: Stack pref (single, explicit CTA) ── */}
-          {step === 8 && (
+          {/* ── Step 9: Stack pref (single, explicit CTA) ── */}
+          {step === 9 && (
             <div className="flex flex-col gap-2.5">
               {PREF_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`8-${id}`}
+                  key={`9-${id}`}
                   label={label} sub={sub}
                   selected={answers.stackPreference === id}
                   onClick={() => setAnswer('stackPreference', id)}
@@ -595,8 +679,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </div>
       </div>
 
-      {/* CTA — multi-select steps and final step */}
-      {[0, 3, 5].includes(step) && (
+      {/* CTA — personal info, multi-select steps */}
+      {[0, 1, 4, 6].includes(step) && (
         <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
           <div className="max-w-lg mx-auto">
             <button
@@ -609,15 +693,17 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               }`}
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {step === 0 && answers.goals.length > 0
-                ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''} →`
-                : 'Continue →'}
+              {step === 0 && localName.trim()
+                ? `Continue, ${localName.trim()} →`
+                : step === 1 && answers.goals.length > 0
+                  ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''} →`
+                  : 'Continue →'}
             </button>
           </div>
         </div>
       )}
 
-      {step === 8 && (
+      {step === 9 && (
         <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
           <div className="max-w-lg mx-auto">
             <button

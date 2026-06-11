@@ -50,6 +50,23 @@ function scoreProduct(product: Product, answers: QuizAnswers): number {
   if (answers.lifestyle.includes('desk-job') && product.id === 'vitamin-d3-k2') score += 10
   if (answers.lifestyle.includes('high-stress') && product.id === 'sleep-support') score += 10
 
+  // Age bracket boosts
+  if (answers.ageBracket === '45+') {
+    if (product.id === 'vitamin-d3-k2') score += 15
+    if (product.id === 'magnesium') score += 12
+    if (product.id === 'collagen') score += 12
+    if (product.id === 'omega3') score += 8
+    if (product.stimulant) score -= 5
+  }
+  if (answers.ageBracket === '35-44') {
+    if (product.id === 'vitamin-d3-k2') score += 8
+    if (product.id === 'magnesium') score += 8
+    if (product.id === 'collagen') score += 6
+  }
+  if (answers.ageBracket === '16-24') {
+    if (product.stimulant && answers.trainingExperience !== 'experienced') score -= 5
+  }
+
   return score
 }
 
