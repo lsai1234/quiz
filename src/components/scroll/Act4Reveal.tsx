@@ -66,7 +66,7 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const recommended = buildRecommendedStack(answers)
 
-  // Stagger cards in — delayed 1.2s so the collector pour-out finishes first
+  // Stagger cards in on scroll-enter
   useEffect(() => {
     if (!cardsRef.current || reducedMotion) return
     const cards = cardsRef.current.querySelectorAll('[data-card]')
@@ -74,20 +74,20 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
       trigger: cardsRef.current,
       start: 'top 80%',
       onEnter: () => {
-        gsap.fromTo(cards, { y: 60, opacity: 0 }, { y: 0, opacity: 1, stagger: 0.12, duration: 0.6, ease: 'power2.out', delay: 1.2 })
+        gsap.fromTo(cards, { y: 60, opacity: 0 }, { y: 0, opacity: 1, stagger: 0.12, duration: 0.6, ease: 'power2.out', delay: 0 })
       },
     })
     return () => st.kill()
   }, [reducedMotion])
 
-  // Headline — spring-loaded reveal, delayed for pour-out
+  // Headline — spring-loaded reveal
   useEffect(() => {
     if (!headlineRef.current || reducedMotion) return
     const words = headlineRef.current.querySelectorAll('[data-word]')
     gsap.fromTo(
       words,
       { y: 40, opacity: 0, scale: 0.92 },
-      { y: 0, opacity: 1, scale: 1, stagger: 0.09, duration: 0.6, ease: 'back.out(1.4)', delay: 0.9 },
+      { y: 0, opacity: 1, scale: 1, stagger: 0.09, duration: 0.6, ease: 'back.out(1.4)', delay: 0.15 },
     )
   }, [reducedMotion])
 
