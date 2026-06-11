@@ -6,8 +6,6 @@ import { Act2Quiz } from './Act2Quiz'
 import { Act3Analysis } from './Act3Analysis'
 import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
-import { CollectorBottle } from '@/components/collector/CollectorBottle'
-import { useQuizStore } from '@/lib/store'
 
 type Act = 1 | 2 | 3 | 4 | 5
 
@@ -23,7 +21,6 @@ export function ScrollExperience() {
   const [act, setAct] = useState<Act>(1)
   const [animKey, setAnimKey] = useState(0)
   const [reducedMotion, setReducedMotion] = useState(false)
-  const { reset, startCollectorPour } = useQuizStore()
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -34,7 +31,6 @@ export function ScrollExperience() {
   }, [])
 
   function goTo(next: Act) {
-    if (next === 4) startCollectorPour()
     setAct(next)
     setAnimKey((k) => k + 1)
     window.scrollTo(0, 0)
@@ -42,39 +38,12 @@ export function ScrollExperience() {
 
   return (
     <div className="min-h-screen overflow-x-hidden">
-      {/* CollectorBottle lives outside key={animKey} so it persists across act transitions */}
-      <CollectorBottle act={act} />
-
       <div key={animKey} className={TRANSITIONS[act]}>
-        {act === 1 && (
-          <Act1Hero
-            onEnterQuiz={() => goTo(2)}
-            reducedMotion={reducedMotion}
-          />
-        )}
-        {act === 2 && (
-          <Act2Quiz
-            onComplete={() => goTo(3)}
-            reducedMotion={reducedMotion}
-          />
-        )}
-        {act === 3 && (
-          <Act3Analysis
-            onComplete={() => goTo(4)}
-            reducedMotion={reducedMotion}
-          />
-        )}
-        {act === 4 && (
-          <Act4Reveal
-            onBuildBundle={() => goTo(5)}
-            reducedMotion={reducedMotion}
-          />
-        )}
-        {act === 5 && (
-          <Act5Bundle
-            reducedMotion={reducedMotion}
-          />
-        )}
+        {act === 1 && <Act1Hero onEnterQuiz={() => goTo(2)} reducedMotion={reducedMotion} />}
+        {act === 2 && <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />}
+        {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
+        {act === 4 && <Act4Reveal onBuildBundle={() => goTo(5)} reducedMotion={reducedMotion} />}
+        {act === 5 && <Act5Bundle reducedMotion={reducedMotion} />}
       </div>
     </div>
   )
