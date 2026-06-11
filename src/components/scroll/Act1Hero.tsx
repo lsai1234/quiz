@@ -162,12 +162,19 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       const bottleVisualBottomB3 = (bottleY + bottleShiftY) + BOTTLE_H * (1 + bottleScaleB3) / 2
       const shelfStartY = bottleVisualBottomB3 + 20
       const shelfRowH   = Math.max(56, (vh * 0.88 - shelfStartY) / 3)
-      const col0 = vw * 0.05
-      const col1 = vw * 0.52
-      shelf = INGREDIENTS.map((_, i) => ({
-        x: i % 2 === 0 ? col0 : col1,
-        y: shelfStartY + Math.floor(i / 2) * shelfRowH,
-      }))
+      // Center the two-column grid symmetrically around the viewport midpoint
+      const colGap = 24
+      const col0 = vw / 2 - CAP_W - colGap / 2
+      const col1 = vw / 2 + colGap / 2
+      const centerX = (vw - CAP_W) / 2
+      const isOdd = INGREDIENTS.length % 2 !== 0
+      shelf = INGREDIENTS.map((_, i) => {
+        const isLoneLastItem = isOdd && i === INGREDIENTS.length - 1
+        return {
+          x: isLoneLastItem ? centerX : (i % 2 === 0 ? col0 : col1),
+          y: shelfStartY + Math.floor(i / 2) * shelfRowH,
+        }
+      })
     } else {
       const shelfX = vw * 0.58
       const shelfY = vh * 0.18
@@ -382,7 +389,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         start:   'top top',
         end:     `+=${L.mobile ? '300%' : '400%'}`,
         pin:     true,
-        scrub:       L.mobile ? 0.5 : 1,
+        scrub:       L.mobile ? true : 1,
         fastScrollEnd: L.mobile,
         animation: tl,
         anticipatePin: 1,
