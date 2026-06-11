@@ -152,7 +152,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     // Beat 3 — bottle movement params.
     // Mobile: shift bottle UP instead of left, shrink more, to clear space for capsule grid.
     const bottleShiftX  = mobile ? 0          : -(vw * 0.14)
-    const bottleShiftY  = mobile ? -(vh * 0.10) : 0
+    const bottleShiftY  = mobile ? -(vh * 0.16) : 0
     const bottleScaleB3 = mobile ? 0.65        : 0.85
 
     // Shelf positions (where each capsule lands)
@@ -163,7 +163,9 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       // with no wrapping or row-overlap issues.
       const bottleVisualBottomB3 = (bottleY + bottleShiftY) + BOTTLE_H * (1 + bottleScaleB3) / 2
       const shelfStartY = bottleVisualBottomB3 + 24
-      const rowH = Math.max(52, (vh * 0.86 - shelfStartY) / INGREDIENTS.length)
+      // Reserve 72px at the bottom for the swipe hint; fit all rows above it
+      const maxGridBottom = vh - 72
+      const rowH = Math.max(40, Math.min(80, (maxGridBottom - CAP_H - shelfStartY) / (INGREDIENTS.length - 1)))
       const col  = Math.round(vw * 0.06)
       shelf = INGREDIENTS.map((_, i) => ({ x: col, y: shelfStartY + i * rowH }))
     } else {
