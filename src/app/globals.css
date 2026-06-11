@@ -120,6 +120,12 @@
 .quiz-options [data-option] {
   transition: opacity 0.16s ease, background-color 0.15s ease,
               border-color 0.15s ease, box-shadow 0.15s ease;
+  will-change: transform, opacity;
+}
+
+/* GSAP-animated step words/items — hint compositor layer during entrance */
+[data-word], [data-anim] {
+  will-change: transform, opacity;
 }
 
 * {

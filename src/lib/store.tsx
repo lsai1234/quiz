@@ -10,6 +10,11 @@ interface QuizStore {
   stackLevel: StackLevel
   selectedProducts: Product[]
 
+  // Collector state
+  collectorCapsules: number
+  collectorStepCounts: Record<number, number>
+  collectorPouring: boolean
+
   setStep: (step: number) => void
   nextStep: () => void
   prevStep: () => void
@@ -20,6 +25,12 @@ interface QuizStore {
   setSelectedProducts: (products: Product[]) => void
   toggleProduct: (product: Product) => void
   reset: () => void
+
+  // Collector actions
+  addCollectorCapsules: (step: number, count: number) => void
+  removeCollectorCapsulesForStep: (step: number) => void
+  startCollectorPour: () => void
+  resetCollector: () => void
 }
 
 const defaultAnswers: QuizAnswers = {
@@ -43,6 +54,10 @@ export const useQuizStore = create<QuizStore>((set) => ({
   identity: null,
   stackLevel: 'performance',
   selectedProducts: [],
+
+  collectorCapsules: 0,
+  collectorStepCounts: {},
+  collectorPouring: false,
 
   setStep: (step) => set({ step }),
   nextStep: () => set((s) => ({ step: s.step + 1 })),
@@ -68,5 +83,31 @@ export const useQuizStore = create<QuizStore>((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [] }),
+  reset: () => set({
+    step: 0, answers: defaultAnswers, identity: null, selectedProducts: [],
+    collectorCapsules: 0, collectorStepCounts: {}, collectorPouring: false,
+  }),
+
+  addCollectorCapsules: (step, count) =>
+    set((s) => {
+      const newCounts = { ...s.collectorStepCounts, [step]: (s.collectorStepCounts[step] ?? 0) + count }
+      return {
+        collectorStepCounts: newCounts,
+        collectorCapsules: Object.values(newCounts).reduce((a, b) => a + b, 0),
+      }
+    }),
+
+  removeCollectorCapsulesForStep: (step) =>
+    set((s) => {
+      const newCounts = { ...s.collectorStepCounts }
+      delete newCounts[step]
+      return {
+        collectorStepCounts: newCounts,
+        collectorCapsules: Object.values(newCounts).reduce((a, b) => a + b, 0),
+      }
+    }),
+
+  startCollectorPour: () => set({ collectorPouring: true }),
+
+  resetCollector: () => set({ collectorCapsules: 0, collectorStepCounts: {}, collectorPouring: false }),
 }))
