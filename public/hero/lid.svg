@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="56" viewBox="0 0 100 56">
+  <!-- Cap body -->
+  <rect x="6" y="14" width="88" height="38" rx="8" fill="#00D4FF"/>
+  <rect x="6" y="14" width="88" height="38" rx="8" fill="none" stroke="white" stroke-width="1" opacity="0.3"/>
+  <!-- Top dome -->
+  <path d="M6 32 Q6 6 50 6 Q94 6 94 32" fill="#1ADBFF"/>
+  <!-- Highlight stripe -->
+  <path d="M18 20 Q18 10 50 10 Q64 10 72 14" stroke="white" stroke-width="2" fill="none" opacity="0.25" stroke-linecap="round"/>
+  <!-- Thread ring -->
+  <rect x="10" y="12" width="80" height="4" rx="2" fill="white" opacity="0.15"/>
+  <!-- Grip ridges -->
+  <rect x="14" y="18" width="4" height="28" rx="2" fill="white" opacity="0.1"/>
+  <rect x="46" y="18" width="4" height="28" rx="2" fill="white" opacity="0.1"/>
+  <rect x="78" y="18" width="4" height="28" rx="2" fill="white" opacity="0.1"/>
+</svg>
