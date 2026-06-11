@@ -145,16 +145,28 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     const ringX = (vw - ringSize) / 2
     const ringY = capStartY + (CAP_H - ringSize) / 2  // vertically centred on mouth
 
-    // Shelf positions (where each capsule travels to)
+    // Beat 2 — how far the lid lifts.
+    // Mobile: cap so the lid stays ≥ 25px below viewport top (never flies off-screen).
+    const lidLift = mobile ? Math.max(0, lidY - 25) : 140
+
+    // Beat 3 — bottle movement params.
+    // Mobile: shift bottle UP instead of left, shrink more, to clear space for capsule grid.
+    const bottleShiftX  = mobile ? 0          : -(vw * 0.14)
+    const bottleShiftY  = mobile ? -(vh * 0.10) : 0
+    const bottleScaleB3 = mobile ? 0.65        : 0.85
+
+    // Shelf positions (where each capsule lands)
     let shelf: Pos[]
     if (mobile) {
-      const col0 = vw * 0.08
-      const col1 = vw * 0.54
-      const rowY = vh * 0.62
-      const rowH = vh * 0.14
+      // Visual bottom of the bottle in its Beat-3 position (shift + scale via transform-origin:centre)
+      const bottleVisualBottomB3 = (bottleY + bottleShiftY) + BOTTLE_H * (1 + bottleScaleB3) / 2
+      const shelfStartY = bottleVisualBottomB3 + 20
+      const shelfRowH   = Math.max(56, (vh * 0.88 - shelfStartY) / 3)
+      const col0 = vw * 0.05
+      const col1 = vw * 0.52
       shelf = INGREDIENTS.map((_, i) => ({
         x: i % 2 === 0 ? col0 : col1,
-        y: rowY + Math.floor(i / 2) * rowH,
+        y: shelfStartY + Math.floor(i / 2) * shelfRowH,
       }))
     } else {
       const shelfX = vw * 0.58
@@ -170,10 +182,8 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         : { x: s.x + CAP_W + 10, y: s.y + CAP_H / 2 - 10 },
     )
 
-    // How far the bottle slides left during Beat 3
-    const bottleShiftX = mobile ? 0 : -(vw * 0.14)
-
-    return { vw, vh, mobile, bottleX, bottleY, lidX, lidY, capStartX, capStartY, ringX, ringY, shelf, captions, bottleShiftX }
+    return { vw, vh, mobile, bottleX, bottleY, lidX, lidY, capStartX, capStartY, ringX, ringY,
+             shelf, captions, bottleShiftX, bottleShiftY, bottleScaleB3, lidLift }
   }, [])
 
   // ── Preload assets ────────────────────────────────────────────────────────
@@ -250,10 +260,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(sweepRef.current, { opacity: 0, duration: 0.25, ease: 'none' }, 0.85)
 
       // ── Beat 2 · THE OPENING (t 1.2 → 2.8) ──────────────────────────────
-      // Lid lifts: -140px, -14° rotation, 60% opacity
+      // Lid lifts by L.lidLift px (capped on mobile to stay on-screen), -14°, 60% opacity
       tl.to(lidRef.current, {
         x: L.lidX - L.vw * 0.02,
-        y: L.lidY - 140,
+        y: L.lidY - L.lidLift,
         rotation: -14, scale: 1.03, opacity: 0.6,
         duration: 1.6, ease: 'none',
       }, 1.2)
@@ -265,12 +275,14 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(ringRef.current, { opacity: 0,                duration: 0.6, ease: 'none' }, 1.8)
 
       // ── Beat 3 · THE INGREDIENTS (t 2.8 → 7.0) ──────────────────────────
-      // Bottle slides left + shrinks to make room for ingredient lineup
+      // Desktop: bottle slides left + shrinks. Mobile: bottle shrinks + rises to clear capsule grid.
       tl.to(bottleRef.current, {
-        x: L.bottleX + L.bottleShiftX, scale: 0.85,
+        x: L.bottleX + L.bottleShiftX,
+        y: L.bottleY + L.bottleShiftY,
+        scale: L.bottleScaleB3,
         duration: 1.3, ease: 'none',
       }, 2.8)
-      // Lid follows bottle leftward (keep relative to bottle neck)
+      // Lid follows bottle (X only — it's floating above and Y is maintained from Beat 2)
       tl.to(lidRef.current, {
         x: L.lidX + L.bottleShiftX - L.vw * 0.02,
         duration: 1.3, ease: 'none',
@@ -339,10 +351,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         }, rStart + 0.28 + ri * returnPer)
       })
 
-      // Bottle returns to centre
+      // Bottle returns to centre (x, y, scale all restored)
       const bReturn = rStart + 0.15
       tl.to(bottleRef.current, {
-        x: L.bottleX, scale: 1.0,
+        x: L.bottleX, y: L.bottleY, scale: 1.0,
         duration: 1.05, ease: 'none',
       }, bReturn)
 
