@@ -392,8 +392,8 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
 
         const FRICTION    = 0.96    // velocity multiplier per 16.67 ms frame
-        const MAX_VEL     = 0.0018  // progress/ms cap — full anim in ~1.5s at max
-        const PX_SCALE    = 0.00075 // converts px/ms swipe speed → progress/ms
+        const MAX_VEL     = 0.0007  // progress/ms cap — full anim in ~1.5s at max
+        const PX_SCALE    = 0.00030 // converts px/ms swipe speed → progress/ms
         const STOP_BELOW  = 0.000001
 
         let velocity = 0
