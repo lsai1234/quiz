@@ -2,6 +2,7 @@
 
 import type { QuizAnswers, Goal } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 
@@ -119,6 +120,11 @@ export function buildStackBlueprint(
   answers: QuizAnswers,
   catalogue: CatalogueProduct[]
 ): StackBlueprint {
+  // If the provided catalogue has no slot coverage (e.g. Shopify products without
+  // slot:* tags), fall back to the mock catalogue so slots are always populated.
+  const hasSlotCoverage = catalogue.some(p => p.stackSlots.length > 0)
+  const effectiveCatalogue = hasSlotCoverage ? catalogue : MOCK_CATALOGUE
+
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
   const secondaryGoals = answers.goals.slice(1)
 
@@ -130,7 +136,7 @@ export function buildStackBlueprint(
   let displayOrder = 0
 
   for (const slotType of SLOT_ORDER) {
-    const candidates = catalogue.filter(p => p.stackSlots.includes(slotType as any))
+    const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any))
     if (candidates.length === 0) continue
 
     let bestProduct: CatalogueProduct | null = null
@@ -193,8 +199,8 @@ export function buildStackBlueprint(
     createdAt: new Date().toISOString(),
   }
 
-  const oneOffPrice = calculateStackPrice(partialBlueprint, catalogue)
-  const subscriptionPrice = calculateSubscriptionPrice(partialBlueprint, catalogue)
+  const oneOffPrice = calculateStackPrice(partialBlueprint, effectiveCatalogue)
+  const subscriptionPrice = calculateSubscriptionPrice(partialBlueprint, effectiveCatalogue)
   const savings = Math.round((oneOffPrice - subscriptionPrice) * 100) / 100
 
   const savingsSummary = savings >= 1

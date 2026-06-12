@@ -24,7 +24,9 @@ import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
   const { stackBlueprint, setStackBlueprint } = useQuizStore()
-  const rawBlueprint = stackBlueprint ?? MOCK_BLUEPRINT
+  // Fall back to MOCK_BLUEPRINT when blueprint is absent OR has no slots
+  // (the latter happens when Shopify products lack slot:* tags)
+  const rawBlueprint = (stackBlueprint && stackBlueprint.slots.length > 0) ? stackBlueprint : MOCK_BLUEPRINT
   // useCatalogueProducts triggers the /api/catalogue fetch (once per session)
   // and returns the properly-typed CatalogueProduct[] from the Zustand store.
   const { products } = useCatalogueProducts()
