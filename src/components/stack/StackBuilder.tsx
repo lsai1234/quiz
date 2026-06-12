@@ -33,6 +33,14 @@ export function StackBuilder() {
   // Rebuild recommended stack whenever level or catalogue changes
   const recommended = useMemo(() => buildRecommendedStack(answers, products), [answers, products])
 
+  // Re-initialise selected products when the live catalogue loads
+  useEffect(() => {
+    if (products.length === 0) return
+    const rec = buildRecommendedStack(answers, products)
+    const core = rec.core.filter((p) => p.stackLevels.includes(stackLevel))
+    setSelectedProducts(core)
+  }, [products]) // eslint-disable-line react-hooks/exhaustive-deps
+
   function handleLevelChange(level: StackLevel) {
     setStackLevel(level)
     setAnimKey((k) => k + 1)
