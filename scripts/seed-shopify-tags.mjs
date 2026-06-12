@@ -27,10 +27,28 @@ const HEADERS = TOKEN
 
 // ─── Tag rules — edit these to match your actual product names ────────────────
 
+// Products to skip entirely — accessories, non-supplement items
+const SKIP_TAGS = ['accessory', 'fitness', 'gym']
+const SKIP_TITLE_KEYWORDS = ['shaker', 'bottle', 'belt', 'jug', 'color kit', 'colour kit', 'color mini']
+
+function shouldSkip(product) {
+  const existingTags = (product.tags || '').toLowerCase()
+  const title = product.title.toLowerCase()
+  if (SKIP_TAGS.some(t => existingTags.includes(t))) return true
+  if (SKIP_TITLE_KEYWORDS.some(k => title.includes(k))) return true
+  return false
+}
+
 function inferTags(product) {
   const title = product.title.toLowerCase()
   const type = (product.product_type || '').toLowerCase()
   const tags = new Set((product.tags || '').split(',').map(t => t.trim()).filter(Boolean))
+
+  // Detect stim-free early — used to block stimulant tag below
+  const isStimFree = title.includes('stim-free') || title.includes('stimfree') ||
+    title.includes('stimulant-free') || title.includes('zero stimulant') ||
+    title.includes('caffeine free') || title.includes('caffeine-free') ||
+    title.includes('pump') && !title.includes('pre-workout')
 
   // ── Product type ──────────────────────────────────────────────────────────
   if (title.includes('whey') || title.includes('protein') || title.includes('mass') || title.includes('gainer')) {
@@ -99,8 +117,8 @@ function inferTags(product) {
   addIfMissing(tags, 'stack:complete')
 
   // ── Flags ─────────────────────────────────────────────────────────────────
-  if (title.includes('stim-free') || title.includes('stimfree') || title.includes('caffeine free') || title.includes('caffeine-free')) {
-    // no stimulant tag
+  if (isStimFree) {
+    // no stimulant tag — explicitly stim-free product
   } else if (title.includes('pre-workout') || title.includes('preworkout') || title.includes('thermo')) {
     addIfMissing(tags, 'stimulant')
   }
@@ -166,6 +184,11 @@ async function main() {
   console.log(`Found ${products.length} products\n`)
 
   for (const product of products) {
+    if (shouldSkip(product)) {
+      console.log(`  ✗ ${product.title} (skipped — accessory/non-supplement)`)
+      continue
+    }
+
     const newTags = inferTags(product)
     const changed = newTags !== (product.tags || '')
 
