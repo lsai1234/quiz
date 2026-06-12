@@ -180,10 +180,26 @@ export function buildStackBlueprint(
   const stackName = getStackName(archetype, answers.trainingFrequency)
   const summary = ARCHETYPE_SUMMARIES[archetype]
 
+  // Cap total slots to match the selected budget / stack size
+  const maxSlots = (() => {
+    switch (answers.budget) {
+      case 'under-30': return 2
+      case '30-50':    return 3
+      case '50-80':    return 5
+      case '80-plus':  return 7
+      default: switch (answers.stackPreference) {
+        case 'simple':   return 3
+        case 'balanced': return 5
+        default:         return 7
+      }
+    }
+  })()
+
   const slots: StackSlotEntry[] = []
   let displayOrder = 0
 
   for (const slotType of SLOT_ORDER) {
+    if (slots.length >= maxSlots) break
     const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any))
     if (candidates.length === 0) continue
 

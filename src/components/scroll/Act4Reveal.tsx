@@ -14,22 +14,18 @@ interface Props {
 }
 
 function ScoreRing({ score }: { score: number }) {
-  const [animated, setAnimated] = useState(false)
   const numRef = useRef<HTMLSpanElement>(null)
   const r = 36
   const circ = 2 * Math.PI * r
-  const dash = animated ? (score / 10) * circ : 0
+  const dash = (score / 100) * circ
 
   useEffect(() => {
+    const counter = { val: 0 }
     const t = setTimeout(() => {
-      setAnimated(true)
-      // Count up from 0
-      const counter = { val: 0 }
       gsap.to(counter, {
         val: score,
         duration: 1.4,
         ease: 'power2.out',
-        delay: 0.1,
         onUpdate: () => {
           if (numRef.current) numRef.current.textContent = Math.round(counter.val).toString()
         },
@@ -43,17 +39,24 @@ function ScoreRing({ score }: { score: number }) {
       <svg width="80" height="80" viewBox="0 0 80 80" className="-rotate-90">
         <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(10,10,10,0.1)" strokeWidth="4" />
         <circle cx="40" cy="40" r={r} fill="none" stroke="#00D4FF" strokeWidth="4"
-          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ - dash}
-          style={{
-            transition: 'stroke-dashoffset 1.3s cubic-bezier(0.34,1.56,0.64,1)',
-            filter: 'drop-shadow(0 0 4px rgba(0,212,255,0.5))',
-          }} />
+          strokeLinecap="round"
+          strokeDasharray={circ}
+          strokeDashoffset={circ}
+          style={{ filter: 'drop-shadow(0 0 4px rgba(0,212,255,0.5))' }}
+          ref={(el) => {
+            if (!el) return
+            setTimeout(() => {
+              el.style.transition = 'stroke-dashoffset 1.3s cubic-bezier(0.22,1,0.36,1)'
+              el.style.strokeDashoffset = String(circ - dash)
+            }, 600)
+          }}
+        />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span ref={numRef} className="text-xl font-black text-[#0A0A0A]" style={{ fontFamily: 'var(--font-display)' }}>
           0
         </span>
-        <span className="text-[9px] text-[#0A0A0A]/40">/10</span>
+        <span className="text-[9px] text-[#0A0A0A]/40">/100</span>
       </div>
     </div>
   )

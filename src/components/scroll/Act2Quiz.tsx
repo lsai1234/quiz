@@ -131,11 +131,34 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
   { id: 'high',   label: 'High tolerance',  sub: '3+ coffees, used to pre-workout' },
 ]
 // Budget options — each one also implicitly sets stackPreference
-const BUDGET_DATA: Array<{ id: Budget; label: string; sub: string; pref: StackPreference; products: string }> = [
-  { id: 'under-30', label: 'Under £30/mo', sub: 'Starter — 1–2 essentials only',            pref: 'simple',   products: '1–2' },
-  { id: '30-50',    label: '£30–£50/mo',   sub: 'Core stack — the products that move the needle', pref: 'simple',   products: '2–3' },
-  { id: '50-80',    label: '£50–£80/mo',   sub: 'Performance stack — solid all-round coverage',    pref: 'balanced', products: '3–5' },
-  { id: '80-plus',  label: '£80+/mo',      sub: 'Complete stack — every angle covered',        pref: 'complete', products: '5–7' },
+const BUDGET_DATA: Array<{
+  id: Budget; name: string; approx: string; sub: string; includes: string
+  pref: StackPreference; count: string
+}> = [
+  {
+    id: 'under-30', name: 'Starter Bundle',     approx: '~£25/mo',
+    sub: 'The two supplements that move the needle most',
+    includes: 'Protein + Creatine',
+    pref: 'simple', count: '2 products',
+  },
+  {
+    id: '30-50',    name: 'Saver Bundle',        approx: '~£40/mo',
+    sub: 'Core essentials to cover your main goal',
+    includes: 'Protein, Creatine + 1 add-on',
+    pref: 'simple', count: '3 products',
+  },
+  {
+    id: '50-80',    name: 'Performance Bundle',  approx: '~£65/mo',
+    sub: 'Solid, well-rounded daily stack',
+    includes: 'Protein, Creatine, Pre-workout + 2 more',
+    pref: 'balanced', count: '5 products',
+  },
+  {
+    id: '80-plus',  name: 'Complete Bundle',     approx: '£80+/mo',
+    sub: 'Every angle covered — nothing left out',
+    includes: 'Full stack: protein, performance, energy, recovery & more',
+    pref: 'complete', count: '7 products',
+  },
 ]
 
 const FORMAT_DATA = [
@@ -743,37 +766,47 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 9: Budget (single — also sets stack preference) ── */}
+          {/* ── Step 9: Budget bundles (single — also sets stack preference) ── */}
           {step === 9 && (
             <div className="flex flex-col gap-3">
-              {BUDGET_DATA.map(({ id, label, sub, pref, products }) => (
-                <button
-                  key={`9-${id}`}
-                  onClick={() => {
-                    setAnswer('budget', id)
-                    setAnswer('stackPreference', pref)
-                  }}
-                  className={[
-                    'w-full flex items-center gap-4 px-5 py-4 rounded-2xl border text-left',
-                    'transition-all duration-150 active:scale-[0.97]',
-                    answers.budget === id
-                      ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-white'
-                      : 'border-white/10 bg-white/[0.04] text-white/70 option-hover',
-                  ].join(' ')}
-                  style={answers.budget === id ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.25), inset 0 0 20px rgba(0,212,255,0.06)' } : undefined}
-                >
-                  <div className={`shrink-0 w-1 h-7 rounded-full transition-colors duration-150 ${answers.budget === id ? 'bg-[#00D4FF]' : 'bg-transparent'}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-                    <div className="text-xs mt-0.5 text-white/35">{sub}</div>
-                  </div>
-                  <div className={`shrink-0 text-[10px] font-bold px-2 py-1 rounded-full border transition-colors ${
-                    answers.budget === id ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/10 text-white/25'
-                  }`}>
-                    {products} products
-                  </div>
-                </button>
-              ))}
+              {BUDGET_DATA.map(({ id, name, approx, sub, includes, pref, count }) => {
+                const active = answers.budget === id
+                return (
+                  <button
+                    key={`9-${id}`}
+                    onClick={() => { setAnswer('budget', id); setAnswer('stackPreference', pref) }}
+                    className={[
+                      'w-full flex flex-col gap-2 px-5 py-4 rounded-2xl border text-left',
+                      'transition-all duration-150 active:scale-[0.98]',
+                      active
+                        ? 'border-[#00D4FF] bg-[#00D4FF]/8 text-white'
+                        : 'border-white/10 bg-white/[0.04] text-white/70 option-hover',
+                    ].join(' ')}
+                    style={active ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.2), inset 0 0 24px rgba(0,212,255,0.05)' } : undefined}
+                  >
+                    {/* Top row — name + approx price */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
+                      <div className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition-colors ${
+                        active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'
+                      }`}>{approx}</div>
+                    </div>
+                    {/* Sub — what it's for */}
+                    <p className={`text-xs leading-snug ${active ? 'text-white/60' : 'text-white/30'}`}>{sub}</p>
+                    {/* Includes line */}
+                    <div className="flex items-start gap-1.5">
+                      <span className={`text-[10px] mt-px ${active ? 'text-[#00D4FF]/60' : 'text-white/20'}`}>Includes</span>
+                      <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/70' : 'text-white/25'}`}>{includes}</span>
+                    </div>
+                    {/* Count badge */}
+                    <div className="flex justify-end">
+                      <span className={`text-[9px] font-bold tracking-widest uppercase ${active ? 'text-[#00D4FF]/70' : 'text-white/15'}`}>
+                        {count}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           )}
 
