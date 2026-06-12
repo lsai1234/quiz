@@ -193,6 +193,29 @@ function scoreProduct(
   if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') score += 8
   if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) score += 8
 
+  // Goal-specific product affinity boosts — ensures the most clinically targeted
+  // product wins when multiple products cover the same goal.
+  //
+  // immune → Vitamin D3 is most evidence-based; multivitamin is solid secondary
+  if (answers.goals.includes('immune') && product.swapGroup === 'vitamin-d') score += 18
+  if (answers.goals.includes('immune') && product.swapGroup === 'multivitamin') score += 10
+  // focus → Omega-3 (EPA/DHA) is the primary brain-health pick; multivitamin B-vitamins are secondary
+  if (answers.goals.includes('focus') && product.swapGroup === 'omega-3') score += 18
+  if (answers.goals.includes('focus') && product.swapGroup === 'multivitamin') score += 8
+  // skin-hair-nails → collagen is the direct pick (already excluded for vegans elsewhere)
+  if (answers.goals.includes('skin-hair-nails') && product.swapGroup === 'collagen') score += 25
+  // less-stress → ashwagandha/theanine blend is primary; magnesium is good secondary
+  if (answers.goals.includes('less-stress') && product.swapGroup === 'sleep-support') score += 18
+  if (answers.goals.includes('less-stress') && product.swapGroup === 'magnesium') score += 10
+  // sleep-better → magnesium glycinate is primary (unless follow-up says switch-off)
+  if (answers.goals.includes('sleep-better') && product.swapGroup === 'magnesium' && !wb.sleepQuality) score += 12
+  // recovery → BCAA/aminos are primary; collagen for joint/tendon support is secondary
+  if (answers.goals.includes('recovery') && product.swapGroup === 'aminos') score += 15
+  if (answers.goals.includes('recovery') && product.swapGroup === 'collagen') score += 8
+  // health → multivitamin is the anchor; omega-3 is an excellent second pick
+  if (answers.goals.includes('health') && product.swapGroup === 'multivitamin') score += 15
+  if (answers.goals.includes('health') && product.swapGroup === 'omega-3') score += 10
+
   // Deprioritise performance (creatine) and protein slots when the user's
   // goals don't call for them — prevents creatine appearing for energy/health users
   const muscleGoals: Goal[] = ['muscle', 'bulking', 'performance']
@@ -282,7 +305,9 @@ function buildWellbeingReason(goal: Goal, product: CatalogueProduct, answers: Qu
     else if (wb.immuneBaseline === 'rarely') suffix = ' A light insurance pick, since you said you rarely get ill.'
     else suffix = ' Chosen for your immune support goal.'
   } else if (goal === 'skin-hair-nails') {
-    suffix = ' Chosen for your skin, hair and nails goal.'
+    const isVeganOrVeggie = answers.lifestyle.includes('vegan') || (answers.wellbeingAnswers ?? {}).collagenOk === 'veggie'
+    if (isVeganOrVeggie) suffix = ' Collagen is bovine so we\'ve swapped to the best plant-friendly alternative for skin and hair health.'
+    else suffix = ' Collagen peptides are the most direct support for skin, hair and nails.'
   } else if (goal === 'health') {
     suffix = ' A daily foundation pick for general health.'
   }
