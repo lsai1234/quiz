@@ -324,18 +324,18 @@ export function buildStackBlueprint(
   answers: QuizAnswers,
   catalogue: CatalogueProduct[]
 ): StackBlueprint {
-  // Build the effective catalogue: use live products where they exist,
-  // and fill any slot types that have zero live coverage with mock products.
-  // This ensures Shopify stores that are only partially tagged still produce
-  // full stacks rather than single-product results.
+  // Build the effective catalogue: live Shopify products take priority, but
+  // mock products fill in for any swap-group (product type) not covered by a
+  // live product. Blending by swap-group (not slot-type) is critical for the
+  // wellbeing path, which matches products by GOAL — a live "health" product
+  // doesn't cover the 'immune' or 'focus' goals just because it shares a slot.
+  const liveSwapGroups = new Set(catalogue.map(p => p.swapGroup).filter(Boolean))
+  const mockFallbacks = MOCK_CATALOGUE.filter(m => !liveSwapGroups.has(m.swapGroup))
+  // If the live catalogue covers fewer than 3 distinct slot types, it's essentially
+  // untagged — use mock entirely rather than a confusing 1-product mix.
   const liveSlotTypes = new Set(catalogue.flatMap(p => p.stackSlots))
-  const mockFillIns = MOCK_CATALOGUE.filter(p =>
-    p.stackSlots.some(s => !liveSlotTypes.has(s as never)),
-  )
-  // If live catalogue has fewer than 3 slot types covered, use mock entirely
-  // (store hasn't been tagged yet — avoid showing a mix of unrelated products)
   const effectiveCatalogue = liveSlotTypes.size >= 3
-    ? [...catalogue, ...mockFillIns]
+    ? [...catalogue, ...mockFallbacks]
     : MOCK_CATALOGUE
 
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
