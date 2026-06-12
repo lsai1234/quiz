@@ -9,14 +9,18 @@ import {
   updateStackSlotVariant,
   updateStackSlotProduct,
   getSwappableProductsForSlot,
+  addBoosterSlot,
+  removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
+import { SLOT_LABELS } from '@/lib/catalogue/types'
 import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
 import { ProductSwapModal } from './ProductSwapModal'
+import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
   const { stackBlueprint, catalogue, setStackBlueprint } = useQuizStore()
@@ -58,7 +62,6 @@ export function StackReviewPage() {
     (slotId: string, newProductId: string) => {
       const product = products.find((p) => p.id === newProductId)
       const defaultVariant = product?.variants.find((v) => v.available)
-      // Swap product, then default to first available variant
       let updated = updateStackSlotProduct(blueprint, slotId, newProductId)
       if (defaultVariant) updated = updateStackSlotVariant(updated, slotId, defaultVariant.id)
       setStackBlueprint(updated)
@@ -67,19 +70,72 @@ export function StackReviewPage() {
     [blueprint, products, setStackBlueprint],
   )
 
+  const handleRemove = useCallback(
+    (slotId: string) => {
+      try {
+        setStackBlueprint(removeOptionalSlot(blueprint, slotId))
+      } catch {
+        // required slot — silently ignore (button shouldn't appear for these)
+      }
+    },
+    [blueprint, setStackBlueprint],
+  )
+
+  const handleAddBooster = useCallback(
+    (product: CatalogueProduct) => {
+      const firstVariant = product.variants.find((v) => v.available) ?? product.variants[0]
+      const slotType = product.stackSlots[0]
+      const slotId = `booster-${product.id}`
+      const updated = addBoosterSlot(blueprint, {
+        slotId,
+        slotType,
+        title: SLOT_LABELS[slotType] ?? product.category,
+        description: product.shortReason || product.description,
+        recommendedProductId: product.id,
+        selectedProductId: product.id,
+        selectedVariantId: firstVariant?.id ?? null,
+        required: false,
+        canSwap: true,
+        swapGroup: product.swapGroup,
+        reason: product.shortReason || product.description,
+        confidenceScore: product.recommendationPriority * 10,
+      })
+      setStackBlueprint(updated)
+    },
+    [blueprint, setStackBlueprint],
+  )
+
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
   const oneOffPrice = calculateStackPrice(blueprint, products)
   const subscriptionPrice = calculateSubscriptionPrice(blueprint, products)
+
+  // IDs already in the stack (core + added boosters)
+  const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
+
+  // Booster candidates: isBoosterEligible, not already in stack, ordered by
+  // goal overlap with blueprint then recommendationPriority
+  const primaryGoal = blueprint.primaryGoal
+  const allGoals = [primaryGoal, ...blueprint.secondaryGoals]
+  const boosters = useMemo(() => {
+    return products
+      .filter((p) => p.isBoosterEligible && !stackProductIds.has(p.id))
+      .sort((a, b) => {
+        const aGoalHits = a.goals.filter((g) => allGoals.includes(g)).length
+        const bGoalHits = b.goals.filter((g) => allGoals.includes(g)).length
+        if (bGoalHits !== aGoalHits) return bGoalHits - aGoalHits
+        return b.recommendationPriority - a.recommendationPriority
+      })
+      .slice(0, 4)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, blueprint.slots, primaryGoal, blueprint.secondaryGoals])
 
   // Build alternatives list for the open swap modal slot
   const swapCurrentProduct = swapSlot ? products.find((p) => p.id === swapSlot.selectedProductId) : undefined
   const swapAlternatives = swapSlot
     ? [
-        // Include current so user can see it with "Current" badge
-        ...( products.filter((p) => p.id === swapSlot.selectedProductId) ),
-        // Alternatives from same swapGroup — include the recommended product even if it's the default
+        ...products.filter((p) => p.id === swapSlot.selectedProductId),
         ...getSwappableProductsForSlot(swapSlot, products),
-      ].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx) // dedupe
+      ].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx)
     : []
 
   if (!blueprint) {
@@ -101,7 +157,7 @@ export function StackReviewPage() {
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
 
-        {/* Product cards */}
+        {/* Core + added booster product cards */}
         <div className="px-5 pt-7 max-w-lg mx-auto space-y-3">
           <p
             className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
@@ -118,10 +174,21 @@ export function StackReviewPage() {
                 product={product}
                 onChangeProduct={handleOpenSwap}
                 onChangeVariant={handleChangeVariant}
+                onRemove={handleRemove}
               />
             )
           })}
         </div>
+
+        {/* Optional booster suggestions — only show products not yet in stack */}
+        <StackBoosters
+          boosters={boosters}
+          addedIds={stackProductIds}
+          onAdd={handleAddBooster}
+        />
+
+        {/* Divider before pricing */}
+        <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
         {/* Price summary */}
         <div className="px-5 pt-6 max-w-lg mx-auto">
@@ -133,7 +200,6 @@ export function StackReviewPage() {
         </div>
       </div>
 
-      {/* Swap modal — rendered outside the scrollable column so it overlays correctly */}
       {swapSlot && (
         <ProductSwapModal
           slot={swapSlot}
