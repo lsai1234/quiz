@@ -4,14 +4,13 @@ import { useCallback, useMemo, useState } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
 import {
-  calculateStackPrice,
-  calculateSubscriptionPrice,
   updateStackSlotVariant,
   updateStackSlotProduct,
   getSwappableProductsForSlot,
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
+import { calculatePricing } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
@@ -106,8 +105,7 @@ export function StackReviewPage() {
   )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
-  const oneOffPrice = calculateStackPrice(blueprint, products)
-  const subscriptionPrice = calculateSubscriptionPrice(blueprint, products)
+  const pricing = calculatePricing(blueprint, products)
 
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
@@ -152,7 +150,7 @@ export function StackReviewPage() {
         <StackHero
           blueprint={blueprint}
           productCount={sortedSlots.length}
-          totalPrice={oneOffPrice}
+          totalPrice={pricing.oneOffTotal}
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
@@ -192,11 +190,7 @@ export function StackReviewPage() {
 
         {/* Price summary */}
         <div className="px-5 pt-6 max-w-lg mx-auto">
-          <StackPriceSummary
-            oneOffPrice={oneOffPrice}
-            subscriptionPrice={subscriptionPrice}
-            savingsSummary={blueprint.savingsSummary}
-          />
+          <StackPriceSummary pricing={pricing} />
         </div>
       </div>
 
