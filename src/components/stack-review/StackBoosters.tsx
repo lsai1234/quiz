@@ -37,9 +37,9 @@ export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
   if (boosters.length === 0) return null
 
   return (
-    <div className="px-5 pt-8 max-w-lg mx-auto">
+    <div className="pt-8">
       {/* Section header */}
-      <div className="mb-5">
+      <div className="px-5 max-w-lg mx-auto mb-4">
         <p
           className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1"
           style={{ fontFamily: 'var(--font-display)' }}
@@ -53,11 +53,15 @@ export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
           Complete your stack
         </h3>
         <p className="text-xs text-[var(--color-text-2)] mt-1">
-          Recommended upgrades based on your goals — add any that fit.
+          Swipe to explore — add anything that fits your goals.
         </p>
       </div>
 
-      <div className="space-y-3">
+      {/* Horizontal swipe carousel */}
+      <div
+        className="flex gap-3 overflow-x-auto px-5 pb-3"
+        style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
+      >
         {boosters.map((product) => {
           const isAdded = addedIds.has(product.id)
           const firstVariant = product.variants.find((v) => v.available) ?? product.variants[0]
@@ -67,12 +71,15 @@ export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
           return (
             <div
               key={product.id}
-              className={`rounded-2xl border overflow-hidden transition-all ${
-                isAdded
-                  ? 'border-[var(--color-accent)]/40 bg-[var(--color-surface)]'
-                  : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-              }`}
-              style={isAdded ? { boxShadow: `0 0 20px -8px ${ACCENT}` } : undefined}
+              className="flex-shrink-0 w-60 rounded-2xl overflow-hidden transition-all"
+              style={{
+                scrollSnapAlign: 'start',
+                border: isAdded
+                  ? `1px solid color-mix(in srgb, ${ACCENT} 40%, transparent)`
+                  : '1px solid var(--color-border)',
+                background: 'var(--color-surface)',
+                ...(isAdded ? { boxShadow: `0 0 20px -8px ${ACCENT}` } : {}),
+              }}
             >
               <div className="p-4">
                 {/* Eyebrow */}

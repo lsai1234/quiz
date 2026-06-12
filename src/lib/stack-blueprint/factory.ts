@@ -196,11 +196,12 @@ export function buildStackBlueprint(
   })()
 
   const slots: StackSlotEntry[] = []
+  const usedProductIds = new Set<string>()
   let displayOrder = 0
 
   for (const slotType of SLOT_ORDER) {
     if (slots.length >= maxSlots) break
-    const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any))
+    const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any) && !usedProductIds.has(p.id))
     if (candidates.length === 0) continue
 
     let bestProduct: CatalogueProduct | null = null
@@ -224,6 +225,7 @@ export function buildStackBlueprint(
 
     const reason = buildPersonalisedReason(bestProduct, slotType as SlotType, answers, archetype)
 
+    usedProductIds.add(bestProduct.id)
     slots.push({
       slotId: `slot-${slotType}`,
       slotType: slotType as any,

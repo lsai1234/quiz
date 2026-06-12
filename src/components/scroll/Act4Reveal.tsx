@@ -130,11 +130,13 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
         </div>
       </div>
 
-      {/* Divider */}
-      <div className="h-px bg-[#0A0A0A]/8 mx-5" />
-
-      {/* Stack review — blueprint-driven product cards + pricing */}
-      <StackReviewPage />
+      {/* Stack review — dark-background section */}
+      <div
+        className="mt-6 rounded-t-3xl overflow-hidden"
+        style={{ background: 'var(--color-bg)' }}
+      >
+        <StackReviewPage />
+      </div>
 
       {/* Sticky Build my bundle CTA */}
       <div className="fixed bottom-0 left-0 right-0 px-5 pt-3 pb-8 bg-gradient-to-t from-[#F5F5F0] to-transparent">

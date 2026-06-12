@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -19,6 +20,7 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 }
 
 export function StackProductCard({ slot, product, onChangeProduct, onChangeVariant, onRemove }: Props) {
+  const [variantsOpen, setVariantsOpen] = useState(false)
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
     ?? product?.variants.find((v) => v.available)
     ?? product?.variants[0]
@@ -123,74 +125,96 @@ export function StackProductCard({ slot, product, onChangeProduct, onChangeVaria
         </div>
       </div>
 
-      {/* Flavour / size picker — visually distinct interactive section */}
+      {/* Flavour / size picker — collapsed by default, expand on tap */}
       {showVariantPicker && (
         <div style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
-          <div className="px-4 pt-3 pb-1">
-            <span
-              className="text-[9px] font-bold tracking-widest uppercase block"
-              style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
-            >
-              Flavour / Size
-            </span>
-          </div>
-          <div className="px-3 pb-3 flex flex-col gap-1.5">
-            {product!.variants.map((v) => {
-              const isSelected = (slot.selectedVariantId ?? selectedVariant?.id) === v.id
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => v.available && onChangeVariant?.(slot.slotId, v.id)}
-                  disabled={!v.available}
-                  className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all active:scale-[0.98]"
-                  style={{
-                    background: isSelected
-                      ? `color-mix(in srgb, ${ACCENT} 12%, transparent)`
-                      : 'transparent',
-                    border: isSelected
-                      ? `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`
-                      : '1px solid var(--color-border)',
-                    opacity: v.available ? 1 : 0.4,
-                    cursor: v.available ? 'pointer' : 'not-allowed',
-                  }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {/* Selected indicator */}
-                    <div
-                      className="w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center transition-all"
-                      style={{
-                        background: isSelected ? ACCENT : 'transparent',
-                        border: isSelected ? 'none' : '1.5px solid var(--color-border-2)',
-                      }}
-                    >
-                      {isSelected && (
-                        <svg width="7" height="6" viewBox="0 0 8 6" fill="none">
-                          <path d="M1 3L3 5L7 1" stroke="#0A0A0A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      )}
+          {/* Collapsed summary row — always visible */}
+          <button
+            onClick={() => setVariantsOpen((o) => !o)}
+            className="w-full flex items-center justify-between px-4 py-3 text-left active:opacity-75 transition-opacity"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="text-[9px] font-bold tracking-widest uppercase flex-shrink-0"
+                style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+              >
+                Flavour
+              </span>
+              <span className="text-xs font-medium truncate" style={{ color: 'var(--color-text-2)' }}>
+                {selectedVariant ? variantLabel(selectedVariant) : '—'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <span className="text-xs font-bold" style={{ color: ACCENT }}>
+                {selectedVariant ? `£${selectedVariant.price.toFixed(2)}` : ''}
+              </span>
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full"
+                style={{
+                  color: 'var(--color-muted)',
+                  border: '1px solid var(--color-border-2)',
+                  display: 'inline-block',
+                  transform: variantsOpen ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 0.2s ease',
+                }}
+              >
+                ▾
+              </span>
+            </div>
+          </button>
+
+          {/* Expanded variant list */}
+          {variantsOpen && (
+            <div className="px-3 pb-3 flex flex-col gap-1.5">
+              {product!.variants.map((v) => {
+                const isSelected = (slot.selectedVariantId ?? selectedVariant?.id) === v.id
+                return (
+                  <button
+                    key={v.id}
+                    onClick={() => {
+                      if (v.available) {
+                        onChangeVariant?.(slot.slotId, v.id)
+                        setVariantsOpen(false)
+                      }
+                    }}
+                    disabled={!v.available}
+                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition-all active:scale-[0.98]"
+                    style={{
+                      background: isSelected ? `color-mix(in srgb, ${ACCENT} 12%, transparent)` : 'transparent',
+                      border: isSelected ? `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)` : '1px solid var(--color-border)',
+                      opacity: v.available ? 1 : 0.4,
+                      cursor: v.available ? 'pointer' : 'not-allowed',
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-3.5 h-3.5 rounded-full flex-shrink-0 flex items-center justify-center"
+                        style={{
+                          background: isSelected ? ACCENT : 'transparent',
+                          border: isSelected ? 'none' : '1.5px solid var(--color-border-2)',
+                        }}
+                      >
+                        {isSelected && (
+                          <svg width="7" height="6" viewBox="0 0 8 6" fill="none">
+                            <path d="M1 3L3 5L7 1" stroke="#0A0A0A" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-xs font-medium" style={{ color: isSelected ? 'var(--color-text)' : 'var(--color-text-2)' }}>
+                        {variantLabel(v)}
+                      </span>
                     </div>
-                    <span
-                      className="text-xs font-medium"
-                      style={{ color: isSelected ? 'var(--color-text)' : 'var(--color-text-2)' }}
-                    >
-                      {variantLabel(v)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {!v.available && (
-                      <span className="text-[9px]" style={{ color: 'var(--color-muted)' }}>Sold out</span>
-                    )}
-                    <span
-                      className="text-xs font-bold"
-                      style={{ color: isSelected ? ACCENT : 'var(--color-muted)' }}
-                    >
-                      £{v.price.toFixed(2)}
-                    </span>
-                  </div>
-                </button>
-              )
-            })}
-          </div>
+                    <div className="flex items-center gap-2">
+                      {!v.available && <span className="text-[9px]" style={{ color: 'var(--color-muted)' }}>Sold out</span>}
+                      <span className="text-xs font-bold" style={{ color: isSelected ? ACCENT : 'var(--color-muted)' }}>
+                        £{v.price.toFixed(2)}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 

@@ -132,29 +132,29 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
 ]
 // Budget options — each one also implicitly sets stackPreference
 const BUDGET_DATA: Array<{
-  id: Budget; name: string; approx: string; sub: string; includes: string
+  id: Budget; name: string; budget: string; sub: string; includes: string
   pref: StackPreference; count: string
 }> = [
   {
-    id: 'under-30', name: 'Starter Bundle',     approx: '~£25/mo',
+    id: 'under-30', name: 'Starter Bundle',     budget: 'Up to £30/mo',
     sub: 'The two supplements that move the needle most',
     includes: 'Protein + Creatine',
     pref: 'simple', count: '2 products',
   },
   {
-    id: '30-50',    name: 'Saver Bundle',        approx: '~£40/mo',
+    id: '30-50',    name: 'Saver Bundle',        budget: '£30–50/mo',
     sub: 'Core essentials to cover your main goal',
     includes: 'Protein, Creatine + 1 add-on',
     pref: 'simple', count: '3 products',
   },
   {
-    id: '50-80',    name: 'Performance Bundle',  approx: '~£65/mo',
+    id: '50-80',    name: 'Performance Bundle',  budget: '£50–80/mo',
     sub: 'Solid, well-rounded daily stack',
     includes: 'Protein, Creatine, Pre-workout + 2 more',
     pref: 'balanced', count: '5 products',
   },
   {
-    id: '80-plus',  name: 'Complete Bundle',     approx: '£80+/mo',
+    id: '80-plus',  name: 'Complete Bundle',     budget: '£80+/mo',
     sub: 'Every angle covered — nothing left out',
     includes: 'Full stack: protein, performance, energy, recovery & more',
     pref: 'complete', count: '7 products',
@@ -769,7 +769,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {/* ── Step 9: Budget bundles (single — also sets stack preference) ── */}
           {step === 9 && (
             <div className="flex flex-col gap-3">
-              {BUDGET_DATA.map(({ id, name, approx, sub, includes, pref, count }) => {
+              {BUDGET_DATA.map(({ id, name, budget, sub, includes, pref, count }) => {
                 const active = answers.budget === id
                 return (
                   <button
@@ -784,12 +784,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     ].join(' ')}
                     style={active ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.2), inset 0 0 24px rgba(0,212,255,0.05)' } : undefined}
                   >
-                    {/* Top row — name + approx price */}
+                    {/* Top row — name + budget range */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
                       <div className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition-colors ${
                         active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'
-                      }`}>{approx}</div>
+                      }`}>{budget}</div>
                     </div>
                     {/* Sub — what it's for */}
                     <p className={`text-xs leading-snug ${active ? 'text-white/60' : 'text-white/30'}`}>{sub}</p>

@@ -127,6 +127,7 @@ export function StackReviewPage() {
   const primaryGoal = blueprint.primaryGoal
   const allGoals = [primaryGoal, ...blueprint.secondaryGoals]
   const boosters = useMemo(() => {
+    const seenSlots = new Set<string>()
     return products
       .filter((p) => p.isBoosterEligible && !stackProductIds.has(p.id))
       .sort((a, b) => {
@@ -134,6 +135,12 @@ export function StackReviewPage() {
         const bGoalHits = b.goals.filter((g) => allGoals.includes(g)).length
         if (bGoalHits !== aGoalHits) return bGoalHits - aGoalHits
         return b.recommendationPriority - a.recommendationPriority
+      })
+      .filter((p) => {
+        const slot = p.stackSlots[0]
+        if (!slot || seenSlots.has(slot)) return false
+        seenSlots.add(slot)
+        return true
       })
       .slice(0, 4)
   // eslint-disable-next-line react-hooks/exhaustive-deps
