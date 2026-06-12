@@ -20,13 +20,22 @@ export interface ShopifyVariant {
   product: { title: string; handle: string; images: { edges: { node: ShopifyImage }[] } }
 }
 
+export interface ShopifyMetafield {
+  key: string
+  value: string
+  type: string
+}
+
 export interface ShopifyProduct {
   id: string
   title: string
   handle: string
   description: string
+  productType: string
+  tags: string[]
   images: { edges: { node: ShopifyImage }[] }
   variants: { edges: { node: ShopifyVariant }[] }
+  metafields: (ShopifyMetafield | null)[]
 }
 
 export interface CartLineItem {

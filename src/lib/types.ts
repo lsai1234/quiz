@@ -47,12 +47,23 @@ export interface StackIdentity {
   routineFitScore: number
 }
 
+export interface ProductVariant {
+  id: string           // Shopify GID e.g. gid://shopify/ProductVariant/123
+  title: string        // e.g. "Chocolate Fudge / 500g"
+  price: number
+  compareAtPrice: number | null
+  availableForSale: boolean
+  image: string | null
+}
+
 export interface Product {
-  id: string
+  id: string                  // internal slug (Shopify handle)
+  shopifyProductId: string    // Shopify GID
+  handle: string
   name: string
   category: string
   subcategory: string
-  price: number
+  price: number               // default variant price
   description: string
   safeWording: string
   goalTags: Goal[]
@@ -61,8 +72,10 @@ export interface Product {
   beginner: boolean
   stackPriority: number
   stackLevels: StackLevel[]
-  shopifyVariantId: string
+  shopifyVariantId: string    // default variant ID
   accentColor: string
+  image: string | null
+  variants: ProductVariant[]
 }
 
 export interface RecommendedStack {

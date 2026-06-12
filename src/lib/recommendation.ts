@@ -1,6 +1,8 @@
 import type { QuizAnswers, Product, RecommendedStack, StackLevel } from './types'
 import { MOCK_PRODUCTS } from './mock-products'
 
+export { MOCK_PRODUCTS }
+
 function budgetLimit(budget: QuizAnswers['budget']): number {
   switch (budget) {
     case 'under-50': return 50
@@ -76,11 +78,11 @@ function resolveStackLevel(answers: QuizAnswers): StackLevel {
   return 'performance'
 }
 
-export function buildRecommendedStack(answers: QuizAnswers): RecommendedStack {
+export function buildRecommendedStack(answers: QuizAnswers, catalogue: Product[] = MOCK_PRODUCTS as Product[]): RecommendedStack {
   const level = resolveStackLevel(answers)
   const limit = budgetLimit(answers.budget)
 
-  const scored = MOCK_PRODUCTS
+  const scored = catalogue
     .map(p => ({ product: p, score: scoreProduct(p, answers) }))
     .filter(({ score }) => score >= 0)
     .filter(({ product }) => product.stackLevels.includes(level))

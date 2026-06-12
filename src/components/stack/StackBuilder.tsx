@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 import { buildRecommendedStack, stackTotalPrice } from '@/lib/recommendation'
+import { useProducts } from '@/hooks/useProducts'
 import type { StackLevel } from '@/lib/types'
 import { LevelSelector } from './LevelSelector'
 import { ProductCard } from './ProductCard'
@@ -21,6 +22,7 @@ export function StackBuilder() {
   } = useQuizStore()
 
   const [animKey, setAnimKey] = useState(0)
+  const { products, isLive } = useProducts()
 
   useEffect(() => {
     if (!identity) {
@@ -28,8 +30,8 @@ export function StackBuilder() {
     }
   }, [identity, router])
 
-  // Rebuild recommended stack whenever level changes
-  const recommended = useMemo(() => buildRecommendedStack(answers), [answers])
+  // Rebuild recommended stack whenever level or catalogue changes
+  const recommended = useMemo(() => buildRecommendedStack(answers, products), [answers, products])
 
   function handleLevelChange(level: StackLevel) {
     setStackLevel(level)
@@ -81,6 +83,9 @@ export function StackBuilder() {
               </p>
               <p className="text-xs text-[var(--color-muted)]">
                 {selectedProducts.length} products
+                {isLive && (
+                  <span className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-green-400 align-middle" title="Live Shopify catalogue" />
+                )}
               </p>
             </div>
           </div>
