@@ -23,6 +23,25 @@ function parseStackLevels(tags: string[]): StackLevel[] {
   return levels.length > 0 ? levels : ['essentials', 'performance', 'complete']
 }
 
+const PRODUCT_TYPE_TAG_MAP: Record<string, string> = {
+  'product-type:protein': 'Protein',
+  'product-type:pre-workout': 'Pre-Workout',
+  'product-type:performance': 'Performance',
+  'product-type:amino-acids': 'Amino Acids',
+  'product-type:hydration': 'Hydration',
+  'product-type:health': 'Health',
+  'product-type:recovery': 'Recovery',
+  'product-type:body-composition': 'Body Composition',
+}
+
+function parseCategoryFromTags(tags: string[]): string | null {
+  for (const tag of tags) {
+    const mapped = PRODUCT_TYPE_TAG_MAP[tag]
+    if (mapped) return mapped
+  }
+  return null
+}
+
 function metaValue(metafields: ShopifyProduct['metafields'], key: string): string | null {
   return metafields.find((m) => m?.key === key)?.value ?? null
 }
@@ -45,19 +64,23 @@ export function mapShopifyProduct(p: ShopifyProduct): Product {
   const goalTags = parseGoalTags(p.tags)
   const stackLevels = parseStackLevels(p.tags)
 
+  // Use our product-type:* tags for category (seeded via seed-shopify-tags.mjs)
+  // Fall back to Shopify productType or title-derived value
+  const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? p.productType || 'Supplement'
+
   const rawPriority = metaValue(p.metafields, 'stack_priority')
-  const stackPriority = rawPriority ? parseInt(rawPriority, 10) : deriveDefaultPriority(p.productType)
+  const stackPriority = rawPriority ? parseInt(rawPriority, 10) : deriveDefaultPriority(category)
 
   const subcategory = metaValue(p.metafields, 'subcategory') ?? deriveSubcategory(p)
   const safeWording = metaValue(p.metafields, 'safe_wording') ?? p.description
-  const accentColor = metaValue(p.metafields, 'accent_color') ?? defaultAccentColor(p.productType)
+  const accentColor = metaValue(p.metafields, 'accent_color') ?? defaultAccentColor(category)
 
   return {
     id: p.handle,
     shopifyProductId: p.id,
     handle: p.handle,
     name: p.title,
-    category: p.productType || 'Supplement',
+    category,
     subcategory,
     price: defaultVariant?.price ?? 0,
     description: p.description,
@@ -76,6 +99,19 @@ export function mapShopifyProduct(p: ShopifyProduct): Product {
 }
 
 // ─── Fallback derivation helpers ─────────────────────────────────────────────
+
+function deriveDefaultCategory(p: ShopifyProduct): string | null {
+  const title = p.title.toLowerCase()
+  if (title.includes('whey') || title.includes('plant protein') || title.includes('vegan protein') || title.includes('mass') || title.includes('gainer') || title.includes('isolate') || title.includes('casein')) return 'Protein'
+  if (title.includes('creatine')) return 'Performance'
+  if (title.includes('pre-workout') || title.includes('preworkout') || title.includes('pre workout')) return 'Pre-Workout'
+  if (title.includes('bcaa') || title.includes('amino') || title.includes('eaa')) return 'Amino Acids'
+  if (title.includes('electrolyte') || title.includes('hydration')) return 'Hydration'
+  if (title.includes('omega') || title.includes('vitamin') || title.includes('magnesium') || title.includes('mineral') || title.includes('multivitamin')) return 'Health'
+  if (title.includes('collagen') || title.includes('sleep') || title.includes('recovery') || title.includes('joint')) return 'Recovery'
+  if (title.includes('fat burner') || title.includes('thermo') || title.includes('slimming') || title.includes('weight loss')) return 'Body Composition'
+  return null
+}
 
 function deriveDefaultPriority(productType: string): number {
   const map: Record<string, number> = {
