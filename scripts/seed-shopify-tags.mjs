@@ -10,19 +10,20 @@
 
 const STORE = 'sanahealthstore.myshopify.com'
 const TOKEN = process.env.SHOPIFY_ADMIN_TOKEN
+const API_KEY = process.env.SHOPIFY_API_KEY
+const API_SECRET = process.env.SHOPIFY_API_SECRET
 const DRY_RUN = process.env.DRY_RUN === 'true'
 const API_VERSION = '2024-10'
 
-if (!TOKEN) {
-  console.error('Missing SHOPIFY_ADMIN_TOKEN env var')
+if (!TOKEN && !(API_KEY && API_SECRET)) {
+  console.error('Provide either SHOPIFY_ADMIN_TOKEN or both SHOPIFY_API_KEY + SHOPIFY_API_SECRET')
   process.exit(1)
 }
 
 const BASE = `https://${STORE}/admin/api/${API_VERSION}`
-const HEADERS = {
-  'Content-Type': 'application/json',
-  'X-Shopify-Access-Token': TOKEN,
-}
+const HEADERS = TOKEN
+  ? { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': TOKEN }
+  : { 'Content-Type': 'application/json', 'Authorization': `Basic ${Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64')}` }
 
 // ─── Tag rules — edit these to match your actual product names ────────────────
 
