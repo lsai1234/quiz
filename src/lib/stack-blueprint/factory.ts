@@ -107,9 +107,57 @@ function scoreProduct(
   if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) score += 15
 
   // Budget sensitivity
-  if (answers.budget === 'under-50' && product.basePrice > 30) score -= 15
+  if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
 
   return score
+}
+
+function buildPersonalisedReason(
+  product: CatalogueProduct,
+  slotType: SlotType,
+  answers: QuizAnswers,
+  archetype: Archetype,
+): string {
+  const base = product.shortReason || SLOT_DEFAULT_REASONS[slotType]
+  const name = answers.name ? answers.name.split(' ')[0] : null
+  const goalOverlap = answers.goals.filter(g => product.goals.includes(g))
+  const freq = answers.trainingFrequency
+
+  // Build a personalised suffix based on the user's profile
+  const suffixes: string[] = []
+
+  if (slotType === 'protein') {
+    if (archetype === 'muscle') suffixes.push('— essential for the muscle-building phase you\'re targeting')
+    else if (archetype === 'fat-loss') suffixes.push('— keeps you full and preserves muscle while in a deficit')
+    else if (goalOverlap.includes('recovery')) suffixes.push('— speeds up repair between your sessions')
+    if (freq === '5-6x' || freq === 'daily') suffixes.push('at high training frequency your protein needs are elevated')
+  } else if (slotType === 'performance') {
+    if (archetype === 'muscle') suffixes.push('— creatine is the most-studied strength supplement available')
+    else if (goalOverlap.includes('performance')) suffixes.push('— directly supports the performance gains you\'re after')
+    else suffixes.push('— daily loading improves power output over 2–4 weeks')
+  } else if (slotType === 'energy') {
+    if (answers.caffeineLevel === 'high') suffixes.push('— formulated for athletes with a high stimulant tolerance')
+    else if (answers.caffeineLevel === 'none' || answers.stimPreference === 'no') suffixes.push('— stim-free so you stay in control of your caffeine')
+    else if (goalOverlap.includes('energy')) suffixes.push('— matched to your goal of higher energy output')
+  } else if (slotType === 'hydration') {
+    if (freq === '5-6x' || freq === 'daily') suffixes.push('— daily training at your level means electrolyte loss is significant')
+    else if (goalOverlap.includes('hydration')) suffixes.push('— directly addresses the hydration goal you flagged')
+  } else if (slotType === 'recovery') {
+    if (freq === '5-6x' || freq === 'daily') suffixes.push('— training this frequently, recovery is your biggest performance lever')
+    else if (goalOverlap.includes('recovery')) suffixes.push('— picked because recovery is one of your stated priorities')
+  } else if (slotType === 'health') {
+    if (answers.lifestyle.includes('desk-job')) suffixes.push('— particularly useful if you spend long hours at a desk')
+    else if (answers.lifestyle.includes('high-stress')) suffixes.push('— supports immunity and energy under high stress')
+    else suffixes.push('— covers the micronutrient gaps most active people have')
+  } else if (slotType === 'sleep') {
+    if (answers.lifestyle.includes('poor-sleep')) suffixes.push('— added because you flagged sleep as a problem area')
+    else suffixes.push('— quality sleep is when most muscle repair actually happens')
+  }
+
+  const suffix = suffixes.length > 0 ? ` ${suffixes[0]}` : ''
+  const greeting = name ? `Chosen for ${name}${suffix}` : null
+
+  return greeting ?? `${base}${suffix}`
 }
 
 /**
@@ -158,7 +206,7 @@ export function buildStackBlueprint(
     const firstAvailableVariant = bestProduct.variants.find(v => v.available) ?? null
     const selectedVariantId = firstAvailableVariant?.id ?? null
 
-    const reason = bestProduct.shortReason || SLOT_DEFAULT_REASONS[slotType]
+    const reason = buildPersonalisedReason(bestProduct, slotType as SlotType, answers, archetype)
 
     slots.push({
       slotId: `slot-${slotType}`,

@@ -15,7 +15,7 @@ export type TrainingFrequency = '1-2x' | '3-4x' | '5-6x' | 'daily'
 export type TrainingType = 'strength' | 'cardio' | 'hiit' | 'sport' | 'mixed'
 export type DietLevel = 'clean' | 'mostly-good' | 'inconsistent' | 'poor'
 export type CaffeineLevel = 'none' | 'low' | 'medium' | 'high'
-export type Budget = 'under-50' | '50-100' | '100-150' | '150-plus'
+export type Budget = 'under-30' | '30-50' | '50-80' | '80-plus'
 export type StackPreference = 'simple' | 'balanced' | 'complete'
 export type StackLevel = 'essentials' | 'performance' | 'complete'
 export type TrainingExperience = 'new' | 'intermediate' | 'experienced'
@@ -24,6 +24,7 @@ export type StimPreference = 'yes' | 'no'
 export interface QuizAnswers {
   name: string
   ageBracket: AgeBracket | null
+  exactAge: number | null
   gender: Gender | null
   goals: Goal[]
   trainingFrequency: TrainingFrequency | null
@@ -31,6 +32,8 @@ export interface QuizAnswers {
   lifestyle: string[]
   diet: DietLevel | null
   currentSupplements: string[]
+  currentVitamins: string[]
+  preferredFormats: string[]
   caffeineLevel: CaffeineLevel | null
   budget: Budget | null
   stackPreference: StackPreference | null

@@ -24,12 +24,13 @@ export async function POST(req: NextRequest) {
     const type = answers.trainingType ?? 'mixed'
     const diet = answers.diet ?? 'balanced'
     const caffeine = answers.caffeineLevel ?? 'moderate'
-    const budget = answers.budget ?? '50-100'
+    const budget = answers.budget ?? '50-80'
     const pref = answers.stackPreference ?? 'balanced'
     const lifestyle = answers.lifestyle.length > 0 ? answers.lifestyle.join(', ') : 'standard'
     const firstName = answers.name?.split(' ')[0]?.trim() || null
-    const age = answers.ageBracket ?? null
+    const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? null)
     const gender = answers.gender && answers.gender !== 'not-specified' ? answers.gender : null
+    const formats = answers.preferredFormats?.length > 0 ? answers.preferredFormats.join(', ') : 'no preference'
 
     const prompt = `You are a specialist sports nutrition advisor for CHRGD, a premium UK supplement brand.
 
@@ -44,6 +45,7 @@ ${gender ? `- Gender: ${gender}` : ''}
 - Caffeine preference: ${caffeine}
 - Budget: £${budget}/month
 - Stack preference: ${pref}
+- Preferred product formats: ${formats}
 
 Return ONLY a JSON object (no markdown, no explanation, no asterisks in any field) with exactly these fields:
 {

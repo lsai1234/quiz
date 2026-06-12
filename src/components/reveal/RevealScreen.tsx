@@ -5,15 +5,26 @@ import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 
 function ScoreRing({ score }: { score: number }) {
-  const [animated, setAnimated] = useState(false)
+  const [displayed, setDisplayed] = useState(0)
   const radius = 40
   const circumference = 2 * Math.PI * radius
-  const dash = animated ? (score / 10) * circumference : 0
+  const targetDash = (score / 100) * circumference
 
   useEffect(() => {
-    const t = setTimeout(() => setAnimated(true), 600)
-    return () => clearTimeout(t)
-  }, [])
+    // Animate the counter number smoothly
+    const start = Date.now()
+    const duration = 1200
+    const tick = () => {
+      const elapsed = Date.now() - start
+      const progress = Math.min(elapsed / duration, 1)
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3)
+      setDisplayed(Math.round(score * eased))
+      if (progress < 1) requestAnimationFrame(tick)
+    }
+    const raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [score])
 
   return (
     <div className="relative w-24 h-24 flex items-center justify-center">
@@ -29,8 +40,8 @@ function ScoreRing({ score }: { score: number }) {
           strokeWidth="6"
           strokeLinecap="round"
           strokeDasharray={circumference}
-          strokeDashoffset={circumference - dash}
-          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.34,1.56,0.64,1)' }}
+          strokeDashoffset={circumference - targetDash}
+          style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(0.22,1,0.36,1)' }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -38,9 +49,9 @@ function ScoreRing({ score }: { score: number }) {
           className="text-2xl font-black text-[var(--color-accent)]"
           style={{ fontFamily: 'var(--font-display)' }}
         >
-          {score}
+          {displayed}
         </span>
-        <span className="text-[10px] text-[var(--color-muted)] tracking-wider">/10</span>
+        <span className="text-[10px] text-[var(--color-muted)] tracking-wider">/100</span>
       </div>
     </div>
   )

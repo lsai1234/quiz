@@ -39,6 +39,7 @@ interface QuizStore {
 const defaultAnswers: QuizAnswers = {
   name: '',
   ageBracket: null,
+  exactAge: null,
   gender: null,
   goals: [],
   trainingFrequency: null,
@@ -46,6 +47,8 @@ const defaultAnswers: QuizAnswers = {
   lifestyle: [],
   diet: null,
   currentSupplements: [],
+  currentVitamins: [],
+  preferredFormats: [],
   caffeineLevel: null,
   budget: null,
   stackPreference: null,
