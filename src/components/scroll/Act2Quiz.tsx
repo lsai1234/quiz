@@ -1,9 +1,11 @@
 'use client'
 
-import { useRef, useState, useCallback, useEffect } from 'react'
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useProducts } from '@/hooks/useProducts'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
+import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -258,36 +260,44 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
   { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
   { id: 'high',   label: 'High tolerance',  sub: '3+ coffees, used to pre-workout' },
 ]
-// Budget options — each one also implicitly sets stackPreference
+// Budget options — each one also implicitly sets stackPreference.
+// 'includes' is computed dynamically from quiz answers — see useBudgetPreview below.
 const BUDGET_DATA: Array<{
-  id: Budget; name: string; budget: string; sub: string; includes: string
-  pref: StackPreference; count: string
+  id: Budget; name: string; budget: string; sub: string
+  pref: StackPreference; slots: number
 }> = [
   {
-    id: 'under-30', name: 'Starter Bundle',     budget: 'Up to £30/mo',
-    sub: 'The two supplements that move the needle most',
-    includes: 'Protein + Creatine',
-    pref: 'simple', count: '2 products',
+    id: 'under-30', name: 'Starter Bundle',   budget: 'Up to £30/mo',
+    sub: 'The essentials that move the needle most',
+    pref: 'simple', slots: 2,
   },
   {
-    id: '30-50',    name: 'Saver Bundle',        budget: '£30–50/mo',
-    sub: 'Core essentials to cover your main goal',
-    includes: 'Protein, Creatine + 1 add-on',
-    pref: 'simple', count: '3 products',
+    id: '30-50',    name: 'Saver Bundle',      budget: '£30–50/mo',
+    sub: 'Core supplements to cover your main goal',
+    pref: 'simple', slots: 3,
   },
   {
-    id: '50-80',    name: 'Performance Bundle',  budget: '£50–80/mo',
-    sub: 'Solid, well-rounded daily stack',
-    includes: 'Protein, Creatine, Pre-workout + 2 more',
-    pref: 'balanced', count: '5 products',
+    id: '50-80',    name: 'Performance Bundle', budget: '£50–80/mo',
+    sub: 'A well-rounded daily stack',
+    pref: 'balanced', slots: 5,
   },
   {
-    id: '80-plus',  name: 'Complete Bundle',     budget: '£80+/mo',
+    id: '80-plus',  name: 'Complete Bundle',   budget: '£80+/mo',
     sub: 'Every angle covered — nothing left out',
-    includes: 'Full stack: protein, performance, energy, recovery & more',
-    pref: 'complete', count: '7 products',
+    pref: 'complete', slots: 7,
   },
 ]
+
+/** Formats ranked slot titles into a short "includes" preview string. */
+function formatIncludes(slots: Array<{ title: string }>, count: number): string {
+  if (slots.length === 0) return 'Personalised to your goals'
+  const shown = slots.slice(0, Math.min(count, slots.length))
+  if (shown.length <= 2) return shown.map(s => s.title).join(' + ')
+  const extra = count - (shown.length - 1)
+  const main = shown.slice(0, shown.length - 1).map(s => s.title).join(', ')
+  const last = extra > 1 ? `+ ${extra} more` : `+ ${shown[shown.length - 1].title}`
+  return `${main} ${last}`
+}
 
 const FORMAT_DATA = [
   { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: '🥤' },
@@ -420,7 +430,27 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   // Hydrate live catalogue while the user answers the quiz
   useProducts()
-  useCatalogueProducts() // Populates store.catalogueProducts for blueprint generation
+  const { products: liveCatalogue } = useCatalogueProducts() // Populates store.catalogueProducts for blueprint generation
+
+  // Pre-compute the full ranked stack (with unlimited budget) so budget cards
+  // can show the *actual* products the user would get — not hardcoded text.
+  const rankedSlots = useMemo(() => {
+    if (answers.goals.length === 0) return []
+    try {
+      const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
+      const preview = buildStackBlueprint(
+        { ...answers, budget: '80-plus', stackPreference: 'complete' },
+        catalogue,
+      )
+      return preview.slots
+    } catch {
+      return []
+    }
+  }, [
+    answers.goals, answers.lifestyle, answers.currentSupplements,
+    answers.currentVitamins, answers.stimPreference, answers.caffeineLevel,
+    answers.wellbeingAnswers, liveCatalogue,
+  ])
 
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
@@ -1050,8 +1080,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {/* ── Step 9: Budget bundles (single — also sets stack preference) ── */}
           {step === 9 && (
             <div className="flex flex-col gap-3">
-              {BUDGET_DATA.map(({ id, name, budget, sub, includes, pref, count }) => {
+              {BUDGET_DATA.map(({ id, name, budget, sub, pref, slots }) => {
                 const active = answers.budget === id
+                const actualCount = Math.min(slots, rankedSlots.length || slots)
+                const includes = formatIncludes(rankedSlots, slots)
                 return (
                   <button
                     key={`9-${id}`}
@@ -1074,7 +1106,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     </div>
                     {/* Sub — what it's for */}
                     <p className={`text-xs leading-snug ${active ? 'text-white/60' : 'text-white/30'}`}>{sub}</p>
-                    {/* Includes line */}
+                    {/* Includes line — dynamic from quiz answers */}
                     <div className="flex items-start gap-1.5">
                       <span className={`text-[10px] mt-px ${active ? 'text-[#00D4FF]/60' : 'text-white/20'}`}>Includes</span>
                       <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/70' : 'text-white/25'}`}>{includes}</span>
@@ -1082,7 +1114,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     {/* Count badge */}
                     <div className="flex justify-end">
                       <span className={`text-[9px] font-bold tracking-widest uppercase ${active ? 'text-[#00D4FF]/70' : 'text-white/15'}`}>
-                        {count}
+                        {actualCount} product{actualCount !== 1 ? 's' : ''}
                       </span>
                     </div>
                   </button>
