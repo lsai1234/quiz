@@ -5,6 +5,7 @@ import type { QuizAnswers } from '@/lib/types'
 function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
     name: 'Test User',
+    track: 'performance',
     ageBracket: '25-34',
     exactAge: null,
     gender: 'male',

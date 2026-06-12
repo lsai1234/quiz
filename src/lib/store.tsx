@@ -38,6 +38,7 @@ interface QuizStore {
 
 const defaultAnswers: QuizAnswers = {
   name: '',
+  track: null,
   ageBracket: null,
   exactAge: null,
   gender: null,

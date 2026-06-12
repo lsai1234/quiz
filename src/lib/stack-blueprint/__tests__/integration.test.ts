@@ -25,6 +25,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const BASE_ANSWERS: QuizAnswers = {
   name: 'Test User',
+  track: 'performance',
   ageBracket: '25-34',
   gender: 'male',
   goals: ['muscle', 'recovery'],

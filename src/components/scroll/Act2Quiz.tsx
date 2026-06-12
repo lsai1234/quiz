@@ -378,7 +378,7 @@ interface Props { onComplete: () => void; reducedMotion: boolean }
 
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
-    step, answers, nextStep, prevStep,
+    step, answers, nextStep, prevStep, setStep,
     setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
   } = useQuizStore()
 
@@ -419,6 +419,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (step >= TOTAL - 1) { handleFinish(); return }
     setDirection('forward')
     setAnimKey((k) => k + 1)
+    // Wellbeing track skips the training questions (steps 2–3)
+    if (step === 1 && answers.track === 'wellbeing') { setStep(4); return }
     nextStep()
   }
 
@@ -428,6 +430,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setSubAnswerId(null)
     setDirection('back')
     setAnimKey((k) => k + 1)
+    // Wellbeing track skips the training questions (steps 2–3)
+    if (step === 4 && answers.track === 'wellbeing') { setStep(1); return }
     prevStep()
   }
 
@@ -694,8 +698,43 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 1: Goals (multi) ── */}
-          {step === 1 && (
+          {/* ── Step 1: Track chooser → goals (multi) ── */}
+          {step === 1 && !answers.track && (
+            <div className="flex flex-col gap-3">
+              {([
+                {
+                  id: 'performance' as const, icon: '🏋️', label: 'Performance & training',
+                  sub: 'Build muscle, energy, recovery — for people who train',
+                },
+                {
+                  id: 'wellbeing' as const, icon: '🌿', label: 'Everyday wellbeing',
+                  sub: 'Sleep, stress, focus, immunity — how you feel day to day',
+                },
+              ]).map(({ id, icon, label, sub }) => (
+                <button
+                  key={`track-${id}`}
+                  onClick={() => {
+                    setAnswer('track', id)
+                    setGoals([])
+                    setAnswer('wellbeingAnswers', {})
+                  }}
+                  className="w-full flex items-center gap-4 px-5 py-6 rounded-2xl border border-white/10 bg-white/[0.04] text-left option-hover transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50"
+                >
+                  <span className="text-3xl leading-none">{icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-bold text-white" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+                    <div className="text-xs mt-1 text-white/35">{sub}</div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="text-white/30">
+                    <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Performance track — the normal goal grid, unchanged */}
+          {step === 1 && answers.track === 'performance' && (
             <div>
               <div className="grid grid-cols-2 gap-2.5">
                 {GOALS_DATA.map(({ id, label, icon }) => (
@@ -710,14 +749,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   />
                 ))}
               </div>
-
-              {/* Everyday wellbeing group */}
-              <p
-                className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/30 mt-7 mb-3"
-                style={{ fontFamily: 'var(--font-display)' }}
+              <button
+                onClick={() => { setAnswer('track', null); setGoals([]) }}
+                className="mt-5 text-xs text-white/30 underline underline-offset-2"
               >
-                Everyday wellbeing
-              </p>
+                ← Switch to everyday wellbeing
+              </button>
+            </div>
+          )}
+
+          {/* Wellbeing track — its own goal screen */}
+          {step === 1 && answers.track === 'wellbeing' && (
+            <div>
               <div className="grid grid-cols-2 gap-2.5">
                 {WELLBEING_DATA.map(({ id, label, icon }) => (
                   <AnswerOption
@@ -730,6 +773,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     }}
                   />
                 ))}
+                <AnswerOption
+                  key="1w-health"
+                  icon="🌿" label="General health" multi
+                  selected={answers.goals.includes('health')}
+                  onClick={() => {
+                    const c = answers.goals
+                    setGoals(c.includes('health') ? c.filter(g => g !== 'health') : [...c, 'health'])
+                  }}
+                />
                 {COMING_SOON_GOALS.map(({ id, label, icon }) => (
                   <div
                     key={`1cs-${id}`}
@@ -744,6 +796,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   </div>
                 ))}
               </div>
+              <button
+                onClick={() => { setAnswer('track', null); setGoals([]); setAnswer('wellbeingAnswers', {}) }}
+                className="mt-5 text-xs text-white/30 underline underline-offset-2"
+              >
+                ← Switch to performance & training
+              </button>
 
               {/* Wellbeing follow-up — one question max, greedy by goal coverage */}
               {(() => {

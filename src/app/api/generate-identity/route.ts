@@ -48,7 +48,7 @@ ${firstName ? `- Name: ${firstName}` : ''}
 ${age ? `- Age group: ${age}` : ''}
 ${gender ? `- Gender: ${gender}` : ''}
 - Goals: ${goalText}
-- Training: ${freq} per week, ${type}-focused sessions
+${answers.trainingFrequency ? `- Training: ${freq} per week, ${type}-focused sessions` : ''}
 - Diet: ${diet}
 - Lifestyle factors: ${lifestyle}
 - Caffeine preference: ${caffeine}

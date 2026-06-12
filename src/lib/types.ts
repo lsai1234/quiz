@@ -33,8 +33,12 @@ export type StackLevel = 'essentials' | 'performance' | 'complete'
 export type TrainingExperience = 'new' | 'intermediate' | 'experienced'
 export type StimPreference = 'yes' | 'no'
 
+export type QuizTrack = 'performance' | 'wellbeing'
+
 export interface QuizAnswers {
   name: string
+  /** Which quiz track the user chose on the goal step */
+  track: QuizTrack | null
   ageBracket: AgeBracket | null
   exactAge: number | null
   gender: Gender | null
