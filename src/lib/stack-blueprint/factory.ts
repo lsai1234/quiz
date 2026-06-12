@@ -299,10 +299,19 @@ export function buildStackBlueprint(
   answers: QuizAnswers,
   catalogue: CatalogueProduct[]
 ): StackBlueprint {
-  // If the provided catalogue has no slot coverage (e.g. Shopify products without
-  // slot:* tags), fall back to the mock catalogue so slots are always populated.
-  const hasSlotCoverage = catalogue.some(p => p.stackSlots.length > 0)
-  const effectiveCatalogue = hasSlotCoverage ? catalogue : MOCK_CATALOGUE
+  // Build the effective catalogue: use live products where they exist,
+  // and fill any slot types that have zero live coverage with mock products.
+  // This ensures Shopify stores that are only partially tagged still produce
+  // full stacks rather than single-product results.
+  const liveSlotTypes = new Set(catalogue.flatMap(p => p.stackSlots))
+  const mockFillIns = MOCK_CATALOGUE.filter(p =>
+    p.stackSlots.some(s => !liveSlotTypes.has(s as never)),
+  )
+  // If live catalogue has fewer than 3 slot types covered, use mock entirely
+  // (store hasn't been tagged yet — avoid showing a mix of unrelated products)
+  const effectiveCatalogue = liveSlotTypes.size >= 3
+    ? [...catalogue, ...mockFillIns]
+    : MOCK_CATALOGUE
 
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
   const secondaryGoals = answers.goals.slice(1)
