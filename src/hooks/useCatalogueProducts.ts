@@ -33,8 +33,13 @@ export function useCatalogueProducts(): UseCatalogueProductsReturn {
       .then((data: { products?: CatalogueProduct[]; source?: string; error?: string }) => {
         if (data.error) throw new Error(data.error)
         if (Array.isArray(data.products) && data.products.length > 0) {
-          setCatalogueProducts(data.products)
-          setIsLive(data.source === 'shopify')
+          // Only adopt Shopify products if they have slot coverage; otherwise
+          // keep the store's MOCK_CATALOGUE so blueprint IDs stay consistent.
+          const hasSlotCoverage = data.products.some((p) => p.stackSlots?.length > 0)
+          if (hasSlotCoverage) {
+            setCatalogueProducts(data.products)
+            setIsLive(data.source === 'shopify')
+          }
         }
       })
       .catch((err: Error) => {
