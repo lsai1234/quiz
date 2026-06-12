@@ -118,7 +118,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Performance',
     stackSlots: ['performance'],
-    goals: ['muscle', 'performance', 'bulking', 'energy'],
+    goals: ['muscle', 'performance', 'bulking'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [

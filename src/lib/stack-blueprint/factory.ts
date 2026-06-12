@@ -56,14 +56,16 @@ const SLOT_DEFAULT_REASONS: Record<SlotType, string> = {
 }
 
 // Goal → slot relevance: which slot types does each goal suggest?
+// Intentionally does NOT map energy → performance (creatine is not an energy product)
+// and does NOT map health/cutting → protein (protein shouldn't dominate non-muscle stacks).
 const GOAL_SLOT_RELEVANCE: Partial<Record<Goal, SlotType[]>> = {
   muscle:      ['protein', 'performance', 'recovery'],
   bulking:     ['protein', 'performance', 'recovery'],
-  cutting:     ['energy', 'health', 'protein'],
-  energy:      ['energy', 'performance', 'health'],
+  cutting:     ['energy', 'health'],
+  energy:      ['energy', 'health'],
   performance: ['performance', 'energy', 'protein'],
-  hydration:   ['hydration', 'energy'],
-  recovery:    ['recovery', 'protein', 'health'],
+  hydration:   ['hydration', 'recovery'],
+  recovery:    ['recovery', 'health'],
   health:      ['health', 'recovery'],
 }
 
@@ -190,6 +192,12 @@ function scoreProduct(
   if (answers.lifestyle.includes('run-down') && product.goals.includes('immune')) score += 10
   if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') score += 8
   if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) score += 8
+
+  // Deprioritise performance (creatine) and protein slots when the user's
+  // goals don't call for them — prevents creatine appearing for energy/health users
+  const muscleGoals: Goal[] = ['muscle', 'bulking', 'performance']
+  if (slotType === 'performance' && !answers.goals.some(g => muscleGoals.includes(g))) score -= 60
+  if (slotType === 'protein' && !answers.goals.some(g => ['muscle', 'bulking', 'recovery'].includes(g))) score -= 50
 
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
