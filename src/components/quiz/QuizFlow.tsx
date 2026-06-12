@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 import { buildRecommendedStack } from '@/lib/recommendation'
 import { buildStackBlueprint } from '@/lib/stack-blueprint'
-import { getCatalogue } from '@/lib/catalogue'
 import { useProducts } from '@/hooks/useProducts'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import type {
@@ -300,7 +299,7 @@ export function QuizFlow() {
   // Kick off the catalogue fetch as soon as the quiz mounts so live
   // Shopify products are in the store by the time the stack is built
   useProducts()
-  useCatalogueProducts() // Populates store.catalogueProducts so getCatalogue() returns live data
+  useCatalogueProducts() // Populates store.catalogueProducts with live Shopify data
 
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -427,7 +426,7 @@ export function QuizFlow() {
       )
 
       // Build and store the stack blueprint
-      const blueprint = buildStackBlueprint(answers, getCatalogue())
+      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
       useQuizStore.getState().setStackBlueprint(blueprint)
 
       router.push('/reveal')
