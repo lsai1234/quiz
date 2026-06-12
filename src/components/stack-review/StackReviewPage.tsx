@@ -11,10 +11,10 @@ import {
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
 import { calculatePricing } from '@/lib/stack-blueprint/pricing'
-import { MOCK_CATALOGUE } from '@/lib/catalogue'
-import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
+import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
@@ -23,9 +23,11 @@ import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
-  const { stackBlueprint, catalogue, setStackBlueprint } = useQuizStore()
+  const { stackBlueprint, setStackBlueprint } = useQuizStore()
   const rawBlueprint = stackBlueprint ?? MOCK_BLUEPRINT
-  const products: CatalogueProduct[] = catalogue.length > 0 ? (catalogue as unknown as CatalogueProduct[]) : MOCK_CATALOGUE
+  // useCatalogueProducts triggers the /api/catalogue fetch (once per session)
+  // and returns the properly-typed CatalogueProduct[] from the Zustand store.
+  const { products } = useCatalogueProducts()
 
   // Default any slot without a selected variant to the product's first available
   // variant so the selector and price always agree.

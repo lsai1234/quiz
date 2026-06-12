@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useProducts } from '@/hooks/useProducts'
+import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -247,6 +248,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   // Hydrate live catalogue while the user answers the quiz
   useProducts()
+  useCatalogueProducts() // Populates store.catalogueProducts for blueprint generation
 
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
