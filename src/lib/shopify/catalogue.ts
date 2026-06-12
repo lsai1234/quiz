@@ -66,7 +66,7 @@ export function mapShopifyProduct(p: ShopifyProduct): Product {
 
   // Use our product-type:* tags for category (seeded via seed-shopify-tags.mjs)
   // Fall back to Shopify productType or title-derived value
-  const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? p.productType || 'Supplement'
+  const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawPriority = metaValue(p.metafields, 'stack_priority')
   const stackPriority = rawPriority ? parseInt(rawPriority, 10) : deriveDefaultPriority(category)
