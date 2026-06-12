@@ -69,20 +69,35 @@ const REMOVE_LINES = `
   }
 `
 
-const GET_PRODUCTS_BY_HANDLES = `
-  query getProducts($handles: [String!]!) {
-    nodes: products(first: 50, query: "handle:${'"'}) {
-      edges { node {
-        id title handle description
-        images(first: 3) { edges { node { url altText width height } } }
-        variants(first: 5) { edges { node {
-          id title availableForSale
-          priceV2 { amount currencyCode }
-          compareAtPriceV2 { amount currencyCode }
-          image { url altText width height }
-          product { title handle images(first:1){edges{node{url altText width height}}} }
-        }}}
-      }}
+const GET_PRODUCTS = `
+  query getProducts($first: Int!) {
+    products(first: $first) {
+      edges {
+        node {
+          id
+          title
+          handle
+          description
+          productType
+          tags
+          images(first: 3) { edges { node { url altText width height } } }
+          variants(first: 10) { edges { node {
+            id
+            title
+            availableForSale
+            priceV2 { amount currencyCode }
+            compareAtPriceV2 { amount currencyCode }
+            image { url altText width height }
+            product { title handle images(first:1){edges{node{url altText width height}}} }
+          }}}
+          metafields(identifiers: [
+            {namespace: "chrgd", key: "safe_wording"},
+            {namespace: "chrgd", key: "accent_color"},
+            {namespace: "chrgd", key: "stack_priority"},
+            {namespace: "chrgd", key: "subcategory"}
+          ]) { key value type }
+        }
+      }
     }
   }
 `
@@ -174,6 +189,14 @@ export function buildMockCart(lines: { variantId: string; quantity: number }[]):
     },
     checkoutUrl: '#mock-checkout',
   }
+}
+
+export async function getProducts(first = 50): Promise<ShopifyProduct[]> {
+  const data = await shopifyFetch<{ products: { edges: { node: ShopifyProduct }[] } }>(
+    GET_PRODUCTS,
+    { first },
+  )
+  return data.products.edges.map(({ node }) => node)
 }
 
 export { SHOPIFY_LIVE }

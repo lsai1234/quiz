@@ -1,8 +1,16 @@
 import type { Product } from './types'
 
+const D = {
+  shopifyProductId: '',
+  image: null,
+  variants: [],
+} satisfies Partial<Product>
+
 export const MOCK_PRODUCTS: Product[] = [
   {
+    ...D,
     id: 'whey-protein',
+    handle: 'whey-protein',
     name: 'CHRGD Whey Protein',
     category: 'Protein',
     subcategory: 'Whey',
@@ -19,7 +27,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#cfff32',
   },
   {
+    ...D,
     id: 'vegan-protein',
+    handle: 'vegan-protein',
     name: 'CHRGD Plant Protein',
     category: 'Protein',
     subcategory: 'Plant-based',
@@ -36,7 +46,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#86efac',
   },
   {
+    ...D,
     id: 'creatine-mono',
+    handle: 'creatine-mono',
     name: 'CHRGD Creatine Monohydrate',
     category: 'Performance',
     subcategory: 'Creatine',
@@ -53,7 +65,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#cfff32',
   },
   {
+    ...D,
     id: 'pre-workout-standard',
+    handle: 'pre-workout-standard',
     name: 'CHRGD Pre-Workout',
     category: 'Pre-Workout',
     subcategory: 'Standard',
@@ -70,7 +84,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#f97316',
   },
   {
+    ...D,
     id: 'pre-workout-stim-free',
+    handle: 'pre-workout-stim-free',
     name: 'CHRGD Stim-Free Pre',
     category: 'Pre-Workout',
     subcategory: 'Stim-free',
@@ -87,7 +103,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#38bdf8',
   },
   {
+    ...D,
     id: 'bcaa',
+    handle: 'bcaa',
     name: 'CHRGD BCAA + Hydration',
     category: 'Amino Acids',
     subcategory: 'BCAA',
@@ -104,7 +122,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#818cf8',
   },
   {
+    ...D,
     id: 'electrolytes',
+    handle: 'electrolytes',
     name: 'CHRGD Electrolyte Mix',
     category: 'Hydration',
     subcategory: 'Electrolytes',
@@ -121,7 +141,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#38bdf8',
   },
   {
+    ...D,
     id: 'omega3',
+    handle: 'omega3',
     name: 'CHRGD Omega-3',
     category: 'Health',
     subcategory: 'Essential Fats',
@@ -138,7 +160,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#fbbf24',
   },
   {
+    ...D,
     id: 'vitamin-d3-k2',
+    handle: 'vitamin-d3-k2',
     name: 'CHRGD Vitamin D3+K2',
     category: 'Health',
     subcategory: 'Vitamins',
@@ -155,7 +179,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#fde68a',
   },
   {
+    ...D,
     id: 'magnesium',
+    handle: 'magnesium',
     name: 'CHRGD Magnesium Glycinate',
     category: 'Health',
     subcategory: 'Minerals',
@@ -172,7 +198,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#c4b5fd',
   },
   {
+    ...D,
     id: 'fat-burner',
+    handle: 'fat-burner',
     name: 'CHRGD Thermo',
     category: 'Body Composition',
     subcategory: 'Thermogenic',
@@ -189,7 +217,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#f87171',
   },
   {
+    ...D,
     id: 'mass-gainer',
+    handle: 'mass-gainer',
     name: 'CHRGD Mass Builder',
     category: 'Protein',
     subcategory: 'Mass Gainer',
@@ -206,7 +236,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#fb923c',
   },
   {
+    ...D,
     id: 'collagen',
+    handle: 'collagen',
     name: 'CHRGD Collagen + Vitamin C',
     category: 'Recovery',
     subcategory: 'Joint Support',
@@ -223,7 +255,9 @@ export const MOCK_PRODUCTS: Product[] = [
     accentColor: '#fdba74',
   },
   {
+    ...D,
     id: 'sleep-support',
+    handle: 'sleep-support',
     name: 'CHRGD Sleep & Recovery',
     category: 'Recovery',
     subcategory: 'Sleep',
