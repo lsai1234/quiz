@@ -13,6 +13,13 @@ interface Props {
 
 const ACCENT = '#00D4FF'
 
+// "Chocolate · 1kg" when both flavour and size exist, otherwise whichever is
+// present, otherwise the raw variant title.
+function variantLabel(v: { title: string; flavour: string | null; size: string | null }): string {
+  const parts = [v.flavour, v.size].filter(Boolean)
+  return parts.length > 0 ? parts.join(' · ') : v.title
+}
+
 export function StackProductCard({ slot, product, onChangeProduct, onChangeVariant, onRemove }: Props) {
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
     ?? product?.variants.find((v) => v.available)
@@ -68,7 +75,7 @@ export function StackProductCard({ slot, product, onChangeProduct, onChangeVaria
               {product?.title ?? 'Product unavailable'}
             </p>
             {selectedVariant && (
-              <p className="text-xs text-[var(--color-muted)] mt-0.5">{selectedVariant.title}</p>
+              <p className="text-xs text-[var(--color-muted)] mt-0.5">{variantLabel(selectedVariant)}</p>
             )}
             <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed line-clamp-2">
               {slot.reason}
@@ -103,16 +110,24 @@ export function StackProductCard({ slot, product, onChangeProduct, onChangeVaria
           )}
         </div>
 
-        {/* Variant selector */}
+        {/* Variant selector — flavour/size picker, only when there's a real choice */}
         {product && product.variants.length > 1 && (
           <div className="mt-3">
+            <label
+              className="block text-[9px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Flavour / size
+            </label>
             <select
-              className="w-full text-xs rounded-lg px-3 py-2 border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text)] appearance-none"
+              className="w-full text-xs rounded-lg px-3 py-2.5 border border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text)] appearance-none"
               value={slot.selectedVariantId ?? selectedVariant?.id ?? ''}
               onChange={(e) => onChangeVariant?.(slot.slotId, e.target.value)}
             >
-              {product.variants.filter((v) => v.available).map((v) => (
-                <option key={v.id} value={v.id}>{v.title} — £{v.price.toFixed(2)}</option>
+              {product.variants.map((v) => (
+                <option key={v.id} value={v.id} disabled={!v.available}>
+                  {variantLabel(v)} — £{v.price.toFixed(2)}{v.available ? '' : ' (sold out)'}
+                </option>
               ))}
             </select>
           </div>

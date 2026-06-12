@@ -1,8 +1,9 @@
 'use client'
 
+import { useCallback, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
-import { calculateStackPrice, calculateSubscriptionPrice } from '@/lib/stack-blueprint/helpers'
+import { calculateStackPrice, calculateSubscriptionPrice, updateStackSlotVariant } from '@/lib/stack-blueprint/helpers'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { StackHero } from './StackHero'
@@ -10,9 +11,31 @@ import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
 
 export function StackReviewPage() {
-  const { stackBlueprint, catalogue } = useQuizStore()
-  const blueprint = stackBlueprint ?? MOCK_BLUEPRINT
+  const { stackBlueprint, catalogue, setStackBlueprint } = useQuizStore()
+  const rawBlueprint = stackBlueprint ?? MOCK_BLUEPRINT
   const products: CatalogueProduct[] = catalogue.length > 0 ? (catalogue as unknown as CatalogueProduct[]) : MOCK_CATALOGUE
+
+  // Default any slot without a selected variant to the product's first
+  // available variant, so the selector and price always agree.
+  const blueprint = useMemo(() => {
+    let result = rawBlueprint
+    for (const slot of rawBlueprint.slots) {
+      if (slot.selectedVariantId) continue
+      const product = products.find((p) => p.id === slot.selectedProductId)
+      const defaultVariant = product?.variants.find((v) => v.available)
+      if (defaultVariant) result = updateStackSlotVariant(result, slot.slotId, defaultVariant.id)
+    }
+    return result
+  }, [rawBlueprint, products])
+
+  const handleChangeVariant = useCallback(
+    (slotId: string, variantId: string) => {
+      // Writes the edited blueprint back to the store so price totals,
+      // checkout, and any other consumers stay in sync.
+      setStackBlueprint(updateStackSlotVariant(blueprint, slotId, variantId))
+    },
+    [blueprint, setStackBlueprint],
+  )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
   const oneOffPrice = calculateStackPrice(blueprint, products)
@@ -51,6 +74,7 @@ export function StackReviewPage() {
               key={slot.slotId}
               slot={slot}
               product={product}
+              onChangeVariant={handleChangeVariant}
             />
           )
         })}
