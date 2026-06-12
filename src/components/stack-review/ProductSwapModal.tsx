@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -33,6 +34,10 @@ function productTags(p: CatalogueProduct): string[] {
 }
 
 export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect, onClose }: Props) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => { setMounted(true) }, [])
+
   // Lock scroll while open, restore on close
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -49,7 +54,9 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
 
   const currentPrice = currentProduct?.basePrice ?? 0
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     /* Backdrop */
     <div
       className="fixed inset-0 z-50 flex items-end justify-center"
@@ -189,6 +196,7 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

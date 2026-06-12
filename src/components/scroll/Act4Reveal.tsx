@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useQuizStore } from '@/lib/store'
@@ -9,7 +9,6 @@ import { StackReviewPage } from '@/components/stack-review/StackReviewPage'
 gsap.registerPlugin(ScrollTrigger)
 
 interface Props {
-  onBuildBundle: () => void
   reducedMotion: boolean
 }
 
@@ -62,7 +61,7 @@ function ScoreRing({ score }: { score: number }) {
   )
 }
 
-export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
+export function Act4Reveal({ reducedMotion }: Props) {
   const { identity, answers } = useQuizStore()
   const firstName = answers.name?.split(' ')[0]?.trim() || null
   const headlineRef = useRef<HTMLDivElement>(null)
@@ -81,7 +80,7 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
   if (!identity) return null
 
   return (
-    <div className="bg-[#F5F5F0] min-h-screen pb-32">
+    <div className="bg-[#F5F5F0] min-h-screen pb-10">
       {/* Identity header */}
       <div className="px-5 pt-16 pb-10 max-w-lg mx-auto">
         <div ref={headlineRef}>
@@ -138,18 +137,6 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
         <StackReviewPage />
       </div>
 
-      {/* Sticky Build my bundle CTA */}
-      <div className="fixed bottom-0 left-0 right-0 px-5 pt-3 pb-8 bg-gradient-to-t from-[#F5F5F0] to-transparent">
-        <div className="max-w-lg mx-auto">
-          <button
-            onClick={onBuildBundle}
-            className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[#0A0A0A] text-white active:scale-95 transition-all"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            Build my bundle →
-          </button>
-        </div>
-      </div>
     </div>
   )
 }

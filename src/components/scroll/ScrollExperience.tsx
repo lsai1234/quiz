@@ -42,7 +42,7 @@ export function ScrollExperience() {
         {act === 1 && <Act1Hero onEnterQuiz={() => goTo(2)} reducedMotion={reducedMotion} />}
         {act === 2 && <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />}
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
-        {act === 4 && <Act4Reveal onBuildBundle={() => goTo(5)} reducedMotion={reducedMotion} />}
+        {act === 4 && <Act4Reveal reducedMotion={reducedMotion} />}
         {act === 5 && <Act5Bundle reducedMotion={reducedMotion} />}
       </div>
     </div>
