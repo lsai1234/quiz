@@ -42,6 +42,7 @@ const BASE_ANSWERS: QuizAnswers = {
   exactAge: null,
   currentVitamins: [],
   preferredFormats: [],
+  wellbeingAnswers: {},
 }
 
 // ─── Feature 3: Quiz → Blueprint ──────────────────────────────────────────────

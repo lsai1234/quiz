@@ -6,7 +6,10 @@ import { MOCK_PRODUCTS } from '@/lib/mock-products'
 
 // ─── Tag parsing helpers ───────────────────────────────────────────────────────
 
-const VALID_GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking']
+const VALID_GOALS: Goal[] = [
+  'muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking',
+  'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails',
+]
 const VALID_LEVELS: StackLevel[] = ['essentials', 'performance', 'complete']
 
 function parseGoalTags(tags: string[]): Goal[] {
@@ -248,8 +251,17 @@ function deriveGoals(p: ShopifyProduct, slots: StackSlot[]): ReturnType<typeof p
   if (slots.includes('hydration'))    { goals.add('hydration'); goals.add('performance') }
   if (slots.includes('recovery'))     { goals.add('recovery') }
   if (slots.includes('health'))       { goals.add('health') }
-  if (slots.includes('sleep'))        { goals.add('recovery'); goals.add('health') }
+  if (slots.includes('sleep'))        { goals.add('recovery'); goals.add('health'); goals.add('sleep-better'); goals.add('less-stress') }
   if (slots.includes('vegan-support')) goals.add('health')
+
+  // Wellbeing goal inference from product title
+  const t = p.title.toLowerCase()
+  if (t.includes('magnesium') || t.includes('sleep'))            { goals.add('sleep-better'); goals.add('less-stress') }
+  if (t.includes('ashwagandha') || t.includes('theanine'))       { goals.add('less-stress') }
+  if (t.includes('omega') || t.includes('fish oil'))             { goals.add('focus') }
+  if (t.includes('multivitamin') || t.includes('multi vitamin')) { goals.add('immune'); goals.add('focus') }
+  if (t.includes('vitamin d') || t.includes('vitamin c'))        { goals.add('immune') }
+  if (t.includes('collagen'))                                    { goals.add('skin-hair-nails'); goals.add('immune') }
   return [...goals] as ReturnType<typeof parseGoalTags>
 }
 

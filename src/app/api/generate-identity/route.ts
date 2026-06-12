@@ -10,10 +10,17 @@ const GOAL_LABELS: Record<string, string> = {
   performance: 'improve athletic performance',
   hydration: 'optimise hydration',
   recovery: 'speed up recovery',
-  health: 'support general health',
+  health: 'support general health and longevity',
   cutting: 'lose body fat',
   bulking: 'gain mass',
+  'sleep-better': 'sleep better',
+  'less-stress': 'manage stress',
+  focus: 'improve focus and reduce brain fog',
+  immune: 'support immune health',
+  'skin-hair-nails': 'support skin, hair and nails',
 }
+
+const PERFORMANCE_GOAL_IDS = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'cutting', 'bulking']
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,9 +39,11 @@ export async function POST(req: NextRequest) {
     const gender = answers.gender && answers.gender !== 'not-specified' ? answers.gender : null
     const formats = answers.preferredFormats?.length > 0 ? answers.preferredFormats.join(', ') : 'no preference'
 
-    const prompt = `You are a specialist sports nutrition advisor for CHRGD, a premium UK supplement brand.
+    const isWellbeingOnly = answers.goals.length > 0 && !answers.goals.some(g => PERFORMANCE_GOAL_IDS.includes(g))
 
-Create a personalised supplement stack identity for an athlete with this profile:
+    const prompt = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand.
+
+Create a personalised supplement stack identity for ${isWellbeingOnly ? 'someone focused on everyday wellbeing (not a gym-focused athlete — avoid training/athlete language)' : 'an athlete'} with this profile:
 ${firstName ? `- Name: ${firstName}` : ''}
 ${age ? `- Age group: ${age}` : ''}
 ${gender ? `- Gender: ${gender}` : ''}
@@ -56,7 +65,7 @@ Return ONLY a JSON object (no markdown, no explanation, no asterisks in any fiel
   "routineFitScore": <integer 72-96, how well this stack fits their specific routine>
 }
 
-Rules: No medical claims. No guaranteed outcomes. Use 'selected based on your goals', 'may suit your routine', 'commonly used by athletes with similar profiles'. Keep it premium, confident, direct. No markdown formatting anywhere in the response.`
+Rules: No medical claims. No guaranteed outcomes. Use 'selected based on your goals', 'may suit your routine', 'commonly used by ${isWellbeingOnly ? 'people' : 'athletes'} with similar profiles'. Never suggest supplements can treat, manage or replace medical care for any condition (including menopause); if anything health-related comes up, the only acceptable framing is to consult a GP — especially if pregnant, breastfeeding, or on prescribed medication such as HRT. Keep it premium, confident, direct. No markdown formatting anywhere in the response.`
 
     const completion = await client.chat.completions.create({
       model: 'gpt-4o-mini',

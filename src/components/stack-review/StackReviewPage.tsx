@@ -227,6 +227,13 @@ export function StackReviewPage() {
             onCheckout={handleCheckout}
             isLoading={checkoutState.status === 'loading'}
           />
+
+          {/* Safety fine print */}
+          <p className="text-[10px] leading-relaxed mt-4 text-center" style={{ color: 'var(--color-muted)' }}>
+            Food supplements are not a substitute for a varied diet or medical care.
+            Consult your GP before use if you are pregnant, breastfeeding, or taking
+            prescribed medication (including HRT).
+          </p>
         </div>
       </div>
 

@@ -16,6 +16,7 @@ function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
     currentSupplements: [],
     currentVitamins: [],
     preferredFormats: [],
+    wellbeingAnswers: {},
     caffeineLevel: 'medium',
     budget: '50-80',
     stackPreference: 'balanced',
@@ -151,5 +152,58 @@ describe('buildStackBlueprint', () => {
     expect(blueprint.summary).toBeTruthy()
     expect(Array.isArray(blueprint.slots)).toBe(true)
     expect(blueprint.slots.length).toBeGreaterThan(0)
+  })
+})
+
+describe('buildStackBlueprint — wellbeing goals', () => {
+  it('wellbeing-only users get no protein or performance slots', () => {
+    const answers = makeAnswers({ goals: ['sleep-better', 'less-stress'] })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    const slotTypes = blueprint.slots.map(s => s.slotType)
+    expect(slotTypes).not.toContain('protein')
+    expect(slotTypes).not.toContain('performance')
+    expect(slotTypes).not.toContain('energy')
+    expect(blueprint.slots.length).toBeGreaterThan(0)
+    // No slot is required for wellbeing-only users
+    expect(blueprint.slots.every(s => !s.required)).toBe(true)
+  })
+
+  it('sleep-better goal selects a sleep slot product', () => {
+    const answers = makeAnswers({ goals: ['sleep-better'] })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    expect(blueprint.slots.some(s => s.slotType === 'sleep')).toBe(true)
+  })
+
+  it('sleepQuality follow-up steers between magnesium and the sleep blend', () => {
+    const switchOff = buildStackBlueprint(
+      makeAnswers({ goals: ['sleep-better'], wellbeingAnswers: { sleepQuality: 'switch-off' } }),
+      MOCK_CATALOGUE,
+    )
+    const wakeNight = buildStackBlueprint(
+      makeAnswers({ goals: ['sleep-better'], wellbeingAnswers: { sleepQuality: 'wake-night' } }),
+      MOCK_CATALOGUE,
+    )
+    const sleepSlotA = switchOff.slots.find(s => s.slotType === 'sleep')
+    const sleepSlotB = wakeNight.slots.find(s => s.slotType === 'sleep')
+    expect(sleepSlotA?.selectedProductId).toBe('chrgd-sleep-support')
+    expect(sleepSlotB?.selectedProductId).toBe('chrgd-magnesium')
+  })
+
+  it('vegetarian collagen answer excludes collagen from the stack', () => {
+    const answers = makeAnswers({
+      goals: ['skin-hair-nails'],
+      wellbeingAnswers: { collagenOk: 'veggie' },
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    expect(blueprint.slots.every(s => s.selectedProductId !== 'chrgd-collagen')).toBe(true)
+  })
+
+  it('mixed performance + wellbeing goals keep protein/creatine required', () => {
+    const answers = makeAnswers({ goals: ['muscle', 'sleep-better'], budget: '80-plus' })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    const slotTypes = blueprint.slots.map(s => s.slotType)
+    expect(slotTypes).toContain('protein')
+    expect(slotTypes).toContain('performance')
+    expect(slotTypes).toContain('sleep')
   })
 })

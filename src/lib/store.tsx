@@ -49,6 +49,7 @@ const defaultAnswers: QuizAnswers = {
   currentSupplements: [],
   currentVitamins: [],
   preferredFormats: [],
+  wellbeingAnswers: {},
   caffeineLevel: null,
   budget: null,
   stackPreference: null,

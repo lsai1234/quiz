@@ -10,6 +10,18 @@ export type Goal =
   | 'health'
   | 'cutting'
   | 'bulking'
+  // Everyday wellbeing goals
+  | 'sleep-better'
+  | 'less-stress'
+  | 'focus'
+  | 'immune'
+  | 'skin-hair-nails'
+
+/** Goals that imply a training/performance context — used to decide whether
+ *  protein/creatine slots are required in the stack. */
+export const PERFORMANCE_GOALS: Goal[] = [
+  'muscle', 'energy', 'performance', 'hydration', 'recovery', 'cutting', 'bulking',
+]
 
 export type TrainingFrequency = '1-2x' | '3-4x' | '5-6x' | 'daily'
 export type TrainingType = 'strength' | 'cardio' | 'hiit' | 'sport' | 'mixed'
@@ -34,6 +46,9 @@ export interface QuizAnswers {
   currentSupplements: string[]
   currentVitamins: string[]
   preferredFormats: string[]
+  /** Answers to wellbeing follow-up questions, keyed by question id
+   *  (sleepQuality, stressPattern, immuneBaseline, collagenOk) */
+  wellbeingAnswers: Record<string, string>
   caffeineLevel: CaffeineLevel | null
   budget: Budget | null
   stackPreference: StackPreference | null

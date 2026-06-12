@@ -271,7 +271,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Recovery',
     stackSlots: ['recovery'],
-    goals: ['recovery', 'health', 'performance'],
+    goals: ['recovery', 'health', 'performance', 'skin-hair-nails', 'immune'],
     dietaryTags: ['gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
@@ -302,7 +302,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Health',
     stackSlots: ['health'],
-    goals: ['health', 'recovery'],
+    goals: ['health', 'recovery', 'focus'],
     dietaryTags: ['gluten-free', 'dairy-free'],
     formats: ['softgel'],
     variants: [
@@ -331,7 +331,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Health',
     stackSlots: ['health'],
-    goals: ['health'],
+    goals: ['health', 'immune'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsule'],
     variants: [
@@ -360,7 +360,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Health',
     stackSlots: ['health'],
-    goals: ['health', 'energy', 'performance'],
+    goals: ['health', 'energy', 'performance', 'immune', 'focus'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsule'],
     variants: [
@@ -390,7 +390,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Health',
     stackSlots: ['sleep', 'recovery'],
-    goals: ['recovery', 'health'],
+    goals: ['recovery', 'health', 'sleep-better', 'less-stress'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsule'],
     variants: [
@@ -418,7 +418,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     imageUrl: null,
     category: 'Recovery',
     stackSlots: ['sleep', 'recovery'],
-    goals: ['recovery', 'health'],
+    goals: ['recovery', 'health', 'sleep-better', 'less-stress'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsule'],
     variants: [

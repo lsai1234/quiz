@@ -92,6 +92,104 @@ const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
   { id: 'bulking',     label: 'Gain mass',        icon: '📈' },
   { id: 'hydration',   label: 'Stay hydrated',    icon: '💧' },
 ]
+
+// Everyday wellbeing goals — shown below the performance grid on the goal step
+const WELLBEING_DATA: Array<{ id: Goal; label: string; icon: string }> = [
+  { id: 'sleep-better',    label: 'Sleep better',        icon: '😴' },
+  { id: 'less-stress',     label: 'Less stress',         icon: '🧘' },
+  { id: 'focus',           label: 'Focus & brain fog',   icon: '🧠' },
+  { id: 'immune',          label: 'Immune support',      icon: '🛡️' },
+  { id: 'skin-hair-nails', label: 'Skin, hair & nails',  icon: '✨' },
+]
+
+// Goals we don't yet stock products for — shown greyed out
+const COMING_SOON_GOALS = [
+  { id: 'menopause', label: 'Menopause support', icon: '🌡' },
+  { id: 'gut-health', label: 'Gut health',       icon: '🦠' },
+]
+
+// ─── Wellbeing follow-up question bank ────────────────────────────────────────
+// One question max is shown inline on the goal step. The question chosen is the
+// one whose `serves` list covers the most of the user's selected goals.
+// `triggers` must include at least one selected goal for the question to be
+// eligible — performance-only users never see these.
+
+interface WellbeingQuestion {
+  id: string
+  triggers: Goal[]   // at least one of these must be selected to be eligible
+  serves: Goal[]     // used for greedy max-coverage prioritisation
+  question: string
+  hint: string
+  options: Array<{ id: string; label: string; sub?: string }>
+}
+
+const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
+  {
+    id: 'sleepQuality',
+    triggers: ['sleep-better', 'less-stress'],
+    serves: ['sleep-better', 'less-stress', 'recovery'],
+    question: "How's your sleep at the moment?",
+    hint: 'Shapes which sleep support we recommend',
+    options: [
+      { id: 'switch-off', label: 'Hard to switch off at night' },
+      { id: 'wake-night', label: 'Wake up during the night' },
+      { id: 'wake-tired', label: 'Sleep enough, still wake tired' },
+      { id: 'fine',       label: "Sleep's fine, actually" },
+    ],
+  },
+  {
+    id: 'stressPattern',
+    triggers: ['less-stress', 'focus'],
+    serves: ['less-stress', 'focus', 'energy'],
+    question: 'When does it hit you hardest?',
+    hint: 'Helps us target the right support',
+    options: [
+      { id: 'morning-fog',     label: 'Morning fog — slow to get going' },
+      { id: 'afternoon-crash', label: 'Afternoon crash' },
+      { id: 'evening-wired',   label: "Wired in the evening, can't wind down" },
+      { id: 'all-day',         label: 'Tense all day' },
+    ],
+  },
+  {
+    id: 'immuneBaseline',
+    triggers: ['immune'],
+    serves: ['immune', 'health'],
+    question: 'How often do you get run down?',
+    hint: 'Sets how much immune support to include',
+    options: [
+      { id: 'often',     label: 'Catch everything going round' },
+      { id: 'sometimes', label: 'A couple of times a year' },
+      { id: 'rarely',    label: 'Rarely ill — just want insurance' },
+    ],
+  },
+  {
+    id: 'collagenOk',
+    triggers: ['skin-hair-nails'],
+    serves: ['skin-hair-nails'],
+    question: 'Our skin & hair support uses bovine collagen — any restrictions?',
+    hint: "We'll only recommend products you can actually take",
+    options: [
+      { id: 'ok',     label: 'No restrictions' },
+      { id: 'veggie', label: 'Vegetarian / vegan' },
+    ],
+  },
+]
+
+/** Greedy max-coverage: returns the single best wellbeing follow-up for the
+ *  selected goals, or null if none are triggered. */
+function pickWellbeingQuestion(goals: Goal[]): WellbeingQuestion | null {
+  let best: WellbeingQuestion | null = null
+  let bestCoverage = 0
+  for (const q of WELLBEING_QUESTIONS) {
+    if (!q.triggers.some(t => goals.includes(t))) continue
+    const coverage = q.serves.filter(s => goals.includes(s)).length
+    if (coverage > bestCoverage) {
+      bestCoverage = coverage
+      best = q
+    }
+  }
+  return best
+}
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
   { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
   { id: '3-4x',  label: '3–4× a week',  sub: 'Regular training' },
@@ -598,18 +696,90 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
           {/* ── Step 1: Goals (multi) ── */}
           {step === 1 && (
-            <div className="grid grid-cols-2 gap-2.5">
-              {GOALS_DATA.map(({ id, label, icon }) => (
-                <AnswerOption
-                  key={`1-${id}`}
-                  icon={icon} label={label} multi
-                  selected={answers.goals.includes(id)}
-                  onClick={() => {
-                    const c = answers.goals
-                    setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
-                  }}
-                />
-              ))}
+            <div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {GOALS_DATA.map(({ id, label, icon }) => (
+                  <AnswerOption
+                    key={`1-${id}`}
+                    icon={icon} label={label} multi
+                    selected={answers.goals.includes(id)}
+                    onClick={() => {
+                      const c = answers.goals
+                      setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* Everyday wellbeing group */}
+              <p
+                className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/30 mt-7 mb-3"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                Everyday wellbeing
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {WELLBEING_DATA.map(({ id, label, icon }) => (
+                  <AnswerOption
+                    key={`1w-${id}`}
+                    icon={icon} label={label} multi
+                    selected={answers.goals.includes(id)}
+                    onClick={() => {
+                      const c = answers.goals
+                      setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
+                    }}
+                  />
+                ))}
+                {COMING_SOON_GOALS.map(({ id, label, icon }) => (
+                  <div
+                    key={`1cs-${id}`}
+                    aria-disabled
+                    className="flex flex-col items-start gap-1.5 px-4 py-4 rounded-2xl border border-white/6 bg-white/[0.02] text-white/25 cursor-not-allowed relative"
+                  >
+                    <span className="text-xl leading-none opacity-50">{icon}</span>
+                    <span className="text-xs font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
+                    <span className="absolute top-2.5 right-2.5 text-[8px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-full border border-white/10 text-white/25">
+                      Soon
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Wellbeing follow-up — one question max, greedy by goal coverage */}
+              {(() => {
+                const wq = pickWellbeingQuestion(answers.goals)
+                if (!wq) return null
+                return (
+                  <div
+                    className="mt-6 pt-5 border-t border-white/8"
+                    style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+                  >
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-px h-4 bg-[#00D4FF]" />
+                      <span
+                        className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
+                        style={{ fontFamily: 'var(--font-display)' }}
+                      >
+                        Quick follow-up
+                      </span>
+                    </div>
+                    <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                      {wq.question}
+                    </p>
+                    <p className="text-xs text-white/35 mb-3">{wq.hint}</p>
+                    <div className="flex flex-col gap-2">
+                      {wq.options.map(({ id, label, sub }) => (
+                        <AnswerOption
+                          key={`wq-${wq.id}-${id}`}
+                          label={label} sub={sub}
+                          selected={answers.wellbeingAnswers[wq.id] === id}
+                          onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: id })}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
           )}
 

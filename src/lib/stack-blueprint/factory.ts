@@ -1,6 +1,7 @@
 // MVP scoring rules — replace with ML-based scoring in v2
 
 import type { QuizAnswers, Goal } from '@/lib/types'
+import { PERFORMANCE_GOALS } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type { StackBlueprint, StackSlotEntry } from './types'
@@ -9,7 +10,11 @@ import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 const SLOT_ORDER = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep'] as const
 type SlotType = typeof SLOT_ORDER[number]
 
-type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health'
+// For users with no performance goals, lead with wellbeing slots and skip
+// the training-centric slots entirely (protein/creatine/pre-workout).
+const WELLBEING_SLOT_ORDER: readonly SlotType[] = ['sleep', 'health', 'recovery', 'hydration']
+
+type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health' | 'wellbeing'
 
 const SLOT_TITLES: Record<SlotType, string> = {
   protein: 'Protein',
@@ -43,10 +48,15 @@ const SLOT_DEFAULT_REASONS: Record<SlotType, string> = {
 
 const REQUIRED_SLOTS: SlotType[] = ['protein', 'performance']
 
+function hasPerformanceGoals(goals: Goal[]): boolean {
+  return goals.some(g => PERFORMANCE_GOALS.includes(g))
+}
+
 function getArchetype(goals: Goal[]): Archetype {
   if (goals.includes('muscle') || goals.includes('bulking')) return 'muscle'
   if (goals.includes('cutting')) return 'fat-loss'
   if (goals.includes('performance') || goals.includes('energy')) return 'performance'
+  if (!hasPerformanceGoals(goals) && goals.some(g => g !== 'health')) return 'wellbeing'
   return 'health'
 }
 
@@ -57,6 +67,7 @@ function getStackName(archetype: Archetype, trainingFrequency: string | null): s
     'fat-loss':    ['Lean Power Stack', 'Fat Loss Protocol'],
     'performance': ['Endurance Edge Stack', 'Athletic Performance Stack'],
     'health':      ['Daily Charge Stack', 'Foundation Health Stack'],
+    'wellbeing':   ['Daily Reset Stack', 'Everyday Wellbeing Stack'],
   }
   return highFreq ? names[archetype][0] : names[archetype][1]
 }
@@ -66,6 +77,7 @@ const ARCHETYPE_SUMMARIES: Record<Archetype, string> = {
   'fat-loss':    'Designed to support fat loss while preserving lean muscle.',
   'performance': 'Optimised for endurance, energy, and athletic output.',
   'health':      'A smart daily foundation for energy, recovery, and long-term health.',
+  'wellbeing':   'A daily routine built around how you actually feel — sleep, stress, and everyday resilience.',
 }
 
 function scoreProduct(
@@ -105,6 +117,24 @@ function scoreProduct(
   if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += 20
   if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) score += 15
   if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) score += 15
+  if (archetype === 'wellbeing' && (slotType === 'sleep' || slotType === 'health')) score += 15
+
+  // Wellbeing follow-up refinements
+  const wb = answers.wellbeingAnswers ?? {}
+  if (slotType === 'sleep') {
+    // "Hard to switch off" / "wired in the evening" → the theanine/ashwagandha blend
+    if (wb.sleepQuality === 'switch-off' || wb.stressPattern === 'evening-wired') {
+      if (product.swapGroup === 'sleep-support') score += 15
+    }
+    // "Wake during the night" / "wake tired" → magnesium glycinate
+    if (wb.sleepQuality === 'wake-night' || wb.sleepQuality === 'wake-tired') {
+      if (product.swapGroup === 'magnesium') score += 15
+    }
+    // Sleep is fine → deprioritise the whole slot
+    if (wb.sleepQuality === 'fine' && !answers.goals.includes('sleep-better')) score -= 20
+  }
+  // Vegetarian/vegan answer on the collagen follow-up excludes bovine collagen
+  if (wb.collagenOk === 'veggie' && product.swapGroup === 'collagen') return -Infinity
 
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
@@ -143,14 +173,20 @@ function buildPersonalisedReason(
     if (freq === '5-6x' || freq === 'daily') suffixes.push('— daily training at your level means electrolyte loss is significant')
     else if (goalOverlap.includes('hydration')) suffixes.push('— directly addresses the hydration goal you flagged')
   } else if (slotType === 'recovery') {
-    if (freq === '5-6x' || freq === 'daily') suffixes.push('— training this frequently, recovery is your biggest performance lever')
+    if (answers.goals.includes('skin-hair-nails') && product.swapGroup === 'collagen') suffixes.push('— collagen chosen for your skin, hair and nails goal')
+    else if (freq === '5-6x' || freq === 'daily') suffixes.push('— training this frequently, recovery is your biggest performance lever')
     else if (goalOverlap.includes('recovery')) suffixes.push('— picked because recovery is one of your stated priorities')
   } else if (slotType === 'health') {
-    if (answers.lifestyle.includes('desk-job')) suffixes.push('— particularly useful if you spend long hours at a desk')
+    if (answers.goals.includes('immune')) suffixes.push('— picked because immune support is one of your goals')
+    else if (answers.goals.includes('focus')) suffixes.push('— supports brain health and steady daily focus')
+    else if (answers.goals.includes('skin-hair-nails')) suffixes.push('— chosen for your skin, hair and nails goal')
+    else if (answers.lifestyle.includes('desk-job')) suffixes.push('— particularly useful if you spend long hours at a desk')
     else if (answers.lifestyle.includes('high-stress')) suffixes.push('— supports immunity and energy under high stress')
     else suffixes.push('— covers the micronutrient gaps most active people have')
   } else if (slotType === 'sleep') {
-    if (answers.lifestyle.includes('poor-sleep')) suffixes.push('— added because you flagged sleep as a problem area')
+    if (answers.goals.includes('sleep-better')) suffixes.push('— added because better sleep is one of your goals')
+    else if (answers.goals.includes('less-stress')) suffixes.push('— helps you wind down and switch off in the evening')
+    else if (answers.lifestyle.includes('poor-sleep')) suffixes.push('— added because you flagged sleep as a problem area')
     else suffixes.push('— quality sleep is when most muscle repair actually happens')
   }
 
@@ -195,11 +231,17 @@ export function buildStackBlueprint(
     }
   })()
 
+  // Wellbeing-only users skip the training-centric slots entirely, and
+  // protein/creatine are no longer required.
+  const performanceUser = hasPerformanceGoals(answers.goals)
+  const slotOrder: readonly SlotType[] = performanceUser ? SLOT_ORDER : WELLBEING_SLOT_ORDER
+  const requiredSlots: SlotType[] = performanceUser ? REQUIRED_SLOTS : []
+
   const slots: StackSlotEntry[] = []
   const usedProductIds = new Set<string>()
   let displayOrder = 0
 
-  for (const slotType of SLOT_ORDER) {
+  for (const slotType of slotOrder) {
     if (slots.length >= maxSlots) break
     const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any) && !usedProductIds.has(p.id))
     if (candidates.length === 0) continue
@@ -217,7 +259,7 @@ export function buildStackBlueprint(
 
     if (!bestProduct || bestScore < 0) continue
 
-    const isRequired = REQUIRED_SLOTS.includes(slotType as SlotType)
+    const isRequired = requiredSlots.includes(slotType as SlotType)
 
     // Default variant selection: first available variant
     const firstAvailableVariant = bestProduct.variants.find(v => v.available) ?? null
