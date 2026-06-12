@@ -33,12 +33,15 @@ const BASE_ANSWERS: QuizAnswers = {
   lifestyle: [],
   diet: 'clean',
   currentSupplements: [],
-  caffeineLevel: 'moderate',
-  budget: '50-100',
-  stackPreference: 'performance',
+  caffeineLevel: 'medium',
+  budget: '50-80',
+  stackPreference: 'balanced',
   trainingExperience: 'intermediate',
   trainingFocus: null,
   stimPreference: 'yes',
+  exactAge: null,
+  currentVitamins: [],
+  preferredFormats: [],
 }
 
 // ─── Feature 3: Quiz → Blueprint ──────────────────────────────────────────────
