@@ -10,9 +10,18 @@ import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 const SLOT_ORDER = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep'] as const
 type SlotType = typeof SLOT_ORDER[number]
 
-// For users with no performance goals, lead with wellbeing slots and skip
-// the training-centric slots entirely (protein/creatine/pre-workout).
-const WELLBEING_SLOT_ORDER: readonly SlotType[] = ['sleep', 'health', 'recovery', 'hydration']
+// Wellbeing stacks are built goal-first: each selected wellbeing goal gets its
+// own named slot, filled by the best product tagged with that goal. This means
+// the final stack mirrors exactly what the user asked for instead of generic
+// slot types.
+const WELLBEING_GOAL_SLOTS: Array<{ goal: Goal; slotType: SlotType; title: string; description: string }> = [
+  { goal: 'sleep-better',    slotType: 'sleep',    title: 'Sleep',               description: 'Improves sleep quality and overnight recovery' },
+  { goal: 'less-stress',     slotType: 'sleep',    title: 'Stress',              description: 'Helps you stay calm and wind down' },
+  { goal: 'focus',           slotType: 'health',   title: 'Focus',               description: 'Supports brain health and steady concentration' },
+  { goal: 'immune',          slotType: 'health',   title: 'Immunity',            description: 'Strengthens everyday immune resilience' },
+  { goal: 'skin-hair-nails', slotType: 'recovery', title: 'Skin, Hair & Nails',  description: 'Collagen and nutrients for skin, hair and nail health' },
+  { goal: 'health',          slotType: 'health',   title: 'Daily Health',        description: 'Covers everyday vitamin and mineral gaps' },
+]
 
 type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health' | 'wellbeing'
 
@@ -113,6 +122,13 @@ function scoreProduct(
   if (answers.currentSupplements.includes('creatine') && slotType === 'performance') score -= 25
   if (answers.currentSupplements.includes('pre-workout') && slotType === 'energy') score -= 25
 
+  // Don't recommend vitamins/minerals the user already takes
+  const taking = new Set([...answers.currentSupplements, ...answers.currentVitamins])
+  if (taking.has('multivitamin') && product.swapGroup === 'multivitamin') score -= 30
+  if (taking.has('vitamin-d') && product.swapGroup === 'vitamin-d') score -= 30
+  if (taking.has('omega-3') && product.swapGroup === 'omega-3') score -= 30
+  if (taking.has('magnesium') && product.swapGroup === 'magnesium') score -= 30
+
   // Archetype boosts
   if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += 20
   if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) score += 15
@@ -135,6 +151,11 @@ function scoreProduct(
   }
   // Vegetarian/vegan answer on the collagen follow-up excludes bovine collagen
   if (wb.collagenOk === 'veggie' && product.swapGroup === 'collagen') return -Infinity
+
+  // Wellbeing lifestyle context
+  if (answers.lifestyle.includes('run-down') && product.goals.includes('immune')) score += 10
+  if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') score += 8
+  if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) score += 8
 
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
@@ -196,6 +217,38 @@ function buildPersonalisedReason(
   return greeting ?? `${base}${suffix}`
 }
 
+/** Personalised reason for a wellbeing goal slot — references the user's own
+ *  follow-up answers wherever possible so the pick feels earned, not generic. */
+function buildWellbeingReason(goal: Goal, product: CatalogueProduct, answers: QuizAnswers): string {
+  const wb = answers.wellbeingAnswers ?? {}
+  const name = answers.name ? answers.name.split(' ')[0] : null
+  const base = product.shortReason || product.description
+
+  let suffix = ''
+  if (goal === 'sleep-better') {
+    if (wb.sleepQuality === 'switch-off') suffix = ' You said you find it hard to switch off — this is formulated for exactly that.'
+    else if (wb.sleepQuality === 'wake-night') suffix = ' Chosen because you wake during the night — magnesium glycinate supports staying asleep.'
+    else if (wb.sleepQuality === 'wake-tired') suffix = ' Picked to improve sleep depth, since you wake unrested even with enough hours.'
+  } else if (goal === 'less-stress') {
+    if (wb.stressPattern === 'evening-wired') suffix = ' Matched to your evening wind-down struggle.'
+    else if (wb.stressPattern === 'all-day') suffix = ' Chosen for the all-day tension you described.'
+    else if (wb.stressPattern === 'morning-fog' || wb.stressPattern === 'afternoon-crash') suffix = ' Supports steadier energy through the dips you described.'
+  } else if (goal === 'focus') {
+    suffix = ' Chosen for your focus and brain fog goal.'
+  } else if (goal === 'immune') {
+    if (wb.immuneBaseline === 'often') suffix = ' You said you catch everything going round — this is the foundation to build from.'
+    else if (wb.immuneBaseline === 'rarely') suffix = ' A light insurance pick, since you said you rarely get ill.'
+    else suffix = ' Chosen for your immune support goal.'
+  } else if (goal === 'skin-hair-nails') {
+    suffix = ' Chosen for your skin, hair and nails goal.'
+  } else if (goal === 'health') {
+    suffix = ' A daily foundation pick for general health.'
+  }
+
+  const reason = `${base}${suffix}`
+  return name ? `For ${name}: ${reason}` : reason
+}
+
 /**
  * Builds a StackBlueprint from quiz answers and the product catalogue.
  * Uses archetype-based scoring to select the best product for each slot.
@@ -234,21 +287,15 @@ export function buildStackBlueprint(
   // Wellbeing-only users skip the training-centric slots entirely, and
   // protein/creatine are no longer required.
   const performanceUser = hasPerformanceGoals(answers.goals)
-  const slotOrder: readonly SlotType[] = performanceUser ? SLOT_ORDER : WELLBEING_SLOT_ORDER
   const requiredSlots: SlotType[] = performanceUser ? REQUIRED_SLOTS : []
 
   const slots: StackSlotEntry[] = []
   const usedProductIds = new Set<string>()
   let displayOrder = 0
 
-  for (const slotType of slotOrder) {
-    if (slots.length >= maxSlots) break
-    const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any) && !usedProductIds.has(p.id))
-    if (candidates.length === 0) continue
-
+  function pickBest(candidates: CatalogueProduct[], slotType: SlotType): { product: CatalogueProduct; score: number } | null {
     let bestProduct: CatalogueProduct | null = null
     let bestScore = -Infinity
-
     for (const product of candidates) {
       const score = scoreProduct(product, slotType, answers, archetype)
       if (score > bestScore) {
@@ -256,34 +303,108 @@ export function buildStackBlueprint(
         bestProduct = product
       }
     }
+    if (!bestProduct || bestScore < 0) return null
+    return { product: bestProduct, score: bestScore }
+  }
 
-    if (!bestProduct || bestScore < 0) continue
-
-    const isRequired = requiredSlots.includes(slotType as SlotType)
-
-    // Default variant selection: first available variant
-    const firstAvailableVariant = bestProduct.variants.find(v => v.available) ?? null
-    const selectedVariantId = firstAvailableVariant?.id ?? null
-
-    const reason = buildPersonalisedReason(bestProduct, slotType as SlotType, answers, archetype)
-
-    usedProductIds.add(bestProduct.id)
+  function pushSlot(opts: {
+    slotId: string; slotType: SlotType; title: string; description: string
+    product: CatalogueProduct; score: number; reason: string; required: boolean
+  }) {
+    const firstAvailableVariant = opts.product.variants.find(v => v.available) ?? null
+    usedProductIds.add(opts.product.id)
     slots.push({
-      slotId: `slot-${slotType}`,
-      slotType: slotType as any,
-      title: SLOT_TITLES[slotType as SlotType],
-      description: SLOT_DESCRIPTIONS[slotType as SlotType],
-      recommendedProductId: bestProduct.id,
-      selectedProductId: bestProduct.id,
-      selectedVariantId,
-      required: isRequired,
-      canRemove: !isRequired,
+      slotId: opts.slotId,
+      slotType: opts.slotType as any,
+      title: opts.title,
+      description: opts.description,
+      recommendedProductId: opts.product.id,
+      selectedProductId: opts.product.id,
+      selectedVariantId: firstAvailableVariant?.id ?? null,
+      required: opts.required,
+      canRemove: !opts.required,
       canSwap: true,
-      swapGroup: bestProduct.swapGroup,
-      reason,
-      confidenceScore: Math.min(100, Math.max(0, Math.round(bestScore / 2))),
+      swapGroup: opts.product.swapGroup,
+      reason: opts.reason,
+      confidenceScore: Math.min(100, Math.max(0, Math.round(opts.score / 2))),
       displayOrder: displayOrder++,
     })
+  }
+
+  if (performanceUser) {
+    // Performance track: slot-type-driven, unchanged behaviour
+    for (const slotType of SLOT_ORDER) {
+      if (slots.length >= maxSlots) break
+      const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any) && !usedProductIds.has(p.id))
+      if (candidates.length === 0) continue
+      const best = pickBest(candidates, slotType)
+      if (!best) continue
+      pushSlot({
+        slotId: `slot-${slotType}`,
+        slotType,
+        title: SLOT_TITLES[slotType],
+        description: SLOT_DESCRIPTIONS[slotType],
+        product: best.product,
+        score: best.score,
+        reason: buildPersonalisedReason(best.product, slotType, answers, archetype),
+        required: requiredSlots.includes(slotType),
+      })
+    }
+  } else {
+    // Wellbeing track: goal-driven. Each selected goal gets its own named slot
+    // filled by the best product TAGGED with that goal — never an unrelated
+    // training product. Two sleep-adjacent goals can yield two sleep products
+    // (e.g. magnesium for sleep + ashwagandha blend for stress).
+    // Fill goals with the fewest candidate products first, so a goal whose
+    // only product also serves other goals (e.g. collagen = skin + immune)
+    // isn't left empty. Display order is restored afterwards.
+    const selectedCfgs = WELLBEING_GOAL_SLOTS
+      .filter(cfg => answers.goals.includes(cfg.goal))
+      .sort((a, b) =>
+        effectiveCatalogue.filter(p => p.goals.includes(a.goal)).length -
+        effectiveCatalogue.filter(p => p.goals.includes(b.goal)).length)
+
+    for (const cfg of selectedCfgs) {
+      if (slots.length >= maxSlots) break
+      const candidates = effectiveCatalogue.filter(p => p.goals.includes(cfg.goal) && !usedProductIds.has(p.id))
+      if (candidates.length === 0) continue
+      const best = pickBest(candidates, cfg.slotType)
+      if (!best) continue
+      pushSlot({
+        slotId: `slot-${cfg.goal}`,
+        slotType: cfg.slotType,
+        title: cfg.title,
+        description: cfg.description,
+        product: best.product,
+        score: best.score,
+        reason: buildWellbeingReason(cfg.goal, best.product, answers),
+        required: false,
+      })
+    }
+
+    // Restore presentation order to match the goal list, not fill order
+    const cfgOrder = new Map(WELLBEING_GOAL_SLOTS.map((cfg, i) => [`slot-${cfg.goal}`, i]))
+    slots.sort((a, b) => (cfgOrder.get(a.slotId) ?? 99) - (cfgOrder.get(b.slotId) ?? 99))
+    slots.forEach((s, i) => { s.displayOrder = i })
+
+    // Never return an empty wellbeing stack (e.g. all picks excluded by
+    // dietary answers) — fall back to a daily-health foundation product.
+    if (slots.length === 0) {
+      const candidates = effectiveCatalogue.filter(p => p.goals.includes('health'))
+      const best = pickBest(candidates, 'health')
+      if (best) {
+        pushSlot({
+          slotId: 'slot-health',
+          slotType: 'health',
+          title: 'Daily Health',
+          description: SLOT_DESCRIPTIONS.health,
+          product: best.product,
+          score: best.score,
+          reason: buildWellbeingReason('health', best.product, answers),
+          required: false,
+        })
+      }
+    }
   }
 
   const userProfileSummary = [

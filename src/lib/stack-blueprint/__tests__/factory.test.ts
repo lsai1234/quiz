@@ -199,6 +199,60 @@ describe('buildStackBlueprint — wellbeing goals', () => {
     expect(blueprint.slots.every(s => s.selectedProductId !== 'chrgd-collagen')).toBe(true)
   })
 
+  it('wellbeing slots mirror the selected goals one-to-one', () => {
+    const answers = makeAnswers({
+      track: 'wellbeing',
+      goals: ['sleep-better', 'immune', 'skin-hair-nails'],
+      budget: '80-plus',
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    const slotIds = blueprint.slots.map(s => s.slotId)
+    expect(slotIds).toContain('slot-sleep-better')
+    expect(slotIds).toContain('slot-immune')
+    expect(slotIds).toContain('slot-skin-hair-nails')
+    // Every product must be tagged with the goal its slot represents
+    for (const slot of blueprint.slots) {
+      const goal = slot.slotId.replace('slot-', '')
+      const product = MOCK_CATALOGUE.find(p => p.id === slot.selectedProductId)!
+      expect(product.goals).toContain(goal)
+    }
+  })
+
+  it('sleep-better + less-stress yields two different sleep-adjacent products', () => {
+    const answers = makeAnswers({
+      track: 'wellbeing',
+      goals: ['sleep-better', 'less-stress'],
+      budget: '80-plus',
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    expect(blueprint.slots.length).toBe(2)
+    const ids = blueprint.slots.map(s => s.selectedProductId)
+    expect(new Set(ids).size).toBe(2)
+  })
+
+  it('already taking magnesium steers the sleep pick to the blend', () => {
+    const answers = makeAnswers({
+      track: 'wellbeing',
+      goals: ['sleep-better'],
+      currentVitamins: ['magnesium'],
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    const sleepSlot = blueprint.slots.find(s => s.slotId === 'slot-sleep-better')
+    expect(sleepSlot?.selectedProductId).toBe('chrgd-sleep-support')
+  })
+
+  it('falls back to a daily-health product instead of an empty wellbeing stack', () => {
+    // Vegan + skin goal: collagen is excluded, leaving zero direct matches
+    const answers = makeAnswers({
+      track: 'wellbeing',
+      goals: ['skin-hair-nails'],
+      lifestyle: ['vegan'],
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    expect(blueprint.slots.length).toBeGreaterThan(0)
+    expect(blueprint.slots.every(s => s.selectedProductId !== 'chrgd-collagen')).toBe(true)
+  })
+
   it('mixed performance + wellbeing goals keep protein/creatine required', () => {
     const answers = makeAnswers({ goals: ['muscle', 'sleep-better'], budget: '80-plus' })
     const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)

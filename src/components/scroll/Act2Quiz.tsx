@@ -175,20 +175,30 @@ const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
   },
 ]
 
-/** Greedy max-coverage: returns the single best wellbeing follow-up for the
- *  selected goals, or null if none are triggered. */
-function pickWellbeingQuestion(goals: Goal[]): WellbeingQuestion | null {
-  let best: WellbeingQuestion | null = null
-  let bestCoverage = 0
-  for (const q of WELLBEING_QUESTIONS) {
-    if (!q.triggers.some(t => goals.includes(t))) continue
-    const coverage = q.serves.filter(s => goals.includes(s)).length
-    if (coverage > bestCoverage) {
-      bestCoverage = coverage
-      best = q
+/** Greedy set cover: returns the smallest set of follow-ups (max 3) that
+ *  together cover every selected wellbeing goal. One question can serve
+ *  several goals, so most users see 1–2. */
+function pickWellbeingQuestions(goals: Goal[]): WellbeingQuestion[] {
+  const selected: WellbeingQuestion[] = []
+  const uncovered = new Set(goals.filter(g => WELLBEING_QUESTIONS.some(q => q.triggers.includes(g))))
+  while (uncovered.size > 0 && selected.length < 3) {
+    let best: WellbeingQuestion | null = null
+    let bestCoverage = 0
+    for (const q of WELLBEING_QUESTIONS) {
+      if (selected.includes(q)) continue
+      if (!q.triggers.some(t => uncovered.has(t))) continue
+      const coverage = q.serves.filter(s => uncovered.has(s)).length
+      if (coverage > bestCoverage) {
+        bestCoverage = coverage
+        best = q
+      }
     }
+    if (!best) break
+    selected.push(best)
+    best.serves.forEach(s => uncovered.delete(s))
+    best.triggers.forEach(t => uncovered.delete(t))
   }
-  return best
+  return selected
 }
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
   { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
@@ -209,6 +219,16 @@ const LIFESTYLE_DATA = [
   { id: 'desk-job',    label: 'Desk job / sedentary',   icon: '💻' },
   { id: 'high-stress', label: 'High stress levels',     icon: '🧠' },
 ]
+
+// Wellbeing-track lifestyle options — sleep/stress are already covered by the
+// goal follow-ups, so these focus on context that changes recommendations
+const WELLBEING_LIFESTYLE_DATA = [
+  { id: 'vegan',      label: 'Plant-based diet',           icon: '🌱' },
+  { id: 'desk-job',   label: 'Desk job / mostly indoors',  icon: '💻' },
+  { id: 'shift-work', label: 'Shift work / irregular hours', icon: '🌙' },
+  { id: 'run-down',   label: 'Get run down easily',        icon: '🤧' },
+  { id: 'active',     label: 'Train or exercise regularly', icon: '🏃' },
+]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
   { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
   { id: 'mostly-good',  label: 'Pretty good',            sub: 'Healthy most of the time' },
@@ -221,6 +241,16 @@ const SUPPS_DATA = [
   { id: 'pre-workout', label: 'Pre-workout',    icon: '⚡' },
   { id: 'vitamins',    label: 'Vitamins',       icon: '💊' },
   { id: 'none',        label: 'Starting fresh', icon: '✦' },
+]
+
+// Wellbeing-track version — asks directly about the supplements we'd
+// recommend so the engine never doubles up
+const WELLBEING_SUPPS_DATA = [
+  { id: 'multivitamin', label: 'Multivitamin',     icon: '💊' },
+  { id: 'vitamin-d',    label: 'Vitamin D',        icon: '☀️' },
+  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: '🐟' },
+  { id: 'magnesium',    label: 'Magnesium',        icon: '🌙' },
+  { id: 'none',         label: 'None of these',    icon: '✦' },
 ]
 const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = [
   { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
@@ -265,6 +295,12 @@ const FORMAT_DATA = [
   { id: 'bars',     label: 'Bars & Snacks',   sub: 'On-the-go protein hits',         icon: '🍫' },
   { id: 'any',      label: 'No preference',   sub: 'Best product regardless of form', icon: '✦' },
 ]
+
+// Question copy overrides for the wellbeing track
+const WELLBEING_STEP_OVERRIDES: Record<number, { q: string; hint: string }> = {
+  4: { q: 'Tell us about your day-to-day', hint: 'Select anything that applies — context changes what we recommend.' },
+  6: { q: 'Already taking any of these?',  hint: "We won't recommend what you've already got covered." },
+}
 
 const TOTAL = STEP_META.length
 
@@ -510,7 +546,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       ? 'animate-[slide-from-right_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
       : 'animate-[slide-from-left_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
 
-  const { section, q, hint } = STEP_META[step]
+  const stepMeta = STEP_META[step]
+  const override = answers.track === 'wellbeing' ? WELLBEING_STEP_OVERRIDES[step] : undefined
+  const { section } = stepMeta
+  const q = override?.q ?? stepMeta.q
+  const hint = override?.hint ?? stepMeta.hint
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -803,41 +843,38 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 ← Switch to performance & training
               </button>
 
-              {/* Wellbeing follow-up — one question max, greedy by goal coverage */}
-              {(() => {
-                const wq = pickWellbeingQuestion(answers.goals)
-                if (!wq) return null
-                return (
-                  <div
-                    className="mt-6 pt-5 border-t border-white/8"
-                    style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
-                  >
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-px h-4 bg-[#00D4FF]" />
-                      <span
-                        className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
-                        style={{ fontFamily: 'var(--font-display)' }}
-                      >
-                        Quick follow-up
-                      </span>
-                    </div>
-                    <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-                      {wq.question}
-                    </p>
-                    <p className="text-xs text-white/35 mb-3">{wq.hint}</p>
-                    <div className="flex flex-col gap-2">
-                      {wq.options.map(({ id, label, sub }) => (
-                        <AnswerOption
-                          key={`wq-${wq.id}-${id}`}
-                          label={label} sub={sub}
-                          selected={answers.wellbeingAnswers[wq.id] === id}
-                          onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: id })}
-                        />
-                      ))}
-                    </div>
+              {/* Wellbeing follow-ups — greedy set cover over selected goals */}
+              {pickWellbeingQuestions(answers.goals).map((wq) => (
+                <div
+                  key={`wqblock-${wq.id}`}
+                  className="mt-6 pt-5 border-t border-white/8"
+                  style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-px h-4 bg-[#00D4FF]" />
+                    <span
+                      className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
+                      style={{ fontFamily: 'var(--font-display)' }}
+                    >
+                      Quick follow-up
+                    </span>
                   </div>
-                )
-              })()}
+                  <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                    {wq.question}
+                  </p>
+                  <p className="text-xs text-white/35 mb-3">{wq.hint}</p>
+                  <div className="flex flex-col gap-2">
+                    {wq.options.map(({ id, label, sub }) => (
+                      <AnswerOption
+                        key={`wq-${wq.id}-${id}`}
+                        label={label} sub={sub}
+                        selected={answers.wellbeingAnswers[wq.id] === id}
+                        onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: id })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
@@ -869,10 +906,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 4: Lifestyle (multi) ── */}
+          {/* ── Step 4: Lifestyle (multi) — option set varies by track ── */}
           {step === 4 && (
             <div className="grid grid-cols-2 gap-2.5">
-              {LIFESTYLE_DATA.map(({ id, label, icon }) => (
+              {(answers.track === 'wellbeing' ? WELLBEING_LIFESTYLE_DATA : LIFESTYLE_DATA).map(({ id, label, icon }) => (
                 <AnswerOption
                   key={`4-${id}`}
                   icon={icon} label={label} multi
@@ -906,8 +943,24 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 6: Current supps (multi) ── */}
-          {step === 6 && (
+          {/* ── Step 6: Current supps (multi) — option set varies by track ── */}
+          {step === 6 && answers.track === 'wellbeing' && (
+            <div className="grid grid-cols-2 gap-2.5">
+              {WELLBEING_SUPPS_DATA.map(({ id, label, icon }) => (
+                <AnswerOption
+                  key={`6w-${id}`}
+                  icon={icon} label={label} multi
+                  selected={id === 'none' ? answers.currentVitamins.length === 0 : answers.currentVitamins.includes(id)}
+                  onClick={() => {
+                    if (id === 'none') { setAnswer('currentVitamins', []); return }
+                    const c = answers.currentVitamins
+                    setAnswer('currentVitamins', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                  }}
+                />
+              ))}
+            </div>
+          )}
+          {step === 6 && answers.track !== 'wellbeing' && (
             <div>
               <div className="grid grid-cols-2 gap-2.5">
                 {SUPPS_DATA.map(({ id, label, icon }) => (

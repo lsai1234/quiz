@@ -24,9 +24,10 @@ import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
   const { stackBlueprint, setStackBlueprint } = useQuizStore()
-  // Fall back to MOCK_BLUEPRINT when blueprint is absent OR has no slots
-  // (the latter happens when Shopify products lack slot:* tags)
-  const rawBlueprint = (stackBlueprint && stackBlueprint.slots.length > 0) ? stackBlueprint : MOCK_BLUEPRINT
+  // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
+  // The factory guarantees at least one slot, so a real blueprint — however
+  // small — is always shown as-is rather than replaced with the mock stack.
+  const rawBlueprint = stackBlueprint ?? MOCK_BLUEPRINT
   // useCatalogueProducts triggers the /api/catalogue fetch (once per session)
   // and returns the properly-typed CatalogueProduct[] from the Zustand store.
   const { products } = useCatalogueProducts()
