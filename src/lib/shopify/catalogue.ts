@@ -132,18 +132,23 @@ let _cacheTime = 0
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export async function fetchCatalogue(): Promise<Product[]> {
-  if (!SHOPIFY_LIVE) return MOCK_PRODUCTS as Product[]
+  if (!SHOPIFY_LIVE) {
+    console.log('[catalogue] SHOPIFY_LIVE=false — env vars missing, using mocks')
+    return MOCK_PRODUCTS as Product[]
+  }
 
   const now = Date.now()
   if (_catalogueCache && now - _cacheTime < CACHE_TTL_MS) return _catalogueCache
 
   try {
     const shopifyProducts = await getProducts(50)
+    console.log(`[catalogue] Fetched ${shopifyProducts.length} products from Shopify`)
     _catalogueCache = shopifyProducts.map(mapShopifyProduct)
     _cacheTime = now
     return _catalogueCache
   } catch (err) {
-    console.error('[catalogue] Shopify fetch failed, falling back to mocks:', err)
-    return MOCK_PRODUCTS as Product[]
+    // Re-throw so the API route can surface it in debug mode
+    console.error('[catalogue] Shopify fetch failed:', err)
+    throw err
   }
 }
