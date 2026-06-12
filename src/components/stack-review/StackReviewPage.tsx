@@ -1,22 +1,30 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
-import { calculateStackPrice, calculateSubscriptionPrice, updateStackSlotVariant } from '@/lib/stack-blueprint/helpers'
+import {
+  calculateStackPrice,
+  calculateSubscriptionPrice,
+  updateStackSlotVariant,
+  updateStackSlotProduct,
+  getSwappableProductsForSlot,
+} from '@/lib/stack-blueprint/helpers'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
+import { ProductSwapModal } from './ProductSwapModal'
 
 export function StackReviewPage() {
   const { stackBlueprint, catalogue, setStackBlueprint } = useQuizStore()
   const rawBlueprint = stackBlueprint ?? MOCK_BLUEPRINT
   const products: CatalogueProduct[] = catalogue.length > 0 ? (catalogue as unknown as CatalogueProduct[]) : MOCK_CATALOGUE
 
-  // Default any slot without a selected variant to the product's first
-  // available variant, so the selector and price always agree.
+  // Default any slot without a selected variant to the product's first available
+  // variant so the selector and price always agree.
   const blueprint = useMemo(() => {
     let result = rawBlueprint
     for (const slot of rawBlueprint.slots) {
@@ -28,18 +36,51 @@ export function StackReviewPage() {
     return result
   }, [rawBlueprint, products])
 
+  // Swap modal state
+  const [swapSlot, setSwapSlot] = useState<StackSlotEntry | null>(null)
+
   const handleChangeVariant = useCallback(
     (slotId: string, variantId: string) => {
-      // Writes the edited blueprint back to the store so price totals,
-      // checkout, and any other consumers stay in sync.
       setStackBlueprint(updateStackSlotVariant(blueprint, slotId, variantId))
     },
     [blueprint, setStackBlueprint],
   )
 
+  const handleOpenSwap = useCallback(
+    (slotId: string) => {
+      const slot = blueprint.slots.find((s) => s.slotId === slotId) ?? null
+      setSwapSlot(slot)
+    },
+    [blueprint],
+  )
+
+  const handleSelectSwap = useCallback(
+    (slotId: string, newProductId: string) => {
+      const product = products.find((p) => p.id === newProductId)
+      const defaultVariant = product?.variants.find((v) => v.available)
+      // Swap product, then default to first available variant
+      let updated = updateStackSlotProduct(blueprint, slotId, newProductId)
+      if (defaultVariant) updated = updateStackSlotVariant(updated, slotId, defaultVariant.id)
+      setStackBlueprint(updated)
+      setSwapSlot(null)
+    },
+    [blueprint, products, setStackBlueprint],
+  )
+
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
   const oneOffPrice = calculateStackPrice(blueprint, products)
   const subscriptionPrice = calculateSubscriptionPrice(blueprint, products)
+
+  // Build alternatives list for the open swap modal slot
+  const swapCurrentProduct = swapSlot ? products.find((p) => p.id === swapSlot.selectedProductId) : undefined
+  const swapAlternatives = swapSlot
+    ? [
+        // Include current so user can see it with "Current" badge
+        ...( products.filter((p) => p.id === swapSlot.selectedProductId) ),
+        // Alternatives from same swapGroup — include the recommended product even if it's the default
+        ...getSwappableProductsForSlot(swapSlot, products),
+      ].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx) // dedupe
+    : []
 
   if (!blueprint) {
     return (
@@ -50,44 +91,58 @@ export function StackReviewPage() {
   }
 
   return (
-    <div className="pb-10">
-      <StackHero
-        blueprint={blueprint}
-        productCount={sortedSlots.length}
-        totalPrice={oneOffPrice}
-      />
-
-      <div className="h-px bg-[var(--color-border)] mx-5" />
-
-      {/* Product cards */}
-      <div className="px-5 pt-7 max-w-lg mx-auto space-y-3">
-        <p
-          className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          Your personalised stack — {sortedSlots.length} products
-        </p>
-        {sortedSlots.map((slot) => {
-          const product = products.find((p) => p.id === slot.selectedProductId)
-          return (
-            <StackProductCard
-              key={slot.slotId}
-              slot={slot}
-              product={product}
-              onChangeVariant={handleChangeVariant}
-            />
-          )
-        })}
-      </div>
-
-      {/* Price summary */}
-      <div className="px-5 pt-6 max-w-lg mx-auto">
-        <StackPriceSummary
-          oneOffPrice={oneOffPrice}
-          subscriptionPrice={subscriptionPrice}
-          savingsSummary={blueprint.savingsSummary}
+    <>
+      <div className="pb-10">
+        <StackHero
+          blueprint={blueprint}
+          productCount={sortedSlots.length}
+          totalPrice={oneOffPrice}
         />
+
+        <div className="h-px bg-[var(--color-border)] mx-5" />
+
+        {/* Product cards */}
+        <div className="px-5 pt-7 max-w-lg mx-auto space-y-3">
+          <p
+            className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            Your personalised stack — {sortedSlots.length} products
+          </p>
+          {sortedSlots.map((slot) => {
+            const product = products.find((p) => p.id === slot.selectedProductId)
+            return (
+              <StackProductCard
+                key={slot.slotId}
+                slot={slot}
+                product={product}
+                onChangeProduct={handleOpenSwap}
+                onChangeVariant={handleChangeVariant}
+              />
+            )
+          })}
+        </div>
+
+        {/* Price summary */}
+        <div className="px-5 pt-6 max-w-lg mx-auto">
+          <StackPriceSummary
+            oneOffPrice={oneOffPrice}
+            subscriptionPrice={subscriptionPrice}
+            savingsSummary={blueprint.savingsSummary}
+          />
+        </div>
       </div>
-    </div>
+
+      {/* Swap modal — rendered outside the scrollable column so it overlays correctly */}
+      {swapSlot && (
+        <ProductSwapModal
+          slot={swapSlot}
+          currentProduct={swapCurrentProduct}
+          alternatives={swapAlternatives}
+          onSelect={handleSelectSwap}
+          onClose={() => setSwapSlot(null)}
+        />
+      )}
+    </>
   )
 }
