@@ -7,9 +7,10 @@ interface Props {
   pricing: StackPricing
   onCheckout?: () => void
   onCustomise?: () => void
+  isLoading?: boolean
 }
 
-export function StackPriceSummary({ pricing, onCheckout, onCustomise }: Props) {
+export function StackPriceSummary({ pricing, onCheckout, onCustomise, isLoading = false }: Props) {
   const {
     oneOffTotal,
     rrpTotal,
@@ -92,10 +93,11 @@ export function StackPriceSummary({ pricing, onCheckout, onCustomise }: Props) {
         <div className="space-y-2">
           <button
             onClick={onCheckout}
-            className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"
+            disabled={isLoading}
+            className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Continue to Checkout →
+            {isLoading ? 'Building your cart…' : 'Continue to Checkout →'}
           </button>
           <button
             onClick={onCustomise}

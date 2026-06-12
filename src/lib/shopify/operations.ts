@@ -44,6 +44,18 @@ const CREATE_CART = `
   }
 `
 
+// CartLineInput supports an attributes field: [AttributeInput!]
+// We pass attributes through in the lines array so each line carries
+// stack metadata (stackId, slotType, reason, source) into the Shopify order.
+const CREATE_CART_WITH_ATTRS = `
+  mutation cartCreateWithAttrs($lines: [CartLineInput!]) {
+    cartCreate(input: { lines: $lines }) {
+      cart { ${CART_FIELDS} }
+      userErrors { field message }
+    }
+  }
+`
+
 const ADD_LINES = `
   mutation cartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
     cartLinesAdd(cartId: $cartId, lines: $lines) {
@@ -131,8 +143,13 @@ function normaliseCart(raw: RawCart): ShopifyCart {
   }
 }
 
-export async function createCart(lines: { merchandiseId: string; quantity: number }[]): Promise<ShopifyCart> {
-  const data = await shopifyFetch<{ cartCreate: CartData }>( CREATE_CART, { lines })
+export async function createCart(
+  lines: { merchandiseId: string; quantity: number; attributes?: { key: string; value: string }[] }[],
+): Promise<ShopifyCart> {
+  // Use the attributes-capable mutation when any line carries attributes
+  const hasAttrs = lines.some((l) => l.attributes && l.attributes.length > 0)
+  const query = hasAttrs ? CREATE_CART_WITH_ATTRS : CREATE_CART
+  const data = await shopifyFetch<{ cartCreate: CartData }>(query, { lines })
   return normaliseCart(data.cartCreate.cart)
 }
 

@@ -15,6 +15,7 @@ import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
+import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
@@ -104,6 +105,13 @@ export function StackReviewPage() {
     [blueprint, setStackBlueprint],
   )
 
+  const { state: checkoutState, checkout, reset: resetCheckout } = useStackCheckout()
+
+  const handleCheckout = useCallback(
+    () => checkout(blueprint, products),
+    [checkout, blueprint, products],
+  )
+
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
   const pricing = calculatePricing(blueprint, products)
 
@@ -188,9 +196,26 @@ export function StackReviewPage() {
         {/* Divider before pricing */}
         <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
-        {/* Price summary */}
+        {/* Price summary + checkout */}
         <div className="px-5 pt-6 max-w-lg mx-auto">
-          <StackPriceSummary pricing={pricing} />
+          {checkoutState.status === 'error' && (
+            <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
+              {checkoutState.messages.map((msg, i) => (
+                <p key={i} className="text-xs text-[var(--color-red)] leading-relaxed">{msg}</p>
+              ))}
+              <button
+                onClick={resetCheckout}
+                className="text-[10px] font-semibold text-[var(--color-red)]/70 underline mt-1"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          <StackPriceSummary
+            pricing={pricing}
+            onCheckout={handleCheckout}
+            isLoading={checkoutState.status === 'loading'}
+          />
         </div>
       </div>
 
