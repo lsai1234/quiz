@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
+import { MOCK_PRODUCTS } from './mock-products'
 
 interface QuizStore {
   step: number
@@ -9,6 +10,9 @@ interface QuizStore {
   identity: StackIdentity | null
   stackLevel: StackLevel
   selectedProducts: Product[]
+  // Product catalogue — single source of truth, hydrated from /api/products
+  catalogue: Product[]
+  catalogueSource: 'mock' | 'shopify'
 
   setStep: (step: number) => void
   nextStep: () => void
@@ -19,6 +23,7 @@ interface QuizStore {
   setStackLevel: (level: StackLevel) => void
   setSelectedProducts: (products: Product[]) => void
   toggleProduct: (product: Product) => void
+  setCatalogue: (products: Product[], source: 'mock' | 'shopify') => void
   reset: () => void
 }
 
@@ -46,6 +51,8 @@ export const useQuizStore = create<QuizStore>((set) => ({
   identity: null,
   stackLevel: 'performance',
   selectedProducts: [],
+  catalogue: MOCK_PRODUCTS,
+  catalogueSource: 'mock',
 
   setStep: (step) => set({ step }),
   nextStep: () => set((s) => ({ step: s.step + 1 })),
@@ -60,6 +67,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setIdentity: (identity) => set({ identity }),
   setStackLevel: (level) => set({ stackLevel: level }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
+  setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
 
   toggleProduct: (product) =>
     set((s) => {

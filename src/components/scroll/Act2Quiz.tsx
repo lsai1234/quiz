@@ -2,6 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react'
 import { useQuizStore } from '@/lib/store'
+import { useProducts } from '@/hooks/useProducts'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -244,6 +245,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
   } = useQuizStore()
 
+  // Hydrate live catalogue while the user answers the quiz
+  useProducts()
+
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   const [subQuestion, setSubQuestion] = useState<SubQuestion | null>(null)
@@ -326,7 +330,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       })
       const identity = await res.json()
       setIdentity(identity)
-      const stack = buildRecommendedStack(answers)
+      const stack = buildRecommendedStack(answers, useQuizStore.getState().catalogue)
       setSelectedProducts(stack.core)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'

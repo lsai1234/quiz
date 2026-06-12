@@ -2,7 +2,11 @@
 
 import { useState, useEffect } from 'react'
 import type { Product } from '@/lib/types'
-import { MOCK_PRODUCTS } from '@/lib/mock-products'
+import { useQuizStore } from '@/lib/store'
+
+// Module-level guard so the catalogue is fetched only once per session,
+// no matter how many components mount this hook.
+let fetchStarted = false
 
 interface UseProductsReturn {
   products: Product[]
@@ -12,32 +16,43 @@ interface UseProductsReturn {
 }
 
 export function useProducts(): UseProductsReturn {
-  const [products, setProducts] = useState<Product[]>(MOCK_PRODUCTS as Product[])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isLive, setIsLive] = useState(false)
+  const catalogue = useQuizStore((s) => s.catalogue)
+  const catalogueSource = useQuizStore((s) => s.catalogueSource)
+  const setCatalogue = useQuizStore((s) => s.setCatalogue)
+
+  const [isLoading, setIsLoading] = useState(catalogueSource !== 'shopify')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let cancelled = false
+    if (fetchStarted) {
+      setIsLoading(false)
+      return
+    }
+    fetchStarted = true
+
     fetch('/api/products')
       .then((r) => r.json())
       .then((data) => {
-        if (cancelled) return
         if (data.error) throw new Error(data.error)
-        setProducts(data.products)
-        setIsLive(data.source === 'shopify')
+        if (data.source === 'shopify' && Array.isArray(data.products)) {
+          useQuizStore.getState().setCatalogue(data.products, 'shopify')
+        } else if (data.shopifyError) {
+          throw new Error(data.shopifyError)
+        }
       })
       .catch((err) => {
-        if (cancelled) return
         console.error('[useProducts]', err)
         setError(err.message)
-        // keep the mock fallback already in state
+        fetchStarted = false // allow retry on next mount
       })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false)
-      })
-    return () => { cancelled = true }
-  }, [])
+      .finally(() => setIsLoading(false))
+    // setCatalogue accessed via getState to keep deps empty
+  }, [setCatalogue])
 
-  return { products, isLoading, isLive, error }
+  return {
+    products: catalogue,
+    isLoading,
+    isLive: catalogueSource === 'shopify',
+    error,
+  }
 }

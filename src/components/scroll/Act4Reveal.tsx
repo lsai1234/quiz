@@ -60,12 +60,12 @@ function ScoreRing({ score }: { score: number }) {
 }
 
 export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
-  const { identity, answers, selectedProducts } = useQuizStore()
+  const { identity, answers, selectedProducts, catalogue } = useQuizStore()
   const firstName = answers.name?.split(' ')[0]?.trim() || null
   const cardsRef = useRef<HTMLDivElement>(null)
   const headlineRef = useRef<HTMLDivElement>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const recommended = buildRecommendedStack(answers)
+  const recommended = buildRecommendedStack(answers, catalogue)
 
   // Stagger cards in on scroll-enter
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 import { buildRecommendedStack } from '@/lib/recommendation'
+import { useProducts } from '@/hooks/useProducts'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -293,6 +294,10 @@ export function QuizFlow() {
     setGoals, setAnswer, setIdentity, setStackLevel, setSelectedProducts,
   } = useQuizStore()
 
+  // Kick off the catalogue fetch as soon as the quiz mounts so live
+  // Shopify products are in the store by the time the stack is built
+  useProducts()
+
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [animKey, setAnimKey] = useState(0)
@@ -408,7 +413,8 @@ export function QuizFlow() {
       const identity = await res.json()
       setIdentity(identity)
 
-      const stack = buildRecommendedStack(answers)
+      // Read catalogue at call time — live Shopify products if loaded
+      const stack = buildRecommendedStack(answers, useQuizStore.getState().catalogue)
       setSelectedProducts(stack.core)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'
