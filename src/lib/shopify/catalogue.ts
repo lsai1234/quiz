@@ -205,6 +205,102 @@ function parseSwapGroup(tags: string[]): SwapGroup {
   return found ?? 'general'
 }
 
+// ─── Fallback derivation — used when explicit tags are absent ─────────────────
+
+function deriveStackSlots(p: ShopifyProduct): StackSlot[] {
+  const t = p.title.toLowerCase()
+  const pt = (p.productType ?? '').toLowerCase()
+  const slots: StackSlot[] = []
+
+  const isProtein = t.includes('protein') || t.includes('whey') || t.includes('mass') || t.includes('gainer') || t.includes('isolate') || t.includes('casein') || pt === 'protein'
+  const isPerformance = t.includes('creatine') || pt === 'performance'
+  const isPreWorkout = t.includes('pre-workout') || t.includes('pre workout') || t.includes('preworkout') || pt.includes('pre-workout') || pt.includes('pre workout')
+  const isHydration = t.includes('electrolyte') || t.includes('hydration') || pt === 'hydration'
+  const isAmino = t.includes('bcaa') || t.includes('amino') || t.includes('eaa') || pt.includes('amino')
+  const isSleep = t.includes('sleep') || t.includes('zma') || (t.includes('magnesium') && t.includes('sleep'))
+  const isHealth = t.includes('vitamin') || t.includes('omega') || t.includes('multivitamin') || t.includes('mineral') || pt === 'health' || pt === 'vitamins'
+  const isRecovery = t.includes('collagen') || t.includes('joint') || t.includes('glucosamine') || (t.includes('recovery') && !isSleep) || pt === 'recovery'
+  const isMagnesium = t.includes('magnesium')
+  const isVegan = p.tags.includes('vegan') || t.includes('plant protein') || t.includes('vegan protein')
+
+  if (isProtein)    slots.push('protein')
+  if (isPerformance) slots.push('performance')
+  if (isPreWorkout) slots.push('energy')
+  if (isHydration)  slots.push('hydration')
+  if (isAmino)      slots.push('recovery', 'hydration')
+  if (isMagnesium)  slots.push('sleep', 'recovery')
+  else if (isSleep) slots.push('sleep', 'recovery')
+  if (isHealth)     slots.push('health')
+  if (isRecovery && !isAmino && !isMagnesium) slots.push('recovery')
+  if (isVegan && isProtein) slots.push('vegan-support')
+
+  return [...new Set(slots)] as StackSlot[]
+}
+
+function deriveGoals(p: ShopifyProduct, slots: StackSlot[]): ReturnType<typeof parseGoalTags> {
+  const goals = new Set<string>()
+  if (slots.includes('protein')) {
+    goals.add('muscle'); goals.add('recovery')
+    if (p.title.toLowerCase().includes('mass') || p.title.toLowerCase().includes('gainer')) goals.add('bulking')
+  }
+  if (slots.includes('performance'))  { goals.add('muscle'); goals.add('performance') }
+  if (slots.includes('energy'))       { goals.add('energy'); goals.add('performance') }
+  if (slots.includes('hydration'))    { goals.add('hydration'); goals.add('performance') }
+  if (slots.includes('recovery'))     { goals.add('recovery') }
+  if (slots.includes('health'))       { goals.add('health') }
+  if (slots.includes('sleep'))        { goals.add('recovery'); goals.add('health') }
+  if (slots.includes('vegan-support')) goals.add('health')
+  return [...goals] as ReturnType<typeof parseGoalTags>
+}
+
+function deriveSwapGroup(p: ShopifyProduct): SwapGroup {
+  const t = p.title.toLowerCase()
+  if (t.includes('plant protein') || t.includes('vegan protein')) return 'protein-plant'
+  if (t.includes('mass') || t.includes('gainer'))                return 'protein-mass'
+  if (t.includes('whey') || t.includes('isolate') || t.includes('casein') || (t.includes('protein') && !t.includes('plant'))) return 'protein-whey'
+  if (t.includes('creatine'))          return 'creatine'
+  if (t.includes('stim-free') || t.includes('stimfree')) return 'pre-workout-stim-free'
+  if (t.includes('pre-workout') || t.includes('pre workout') || t.includes('preworkout')) return 'pre-workout-stim'
+  if (t.includes('electrolyte') || t.includes('hydration')) return 'electrolytes'
+  if (t.includes('bcaa') || t.includes('amino') || t.includes('eaa')) return 'aminos'
+  if (t.includes('omega'))             return 'omega-3'
+  if (t.includes('magnesium'))         return 'magnesium'
+  if (t.includes('vitamin d'))         return 'vitamin-d'
+  if (t.includes('multivitamin') || t.includes('multi vitamin')) return 'multivitamin'
+  if (t.includes('collagen'))          return 'collagen'
+  if (t.includes('sleep'))             return 'sleep-support'
+  if (t.includes('fat burner') || t.includes('thermo')) return 'fat-burner'
+  return 'general'
+}
+
+function deriveDietaryTags(p: ShopifyProduct): DietaryTag[] {
+  const tags: DietaryTag[] = []
+  const allTags = p.tags.map(t => t.toLowerCase())
+  if (allTags.includes('vegan'))       tags.push('vegan', 'vegetarian', 'dairy-free')
+  if (allTags.includes('vegetarian'))  tags.push('vegetarian')
+  if (allTags.includes('gluten-free') || allTags.includes('gluten free')) tags.push('gluten-free')
+  if (allTags.includes('dairy-free') || allTags.includes('dairy free'))   tags.push('dairy-free')
+  return [...new Set(tags)] as DietaryTag[]
+}
+
+function deriveBoosterEligible(slots: StackSlot[]): boolean {
+  // Products that fit into non-core slots are typically good booster candidates
+  return slots.some(s => ['recovery', 'hydration', 'health', 'sleep'].includes(s)) &&
+         !slots.includes('protein') &&
+         !slots.includes('performance')
+}
+
+function derivePriority(p: ShopifyProduct, slots: StackSlot[]): number {
+  if (slots.includes('protein'))     return 10
+  if (slots.includes('performance')) return 9
+  if (slots.includes('energy'))      return 8
+  if (slots.includes('hydration'))   return 7
+  if (slots.includes('health'))      return 6
+  if (slots.includes('recovery'))    return 5
+  if (slots.includes('sleep'))       return 5
+  return deriveDefaultPriority(p.productType ?? '')
+}
+
 export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduct {
   const variants: CatalogueVariant[] = p.variants.edges.map(({ node }) => ({
     id: node.id,
@@ -220,17 +316,26 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const defaultVariant = variants[0]
   const firstImage = p.images.edges[0]?.node.url ?? null
 
-  const goals = parseGoalTags(p.tags)
-  const stackSlots = parseStackSlots(p.tags)
-  const dietaryTags = parseDietaryTags(p.tags)
-  const swapGroup = parseSwapGroup(p.tags)
+  // Parse explicit tags first; fall back to title/productType inference so
+  // products work correctly even before the seed-shopify-tags script is run.
+  const explicitSlots   = parseStackSlots(p.tags)
+  const stackSlots      = explicitSlots.length > 0 ? explicitSlots : deriveStackSlots(p)
 
-  const hasStimulants = p.tags.includes('stimulant')
-  const isCoreEligible = p.tags.includes('core-eligible')
-  const isBoosterEligible = p.tags.includes('booster-eligible')
+  const explicitGoals   = parseGoalTags(p.tags)
+  const goals           = explicitGoals.length > 0 ? explicitGoals : deriveGoals(p, stackSlots)
+
+  const explicitDietary = parseDietaryTags(p.tags)
+  const dietaryTags     = explicitDietary.length > 0 ? explicitDietary : deriveDietaryTags(p)
+
+  const explicitSwap    = parseSwapGroup(p.tags)
+  const swapGroup       = explicitSwap !== 'general' ? explicitSwap : deriveSwapGroup(p)
+
+  const hasStimulants     = p.tags.includes('stimulant') || p.title.toLowerCase().includes('pre-workout') && !p.title.toLowerCase().includes('stim-free')
+  const isCoreEligible    = p.tags.includes('core-eligible')    || stackSlots.includes('protein') || stackSlots.includes('performance')
+  const isBoosterEligible = p.tags.includes('booster-eligible') || deriveBoosterEligible(stackSlots)
 
   const rawPriority = metaValue(p.metafields, 'stack_priority')
-  const recommendationPriority = rawPriority ? parseInt(rawPriority, 10) : 5
+  const recommendationPriority = rawPriority ? parseInt(rawPriority, 10) : derivePriority(p, stackSlots)
 
   const rawMarginPriority = metaValue(p.metafields, 'margin_priority')
   const marginPriority = rawMarginPriority ? parseInt(rawMarginPriority, 10) : 5
