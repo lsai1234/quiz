@@ -12,82 +12,96 @@ interface Props {
 export function ProductCard({ product, selected, onToggle, isUpgrade }: Props) {
   return (
     <div
-      className={`relative rounded-2xl border transition-all ${
+      className={`relative rounded-2xl border transition-all overflow-hidden ${
         selected
-          ? 'border-[var(--color-accent)] bg-[var(--color-surface-2)]'
+          ? 'border-[var(--color-accent)]/60 bg-[var(--color-surface-2)] shadow-[0_0_24px_-12px_var(--color-accent)]'
           : 'border-[var(--color-border)] bg-[var(--color-surface)]'
       }`}
     >
-      {isUpgrade && (
-        <div className="absolute top-3 right-3">
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wide bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-muted)]">
-            UPGRADE
-          </span>
-        </div>
-      )}
-
       <div className="p-4">
-        {/* Colour accent line */}
-        <div
-          className="w-6 h-1 rounded-full mb-3"
-          style={{ background: product.accentColor }}
-        />
+        <div className="flex gap-3">
+          {/* Product image */}
+          <div
+            className="w-[72px] h-[72px] rounded-xl flex-shrink-0 flex items-center justify-center overflow-hidden bg-[var(--color-surface-2)] border border-[var(--color-border)]"
+          >
+            {product.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={product.image}
+                alt={product.name}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <span
+                className="text-xl font-black opacity-60"
+                style={{ fontFamily: 'var(--font-display)', color: product.accentColor }}
+              >
+                {product.category.charAt(0)}
+              </span>
+            )}
+          </div>
 
-        <div className="flex items-start justify-between gap-2">
+          {/* Content */}
           <div className="flex-1 min-w-0">
-            <p
-              className="text-sm font-bold leading-tight"
-              style={{ fontFamily: 'var(--font-display)' }}
-            >
-              {product.name}
-            </p>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5 capitalize">
-              {product.subcategory}
+            {/* Category chip + badges row */}
+            <div className="flex items-center gap-1.5 mb-1">
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  color: product.accentColor,
+                  background: `color-mix(in srgb, ${product.accentColor} 12%, transparent)`,
+                }}
+              >
+                {product.category}
+              </span>
+              {isUpgrade && (
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-widest uppercase bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-muted)]">
+                  Upgrade
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-start justify-between gap-2">
+              <p
+                className="text-sm font-bold leading-snug line-clamp-2"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                {product.name}
+              </p>
+              <p
+                className="text-sm font-black text-[var(--color-accent)] whitespace-nowrap"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                £{product.price.toFixed(2)}
+              </p>
+            </div>
+
+            <p className="text-xs text-[var(--color-muted)] mt-1 leading-relaxed line-clamp-2">
+              {product.safeWording}
             </p>
           </div>
-          <p
-            className="text-sm font-bold text-[var(--color-accent)] whitespace-nowrap"
+        </div>
+
+        {/* Footer: flags + toggle */}
+        <div className="flex items-center justify-between gap-3 mt-3">
+          <div className="flex gap-1.5 text-[10px] text-[var(--color-muted)]">
+            {product.stimulant && <span title="Contains stimulants">⚡</span>}
+            {product.vegan && <span title="Vegan">🌱</span>}
+          </div>
+          <button
+            onClick={onToggle}
+            className={`px-4 py-2 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 ${
+              selected
+                ? 'bg-transparent border border-[var(--color-border)] text-[var(--color-muted)]'
+                : 'bg-[var(--color-accent)] text-[var(--color-bg)]'
+            }`}
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            £{product.price}/mo
-          </p>
+            {selected ? '− Remove' : '+ Add to stack'}
+          </button>
         </div>
-
-        <p className="text-xs text-[var(--color-text-2)] mt-2 leading-relaxed">
-          {product.safeWording}
-        </p>
-
-        {/* Tags */}
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {product.stimulant && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]">
-              ⚡ Stimulant
-            </span>
-          )}
-          {product.vegan && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]">
-              🌱 Vegan
-            </span>
-          )}
-          {product.beginner && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-muted)]">
-              ✓ Beginner-friendly
-            </span>
-          )}
-        </div>
-
-        {/* Add/remove */}
-        <button
-          onClick={onToggle}
-          className={`mt-4 w-full py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 ${
-            selected
-              ? 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-2)]'
-              : 'bg-[var(--color-accent)] text-[var(--color-bg)]'
-          }`}
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {selected ? 'Remove from stack' : 'Add to stack'}
-        </button>
       </div>
     </div>
   )

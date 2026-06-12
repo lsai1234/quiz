@@ -46,6 +46,16 @@ function metaValue(metafields: ShopifyProduct['metafields'], key: string): strin
   return metafields.find((m) => m?.key === key)?.value ?? null
 }
 
+// Shopify descriptions are full marketing copy — cut to the first sentence,
+// hard-capped so cards stay scannable
+function shortDescription(text: string, maxLen = 140): string {
+  const clean = text.replace(/\s+/g, ' ').trim()
+  if (clean.length <= maxLen) return clean
+  const firstSentence = clean.split(/(?<=[.!?])\s/)[0]
+  if (firstSentence.length <= maxLen) return firstSentence
+  return clean.slice(0, maxLen - 1).replace(/\s+\S*$/, '') + '…'
+}
+
 // ─── Main mapping function ────────────────────────────────────────────────────
 
 export function mapShopifyProduct(p: ShopifyProduct): Product {
@@ -72,7 +82,7 @@ export function mapShopifyProduct(p: ShopifyProduct): Product {
   const stackPriority = rawPriority ? parseInt(rawPriority, 10) : deriveDefaultPriority(category)
 
   const subcategory = metaValue(p.metafields, 'subcategory') ?? deriveSubcategory(p)
-  const safeWording = metaValue(p.metafields, 'safe_wording') ?? p.description
+  const safeWording = metaValue(p.metafields, 'safe_wording') ?? shortDescription(p.description)
   const accentColor = metaValue(p.metafields, 'accent_color') ?? defaultAccentColor(category)
 
   return {
@@ -83,7 +93,7 @@ export function mapShopifyProduct(p: ShopifyProduct): Product {
     category,
     subcategory,
     price: defaultVariant?.price ?? 0,
-    description: p.description,
+    description: shortDescription(p.description),
     safeWording,
     goalTags,
     stimulant: p.tags.includes('stimulant'),
