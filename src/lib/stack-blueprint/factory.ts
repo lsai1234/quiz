@@ -1,3 +1,5 @@
+// MVP scoring rules — replace with ML-based scoring in v2
+
 import type { QuizAnswers, Goal } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackBlueprint, StackSlotEntry } from './types'
@@ -5,6 +7,8 @@ import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 
 const SLOT_ORDER = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep'] as const
 type SlotType = typeof SLOT_ORDER[number]
+
+type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health'
 
 const SLOT_TITLES: Record<SlotType, string> = {
   protein: 'Protein',
@@ -26,42 +30,57 @@ const SLOT_DESCRIPTIONS: Record<SlotType, string> = {
   sleep: 'Improves sleep quality and overnight recovery',
 }
 
+const SLOT_DEFAULT_REASONS: Record<SlotType, string> = {
+  protein: 'Supports muscle repair and daily protein targets',
+  performance: 'Builds strength and power over time — take daily',
+  energy: 'Pre-workout energy and focus without the crash',
+  hydration: 'Replaces electrolytes lost during training',
+  recovery: 'Supports muscle recovery between sessions',
+  health: 'Covers everyday vitamin and mineral gaps',
+  sleep: 'Helps you wind down and sleep deeper',
+}
+
 const REQUIRED_SLOTS: SlotType[] = ['protein', 'performance']
 
-const GOAL_STACK_NAMES: Record<Goal, string> = {
-  muscle: 'Muscle Building Stack',
-  energy: 'Energy & Performance Stack',
-  performance: 'Performance Stack',
-  hydration: 'Hydration Stack',
-  recovery: 'Recovery Stack',
-  health: 'General Health Stack',
-  cutting: 'Fat Loss Stack',
-  bulking: 'Bulk & Mass Stack',
+function getArchetype(goals: Goal[]): Archetype {
+  if (goals.includes('muscle') || goals.includes('bulking')) return 'muscle'
+  if (goals.includes('cutting')) return 'fat-loss'
+  if (goals.includes('performance') || goals.includes('energy')) return 'performance'
+  return 'health'
 }
 
-const GOAL_SUMMARIES: Record<Goal, string> = {
-  muscle: 'A targeted stack to support muscle growth, strength and recovery.',
-  energy: 'A stack designed to boost your energy levels and training performance.',
-  performance: 'A science-backed stack to enhance training performance and output.',
-  hydration: 'A stack focused on maintaining optimal hydration during training.',
-  recovery: 'A stack built around faster recovery and reduced muscle soreness.',
-  health: 'A balanced stack to support everyday health and active living.',
-  cutting: 'A lean stack to support fat loss while preserving muscle mass.',
-  bulking: 'A high-calorie stack designed to support serious muscle and mass gain.',
+function getStackName(archetype: Archetype, trainingFrequency: string | null): string {
+  const highFreq = trainingFrequency === '5-6x' || trainingFrequency === 'daily'
+  const names: Record<Archetype, [string, string]> = {
+    'muscle':      ['Performance Core Stack', 'Strength Engine Stack'],
+    'fat-loss':    ['Lean Power Stack', 'Fat Loss Protocol'],
+    'performance': ['Endurance Edge Stack', 'Athletic Performance Stack'],
+    'health':      ['Daily Charge Stack', 'Foundation Health Stack'],
+  }
+  return highFreq ? names[archetype][0] : names[archetype][1]
 }
 
-function scoreProduct(product: CatalogueProduct, answers: QuizAnswers): number {
+const ARCHETYPE_SUMMARIES: Record<Archetype, string> = {
+  'muscle':      'Built to maximise muscle growth, strength, and recovery.',
+  'fat-loss':    'Designed to support fat loss while preserving lean muscle.',
+  'performance': 'Optimised for endurance, energy, and athletic output.',
+  'health':      'A smart daily foundation for energy, recovery, and long-term health.',
+}
+
+function scoreProduct(
+  product: CatalogueProduct,
+  slotType: SlotType,
+  answers: QuizAnswers,
+  archetype: Archetype,
+): number {
   let score = product.recommendationPriority * 10
 
-  // Goal matches
-  for (const goal of answers.goals) {
-    if (product.goals.includes(goal)) {
-      score += 15
-    }
-  }
+  // Goal overlap
+  const goalOverlap = answers.goals.filter(g => product.goals.includes(g)).length
+  score += goalOverlap * 15
 
-  // Stimulant penalty
-  if (product.hasStimulants && answers.stimPreference === 'no') {
+  // Stimulant skip
+  if (product.hasStimulants && (answers.stimPreference === 'no' || answers.caffeineLevel === 'none')) {
     return -Infinity
   }
 
@@ -70,32 +89,31 @@ function scoreProduct(product: CatalogueProduct, answers: QuizAnswers): number {
     return -Infinity
   }
 
-  // Already-taking penalty
-  if (
-    answers.currentSupplements.includes('protein') &&
-    product.stackSlots.includes('protein')
-  ) {
-    score -= 20
+  // Gluten-free filter (answers.dietary is an optional extension not in the base QuizAnswers type)
+  const dietary = (answers as unknown as { dietary?: string[] }).dietary
+  if (dietary?.includes('gluten-free') && !product.dietaryTags.includes('gluten-free')) {
+    return -Infinity
   }
-  if (
-    answers.currentSupplements.includes('creatine') &&
-    product.stackSlots.includes('performance')
-  ) {
-    score -= 20
-  }
-  if (
-    answers.currentSupplements.includes('pre-workout') &&
-    product.stackSlots.includes('energy')
-  ) {
-    score -= 20
-  }
+
+  // Already-taking penalties
+  if (answers.currentSupplements.includes('protein') && slotType === 'protein') score -= 25
+  if (answers.currentSupplements.includes('creatine') && slotType === 'performance') score -= 25
+  if (answers.currentSupplements.includes('pre-workout') && slotType === 'energy') score -= 25
+
+  // Archetype boosts
+  if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += 20
+  if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) score += 15
+  if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) score += 15
+
+  // Budget sensitivity
+  if (answers.budget === 'under-50' && product.basePrice > 30) score -= 15
 
   return score
 }
 
 /**
  * Builds a StackBlueprint from quiz answers and the product catalogue.
- * Uses a scoring approach similar to the existing recommendation engine.
+ * Uses archetype-based scoring to select the best product for each slot.
  */
 export function buildStackBlueprint(
   answers: QuizAnswers,
@@ -103,6 +121,10 @@ export function buildStackBlueprint(
 ): StackBlueprint {
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
   const secondaryGoals = answers.goals.slice(1)
+
+  const archetype = getArchetype(answers.goals)
+  const stackName = getStackName(archetype, answers.trainingFrequency)
+  const summary = ARCHETYPE_SUMMARIES[archetype]
 
   const slots: StackSlotEntry[] = []
   let displayOrder = 0
@@ -115,7 +137,7 @@ export function buildStackBlueprint(
     let bestScore = -Infinity
 
     for (const product of candidates) {
-      const score = scoreProduct(product, answers)
+      const score = scoreProduct(product, slotType, answers, archetype)
       if (score > bestScore) {
         bestScore = score
         bestProduct = product
@@ -126,6 +148,12 @@ export function buildStackBlueprint(
 
     const isRequired = REQUIRED_SLOTS.includes(slotType as SlotType)
 
+    // Default variant selection: first available variant
+    const firstAvailableVariant = bestProduct.variants.find(v => v.available) ?? null
+    const selectedVariantId = firstAvailableVariant?.id ?? null
+
+    const reason = bestProduct.shortReason || SLOT_DEFAULT_REASONS[slotType]
+
     slots.push({
       slotId: `slot-${slotType}`,
       slotType: slotType as any,
@@ -133,30 +161,31 @@ export function buildStackBlueprint(
       description: SLOT_DESCRIPTIONS[slotType as SlotType],
       recommendedProductId: bestProduct.id,
       selectedProductId: bestProduct.id,
-      selectedVariantId: null,
+      selectedVariantId,
       required: isRequired,
       canRemove: !isRequired,
       canSwap: true,
       swapGroup: bestProduct.swapGroup,
-      reason: bestProduct.shortReason,
-      confidenceScore: Math.min(100, Math.max(0, bestScore)),
+      reason,
+      confidenceScore: Math.min(100, Math.max(0, Math.round(bestScore / 2))),
       displayOrder: displayOrder++,
     })
   }
 
+  const userProfileSummary = [
+    answers.ageBracket,
+    answers.trainingType ? `${answers.trainingType} training` : null,
+    answers.trainingFrequency ? `${answers.trainingFrequency}/week` : null,
+  ].filter(Boolean).join(', ')
+
   // Build partial blueprint to calculate prices
   const partialBlueprint: StackBlueprint = {
     id: Date.now().toString(36),
-    stackName: GOAL_STACK_NAMES[primaryGoal] ?? 'Your Supplement Stack',
-    summary: GOAL_SUMMARIES[primaryGoal] ?? 'A personalised supplement stack built around your goals.',
+    stackName,
+    summary,
     primaryGoal,
     secondaryGoals,
-    userProfileSummary: [
-      answers.ageBracket,
-      answers.gender,
-      answers.trainingType ? `${answers.trainingType} training` : null,
-      answers.trainingFrequency ? `${answers.trainingFrequency}/week` : null,
-    ].filter(Boolean).join(', '),
+    userProfileSummary,
     slots,
     estimatedOneOffPrice: 0,
     estimatedSubscriptionPrice: 0,
@@ -168,10 +197,14 @@ export function buildStackBlueprint(
   const subscriptionPrice = calculateSubscriptionPrice(partialBlueprint, catalogue)
   const savings = Math.round((oneOffPrice - subscriptionPrice) * 100) / 100
 
+  const savingsSummary = savings >= 1
+    ? `Save £${savings.toFixed(2)}/month with a subscription`
+    : 'Subscription pricing available on selected products.'
+
   return {
     ...partialBlueprint,
     estimatedOneOffPrice: oneOffPrice,
     estimatedSubscriptionPrice: subscriptionPrice,
-    savingsSummary: `Save £${savings.toFixed(2)}/month with a subscription`,
+    savingsSummary,
   }
 }

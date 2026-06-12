@@ -323,6 +323,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setIsGenerating(true)
     try {
       const { buildRecommendedStack } = await import('@/lib/recommendation')
+      const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
+      const { getCatalogue } = await import('@/lib/catalogue')
       const res = await fetch('/api/generate-identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -337,6 +339,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
+
+      // Build and store the stack blueprint
+      const blueprint = buildStackBlueprint(answers, getCatalogue())
+      useQuizStore.getState().setStackBlueprint(blueprint)
+
       onComplete()
     } catch { setIsGenerating(false) }
   }

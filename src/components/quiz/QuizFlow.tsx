@@ -4,6 +4,8 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 import { buildRecommendedStack } from '@/lib/recommendation'
+import { buildStackBlueprint } from '@/lib/stack-blueprint'
+import { getCatalogue } from '@/lib/catalogue'
 import { useProducts } from '@/hooks/useProducts'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
@@ -421,6 +423,11 @@ export function QuizFlow() {
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
+
+      // Build and store the stack blueprint
+      const blueprint = buildStackBlueprint(answers, getCatalogue())
+      useQuizStore.getState().setStackBlueprint(blueprint)
+
       router.push('/reveal')
     } catch {
       setIsGenerating(false)

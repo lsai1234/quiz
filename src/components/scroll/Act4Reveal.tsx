@@ -60,7 +60,7 @@ function ScoreRing({ score }: { score: number }) {
 }
 
 export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
-  const { identity, answers, selectedProducts, catalogue } = useQuizStore()
+  const { identity, answers, selectedProducts, catalogue, stackBlueprint } = useQuizStore()
   const firstName = answers.name?.split(' ')[0]?.trim() || null
   const cardsRef = useRef<HTMLDivElement>(null)
   const headlineRef = useRef<HTMLDivElement>(null)
@@ -146,6 +146,17 @@ export function Act4Reveal({ onBuildBundle, reducedMotion }: Props) {
 
       {/* Divider */}
       <div className="h-px bg-[#0A0A0A]/8 mx-5" />
+
+      {/* Stack blueprint */}
+      {stackBlueprint && (
+        <div className="px-5 pt-6 max-w-lg mx-auto">
+          <div className="mt-4 p-4 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border)]">
+            <p className="text-xs font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Your Stack</p>
+            <p className="text-lg font-black" style={{ fontFamily: 'var(--font-display)' }}>{stackBlueprint.stackName}</p>
+            <p className="text-sm text-[var(--color-text-2)] mt-1">{stackBlueprint.summary}</p>
+          </div>
+        </div>
+      )}
 
       {/* Product cards */}
       <div className="px-5 pt-8 max-w-lg mx-auto">

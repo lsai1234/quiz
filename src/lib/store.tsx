@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
+import type { StackBlueprint } from '@/lib/stack-blueprint'
 import { MOCK_PRODUCTS } from './mock-products'
 
 interface QuizStore {
@@ -13,6 +14,7 @@ interface QuizStore {
   // Product catalogue — single source of truth, hydrated from /api/products
   catalogue: Product[]
   catalogueSource: 'mock' | 'shopify'
+  stackBlueprint: StackBlueprint | null
 
   setStep: (step: number) => void
   nextStep: () => void
@@ -24,6 +26,7 @@ interface QuizStore {
   setSelectedProducts: (products: Product[]) => void
   toggleProduct: (product: Product) => void
   setCatalogue: (products: Product[], source: 'mock' | 'shopify') => void
+  setStackBlueprint: (blueprint: StackBlueprint) => void
   reset: () => void
 }
 
@@ -53,6 +56,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   selectedProducts: [],
   catalogue: MOCK_PRODUCTS,
   catalogueSource: 'mock',
+  stackBlueprint: null,
 
   setStep: (step) => set({ step }),
   nextStep: () => set((s) => ({ step: s.step + 1 })),
@@ -68,6 +72,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setStackLevel: (level) => set({ stackLevel: level }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
+  setStackBlueprint: (blueprint) => set({ stackBlueprint: blueprint }),
 
   toggleProduct: (product) =>
     set((s) => {
