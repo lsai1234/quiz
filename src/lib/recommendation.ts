@@ -1,5 +1,6 @@
 import type { QuizAnswers, Product, RecommendedStack, StackLevel } from './types'
 import { MOCK_PRODUCTS } from './mock-products'
+import { getRole } from './product-roles'
 
 export { MOCK_PRODUCTS }
 
@@ -15,6 +16,7 @@ function budgetLimit(budget: QuizAnswers['budget']): number {
 
 function scoreProduct(product: Product, answers: QuizAnswers): number {
   let score = product.stackPriority * 10
+  const role = getRole(product).id
 
   // Goal alignment
   const goalMatches = answers.goals.filter(g => product.goalTags.includes(g)).length
@@ -28,12 +30,11 @@ function scoreProduct(product: Product, answers: QuizAnswers): number {
   // Vegan filter
   if (!product.vegan && answers.lifestyle.includes('vegan')) return -1
 
-  // Already taking filter — don't double-up same category
-  const currentSuppCategories = answers.currentSupplements.map(s => s.toLowerCase())
-  if (currentSuppCategories.includes('protein') && product.subcategory === 'Whey') score -= 20
-  if (currentSuppCategories.includes('protein') && product.subcategory === 'Plant-based') score -= 20
-  if (currentSuppCategories.includes('creatine') && product.category === 'Performance') score -= 15
-  if (currentSuppCategories.includes('pre-workout') && product.category === 'Pre-Workout') score -= 15
+  // Already taking filter — don't double-up what the user already has
+  const currentSupps = answers.currentSupplements.map(s => s.toLowerCase())
+  if (currentSupps.includes('protein') && role === 'protein') score -= 20
+  if (currentSupps.includes('creatine') && role === 'creatine') score -= 15
+  if (currentSupps.includes('pre-workout') && role.startsWith('pre-workout')) score -= 15
 
   // Beginner safety — use drill-down experience level when available
   if (answers.trainingExperience === 'new' && product.beginner) score += 8
@@ -46,24 +47,24 @@ function scoreProduct(product: Product, answers: QuizAnswers): number {
   if (answers.trainingType === 'hiit' && product.stimulant) score += 5
   if (answers.trainingType === 'sport' && product.category === 'Hydration') score += 8
 
-  // Lifestyle boosts
-  if (answers.lifestyle.includes('poor-sleep') && product.id === 'sleep-support') score += 20
-  if (answers.lifestyle.includes('poor-sleep') && product.id === 'magnesium') score += 15
-  if (answers.lifestyle.includes('desk-job') && product.id === 'vitamin-d3-k2') score += 10
-  if (answers.lifestyle.includes('high-stress') && product.id === 'sleep-support') score += 10
+  // Lifestyle boosts (role-based so they work with any catalogue)
+  if (answers.lifestyle.includes('poor-sleep') && role === 'sleep') score += 20
+  if (answers.lifestyle.includes('poor-sleep') && role === 'magnesium') score += 15
+  if (answers.lifestyle.includes('desk-job') && (role === 'vitamin-d' || role === 'multivitamin')) score += 10
+  if (answers.lifestyle.includes('high-stress') && (role === 'sleep' || role === 'adaptogen')) score += 10
 
   // Age bracket boosts
   if (answers.ageBracket === '45+') {
-    if (product.id === 'vitamin-d3-k2') score += 15
-    if (product.id === 'magnesium') score += 12
-    if (product.id === 'collagen') score += 12
-    if (product.id === 'omega3') score += 8
+    if (role === 'vitamin-d' || role === 'multivitamin') score += 15
+    if (role === 'magnesium') score += 12
+    if (role === 'collagen') score += 12
+    if (role === 'omega-3') score += 8
     if (product.stimulant) score -= 5
   }
   if (answers.ageBracket === '35-44') {
-    if (product.id === 'vitamin-d3-k2') score += 8
-    if (product.id === 'magnesium') score += 8
-    if (product.id === 'collagen') score += 6
+    if (role === 'vitamin-d' || role === 'multivitamin') score += 8
+    if (role === 'magnesium') score += 8
+    if (role === 'collagen') score += 6
   }
   if (answers.ageBracket === '16-24') {
     if (product.stimulant && answers.trainingExperience !== 'experienced') score -= 5
@@ -78,6 +79,12 @@ function resolveStackLevel(answers: QuizAnswers): StackLevel {
   return 'performance'
 }
 
+// Stim and stim-free pre-workouts fill the same slot in a stack
+function dedupeRole(product: Product): string {
+  const id = getRole(product).id
+  return id.startsWith('pre-workout') ? 'pre-workout' : id
+}
+
 export function buildRecommendedStack(answers: QuizAnswers, catalogue: Product[] = MOCK_PRODUCTS as Product[]): RecommendedStack {
   const level = resolveStackLevel(answers)
   const limit = budgetLimit(answers.budget)
@@ -88,41 +95,53 @@ export function buildRecommendedStack(answers: QuizAnswers, catalogue: Product[]
     .filter(({ product }) => product.stackLevels.includes(level))
     .sort((a, b) => b.score - a.score)
 
-  // Build core stack within budget
+  // Build core stack within budget.
+  // Dedupe by functional role (creatine, protein, pre-workout…) so the stack
+  // never contains two products doing the same job, and cap stimulants at one.
   const core: Product[] = []
   let total = 0
-  const usedCategories = new Set<string>()
+  let stimCount = 0
+  const usedRoles = new Set<string>()
 
   for (const { product } of scored) {
-    if (usedCategories.has(product.category)) continue
+    const role = dedupeRole(product)
+    if (usedRoles.has(role)) continue
+    if (product.stimulant && stimCount >= 1) continue
     if (total + product.price > limit) continue
     core.push(product)
     total += product.price
-    usedCategories.add(product.category)
+    usedRoles.add(role)
+    if (product.stimulant) stimCount++
     if (core.length >= 6) break
   }
 
-  // Upgrades: top-scored products not in core that fit budget at higher level
-  const upgrades: Product[] = scored
-    .filter(({ product }) => !core.includes(product))
-    .filter(({ product }) => product.stackLevels.includes('complete'))
-    .slice(0, 3)
-    .map(({ product }) => product)
+  // Upgrades: top-scored products covering roles not already in the stack
+  const upgrades: Product[] = []
+  const upgradeRoles = new Set(usedRoles)
+  for (const { product } of scored) {
+    if (core.includes(product)) continue
+    if (!product.stackLevels.includes('complete')) continue
+    const role = dedupeRole(product)
+    if (upgradeRoles.has(role)) continue
+    upgrades.push(product)
+    upgradeRoles.add(role)
+    if (upgrades.length >= 3) break
+  }
 
   // Exclusions — notable categories left out and why
   const excluded: Array<{ category: string; reason: string }> = []
 
-  const hasPreWorkout = core.some(p => p.category === 'Pre-Workout')
+  const hasPreWorkout = core.some(p => getRole(p).id.startsWith('pre-workout'))
   if (!hasPreWorkout && answers.caffeineLevel === 'none') {
     excluded.push({ category: 'Pre-Workout', reason: "You told us you prefer no caffeine — we've left stimulant-based pre-workouts out." })
   }
 
-  const hasMassGainer = core.some(p => p.id === 'mass-gainer')
+  const hasMassGainer = core.some(p => getRole(p).id === 'mass-gainer')
   if (!hasMassGainer && !answers.goals.includes('bulking')) {
     excluded.push({ category: 'Mass Gainer', reason: "Not aligned with your current goals — we only include it for active bulk phases." })
   }
 
-  const hasFatBurner = core.some(p => p.id === 'fat-burner')
+  const hasFatBurner = core.some(p => getRole(p).id === 'fat-burner')
   if (!hasFatBurner && !answers.goals.includes('cutting')) {
     excluded.push({ category: 'Thermogenic', reason: "Not included as your goals aren't focused on a cutting phase right now." })
   }

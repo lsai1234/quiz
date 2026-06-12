@@ -1,6 +1,7 @@
 'use client'
 
 import type { Product } from '@/lib/types'
+import { getRole } from '@/lib/product-roles'
 
 interface Props {
   product: Product
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function ProductCard({ product, selected, onToggle, isUpgrade }: Props) {
+  const role = getRole(product)
   return (
     <div
       className={`relative rounded-2xl border transition-all overflow-hidden ${
@@ -54,7 +56,7 @@ export function ProductCard({ product, selected, onToggle, isUpgrade }: Props) {
                   background: `color-mix(in srgb, ${product.accentColor} 12%, transparent)`,
                 }}
               >
-                {product.category}
+                {role.label}
               </span>
               {isUpgrade && (
                 <span className="px-2 py-0.5 rounded-full text-[9px] font-semibold tracking-widest uppercase bg-[var(--color-surface-2)] border border-[var(--color-border)] text-[var(--color-muted)]">
@@ -78,8 +80,9 @@ export function ProductCard({ product, selected, onToggle, isUpgrade }: Props) {
               </p>
             </div>
 
-            <p className="text-xs text-[var(--color-muted)] mt-1 leading-relaxed line-clamp-2">
-              {product.safeWording}
+            {/* Plain-English explainer — what this product actually does */}
+            <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
+              {role.benefit}
             </p>
           </div>
         </div>
