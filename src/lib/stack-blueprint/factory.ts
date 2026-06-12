@@ -55,7 +55,41 @@ const SLOT_DEFAULT_REASONS: Record<SlotType, string> = {
   sleep: 'Helps you wind down and sleep deeper',
 }
 
-const REQUIRED_SLOTS: SlotType[] = ['protein', 'performance']
+// Goal → slot relevance: which slot types does each goal suggest?
+const GOAL_SLOT_RELEVANCE: Partial<Record<Goal, SlotType[]>> = {
+  muscle:      ['protein', 'performance', 'recovery'],
+  bulking:     ['protein', 'performance', 'recovery'],
+  cutting:     ['energy', 'health', 'protein'],
+  energy:      ['energy', 'performance', 'health'],
+  performance: ['performance', 'energy', 'protein'],
+  hydration:   ['hydration', 'energy'],
+  recovery:    ['recovery', 'protein', 'health'],
+  health:      ['health', 'recovery'],
+}
+
+/** Returns required slot types based on which goals the user actually chose. */
+function getRequiredSlots(goals: Goal[]): SlotType[] {
+  const required: SlotType[] = []
+  const needsProtein = goals.some(g => ['muscle', 'bulking'].includes(g))
+  const needsPerformance = goals.some(g => ['muscle', 'bulking', 'performance'].includes(g))
+  if (needsProtein) required.push('protein')
+  if (needsPerformance) required.push('performance')
+  return required
+}
+
+/** Returns SLOT_ORDER sorted so goal-relevant slots come first. */
+function sortedSlotsByGoalRelevance(goals: Goal[]): SlotType[] {
+  const scores: Record<string, number> = {}
+  for (const slot of SLOT_ORDER) scores[slot] = 0
+  for (const goal of goals) {
+    const relevant = GOAL_SLOT_RELEVANCE[goal] ?? []
+    relevant.forEach((slot, idx) => {
+      // Earlier positions in the relevance array earn more points
+      scores[slot] = (scores[slot] ?? 0) + (relevant.length - idx)
+    })
+  }
+  return [...SLOT_ORDER].sort((a, b) => (scores[b] ?? 0) - (scores[a] ?? 0))
+}
 
 function hasPerformanceGoals(goals: Goal[]): boolean {
   return goals.some(g => PERFORMANCE_GOALS.includes(g))
@@ -287,7 +321,7 @@ export function buildStackBlueprint(
   // Wellbeing-only users skip the training-centric slots entirely, and
   // protein/creatine are no longer required.
   const performanceUser = hasPerformanceGoals(answers.goals)
-  const requiredSlots: SlotType[] = performanceUser ? REQUIRED_SLOTS : []
+  const requiredSlots: SlotType[] = performanceUser ? getRequiredSlots(answers.goals) : []
 
   const slots: StackSlotEntry[] = []
   const usedProductIds = new Set<string>()
@@ -332,8 +366,10 @@ export function buildStackBlueprint(
   }
 
   if (performanceUser) {
-    // Performance track: slot-type-driven, unchanged behaviour
-    for (const slotType of SLOT_ORDER) {
+    // Performance track: fill slots in goal-relevance order so the user's
+    // chosen goals drive which products appear first — not a fixed list.
+    const orderedSlots = sortedSlotsByGoalRelevance(answers.goals)
+    for (const slotType of orderedSlots) {
       if (slots.length >= maxSlots) break
       const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any) && !usedProductIds.has(p.id))
       if (candidates.length === 0) continue
