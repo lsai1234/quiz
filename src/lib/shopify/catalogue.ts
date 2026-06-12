@@ -1,5 +1,6 @@
 import type { ShopifyProduct } from './types'
 import type { Product, ProductVariant, Goal, StackLevel } from '@/lib/types'
+import type { CatalogueProduct, CatalogueVariant, StackSlot, DietaryTag, SwapGroup } from '@/lib/catalogue/types'
 import { getProducts, SHOPIFY_LIVE } from './operations'
 import { MOCK_PRODUCTS } from '@/lib/mock-products'
 
@@ -169,6 +170,104 @@ function defaultAccentColor(productType: string): string {
     'Body Composition': '#f87171',
   }
   return map[productType] ?? '#cfff32'
+}
+
+// ─── Shopify → CatalogueProduct mapper ───────────────────────────────────────
+
+const VALID_STACK_SLOTS: StackSlot[] = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep', 'vegan-support']
+const VALID_DIETARY_TAGS: DietaryTag[] = ['vegan', 'vegetarian', 'gluten-free', 'dairy-free', 'nut-free', 'halal', 'keto-friendly']
+const VALID_SWAP_GROUPS: SwapGroup[] = [
+  'protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine',
+  'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3',
+  'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'sleep-support', 'fat-burner',
+  'adaptogen', 'general',
+]
+
+function parseStackSlots(tags: string[]): StackSlot[] {
+  return tags
+    .filter((t) => t.startsWith('slot:'))
+    .map((t) => t.replace('slot:', '') as StackSlot)
+    .filter((s) => VALID_STACK_SLOTS.includes(s))
+}
+
+function parseDietaryTags(tags: string[]): DietaryTag[] {
+  return tags
+    .filter((t) => t.startsWith('dietary:'))
+    .map((t) => t.replace('dietary:', '') as DietaryTag)
+    .filter((d) => VALID_DIETARY_TAGS.includes(d))
+}
+
+function parseSwapGroup(tags: string[]): SwapGroup {
+  const found = tags
+    .filter((t) => t.startsWith('swap:'))
+    .map((t) => t.replace('swap:', '') as SwapGroup)
+    .find((s) => VALID_SWAP_GROUPS.includes(s))
+  return found ?? 'general'
+}
+
+export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduct {
+  const variants: CatalogueVariant[] = p.variants.edges.map(({ node }) => ({
+    id: node.id,
+    title: node.title,
+    flavour: null,
+    size: null,
+    price: parseFloat(node.priceV2.amount),
+    compareAtPrice: node.compareAtPriceV2 ? parseFloat(node.compareAtPriceV2.amount) : null,
+    available: node.availableForSale,
+    shopifyVariantId: node.id,
+  }))
+
+  const defaultVariant = variants[0]
+  const firstImage = p.images.edges[0]?.node.url ?? null
+
+  const goals = parseGoalTags(p.tags)
+  const stackSlots = parseStackSlots(p.tags)
+  const dietaryTags = parseDietaryTags(p.tags)
+  const swapGroup = parseSwapGroup(p.tags)
+
+  const hasStimulants = p.tags.includes('stimulant')
+  const isCoreEligible = p.tags.includes('core-eligible')
+  const isBoosterEligible = p.tags.includes('booster-eligible')
+
+  const rawPriority = metaValue(p.metafields, 'stack_priority')
+  const recommendationPriority = rawPriority ? parseInt(rawPriority, 10) : 5
+
+  const rawMarginPriority = metaValue(p.metafields, 'margin_priority')
+  const marginPriority = rawMarginPriority ? parseInt(rawMarginPriority, 10) : 5
+
+  const shortReason = metaValue(p.metafields, 'safe_wording') ?? shortDescription(p.description)
+  const subscriptionEligible = metaValue(p.metafields, 'subscription_eligible') === 'true'
+
+  const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
+
+  const rawFormats = metaValue(p.metafields, 'formats')
+  const formats = rawFormats ? rawFormats.split(',').map((f) => f.trim()) : ['powder']
+
+  return {
+    id: p.handle,
+    title: p.title,
+    handle: p.handle,
+    description: shortDescription(p.description),
+    imageUrl: firstImage,
+    category,
+    stackSlots,
+    goals,
+    dietaryTags,
+    formats,
+    variants,
+    basePrice: defaultVariant?.price ?? 0,
+    compareAtPrice: defaultVariant?.compareAtPrice ?? null,
+    subscriptionEligible,
+    swapGroup,
+    recommendationPriority,
+    marginPriority,
+    isCoreEligible,
+    isBoosterEligible,
+    hasStimulants,
+    shortReason,
+    warnings: [],
+    shopifyProductId: p.id,
+  }
 }
 
 // ─── Public catalogue fetch ───────────────────────────────────────────────────
