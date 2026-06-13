@@ -205,17 +205,20 @@ function scoreProduct(
     return -Infinity
   }
 
-  // Already-taking penalties
-  if (answers.currentSupplements.includes('protein') && slotType === 'protein') score -= 25
-  if (answers.currentSupplements.includes('creatine') && slotType === 'performance') score -= 25
-  if (answers.currentSupplements.includes('pre-workout') && slotType === 'energy') score -= 25
-
-  // Don't recommend vitamins/minerals the user already takes
+  // Already-taking: hard exclude, not just a penalty.
+  // If the user told us they already take this supplement type, recommending it
+  // is actively wrong — it erodes trust and wastes their money. Use -Infinity
+  // so it never appears regardless of how many goal-affinity boosts it accumulates.
   const taking = new Set([...answers.currentSupplements, ...answers.currentVitamins])
-  if (taking.has('multivitamin') && product.swapGroup === 'multivitamin') score -= 30
-  if (taking.has('vitamin-d') && product.swapGroup === 'vitamin-d') score -= 30
-  if (taking.has('omega-3') && product.swapGroup === 'omega-3') score -= 30
-  if (taking.has('magnesium') && product.swapGroup === 'magnesium') score -= 30
+  if (taking.has('multivitamin') && product.swapGroup === 'multivitamin') return -Infinity
+  if (taking.has('vitamin-d')    && product.swapGroup === 'vitamin-d')    return -Infinity
+  if (taking.has('omega-3')      && product.swapGroup === 'omega-3')      return -Infinity
+  if (taking.has('magnesium')    && product.swapGroup === 'magnesium')    return -Infinity
+  if (taking.has('vitamin-c')    && product.swapGroup === 'vitamin-c')    return -Infinity
+  if (taking.has('collagen')     && product.swapGroup === 'collagen')     return -Infinity
+  if (taking.has('protein')      && slotType === 'protein')               return -Infinity
+  if (taking.has('creatine')     && slotType === 'performance')           return -Infinity
+  if (taking.has('pre-workout')  && slotType === 'energy')                return -Infinity
 
   // Archetype boosts
   if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += 20
@@ -601,12 +604,20 @@ export function buildStackBlueprint(
         effectiveCatalogue.filter(p => p.goals.includes(a.goal)).length -
         effectiveCatalogue.filter(p => p.goals.includes(b.goal)).length)
 
+    // Track which swap groups are already in the stack so a user who selects
+    // both "focus" and "immune" can't end up with two multivitamins — the
+    // second goal steers to the next-best product in a different category.
+    const usedSwapGroups = new Set<string>()
+
     for (const cfg of selectedCfgs) {
       if (slots.length >= maxSlots) break
-      const candidates = effectiveCatalogue.filter(p => p.goals.includes(cfg.goal) && !usedProductIds.has(p.id))
+      const candidates = effectiveCatalogue.filter(
+        p => p.goals.includes(cfg.goal) && !usedProductIds.has(p.id) && !usedSwapGroups.has(p.swapGroup)
+      )
       if (candidates.length === 0) continue
       const best = pickBest(candidates, cfg.slotType)
       if (!best) continue
+      usedSwapGroups.add(best.product.swapGroup)
       pushSlot({
         slotId: `slot-${cfg.goal}`,
         slotType: cfg.slotType,
@@ -644,7 +655,9 @@ export function buildStackBlueprint(
         .filter(x => x.score > 0)
         .sort((a, b) => b.score - a.score)
 
-      const usedSwapGroups = new Set(slots.map(s => s.swapGroup))
+      // Extend the primary fill's usedSwapGroups so secondary fill doesn't
+      // add a product already represented by a primary slot
+      slots.forEach(s => usedSwapGroups.add(s.swapGroup))
       for (const { product, slotType, score } of extras) {
         if (slots.length >= maxSlots) break
         // Don't add two products from the same swap group (e.g. two magnesiums)

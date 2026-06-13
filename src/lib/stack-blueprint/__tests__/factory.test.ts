@@ -84,24 +84,13 @@ describe('buildStackBlueprint', () => {
     }
   })
 
-  it('gives lower confidence score to protein slot when user already takes protein', () => {
+  it('never recommends protein when user says they already take protein', () => {
+    // If the user already has protein covered, recommending it erodes trust.
+    // It should be hard-excluded, not just deprioritised.
     const withProtein = makeAnswers({ currentSupplements: ['protein'], goals: ['muscle'] })
-    const withoutProtein = makeAnswers({ currentSupplements: [], goals: ['muscle'] })
-
-    const blueprintWith = buildStackBlueprint(withProtein, MOCK_CATALOGUE)
-    const blueprintWithout = buildStackBlueprint(withoutProtein, MOCK_CATALOGUE)
-
-    const proteinSlotWith = blueprintWith.slots.find(s => s.slotType === 'protein')
-    const proteinSlotWithout = blueprintWithout.slots.find(s => s.slotType === 'protein')
-
-    // Protein slot should still exist
-    expect(proteinSlotWith).toBeDefined()
-    expect(proteinSlotWithout).toBeDefined()
-
-    // Confidence should be lower when already taking protein
-    if (proteinSlotWith && proteinSlotWithout) {
-      expect(proteinSlotWith.confidenceScore).toBeLessThan(proteinSlotWithout.confidenceScore)
-    }
+    const blueprint = buildStackBlueprint(withProtein, MOCK_CATALOGUE)
+    const proteinSlot = blueprint.slots.find(s => s.slotType === 'protein')
+    expect(proteinSlot).toBeUndefined()
   })
 
   it('marks protein and performance slots as required with canRemove false', () => {
@@ -426,6 +415,40 @@ describe('buildStackBlueprint — eligibility gates', () => {
       return p?.swapGroup === 'probiotic'
     })
     expect(probiotic).toBeUndefined()
+  })
+
+  it('focus + immune + gut-health with multivitamin already taken never returns two multivitamins', () => {
+    // Regression: was returning Nordic Berries (focus slot) + Nexgen Multi (immune slot)
+    // even though user stated they already take a multivitamin.
+    const blueprint = buildStackBlueprint(
+      makeAnswers({
+        track: 'wellbeing',
+        goals: ['focus', 'immune', 'gut-health'],
+        currentVitamins: ['multivitamin'],
+        budget: '80-plus',
+      }),
+      MOCK_CATALOGUE,
+    )
+    const multiCount = blueprint.slots.filter(s => {
+      const p = MOCK_CATALOGUE.find(p => p.id === s.selectedProductId)
+      return p?.swapGroup === 'multivitamin'
+    }).length
+    // No multivitamins should appear — user already takes one
+    expect(multiCount).toBe(0)
+    // Should still have meaningful recommendations
+    expect(blueprint.slots.length).toBeGreaterThan(0)
+    // Focus should be filled by omega-3 (most evidence-based for brain health)
+    const focusSlot = blueprint.slots.find(s => s.slotId === 'slot-focus')
+    if (focusSlot) {
+      const product = MOCK_CATALOGUE.find(p => p.id === focusSlot.selectedProductId)!
+      expect(product.swapGroup).toBe('omega-3')
+    }
+    // Immune should be filled by vitamin-d (not a multivitamin)
+    const immuneSlot = blueprint.slots.find(s => s.slotId === 'slot-immune')
+    if (immuneSlot) {
+      const product = MOCK_CATALOGUE.find(p => p.id === immuneSlot.selectedProductId)!
+      expect(product.swapGroup).not.toBe('multivitamin')
+    }
   })
 
   it('secondary fill does not add probiotics for a focus-only user', () => {
