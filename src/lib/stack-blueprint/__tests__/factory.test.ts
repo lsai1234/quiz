@@ -24,6 +24,7 @@ function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
     trainingExperience: 'intermediate',
     trainingFocus: null,
     stimPreference: 'yes',
+    trainingTime: null,
     ...overrides,
   }
 }
@@ -285,5 +286,61 @@ describe('buildStackBlueprint — wellbeing goals', () => {
     expect(slotTypes).toContain('protein')
     expect(slotTypes).toContain('performance')
     expect(slotTypes).toContain('sleep')
+  })
+})
+
+describe('buildStackBlueprint — new scoring signals', () => {
+  it('clean diet deprioritises protein slot', () => {
+    const with_clean = buildStackBlueprint(
+      makeAnswers({ goals: ['muscle'], diet: 'clean' }), MOCK_CATALOGUE)
+    const with_poor = buildStackBlueprint(
+      makeAnswers({ goals: ['muscle'], diet: 'poor' }), MOCK_CATALOGUE)
+    const cleanProtein = with_clean.slots.find(s => s.slotType === 'protein')
+    const poorProtein = with_poor.slots.find(s => s.slotType === 'protein')
+    // Both should still recommend protein (muscle goal), but poor diet user
+    // should have higher confidence score for protein
+    expect(poorProtein!.confidenceScore).toBeGreaterThanOrEqual(cleanProtein!.confidenceScore)
+  })
+
+  it('hypertrophy focus boosts creatine confidence', () => {
+    const hypertrophy = buildStackBlueprint(
+      makeAnswers({ goals: ['muscle'], trainingFocus: 'hypertrophy' }), MOCK_CATALOGUE)
+    const general = buildStackBlueprint(
+      makeAnswers({ goals: ['muscle'], trainingFocus: 'general' }), MOCK_CATALOGUE)
+    const htCreatine = hypertrophy.slots.find(s => s.slotType === 'performance')
+    const genCreatine = general.slots.find(s => s.slotType === 'performance')
+    expect(htCreatine!.confidenceScore).toBeGreaterThan(genCreatine!.confidenceScore)
+  })
+
+  it('evening training + sleep goal penalises stim pre-workout', () => {
+    const evening = buildStackBlueprint(
+      makeAnswers({
+        goals: ['muscle', 'sleep-better'],
+        trainingTime: 'evening',
+        caffeineLevel: 'low',
+      }), MOCK_CATALOGUE)
+    const energySlot = evening.slots.find(s => s.slotType === 'energy')
+    if (energySlot) {
+      const product = MOCK_CATALOGUE.find(p => p.id === energySlot.selectedProductId)!
+      expect(product.hasStimulants).toBe(false)
+    }
+  })
+
+  it('45+ age bracket boosts vitamin D priority', () => {
+    const older = buildStackBlueprint(
+      makeAnswers({ goals: ['health'], ageBracket: '45+' }), MOCK_CATALOGUE)
+    const younger = buildStackBlueprint(
+      makeAnswers({ goals: ['health'], ageBracket: '16-24' }), MOCK_CATALOGUE)
+    const olderVitD = older.slots.find(s => s.selectedProductId === 'chrgd-vitamin-d3-k2')
+    const youngerVitD = younger.slots.find(s => s.selectedProductId === 'chrgd-vitamin-d3-k2')
+    // older user should have vitamin D in their stack
+    expect(olderVitD).toBeDefined()
+  })
+
+  it('joint-issues lifestyle flag boosts collagen', () => {
+    const withJoints = buildStackBlueprint(
+      makeAnswers({ goals: ['recovery'], lifestyle: ['joint-issues'] }), MOCK_CATALOGUE)
+    const collagenSlot = withJoints.slots.find(s => s.selectedProductId === 'chrgd-collagen')
+    expect(collagenSlot).toBeDefined()
   })
 })

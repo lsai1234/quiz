@@ -304,7 +304,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['health'],
     goals: ['health', 'recovery', 'focus'],
     dietaryTags: ['gluten-free', 'dairy-free'],
-    formats: ['softgel'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-omega3-90', title: '90 Softgels', flavour: null, size: '90 softgels', price: 14.99, compareAtPrice: 19.99, available: true, shopifyVariantId: null },
       { id: 'chrgd-omega3-180', title: '180 Softgels', flavour: null, size: '180 softgels', price: 26.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
@@ -333,7 +333,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['health'],
     goals: ['health', 'immune'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-vitd3k2-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 12.99, compareAtPrice: 17.99, available: true, shopifyVariantId: null },
       { id: 'chrgd-vitd3k2-120', title: '120 Capsules', flavour: null, size: '120 caps', price: 22.99, compareAtPrice: 29.99, available: true, shopifyVariantId: null },
@@ -362,7 +362,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['health'],
     goals: ['health', 'energy', 'performance', 'immune', 'focus'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-multi-60', title: '60 Capsules (1 month)', flavour: null, size: '60 caps', price: 16.99, compareAtPrice: 22.99, available: true, shopifyVariantId: null },
     ],
@@ -392,7 +392,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['sleep', 'recovery'],
     goals: ['recovery', 'health', 'sleep-better', 'less-stress'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-mag-90', title: '90 Capsules', flavour: null, size: '90 caps', price: 14.99, compareAtPrice: 19.99, available: true, shopifyVariantId: null },
     ],
@@ -420,7 +420,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['sleep', 'recovery'],
     goals: ['recovery', 'health', 'sleep-better', 'less-stress'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-sleep-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 19.99, compareAtPrice: 26.99, available: true, shopifyVariantId: null },
     ],
@@ -448,7 +448,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['sleep', 'recovery'],
     goals: ['less-stress', 'health', 'menopause'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-ashwa-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 18.99, compareAtPrice: 24.99, available: true, shopifyVariantId: null },
     ],
@@ -476,7 +476,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['health'],
     goals: ['immune', 'health'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['tablet'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-vitc-zinc-90', title: '90 Tablets', flavour: null, size: '90 tabs', price: 11.99, compareAtPrice: 15.99, available: true, shopifyVariantId: null },
     ],
@@ -506,7 +506,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['gut', 'health'],
     goals: ['gut-health', 'health', 'immune'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-probiotic-30', title: '30 Capsules (1 month)', flavour: null, size: '30 caps', price: 21.99, compareAtPrice: 28.99, available: true, shopifyVariantId: null },
       { id: 'chrgd-probiotic-60', title: '60 Capsules (2 months)', flavour: null, size: '60 caps', price: 38.99, compareAtPrice: 49.99, available: true, shopifyVariantId: null },
@@ -566,7 +566,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['menopause', 'health'],
     goals: ['menopause', 'health'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['capsule'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-meno-60', title: '60 Capsules (1 month)', flavour: null, size: '60 caps', price: 24.99, compareAtPrice: 32.99, available: true, shopifyVariantId: null },
     ],
@@ -594,7 +594,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     stackSlots: ['menopause', 'health'],
     goals: ['menopause', 'health'],
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    formats: ['tablet'],
+    formats: ['capsules'],
     variants: [
       { id: 'chrgd-meno-bone-90', title: '90 Tablets', flavour: null, size: '90 tabs', price: 17.99, compareAtPrice: 23.99, available: true, shopifyVariantId: null },
     ],

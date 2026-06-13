@@ -57,6 +57,7 @@ const defaultAnswers: QuizAnswers = {
   trainingExperience: null,
   trainingFocus: null,
   stimPreference: null,
+  trainingTime: null,
 }
 
 export const useQuizStore = create<QuizStore>((set) => ({

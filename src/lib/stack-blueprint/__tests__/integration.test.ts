@@ -44,6 +44,7 @@ const BASE_ANSWERS: QuizAnswers = {
   currentVitamins: [],
   preferredFormats: [],
   wellbeingAnswers: {},
+  trainingTime: null,
 }
 
 // ─── Feature 3: Quiz → Blueprint ──────────────────────────────────────────────

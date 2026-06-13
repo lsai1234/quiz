@@ -80,6 +80,7 @@ const STEP_META = [
   { section: 'NUTRITION',     q: "How's the diet?",                 hint: 'Honest answer = better results.' },
   { section: 'WHAT YOU HAVE', q: 'Already using any of these?',     hint: "We won't recommend what you've already got." },
   { section: 'ENERGY',        q: 'How do you handle caffeine?',     hint: 'Shapes your pre-workout recommendation.' },
+  { section: 'TRAINING',      q: 'When do you usually train?',      hint: 'Caffeine timing matters — tells us whether to include stimulants.' },
   { section: 'YOUR STYLE',    q: 'What formats do you prefer?',     hint: "We'll match your stack to products you'll actually use." },
   { section: 'BUDGET',        q: 'Monthly supplement budget?',      hint: "Selects your products and sets your stack size — last one." },
 ]
@@ -215,20 +216,22 @@ const TYPE_DATA: Array<{ id: TrainingType; label: string; sub: string }> = [
   { id: 'mixed',    label: 'Mixed training',     sub: 'Bit of everything' },
 ]
 const LIFESTYLE_DATA = [
-  { id: 'vegan',       label: 'Plant-based diet',       icon: '🌱' },
-  { id: 'poor-sleep',  label: 'Struggling with sleep',  icon: '😴' },
-  { id: 'desk-job',    label: 'Desk job / sedentary',   icon: '💻' },
-  { id: 'high-stress', label: 'High stress levels',     icon: '🧠' },
+  { id: 'vegan',        label: 'Plant-based diet',       icon: '🌱' },
+  { id: 'poor-sleep',   label: 'Struggling with sleep',  icon: '😴' },
+  { id: 'desk-job',     label: 'Desk job / sedentary',   icon: '💻' },
+  { id: 'high-stress',  label: 'High stress levels',     icon: '🧠' },
+  { id: 'joint-issues', label: 'Joint or old injuries',  icon: '🦴' },
 ]
 
 // Wellbeing-track lifestyle options — sleep/stress are already covered by the
 // goal follow-ups, so these focus on context that changes recommendations
 const WELLBEING_LIFESTYLE_DATA = [
-  { id: 'vegan',      label: 'Plant-based diet',           icon: '🌱' },
-  { id: 'desk-job',   label: 'Desk job / mostly indoors',  icon: '💻' },
-  { id: 'shift-work', label: 'Shift work / irregular hours', icon: '🌙' },
-  { id: 'run-down',   label: 'Get run down easily',        icon: '🤧' },
-  { id: 'active',     label: 'Train or exercise regularly', icon: '🏃' },
+  { id: 'vegan',        label: 'Plant-based diet',           icon: '🌱' },
+  { id: 'desk-job',     label: 'Desk job / mostly indoors',  icon: '💻' },
+  { id: 'shift-work',   label: 'Shift work / irregular hours', icon: '🌙' },
+  { id: 'run-down',     label: 'Get run down easily',        icon: '🤧' },
+  { id: 'active',       label: 'Train or exercise regularly', icon: '🏃' },
+  { id: 'joint-issues', label: 'Joint or old injuries',      icon: '🦴' },
 ]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
   { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
@@ -252,6 +255,12 @@ const WELLBEING_SUPPS_DATA = [
   { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: '🐟' },
   { id: 'magnesium',    label: 'Magnesium',        icon: '🌙' },
   { id: 'none',         label: 'None of these',    icon: '✦' },
+]
+const TRAINING_TIME_DATA: Array<{ id: string; label: string; sub: string }> = [
+  { id: 'morning',   label: 'Morning',   sub: 'Before 11am' },
+  { id: 'lunchtime', label: 'Midday',    sub: '11am–2pm' },
+  { id: 'evening',   label: 'Evening',   sub: 'After 5pm' },
+  { id: 'varies',    label: 'Varies',    sub: 'No fixed time' },
 ]
 const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = [
   { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
@@ -309,6 +318,7 @@ const FORMAT_DATA = [
 const WELLBEING_STEP_OVERRIDES: Record<number, { q: string; hint: string }> = {
   4: { q: 'Tell us about your day-to-day', hint: 'Select anything that applies — context changes what we recommend.' },
   6: { q: 'Already taking any of these?',  hint: "We won't recommend what you've already got covered." },
+  8: { q: 'When do you usually move or exercise?', hint: 'Even light exercise timing affects what we recommend.' },
 }
 
 const TOTAL = STEP_META.length
@@ -448,7 +458,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   }, [
     answers.goals, answers.lifestyle, answers.currentSupplements,
     answers.currentVitamins, answers.stimPreference, answers.caffeineLevel,
-    answers.wellbeingAnswers, liveCatalogue,
+    answers.wellbeingAnswers, answers.diet, answers.preferredFormats,
+    answers.trainingFocus, answers.gender, answers.ageBracket,
+    answers.trainingTime, answers.trainingExperience, liveCatalogue,
   ])
 
   const [animKey, setAnimKey] = useState(0)
@@ -564,7 +576,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       case 1: return answers.goals.length > 0
       case 4: return true
       case 6: return true
-      case 8: return true
+      case 9: return true
       default: return false
     }
   })()
@@ -830,6 +842,14 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {/* Wellbeing track — its own goal screen */}
           {step === 1 && answers.track === 'wellbeing' && (
             <div>
+              {answers.gender === 'female' && answers.ageBracket === '45+' && !answers.goals.includes('menopause') && (
+                <div
+                  className="mb-4 px-4 py-3 rounded-xl border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-xs text-[#00D4FF]/80 leading-snug cursor-pointer"
+                  onClick={() => setGoals([...answers.goals, 'menopause'])}
+                >
+                  <span className="font-bold">Suggested for you:</span> Menopause Support is often the highest-impact pick for women 45+ — tap to add it.
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2.5">
                 {WELLBEING_DATA.map(({ id, label, icon }) => (
                   <AnswerOption
@@ -1053,12 +1073,30 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 8: Product format preferences (multi, continue button) ── */}
+          {/* ── Step 8: Training time (single) ── */}
           {step === 8 && (
+            <div className="flex flex-col gap-2.5">
+              {TRAINING_TIME_DATA.map(({ id, label, sub }) => (
+                <AnswerOption
+                  key={`8t-${id}`}
+                  label={label} sub={sub}
+                  selected={answers.trainingTime === id}
+                  onClick={() => {
+                    setAnswer('trainingTime', id as any)
+                    clearPending()
+                    pendingTimerRef.current = setTimeout(() => advance(), 320)
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* ── Step 9: Product format preferences (multi, continue button) ── */}
+          {step === 9 && (
             <div className="flex flex-col gap-2.5">
               {FORMAT_DATA.map(({ id, label, sub, icon }) => (
                 <AnswerOption
-                  key={`8-${id}`}
+                  key={`9-${id}`}
                   icon={icon} label={label} sub={sub} multi
                   selected={id === 'any'
                     ? answers.preferredFormats.includes('any')
@@ -1076,8 +1114,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 9: Budget bundles (single — also sets stack preference) ── */}
-          {step === 9 && (
+          {/* ── Step 10: Budget bundles (single — also sets stack preference) ── */}
+          {step === 10 && (
             <div className="flex flex-col gap-3">
               {BUDGET_DATA.map(({ id, name, budget, sub, pref, slots }) => {
                 const active = answers.budget === id
@@ -1156,7 +1194,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       </div>
 
       {/* CTA — personal info, multi-select steps */}
-      {[0, 1, 4, 6, 8].includes(step) && (
+      {[0, 1, 4, 6, 9].includes(step) && (
         <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
           <div className="max-w-lg mx-auto">
             <button
@@ -1179,7 +1217,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </div>
       )}
 
-      {step === 9 && (
+      {step === 10 && (
         <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
           <div className="max-w-lg mx-auto">
             <button

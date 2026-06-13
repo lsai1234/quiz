@@ -252,6 +252,105 @@ function scoreProduct(
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
 
+  // ── Diet quality → protein and micronutrient necessity ────────────────────
+  // A clean, high-protein diet already covers protein needs — the powder adds
+  // less marginal value. A poor diet means a multivitamin is more critical.
+  if (answers.diet === 'clean' && slotType === 'protein') score -= 20
+  if (answers.diet === 'poor' && product.swapGroup === 'multivitamin') score += 12
+  if (answers.diet === 'poor' && product.swapGroup === 'omega-3') score += 8
+  if (answers.diet === 'inconsistent' && product.swapGroup === 'multivitamin') score += 6
+
+  // ── Format preference → filter by product format ──────────────────────────
+  // If the user has a preference and hasn't said "any", penalise products in
+  // formats they didn't pick. A preference for capsules should push capsule
+  // products up, not hard-exclude powders (some slots only exist as powders).
+  const formats = answers.preferredFormats ?? []
+  if (formats.length > 0 && !formats.includes('any')) {
+    const productFormats = product.formats ?? []
+    const formatMatch = productFormats.some(f => formats.includes(f))
+    if (!formatMatch) score -= 18
+  }
+
+  // ── Training focus (strength sub-question) → creatine + protein priority ─
+  if (answers.trainingFocus === 'hypertrophy') {
+    if (slotType === 'performance') score += 20  // creatine is most evidence-based for hypertrophy
+    if (slotType === 'protein') score += 10
+  }
+  if (answers.trainingFocus === 'powerlifting') {
+    if (slotType === 'performance') score += 25  // creatine even more critical for max-strength
+    if (product.swapGroup === 'collagen') score += 10  // joint/tendon load is extreme in powerlifting
+  }
+  if (answers.trainingFocus === 'general') {
+    if (slotType === 'performance') score -= 8  // creatine is nice-to-have, not essential
+  }
+
+  // ── Sport type → endurance vs power profile ───────────────────────────────
+  if (answers.trainingFocus === 'football' || answers.trainingFocus === 'rugby' || answers.trainingFocus === 'basketball') {
+    if (slotType === 'energy') score += 10     // sport athletes benefit from pre-workout
+    if (slotType === 'hydration') score += 12  // high sweat-rate sports need electrolytes
+  }
+
+  // ── Gender + age → supplement priorities ─────────────────────────────────
+  // Female users have higher iron/B-vitamin needs; both genders 45+ need more
+  // vitamin D and bone-support nutrients.
+  if (answers.gender === 'female') {
+    if (product.swapGroup === 'multivitamin') score += 8  // women's multis cover iron/B9/B12
+  }
+  if (answers.ageBracket === '45+') {
+    if (product.swapGroup === 'vitamin-d') score += 12   // absorption declines with age
+    if (product.swapGroup === 'collagen') score += 12   // bone + joint health post-45
+    if (product.swapGroup === 'omega-3') score += 8     // cardiovascular + joint
+  }
+  if (answers.ageBracket === '35-44') {
+    if (product.swapGroup === 'vitamin-d') score += 6
+    if (product.swapGroup === 'omega-3') score += 5
+  }
+
+  // ── Training time → stimulant timing ─────────────────────────────────────
+  // Caffeine has a 5-6 hour half-life. An evening trainer who takes stim
+  // pre-workout at 7pm has caffeine in their system until 1am — bad for
+  // sleep recovery. We penalise stim products for evening trainers unless
+  // they've explicitly said they want stims (stimPreference: 'yes') and have
+  // a high caffeine tolerance.
+  if (product.hasStimulants) {
+    const eveningTrainer = answers.trainingTime === 'evening'
+    const wantsSleep = answers.goals.includes('sleep-better') || answers.goals.includes('less-stress')
+    if (eveningTrainer && wantsSleep) score -= 40
+    if (eveningTrainer && answers.caffeineLevel === 'low') score -= 20
+  }
+
+  // ── Caffeine level nuance (4-level, not binary) ───────────────────────────
+  // Currently only 'none'/'high' are scored. Add nuance for 'low'/'medium'.
+  if (product.hasStimulants) {
+    if (answers.caffeineLevel === 'low') score -= 15   // one occasional coffee — avoid stimulants
+    if (answers.caffeineLevel === 'medium') score -= 5 // daily coffee — mild penalty
+    // 'high' was already handled by the existing +0 neutral logic (no change)
+    // 'none' is already -Infinity from existing logic
+  }
+
+  // ── Lifestyle: joint/injury flag → collagen + omega-3 ────────────────────
+  // When the user flags joint issues (captured in lifestyle step), these two
+  // products move to the top — they have direct mechanistic support.
+  if (answers.lifestyle.includes('joint-issues')) {
+    if (product.swapGroup === 'collagen') score += 22
+    if (product.swapGroup === 'omega-3') score += 15
+  }
+
+  // ── Training experience → stack complexity ────────────────────────────────
+  if (answers.trainingExperience === 'new') {
+    // New athletes benefit most from protein and creatine — the basics
+    if (slotType === 'protein') score += 8
+    if (slotType === 'performance') score += 5
+    // New athletes don't yet need complex multi-supplement stacks
+    if (slotType === 'energy' && answers.trainingFrequency !== '5-6x' && answers.trainingFrequency !== 'daily') score -= 10
+  }
+  if (answers.trainingExperience === 'experienced') {
+    // Experienced athletes need marginal gains — creatine, recovery, hydration
+    if (slotType === 'performance') score += 10
+    if (slotType === 'recovery') score += 8
+    if (slotType === 'hydration') score += 5
+  }
+
   return score
 }
 

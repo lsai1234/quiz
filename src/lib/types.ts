@@ -61,6 +61,7 @@ export interface QuizAnswers {
   trainingExperience: TrainingExperience | null
   trainingFocus: string | null
   stimPreference: StimPreference | null
+  trainingTime: 'morning' | 'lunchtime' | 'evening' | 'varies' | null
 }
 
 export interface StackIdentity {
