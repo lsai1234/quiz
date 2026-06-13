@@ -3,6 +3,33 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
+import type { Product } from '@/lib/types'
+
+/** One product's AI reason — clamped to 2 lines with a More/Less toggle so long
+ *  personalised reasons don't overflow the card. */
+function ReasonItem({ product, reason }: { product: Product; reason: string }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <li className="flex gap-2.5">
+      <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: product.accentColor }} />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-[var(--color-text)]">{product.name}</p>
+        <p className={`text-xs text-[var(--color-text-2)] leading-relaxed mt-0.5 ${expanded ? '' : 'line-clamp-2'}`}>
+          {reason}
+        </p>
+        {reason.length > 80 && (
+          <button
+            onClick={() => setExpanded((o) => !o)}
+            className="text-[10px] font-bold mt-1 active:opacity-60 transition-opacity"
+            style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}
+          >
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
 
 function ScoreRing({ score }: { score: number }) {
   const [displayed, setDisplayed] = useState(0)
@@ -221,18 +248,7 @@ export function RevealScreen() {
                 {selectedProducts
                   .filter((p) => aiReasons[p.id])
                   .map((p) => (
-                    <li key={p.id} className="flex gap-2.5">
-                      <span
-                        className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0"
-                        style={{ background: p.accentColor }}
-                      />
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-[var(--color-text)]">{p.name}</p>
-                        <p className="text-xs text-[var(--color-text-2)] leading-relaxed mt-0.5">
-                          {aiReasons[p.id]}
-                        </p>
-                      </div>
-                    </li>
+                    <ReasonItem key={p.id} product={p} reason={aiReasons[p.id]} />
                   ))}
               </ul>
             )}
