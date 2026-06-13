@@ -20,8 +20,29 @@ const WELLBEING_GOAL_SLOTS: Array<{ goal: Goal; slotType: SlotType; title: strin
   { goal: 'focus',           slotType: 'health',   title: 'Focus',               description: 'Supports brain health and steady concentration' },
   { goal: 'immune',          slotType: 'health',   title: 'Immunity',            description: 'Strengthens everyday immune resilience' },
   { goal: 'skin-hair-nails', slotType: 'recovery', title: 'Skin, Hair & Nails',  description: 'Collagen and nutrients for skin, hair and nail health' },
+  { goal: 'gut-health',      slotType: 'health',   title: 'Gut Health',          description: 'Probiotics and fibre for digestion and gut balance' },
+  { goal: 'menopause',       slotType: 'health',   title: 'Menopause Support',   description: 'Botanicals and nutrients for hormonal balance' },
   { goal: 'health',          slotType: 'health',   title: 'Daily Health',        description: 'Covers everyday vitamin and mineral gaps' },
 ]
+
+// Friendly slot titles for budget-driven "extra" wellbeing picks, derived from
+// the product's swap group so each added product reads clearly in the stack.
+const SWAP_GROUP_LABELS: Record<string, string> = {
+  'multivitamin':   'Daily Multivitamin',
+  'omega-3':        'Omega-3',
+  'vitamin-d':      'Vitamin D',
+  'vitamin-c':      'Immune Support',
+  'magnesium':      'Magnesium',
+  'collagen':       'Collagen',
+  'sleep-support':  'Sleep & Recovery',
+  'adaptogen':      'Stress Support',
+  'probiotic':      'Gut Health',
+  'greens':         'Daily Greens',
+  'fibre':          'Fibre',
+  'menopause':      'Menopause Support',
+  'aminos':         'Amino Acids',
+  'electrolytes':   'Hydration',
+}
 
 type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health' | 'wellbeing'
 
@@ -215,6 +236,12 @@ function scoreProduct(
   // health → multivitamin is the anchor; omega-3 is an excellent second pick
   if (answers.goals.includes('health') && product.swapGroup === 'multivitamin') score += 15
   if (answers.goals.includes('health') && product.swapGroup === 'omega-3') score += 10
+  // gut-health → probiotic is primary; greens/fibre are good secondary picks
+  if (answers.goals.includes('gut-health') && product.swapGroup === 'probiotic') score += 20
+  if (answers.goals.includes('gut-health') && (product.swapGroup === 'greens' || product.swapGroup === 'fibre')) score += 12
+  // menopause → dedicated menopause blend is primary; adaptogen helps with symptoms
+  if (answers.goals.includes('menopause') && product.swapGroup === 'menopause') score += 22
+  if (answers.goals.includes('menopause') && product.swapGroup === 'adaptogen') score += 10
 
   // Deprioritise performance (creatine) and protein slots when the user's
   // goals don't call for them — prevents creatine appearing for energy/health users
@@ -308,6 +335,10 @@ function buildWellbeingReason(goal: Goal, product: CatalogueProduct, answers: Qu
     const isVeganOrVeggie = answers.lifestyle.includes('vegan') || (answers.wellbeingAnswers ?? {}).collagenOk === 'veggie'
     if (isVeganOrVeggie) suffix = ' Collagen is bovine so we\'ve swapped to the best plant-friendly alternative for skin and hair health.'
     else suffix = ' Collagen peptides are the most direct support for skin, hair and nails.'
+  } else if (goal === 'gut-health') {
+    suffix = ' Chosen to support digestion and a balanced gut microbiome.'
+  } else if (goal === 'menopause') {
+    suffix = ' Formulated to support hormonal balance and ease menopause symptoms.'
   } else if (goal === 'health') {
     suffix = ' A daily foundation pick for general health.'
   }
@@ -452,7 +483,45 @@ export function buildStackBlueprint(
       })
     }
 
-    // Restore presentation order to match the goal list, not fill order
+    // Budget-driven secondary fill: a higher budget should genuinely deliver a
+    // bigger stack. After every selected goal has its primary product, top the
+    // stack up with the next best complementary products — second picks for the
+    // user's goals plus daily-health staples — until we hit the budget's slot cap.
+    if (slots.length < maxSlots) {
+      const foundationGoals: Goal[] = ['health', 'immune', 'focus']
+      const relevantGoals = new Set<Goal>([...answers.goals, ...foundationGoals])
+      const extras = effectiveCatalogue
+        .filter(p => !usedProductIds.has(p.id))
+        .filter(p => p.goals.some(g => relevantGoals.has(g)))
+        .map(p => {
+          const slotType = (p.stackSlots[0] ?? 'health') as SlotType
+          return { product: p, slotType, score: scoreProduct(p, slotType, answers, archetype) }
+        })
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+
+      const usedSwapGroups = new Set(slots.map(s => s.swapGroup))
+      for (const { product, slotType, score } of extras) {
+        if (slots.length >= maxSlots) break
+        // Don't add two products from the same swap group (e.g. two magnesiums)
+        if (usedSwapGroups.has(product.swapGroup)) continue
+        usedSwapGroups.add(product.swapGroup)
+        pushSlot({
+          slotId: `slot-extra-${product.id}`,
+          slotType,
+          title: SWAP_GROUP_LABELS[product.swapGroup] ?? SLOT_TITLES[slotType] ?? 'Daily Support',
+          description: product.shortReason || SLOT_DESCRIPTIONS[slotType],
+          product,
+          score,
+          reason: product.shortReason || SLOT_DESCRIPTIONS[slotType],
+          required: false,
+        })
+      }
+    }
+
+    // Restore presentation order to match the goal list, not fill order.
+    // Primary goal slots come first (in goal-list order); budget-driven extras
+    // follow, preserving their score-ranked order.
     const cfgOrder = new Map(WELLBEING_GOAL_SLOTS.map((cfg, i) => [`slot-${cfg.goal}`, i]))
     slots.sort((a, b) => (cfgOrder.get(a.slotId) ?? 99) - (cfgOrder.get(b.slotId) ?? 99))
     slots.forEach((s, i) => { s.displayOrder = i })

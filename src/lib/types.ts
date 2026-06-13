@@ -16,6 +16,8 @@ export type Goal =
   | 'focus'
   | 'immune'
   | 'skin-hair-nails'
+  | 'menopause'
+  | 'gut-health'
 
 /** Goals that imply a training/performance context — used to decide whether
  *  protein/creatine slots are required in the stack. */

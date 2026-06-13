@@ -18,6 +18,8 @@ const GOAL_LABELS: Record<string, string> = {
   focus: 'improve focus and reduce brain fog',
   immune: 'support immune health',
   'skin-hair-nails': 'support skin, hair and nails',
+  'gut-health': 'improve gut health and digestion',
+  menopause: 'support hormonal balance through menopause',
 }
 
 const PERFORMANCE_GOAL_IDS = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'cutting', 'bulking']

@@ -13,10 +13,12 @@ export type StackSlot =
   | 'health'        // omega-3, vitamin D, multivitamin
   | 'sleep'         // magnesium, sleep blends
   | 'vegan-support' // plant protein, vegan omega-3, algae DHA
+  | 'gut'           // probiotics, fibre, greens
+  | 'menopause'     // hormonal balance / menopause support blends
 
 export const STACK_SLOTS: StackSlot[] = [
   'protein', 'performance', 'energy', 'hydration',
-  'recovery', 'health', 'sleep', 'vegan-support',
+  'recovery', 'health', 'sleep', 'vegan-support', 'gut', 'menopause',
 ]
 
 export const SLOT_LABELS: Record<StackSlot, string> = {
@@ -28,6 +30,8 @@ export const SLOT_LABELS: Record<StackSlot, string> = {
   health: 'Health',
   sleep: 'Sleep',
   'vegan-support': 'Vegan Support',
+  gut: 'Gut Health',
+  menopause: 'Menopause Support',
 }
 
 // ─── Dietary tags ──────────────────────────────────────────────────────────────
@@ -63,6 +67,11 @@ export type SwapGroup =
   | 'sleep-support'
   | 'fat-burner'
   | 'adaptogen'
+  | 'probiotic'
+  | 'greens'
+  | 'fibre'
+  | 'menopause'
+  | 'vitamin-c'
   | 'general'
 
 // ─── Variant ──────────────────────────────────────────────────────────────────

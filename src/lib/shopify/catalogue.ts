@@ -8,7 +8,7 @@ import { MOCK_PRODUCTS } from '@/lib/mock-products'
 
 const VALID_GOALS: Goal[] = [
   'muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking',
-  'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails',
+  'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health',
 ]
 const VALID_LEVELS: StackLevel[] = ['essentials', 'performance', 'complete']
 
@@ -177,13 +177,13 @@ function defaultAccentColor(productType: string): string {
 
 // ─── Shopify → CatalogueProduct mapper ───────────────────────────────────────
 
-const VALID_STACK_SLOTS: StackSlot[] = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep', 'vegan-support']
+const VALID_STACK_SLOTS: StackSlot[] = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep', 'vegan-support', 'gut', 'menopause']
 const VALID_DIETARY_TAGS: DietaryTag[] = ['vegan', 'vegetarian', 'gluten-free', 'dairy-free', 'nut-free', 'halal', 'keto-friendly']
 const VALID_SWAP_GROUPS: SwapGroup[] = [
   'protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine',
   'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3',
   'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'sleep-support', 'fat-burner',
-  'adaptogen', 'general',
+  'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c', 'general',
 ]
 
 function parseStackSlots(tags: string[]): StackSlot[] {
@@ -226,6 +226,8 @@ function deriveStackSlots(p: ShopifyProduct): StackSlot[] {
   const isMagnesium = t.includes('magnesium')
   const isVegan = p.tags.includes('vegan') || t.includes('plant protein') || t.includes('vegan protein')
   const isFatBurner = t.includes('fat burner') || t.includes('fat direct') || t.includes('fat-x') || t.includes('slender') || t.includes('pro cut') || t.includes('fat transporter') || pt.includes('slimming') || pt.includes('weight management') || pt.includes('body composition') || pt.includes('thermogenic')
+  const isGut = t.includes('probiotic') || t.includes('gut') || t.includes('greens') || t.includes('fibre') || t.includes('fiber') || t.includes('digestive') || pt.includes('gut') || pt.includes('digestive')
+  const isMenopause = t.includes('menopause') || t.includes('peri-menopause') || t.includes('perimenopause') || t.includes('hormonal balance') || pt.includes('menopause')
 
   if (isProtein)    slots.push('protein')
   if (isPerformance) slots.push('performance')
@@ -237,6 +239,8 @@ function deriveStackSlots(p: ShopifyProduct): StackSlot[] {
   if (isHealth)     slots.push('health')
   if (isRecovery && !isAmino && !isMagnesium) slots.push('recovery')
   if (isVegan && isProtein) slots.push('vegan-support')
+  if (isGut)        slots.push('gut', 'health')
+  if (isMenopause)  slots.push('menopause', 'health')
   if (isFatBurner && slots.length === 0) slots.push('health')
 
   return [...new Set(slots)] as StackSlot[]
@@ -278,6 +282,18 @@ function deriveGoals(p: ShopifyProduct, slots: StackSlot[]): ReturnType<typeof p
   if (t.includes('electrolyte') || t.includes('hydration+')) {
     goals.add('hydration'); goals.add('energy')
   }
+  // Gut health → probiotics, greens, fibre, digestive blends
+  if (t.includes('probiotic') || t.includes('gut') || t.includes('greens') || t.includes('fibre') || t.includes('fiber') || t.includes('digestive')) {
+    goals.add('gut-health'); goals.add('health'); goals.add('immune')
+  }
+  // Menopause support blends
+  if (t.includes('menopause') || t.includes('perimenopause') || t.includes('peri-menopause') || t.includes('hormonal balance')) {
+    goals.add('menopause'); goals.add('health')
+  }
+  // Ashwagandha / adaptogens → stress + (often) menopause support
+  if (t.includes('ashwagandha') || t.includes('rhodiola')) {
+    goals.add('less-stress')
+  }
   return [...goals] as ReturnType<typeof parseGoalTags>
 }
 
@@ -298,6 +314,12 @@ function deriveSwapGroup(p: ShopifyProduct): SwapGroup {
   if (t.includes('collagen'))          return 'collagen'
   if (t.includes('sleep'))             return 'sleep-support'
   if (t.includes('fat burner') || t.includes('thermo')) return 'fat-burner'
+  if (t.includes('menopause') || t.includes('hormonal balance')) return 'menopause'
+  if (t.includes('probiotic') || t.includes('gut'))     return 'probiotic'
+  if (t.includes('greens'))            return 'greens'
+  if (t.includes('fibre') || t.includes('fiber'))       return 'fibre'
+  if (t.includes('ashwagandha') || t.includes('rhodiola')) return 'adaptogen'
+  if (t.includes('vitamin c') || t.includes('zinc'))    return 'vitamin-c'
   return 'general'
 }
 

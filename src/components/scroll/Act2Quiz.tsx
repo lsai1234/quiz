@@ -102,13 +102,12 @@ const WELLBEING_DATA: Array<{ id: Goal; label: string; icon: string }> = [
   { id: 'focus',           label: 'Focus & brain fog',   icon: '🧠' },
   { id: 'immune',          label: 'Immune support',      icon: '🛡️' },
   { id: 'skin-hair-nails', label: 'Skin, hair & nails',  icon: '✨' },
+  { id: 'gut-health',      label: 'Gut health',          icon: '🦠' },
+  { id: 'menopause',       label: 'Menopause support',   icon: '🌡' },
 ]
 
 // Goals we don't yet stock products for — shown greyed out
-const COMING_SOON_GOALS = [
-  { id: 'menopause', label: 'Menopause support', icon: '🌡' },
-  { id: 'gut-health', label: 'Gut health',       icon: '🦠' },
-]
+const COMING_SOON_GOALS: Array<{ id: string; label: string; icon: string }> = []
 
 // ─── Wellbeing follow-up question bank ────────────────────────────────────────
 // One question max is shown inline on the goal step. The question chosen is the

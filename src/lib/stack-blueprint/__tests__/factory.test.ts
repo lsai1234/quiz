@@ -1,6 +1,6 @@
 import { buildStackBlueprint } from '../factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
-import type { QuizAnswers } from '@/lib/types'
+import type { QuizAnswers, Goal } from '@/lib/types'
 
 function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
@@ -210,8 +210,10 @@ describe('buildStackBlueprint — wellbeing goals', () => {
     expect(slotIds).toContain('slot-sleep-better')
     expect(slotIds).toContain('slot-immune')
     expect(slotIds).toContain('slot-skin-hair-nails')
-    // Every product must be tagged with the goal its slot represents
+    // Every primary goal slot's product must be tagged with the goal it represents.
+    // Budget-driven extra slots (slot-extra-*) are complementary and skipped here.
     for (const slot of blueprint.slots) {
+      if (slot.slotId.startsWith('slot-extra-')) continue
       const goal = slot.slotId.replace('slot-', '')
       const product = MOCK_CATALOGUE.find(p => p.id === slot.selectedProductId)!
       expect(product.goals).toContain(goal)
@@ -219,15 +221,38 @@ describe('buildStackBlueprint — wellbeing goals', () => {
   })
 
   it('sleep-better + less-stress yields two different sleep-adjacent products', () => {
+    // A tight budget caps the stack at its primary goal slots — one product per goal
     const answers = makeAnswers({
       track: 'wellbeing',
       goals: ['sleep-better', 'less-stress'],
-      budget: '80-plus',
+      budget: 'under-30',
     })
     const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
     expect(blueprint.slots.length).toBe(2)
     const ids = blueprint.slots.map(s => s.selectedProductId)
     expect(new Set(ids).size).toBe(2)
+  })
+
+  it('a bigger budget delivers a bigger wellbeing stack', () => {
+    const base = { track: 'wellbeing' as const, goals: ['sleep-better', 'immune'] as Goal[] }
+    const small = buildStackBlueprint(makeAnswers({ ...base, budget: 'under-30' }), MOCK_CATALOGUE)
+    const large = buildStackBlueprint(makeAnswers({ ...base, budget: '80-plus' }), MOCK_CATALOGUE)
+    expect(small.slots.length).toBeLessThanOrEqual(2)
+    expect(large.slots.length).toBeGreaterThan(small.slots.length)
+    // The two chosen goals still anchor the larger stack
+    const largeIds = large.slots.map(s => s.slotId)
+    expect(largeIds).toContain('slot-sleep-better')
+    expect(largeIds).toContain('slot-immune')
+  })
+
+  it('activates menopause and gut-health goals with matching products', () => {
+    const meno = buildStackBlueprint(makeAnswers({ track: 'wellbeing', goals: ['menopause'], budget: 'under-30' }), MOCK_CATALOGUE)
+    const menoSlot = meno.slots.find(s => s.slotId === 'slot-menopause')
+    expect(menoSlot?.selectedProductId).toBe('chrgd-menopause-complete')
+
+    const gut = buildStackBlueprint(makeAnswers({ track: 'wellbeing', goals: ['gut-health'], budget: 'under-30' }), MOCK_CATALOGUE)
+    const gutSlot = gut.slots.find(s => s.slotId === 'slot-gut-health')
+    expect(gutSlot?.selectedProductId).toBe('chrgd-daily-probiotic')
   })
 
   it('already taking magnesium steers the sleep pick to the blend', () => {
