@@ -1,210 +1,438 @@
 /**
- * One-time script to auto-tag Shopify products for the CHRGD quiz engine.
+ * seed-shopify-tags.mjs
  *
- * Usage:
- *   SHOPIFY_ADMIN_TOKEN=your_token node scripts/seed-shopify-tags.mjs
+ * Adds CHRGD quiz tags and metafields to your Shopify products via the Admin API.
  *
- * Set DRY_RUN=true to preview changes without writing:
- *   DRY_RUN=true SHOPIFY_ADMIN_TOKEN=your_token node scripts/seed-shopify-tags.mjs
+ * USAGE
+ *   node scripts/seed-shopify-tags.mjs [--dry-run]
+ *
+ * REQUIRED ENV VARS (add to .env.local or export before running)
+ *   SHOPIFY_STORE_DOMAIN      e.g. your-store.myshopify.com
+ *   SHOPIFY_ADMIN_TOKEN       shpat_xxxxxxxxxxxxxxxxxxxxxxxx
+ *
+ * HOW MATCHING WORKS
+ * The script fetches every product from your store, then matches each one to
+ * an entry in PRODUCT_MAP using the Shopify product handle.  If your handles
+ * differ from the CHRGD defaults, edit the keys in PRODUCT_MAP to match.
+ *
+ * DRY RUN
+ *   Pass --dry-run to print what would change without touching Shopify.
  */
 
-const STORE = 'sanahealthstore.myshopify.com'
-const TOKEN = process.env.SHOPIFY_ADMIN_TOKEN
-const API_KEY = process.env.SHOPIFY_API_KEY
-const API_SECRET = process.env.SHOPIFY_API_SECRET
-const DRY_RUN = process.env.DRY_RUN === 'true'
+import { readFileSync } from 'fs'
+import { join, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+// ─── Load .env.local ──────────────────────────────────────────────────────────
+
+function loadEnv() {
+  const envPath = join(__dirname, '..', '.env.local')
+  try {
+    const lines = readFileSync(envPath, 'utf8').split('\n')
+    for (const line of lines) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const eq = trimmed.indexOf('=')
+      if (eq === -1) continue
+      const key = trimmed.slice(0, eq).trim()
+      const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '')
+      if (!process.env[key]) process.env[key] = val
+    }
+  } catch {
+    // no .env.local — rely on shell env vars
+  }
+}
+
+loadEnv()
+
+// ─── Config ───────────────────────────────────────────────────────────────────
+
+const DOMAIN = process.env.SHOPIFY_STORE_DOMAIN || process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
+const TOKEN  = process.env.SHOPIFY_ADMIN_TOKEN
+const DRY_RUN = process.argv.includes('--dry-run')
 const API_VERSION = '2024-10'
 
-if (!TOKEN && !(API_KEY && API_SECRET)) {
-  console.error('Provide either SHOPIFY_ADMIN_TOKEN or both SHOPIFY_API_KEY + SHOPIFY_API_SECRET')
+if (!DOMAIN) {
+  console.error('❌  SHOPIFY_STORE_DOMAIN is not set.')
+  process.exit(1)
+}
+if (!TOKEN) {
+  console.error('❌  SHOPIFY_ADMIN_TOKEN is not set.')
+  console.error('    In Shopify admin → Apps → Develop apps → create a custom app')
+  console.error('    with the write_products Admin API scope, then copy the token.')
   process.exit(1)
 }
 
-const BASE = `https://${STORE}/admin/api/${API_VERSION}`
-const HEADERS = TOKEN
-  ? { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': TOKEN }
-  : { 'Content-Type': 'application/json', 'Authorization': `Basic ${Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64')}` }
+const BASE    = `https://${DOMAIN}/admin/api/${API_VERSION}`
+const HEADERS = { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': TOKEN }
 
-// ─── Tag rules — edit these to match your actual product names ────────────────
+// ─── Product map ──────────────────────────────────────────────────────────────
+// Key = Shopify product handle (visible in the URL on the product page).
+// Edit the keys below to match your actual handles if they differ from defaults.
 
-// Products to skip entirely — accessories, non-supplement items
-const SKIP_TAGS = ['accessory', 'fitness', 'gym']
-const SKIP_TITLE_KEYWORDS = ['shaker', 'bottle', 'belt', 'jug', 'color kit', 'colour kit', 'color mini']
-
-function shouldSkip(product) {
-  const existingTags = (product.tags || '').toLowerCase()
-  const title = product.title.toLowerCase()
-  if (SKIP_TAGS.some(t => existingTags.includes(t))) return true
-  if (SKIP_TITLE_KEYWORDS.some(k => title.includes(k))) return true
-  return false
+const PRODUCT_MAP = {
+  'chrgd-whey-protein': {
+    slots:               ['protein'],
+    goals:               ['muscle', 'recovery', 'bulking'],
+    swapGroup:           'protein-whey',
+    dietary:             ['gluten-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       10,
+    marginPriority:      8,
+    safeWording:         'Fast-absorbing protein to build and repair muscle after training.',
+    subscriptionEligible: true,
+    productType:         'Protein',
+    formats:             'powder',
+  },
+  'chrgd-plant-protein': {
+    slots:               ['protein', 'vegan-support'],
+    goals:               ['muscle', 'recovery', 'health'],
+    swapGroup:           'protein-plant',
+    dietary:             ['vegan', 'vegetarian', 'dairy-free', 'gluten-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       10,
+    marginPriority:      8,
+    safeWording:         'A complete plant-based protein that covers all essential amino acids.',
+    subscriptionEligible: true,
+    productType:         'Protein',
+    formats:             'powder',
+  },
+  'chrgd-mass-builder': {
+    slots:               ['protein'],
+    goals:               ['bulking', 'muscle'],
+    swapGroup:           'protein-mass',
+    dietary:             ['gluten-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       8,
+    marginPriority:      7,
+    safeWording:         'High-calorie shake for people trying to gain size and mass.',
+    subscriptionEligible: true,
+    productType:         'Protein',
+    formats:             'powder',
+  },
+  'chrgd-creatine': {
+    slots:               ['performance'],
+    goals:               ['muscle', 'performance', 'bulking', 'energy'],
+    swapGroup:           'creatine',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       9,
+    marginPriority:      8,
+    safeWording:         'Proven to build strength and power — take it daily to see results.',
+    subscriptionEligible: true,
+    productType:         'Performance',
+    formats:             'powder',
+  },
+  'chrgd-pre-workout': {
+    slots:               ['energy'],
+    goals:               ['energy', 'performance', 'muscle'],
+    swapGroup:           'pre-workout-stim',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           true,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       8,
+    marginPriority:      8,
+    safeWording:         'Boosts energy, focus and blood flow before training.',
+    subscriptionEligible: true,
+    productType:         'Pre-Workout',
+    formats:             'powder',
+  },
+  'chrgd-pre-workout-stim-free': {
+    slots:               ['energy'],
+    goals:               ['energy', 'performance'],
+    swapGroup:           'pre-workout-stim-free',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       7,
+    marginPriority:      7,
+    safeWording:         'Improves blood flow and pump during training — no caffeine.',
+    subscriptionEligible: true,
+    productType:         'Pre-Workout',
+    formats:             'powder',
+  },
+  'chrgd-electrolytes': {
+    slots:               ['hydration'],
+    goals:               ['hydration', 'performance', 'recovery'],
+    swapGroup:           'electrolytes',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       7,
+    marginPriority:      6,
+    safeWording:         'Keeps you hydrated and prevents cramps — especially useful in long or sweaty sessions.',
+    subscriptionEligible: true,
+    productType:         'Hydration',
+    formats:             'powder',
+  },
+  'chrgd-bcaa': {
+    slots:               ['recovery', 'hydration'],
+    goals:               ['recovery', 'hydration', 'performance'],
+    swapGroup:           'aminos',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     true,
+    stackPriority:       6,
+    marginPriority:      6,
+    safeWording:         'Amino acids that speed up muscle repair and reduce soreness.',
+    subscriptionEligible: true,
+    productType:         'Amino Acids',
+    formats:             'powder',
+  },
+  'chrgd-collagen': {
+    slots:               ['recovery'],
+    goals:               ['recovery', 'health', 'performance'],
+    swapGroup:           'collagen',
+    dietary:             ['gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        false,
+    boosterEligible:     true,
+    stackPriority:       5,
+    marginPriority:      6,
+    safeWording:         'Supports joint, tendon and skin health — especially for high-frequency training.',
+    subscriptionEligible: true,
+    productType:         'Recovery',
+    formats:             'powder',
+  },
+  'chrgd-omega-3': {
+    slots:               ['health'],
+    goals:               ['health', 'recovery'],
+    swapGroup:           'omega-3',
+    dietary:             ['gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       6,
+    marginPriority:      6,
+    safeWording:         'Supports heart, brain and joint health — one of the most recommended daily supplements.',
+    subscriptionEligible: true,
+    productType:         'Health',
+    formats:             'softgels',
+  },
+  'chrgd-vitamin-d3-k2': {
+    slots:               ['health'],
+    goals:               ['health'],
+    swapGroup:           'vitamin-d',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       5,
+    marginPriority:      6,
+    safeWording:         'Supports immunity, bone health and energy — especially important for people who train indoors.',
+    subscriptionEligible: true,
+    productType:         'Health',
+    formats:             'capsules',
+  },
+  'chrgd-multivitamin': {
+    slots:               ['health'],
+    goals:               ['health', 'energy', 'performance'],
+    swapGroup:           'multivitamin',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       5,
+    marginPriority:      5,
+    safeWording:         'Covers everyday vitamin and mineral gaps to keep you performing at your best.',
+    subscriptionEligible: true,
+    productType:         'Health',
+    formats:             'capsules',
+  },
+  'chrgd-magnesium': {
+    slots:               ['sleep', 'recovery'],
+    goals:               ['recovery', 'health'],
+    swapGroup:           'magnesium',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        true,
+    boosterEligible:     false,
+    stackPriority:       5,
+    marginPriority:      6,
+    safeWording:         'Helps you wind down, sleep deeper and recover faster. Take before bed.',
+    subscriptionEligible: true,
+    productType:         'Recovery',
+    formats:             'capsules',
+  },
+  'chrgd-sleep-support': {
+    slots:               ['sleep', 'recovery'],
+    goals:               ['recovery', 'health'],
+    swapGroup:           'sleep-support',
+    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    stimulant:           false,
+    coreEligible:        false,
+    boosterEligible:     true,
+    stackPriority:       4,
+    marginPriority:      6,
+    safeWording:         'Promotes deep sleep and overnight muscle recovery — take 30 mins before bed.',
+    subscriptionEligible: true,
+    productType:         'Recovery',
+    formats:             'capsules',
+  },
 }
 
-function inferTags(product) {
-  const title = product.title.toLowerCase()
-  const type = (product.product_type || '').toLowerCase()
-  const tags = new Set((product.tags || '').split(',').map(t => t.trim()).filter(Boolean))
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-  // Detect stim-free early — used to block stimulant tag below
-  const isStimFree = title.includes('stim-free') || title.includes('stimfree') ||
-    title.includes('stimulant-free') || title.includes('zero stimulant') ||
-    title.includes('caffeine free') || title.includes('caffeine-free') ||
-    title.includes('pump') && !title.includes('pre-workout')
-
-  // ── Product type ──────────────────────────────────────────────────────────
-  if (title.includes('whey') || title.includes('protein') || title.includes('mass') || title.includes('gainer')) {
-    addIfMissing(tags, 'product-type:protein')
-  }
-  if (title.includes('creatine')) addIfMissing(tags, 'product-type:performance')
-  if (title.includes('pre-workout') || title.includes('pre workout') || title.includes('preworkout')) {
-    addIfMissing(tags, 'product-type:pre-workout')
-  }
-  if (title.includes('bcaa') || title.includes('amino')) addIfMissing(tags, 'product-type:amino-acids')
-  if (title.includes('electrolyte') || title.includes('hydration')) addIfMissing(tags, 'product-type:hydration')
-  if (title.includes('omega') || title.includes('vitamin') || title.includes('magnesium') || title.includes('mineral')) {
-    addIfMissing(tags, 'product-type:health')
-  }
-  if (title.includes('collagen') || title.includes('sleep') || title.includes('recovery') || title.includes('joint')) {
-    addIfMissing(tags, 'product-type:recovery')
-  }
-  if (title.includes('thermo') || title.includes('fat burner') || title.includes('burn')) {
-    addIfMissing(tags, 'product-type:body-composition')
-  }
-
-  // ── Goals ─────────────────────────────────────────────────────────────────
-  if (title.includes('whey') || title.includes('protein') || title.includes('mass') || title.includes('creatine')) {
-    addIfMissing(tags, 'goal:muscle')
-    addIfMissing(tags, 'goal:performance')
-  }
-  if (title.includes('mass') || title.includes('gainer')) {
-    addIfMissing(tags, 'goal:bulking')
-  }
-  if (title.includes('thermo') || title.includes('fat')) {
-    addIfMissing(tags, 'goal:cutting')
-  }
-  if (title.includes('pre-workout') || title.includes('preworkout') || title.includes('pre workout') || title.includes('caffeine')) {
-    addIfMissing(tags, 'goal:energy')
-    addIfMissing(tags, 'goal:performance')
-  }
-  if (title.includes('electrolyte') || title.includes('hydration') || title.includes('bcaa')) {
-    addIfMissing(tags, 'goal:hydration')
-    addIfMissing(tags, 'goal:performance')
-  }
-  if (title.includes('collagen') || title.includes('sleep') || title.includes('recovery') || title.includes('bcaa') || title.includes('omega') || title.includes('magnesium')) {
-    addIfMissing(tags, 'goal:recovery')
-  }
-  if (title.includes('vitamin') || title.includes('omega') || title.includes('magnesium') || title.includes('mineral') || title.includes('health')) {
-    addIfMissing(tags, 'goal:health')
-  }
-
-  // ── Stack levels ──────────────────────────────────────────────────────────
-  // Essentials: core basics most people should take
-  if (
-    title.includes('whey') || title.includes('plant protein') || title.includes('creatine') ||
-    title.includes('vitamin d') || title.includes('omega') || title.includes('electrolyte')
-  ) {
-    addIfMissing(tags, 'stack:essentials')
-  }
-  // Performance: serious training
-  if (
-    title.includes('creatine') || title.includes('pre-workout') || title.includes('preworkout') ||
-    title.includes('bcaa') || title.includes('electrolyte') || title.includes('whey') ||
-    title.includes('plant protein') || title.includes('magnesium') || title.includes('thermo') ||
-    title.includes('mass') || title.includes('omega') || title.includes('vitamin')
-  ) {
-    addIfMissing(tags, 'stack:performance')
-  }
-  // Complete: everything available
-  addIfMissing(tags, 'stack:complete')
-
-  // ── Flags ─────────────────────────────────────────────────────────────────
-  if (isStimFree) {
-    // no stimulant tag — explicitly stim-free product
-  } else if (title.includes('pre-workout') || title.includes('preworkout') || title.includes('thermo')) {
-    addIfMissing(tags, 'stimulant')
-  }
-
-  if (
-    title.includes('plant') || title.includes('vegan') ||
-    title.includes('creatine') || title.includes('electrolyte') ||
-    title.includes('vitamin') || title.includes('magnesium') || title.includes('bcaa') ||
-    (title.includes('pre-workout') && !title.includes('whey'))
-  ) {
-    addIfMissing(tags, 'vegan')
-  }
-
-  // Most basics are beginner-safe; exclude advanced stims and mass gainers
-  if (!title.includes('mass') && !title.includes('gainer') && !(title.includes('pre-workout') && !title.includes('stim-free'))) {
-    addIfMissing(tags, 'beginner')
-  }
-
-  return [...tags].join(', ')
+function buildNewTags(cfg) {
+  const tags = []
+  for (const slot of cfg.slots)  tags.push(`slot:${slot}`)
+  for (const goal of cfg.goals)  tags.push(`goal:${goal}`)
+  for (const d    of cfg.dietary) tags.push(`dietary:${d}`)
+  tags.push(`swap:${cfg.swapGroup}`)
+  tags.push(`product-type:${cfg.productType.toLowerCase().replace(/\s+/g, '-')}`)
+  if (cfg.stimulant)       tags.push('stimulant')
+  if (cfg.coreEligible)    tags.push('core-eligible')
+  if (cfg.boosterEligible) tags.push('booster-eligible')
+  return tags
 }
 
-function addIfMissing(set, tag) {
-  if (!set.has(tag)) set.add(tag)
+function buildMetafields(cfg) {
+  return [
+    { namespace: 'chrgd', key: 'stack_priority',        type: 'number_integer',         value: String(cfg.stackPriority) },
+    { namespace: 'chrgd', key: 'margin_priority',       type: 'number_integer',         value: String(cfg.marginPriority) },
+    { namespace: 'chrgd', key: 'safe_wording',          type: 'single_line_text_field', value: cfg.safeWording },
+    { namespace: 'chrgd', key: 'subscription_eligible', type: 'boolean',                value: String(cfg.subscriptionEligible) },
+    { namespace: 'chrgd', key: 'formats',               type: 'single_line_text_field', value: cfg.formats },
+  ]
 }
 
-// ─── Shopify REST helpers ─────────────────────────────────────────────────────
+async function adminFetch(path, options = {}) {
+  const res = await fetch(`${BASE}${path}`, { ...options, headers: HEADERS })
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Shopify ${options.method ?? 'GET'} ${path} → ${res.status}: ${body}`)
+  }
+  return res.json()
+}
+
+// ─── Fetch all products (handles pagination for stores with >250 products) ────
 
 async function fetchAllProducts() {
   const products = []
-  let url = `${BASE}/products.json?limit=250&fields=id,title,product_type,tags`
+  let pageInfo = null
 
-  while (url) {
-    const res = await fetch(url, { headers: HEADERS })
-    if (!res.ok) throw new Error(`Shopify ${res.status}: ${await res.text()}`)
+  do {
+    const qs = pageInfo
+      ? `limit=250&page_info=${pageInfo}&fields=id,handle,title,tags`
+      : `limit=250&fields=id,handle,title,tags`
+
+    const res = await fetch(`${BASE}/products.json?${qs}`, { headers: HEADERS })
+    if (!res.ok) throw new Error(`Failed to fetch products: ${res.status}`)
+
     const data = await res.json()
     products.push(...data.products)
 
-    // Pagination via Link header
+    // Parse Link header for cursor-based pagination
     const link = res.headers.get('link') ?? ''
-    const next = link.match(/<([^>]+)>;\s*rel="next"/)
-    url = next ? next[1] : null
-  }
+    const nextMatch = link.match(/<[^>]*page_info=([^&>]+)[^>]*>;\s*rel="next"/)
+    pageInfo = nextMatch ? nextMatch[1] : null
+  } while (pageInfo)
 
   return products
 }
 
-async function updateProductTags(id, tags) {
-  const res = await fetch(`${BASE}/products/${id}.json`, {
+// ─── Apply tags + metafields to one product ───────────────────────────────────
+
+async function applyToProduct(product, cfg) {
+  const newTags = buildNewTags(cfg)
+
+  // Preserve any existing tags that are NOT managed by this script
+  const existingTags = product.tags ? product.tags.split(', ').filter(Boolean) : []
+  const managedPrefixes = [
+    'slot:', 'goal:', 'dietary:', 'swap:', 'product-type:',
+    'stimulant', 'core-eligible', 'booster-eligible',
+  ]
+  const preserved  = existingTags.filter(t => !managedPrefixes.some(p => t === p || t.startsWith(p)))
+  const mergedTags = [...new Set([...preserved, ...newTags])].sort().join(', ')
+
+  if (DRY_RUN) {
+    console.log(`\n  [DRY RUN] ${product.handle}`)
+    console.log(`    tags → ${mergedTags}`)
+    buildMetafields(cfg).forEach(mf =>
+      console.log(`    metafield → chrgd.${mf.key} = "${mf.value}"`)
+    )
+    return
+  }
+
+  // Update tags
+  await adminFetch(`/products/${product.id}.json`, {
     method: 'PUT',
-    headers: HEADERS,
-    body: JSON.stringify({ product: { id, tags } }),
+    body: JSON.stringify({ product: { id: product.id, tags: mergedTags } }),
   })
-  if (!res.ok) throw new Error(`Update failed for ${id}: ${await res.text()}`)
-  return res.json()
+
+  // Upsert each metafield
+  for (const mf of buildMetafields(cfg)) {
+    await adminFetch(`/products/${product.id}/metafields.json`, {
+      method: 'POST',
+      body: JSON.stringify({
+        metafield: { ...mf, owner_resource: 'product', owner_id: product.id },
+      }),
+    })
+  }
 }
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log(`\n🏷  CHRGD Shopify Tag Seeder ${DRY_RUN ? '(DRY RUN)' : '(LIVE)'}\n`)
+  console.log('\n🚀  CHRGD Shopify tag seeder')
+  console.log(`    Store   : ${DOMAIN}`)
+  console.log(`    API ver : ${API_VERSION}`)
+  console.log(`    Mode    : ${DRY_RUN ? 'DRY RUN — no changes made' : 'LIVE — writing to Shopify'}\n`)
 
   const products = await fetchAllProducts()
-  console.log(`Found ${products.length} products\n`)
+  console.log(`📦  Found ${products.length} products in your store\n`)
+
+  let matched = 0
+  let skipped = 0
+  const unmatched = []
 
   for (const product of products) {
-    if (shouldSkip(product)) {
-      console.log(`  ✗ ${product.title} (skipped — accessory/non-supplement)`)
+    const cfg = PRODUCT_MAP[product.handle]
+    if (!cfg) {
+      unmatched.push(`  ⏭   "${product.title}" (handle: ${product.handle})`)
+      skipped++
       continue
     }
-
-    const newTags = inferTags(product)
-    const changed = newTags !== (product.tags || '')
-
-    console.log(`${changed ? '→' : '·'} ${product.title}`)
-    if (changed) {
-      console.log(`  was: ${product.tags || '(none)'}`)
-      console.log(`  now: ${newTags}`)
-    }
-
-    if (changed && !DRY_RUN) {
-      await updateProductTags(product.id, newTags)
-      await new Promise(r => setTimeout(r, 500)) // respect rate limit
-    }
+    if (!DRY_RUN) process.stdout.write(`  ⏳  ${product.handle} … `)
+    await applyToProduct(product, cfg)
+    if (!DRY_RUN) console.log('✅')
+    matched++
   }
 
-  console.log(`\n✓ Done${DRY_RUN ? ' (dry run — no changes written)' : ''}`)
+  if (unmatched.length > 0) {
+    console.log('\nSkipped (not in PRODUCT_MAP):')
+    unmatched.forEach(l => console.log(l))
+  }
+
+  console.log(`\n──────────────────────────────────────`)
+  console.log(`✅  Done — ${matched} products tagged, ${skipped} skipped`)
+
+  if (skipped > 0) {
+    console.log('\n💡  To tag skipped products, add an entry to PRODUCT_MAP in this script')
+    console.log('    with the product handle as the key.')
+  }
+
+  if (!DRY_RUN) {
+    console.log('\n🔄  The /api/catalogue cache updates within 5 minutes.')
+    console.log('    Or restart your dev server to see the changes immediately.')
+  }
 }
 
-main().catch(err => { console.error(err); process.exit(1) })
+main().catch(err => {
+  console.error('\n❌  Fatal error:', err.message)
+  process.exit(1)
+})

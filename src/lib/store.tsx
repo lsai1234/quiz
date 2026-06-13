@@ -2,7 +2,10 @@
 
 import { create } from 'zustand'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
+import type { StackBlueprint } from '@/lib/stack-blueprint'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MOCK_PRODUCTS } from './mock-products'
+import { MOCK_CATALOGUE } from '@/lib/catalogue'
 
 interface QuizStore {
   step: number
@@ -13,6 +16,11 @@ interface QuizStore {
   // Product catalogue — single source of truth, hydrated from /api/products
   catalogue: Product[]
   catalogueSource: 'mock' | 'shopify'
+  stackBlueprint: StackBlueprint | null
+  // CatalogueProduct[] — richer type used by the stack review page, blueprint
+  // factory, swap modal, and boosters. Fetched from /api/catalogue on mount.
+  catalogueProducts: CatalogueProduct[]
+  setCatalogueProducts: (products: CatalogueProduct[]) => void
 
   setStep: (step: number) => void
   nextStep: () => void
@@ -24,12 +32,15 @@ interface QuizStore {
   setSelectedProducts: (products: Product[]) => void
   toggleProduct: (product: Product) => void
   setCatalogue: (products: Product[], source: 'mock' | 'shopify') => void
+  setStackBlueprint: (blueprint: StackBlueprint) => void
   reset: () => void
 }
 
 const defaultAnswers: QuizAnswers = {
   name: '',
+  track: null,
   ageBracket: null,
+  exactAge: null,
   gender: null,
   goals: [],
   trainingFrequency: null,
@@ -37,12 +48,16 @@ const defaultAnswers: QuizAnswers = {
   lifestyle: [],
   diet: null,
   currentSupplements: [],
+  currentVitamins: [],
+  preferredFormats: [],
+  wellbeingAnswers: {},
   caffeineLevel: null,
   budget: null,
   stackPreference: null,
   trainingExperience: null,
   trainingFocus: null,
   stimPreference: null,
+  trainingTime: null,
 }
 
 export const useQuizStore = create<QuizStore>((set) => ({
@@ -53,6 +68,8 @@ export const useQuizStore = create<QuizStore>((set) => ({
   selectedProducts: [],
   catalogue: MOCK_PRODUCTS,
   catalogueSource: 'mock',
+  stackBlueprint: null,
+  catalogueProducts: MOCK_CATALOGUE,
 
   setStep: (step) => set({ step }),
   nextStep: () => set((s) => ({ step: s.step + 1 })),
@@ -68,6 +85,8 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setStackLevel: (level) => set({ stackLevel: level }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
+  setStackBlueprint: (blueprint) => set({ stackBlueprint: blueprint }),
+  setCatalogueProducts: (products) => set({ catalogueProducts: products }),
 
   toggleProduct: (product) =>
     set((s) => {

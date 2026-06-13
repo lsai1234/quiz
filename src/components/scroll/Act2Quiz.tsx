@@ -1,8 +1,11 @@
 'use client'
 
-import { useRef, useState, useCallback } from 'react'
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useProducts } from '@/hooks/useProducts'
+import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
+import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -54,6 +57,18 @@ function getSubQuestion(step: number, value: string): SubQuestion | null {
   return null
 }
 
+// Vitamin options shown when "vitamins" is selected in step 6
+const VITAMIN_OPTIONS = [
+  { id: 'vitamin-d',    label: 'Vitamin D',        icon: '☀️' },
+  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: '🐟' },
+  { id: 'multivitamin', label: 'Multivitamin',     icon: '💊' },
+  { id: 'vitamin-c',    label: 'Vitamin C',        icon: '🍊' },
+  { id: 'b-complex',    label: 'B12 / B-complex',  icon: '⚡' },
+  { id: 'magnesium',    label: 'Magnesium',        icon: '🌙' },
+  { id: 'zinc',         label: 'Zinc',             icon: '🔩' },
+  { id: 'other',        label: 'Other / unsure',   icon: '✦' },
+]
+
 // ─── Step data ────────────────────────────────────────────────────────────────
 
 const STEP_META = [
@@ -65,8 +80,9 @@ const STEP_META = [
   { section: 'NUTRITION',     q: "How's the diet?",                 hint: 'Honest answer = better results.' },
   { section: 'WHAT YOU HAVE', q: 'Already using any of these?',     hint: "We won't recommend what you've already got." },
   { section: 'ENERGY',        q: 'How do you handle caffeine?',     hint: 'Shapes your pre-workout recommendation.' },
-  { section: 'BUDGET',        q: 'Monthly supplement budget?',      hint: "We'll build the best stack within your range." },
-  { section: 'YOUR STACK',    q: 'How do you want to build?',       hint: "Last one. Let's lock in your stack." },
+  { section: 'TRAINING',      q: 'When do you usually train?',      hint: 'Caffeine timing matters — tells us whether to include stimulants.' },
+  { section: 'YOUR STYLE',    q: 'What formats do you prefer?',     hint: "We'll match your stack to products you'll actually use." },
+  { section: 'BUDGET',        q: 'Monthly supplement budget?',      hint: "Selects your products and sets your stack size — last one." },
 ]
 
 const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
@@ -79,6 +95,113 @@ const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
   { id: 'bulking',     label: 'Gain mass',        icon: '📈' },
   { id: 'hydration',   label: 'Stay hydrated',    icon: '💧' },
 ]
+
+// Everyday wellbeing goals — shown below the performance grid on the goal step
+const WELLBEING_DATA: Array<{ id: Goal; label: string; icon: string }> = [
+  { id: 'sleep-better',    label: 'Sleep better',        icon: '😴' },
+  { id: 'less-stress',     label: 'Less stress',         icon: '🧘' },
+  { id: 'focus',           label: 'Focus & brain fog',   icon: '🧠' },
+  { id: 'immune',          label: 'Immune support',      icon: '🛡️' },
+  { id: 'skin-hair-nails', label: 'Skin, hair & nails',  icon: '✨' },
+  { id: 'gut-health',      label: 'Gut health',          icon: '🦠' },
+  { id: 'menopause',       label: 'Menopause support',   icon: '🌡' },
+]
+
+// Goals we don't yet stock products for — shown greyed out
+const COMING_SOON_GOALS: Array<{ id: string; label: string; icon: string }> = []
+
+// ─── Wellbeing follow-up question bank ────────────────────────────────────────
+// One question max is shown inline on the goal step. The question chosen is the
+// one whose `serves` list covers the most of the user's selected goals.
+// `triggers` must include at least one selected goal for the question to be
+// eligible — performance-only users never see these.
+
+interface WellbeingQuestion {
+  id: string
+  triggers: Goal[]   // at least one of these must be selected to be eligible
+  serves: Goal[]     // used for greedy max-coverage prioritisation
+  question: string
+  hint: string
+  options: Array<{ id: string; label: string; sub?: string }>
+}
+
+const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
+  {
+    id: 'sleepQuality',
+    triggers: ['sleep-better', 'less-stress'],
+    serves: ['sleep-better', 'less-stress', 'recovery'],
+    question: "How's your sleep at the moment?",
+    hint: 'Shapes which sleep support we recommend',
+    options: [
+      { id: 'switch-off', label: 'Hard to switch off at night' },
+      { id: 'wake-night', label: 'Wake up during the night' },
+      { id: 'wake-tired', label: 'Sleep enough, still wake tired' },
+      { id: 'fine',       label: "Sleep's fine, actually" },
+    ],
+  },
+  {
+    id: 'stressPattern',
+    triggers: ['less-stress', 'focus'],
+    serves: ['less-stress', 'focus', 'energy'],
+    question: 'When does it hit you hardest?',
+    hint: 'Helps us target the right support',
+    options: [
+      { id: 'morning-fog',     label: 'Morning fog — slow to get going' },
+      { id: 'afternoon-crash', label: 'Afternoon crash' },
+      { id: 'evening-wired',   label: "Wired in the evening, can't wind down" },
+      { id: 'all-day',         label: 'Tense all day' },
+    ],
+  },
+  {
+    id: 'immuneBaseline',
+    triggers: ['immune'],
+    serves: ['immune', 'health'],
+    question: 'How often do you get run down?',
+    hint: 'Sets how much immune support to include',
+    options: [
+      { id: 'often',     label: 'Catch everything going round' },
+      { id: 'sometimes', label: 'A couple of times a year' },
+      { id: 'rarely',    label: 'Rarely ill — just want insurance' },
+    ],
+  },
+  {
+    id: 'collagenOk',
+    triggers: ['skin-hair-nails'],
+    serves: ['skin-hair-nails'],
+    question: 'Our skin & hair support uses bovine collagen — any restrictions?',
+    hint: "We'll only recommend products you can actually take",
+    options: [
+      { id: 'ok',     label: 'No restrictions' },
+      { id: 'veggie', label: 'Vegetarian / vegan' },
+    ],
+  },
+]
+
+/** Greedy set cover: returns the smallest set of follow-ups (max 3) that
+ *  together cover every selected wellbeing goal. One question can serve
+ *  several goals, so most users see 1–2. */
+function pickWellbeingQuestions(goals: Goal[]): WellbeingQuestion[] {
+  const selected: WellbeingQuestion[] = []
+  const uncovered = new Set(goals.filter(g => WELLBEING_QUESTIONS.some(q => q.triggers.includes(g))))
+  while (uncovered.size > 0 && selected.length < 3) {
+    let best: WellbeingQuestion | null = null
+    let bestCoverage = 0
+    for (const q of WELLBEING_QUESTIONS) {
+      if (selected.includes(q)) continue
+      if (!q.triggers.some(t => uncovered.has(t))) continue
+      const coverage = q.serves.filter(s => uncovered.has(s)).length
+      if (coverage > bestCoverage) {
+        bestCoverage = coverage
+        best = q
+      }
+    }
+    if (!best) break
+    selected.push(best)
+    best.serves.forEach(s => uncovered.delete(s))
+    best.triggers.forEach(t => uncovered.delete(t))
+  }
+  return selected
+}
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
   { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
   { id: '3-4x',  label: '3–4× a week',  sub: 'Regular training' },
@@ -93,10 +216,22 @@ const TYPE_DATA: Array<{ id: TrainingType; label: string; sub: string }> = [
   { id: 'mixed',    label: 'Mixed training',     sub: 'Bit of everything' },
 ]
 const LIFESTYLE_DATA = [
-  { id: 'vegan',       label: 'Plant-based',            icon: '🌱' },
-  { id: 'poor-sleep',  label: 'Struggling with sleep',  icon: '😴' },
-  { id: 'desk-job',    label: 'Desk job / sedentary',   icon: '💻' },
-  { id: 'high-stress', label: 'High stress levels',     icon: '🧠' },
+  { id: 'vegan',        label: 'Plant-based diet',       icon: '🌱' },
+  { id: 'poor-sleep',   label: 'Struggling with sleep',  icon: '😴' },
+  { id: 'desk-job',     label: 'Desk job / sedentary',   icon: '💻' },
+  { id: 'high-stress',  label: 'High stress levels',     icon: '🧠' },
+  { id: 'joint-issues', label: 'Joint or old injuries',  icon: '🦴' },
+]
+
+// Wellbeing-track lifestyle options — sleep/stress are already covered by the
+// goal follow-ups, so these focus on context that changes recommendations
+const WELLBEING_LIFESTYLE_DATA = [
+  { id: 'vegan',        label: 'Plant-based diet',           icon: '🌱' },
+  { id: 'desk-job',     label: 'Desk job / mostly indoors',  icon: '💻' },
+  { id: 'shift-work',   label: 'Shift work / irregular hours', icon: '🌙' },
+  { id: 'run-down',     label: 'Get run down easily',        icon: '🤧' },
+  { id: 'active',       label: 'Train or exercise regularly', icon: '🏃' },
+  { id: 'joint-issues', label: 'Joint or old injuries',      icon: '🦴' },
 ]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
   { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
@@ -111,23 +246,80 @@ const SUPPS_DATA = [
   { id: 'vitamins',    label: 'Vitamins',       icon: '💊' },
   { id: 'none',        label: 'Starting fresh', icon: '✦' },
 ]
+
+// Wellbeing-track version — asks directly about the supplements we'd
+// recommend so the engine never doubles up
+const WELLBEING_SUPPS_DATA = [
+  { id: 'multivitamin', label: 'Multivitamin',     icon: '💊' },
+  { id: 'vitamin-d',    label: 'Vitamin D',        icon: '☀️' },
+  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: '🐟' },
+  { id: 'magnesium',    label: 'Magnesium',        icon: '🌙' },
+  { id: 'none',         label: 'None of these',    icon: '✦' },
+]
+const TRAINING_TIME_DATA: Array<{ id: string; label: string; sub: string }> = [
+  { id: 'morning',   label: 'Morning',   sub: 'Before 11am' },
+  { id: 'lunchtime', label: 'Midday',    sub: '11am–2pm' },
+  { id: 'evening',   label: 'Evening',   sub: 'After 5pm' },
+  { id: 'varies',    label: 'Varies',    sub: 'No fixed time' },
+]
 const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = [
   { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
   { id: 'low',    label: 'Occasionally',    sub: 'One coffee here and there' },
   { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
   { id: 'high',   label: 'High tolerance',  sub: '3+ coffees, used to pre-workout' },
 ]
-const BUDGET_DATA: Array<{ id: Budget; label: string; sub: string }> = [
-  { id: 'under-50', label: 'Under £50/mo', sub: '2–3 core essentials' },
-  { id: '50-100',   label: '£50–£100/mo',  sub: '3–5 products, solid coverage' },
-  { id: '100-150',  label: '£100–£150/mo', sub: '5–7 products, performance stack' },
-  { id: '150-plus', label: '£150+/mo',     sub: '7+ products, complete coverage' },
+// Budget options — each one also implicitly sets stackPreference.
+// 'includes' is computed dynamically from quiz answers — see useBudgetPreview below.
+const BUDGET_DATA: Array<{
+  id: Budget; name: string; budget: string; sub: string
+  pref: StackPreference; slots: number
+}> = [
+  {
+    id: 'under-30', name: 'Starter Bundle',   budget: 'Up to £30/mo',
+    sub: 'The essentials that move the needle most',
+    pref: 'simple', slots: 2,
+  },
+  {
+    id: '30-50',    name: 'Saver Bundle',      budget: '£30–50/mo',
+    sub: 'Core supplements to cover your main goal',
+    pref: 'simple', slots: 3,
+  },
+  {
+    id: '50-80',    name: 'Performance Bundle', budget: '£50–80/mo',
+    sub: 'A well-rounded daily stack',
+    pref: 'balanced', slots: 5,
+  },
+  {
+    id: '80-plus',  name: 'Complete Bundle',   budget: '£80+/mo',
+    sub: 'Every angle covered — nothing left out',
+    pref: 'complete', slots: 7,
+  },
 ]
-const PREF_DATA: Array<{ id: StackPreference; label: string; sub: string }> = [
-  { id: 'simple',   label: 'Quick wins',    sub: '2–3 products — the ones that actually move the needle' },
-  { id: 'balanced', label: 'Proper stack',  sub: '4–5 products — solid, well-rounded coverage' },
-  { id: 'complete', label: 'Full throttle', sub: '6+ products — every angle covered' },
+
+/** Formats ranked slot titles into a short "includes" preview string. */
+function formatIncludes(slots: Array<{ title: string }>, count: number): string {
+  if (slots.length === 0) return 'Personalised to your goals'
+  const shown = slots.slice(0, Math.min(count, slots.length))
+  if (shown.length <= 2) return shown.map(s => s.title).join(' + ')
+  const extra = count - (shown.length - 1)
+  const main = shown.slice(0, shown.length - 1).map(s => s.title).join(', ')
+  const last = extra > 1 ? `+ ${extra} more` : `+ ${shown[shown.length - 1].title}`
+  return `${main} ${last}`
+}
+
+const FORMAT_DATA = [
+  { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: '🥤' },
+  { id: 'capsules', label: 'Capsules / Tabs', sub: 'Easy to take anywhere',          icon: '💊' },
+  { id: 'bars',     label: 'Bars & Snacks',   sub: 'On-the-go protein hits',         icon: '🍫' },
+  { id: 'any',      label: 'No preference',   sub: 'Best product regardless of form', icon: '✦' },
 ]
+
+// Question copy overrides for the wellbeing track
+const WELLBEING_STEP_OVERRIDES: Record<number, { q: string; hint: string }> = {
+  4: { q: 'Tell us about your day-to-day', hint: 'Select anything that applies — context changes what we recommend.' },
+  6: { q: 'Already taking any of these?',  hint: "We won't recommend what you've already got covered." },
+  8: { q: 'When do you usually move or exercise?', hint: 'Even light exercise timing affects what we recommend.' },
+}
 
 const TOTAL = STEP_META.length
 
@@ -241,12 +433,35 @@ interface Props { onComplete: () => void; reducedMotion: boolean }
 
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
-    step, answers, nextStep, prevStep,
+    step, answers, nextStep, prevStep, setStep,
     setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
   } = useQuizStore()
 
   // Hydrate live catalogue while the user answers the quiz
   useProducts()
+  const { products: liveCatalogue } = useCatalogueProducts() // Populates store.catalogueProducts for blueprint generation
+
+  // Pre-compute the full ranked stack (with unlimited budget) so budget cards
+  // can show the *actual* products the user would get — not hardcoded text.
+  const rankedSlots = useMemo(() => {
+    if (answers.goals.length === 0) return []
+    try {
+      const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
+      const preview = buildStackBlueprint(
+        { ...answers, budget: '80-plus', stackPreference: 'complete' },
+        catalogue,
+      )
+      return preview.slots
+    } catch {
+      return []
+    }
+  }, [
+    answers.goals, answers.lifestyle, answers.currentSupplements,
+    answers.currentVitamins, answers.stimPreference, answers.caffeineLevel,
+    answers.wellbeingAnswers, answers.diet, answers.preferredFormats,
+    answers.trainingFocus, answers.gender, answers.ageBracket,
+    answers.trainingTime, answers.trainingExperience, liveCatalogue,
+  ])
 
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
@@ -259,6 +474,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [localName, setLocalName] = useState(answers.name || '')
   const [localAge, setLocalAge] = useState<AgeBracket | ''>(answers.ageBracket || '')
   const [localGender, setLocalGender] = useState<Gender | ''>(answers.gender || '')
+  const [localExactAge, setLocalExactAge] = useState<number | null>(answers.exactAge ?? null)
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
@@ -275,10 +491,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       setAnswer('name', localName.trim())
       if (localAge) setAnswer('ageBracket', localAge as AgeBracket)
       if (localGender) setAnswer('gender', localGender as Gender)
+      if (localExactAge !== null) setAnswer('exactAge', localExactAge)
     }
     if (step >= TOTAL - 1) { handleFinish(); return }
     setDirection('forward')
     setAnimKey((k) => k + 1)
+    // Wellbeing track skips the training questions (steps 2–3)
+    if (step === 1 && answers.track === 'wellbeing') { setStep(4); return }
     nextStep()
   }
 
@@ -288,6 +507,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setSubAnswerId(null)
     setDirection('back')
     setAnimKey((k) => k + 1)
+    // Wellbeing track skips the training questions (steps 2–3)
+    if (step === 4 && answers.track === 'wellbeing') { setStep(1); return }
     prevStep()
   }
 
@@ -323,6 +544,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setIsGenerating(true)
     try {
       const { buildRecommendedStack } = await import('@/lib/recommendation')
+      const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
       const res = await fetch('/api/generate-identity', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -337,6 +559,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
+
+      // Build and store the stack blueprint
+      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
+      useQuizStore.getState().setStackBlueprint(blueprint)
+
       onComplete()
     } catch { setIsGenerating(false) }
   }
@@ -349,6 +576,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       case 1: return answers.goals.length > 0
       case 4: return true
       case 6: return true
+      case 9: return true
       default: return false
     }
   })()
@@ -359,7 +587,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       ? 'animate-[slide-from-right_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
       : 'animate-[slide-from-left_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
 
-  const { section, q, hint } = STEP_META[step]
+  const stepMeta = STEP_META[step]
+  const override = answers.track === 'wellbeing' ? WELLBEING_STEP_OVERRIDES[step] : undefined
+  const { section } = stepMeta
+  const q = override?.q ?? stepMeta.q
+  const hint = override?.hint ?? stepMeta.hint
 
   // ─── Render ──────────────────────────────────────────────────────────────────
 
@@ -481,6 +713,44 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     />
                   ))}
                 </div>
+                {/* Exact age slider — optional, improves accuracy */}
+                <div className="mt-4 px-1">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11px] text-white/30">
+                      For more accurate results, set your exact age
+                    </p>
+                    {localExactAge !== null && (
+                      <span className="text-xs font-bold text-[#00D4FF]">{localExactAge}</span>
+                    )}
+                  </div>
+                  <input
+                    type="range"
+                    min={16}
+                    max={70}
+                    step={1}
+                    value={localExactAge ?? 25}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value, 10)
+                      setLocalExactAge(v)
+                      // Auto-select the matching bracket
+                      if (v < 25) setLocalAge('16-24')
+                      else if (v < 35) setLocalAge('25-34')
+                      else if (v < 45) setLocalAge('35-44')
+                      else setLocalAge('45+')
+                    }}
+                    onFocus={() => { if (localExactAge === null) setLocalExactAge(25) }}
+                    className="w-full h-1 rounded-full appearance-none cursor-pointer"
+                    style={{
+                      background: localExactAge !== null
+                        ? `linear-gradient(to right, #00D4FF ${((( localExactAge - 16) / 54) * 100).toFixed(1)}%, rgba(255,255,255,0.12) 0%)`
+                        : 'rgba(255,255,255,0.12)',
+                    }}
+                  />
+                  <div className="flex justify-between mt-1">
+                    <span className="text-[10px] text-white/20">16</span>
+                    <span className="text-[10px] text-white/20">70+</span>
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -509,19 +779,150 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 1: Goals (multi) ── */}
-          {step === 1 && (
-            <div className="grid grid-cols-2 gap-2.5">
-              {GOALS_DATA.map(({ id, label, icon }) => (
+          {/* ── Step 1: Track chooser → goals (multi) ── */}
+          {step === 1 && !answers.track && (
+            <div className="flex flex-col gap-3">
+              {([
+                {
+                  id: 'performance' as const, icon: '🏋️', label: 'Performance & training',
+                  sub: 'Build muscle, energy, recovery — for people who train',
+                },
+                {
+                  id: 'wellbeing' as const, icon: '🌿', label: 'Everyday wellbeing',
+                  sub: 'Sleep, stress, focus, immunity — how you feel day to day',
+                },
+              ]).map(({ id, icon, label, sub }) => (
+                <button
+                  key={`track-${id}`}
+                  onClick={() => {
+                    setAnswer('track', id)
+                    setGoals([])
+                    setAnswer('wellbeingAnswers', {})
+                  }}
+                  className="w-full flex items-center gap-4 px-5 py-6 rounded-2xl border border-white/10 bg-white/[0.04] text-left option-hover transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50"
+                >
+                  <span className="text-3xl leading-none">{icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-base font-bold text-white" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+                    <div className="text-xs mt-1 text-white/35">{sub}</div>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="text-white/30">
+                    <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Performance track — the normal goal grid, unchanged */}
+          {step === 1 && answers.track === 'performance' && (
+            <div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {GOALS_DATA.map(({ id, label, icon }) => (
+                  <AnswerOption
+                    key={`1-${id}`}
+                    icon={icon} label={label} multi
+                    selected={answers.goals.includes(id)}
+                    onClick={() => {
+                      const c = answers.goals
+                      setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
+                    }}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={() => { setAnswer('track', null); setGoals([]) }}
+                className="mt-5 text-xs text-white/30 underline underline-offset-2"
+              >
+                ← Switch to everyday wellbeing
+              </button>
+            </div>
+          )}
+
+          {/* Wellbeing track — its own goal screen */}
+          {step === 1 && answers.track === 'wellbeing' && (
+            <div>
+              {answers.gender === 'female' && answers.ageBracket === '45+' && !answers.goals.includes('menopause') && (
+                <div
+                  className="mb-4 px-4 py-3 rounded-xl border border-[#00D4FF]/20 bg-[#00D4FF]/5 text-xs text-[#00D4FF]/80 leading-snug cursor-pointer"
+                  onClick={() => setGoals([...answers.goals, 'menopause'])}
+                >
+                  <span className="font-bold">Suggested for you:</span> Menopause Support is often the highest-impact pick for women 45+ — tap to add it.
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-2.5">
+                {WELLBEING_DATA.map(({ id, label, icon }) => (
+                  <AnswerOption
+                    key={`1w-${id}`}
+                    icon={icon} label={label} multi
+                    selected={answers.goals.includes(id)}
+                    onClick={() => {
+                      const c = answers.goals
+                      setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
+                    }}
+                  />
+                ))}
                 <AnswerOption
-                  key={`1-${id}`}
-                  icon={icon} label={label} multi
-                  selected={answers.goals.includes(id)}
+                  key="1w-health"
+                  icon="🌿" label="General health" multi
+                  selected={answers.goals.includes('health')}
                   onClick={() => {
                     const c = answers.goals
-                    setGoals(c.includes(id) ? c.filter(g => g !== id) : [...c, id])
+                    setGoals(c.includes('health') ? c.filter(g => g !== 'health') : [...c, 'health'])
                   }}
                 />
+                {COMING_SOON_GOALS.map(({ id, label, icon }) => (
+                  <div
+                    key={`1cs-${id}`}
+                    aria-disabled
+                    className="flex flex-col items-start gap-1.5 px-4 py-4 rounded-2xl border border-white/6 bg-white/[0.02] text-white/25 cursor-not-allowed relative"
+                  >
+                    <span className="text-xl leading-none opacity-50">{icon}</span>
+                    <span className="text-xs font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
+                    <span className="absolute top-2.5 right-2.5 text-[8px] font-bold tracking-widest uppercase px-1.5 py-0.5 rounded-full border border-white/10 text-white/25">
+                      Soon
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => { setAnswer('track', null); setGoals([]); setAnswer('wellbeingAnswers', {}) }}
+                className="mt-5 text-xs text-white/30 underline underline-offset-2"
+              >
+                ← Switch to performance & training
+              </button>
+
+              {/* Wellbeing follow-ups — greedy set cover over selected goals */}
+              {pickWellbeingQuestions(answers.goals).map((wq) => (
+                <div
+                  key={`wqblock-${wq.id}`}
+                  className="mt-6 pt-5 border-t border-white/8"
+                  style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+                >
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="w-px h-4 bg-[#00D4FF]" />
+                    <span
+                      className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
+                      style={{ fontFamily: 'var(--font-display)' }}
+                    >
+                      Quick follow-up
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                    {wq.question}
+                  </p>
+                  <p className="text-xs text-white/35 mb-3">{wq.hint}</p>
+                  <div className="flex flex-col gap-2">
+                    {wq.options.map(({ id, label, sub }) => (
+                      <AnswerOption
+                        key={`wq-${wq.id}-${id}`}
+                        label={label} sub={sub}
+                        selected={answers.wellbeingAnswers[wq.id] === id}
+                        onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: id })}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -554,10 +955,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 4: Lifestyle (multi) ── */}
+          {/* ── Step 4: Lifestyle (multi) — option set varies by track ── */}
           {step === 4 && (
             <div className="grid grid-cols-2 gap-2.5">
-              {LIFESTYLE_DATA.map(({ id, label, icon }) => (
+              {(answers.track === 'wellbeing' ? WELLBEING_LIFESTYLE_DATA : LIFESTYLE_DATA).map(({ id, label, icon }) => (
                 <AnswerOption
                   key={`4-${id}`}
                   icon={icon} label={label} multi
@@ -591,21 +992,70 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 6: Current supps (multi) ── */}
-          {step === 6 && (
+          {/* ── Step 6: Current supps (multi) — option set varies by track ── */}
+          {step === 6 && answers.track === 'wellbeing' && (
             <div className="grid grid-cols-2 gap-2.5">
-              {SUPPS_DATA.map(({ id, label, icon }) => (
+              {WELLBEING_SUPPS_DATA.map(({ id, label, icon }) => (
                 <AnswerOption
-                  key={`6-${id}`}
+                  key={`6w-${id}`}
                   icon={icon} label={label} multi
-                  selected={id === 'none' ? answers.currentSupplements.length === 0 : answers.currentSupplements.includes(id)}
+                  selected={id === 'none' ? answers.currentVitamins.length === 0 : answers.currentVitamins.includes(id)}
                   onClick={() => {
-                    if (id === 'none') { setAnswer('currentSupplements', []); return }
-                    const c = answers.currentSupplements.filter(x => x !== 'none')
-                    setAnswer('currentSupplements', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                    if (id === 'none') { setAnswer('currentVitamins', []); return }
+                    const c = answers.currentVitamins
+                    setAnswer('currentVitamins', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
                   }}
                 />
               ))}
+            </div>
+          )}
+          {step === 6 && answers.track !== 'wellbeing' && (
+            <div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {SUPPS_DATA.map(({ id, label, icon }) => (
+                  <AnswerOption
+                    key={`6-${id}`}
+                    icon={icon} label={label} multi
+                    selected={id === 'none' ? answers.currentSupplements.length === 0 : answers.currentSupplements.includes(id)}
+                    onClick={() => {
+                      if (id === 'none') { setAnswer('currentSupplements', []); setAnswer('currentVitamins', []); return }
+                      const c = answers.currentSupplements.filter(x => x !== 'none')
+                      setAnswer('currentSupplements', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                    }}
+                  />
+                ))}
+              </div>
+              {/* Vitamin follow-up — shown when vitamins is selected */}
+              {answers.currentSupplements.includes('vitamins') && (
+                <div
+                  className="mt-6 pt-5 border-t border-white/8"
+                  style={{ animation: 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-px h-4 bg-[#00D4FF]" />
+                    <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]"
+                      style={{ fontFamily: 'var(--font-display)' }}>
+                      Which vitamins?
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/35 mb-4">
+                    We won't double up on what you're already taking
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {VITAMIN_OPTIONS.map(({ id, label, icon }) => (
+                      <AnswerOption
+                        key={`vit-${id}`}
+                        icon={icon} label={label} multi
+                        selected={answers.currentVitamins.includes(id)}
+                        onClick={() => {
+                          const c = answers.currentVitamins
+                          setAnswer('currentVitamins', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -623,31 +1073,90 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Step 8: Budget (single) ── */}
+          {/* ── Step 8: Training time (single) ── */}
           {step === 8 && (
             <div className="flex flex-col gap-2.5">
-              {BUDGET_DATA.map(({ id, label, sub }) => (
+              {TRAINING_TIME_DATA.map(({ id, label, sub }) => (
                 <AnswerOption
-                  key={`8-${id}`}
+                  key={`8t-${id}`}
                   label={label} sub={sub}
-                  selected={answers.budget === id}
-                  onClick={() => handleSingle('budget', id)}
+                  selected={answers.trainingTime === id}
+                  onClick={() => {
+                    setAnswer('trainingTime', id as any)
+                    clearPending()
+                    pendingTimerRef.current = setTimeout(() => advance(), 320)
+                  }}
                 />
               ))}
             </div>
           )}
 
-          {/* ── Step 9: Stack pref (single, explicit CTA) ── */}
+          {/* ── Step 9: Product format preferences (multi, continue button) ── */}
           {step === 9 && (
             <div className="flex flex-col gap-2.5">
-              {PREF_DATA.map(({ id, label, sub }) => (
+              {FORMAT_DATA.map(({ id, label, sub, icon }) => (
                 <AnswerOption
                   key={`9-${id}`}
-                  label={label} sub={sub}
-                  selected={answers.stackPreference === id}
-                  onClick={() => setAnswer('stackPreference', id)}
+                  icon={icon} label={label} sub={sub} multi
+                  selected={id === 'any'
+                    ? answers.preferredFormats.includes('any')
+                    : answers.preferredFormats.includes(id) && !answers.preferredFormats.includes('any')}
+                  onClick={() => {
+                    if (id === 'any') {
+                      setAnswer('preferredFormats', answers.preferredFormats.includes('any') ? [] : ['any'])
+                      return
+                    }
+                    const c = answers.preferredFormats.filter(x => x !== 'any')
+                    setAnswer('preferredFormats', c.includes(id) ? c.filter(x => x !== id) : [...c, id])
+                  }}
                 />
               ))}
+            </div>
+          )}
+
+          {/* ── Step 10: Budget bundles (single — also sets stack preference) ── */}
+          {step === 10 && (
+            <div className="flex flex-col gap-3">
+              {BUDGET_DATA.map(({ id, name, budget, sub, pref, slots }) => {
+                const active = answers.budget === id
+                const actualCount = Math.min(slots, rankedSlots.length || slots)
+                const includes = formatIncludes(rankedSlots, slots)
+                return (
+                  <button
+                    key={`9-${id}`}
+                    onClick={() => { setAnswer('budget', id); setAnswer('stackPreference', pref) }}
+                    className={[
+                      'w-full flex flex-col gap-2 px-5 py-4 rounded-2xl border text-left',
+                      'transition-all duration-150 active:scale-[0.98]',
+                      active
+                        ? 'border-[#00D4FF] bg-[#00D4FF]/8 text-white'
+                        : 'border-white/10 bg-white/[0.04] text-white/70 option-hover',
+                    ].join(' ')}
+                    style={active ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.2), inset 0 0 24px rgba(0,212,255,0.05)' } : undefined}
+                  >
+                    {/* Top row — name + budget range */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
+                      <div className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition-colors ${
+                        active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'
+                      }`}>{budget}</div>
+                    </div>
+                    {/* Sub — what it's for */}
+                    <p className={`text-xs leading-snug ${active ? 'text-white/60' : 'text-white/30'}`}>{sub}</p>
+                    {/* Includes line — dynamic from quiz answers */}
+                    <div className="flex items-start gap-1.5">
+                      <span className={`text-[10px] mt-px ${active ? 'text-[#00D4FF]/60' : 'text-white/20'}`}>Includes</span>
+                      <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/70' : 'text-white/25'}`}>{includes}</span>
+                    </div>
+                    {/* Count badge */}
+                    <div className="flex justify-end">
+                      <span className={`text-[9px] font-bold tracking-widest uppercase ${active ? 'text-[#00D4FF]/70' : 'text-white/15'}`}>
+                        {actualCount} product{actualCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           )}
 
@@ -685,7 +1194,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       </div>
 
       {/* CTA — personal info, multi-select steps */}
-      {[0, 1, 4, 6].includes(step) && (
+      {[0, 1, 4, 6, 9].includes(step) && (
         <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
           <div className="max-w-lg mx-auto">
             <button
@@ -708,20 +1217,20 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </div>
       )}
 
-      {step === 9 && (
+      {step === 10 && (
         <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
           <div className="max-w-lg mx-auto">
             <button
               onClick={advance}
-              disabled={!answers.stackPreference}
+              disabled={!answers.budget}
               className={`w-full py-4 rounded-2xl text-sm font-bold tracking-wide transition-all active:scale-95 ${
-                answers.stackPreference
+                answers.budget
                   ? 'bg-[#00D4FF] text-[#0A0A0A]'
                   : 'bg-white/8 text-white/20 cursor-not-allowed'
               }`}
               style={{
                 fontFamily: 'var(--font-display)',
-                ...(answers.stackPreference ? { animation: 'pulse-glow 2s ease-in-out infinite' } : {}),
+                ...(answers.budget ? { animation: 'pulse-glow 2s ease-in-out infinite' } : {}),
               }}
             >
               Build my stack →

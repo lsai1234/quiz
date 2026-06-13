@@ -6,11 +6,11 @@ export { MOCK_PRODUCTS }
 
 function budgetLimit(budget: QuizAnswers['budget']): number {
   switch (budget) {
-    case 'under-50': return 50
-    case '50-100': return 100
-    case '100-150': return 150
-    case '150-plus': return 200
-    default: return 100
+    case 'under-30': return 30
+    case '30-50':    return 50
+    case '50-80':    return 80
+    case '80-plus':  return 150
+    default:         return 80
   }
 }
 
@@ -74,7 +74,7 @@ function scoreProduct(product: Product, answers: QuizAnswers): number {
 }
 
 function resolveStackLevel(answers: QuizAnswers): StackLevel {
-  if (answers.stackPreference === 'simple' || answers.budget === 'under-50') return 'essentials'
+  if (answers.stackPreference === 'simple' || answers.budget === 'under-30' || answers.budget === '30-50') return 'essentials'
   if (answers.stackPreference === 'complete') return 'complete'
   return 'performance'
 }

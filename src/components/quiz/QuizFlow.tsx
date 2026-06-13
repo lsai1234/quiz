@@ -4,7 +4,9 @@ import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 import { buildRecommendedStack } from '@/lib/recommendation'
+import { buildStackBlueprint } from '@/lib/stack-blueprint'
 import { useProducts } from '@/hooks/useProducts'
+import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -239,10 +241,10 @@ const CAFFEINE_OPTS: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
 ]
 
 const BUDGET_OPTS: Array<{ id: Budget; label: string; sub: string; detail: string }> = [
-  { id: 'under-50', label: 'Under £50/mo',  sub: 'Starter — essentials only',  detail: '2–3 products' },
-  { id: '50-100',   label: '£50–£100/mo',   sub: 'Core — solid coverage',       detail: '3–5 products' },
-  { id: '100-150',  label: '£100–£150/mo',  sub: 'Performance — well-rounded',  detail: '5–7 products' },
-  { id: '150-plus', label: '£150+/mo',      sub: 'Complete — no compromises',   detail: '7+ products' },
+  { id: 'under-30', label: 'Under £30/mo', sub: 'Starter — 1–2 essentials only',           detail: '1–2 products' },
+  { id: '30-50',    label: '£30–£50/mo',   sub: 'Core — the products that move the needle', detail: '2–3 products' },
+  { id: '50-80',    label: '£50–£80/mo',   sub: 'Performance — solid all-round coverage',   detail: '3–5 products' },
+  { id: '80-plus',  label: '£80+/mo',      sub: 'Complete — every angle covered',           detail: '5–7 products' },
 ]
 
 const PREF_OPTS: Array<{ id: StackPreference; label: string; sub: string }> = [
@@ -297,6 +299,7 @@ export function QuizFlow() {
   // Kick off the catalogue fetch as soon as the quiz mounts so live
   // Shopify products are in the store by the time the stack is built
   useProducts()
+  useCatalogueProducts() // Populates store.catalogueProducts with live Shopify data
 
   const [feedback, setFeedback] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
@@ -421,6 +424,11 @@ export function QuizFlow() {
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
+
+      // Build and store the stack blueprint
+      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
+      useQuizStore.getState().setStackBlueprint(blueprint)
+
       router.push('/reveal')
     } catch {
       setIsGenerating(false)

@@ -10,20 +10,39 @@ export type Goal =
   | 'health'
   | 'cutting'
   | 'bulking'
+  // Everyday wellbeing goals
+  | 'sleep-better'
+  | 'less-stress'
+  | 'focus'
+  | 'immune'
+  | 'skin-hair-nails'
+  | 'menopause'
+  | 'gut-health'
+
+/** Goals that imply a training/performance context — used to decide whether
+ *  protein/creatine slots are required in the stack. */
+export const PERFORMANCE_GOALS: Goal[] = [
+  'muscle', 'energy', 'performance', 'hydration', 'recovery', 'cutting', 'bulking',
+]
 
 export type TrainingFrequency = '1-2x' | '3-4x' | '5-6x' | 'daily'
 export type TrainingType = 'strength' | 'cardio' | 'hiit' | 'sport' | 'mixed'
 export type DietLevel = 'clean' | 'mostly-good' | 'inconsistent' | 'poor'
 export type CaffeineLevel = 'none' | 'low' | 'medium' | 'high'
-export type Budget = 'under-50' | '50-100' | '100-150' | '150-plus'
+export type Budget = 'under-30' | '30-50' | '50-80' | '80-plus'
 export type StackPreference = 'simple' | 'balanced' | 'complete'
 export type StackLevel = 'essentials' | 'performance' | 'complete'
 export type TrainingExperience = 'new' | 'intermediate' | 'experienced'
 export type StimPreference = 'yes' | 'no'
 
+export type QuizTrack = 'performance' | 'wellbeing'
+
 export interface QuizAnswers {
   name: string
+  /** Which quiz track the user chose on the goal step */
+  track: QuizTrack | null
   ageBracket: AgeBracket | null
+  exactAge: number | null
   gender: Gender | null
   goals: Goal[]
   trainingFrequency: TrainingFrequency | null
@@ -31,12 +50,18 @@ export interface QuizAnswers {
   lifestyle: string[]
   diet: DietLevel | null
   currentSupplements: string[]
+  currentVitamins: string[]
+  preferredFormats: string[]
+  /** Answers to wellbeing follow-up questions, keyed by question id
+   *  (sleepQuality, stressPattern, immuneBaseline, collagenOk) */
+  wellbeingAnswers: Record<string, string>
   caffeineLevel: CaffeineLevel | null
   budget: Budget | null
   stackPreference: StackPreference | null
   trainingExperience: TrainingExperience | null
   trainingFocus: string | null
   stimPreference: StimPreference | null
+  trainingTime: 'morning' | 'lunchtime' | 'evening' | 'varies' | null
 }
 
 export interface StackIdentity {
