@@ -21,6 +21,7 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 
 export function StackProductCard({ slot, product, onChangeProduct, onChangeVariant, onRemove }: Props) {
   const [variantsOpen, setVariantsOpen] = useState(false)
+  const [reasonExpanded, setReasonExpanded] = useState(false)
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
     ?? product?.variants.find((v) => v.available)
     ?? product?.variants[0]
@@ -90,9 +91,21 @@ export function StackProductCard({ slot, product, onChangeProduct, onChangeVaria
                 {variantLabel(selectedVariant)}
               </p>
             )}
-            <p className="text-xs mt-1.5 leading-relaxed line-clamp-2" style={{ color: 'var(--color-text-2)' }}>
+            <p
+              className={`text-xs mt-1.5 leading-relaxed ${reasonExpanded ? '' : 'line-clamp-2'}`}
+              style={{ color: 'var(--color-text-2)' }}
+            >
               {slot.reason}
             </p>
+            {slot.reason.length > 80 && (
+              <button
+                onClick={() => setReasonExpanded((o) => !o)}
+                className="text-[10px] font-bold mt-1 active:opacity-60 transition-opacity"
+                style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
+              >
+                {reasonExpanded ? 'Less' : 'More'}
+              </button>
+            )}
           </div>
         </div>
 
