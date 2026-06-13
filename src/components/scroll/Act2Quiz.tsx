@@ -434,7 +434,7 @@ interface Props { onComplete: () => void; reducedMotion: boolean }
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
     step, answers, nextStep, prevStep, setStep,
-    setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
+    setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel, setAiStackMeta,
   } = useQuizStore()
 
   // Hydrate live catalogue while the user answers the quiz
@@ -543,7 +543,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   async function handleFinish() {
     setIsGenerating(true)
     try {
-      const { buildRecommendedStack } = await import('@/lib/recommendation')
+      const { fetchRecommendedStack } = await import('@/lib/recommendation')
       const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
       const res = await fetch('/api/generate-identity', {
         method: 'POST',
@@ -552,8 +552,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       })
       const identity = await res.json()
       setIdentity(identity)
-      const stack = buildRecommendedStack(answers, useQuizStore.getState().catalogue)
+      // AI ranks the selection server-side; falls back to deterministic scoring.
+      const stack = await fetchRecommendedStack(answers, useQuizStore.getState().catalogue)
       setSelectedProducts(stack.core)
+      setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'
           : answers.stackPreference === 'complete' ? 'complete'

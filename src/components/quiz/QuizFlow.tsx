@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
-import { buildRecommendedStack } from '@/lib/recommendation'
+import { fetchRecommendedStack } from '@/lib/recommendation'
 import { buildStackBlueprint } from '@/lib/stack-blueprint'
 import { useProducts } from '@/hooks/useProducts'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
@@ -293,7 +293,7 @@ export function QuizFlow() {
   const router = useRouter()
   const {
     step, answers, nextStep, prevStep,
-    setGoals, setAnswer, setIdentity, setStackLevel, setSelectedProducts,
+    setGoals, setAnswer, setIdentity, setStackLevel, setSelectedProducts, setAiStackMeta,
   } = useQuizStore()
 
   // Kick off the catalogue fetch as soon as the quiz mounts so live
@@ -416,9 +416,11 @@ export function QuizFlow() {
       const identity = await res.json()
       setIdentity(identity)
 
-      // Read catalogue at call time — live Shopify products if loaded
-      const stack = buildRecommendedStack(answers, useQuizStore.getState().catalogue)
+      // Read catalogue at call time — live Shopify products if loaded.
+      // AI ranks the selection server-side; falls back to deterministic scoring.
+      const stack = await fetchRecommendedStack(answers, useQuizStore.getState().catalogue)
       setSelectedProducts(stack.core)
+      setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'
           : answers.stackPreference === 'complete' ? 'complete'
