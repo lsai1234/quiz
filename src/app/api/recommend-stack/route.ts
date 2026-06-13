@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import type { QuizAnswers, Product, RecommendedStack } from '@/lib/types'
 import { MOCK_PRODUCTS, buildRecommendedStack, buildStackFromAIOrder, getEligibleCandidates } from '@/lib/recommendation'
-import { buildRankingPrompt, parseAIStackResult } from '@/lib/ai-stack'
+import { buildRankingPrompt, parseAIStackResult, RANKING_SYSTEM_PROMPT } from '@/lib/ai-stack'
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -38,11 +38,16 @@ export async function POST(req: NextRequest) {
 
     const completion = await client.chat.completions.create(
       {
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
+        // gpt-4.1-mini: strong instruction-following + JSON adherence, fast and
+        // non-reasoning (keeps the reveal snappy), ~$0.001/quiz at this size.
+        model: 'gpt-4.1-mini',
+        messages: [
+          { role: 'system', content: RANKING_SYSTEM_PROMPT },
+          { role: 'user', content: prompt },
+        ],
         response_format: { type: 'json_object' },
         max_tokens: 600,
-        temperature: 0.4,
+        temperature: 0.3,
       },
       { timeout: 9000 },
     )

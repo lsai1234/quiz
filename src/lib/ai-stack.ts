@@ -39,10 +39,25 @@ export interface AIStackResult {
 }
 
 /**
- * Builds the ranking prompt. The model is only ever shown eligible candidates
- * (already filtered by the deterministic gates) and is told to pick from those
- * ids only — it cannot invent products. Health-claim guardrails mirror the
+ * System role for the ranker. Establishing the rules here (rather than only in
+ * the user turn) improves instruction adherence and keeps the per-request user
+ * prompt — and therefore token cost — small. Health-claim guardrails mirror the
  * existing identity prompt so generated copy stays advertising-compliant.
+ */
+export const RANKING_SYSTEM_PROMPT = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand. You assemble personalised supplement stacks.
+
+Rules:
+- Recommend ONLY from the eligible product ids given in the user message. Never invent products or ids.
+- Rank by how well each product fits this specific person's goals, lifestyle, training and budget — most important first. You need not include every product, but cover their main goals.
+- Write one reason per recommended product: a single sentence, max 18 words, warm and specific to this person, plain text (no markdown or asterisks).
+- No medical claims and no guaranteed outcomes. Say "may support", never "will improve". Never suggest a supplement can treat, manage or replace medical care for any condition.
+- Respond with a single JSON object only, no prose: {"order":["id", ...],"reasons":{"id":"reason", ...}}`
+
+/**
+ * Builds the per-request user prompt: the person's profile and the eligible
+ * candidate list. The model is only ever shown candidates that already passed
+ * the deterministic gates, so it can re-rank but cannot recommend something the
+ * rules forbid.
  */
 export function buildRankingPrompt(answers: QuizAnswers, candidates: Product[]): string {
   const firstName = answers.name?.split(' ')[0]?.trim() || null
@@ -60,7 +75,7 @@ export function buildRankingPrompt(answers: QuizAnswers, candidates: Product[]):
     return `- ${p.id} | ${p.name} | role: ${getRole(p).label} | ${p.category} | £${p.price.toFixed(2)} | goals: ${p.goalTags.join('/')}${flags ? ` | ${flags}` : ''}`
   })
 
-  return `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand. Choose the ideal personalised supplement stack for this person from the eligible products below.
+  return `Build the ideal personalised stack for this person.
 
 PERSON
 ${firstName ? `- Name: ${firstName}` : ''}
@@ -75,23 +90,8 @@ ${firstName ? `- Name: ${firstName}` : ''}
 - Monthly budget: ${budget}
 - Stack preference: ${answers.stackPreference ?? 'balanced'}
 
-ELIGIBLE PRODUCTS (choose only from these ids — every one already fits this person's hard requirements)
-${lines.join('\n')}
-
-TASK
-Rank the products that form the best stack for this person, most important first. Order by how well each fits their specific goals, lifestyle and budget. You do not have to include every product. Write one short personalised reason (max 18 words) for each product you include.
-
-RULES
-- Use only product ids from the list above.
-- No medical claims, no guaranteed outcomes. Say "may support" not "will improve".
-- Never suggest a supplement can treat, manage or replace medical care for any condition.
-- Reasons are plain text — no markdown, no asterisks.
-
-Return ONLY a JSON object (no markdown) with exactly:
-{
-  "order": ["product-id", ...],
-  "reasons": { "product-id": "short personalised reason", ... }
-}`
+ELIGIBLE PRODUCTS (choose only from these ids)
+${lines.join('\n')}`
 }
 
 const stripMd = (s: string) => s.replace(/\*+/g, '').replace(/_{2,}/g, '').trim()
