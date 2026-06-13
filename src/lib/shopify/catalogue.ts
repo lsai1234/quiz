@@ -225,6 +225,7 @@ function deriveStackSlots(p: ShopifyProduct): StackSlot[] {
   const isRecovery = t.includes('collagen') || t.includes('joint') || t.includes('glucosamine') || (t.includes('recovery') && !isSleep) || pt === 'recovery'
   const isMagnesium = t.includes('magnesium')
   const isVegan = p.tags.includes('vegan') || t.includes('plant protein') || t.includes('vegan protein')
+  const isFatBurner = t.includes('fat burner') || t.includes('fat direct') || t.includes('fat-x') || t.includes('slender') || t.includes('pro cut') || t.includes('fat transporter') || pt.includes('slimming') || pt.includes('weight management') || pt.includes('body composition') || pt.includes('thermogenic')
 
   if (isProtein)    slots.push('protein')
   if (isPerformance) slots.push('performance')
@@ -236,6 +237,7 @@ function deriveStackSlots(p: ShopifyProduct): StackSlot[] {
   if (isHealth)     slots.push('health')
   if (isRecovery && !isAmino && !isMagnesium) slots.push('recovery')
   if (isVegan && isProtein) slots.push('vegan-support')
+  if (isFatBurner && slots.length === 0) slots.push('health')
 
   return [...new Set(slots)] as StackSlot[]
 }
@@ -259,9 +261,23 @@ function deriveGoals(p: ShopifyProduct, slots: StackSlot[]): ReturnType<typeof p
   if (t.includes('magnesium') || t.includes('sleep'))            { goals.add('sleep-better'); goals.add('less-stress') }
   if (t.includes('ashwagandha') || t.includes('theanine'))       { goals.add('less-stress') }
   if (t.includes('omega') || t.includes('fish oil'))             { goals.add('focus') }
-  if (t.includes('multivitamin') || t.includes('multi vitamin')) { goals.add('immune'); goals.add('focus') }
+  if (t.includes('multivitamin') || t.includes('multi vitamin') || t.includes('multi-vitamin')) {
+    goals.add('immune'); goals.add('focus'); goals.add('energy')
+  }
   if (t.includes('vitamin d') || t.includes('vitamin c'))        { goals.add('immune') }
   if (t.includes('collagen'))                                    { goals.add('skin-hair-nails'); goals.add('immune') }
+  // Fat burner / thermogenic → cutting goal
+  if (t.includes('fat burner') || t.includes('fat direct') || t.includes('fat-x') || t.includes('slender') || t.includes('pro cut') || t.includes('fat transporter')) {
+    goals.add('cutting')
+  }
+  // BCAA / EAA / amino → recovery + muscle
+  if (t.includes('bcaa') || t.includes('eaa') || t.includes('amino')) {
+    goals.add('recovery'); goals.add('muscle')
+  }
+  // Electrolytes → hydration + energy
+  if (t.includes('electrolyte') || t.includes('hydration+')) {
+    goals.add('hydration'); goals.add('energy')
+  }
   return [...goals] as ReturnType<typeof parseGoalTags>
 }
 
@@ -303,10 +319,13 @@ function deriveBoosterEligible(slots: StackSlot[]): boolean {
 }
 
 function derivePriority(p: ShopifyProduct, slots: StackSlot[]): number {
+  const t = p.title.toLowerCase()
   if (slots.includes('protein'))     return 10
   if (slots.includes('performance')) return 9
   if (slots.includes('energy'))      return 8
   if (slots.includes('hydration'))   return 7
+  // Fat burners get priority 7 for cutting goal users
+  if (t.includes('fat burner') || t.includes('fat direct') || t.includes('slender') || t.includes('fat-x') || t.includes('pro cut')) return 7
   if (slots.includes('health'))      return 6
   if (slots.includes('recovery'))    return 5
   if (slots.includes('sleep'))       return 5
@@ -334,7 +353,9 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const stackSlots      = explicitSlots.length > 0 ? explicitSlots : deriveStackSlots(p)
 
   const explicitGoals   = parseGoalTags(p.tags)
-  const goals           = explicitGoals.length > 0 ? explicitGoals : deriveGoals(p, stackSlots)
+  const derivedGoals    = deriveGoals(p, stackSlots)
+  // Always merge: explicit tags are authoritative, derived goals fill wellbeing gaps
+  const goals           = [...new Set([...explicitGoals, ...derivedGoals])] as Goal[]
 
   const explicitDietary = parseDietaryTags(p.tags)
   const dietaryTags     = explicitDietary.length > 0 ? explicitDietary : deriveDietaryTags(p)
