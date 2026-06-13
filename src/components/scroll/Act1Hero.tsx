@@ -54,6 +54,12 @@ const CAP_H     = 40
 const BOTTLE_SRC = '/hero/bottle.png'
 const LID_SRC    = '/hero/lid.png'
 
+// ── Progress-rail beat labels ───────────────────────────────────────────────────
+// What's coming, in order. Each light up as the scroll passes its point on the
+// timeline. `at` is resolved to a 0–1 fraction at runtime from the real beat
+// start times, so the ticks stay in sync if the timeline timing is retuned.
+const BEAT_LABELS = ['Open', 'Ingredients', 'Your stack'] as const
+
 // ── Image preloader ───────────────────────────────────────────────────────────
 
 function preloadImages(srcs: string[]): Promise<void> {
@@ -119,9 +125,11 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   const headline1Ref = useRef<HTMLDivElement>(null)
   const headline2Ref = useRef<HTMLDivElement>(null)
   const ctaRef       = useRef<HTMLButtonElement>(null)
+  const railRef      = useRef<HTMLDivElement>(null)
   const railFillRef  = useRef<HTMLDivElement>(null)
   const pctRef       = useRef<HTMLSpanElement>(null)
   const hintRef      = useRef<HTMLDivElement>(null)
+  const beatRefs     = useRef<(HTMLDivElement | null)[]>([])
 
   const [assetsReady, setAssetsReady]  = useState(false)
   const [resizeKey,   setResizeKey]    = useState(0)
@@ -228,15 +236,26 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     let mobileCleanup: (() => void) | null = null
 
     // ── Progress feedback ───────────────────────────────────────────────────
-    // Drives the side rail fill, the % readout, and fades the scroll prompt out
-    // as the intro nears its end. Called from ScrollTrigger (desktop) and the
-    // physics ticker (mobile) — direct DOM writes, no React re-renders.
+    // Drives the side rail fill, the % readout, the beat ticks, and fades the
+    // rail + scroll prompt out as the intro nears its end. Called from
+    // ScrollTrigger (desktop) and the physics ticker (mobile) — direct DOM
+    // writes, no React re-renders. `beatFracs` is filled once the timeline
+    // exists (see below) and read by closure here.
+    let beatFracs: number[] = []
     const updateProgress = (p: number) => {
       const cp = Math.max(0, Math.min(1, p))
+      // Fade rail + prompt out together over the final stretch, so the CTA gets
+      // a clean stage once the intro is essentially done.
+      const fade = 1 - Math.max(0, Math.min(1, (cp - 0.86) / 0.12))
       if (railFillRef.current) railFillRef.current.style.transform = `scaleY(${cp})`
       if (pctRef.current)      pctRef.current.textContent = `${Math.round(cp * 100)}%`
-      // Fade the "keep scrolling" prompt out over the last stretch (CTA appearing)
-      if (hintRef.current)     hintRef.current.style.opacity = String(1 - Math.max(0, Math.min(1, (cp - 0.82) / 0.12)))
+      if (railRef.current)     railRef.current.style.opacity = String(fade)
+      if (hintRef.current)     hintRef.current.style.opacity = String(fade)
+      // Light up each beat tick once the scroll passes its point on the timeline.
+      beatRefs.current.forEach((el, i) => {
+        if (!el || beatFracs[i] === undefined) return
+        el.dataset.active = cp >= beatFracs[i] - 0.001 ? 'true' : 'false'
+      })
     }
 
     const ctx = gsap.context(() => {
@@ -389,6 +408,17 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
       tl.to(headline1Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.15)
       tl.to(headline2Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.65)
       tl.to(ctaRef.current,       { opacity: 1, y: 0, duration: 0.55, ease: 'none' }, hStart + 1.1)
+
+      // ── Resolve beat-tick positions from real timeline times ─────────────
+      // Map each labelled beat to the moment it begins on the timeline, then
+      // position its tick down the rail at that fraction. Order matches
+      // BEAT_LABELS: Open (lid lifts) → Ingredients (capsules rise) →
+      // Your stack (bottle reassembled).
+      const total = tl.duration()
+      beatFracs = [b2, capFirst, rStart].map((t) => t / total)
+      beatRefs.current.forEach((el, i) => {
+        if (el && beatFracs[i] !== undefined) el.style.top = `${beatFracs[i] * 100}%`
+      })
 
       if (L.mobile) {
         // ── Mobile: physics momentum ────────────────────────────────────────
@@ -698,18 +728,38 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         </button>
       </div>
 
-      {/* Scroll-progress rail — fills as you advance, with a live % readout.
-          Makes it obvious the intro is a journey with more still to come. */}
-      <div className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 z-30 pointer-events-none">
+      {/* Scroll-progress rail — fills as you advance, with a live % readout and
+          labelled beat ticks (Open → Ingredients → Your stack) that light up as
+          you pass them. Spells out both how far you are and what's still coming.
+          Fades out with the prompt as the intro completes. */}
+      <div ref={railRef} className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 z-30 pointer-events-none">
         <span className="text-[8px] tracking-[0.25em] uppercase text-white/35 [writing-mode:vertical-rl] rotate-180">
           Intro
         </span>
-        <div className="relative w-[3px] h-[34vh] rounded-full bg-white/10 overflow-hidden">
-          <div
-            ref={railFillRef}
-            className="absolute inset-x-0 top-0 h-full rounded-full bg-[#00D4FF]"
-            style={{ transform: 'scaleY(0)', transformOrigin: 'top', boxShadow: '0 0 8px rgba(0,212,255,0.7)' }}
-          />
+        <div className="relative h-[34vh] flex justify-center">
+          {/* Track + fill */}
+          <div className="w-[3px] h-full rounded-full bg-white/10 overflow-hidden">
+            <div
+              ref={railFillRef}
+              className="w-full h-full rounded-full bg-[#00D4FF]"
+              style={{ transform: 'scaleY(0)', transformOrigin: 'top', boxShadow: '0 0 8px rgba(0,212,255,0.7)' }}
+            />
+          </div>
+          {/* Beat ticks — positioned down the rail by top% in the effect */}
+          {BEAT_LABELS.map((label, i) => (
+            <div
+              key={i}
+              ref={(el) => { beatRefs.current[i] = el }}
+              data-active="false"
+              className="group absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center"
+              style={{ top: '0%' }}
+            >
+              <span className="absolute right-3 text-right whitespace-nowrap text-[8px] tracking-[0.15em] uppercase leading-none text-white/30 transition-colors duration-300 group-data-[active=true]:text-white/80">
+                {label}
+              </span>
+              <span className="block w-[7px] h-[7px] rounded-full border border-white/25 bg-[#0A0A0A] transition-all duration-300 group-data-[active=true]:bg-[#00D4FF] group-data-[active=true]:border-[#00D4FF] group-data-[active=true]:shadow-[0_0_6px_rgba(0,212,255,0.8)]" />
+            </div>
+          ))}
         </div>
         <span ref={pctRef} className="text-[10px] font-semibold tabular-nums text-white/45" style={{ fontFamily: 'var(--font-display)' }}>
           0%
