@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
+import { useQuizStore } from '@/lib/store'
 
 interface Props {
   onComplete: () => void
@@ -40,60 +41,71 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   const progressTrackRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    if (reducedMotion) {
-      setTimeout(onComplete, 800)
-      return
+    // The stack is generated (incl. the AI passes) in the background while this
+    // screen plays. We only advance once BOTH a minimum play time has elapsed
+    // AND the data is ready — so the AI work overlaps the animation instead of
+    // adding to it, and we never reveal an unfinished stack.
+    const minDisplay = reducedMotion ? 900 : 3400
+    let animDone = false
+    let ready = useQuizStore.getState().stackReady
+    let finished = false
+
+    const finish = () => {
+      if (finished || !animDone || !ready) return
+      finished = true
+      if (reducedMotion) { onComplete(); return }
+      gsap.to([textRef.current, progressTrackRef.current], { opacity: 0, duration: 0.35, ease: 'power2.in' })
+      gsap.to(vizRef.current, { opacity: 0, scale: 1.08, duration: 0.5, ease: 'power2.in', onComplete })
     }
 
-    const tl = gsap.timeline({ onComplete })
-
-    // Visualization appears
-    if (vizRef.current) {
-      tl.fromTo(
-        vizRef.current,
-        { opacity: 0, scale: 0.82 },
-        { opacity: 1, scale: 1, duration: 0.8, ease: 'back.out(1.5)' },
-        0,
-      )
-    }
-
-    // Progress track appears
-    if (progressTrackRef.current) {
-      tl.fromTo(progressTrackRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0.4)
-    }
-
-    // Text cycles
-    const messages = [
-      'Reading your training profile…',
-      'Matching to supplement science…',
-      'Building your personalised stack…',
-      'Almost there…',
-    ]
-    messages.forEach((msg, i) => {
-      tl.call(() => {
-        if (textRef.current) {
-          gsap.fromTo(textRef.current, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35 })
-          textRef.current.textContent = msg
-        }
-      }, [], i * 0.88 + 0.4)
+    const unsub = useQuizStore.subscribe((s) => {
+      if (s.stackReady && !ready) { ready = true; finish() }
     })
+    const minTimer = setTimeout(() => {
+      animDone = true
+      if (!ready) ready = useQuizStore.getState().stackReady
+      finish()
+    }, minDisplay)
 
-    // Progress bar fills over 3.5s
-    if (progressRef.current) {
-      tl.fromTo(
-        progressRef.current,
-        { scaleX: 0 },
-        { scaleX: 1, duration: 3.5, ease: 'power1.inOut', transformOrigin: 'left center' },
-        0.3,
-      )
+    let tl: gsap.core.Timeline | null = null
+    if (!reducedMotion) {
+      tl = gsap.timeline()
+
+      if (vizRef.current) {
+        tl.fromTo(vizRef.current, { opacity: 0, scale: 0.82 }, { opacity: 1, scale: 1, duration: 0.8, ease: 'back.out(1.5)' }, 0)
+      }
+      if (progressTrackRef.current) {
+        tl.fromTo(progressTrackRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0.4)
+      }
+
+      // AI-forward status messages. The last one holds if the AI is still working.
+      const messages = [
+        'Connecting to CHRGD Intelligence…',
+        'Our AI is reading your profile…',
+        'Matching you to supplement science…',
+        'Personalising your stack…',
+      ]
+      messages.forEach((msg, i) => {
+        tl!.call(() => {
+          if (textRef.current) {
+            gsap.fromTo(textRef.current, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35 })
+            textRef.current.textContent = msg
+          }
+        }, [], i * 0.78 + 0.4)
+      })
+
+      // Progress eases to ~92% over the min display, then holds until ready.
+      if (progressRef.current) {
+        tl.fromTo(
+          progressRef.current,
+          { scaleX: 0 },
+          { scaleX: 0.92, duration: minDisplay / 1000 - 0.2, ease: 'power1.inOut', transformOrigin: 'left center' },
+          0.3,
+        )
+      }
     }
 
-    // Fade out visualization
-    tl.to(vizRef.current, { opacity: 0, scale: 1.08, duration: 0.55, ease: 'power2.in' }, 3.4)
-    tl.to(textRef.current, { opacity: 0, y: -12, duration: 0.3 }, 3.5)
-    tl.to(progressTrackRef.current, { opacity: 0, duration: 0.3 }, 3.55)
-
-    return () => { tl.kill() }
+    return () => { unsub(); clearTimeout(minTimer); tl?.kill() }
   }, [onComplete, reducedMotion])
 
   return (
@@ -202,14 +214,14 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         className="text-sm text-white/55 text-center mb-3"
         style={{ fontFamily: 'var(--font-display)', minHeight: '1.5em' }}
       >
-        Preparing analysis…
+        Connecting to CHRGD Intelligence…
       </p>
 
       <p
-        className="text-[10px] tracking-[0.2em] uppercase text-white/18"
+        className="text-[10px] tracking-[0.2em] uppercase text-white/25 flex items-center gap-1.5"
         style={{ fontFamily: 'var(--font-display)', textShadow: '0 0 10px rgba(0,212,255,0.3)' }}
       >
-        getCHRGD
+        <span className="text-[#00D4FF]">✦</span> Powered by CHRGD Intelligence
       </p>
     </div>
   )

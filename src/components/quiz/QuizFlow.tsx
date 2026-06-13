@@ -456,7 +456,7 @@ export function QuizFlow() {
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--color-bg)]">
           <div className="w-12 h-12 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin mb-6" />
           <p className="text-sm text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
-            Building your identity…
+            CHRGD Intelligence is personalising your stack…
           </p>
         </div>
       )}
