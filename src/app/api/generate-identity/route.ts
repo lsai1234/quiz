@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import type { QuizAnswers, StackIdentity } from '@/lib/types'
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// Constructed lazily inside the handler — the OpenAI SDK throws at construction
+// when no key is set, which would break the build/page-data collection.
+function getClient(): OpenAI | null {
+  const apiKey = process.env.OPENAI_API_KEY
+  return apiKey ? new OpenAI({ apiKey }) : null
+}
 
 const GOAL_LABELS: Record<string, string> = {
   muscle: 'build muscle',
@@ -26,6 +31,10 @@ const PERFORMANCE_GOAL_IDS = ['muscle', 'energy', 'performance', 'hydration', 'r
 
 export async function POST(req: NextRequest) {
   try {
+    const client = getClient()
+    // No key configured — fall through to the deterministic fallback identity.
+    if (!client) throw new Error('OPENAI_API_KEY not set')
+
     const answers: QuizAnswers = await req.json()
 
     const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ')

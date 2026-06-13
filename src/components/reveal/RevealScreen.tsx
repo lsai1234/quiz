@@ -3,6 +3,33 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
+import type { Product } from '@/lib/types'
+
+/** One product's AI reason — clamped to 2 lines with a More/Less toggle so long
+ *  personalised reasons don't overflow the card. */
+function ReasonItem({ product, reason }: { product: Product; reason: string }) {
+  const [expanded, setExpanded] = useState(false)
+  return (
+    <li className="flex gap-2.5">
+      <span className="mt-1.5 w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: product.accentColor }} />
+      <div className="min-w-0">
+        <p className="text-xs font-semibold text-[var(--color-text)]">{product.name}</p>
+        <p className={`text-xs text-[var(--color-text-2)] leading-relaxed mt-0.5 ${expanded ? '' : 'line-clamp-2'}`}>
+          {reason}
+        </p>
+        {reason.length > 80 && (
+          <button
+            onClick={() => setExpanded((o) => !o)}
+            className="text-[10px] font-bold mt-1 active:opacity-60 transition-opacity"
+            style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}
+          >
+            {expanded ? 'Less' : 'More'}
+          </button>
+        )}
+      </div>
+    </li>
+  )
+}
 
 function ScoreRing({ score }: { score: number }) {
   const [displayed, setDisplayed] = useState(0)
@@ -59,7 +86,7 @@ function ScoreRing({ score }: { score: number }) {
 
 export function RevealScreen() {
   const router = useRouter()
-  const { identity, selectedProducts } = useQuizStore()
+  const { identity, selectedProducts, aiReasons, stackPersonalised } = useQuizStore()
   const [phase, setPhase] = useState(0)
 
   useEffect(() => {
@@ -103,6 +130,18 @@ export function RevealScreen() {
             >
               Your supplement identity
             </span>
+            {stackPersonalised && (
+              <span
+                className="ml-auto px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase text-[var(--color-accent)]"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
+                }}
+              >
+                ✦ AI personalised
+              </span>
+            )}
           </div>
         </div>
 
@@ -182,7 +221,7 @@ export function RevealScreen() {
                   {selectedProducts.length} products selected
                 </p>
                 <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                  Matched to your goals and budget
+                  {stackPersonalised ? 'Personalised for you by AI' : 'Matched to your goals and budget'}
                 </p>
               </div>
               <div className="flex -space-x-2">
@@ -202,6 +241,17 @@ export function RevealScreen() {
                 )}
               </div>
             </div>
+
+            {/* Per-product AI reasoning — only shown when the AI personalised the stack */}
+            {selectedProducts.some((p) => aiReasons[p.id]) && (
+              <ul className="mt-3 pt-3 flex flex-col gap-2.5 border-t border-[var(--color-border)]">
+                {selectedProducts
+                  .filter((p) => aiReasons[p.id])
+                  .map((p) => (
+                    <ReasonItem key={p.id} product={p} reason={aiReasons[p.id]} />
+                  ))}
+              </ul>
+            )}
           </div>
         )}
 

@@ -3,8 +3,9 @@
 import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
-import { buildRecommendedStack } from '@/lib/recommendation'
+import { fetchRecommendedStack } from '@/lib/recommendation'
 import { buildStackBlueprint } from '@/lib/stack-blueprint'
+import { personaliseBlueprint } from '@/lib/stack-blueprint/personalise'
 import { useProducts } from '@/hooks/useProducts'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import type {
@@ -293,7 +294,7 @@ export function QuizFlow() {
   const router = useRouter()
   const {
     step, answers, nextStep, prevStep,
-    setGoals, setAnswer, setIdentity, setStackLevel, setSelectedProducts,
+    setGoals, setAnswer, setIdentity, setStackLevel, setSelectedProducts, setAiStackMeta,
   } = useQuizStore()
 
   // Kick off the catalogue fetch as soon as the quiz mounts so live
@@ -408,25 +409,31 @@ export function QuizFlow() {
   async function handleFinish() {
     setIsGenerating(true)
     try {
-      const res = await fetch('/api/generate-identity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answers),
-      })
-      const identity = await res.json()
-      setIdentity(identity)
+      // Read catalogue at call time — live Shopify products if loaded.
+      const catalogueProducts = useQuizStore.getState().catalogueProducts
+      const baseBlueprint = buildStackBlueprint(answers, catalogueProducts)
 
-      // Read catalogue at call time — live Shopify products if loaded
-      const stack = buildRecommendedStack(answers, useQuizStore.getState().catalogue)
+      // Run the AI passes concurrently so the reveal stays snappy. Each falls
+      // back to deterministic output on failure (personaliseBlueprint and
+      // fetchRecommendedStack never reject; only identity can, → outer catch).
+      const [identity, stack, blueprint] = await Promise.all([
+        fetch('/api/generate-identity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers),
+        }).then(r => r.json()),
+        fetchRecommendedStack(answers, useQuizStore.getState().catalogue),
+        personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
+      ])
+
+      setIdentity(identity)
       setSelectedProducts(stack.core)
+      setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
-
-      // Build and store the stack blueprint
-      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
       useQuizStore.getState().setStackBlueprint(blueprint)
 
       router.push('/reveal')
@@ -449,7 +456,7 @@ export function QuizFlow() {
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[var(--color-bg)]">
           <div className="w-12 h-12 rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-accent)] animate-spin mb-6" />
           <p className="text-sm text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
-            Building your identity…
+            CHRGD Intelligence is personalising your stack…
           </p>
         </div>
       )}

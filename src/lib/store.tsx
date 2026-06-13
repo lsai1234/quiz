@@ -13,6 +13,12 @@ interface QuizStore {
   identity: StackIdentity | null
   stackLevel: StackLevel
   selectedProducts: Product[]
+  // AI personalisation metadata for the current stack
+  aiReasons: Record<string, string>
+  stackPersonalised: boolean
+  // True once the (async, AI-backed) stack generation has finished and the
+  // store is populated — the analysis screen waits on this before revealing.
+  stackReady: boolean
   // Product catalogue — single source of truth, hydrated from /api/products
   catalogue: Product[]
   catalogueSource: 'mock' | 'shopify'
@@ -30,6 +36,8 @@ interface QuizStore {
   setIdentity: (identity: StackIdentity) => void
   setStackLevel: (level: StackLevel) => void
   setSelectedProducts: (products: Product[]) => void
+  setAiStackMeta: (reasons: Record<string, string>, personalised: boolean) => void
+  setStackReady: (ready: boolean) => void
   toggleProduct: (product: Product) => void
   setCatalogue: (products: Product[], source: 'mock' | 'shopify') => void
   setStackBlueprint: (blueprint: StackBlueprint) => void
@@ -66,6 +74,9 @@ export const useQuizStore = create<QuizStore>((set) => ({
   identity: null,
   stackLevel: 'performance',
   selectedProducts: [],
+  aiReasons: {},
+  stackPersonalised: false,
+  stackReady: false,
   catalogue: MOCK_PRODUCTS,
   catalogueSource: 'mock',
   stackBlueprint: null,
@@ -84,6 +95,8 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setIdentity: (identity) => set({ identity }),
   setStackLevel: (level) => set({ stackLevel: level }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
+  setAiStackMeta: (reasons, personalised) => set({ aiReasons: reasons, stackPersonalised: personalised }),
+  setStackReady: (ready) => set({ stackReady: ready }),
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
   setStackBlueprint: (blueprint) => set({ stackBlueprint: blueprint }),
   setCatalogueProducts: (products) => set({ catalogueProducts: products }),
@@ -98,5 +111,5 @@ export const useQuizStore = create<QuizStore>((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [] }),
+  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], aiReasons: {}, stackPersonalised: false, stackReady: false }),
 }))

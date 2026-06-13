@@ -85,15 +85,40 @@ function dedupeRole(product: Product): string {
   return id.startsWith('pre-workout') ? 'pre-workout' : id
 }
 
-export function buildRecommendedStack(answers: QuizAnswers, catalogue: Product[] = MOCK_PRODUCTS as Product[]): RecommendedStack {
-  const level = resolveStackLevel(answers)
-  const limit = budgetLimit(answers.budget)
+interface ScoredProduct {
+  product: Product
+  score: number
+}
 
-  const scored = catalogue
+/**
+ * Hard eligibility gate. Returns the products a user is *allowed* to be shown,
+ * scored and sorted best-first. A negative score means a product is excluded
+ * outright (vegan/stimulant conflicts, already-taking, etc.) — those never make
+ * it into this list. This is the deterministic safety layer: the AI ranker is
+ * only ever offered candidates that survive these gates, so it can re-prioritise
+ * but can never recommend something the rules forbid.
+ */
+export function getEligibleCandidates(
+  answers: QuizAnswers,
+  catalogue: Product[] = MOCK_PRODUCTS as Product[],
+  level: StackLevel = resolveStackLevel(answers),
+): ScoredProduct[] {
+  return catalogue
     .map(p => ({ product: p, score: scoreProduct(p, answers) }))
     .filter(({ score }) => score >= 0)
     .filter(({ product }) => product.stackLevels.includes(level))
     .sort((a, b) => b.score - a.score)
+}
+
+/**
+ * Packs an already-ordered list of eligible candidates into a stack, enforcing
+ * the budget ceiling, one-product-per-role de-duping and the single-stimulant
+ * cap. Selection follows the order of `scored`, so whoever controls that order
+ * (deterministic score, or the AI ranker) controls the stack — but the
+ * constraints below are non-negotiable and applied here regardless.
+ */
+export function assembleStack(scored: ScoredProduct[], answers: QuizAnswers): RecommendedStack {
+  const limit = budgetLimit(answers.budget)
 
   // Build core stack within budget.
   // Dedupe by functional role (creatine, protein, pre-workout…) so the stack
@@ -147,6 +172,80 @@ export function buildRecommendedStack(answers: QuizAnswers, catalogue: Product[]
   }
 
   return { core, upgrades, excluded }
+}
+
+/**
+ * Deterministic recommendation engine. This is both the default path and the
+ * fallback whenever the AI ranker is unavailable, slow, or returns something
+ * that fails validation.
+ */
+export function buildRecommendedStack(answers: QuizAnswers, catalogue: Product[] = MOCK_PRODUCTS as Product[]): RecommendedStack {
+  const level = resolveStackLevel(answers)
+  const scored = getEligibleCandidates(answers, catalogue, level)
+  return assembleStack(scored, answers)
+}
+
+/**
+ * Builds a stack from an AI-supplied ordering of product ids while keeping every
+ * hard constraint intact. The AI only ever reorders the *eligible* candidate set
+ * — ids it returns that aren't eligible (don't exist, failed a gate, wrong stack
+ * level) are silently ignored, and anything it omits falls back to deterministic
+ * score order. Budget, role de-duping and the stimulant cap are still enforced
+ * by `assembleStack`. The result is a genuinely AI-personalised selection that
+ * cannot break the rules.
+ */
+export function buildStackFromAIOrder(
+  answers: QuizAnswers,
+  catalogue: Product[],
+  aiOrder: string[],
+): RecommendedStack {
+  const level = resolveStackLevel(answers)
+  const eligible = getEligibleCandidates(answers, catalogue, level)
+
+  const byId = new Map(eligible.map(s => [s.product.id, s]))
+  const rank = new Map(aiOrder.map((id, i) => [id, i]))
+
+  // AI-ranked eligible products first (in the AI's order), then everything else
+  // the AI didn't mention, kept in deterministic score order as a tiebreak.
+  const reordered = [...eligible].sort((a, b) => {
+    const ra = rank.has(a.product.id) ? rank.get(a.product.id)! : Infinity
+    const rb = rank.has(b.product.id) ? rank.get(b.product.id)! : Infinity
+    if (ra !== rb) return ra - rb
+    return b.score - a.score
+  })
+
+  // If the AI named nothing we recognise, fall back to the deterministic stack.
+  const recognised = aiOrder.some(id => byId.has(id))
+  return assembleStack(recognised ? reordered : eligible, answers)
+}
+
+export interface PersonalisedStack extends RecommendedStack {
+  /** AI-written reason per product id. Empty when the deterministic engine ran. */
+  aiReasons: Record<string, string>
+  /** True when the AI ranked the stack, false when it fell back to scoring. */
+  personalised: boolean
+}
+
+/**
+ * Client-side entry point. Asks the AI ranker (via /api/recommend-stack) for a
+ * personalised selection and falls back to the deterministic engine if the
+ * request fails for any reason, so the quiz can never get stuck.
+ */
+export async function fetchRecommendedStack(
+  answers: QuizAnswers,
+  catalogue: Product[] = MOCK_PRODUCTS as Product[],
+): Promise<PersonalisedStack> {
+  try {
+    const res = await fetch('/api/recommend-stack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answers, catalogue }),
+    })
+    if (!res.ok) throw new Error(`recommend-stack ${res.status}`)
+    return (await res.json()) as PersonalisedStack
+  } catch {
+    return { ...buildRecommendedStack(answers, catalogue), aiReasons: {}, personalised: false }
+  }
 }
 
 export function stackTotalPrice(products: Product[]): number {

@@ -9,8 +9,19 @@ import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
-  TrainingExperience, StimPreference, AgeBracket, Gender,
+  TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
 } from '@/lib/types'
+
+// Client-side fallback identity so the reveal is never empty if the identity
+// request fails outright (the API also returns its own fallback on a 200).
+const FALLBACK_IDENTITY: StackIdentity = {
+  name: 'Peak Protocol',
+  archetype: 'The Performance Athlete',
+  description:
+    'Your stack is built around output and recovery. These selections may suit your goals and are commonly used by people with similar profiles.',
+  focusAreas: ['Performance Output', 'Faster Recovery', 'Daily Energy'],
+  routineFitScore: 84,
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -434,7 +445,7 @@ interface Props { onComplete: () => void; reducedMotion: boolean }
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
     step, answers, nextStep, prevStep, setStep,
-    setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel,
+    setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel, setAiStackMeta, setStackReady,
   } = useQuizStore()
 
   // Hydrate live catalogue while the user answers the quiz
@@ -540,32 +551,51 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     pendingTimerRef.current = setTimeout(() => advance(), 320)
   }
 
-  async function handleFinish() {
+  // Kick the AI generation off in the background and advance straight to the
+  // analysis screen — the work runs *during* that animation instead of blocking
+  // behind it. Act3Analysis waits on `stackReady` before revealing the stack.
+  function handleFinish() {
+    setStackReady(false)
     setIsGenerating(true)
+    void generateStack()
+    onComplete()
+  }
+
+  async function generateStack() {
     try {
-      const { buildRecommendedStack } = await import('@/lib/recommendation')
+      const { fetchRecommendedStack } = await import('@/lib/recommendation')
       const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
-      const res = await fetch('/api/generate-identity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answers),
-      })
-      const identity = await res.json()
-      setIdentity(identity)
-      const stack = buildRecommendedStack(answers, useQuizStore.getState().catalogue)
+      const { personaliseBlueprint } = await import('@/lib/stack-blueprint/personalise')
+
+      const catalogueProducts = useQuizStore.getState().catalogueProducts
+      const baseBlueprint = buildStackBlueprint(answers, catalogueProducts)
+
+      // Run the AI passes concurrently. Each falls back to deterministic output
+      // on failure, and identity falls back too, so this never rejects.
+      const [identity, stack, blueprint] = await Promise.all([
+        fetch('/api/generate-identity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers),
+        }).then(r => r.json()).catch(() => FALLBACK_IDENTITY),
+        fetchRecommendedStack(answers, useQuizStore.getState().catalogue),
+        personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
+      ])
+
+      setIdentity(identity ?? FALLBACK_IDENTITY)
       setSelectedProducts(stack.core)
+      setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
-
-      // Build and store the stack blueprint
-      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
       useQuizStore.getState().setStackBlueprint(blueprint)
-
-      onComplete()
-    } catch { setIsGenerating(false) }
+    } catch {
+      if (!useQuizStore.getState().identity) setIdentity(FALLBACK_IDENTITY)
+    } finally {
+      useQuizStore.getState().setStackReady(true)
+    }
   }
 
   // ─── Derived state ───────────────────────────────────────────────────────────
@@ -609,9 +639,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           </div>
           <div className="text-center">
             <p className="text-xl font-black text-white mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
-              Building your stack…
+              Connecting to CHRGD Intelligence…
             </p>
-            <p className="text-sm text-white/35">Personalising every pick</p>
+            <p className="text-sm text-white/35">Our AI is personalising every pick</p>
           </div>
           <div className="flex gap-1.5 mt-2">
             {Array.from({ length: 5 }).map((_, i) => (

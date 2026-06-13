@@ -31,4 +31,6 @@ export interface StackBlueprint {
   estimatedSubscriptionPrice: number
   savingsSummary: string            // e.g. "Save £12.50/month with subscription"
   createdAt: string                 // ISO date string
+  /** True when an AI pass personalised the product choices / reasons. */
+  personalised?: boolean
 }
