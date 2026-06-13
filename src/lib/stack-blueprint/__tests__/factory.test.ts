@@ -344,3 +344,99 @@ describe('buildStackBlueprint — new scoring signals', () => {
     expect(collagenSlot).toBeDefined()
   })
 })
+
+describe('buildStackBlueprint — eligibility gates', () => {
+  it('fat burners never appear when cutting is not a goal', () => {
+    const noGoals: Goal[][] = [
+      ['health'], ['muscle'], ['sleep-better'], ['immune'], ['focus'],
+      ['energy'], ['gut-health'], ['muscle', 'sleep-better'],
+    ]
+    for (const goals of noGoals) {
+      const blueprint = buildStackBlueprint(
+        makeAnswers({ goals, budget: '80-plus', stackPreference: 'complete' }),
+        MOCK_CATALOGUE,
+      )
+      const fatBurner = blueprint.slots.find(s => {
+        const p = MOCK_CATALOGUE.find(p => p.id === s.selectedProductId)
+        return p?.swapGroup === 'fat-burner'
+      })
+      expect(fatBurner).toBeUndefined()
+    }
+  })
+
+  it('fat burners DO appear when cutting is selected', () => {
+    // Mock catalogue doesn't have a fat-burner product, but we can verify the gate
+    // doesn't wrongly exclude cutting users. Add a synthetic one inline.
+    const { MOCK_CATALOGUE: base } = require('@/lib/catalogue')
+    const withFatBurner = [
+      ...base,
+      {
+        id: 'test-fat-burner', title: 'Test Thermo', handle: 'test-fat-burner',
+        description: 'A thermogenic fat burner', imageUrl: null, category: 'Body Composition',
+        stackSlots: ['health'], goals: ['cutting'],
+        dietaryTags: [], formats: ['capsule'], variants: [],
+        basePrice: 29.99, compareAtPrice: null, subscriptionEligible: false,
+        swapGroup: 'fat-burner', recommendationPriority: 7, marginPriority: 5,
+        isCoreEligible: false, isBoosterEligible: false, hasStimulants: true,
+        shortReason: 'Supports fat loss.', warnings: [], shopifyProductId: null,
+      },
+    ] as typeof base
+    const blueprint = buildStackBlueprint(
+      makeAnswers({ goals: ['cutting'], budget: '80-plus', stimPreference: 'yes', caffeineLevel: 'high' }),
+      withFatBurner,
+    )
+    const fatBurnerSlot = blueprint.slots.find(s => s.selectedProductId === 'test-fat-burner')
+    expect(fatBurnerSlot).toBeDefined()
+  })
+
+  it('mass gainer never appears when bulking is not a goal', () => {
+    const blueprint = buildStackBlueprint(
+      makeAnswers({ goals: ['muscle'], budget: '80-plus' }),
+      MOCK_CATALOGUE,
+    )
+    const massGainer = blueprint.slots.find(s => s.selectedProductId === 'chrgd-mass-builder')
+    expect(massGainer).toBeUndefined()
+  })
+
+  it('mass gainer appears when bulking is selected', () => {
+    const blueprint = buildStackBlueprint(
+      makeAnswers({ goals: ['bulking', 'muscle'], budget: '80-plus' }),
+      MOCK_CATALOGUE,
+    )
+    const massGainer = blueprint.slots.find(s => s.selectedProductId === 'chrgd-mass-builder')
+    expect(massGainer).toBeDefined()
+  })
+
+  it('menopause product never appears without menopause goal', () => {
+    const blueprint = buildStackBlueprint(
+      makeAnswers({ track: 'wellbeing', goals: ['sleep-better', 'immune', 'health'], budget: '80-plus' }),
+      MOCK_CATALOGUE,
+    )
+    const menoSlot = blueprint.slots.find(s => s.selectedProductId === 'chrgd-menopause-complete')
+    expect(menoSlot).toBeUndefined()
+  })
+
+  it('secondary fill does not add probiotics for a sleep-only user', () => {
+    const blueprint = buildStackBlueprint(
+      makeAnswers({ track: 'wellbeing', goals: ['sleep-better'], budget: '80-plus' }),
+      MOCK_CATALOGUE,
+    )
+    const probiotic = blueprint.slots.find(s => {
+      const p = MOCK_CATALOGUE.find(p => p.id === s.selectedProductId)
+      return p?.swapGroup === 'probiotic'
+    })
+    expect(probiotic).toBeUndefined()
+  })
+
+  it('secondary fill does not add probiotics for a focus-only user', () => {
+    const blueprint = buildStackBlueprint(
+      makeAnswers({ track: 'wellbeing', goals: ['focus'], budget: '80-plus' }),
+      MOCK_CATALOGUE,
+    )
+    const probiotic = blueprint.slots.find(s => {
+      const p = MOCK_CATALOGUE.find(p => p.id === s.selectedProductId)
+      return p?.swapGroup === 'probiotic'
+    })
+    expect(probiotic).toBeUndefined()
+  })
+})

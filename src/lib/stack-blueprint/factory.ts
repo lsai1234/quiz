@@ -158,6 +158,37 @@ function scoreProduct(
   const goalOverlap = answers.goals.filter(g => product.goals.includes(g)).length
   score += goalOverlap * 15
 
+  // ── Hard eligibility gates ─────────────────────────────────────────────────
+  // These products have a specific, narrow use case. Recommending them without
+  // the matching goal creates noise and erodes trust. -Infinity means they are
+  // excluded entirely from scoring — they never even appear as candidates.
+  //
+  // Fat burners: thermogenics and cutting products have no benefit for someone
+  // who hasn't selected a weight-loss / cutting goal. Recommending them to a
+  // sleep or immune-support user is actively wrong.
+  if (product.swapGroup === 'fat-burner' && !answers.goals.includes('cutting')) return -Infinity
+  // Mass gainers: a 600kcal shake is counterproductive outside a bulk phase
+  if (product.swapGroup === 'protein-mass' && !answers.goals.includes('bulking')) return -Infinity
+  // Menopause blends: hormone-support botanicals are only relevant for menopause
+  if (product.swapGroup === 'menopause' && !answers.goals.includes('menopause')) return -Infinity
+  // Probiotics and greens: gut-health products should only appear when the user
+  // has asked for gut or immune support — not as generic "health" fill
+  if ((product.swapGroup === 'probiotic' || product.swapGroup === 'greens' || product.swapGroup === 'fibre') &&
+      !answers.goals.some(g => ['gut-health', 'immune', 'health'].includes(g))) return -Infinity
+  // Adaptogen/stress blends: ashwagandha should only appear when stress or sleep
+  // is a stated goal — not as a generic health add-on
+  if (product.swapGroup === 'adaptogen' &&
+      !answers.goals.some(g => ['less-stress', 'sleep-better', 'menopause'].includes(g))) return -Infinity
+
+  // ── Goal relevance floor ───────────────────────────────────────────────────
+  // If a product has NO goal overlap with the user AND it isn't a foundational
+  // supplement (omega-3, vitamin-d, multivitamin have broad evidence for all
+  // active people), it needs a meaningful score penalty to prevent priority
+  // number alone from pushing irrelevant products into the stack.
+  const foundationalSwapGroups = ['omega-3', 'vitamin-d', 'multivitamin', 'vitamin-c', 'magnesium']
+  const isFoundational = foundationalSwapGroups.includes(product.swapGroup)
+  if (goalOverlap === 0 && !isFoundational) score -= 30
+
   // Stimulant skip
   if (product.hasStimulants && (answers.stimPreference === 'no' || answers.caffeineLevel === 'none')) {
     return -Infinity
@@ -248,6 +279,12 @@ function scoreProduct(
   const muscleGoals: Goal[] = ['muscle', 'bulking', 'performance']
   if (slotType === 'performance' && !answers.goals.some(g => muscleGoals.includes(g))) score -= 60
   if (slotType === 'protein' && !answers.goals.some(g => ['muscle', 'bulking', 'recovery'].includes(g))) score -= 50
+
+  // Mass gainer is the primary pick for bulking — it provides calories AND protein.
+  // Regular whey is inadequate for someone trying to gain mass who struggles to eat.
+  if (answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score += 25
+  // Conversely, regular whey is the better default for muscle/recovery without bulking
+  if (!answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score -= 20
 
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
@@ -584,14 +621,22 @@ export function buildStackBlueprint(
 
     // Budget-driven secondary fill: a higher budget should genuinely deliver a
     // bigger stack. After every selected goal has its primary product, top the
-    // stack up with the next best complementary products — second picks for the
-    // user's goals plus daily-health staples — until we hit the budget's slot cap.
+    // stack up with the next best complementary picks for the user's STATED goals
+    // only. We intentionally do NOT inject "foundation" goals here — if a user
+    // asked for sleep support they should get sleep-related products, not a
+    // probiotic they never asked for.
     if (slots.length < maxSlots) {
-      const foundationGoals: Goal[] = ['health', 'immune', 'focus']
-      const relevantGoals = new Set<Goal>([...answers.goals, ...foundationGoals])
+      const relevantGoals = new Set<Goal>(answers.goals)
+      // Foundational supplements (multivitamin, omega-3, vitamin-d) have blanket
+      // evidence for anyone who trains — include them as secondary picks regardless
+      // of specific goals, but they still go through scoreProduct so they only
+      // appear when they score positively.
       const extras = effectiveCatalogue
         .filter(p => !usedProductIds.has(p.id))
-        .filter(p => p.goals.some(g => relevantGoals.has(g)))
+        .filter(p => {
+          const foundationalSwapGroups = ['omega-3', 'vitamin-d', 'multivitamin', 'vitamin-c', 'magnesium']
+          return p.goals.some(g => relevantGoals.has(g)) || foundationalSwapGroups.includes(p.swapGroup)
+        })
         .map(p => {
           const slotType = (p.stackSlots[0] ?? 'health') as SlotType
           return { product: p, slotType, score: scoreProduct(p, slotType, answers, archetype) }

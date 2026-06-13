@@ -346,8 +346,10 @@ function derivePriority(p: ShopifyProduct, slots: StackSlot[]): number {
   if (slots.includes('performance')) return 9
   if (slots.includes('energy'))      return 8
   if (slots.includes('hydration'))   return 7
-  // Fat burners get priority 7 for cutting goal users
-  if (t.includes('fat burner') || t.includes('fat direct') || t.includes('slender') || t.includes('fat-x') || t.includes('pro cut')) return 7
+  // Fat burners have a narrow use case (cutting only) — priority stays low so
+  // the hard eligibility gate in the factory does the real work. When cutting IS
+  // selected they rank correctly via goal-affinity boosts.
+  if (t.includes('fat burner') || t.includes('fat direct') || t.includes('slender') || t.includes('fat-x') || t.includes('pro cut')) return 5
   if (slots.includes('health'))      return 6
   if (slots.includes('recovery'))    return 5
   if (slots.includes('sleep'))       return 5
