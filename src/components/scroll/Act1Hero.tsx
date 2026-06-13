@@ -93,6 +93,19 @@ function CHRGDIcon({ size = 28 }: { size?: number }) {
   )
 }
 
+// ── Bouncing chevron (mobile scroll cue) ───────────────────────────────────────
+
+function Chevron({ delay }: { delay: string }) {
+  return (
+    <svg
+      width="18" height="10" viewBox="0 0 18 10" fill="none"
+      style={{ animation: 'chevron-bounce 1.4s ease-in-out infinite', animationDelay: delay }}
+    >
+      <path d="M1 1L9 8L17 1" stroke="#00D4FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
@@ -106,6 +119,9 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   const headline1Ref = useRef<HTMLDivElement>(null)
   const headline2Ref = useRef<HTMLDivElement>(null)
   const ctaRef       = useRef<HTMLButtonElement>(null)
+  const railFillRef  = useRef<HTMLDivElement>(null)
+  const pctRef       = useRef<HTMLSpanElement>(null)
+  const hintRef      = useRef<HTMLDivElement>(null)
 
   const [assetsReady, setAssetsReady]  = useState(false)
   const [resizeKey,   setResizeKey]    = useState(0)
@@ -210,6 +226,19 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
 
     const L = getLayout()
     let mobileCleanup: (() => void) | null = null
+
+    // ── Progress feedback ───────────────────────────────────────────────────
+    // Drives the side rail fill, the % readout, and fades the scroll prompt out
+    // as the intro nears its end. Called from ScrollTrigger (desktop) and the
+    // physics ticker (mobile) — direct DOM writes, no React re-renders.
+    const updateProgress = (p: number) => {
+      const cp = Math.max(0, Math.min(1, p))
+      if (railFillRef.current) railFillRef.current.style.transform = `scaleY(${cp})`
+      if (pctRef.current)      pctRef.current.textContent = `${Math.round(cp * 100)}%`
+      // Fade the "keep scrolling" prompt out over the last stretch (CTA appearing)
+      if (hintRef.current)     hintRef.current.style.opacity = String(1 - Math.max(0, Math.min(1, (cp - 0.82) / 0.12)))
+    }
+
     const ctx = gsap.context(() => {
 
       // ── Set every element to its correct starting position ──────────────
@@ -367,6 +396,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         // into a friction loop: big flick → animation plays fast then coasts
         // to a stop, just like a page decelerating after a scroll.
         gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
+        updateProgress(0)
 
         const FRICTION    = 0.985   // velocity multiplier per 16.67 ms frame — higher = longer coast
         const MAX_VEL     = 0.00035 // progress/ms cap
@@ -382,6 +412,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           const dt = Math.min(deltaTime, 50)
           velocity *= Math.pow(FRICTION, dt / 16.67)
           tl.progress(Math.max(0, Math.min(1, tl.progress() + velocity * dt)))
+          updateProgress(tl.progress())
         }
         gsap.ticker.add(tick)
 
@@ -454,7 +485,9 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           scrub:         1,
           animation:     tl,
           anticipatePin: 1,
+          onUpdate:      (self) => updateProgress(self.progress),
         })
+        updateProgress(0)
       }
 
     }, section)  // scope gsap.context to the section element
@@ -665,12 +698,40 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         </button>
       </div>
 
-      {/* Scroll / swipe hint */}
-      <div className="absolute bottom-8 left-0 right-0 flex flex-col items-center gap-2 pointer-events-none z-20">
-        <div className="w-px h-8 bg-white/20 animate-[scroll-hint_2s_ease-in-out_infinite]" />
-        <p className="text-[10px] tracking-widest uppercase text-white/30">
-          <span className="md:hidden">Swipe to reveal</span>
-          <span className="hidden md:inline">Scroll to reveal</span>
+      {/* Scroll-progress rail — fills as you advance, with a live % readout.
+          Makes it obvious the intro is a journey with more still to come. */}
+      <div className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 z-30 pointer-events-none">
+        <span className="text-[8px] tracking-[0.25em] uppercase text-white/35 [writing-mode:vertical-rl] rotate-180">
+          Intro
+        </span>
+        <div className="relative w-[3px] h-[34vh] rounded-full bg-white/10 overflow-hidden">
+          <div
+            ref={railFillRef}
+            className="absolute inset-x-0 top-0 h-full rounded-full bg-[#00D4FF]"
+            style={{ transform: 'scaleY(0)', transformOrigin: 'top', boxShadow: '0 0 8px rgba(0,212,255,0.7)' }}
+          />
+        </div>
+        <span ref={pctRef} className="text-[10px] font-semibold tabular-nums text-white/45" style={{ fontFamily: 'var(--font-display)' }}>
+          0%
+        </span>
+      </div>
+
+      {/* Scroll / swipe prompt — animated, imperative, fades out near the end */}
+      <div ref={hintRef} className="absolute bottom-7 left-0 right-0 flex flex-col items-center gap-2.5 pointer-events-none z-30">
+        {/* Mobile: bouncing chevrons. Desktop: mouse with drifting wheel dot. */}
+        <div className="md:hidden flex flex-col items-center -space-y-1">
+          <Chevron delay="0s" />
+          <Chevron delay="0.15s" />
+        </div>
+        <div className="hidden md:flex w-[26px] h-[42px] rounded-full border-2 border-white/40 justify-center pt-2">
+          <div
+            className="w-1 h-2 rounded-full bg-[#00D4FF]"
+            style={{ animation: 'scroll-wheel 1.6s ease-in-out infinite', boxShadow: '0 0 6px rgba(0,212,255,0.8)' }}
+          />
+        </div>
+        <p className="text-[11px] font-semibold tracking-[0.2em] uppercase text-white/70" style={{ fontFamily: 'var(--font-display)' }}>
+          <span className="md:hidden">Keep swiping up</span>
+          <span className="hidden md:inline">Keep scrolling</span>
         </p>
       </div>
     </section>
