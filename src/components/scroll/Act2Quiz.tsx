@@ -545,15 +545,24 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     try {
       const { fetchRecommendedStack } = await import('@/lib/recommendation')
       const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
-      const res = await fetch('/api/generate-identity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answers),
-      })
-      const identity = await res.json()
+      const { personaliseBlueprint } = await import('@/lib/stack-blueprint/personalise')
+
+      const catalogueProducts = useQuizStore.getState().catalogueProducts
+      const baseBlueprint = buildStackBlueprint(answers, catalogueProducts)
+
+      // Run the AI passes concurrently so the reveal stays snappy. Each falls
+      // back to deterministic output on failure.
+      const [identity, stack, blueprint] = await Promise.all([
+        fetch('/api/generate-identity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers),
+        }).then(r => r.json()),
+        fetchRecommendedStack(answers, useQuizStore.getState().catalogue),
+        personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
+      ])
+
       setIdentity(identity)
-      // AI ranks the selection server-side; falls back to deterministic scoring.
-      const stack = await fetchRecommendedStack(answers, useQuizStore.getState().catalogue)
       setSelectedProducts(stack.core)
       setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
@@ -561,9 +570,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
-
-      // Build and store the stack blueprint
-      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
       useQuizStore.getState().setStackBlueprint(blueprint)
 
       onComplete()

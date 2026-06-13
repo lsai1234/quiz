@@ -4,7 +4,12 @@ import type { QuizAnswers, Product, RecommendedStack } from '@/lib/types'
 import { MOCK_PRODUCTS, buildRecommendedStack, buildStackFromAIOrder, getEligibleCandidates } from '@/lib/recommendation'
 import { buildRankingPrompt, parseAIStackResult, RANKING_SYSTEM_PROMPT } from '@/lib/ai-stack'
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+// Constructed lazily inside the handler — the OpenAI SDK throws at construction
+// when no key is set, which would break the build/page-data collection.
+function getClient(): OpenAI | null {
+  const apiKey = process.env.OPENAI_API_KEY
+  return apiKey ? new OpenAI({ apiKey }) : null
+}
 
 interface RecommendStackResponse extends RecommendedStack {
   /** Personalised, AI-written reason per product id (empty when deterministic). */
@@ -28,9 +33,10 @@ export async function POST(req: NextRequest) {
   })
 
   try {
+    const client = getClient()
     const eligible = getEligibleCandidates(answers, catalogue)
     // Nothing to rank, or no key configured — skip the model entirely.
-    if (eligible.length === 0 || !process.env.OPENAI_API_KEY) {
+    if (eligible.length === 0 || !client) {
       return NextResponse.json(fallback())
     }
 

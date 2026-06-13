@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useQuizStore } from '@/lib/store'
 import { fetchRecommendedStack } from '@/lib/recommendation'
 import { buildStackBlueprint } from '@/lib/stack-blueprint'
+import { personaliseBlueprint } from '@/lib/stack-blueprint/personalise'
 import { useProducts } from '@/hooks/useProducts'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import type {
@@ -408,17 +409,24 @@ export function QuizFlow() {
   async function handleFinish() {
     setIsGenerating(true)
     try {
-      const res = await fetch('/api/generate-identity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(answers),
-      })
-      const identity = await res.json()
-      setIdentity(identity)
-
       // Read catalogue at call time — live Shopify products if loaded.
-      // AI ranks the selection server-side; falls back to deterministic scoring.
-      const stack = await fetchRecommendedStack(answers, useQuizStore.getState().catalogue)
+      const catalogueProducts = useQuizStore.getState().catalogueProducts
+      const baseBlueprint = buildStackBlueprint(answers, catalogueProducts)
+
+      // Run the AI passes concurrently so the reveal stays snappy. Each falls
+      // back to deterministic output on failure (personaliseBlueprint and
+      // fetchRecommendedStack never reject; only identity can, → outer catch).
+      const [identity, stack, blueprint] = await Promise.all([
+        fetch('/api/generate-identity', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(answers),
+        }).then(r => r.json()),
+        fetchRecommendedStack(answers, useQuizStore.getState().catalogue),
+        personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
+      ])
+
+      setIdentity(identity)
       setSelectedProducts(stack.core)
       setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
@@ -426,9 +434,6 @@ export function QuizFlow() {
           : answers.stackPreference === 'complete' ? 'complete'
             : 'performance',
       )
-
-      // Build and store the stack blueprint
-      const blueprint = buildStackBlueprint(answers, useQuizStore.getState().catalogueProducts)
       useQuizStore.getState().setStackBlueprint(blueprint)
 
       router.push('/reveal')

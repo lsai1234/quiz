@@ -16,12 +16,27 @@ function prettifyGoal(goal: string) {
 export function StackHero({ blueprint, productCount, totalPrice }: Props) {
   return (
     <div className="px-5 pt-12 pb-8 max-w-lg mx-auto">
-      <span
-        className="text-[10px] font-bold tracking-[0.25em] uppercase mb-4 block"
-        style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}
-      >
-        Your CHRGD Stack
-      </span>
+      <div className="flex items-center gap-2 mb-4">
+        <span
+          className="text-[10px] font-bold tracking-[0.25em] uppercase block"
+          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}
+        >
+          Your CHRGD Stack
+        </span>
+        {blueprint.personalised && (
+          <span
+            className="px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase"
+            style={{
+              fontFamily: 'var(--font-display)',
+              color: 'var(--color-accent)',
+              background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
+            }}
+          >
+            ✦ AI personalised
+          </span>
+        )}
+      </div>
       <h2
         className="text-4xl font-black leading-tight tracking-tight"
         style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}

@@ -126,3 +126,105 @@ export function parseAIStackResult(raw: unknown, eligibleIds: Set<string>): AISt
   if (order.length === 0) return null
   return { order, reasons }
 }
+
+// ─── Blueprint slot personalisation ──────────────────────────────────────────
+// The main flow shows a slot-based stack (protein / performance / sleep …). The
+// deterministic factory decides which slots exist, the budget cap and every hard
+// gate; the AI then picks the best product to fill each slot from that slot's
+// already-eligible options and writes the personalised reason.
+
+/** One slot offered to the model, with its eligible product options. */
+export interface SlotOption {
+  slotId: string
+  title: string
+  description: string
+  currentProductId: string
+  options: Array<{
+    id: string
+    name: string
+    category: string
+    price: number
+    vegan: boolean
+    stimulant: boolean
+    reason: string
+  }>
+}
+
+export interface BlueprintAIResult {
+  /** Chosen product id per slotId (already validated against that slot's options). */
+  choices: Record<string, string>
+  /** Personalised reason per slotId. */
+  reasons: Record<string, string>
+}
+
+export const BLUEPRINT_SYSTEM_PROMPT = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand. You personalise a supplement stack for one person.
+
+The stack has fixed slots (each a job like Protein or Sleep). For each slot you are given a short list of eligible product options. Your job:
+- Pick the single best product option for this specific person for each slot — choose by id, from that slot's options only. Never invent ids or move a product between slots.
+- Write one reason per slot: a single sentence, max 20 words, warm and specific to this person, explaining why that product suits them. Plain text, no markdown or asterisks.
+- No medical claims, no guaranteed outcomes. Say "may support", never "will improve". Never suggest a supplement can treat, manage or replace medical care for any condition.
+- Respond with a single JSON object only, no prose: {"choices":{"slotId":"productId", ...},"reasons":{"slotId":"reason", ...}}`
+
+export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]): string {
+  const firstName = answers.name?.split(' ')[0]?.trim() || null
+  const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || 'general wellbeing'
+  const budget = BUDGET_LABELS[answers.budget ?? ''] ?? '£50–80/month'
+  const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? 'unknown')
+  const lifestyle = answers.lifestyle.length ? answers.lifestyle.join(', ') : 'none noted'
+
+  const slotBlocks = slots.map(s => {
+    const opts = s.options.map(o => {
+      const flags = [o.vegan ? 'vegan' : null, o.stimulant ? 'stimulant' : null].filter(Boolean).join(', ')
+      return `    - ${o.id} | ${o.name} | ${o.category} | £${o.price.toFixed(2)}${flags ? ` | ${flags}` : ''} | ${o.reason}`
+    })
+    return `  Slot "${s.slotId}" (${s.title} — ${s.description}); current: ${s.currentProductId}\n${opts.join('\n')}`
+  })
+
+  return `Personalise this person's stack.
+
+PERSON
+${firstName ? `- Name: ${firstName}` : ''}
+- Age: ${age}
+- Goals: ${goalText}
+- Training: ${answers.trainingFrequency ?? 'unknown'} per week, ${answers.trainingType ?? 'mixed'}-focused
+- Diet: ${answers.diet ?? 'balanced'}
+- Lifestyle factors: ${lifestyle}
+- Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
+- Monthly budget: ${budget}
+
+SLOTS (pick one product id per slot, from that slot's options only)
+${slotBlocks.join('\n')}`
+}
+
+/**
+ * Validates the model output against each slot's allowed option ids. Choices for
+ * unknown slots or ids outside that slot's options are dropped; reasons are
+ * sanitised. Returns null when nothing usable came back.
+ */
+export function parseBlueprintResult(
+  raw: unknown,
+  optionIdsBySlot: Record<string, Set<string>>,
+): BlueprintAIResult | null {
+  if (!raw || typeof raw !== 'object') return null
+  const obj = raw as Record<string, unknown>
+
+  const choices: Record<string, string> = {}
+  const rawChoices = obj.choices && typeof obj.choices === 'object' ? (obj.choices as Record<string, unknown>) : {}
+  for (const [slotId, productId] of Object.entries(rawChoices)) {
+    const allowed = optionIdsBySlot[slotId]
+    if (allowed && typeof productId === 'string' && allowed.has(productId)) {
+      choices[slotId] = productId
+    }
+  }
+
+  const reasons: Record<string, string> = {}
+  const rawReasons = obj.reasons && typeof obj.reasons === 'object' ? (obj.reasons as Record<string, unknown>) : {}
+  for (const [slotId, reason] of Object.entries(rawReasons)) {
+    if (!optionIdsBySlot[slotId] || typeof reason !== 'string') continue
+    const clean = stripMd(reason).slice(0, 180)
+    if (clean) reasons[slotId] = clean
+  }
+
+  if (Object.keys(choices).length === 0 && Object.keys(reasons).length === 0) return null
+  return { choices, reasons }
+}

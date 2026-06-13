@@ -8,7 +8,7 @@ import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 
 const SLOT_ORDER = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep'] as const
-type SlotType = typeof SLOT_ORDER[number]
+export type SlotType = typeof SLOT_ORDER[number]
 
 // Wellbeing stacks are built goal-first: each selected wellbeing goal gets its
 // own named slot, filled by the best product tagged with that goal. This means
@@ -44,7 +44,7 @@ const SWAP_GROUP_LABELS: Record<string, string> = {
   'electrolytes':   'Hydration',
 }
 
-type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health' | 'wellbeing'
+export type Archetype = 'muscle' | 'fat-loss' | 'performance' | 'health' | 'wellbeing'
 
 const SLOT_TITLES: Record<SlotType, string> = {
   protein: 'Protein',
@@ -118,7 +118,7 @@ function hasPerformanceGoals(goals: Goal[]): boolean {
   return goals.some(g => PERFORMANCE_GOALS.includes(g))
 }
 
-function getArchetype(goals: Goal[]): Archetype {
+export function getArchetype(goals: Goal[]): Archetype {
   if (goals.includes('muscle') || goals.includes('bulking')) return 'muscle'
   if (goals.includes('cutting')) return 'fat-loss'
   if (goals.includes('performance') || goals.includes('energy')) return 'performance'
@@ -146,7 +146,7 @@ const ARCHETYPE_SUMMARIES: Record<Archetype, string> = {
   'wellbeing':   'A daily routine built around how you actually feel — sleep, stress, and everyday resilience.',
 }
 
-function scoreProduct(
+export function scoreProduct(
   product: CatalogueProduct,
   slotType: SlotType,
   answers: QuizAnswers,
