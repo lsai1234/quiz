@@ -48,7 +48,7 @@ export const PRICING_CONFIG = {
   /** Products longer-lived than this (days) are candidates for a monthly refill SKU. */
   maxSubscriptionDaysOfSupply: 35,
   /** Never schedule a delivery more than this many months apart. */
-  maxDeliveryMonths: 6,
+  maxDeliveryMonths: 3,
   /** Bill one flat amount every month (smoothed average); minimum term protects it. */
   subscriptionFlatMonthly: true,
   /** Minimum subscription commitment in months (per-product can override up). */
