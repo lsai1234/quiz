@@ -1,7 +1,8 @@
 import type { ShopifyProduct } from './types'
 import type { Product, ProductVariant, Goal, StackLevel } from '@/lib/types'
 import type { CatalogueProduct, CatalogueVariant, StackSlot, DietaryTag, SwapGroup } from '@/lib/catalogue/types'
-import { getProducts, SHOPIFY_LIVE } from './operations'
+import { getProducts } from './operations'
+import { getDataSource } from '@/lib/data-source'
 import { MOCK_PRODUCTS } from '@/lib/mock-products'
 
 // ─── Tag parsing helpers ───────────────────────────────────────────────────────
@@ -439,8 +440,8 @@ let _cacheTime = 0
 const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
 
 export async function fetchCatalogue(): Promise<Product[]> {
-  if (!SHOPIFY_LIVE) {
-    console.log('[catalogue] SHOPIFY_LIVE=false — env vars missing, using mocks')
+  if (getDataSource() === 'mock') {
+    console.log('[catalogue] data source is mock — using MOCK_PRODUCTS')
     return MOCK_PRODUCTS as Product[]
   }
 

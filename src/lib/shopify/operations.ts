@@ -1,4 +1,4 @@
-import { shopifyFetch, SHOPIFY_LIVE } from './client'
+import { shopifyFetch } from './client'
 import type { ShopifyCart, ShopifyProduct, ShopifyVariant } from './types'
 import { MOCK_PRODUCTS } from '@/lib/mock-products'
 
@@ -215,5 +215,3 @@ export async function getProducts(first = 50): Promise<ShopifyProduct[]> {
   )
   return data.products.edges.map(({ node }) => node)
 }
-
-export { SHOPIFY_LIVE }

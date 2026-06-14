@@ -1,10 +1,10 @@
 /**
  * CHRGD Mock Product Catalogue
  *
- * This file is the source of truth when Shopify Storefront API credentials
- * are not set (local dev / CI). When SHOPIFY_LIVE=true, this is replaced
- * by live data fetched via mapShopifyToCatalogueProduct() in
- * src/lib/shopify/catalogue.ts.
+ * This file is the source of truth when the resolved data source is 'mock'
+ * (see src/lib/data-source.ts) — i.e. local dev / CI, or when DATA_SOURCE=mock.
+ * When the data source is 'shopify', this is replaced by live data fetched via
+ * mapShopifyToCatalogueProduct() in src/lib/shopify/catalogue.ts.
  *
  * HOW TO CONNECT SHOPIFY DATA:
  * 1. Set NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN and NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN

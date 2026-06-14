@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { fetchCatalogue } from '@/lib/shopify/catalogue'
-import { SHOPIFY_LIVE } from '@/lib/shopify/operations'
+import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -11,7 +11,9 @@ export async function GET(request: Request) {
     const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
     const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
     return NextResponse.json({
-      shopifyLive: SHOPIFY_LIVE,
+      dataSource: getDataSource(),
+      mode: getDataSourceMode(),
+      hasCredentials: hasShopifyCredentials(),
       domainSet: !!domain,
       domainValue: domain ?? null,
       tokenSet: !!token,
@@ -22,8 +24,7 @@ export async function GET(request: Request) {
 
   try {
     const products = await fetchCatalogue()
-    const source = products[0]?.shopifyProductId?.startsWith('gid://') ? 'shopify' : 'mock'
-    return NextResponse.json({ products, source, count: products.length })
+    return NextResponse.json({ products, source: getDataSource(), count: products.length })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
     console.error('[api/products] Shopify error:', message)

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createCart } from '@/lib/shopify/operations'
-import { SHOPIFY_LIVE } from '@/lib/shopify/client'
+import { getDataSource } from '@/lib/data-source'
 
 /**
  * POST /api/cart
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
     }
   }
 
-  if (!SHOPIFY_LIVE) {
+  if (getDataSource() === 'mock') {
     // Mock mode — return a placeholder URL so the UI can still show success state
     return NextResponse.json({
       checkoutUrl: '#mock-checkout',

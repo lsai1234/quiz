@@ -5,7 +5,7 @@ import confetti from 'canvas-confetti'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
 import { useShopifyCart } from '@/hooks/useShopifyCart'
-import { SHOPIFY_LIVE } from '@/lib/shopify/client'
+import { isShopifyLive } from '@/lib/data-source'
 import type { Product } from '@/lib/types'
 
 interface Props {
@@ -58,6 +58,7 @@ function ProductBundleCard({
 export function Act5Bundle({ reducedMotion }: Props) {
   const { selectedProducts, answers, identity } = useQuizStore()
   const shopify = useShopifyCart()
+  const isLive = isShopifyLive()
   const containerRef = useRef<HTMLDivElement>(null)
   const successRef = useRef<HTMLDivElement>(null)
 
@@ -128,7 +129,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
             Your stack is on its way.
           </h2>
           <p className="text-sm text-white/50 max-w-xs mx-auto leading-relaxed">
-            {SHOPIFY_LIVE
+            {isLive
               ? 'Check your inbox for your order confirmation. Your getCHRGD stack will be with you soon.'
               : 'This is a demo — in live mode your Shopify checkout would open here. Set NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN to go live.'}
           </p>
@@ -138,7 +139,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
               {identity.name} stack confirmed
             </div>
           )}
-          {!SHOPIFY_LIVE && (
+          {!isLive && (
             <div className="mt-6 px-4 py-3 rounded-xl bg-[#00D4FF]/10 border border-[#00D4FF]/20 text-xs text-[#00D4FF]/80 max-w-sm mx-auto text-left leading-relaxed">
               <strong>To go live:</strong> add <code>NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN</code> and{' '}
               <code>NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN</code> to <code>.env.local</code>
@@ -155,7 +156,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
       <div className="px-5 pt-12 pb-6 max-w-lg mx-auto">
         <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#00D4FF] mb-3 block"
           style={{ fontFamily: 'var(--font-display)' }}>
-          {SHOPIFY_LIVE ? 'Your bundle' : 'Your bundle · Mock mode'}
+          {isLive ? 'Your bundle' : 'Your bundle · Mock mode'}
         </span>
         <h2 className="text-3xl font-black text-[#0A0A0A] leading-tight"
           style={{ fontFamily: 'var(--font-display)' }}>
@@ -163,7 +164,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
         </h2>
         <p className="text-sm text-[#0A0A0A]/45 mt-1.5">
           Adjust quantities, then head to checkout.
-          {!SHOPIFY_LIVE && (
+          {!isLive && (
             <span className="ml-1 text-[#00D4FF]">
               (Mock mode — add Shopify credentials to go live)
             </span>
@@ -270,7 +271,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
             }`}
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            {shopify.isLoading ? 'Loading…' : SHOPIFY_LIVE ? 'Checkout →' : 'Demo checkout →'}
+            {shopify.isLoading ? 'Loading…' : isLive ? 'Checkout →' : 'Demo checkout →'}
           </button>
         </div>
       </div>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { SHOPIFY_LIVE } from '@/lib/shopify/client'
+import { isShopifyLive } from '@/lib/data-source'
 import { validateCheckout, validationErrorMessage } from '@/lib/stack-blueprint/checkout'
 import type { CheckoutLineItem, ValidationError } from '@/lib/stack-blueprint/checkout'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
@@ -26,9 +26,11 @@ export function useStackCheckout() {
     async (blueprint: StackBlueprint, catalogue: CatalogueProduct[]) => {
       setState({ status: 'loading' })
 
+      const live = isShopifyLive()
+
       // Validate — in mock mode we don't require Shopify GIDs
       const validation = validateCheckout(blueprint, catalogue, {
-        requireShopifyIds: SHOPIFY_LIVE,
+        requireShopifyIds: live,
       })
 
       if (!validation.ok) {
@@ -39,7 +41,7 @@ export function useStackCheckout() {
         return
       }
 
-      if (!SHOPIFY_LIVE) {
+      if (!live) {
         // Mock checkout — show success without hitting the API
         setState({ status: 'success', checkoutUrl: '#mock-checkout', mock: true })
         return

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { SHOPIFY_LIVE } from '@/lib/shopify/operations'
+import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -31,7 +31,9 @@ export async function GET(request: Request) {
     const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
     const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
     return NextResponse.json({
-      shopifyLive: SHOPIFY_LIVE,
+      dataSource: getDataSource(),
+      mode: getDataSourceMode(),
+      hasCredentials: hasShopifyCredentials(),
       domainSet: !!domain,
       domainValue: domain ?? null,
       tokenSet: !!token,
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
     })
   }
 
-  if (!SHOPIFY_LIVE) {
+  if (getDataSource() === 'mock') {
     return NextResponse.json({
       products: MOCK_CATALOGUE,
       source: 'mock',

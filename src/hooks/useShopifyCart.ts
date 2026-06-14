@@ -4,8 +4,9 @@ import { useState, useCallback } from 'react'
 import type { ShopifyCart, CartLineItem } from '@/lib/shopify/types'
 import {
   createCart, addCartLines, updateCartLines, removeCartLines,
-  buildMockCart, SHOPIFY_LIVE,
+  buildMockCart,
 } from '@/lib/shopify/operations'
+import { getDataSource } from '@/lib/data-source'
 
 interface UseShopifyCartReturn {
   cart: ShopifyCart | null
@@ -25,7 +26,7 @@ export function useShopifyCart(): UseShopifyCartReturn {
   const [isCheckoutSuccess, setIsCheckoutSuccess] = useState(false)
   const [pendingReasons, setPendingReasons] = useState<Record<string, string>>({})
 
-  const isMockMode = !SHOPIFY_LIVE
+  const isMockMode = getDataSource() === 'mock'
 
   // ─── Mock helpers ──────────────────────────────────────────────────────────
 
