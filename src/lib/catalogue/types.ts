@@ -95,6 +95,19 @@ export interface CatalogueVariant {
   shopifyVariantId: string | null
 }
 
+// ─── Consumption protocol ─────────────────────────────────────────────────────
+// How a product is taken — drives how much you need per month on subscription.
+
+export type ConsumptionCadence =
+  | 'daily'        // taken every day (protein, creatine, multivitamin…)
+  | 'per-workout'  // taken on training days (pre-workout, electrolytes…)
+
+export interface ProductConsumption {
+  cadence: ConsumptionCadence
+  /** Number of doses/servings in one (default) container. */
+  dosesPerUnit: number
+}
+
 // ─── Product ──────────────────────────────────────────────────────────────────
 
 export interface CatalogueProduct {
@@ -148,6 +161,12 @@ export interface CatalogueProduct {
    * swap lists — they only ever appear as a subscription resolution target.
    */
   isSubscriptionOnly?: boolean
+  /**
+   * How the product is consumed — drives the monthly subscription quantity.
+   * When omitted, it's derived from the stack slot (energy/hydration =
+   * per-workout, everything else = daily) and daysOfSupply.
+   */
+  consumption?: ProductConsumption
 
   // ── Stack logic ───────────────────────────────────────────────────────────────
   /**

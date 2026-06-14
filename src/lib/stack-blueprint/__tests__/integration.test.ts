@@ -413,7 +413,9 @@ describe('Feature 8: dynamic pricing', () => {
     // mapping) and is eligible, so the whole stack is discounted directly.
     const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, daysOfSupply: 30, subscriptionProductId: null }))
     const bp = buildStackBlueprint(BASE_ANSWERS, allEligible)
-    const { oneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible)
+    // Daily training so per-workout items also ship at 1 unit/month — then the
+    // whole stack is simply discounted by the subscription rate.
+    const { oneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible, { ...BASE_ANSWERS, trainingFrequency: 'daily' })
     if (oneOffTotal > 0) {
       const expectedSub = Math.round(oneOffTotal * (1 - PRICING_CONFIG.subscriptionDiscount) * 100) / 100
       expect(Math.abs(subscriptionTotal - expectedSub)).toBeLessThan(0.02) // rounding tolerance

@@ -138,6 +138,7 @@ const PRODUCT_MAP = {
   'chrgd-pre-workout': {
     slots:               ['energy'],
     goals:               ['energy', 'performance', 'muscle'],
+    consumptionCadence:  'per-workout',
     swapGroup:           'pre-workout-stim',
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           true,
@@ -153,6 +154,7 @@ const PRODUCT_MAP = {
   'chrgd-pre-workout-stim-free': {
     slots:               ['energy'],
     goals:               ['energy', 'performance'],
+    consumptionCadence:  'per-workout',
     swapGroup:           'pre-workout-stim-free',
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
@@ -168,6 +170,7 @@ const PRODUCT_MAP = {
   'chrgd-electrolytes': {
     slots:               ['hydration'],
     goals:               ['hydration', 'performance', 'recovery'],
+    consumptionCadence:  'per-workout',
     swapGroup:           'electrolytes',
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
@@ -183,6 +186,7 @@ const PRODUCT_MAP = {
   'chrgd-bcaa': {
     slots:               ['recovery', 'hydration'],
     goals:               ['recovery', 'hydration', 'performance'],
+    consumptionCadence:  'per-workout',
     swapGroup:           'aminos',
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
@@ -367,6 +371,8 @@ function buildMetafields(cfg) {
     { namespace: 'chrgd', key: 'subscription_eligible', type: 'boolean',                value: String(cfg.subscriptionEligible) },
     { namespace: 'chrgd', key: 'days_of_supply',        type: 'number_integer',         value: String(cfg.daysOfSupply ?? 30) },
     { namespace: 'chrgd', key: 'subscription_only',     type: 'boolean',                value: String(cfg.subscriptionOnly ?? false) },
+    { namespace: 'chrgd', key: 'consumption_cadence',   type: 'single_line_text_field', value: cfg.consumptionCadence ?? 'daily' },
+    { namespace: 'chrgd', key: 'doses_per_unit',        type: 'number_integer',         value: String(cfg.dosesPerUnit ?? cfg.daysOfSupply ?? 30) },
     { namespace: 'chrgd', key: 'formats',               type: 'single_line_text_field', value: cfg.formats },
   ]
   // The monthly refill a longer-lasting product flips to on subscription.

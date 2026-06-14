@@ -112,6 +112,8 @@ const GET_PRODUCTS = `
             {namespace: "chrgd", key: "days_of_supply"},
             {namespace: "chrgd", key: "subscription_product_handle"},
             {namespace: "chrgd", key: "subscription_only"},
+            {namespace: "chrgd", key: "consumption_cadence"},
+            {namespace: "chrgd", key: "doses_per_unit"},
             {namespace: "chrgd", key: "formats"}
           ]) { key value type }
         }

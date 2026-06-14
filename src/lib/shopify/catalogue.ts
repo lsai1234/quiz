@@ -1,6 +1,6 @@
 import type { ShopifyProduct } from './types'
 import type { Product, ProductVariant, Goal, StackLevel } from '@/lib/types'
-import type { CatalogueProduct, CatalogueVariant, StackSlot, DietaryTag, SwapGroup } from '@/lib/catalogue/types'
+import type { CatalogueProduct, CatalogueVariant, StackSlot, DietaryTag, SwapGroup, ProductConsumption } from '@/lib/catalogue/types'
 import { getProducts } from './operations'
 import { getDataSource } from '@/lib/data-source'
 import { MOCK_PRODUCTS } from '@/lib/mock-products'
@@ -411,6 +411,14 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const subscriptionProductId = metaValue(p.metafields, 'subscription_product_handle') || null
   const isSubscriptionOnly = metaValue(p.metafields, 'subscription_only') === 'true'
 
+  // Consumption protocol (how it's taken) — drives monthly subscription quantity.
+  const rawCadence = metaValue(p.metafields, 'consumption_cadence')
+  const rawDoses = metaValue(p.metafields, 'doses_per_unit')
+  let consumption: ProductConsumption | undefined
+  if (rawCadence === 'daily' || rawCadence === 'per-workout') {
+    consumption = { cadence: rawCadence, dosesPerUnit: (rawDoses ? parseInt(rawDoses, 10) : 0) || daysOfSupply }
+  }
+
   const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawFormats = metaValue(p.metafields, 'formats')
@@ -434,6 +442,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     daysOfSupply,
     subscriptionProductId,
     isSubscriptionOnly,
+    consumption,
     swapGroup,
     recommendationPriority,
     marginPriority,

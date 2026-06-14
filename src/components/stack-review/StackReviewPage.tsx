@@ -10,7 +10,7 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, getSubscriptionProduct } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, getSubscriptionProduct, buildSubscriptionPlan } from '@/lib/stack-blueprint/pricing'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -19,11 +19,12 @@ import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
+import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
-  const { stackBlueprint, setStackBlueprint, planType, setPlanType } = useQuizStore()
+  const { stackBlueprint, setStackBlueprint, planType, setPlanType, answers } = useQuizStore()
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -118,7 +119,12 @@ export function StackReviewPage() {
   )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
-  const pricing = calculatePricing(blueprint, products)
+  const pricing = calculatePricing(blueprint, products, answers)
+  const subscriptionPlan = useMemo(
+    () => buildSubscriptionPlan(blueprint, products, answers),
+    [blueprint, products, answers],
+  )
+  const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
 
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
@@ -225,6 +231,13 @@ export function StackReviewPage() {
                 Dismiss
               </button>
             </div>
+          )}
+          {planType === 'subscription' && (
+            <SubscriptionProtocol
+              plan={subscriptionPlan}
+              answers={answers}
+              slotTitleById={slotTitleById}
+            />
           )}
           <StackPriceSummary
             pricing={pricing}

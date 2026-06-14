@@ -1,5 +1,8 @@
 import type { StackBlueprint } from './types'
-import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
+import type { QuizAnswers } from '@/lib/types'
+
+const DAYS_PER_MONTH = 30
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 // All discount rates live here so they can be changed without touching UI code.
@@ -57,16 +60,55 @@ export function getSubscriptionProduct(
   return product
 }
 
+// ─── Consumption → monthly quantity ──────────────────────────────────────────
+
+/** Approximate training sessions per month, from the quiz training frequency. */
+export function workoutsPerMonth(answers?: QuizAnswers | null): number {
+  switch (answers?.trainingFrequency) {
+    case '1-2x': return 6
+    case '3-4x': return 15
+    case '5-6x': return 24
+    case 'daily': return 30
+    default: return 12 // unknown → assume ~3×/week
+  }
+}
+
+/**
+ * The consumption protocol for a product — explicit if set, otherwise derived
+ * from its stack slots (energy/hydration are taken per-workout, the rest daily)
+ * and daysOfSupply (which doubles as doses-per-container at one dose per use).
+ */
+export function resolveConsumption(product: CatalogueProduct): { cadence: ConsumptionCadence; dosesPerUnit: number } {
+  if (product.consumption) return product.consumption
+  const perWorkout = product.stackSlots.some((s) => s === 'energy' || s === 'hydration')
+  return {
+    cadence: perWorkout ? 'per-workout' : 'daily',
+    dosesPerUnit: product.daysOfSupply > 0 ? product.daysOfSupply : DAYS_PER_MONTH,
+  }
+}
+
 /** A single line in the monthly subscription, after deduplication. */
 export interface SubscriptionLine {
   /** The monthly product that will actually be billed/shipped. */
   product: CatalogueProduct
   /** Slot ids this line fulfils — more than one when slots share a sub product. */
   coversSlotIds: string[]
-  /** Undiscounted monthly product price. */
-  price: number
-  /** Price after the subscription discount. */
-  subscriptionPrice: number
+  /** How the product is taken. */
+  cadence: ConsumptionCadence
+  /** Times taken per month: ~30 for daily, training sessions/month for per-workout. */
+  occasionsPerMonth: number
+  /** Doses in one container. */
+  dosesPerUnit: number
+  /** Units sent each shipment. */
+  unitsPerShipment: number
+  /** Ship cadence in months (e.g. 2 = one unit every two months). */
+  shipEveryMonths: number
+  /** Undiscounted price of one unit. */
+  unitPrice: number
+  /** Amortised undiscounted monthly cost. */
+  monthlyBaseline: number
+  /** Amortised monthly cost after the subscription discount. */
+  monthlyPrice: number
 }
 
 /**
@@ -78,10 +120,12 @@ export interface SubscriptionLine {
 export function buildSubscriptionPlan(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
+  answers?: QuizAnswers | null,
   config = PRICING_CONFIG,
 ): SubscriptionLine[] {
   const round = (n: number) => Math.round(n * 100) / 100
   const lines = new Map<string, SubscriptionLine>()
+  const woPerMonth = workoutsPerMonth(answers)
 
   for (const slot of blueprint.slots) {
     const slotProduct = catalogue.find((p) => p.id === slot.selectedProductId)
@@ -99,16 +143,42 @@ export function buildSubscriptionPlan(
 
     // Self-subscription respects the chosen variant; a mapped refill uses its
     // own default available variant.
-    const price =
+    const unitPrice =
       sub.id === slotProduct.id
         ? slotPrice(slot, sub)
         : sub.variants.find((v) => v.available)?.price ?? sub.basePrice
 
+    // How much is needed per month, from the consumption protocol + answers.
+    const { cadence, dosesPerUnit } = resolveConsumption(sub)
+    const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : woPerMonth
+    const monthsOneUnitLasts = dosesPerUnit / Math.max(occasionsPerMonth, 1)
+
+    let unitsPerShipment: number
+    let shipEveryMonths: number
+    let monthlyUnits: number
+    if (monthsOneUnitLasts >= 1) {
+      // One unit lasts a month or more → ship one unit, spaced out.
+      unitsPerShipment = 1
+      shipEveryMonths = Math.max(1, Math.round(monthsOneUnitLasts))
+      monthlyUnits = 1 / shipEveryMonths
+    } else {
+      // Need more than one unit a month → ship several each month.
+      unitsPerShipment = Math.ceil(occasionsPerMonth / Math.max(dosesPerUnit, 1))
+      shipEveryMonths = 1
+      monthlyUnits = unitsPerShipment
+    }
+
     lines.set(sub.id, {
       product: sub,
       coversSlotIds: [slot.slotId],
-      price: round(price),
-      subscriptionPrice: round(price * (1 - config.subscriptionDiscount)),
+      cadence,
+      occasionsPerMonth,
+      dosesPerUnit,
+      unitsPerShipment,
+      shipEveryMonths,
+      unitPrice: round(unitPrice),
+      monthlyBaseline: round(monthlyUnits * unitPrice),
+      monthlyPrice: round(monthlyUnits * unitPrice * (1 - config.subscriptionDiscount)),
     })
   }
 
@@ -183,6 +253,7 @@ function slotRrp(slot: StackBlueprint['slots'][number], product: CatalogueProduc
 export function calculatePricing(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
+  answers?: QuizAnswers | null,
   config = PRICING_CONFIG,
 ): StackPricing {
   const round = (n: number) => Math.round(n * 100) / 100
@@ -199,13 +270,13 @@ export function calculatePricing(
   const oneOffTotal = round(oneOffSubtotal * (1 - config.bundleDiscount))
   const bundleSaving = round(rrpTotal - oneOffTotal)
 
-  // ── Monthly subscription (resolved + deduplicated) ──
-  const subPlan = buildSubscriptionPlan(blueprint, catalogue, config)
+  // ── Monthly subscription (resolved, deduplicated, quantity-aware) ──
+  const subPlan = buildSubscriptionPlan(blueprint, catalogue, answers, config)
   let subscriptionTotal = 0
   let subscriptionItemsOneOffTotal = 0
   for (const line of subPlan) {
-    subscriptionItemsOneOffTotal += line.price
-    subscriptionTotal += line.subscriptionPrice
+    subscriptionItemsOneOffTotal += line.monthlyBaseline
+    subscriptionTotal += line.monthlyPrice
   }
   subscriptionTotal = round(subscriptionTotal)
   subscriptionItemsOneOffTotal = round(subscriptionItemsOneOffTotal)

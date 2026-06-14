@@ -1,6 +1,10 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, PRICING_CONFIG } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { QuizAnswers } from '@/lib/types'
+
+const answersWith = (trainingFrequency: QuizAnswers['trainingFrequency']) =>
+  ({ trainingFrequency } as unknown as QuizAnswers)
 
 // ─── Minimal fixtures ─────────────────────────────────────────────────────────
 
@@ -249,6 +253,60 @@ describe('buildSubscriptionPlan', () => {
     expect(plan).toHaveLength(1)
     expect(plan[0].product.id).toBe('shared')
     expect(plan[0].coversSlotIds).toHaveLength(2)
+  })
+})
+
+describe('consumption protocol & monthly quantities', () => {
+  it('maps training frequency to workouts per month', () => {
+    expect(workoutsPerMonth(answersWith('1-2x'))).toBe(6)
+    expect(workoutsPerMonth(answersWith('3-4x'))).toBe(15)
+    expect(workoutsPerMonth(answersWith('daily'))).toBe(30)
+    expect(workoutsPerMonth(null)).toBe(12)
+  })
+
+  it('derives cadence from the stack slot and doses from daysOfSupply', () => {
+    expect(resolveConsumption(makeProduct({ stackSlots: ['protein'], daysOfSupply: 30 })))
+      .toEqual({ cadence: 'daily', dosesPerUnit: 30 })
+    expect(resolveConsumption(makeProduct({ stackSlots: ['energy'], daysOfSupply: 30 })).cadence)
+      .toBe('per-workout')
+    expect(resolveConsumption(makeProduct({ stackSlots: ['hydration'], daysOfSupply: 30 })).cadence)
+      .toBe('per-workout')
+  })
+
+  it('uses an explicit consumption override when present', () => {
+    const p = makeProduct({ stackSlots: ['protein'], consumption: { cadence: 'per-workout', dosesPerUnit: 20 } })
+    expect(resolveConsumption(p)).toEqual({ cadence: 'per-workout', dosesPerUnit: 20 })
+  })
+
+  it('keeps a daily product at one unit per month', () => {
+    const daily = makeProduct({ id: 'd', stackSlots: ['health'], daysOfSupply: 30, basePrice: 20,
+      variants: [{ id: 'dv', title: '', flavour: null, size: null, price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const bp = makeBlueprint([{ selectedProductId: 'd', selectedVariantId: 'dv', slotType: 'health' } as never])
+    const [line] = buildSubscriptionPlan(bp, [daily], answersWith('1-2x'))
+    expect(line.cadence).toBe('daily')
+    expect(line.shipEveryMonths).toBe(1)
+    expect(line.monthlyPrice).toBe(Math.round(20 * 0.85 * 100) / 100)
+  })
+
+  it('scales a per-workout product to training frequency', () => {
+    const pre = makeProduct({ id: 'pre', stackSlots: ['energy'], daysOfSupply: 30, basePrice: 30,
+      variants: [{ id: 'pv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const bp = makeBlueprint([{ selectedProductId: 'pre', selectedVariantId: 'pv', slotType: 'energy' } as never])
+
+    // 3-4×/week → 15 workouts/month, 30 doses → a tub lasts ~2 months
+    const [light] = buildSubscriptionPlan(bp, [pre], answersWith('3-4x'))
+    expect(light.cadence).toBe('per-workout')
+    expect(light.occasionsPerMonth).toBe(15)
+    expect(light.shipEveryMonths).toBe(2)
+    expect(light.monthlyPrice).toBe(Math.round((30 / 2) * 0.85 * 100) / 100)
+
+    // Daily training → 30/month → ships every month at full quantity
+    const [heavy] = buildSubscriptionPlan(bp, [pre], answersWith('daily'))
+    expect(heavy.shipEveryMonths).toBe(1)
+    expect(heavy.monthlyPrice).toBe(Math.round(30 * 0.85 * 100) / 100)
+
+    // The quantity flows through to the headline subscription total
+    expect(calculatePricing(bp, [pre], answersWith('3-4x')).subscriptionTotal).toBe(light.monthlyPrice)
   })
 })
 
