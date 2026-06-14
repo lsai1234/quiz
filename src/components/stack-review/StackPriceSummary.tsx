@@ -42,7 +42,7 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
     subscriptionSaving,
     subscriptionSavingPct,
     subscriptionItemCount,
-    excludedFromSubscriptionCount,
+    subscriptionSwappedCount,
   } = pricing
 
   const hasRrpSaving = bundleSaving > 0.01
@@ -103,12 +103,12 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
               Save {subscriptionSavingPct}% every month with the {PRICING_CONFIG.subscriptionPlanLabel}
             </div>
 
-            {excludedFromSubscriptionCount > 0 && (
+            {subscriptionSwappedCount > 0 && (
               <p className="text-[11px] leading-relaxed text-[var(--color-muted)]">
-                {excludedFromSubscriptionCount}{' '}
-                {excludedFromSubscriptionCount === 1 ? 'product lasts' : 'products last'} longer than a month,
-                so {excludedFromSubscriptionCount === 1 ? 'it’s' : 'they’re'} bought one-off and not part of
-                your monthly plan.
+                {subscriptionSwappedCount}{' '}
+                {subscriptionSwappedCount === 1 ? 'product switches' : 'products switch'} to a
+                monthly-sized refill so {subscriptionSwappedCount === 1 ? 'it ships' : 'they ship'} every
+                month — see the product cards above.
               </p>
             )}
           </div>

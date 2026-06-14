@@ -10,7 +10,7 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, getSubscriptionProduct } from '@/lib/stack-blueprint/pricing'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -130,7 +130,7 @@ export function StackReviewPage() {
   const boosters = useMemo(() => {
     const seenSlots = new Set<string>()
     return products
-      .filter((p) => p.isBoosterEligible && !stackProductIds.has(p.id))
+      .filter((p) => p.isBoosterEligible && !p.isSubscriptionOnly && !stackProductIds.has(p.id))
       .sort((a, b) => {
         const aGoalHits = a.goals.filter((g) => allGoals.includes(g)).length
         const bGoalHits = b.goals.filter((g) => allGoals.includes(g)).length
@@ -185,12 +185,14 @@ export function StackReviewPage() {
           </p>
           {sortedSlots.map((slot) => {
             const product = products.find((p) => p.id === slot.selectedProductId)
+            const subscriptionProduct = product ? getSubscriptionProduct(product, products) : undefined
             return (
               <StackProductCard
                 key={slot.slotId}
                 slot={slot}
                 product={product}
                 planType={planType}
+                subscriptionProduct={subscriptionProduct}
                 onChangeProduct={handleOpenSwap}
                 onChangeVariant={handleChangeVariant}
                 onRemove={handleRemove}

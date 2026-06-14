@@ -498,7 +498,10 @@ export function buildStackBlueprint(
   // The Shopify mapper derives goals/slots for all products so stacks are
   // always built from real inventory. If a goal has no matching product,
   // that slot is simply omitted (handled gracefully below).
-  const effectiveCatalogue = catalogue.length > 0 ? catalogue : MOCK_CATALOGUE
+  // Subscription-only refills never enter the quiz recommendation — they only
+  // exist as monthly subscription resolution targets.
+  const effectiveCatalogue = (catalogue.length > 0 ? catalogue : MOCK_CATALOGUE)
+    .filter((p) => !p.isSubscriptionOnly)
 
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
   const secondaryGoals = answers.goals.slice(1)

@@ -134,6 +134,20 @@ export interface CatalogueProduct {
    * See `qualifiesForSubscription` in stack-blueprint/pricing.
    */
   daysOfSupply: number
+  /**
+   * The correlating product to bill/ship monthly when this product is put on
+   * subscription. Used so the monthly plan is always available even for items
+   * that last longer than a month (e.g. a 90-day creatine tub maps to a
+   * monthly-sized refill). `null`/omitted means the product subscribes as itself.
+   * Settable in the portal; resolved via `getSubscriptionProduct`.
+   */
+  subscriptionProductId?: string | null
+  /**
+   * True for products that ONLY exist as a monthly subscription equivalent of
+   * another product. They are hidden from quiz recommendations, boosters and
+   * swap lists — they only ever appear as a subscription resolution target.
+   */
+  isSubscriptionOnly?: boolean
 
   // ── Stack logic ───────────────────────────────────────────────────────────────
   /**

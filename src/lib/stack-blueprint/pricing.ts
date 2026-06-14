@@ -5,23 +5,29 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 // All discount rates live here so they can be changed without touching UI code.
 
 export const PRICING_CONFIG = {
-  /** Subscription discount applied to subscriptionEligible products (0–1). */
+  /** One-off bundle discount applied to the whole stack subtotal (0–1). The
+   *  default is 0 because the one-off saving currently comes from per-product
+   *  RRP markdowns; the portal can switch on a flat bundle % here later. */
+  bundleDiscount: 0,
+  /** Monthly subscription discount applied to subscription products (0–1). */
   subscriptionDiscount: 0.15,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
   /**
-   * Longest days-of-supply a product can have and still belong in a *monthly*
-   * subscription. Products that last much longer (e.g. a 90-day creatine tub)
-   * ship too infrequently to subscribe to monthly and are offered one-off instead.
+   * Longest days-of-supply a product can have and still be a sensible *monthly*
+   * subscription as-is. Products that last longer should be mapped (via
+   * `subscriptionProductId`) to a monthly-sized refill so the monthly plan is
+   * always available — this threshold drives that recommendation in the portal.
    */
   maxSubscriptionDaysOfSupply: 35,
 }
 
-// ─── Subscription qualification ─────────────────────────────────────────────
+// ─── Subscription qualification & resolution ─────────────────────────────────
 
 /**
- * Whether a product belongs in the monthly subscription: it must be flagged
- * subscriptionEligible AND last roughly a month at its recommended dose.
+ * Whether a product is itself a sensible monthly subscription item: flagged
+ * subscriptionEligible AND lasting roughly a month. Products that fail this
+ * should be mapped to a monthly refill via `subscriptionProductId`.
  */
 export function qualifiesForSubscription(
   product: Pick<CatalogueProduct, 'subscriptionEligible' | 'daysOfSupply'>,
@@ -31,6 +37,82 @@ export function qualifiesForSubscription(
     product.subscriptionEligible &&
     product.daysOfSupply <= config.maxSubscriptionDaysOfSupply
   )
+}
+
+/**
+ * Resolve the product that should be billed/shipped monthly when `product` is
+ * put on subscription. Falls back to the product itself when no (valid) mapping
+ * is set, so the monthly plan is always available.
+ */
+export function getSubscriptionProduct(
+  product: CatalogueProduct,
+  catalogue: CatalogueProduct[],
+): CatalogueProduct {
+  const mappedId = product.subscriptionProductId
+  if (mappedId && mappedId !== product.id) {
+    const mapped = catalogue.find((p) => p.id === mappedId)
+    if (mapped) return mapped
+    // Mapping set but not found in catalogue — fall back to self.
+  }
+  return product
+}
+
+/** A single line in the monthly subscription, after deduplication. */
+export interface SubscriptionLine {
+  /** The monthly product that will actually be billed/shipped. */
+  product: CatalogueProduct
+  /** Slot ids this line fulfils — more than one when slots share a sub product. */
+  coversSlotIds: string[]
+  /** Undiscounted monthly product price. */
+  price: number
+  /** Price after the subscription discount. */
+  subscriptionPrice: number
+}
+
+/**
+ * Build the deduplicated monthly subscription from a blueprint: each slot's
+ * product is resolved to its subscription product, and slots that resolve to
+ * the SAME subscription product are merged into one line (billed once).
+ * Slots whose resolved product isn't subscriptionEligible are skipped.
+ */
+export function buildSubscriptionPlan(
+  blueprint: StackBlueprint,
+  catalogue: CatalogueProduct[],
+  config = PRICING_CONFIG,
+): SubscriptionLine[] {
+  const round = (n: number) => Math.round(n * 100) / 100
+  const lines = new Map<string, SubscriptionLine>()
+
+  for (const slot of blueprint.slots) {
+    const slotProduct = catalogue.find((p) => p.id === slot.selectedProductId)
+    if (!slotProduct) continue
+
+    const sub = getSubscriptionProduct(slotProduct, catalogue)
+    if (!sub.subscriptionEligible) continue
+
+    const existing = lines.get(sub.id)
+    if (existing) {
+      // Two slots resolve to the same subscription product — bill it once.
+      existing.coversSlotIds.push(slot.slotId)
+      continue
+    }
+
+    // Self-subscription respects the chosen variant; a mapped refill uses its
+    // own default available variant.
+    const price =
+      sub.id === slotProduct.id
+        ? slotPrice(slot, sub)
+        : sub.variants.find((v) => v.available)?.price ?? sub.basePrice
+
+    lines.set(sub.id, {
+      product: sub,
+      coversSlotIds: [slot.slotId],
+      price: round(price),
+      subscriptionPrice: round(price * (1 - config.subscriptionDiscount)),
+    })
+  }
+
+  return [...lines.values()]
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -45,19 +127,21 @@ export interface StackPricing {
   /** bundleSaving / rrpTotal expressed as 0–100. 0 when no compare prices exist. */
   bundleSavingPct: number
   /**
-   * Monthly price of the subscription: only products that qualify
-   * (see qualifiesForSubscription) are included, each with subscriptionDiscount applied.
+   * Monthly price of the subscription: each slot resolved to its subscription
+   * product, deduplicated, with subscriptionDiscount applied to each line.
    */
   subscriptionTotal: number
-  /** Undiscounted one-off price of just the subscription-qualifying products — the baseline for subscriptionSaving. */
+  /** Undiscounted price of the (deduplicated) subscription products — the baseline for subscriptionSaving. */
   subscriptionItemsOneOffTotal: number
   /** subscriptionItemsOneOffTotal − subscriptionTotal */
   subscriptionSaving: number
   /** subscriptionSaving / subscriptionItemsOneOffTotal expressed as 0–100. */
   subscriptionSavingPct: number
-  /** Number of slots whose product qualifies for the monthly subscription. */
+  /** Number of distinct products in the monthly subscription (after dedupe). */
   subscriptionItemCount: number
-  /** Number of slots excluded from the subscription (one-off only). */
+  /** Number of slots whose subscription product differs from the one-off product (flipped to a monthly refill). */
+  subscriptionSwappedCount: number
+  /** Number of slots that can't subscribe at all (resolved product isn't subscriptionEligible). */
   excludedFromSubscriptionCount: number
 }
 
@@ -101,51 +185,60 @@ export function calculatePricing(
   catalogue: CatalogueProduct[],
   config = PRICING_CONFIG,
 ): StackPricing {
-  let oneOffTotal = 0
-  let rrpTotal = 0
-  let subscriptionTotal = 0
-  let subscriptionItemsOneOffTotal = 0
-  let subscriptionItemCount = 0
-  let excludedFromSubscriptionCount = 0
+  const round = (n: number) => Math.round(n * 100) / 100
 
+  // ── One-off bundle ──
+  let oneOffSubtotal = 0
+  let rrpTotal = 0
   for (const slot of blueprint.slots) {
     const product = catalogue.find((p) => p.id === slot.selectedProductId)
     if (!product) continue
+    oneOffSubtotal += slotPrice(slot, product)
+    rrpTotal += slotRrp(slot, product)
+  }
+  const oneOffTotal = round(oneOffSubtotal * (1 - config.bundleDiscount))
+  const bundleSaving = round(rrpTotal - oneOffTotal)
 
-    const price = slotPrice(slot, product)
-    const rrp = slotRrp(slot, product)
+  // ── Monthly subscription (resolved + deduplicated) ──
+  const subPlan = buildSubscriptionPlan(blueprint, catalogue, config)
+  let subscriptionTotal = 0
+  let subscriptionItemsOneOffTotal = 0
+  for (const line of subPlan) {
+    subscriptionItemsOneOffTotal += line.price
+    subscriptionTotal += line.subscriptionPrice
+  }
+  subscriptionTotal = round(subscriptionTotal)
+  subscriptionItemsOneOffTotal = round(subscriptionItemsOneOffTotal)
+  const subscriptionSaving = round(subscriptionItemsOneOffTotal - subscriptionTotal)
 
-    oneOffTotal += price
-    rrpTotal += rrp
-
-    // The subscription only contains products that last roughly a month — others
-    // are excluded entirely (the customer buys them one-off, less frequently).
-    if (qualifiesForSubscription(product, config)) {
-      subscriptionItemsOneOffTotal += price
-      subscriptionTotal += price * (1 - config.subscriptionDiscount)
-      subscriptionItemCount += 1
-    } else {
+  // Per-slot counts: how many flip to a refill, how many can't subscribe at all.
+  let subscriptionSwappedCount = 0
+  let excludedFromSubscriptionCount = 0
+  for (const slot of blueprint.slots) {
+    const product = catalogue.find((p) => p.id === slot.selectedProductId)
+    if (!product) continue
+    const sub = getSubscriptionProduct(product, catalogue)
+    if (!sub.subscriptionEligible) {
       excludedFromSubscriptionCount += 1
+    } else if (sub.id !== product.id) {
+      subscriptionSwappedCount += 1
     }
   }
 
-  const round = (n: number) => Math.round(n * 100) / 100
-  const bundleSaving = round(rrpTotal - oneOffTotal)
-  const subscriptionSaving = round(subscriptionItemsOneOffTotal - subscriptionTotal)
-
   return {
-    oneOffTotal: round(oneOffTotal),
+    oneOffTotal,
     rrpTotal: round(rrpTotal),
     bundleSaving,
     bundleSavingPct: rrpTotal > 0 ? Math.round((bundleSaving / rrpTotal) * 100) : 0,
-    subscriptionTotal: round(subscriptionTotal),
-    subscriptionItemsOneOffTotal: round(subscriptionItemsOneOffTotal),
+    subscriptionTotal,
+    subscriptionItemsOneOffTotal,
     subscriptionSaving,
     subscriptionSavingPct:
       subscriptionItemsOneOffTotal > 0
         ? Math.round((subscriptionSaving / subscriptionItemsOneOffTotal) * 100)
         : 0,
-    subscriptionItemCount,
+    subscriptionItemCount: subPlan.length,
+    subscriptionSwappedCount,
     excludedFromSubscriptionCount,
   }
 }

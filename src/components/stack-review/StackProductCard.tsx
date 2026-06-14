@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
-import { qualifiesForSubscription } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 
@@ -10,6 +10,8 @@ interface Props {
   slot: StackSlotEntry
   product: CatalogueProduct | undefined
   planType?: PlanType
+  /** The monthly product this slot resolves to on subscription (may be the product itself). */
+  subscriptionProduct?: CatalogueProduct
   onChangeProduct?: (slotId: string) => void
   onChangeVariant?: (slotId: string, variantId: string) => void
   onRemove?: (slotId: string) => void
@@ -22,13 +24,20 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
   return parts.length > 0 ? parts.join(' · ') : v.title
 }
 
-export function StackProductCard({ slot, product, planType = 'oneoff', onChangeProduct, onChangeVariant, onRemove }: Props) {
+export function StackProductCard({ slot, product, planType = 'oneoff', subscriptionProduct, onChangeProduct, onChangeVariant, onRemove }: Props) {
   const [variantsOpen, setVariantsOpen] = useState(false)
   const [reasonExpanded, setReasonExpanded] = useState(false)
-  const qualifiesForSub = product ? qualifiesForSubscription(product) : false
-  // In subscription view, products that last longer than a month aren't part of
-  // the monthly plan — dim them so it's clear they're one-off only.
-  const excludedFromPlan = planType === 'subscription' && !qualifiesForSub
+
+  // On subscription, every slot resolves to a monthly product (often itself).
+  const subProduct = subscriptionProduct ?? product
+  const canSubscribe = !!subProduct?.subscriptionEligible
+  const flipsToRefill = !!product && !!subProduct && subProduct.id !== product.id && canSubscribe
+  const subPrice = subProduct
+    ? (subProduct.variants.find((v) => v.available)?.price ?? subProduct.basePrice) * (1 - PRICING_CONFIG.subscriptionDiscount)
+    : 0
+  const inSubView = planType === 'subscription'
+  // Only dim when a slot genuinely can't be subscribed at all.
+  const excludedFromPlan = inSubView && !canSubscribe
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
     ?? product?.variants.find((v) => v.available)
     ?? product?.variants[0]
@@ -134,8 +143,15 @@ export function StackProductCard({ slot, product, planType = 'oneoff', onChangeP
           >
             {slot.required ? 'Core' : 'Optional'}
           </span>
-          {planType === 'subscription' ? (
-            qualifiesForSub ? (
+          {inSubView ? (
+            !canSubscribe ? (
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
+                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
+              >
+                One-off only
+              </span>
+            ) : (
               <span
                 className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
                 style={{
@@ -144,18 +160,11 @@ export function StackProductCard({ slot, product, planType = 'oneoff', onChangeP
                   border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`,
                 }}
               >
-                In monthly plan
-              </span>
-            ) : (
-              <span
-                className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
-              >
-                One-off only · ~{product?.daysOfSupply}d supply
+                {flipsToRefill ? 'Monthly refill' : 'In monthly plan'}
               </span>
             )
           ) : (
-            qualifiesForSub && (
+            canSubscribe && (
               <span
                 className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
                 style={{
@@ -169,6 +178,22 @@ export function StackProductCard({ slot, product, planType = 'oneoff', onChangeP
             )
           )}
         </div>
+
+        {/* Subscription resolution note — when this slot flips to a monthly refill */}
+        {inSubView && flipsToRefill && (
+          <div
+            className="mt-3 px-3 py-2 rounded-xl text-[11px] leading-snug"
+            style={{
+              color: 'var(--color-text-2)',
+              background: `color-mix(in srgb, ${ACCENT} 6%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${ACCENT} 18%, transparent)`,
+            }}
+          >
+            On subscription you’ll get <span className="font-semibold">{subProduct?.title}</span>{' '}
+            at <span className="font-semibold">{formatGBP(subPrice)}/mo</span> — a monthly-sized refill
+            so it ships every month.
+          </div>
+        )}
       </div>
 
       {/* Flavour / size picker — collapsed by default, expand on tap */}

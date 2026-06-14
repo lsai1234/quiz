@@ -409,9 +409,9 @@ describe('Feature 8: dynamic pricing', () => {
   })
 
   it('PRICING_CONFIG.subscriptionDiscount is applied only to eligible products', () => {
-    // Create a blueprint where every product qualifies for the subscription
-    // (eligible AND lasts about a month) so the whole stack is discounted.
-    const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, daysOfSupply: 30 }))
+    // Create a blueprint where every product subscribes as itself (no refill
+    // mapping) and is eligible, so the whole stack is discounted directly.
+    const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, daysOfSupply: 30, subscriptionProductId: null }))
     const bp = buildStackBlueprint(BASE_ANSWERS, allEligible)
     const { oneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible)
     if (oneOffTotal > 0) {

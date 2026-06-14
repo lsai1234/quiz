@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, PRICING_CONFIG } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -131,13 +131,48 @@ describe('calculatePricing', () => {
     expect(p.excludedFromSubscriptionCount).toBe(1)
   })
 
-  it('excludes products that last longer than a month even when eligible', () => {
-    const product = makeProduct({ subscriptionEligible: true, daysOfSupply: 90 })
-    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
-    const p = calculatePricing(blueprint, [product])
-    expect(p.subscriptionTotal).toBe(0)
-    expect(p.subscriptionItemCount).toBe(0)
-    expect(p.excludedFromSubscriptionCount).toBe(1)
+  it('flips a long-lasting product to its mapped monthly subscription product', () => {
+    const longProduct = makeProduct({
+      id: 'creatine', basePrice: 20, daysOfSupply: 90, subscriptionProductId: 'creatine-monthly',
+      variants: [{ id: 'cv', title: '500g', flavour: null, size: '500g', price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }],
+    })
+    const monthly = makeProduct({
+      id: 'creatine-monthly', basePrice: 9, isSubscriptionOnly: true,
+      variants: [{ id: 'cmv', title: '150g', flavour: null, size: '150g', price: 9, compareAtPrice: null, available: true, shopifyVariantId: null }],
+    })
+    const blueprint = makeBlueprint([{ selectedProductId: 'creatine', selectedVariantId: 'cv' }])
+    const p = calculatePricing(blueprint, [longProduct, monthly])
+    expect(p.oneOffTotal).toBe(20)                          // one-off uses the 500g tub
+    expect(p.subscriptionItemsOneOffTotal).toBe(9)          // subscription uses the monthly refill
+    expect(p.subscriptionTotal).toBe(Math.round(9 * 0.85 * 100) / 100)
+    expect(p.subscriptionItemCount).toBe(1)
+    expect(p.subscriptionSwappedCount).toBe(1)
+    expect(p.excludedFromSubscriptionCount).toBe(0)
+  })
+
+  it('deduplicates when two slots resolve to the same subscription product', () => {
+    const vitD = makeProduct({
+      id: 'vit-d', basePrice: 13, daysOfSupply: 60, subscriptionProductId: 'vit-d-monthly', stackSlots: ['health'],
+      variants: [{ id: 'vdv', title: '', flavour: null, size: null, price: 13, compareAtPrice: null, available: true, shopifyVariantId: null }],
+    })
+    const bone = makeProduct({
+      id: 'bone', basePrice: 18, daysOfSupply: 45, subscriptionProductId: 'vit-d-monthly', stackSlots: ['menopause'],
+      variants: [{ id: 'bv', title: '', flavour: null, size: null, price: 18, compareAtPrice: null, available: true, shopifyVariantId: null }],
+    })
+    const monthly = makeProduct({
+      id: 'vit-d-monthly', basePrice: 8, isSubscriptionOnly: true,
+      variants: [{ id: 'vdm', title: '', flavour: null, size: null, price: 8, compareAtPrice: null, available: true, shopifyVariantId: null }],
+    })
+    const blueprint = makeBlueprint([
+      { selectedProductId: 'vit-d', selectedVariantId: 'vdv' },
+      { selectedProductId: 'bone', selectedVariantId: 'bv', slotType: 'menopause' } as never,
+    ])
+    const p = calculatePricing(blueprint, [vitD, bone, monthly])
+    // Both slots map to the same monthly product → billed once.
+    expect(p.subscriptionItemCount).toBe(1)
+    expect(p.subscriptionItemsOneOffTotal).toBe(8)
+    expect(p.subscriptionTotal).toBe(Math.round(8 * 0.85 * 100) / 100)
+    expect(p.subscriptionSwappedCount).toBe(2)
   })
 
   it('sums correctly across multiple slots, excluding non-qualifying products from the subscription', () => {
@@ -180,6 +215,40 @@ describe('qualifiesForSubscription', () => {
 
   it('is false for an ineligible product regardless of supply', () => {
     expect(qualifiesForSubscription({ subscriptionEligible: false, daysOfSupply: 30 })).toBe(false)
+  })
+})
+
+describe('getSubscriptionProduct', () => {
+  it('returns the product itself when no mapping is set', () => {
+    const self = makeProduct({ id: 'self' })
+    expect(getSubscriptionProduct(self, [self]).id).toBe('self')
+  })
+
+  it('returns the mapped monthly product when set', () => {
+    const parent = makeProduct({ id: 'parent', subscriptionProductId: 'monthly' })
+    const monthly = makeProduct({ id: 'monthly', isSubscriptionOnly: true })
+    expect(getSubscriptionProduct(parent, [parent, monthly]).id).toBe('monthly')
+  })
+
+  it('falls back to self when the mapped product is missing from the catalogue', () => {
+    const parent = makeProduct({ id: 'parent', subscriptionProductId: 'gone' })
+    expect(getSubscriptionProduct(parent, [parent]).id).toBe('parent')
+  })
+})
+
+describe('buildSubscriptionPlan', () => {
+  it('merges slots that share a subscription product into one line', () => {
+    const a = makeProduct({ id: 'a', subscriptionProductId: 'shared', stackSlots: ['health'] })
+    const b = makeProduct({ id: 'b', subscriptionProductId: 'shared', stackSlots: ['menopause'] })
+    const shared = makeProduct({ id: 'shared', basePrice: 8, isSubscriptionOnly: true, variants: [{ id: 'sv', title: '', flavour: null, size: null, price: 8, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const blueprint = makeBlueprint([
+      { selectedProductId: 'a', selectedVariantId: 'sv' },
+      { selectedProductId: 'b', selectedVariantId: 'sv', slotType: 'menopause' } as never,
+    ])
+    const plan = buildSubscriptionPlan(blueprint, [a, b, shared])
+    expect(plan).toHaveLength(1)
+    expect(plan[0].product.id).toBe('shared')
+    expect(plan[0].coversSlotIds).toHaveLength(2)
   })
 })
 

@@ -110,6 +110,8 @@ const GET_PRODUCTS = `
             {namespace: "chrgd", key: "margin_priority"},
             {namespace: "chrgd", key: "subscription_eligible"},
             {namespace: "chrgd", key: "days_of_supply"},
+            {namespace: "chrgd", key: "subscription_product_handle"},
+            {namespace: "chrgd", key: "subscription_only"},
             {namespace: "chrgd", key: "formats"}
           ]) { key value type }
         }

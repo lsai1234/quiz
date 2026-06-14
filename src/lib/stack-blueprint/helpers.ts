@@ -75,7 +75,7 @@ export function getSwappableProductsForSlot(
   catalogue: CatalogueProduct[]
 ): CatalogueProduct[] {
   return catalogue.filter(
-    p => p.swapGroup === slot.swapGroup && p.id !== slot.selectedProductId
+    p => p.swapGroup === slot.swapGroup && p.id !== slot.selectedProductId && !p.isSubscriptionOnly
   )
 }
 

@@ -406,6 +406,11 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const rawDaysOfSupply = metaValue(p.metafields, 'days_of_supply')
   const daysOfSupply = rawDaysOfSupply ? parseInt(rawDaysOfSupply, 10) : 30
 
+  // The correlating monthly subscription product (a Shopify handle, since our
+  // catalogue ids ARE handles) and whether this product is a refill-only item.
+  const subscriptionProductId = metaValue(p.metafields, 'subscription_product_handle') || null
+  const isSubscriptionOnly = metaValue(p.metafields, 'subscription_only') === 'true'
+
   const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawFormats = metaValue(p.metafields, 'formats')
@@ -427,6 +432,8 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     compareAtPrice: defaultVariant?.compareAtPrice ?? null,
     subscriptionEligible,
     daysOfSupply,
+    subscriptionProductId,
+    isSubscriptionOnly,
     swapGroup,
     recommendationPriority,
     marginPriority,
