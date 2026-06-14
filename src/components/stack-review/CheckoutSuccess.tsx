@@ -1,0 +1,96 @@
+'use client'
+
+import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import type { SubscriptionCheckout } from '@/lib/stack-blueprint/checkout'
+
+const ACCENT = '#00D4FF'
+
+interface Props {
+  plan: 'oneoff' | 'subscription'
+  mock: boolean
+  subscription?: SubscriptionCheckout
+  onBack?: () => void
+}
+
+function deliveryLabel(months: number): string {
+  if (months <= 1) return 'every month'
+  return `every ${months} months`
+}
+
+export function CheckoutSuccess({ plan, mock, subscription, onBack }: Props) {
+  const isSub = plan === 'subscription' && subscription
+
+  return (
+    <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 py-12 text-center max-w-lg mx-auto">
+      <div className="text-5xl mb-5">🎉</div>
+      <h2 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        {isSub ? "You're subscribed." : 'Your stack is on its way.'}
+      </h2>
+      <p className="text-sm text-[var(--color-muted)] leading-relaxed max-w-sm">
+        {isSub
+          ? 'Your first box ships now. After that, each item arrives on its own schedule — all on one flat monthly payment.'
+          : 'Check your inbox for your order confirmation.'}
+      </p>
+
+      {isSub && subscription && (
+        <div className="w-full mt-7 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 text-left">
+          {/* Money */}
+          <div className="space-y-1.5 mb-4">
+            {subscription.introDiscountPct > 0 && subscription.firstMonth < subscription.flatMonthly && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--color-text-2)]">First month ({subscription.introDiscountPct}% off)</span>
+                <span className="text-base font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+                  {formatGBP(subscription.firstMonth)}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-[var(--color-text-2)]">Then per month</span>
+              <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{formatGBP(subscription.flatMonthly)}/mo</span>
+            </div>
+            {subscription.minMonths > 1 && (
+              <p className="text-[11px] text-[var(--color-muted)] pt-1">
+                {subscription.minMonths}-month minimum ({formatGBP(subscription.minTermTotal)} total), then cancel anytime.
+              </p>
+            )}
+          </div>
+
+          {/* Schedule */}
+          <div className="border-t border-[var(--color-border)] pt-3">
+            <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+              Delivery schedule
+            </p>
+            <div className="space-y-1.5">
+              {subscription.lines.map((line) => (
+                <div key={line.productId} className="flex items-center justify-between gap-3">
+                  <span className="text-xs truncate" style={{ color: 'var(--color-text-2)' }}>
+                    {line.quantity > 1 ? `${line.quantity}× ` : ''}{line.productTitle}
+                  </span>
+                  <span className="text-[11px] text-[var(--color-muted)] flex-shrink-0">{deliveryLabel(line.deliveryIntervalMonths)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {mock && (
+        <div className="mt-6 px-4 py-3 rounded-xl text-xs leading-relaxed max-w-sm"
+          style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+          <strong>Demo mode.</strong> No payment was taken. Connect Shopify + Recharge and set{' '}
+          <code>NEXT_PUBLIC_DATA_SOURCE=shopify</code> to take real {isSub ? 'subscriptions' : 'orders'}.
+        </div>
+      )}
+
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="mt-7 py-3 px-6 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all"
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          Back to your stack
+        </button>
+      )}
+    </div>
+  )
+}

@@ -18,6 +18,8 @@ export interface ShopifyVariant {
   image: ShopifyImage | null
   availableForSale: boolean
   product: { title: string; handle: string; images: { edges: { node: ShopifyImage }[] } }
+  /** Subscription selling-plan allocations — present once selling plans/Recharge are configured. */
+  sellingPlanAllocations?: { edges: { node: { sellingPlan: { id: string } } }[] }
 }
 
 export interface ShopifyMetafield {

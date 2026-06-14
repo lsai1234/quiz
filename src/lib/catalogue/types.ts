@@ -93,6 +93,13 @@ export interface CatalogueVariant {
    * Null in mock/development mode.
    */
   shopifyVariantId: string | null
+  /**
+   * Shopify selling-plan GID for this variant's subscription, read from the
+   * variant's selling-plan allocations. Null until Recharge/selling plans are
+   * configured. Attached to the cart line so Shopify checkout creates the
+   * subscription (and Recharge picks it up).
+   */
+  sellingPlanId?: string | null
 }
 
 // ─── Consumption protocol ─────────────────────────────────────────────────────

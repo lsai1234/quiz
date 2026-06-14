@@ -11,6 +11,8 @@
 
 import type { StackBlueprint, StackSlotEntry } from './types'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
+import type { QuizAnswers } from '@/lib/types'
+import { buildSubscriptionPlan, calculatePricing } from './pricing'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +20,8 @@ export interface CheckoutLineItem {
   /** Shopify merchandiseId (GID) — e.g. "gid://shopify/ProductVariant/1234567" */
   merchandiseId: string
   quantity: number
+  /** Shopify selling-plan GID — present on subscription lines, null for one-off. */
+  sellingPlanId?: string | null
   /** Shopify cart line attributes — surfaced in the order for ops/personalisation */
   attributes: { key: string; value: string }[]
 }
@@ -26,9 +30,45 @@ export type ValidationError =
   | { type: 'no-variant'; slotId: string; slotTitle: string }
   | { type: 'no-shopify-id'; slotId: string; slotTitle: string; variantTitle: string }
   | { type: 'unavailable'; slotId: string; slotTitle: string; variantTitle: string }
+  | { type: 'no-selling-plan'; slotId: string; slotTitle: string }
 
 export type CheckoutValidation =
   | { ok: true; lines: CheckoutLineItem[] }
+  | { ok: false; errors: ValidationError[] }
+
+/** A single recurring line in the subscription checkout. */
+export interface SubscriptionCheckoutLine {
+  productId: string
+  productTitle: string
+  /** Cart merchandiseId (Shopify GID when live, internal variant id in mock). */
+  merchandiseId: string
+  /** Selling plan that makes this line recurring (null until configured). */
+  sellingPlanId: string | null
+  /** Units sent each delivery. */
+  quantity: number
+  /** Delivery cadence in months. */
+  deliveryIntervalMonths: number
+  /** Amount billed each delivery. */
+  pricePerDelivery: number
+  attributes: { key: string; value: string }[]
+}
+
+/** Everything needed to start a subscription — the payload handed to Shopify/Recharge. */
+export interface SubscriptionCheckout {
+  lines: SubscriptionCheckoutLine[]
+  /** Flat amount billed every month. */
+  flatMonthly: number
+  /** First month's price after the intro discount. */
+  firstMonth: number
+  introDiscountPct: number
+  /** Minimum commitment in months. */
+  minMonths: number
+  /** Total committed across the minimum term. */
+  minTermTotal: number
+}
+
+export type SubscriptionCheckoutResult =
+  | { ok: true; checkout: SubscriptionCheckout }
   | { ok: false; errors: ValidationError[] }
 
 // ─── Cart permalink (fallback when Storefront API is not live) ────────────────
@@ -133,6 +173,69 @@ export function validateCheckout(
   return { ok: true, lines }
 }
 
+// ─── Subscription checkout builder ───────────────────────────────────────────
+
+/**
+ * Build the subscription checkout payload from a blueprint: the deduplicated,
+ * quantity-aware plan lines plus the flat monthly / intro / commitment figures.
+ * This is exactly what gets handed to Shopify (cart lines with selling plans)
+ * or Recharge at checkout.
+ */
+export function buildSubscriptionCheckout(
+  blueprint: StackBlueprint,
+  catalogue: CatalogueProduct[],
+  answers?: QuizAnswers | null,
+  options: { requireShopifyIds?: boolean; requireSellingPlans?: boolean } = {},
+): SubscriptionCheckoutResult {
+  const { requireShopifyIds = false, requireSellingPlans = false } = options
+  const plan = buildSubscriptionPlan(blueprint, catalogue, answers)
+  const pricing = calculatePricing(blueprint, catalogue, answers)
+  const errors: ValidationError[] = []
+  const lines: SubscriptionCheckoutLine[] = []
+
+  for (const line of plan) {
+    const slotId = line.coversSlotIds[0] ?? line.product.id
+    if (requireShopifyIds && !line.variantId.startsWith('gid://')) {
+      errors.push({ type: 'no-shopify-id', slotId, slotTitle: line.product.title, variantTitle: '' })
+      continue
+    }
+    if (requireSellingPlans && !line.sellingPlanId) {
+      errors.push({ type: 'no-selling-plan', slotId, slotTitle: line.product.title })
+      continue
+    }
+    lines.push({
+      productId: line.product.id,
+      productTitle: line.product.title,
+      merchandiseId: line.variantId,
+      sellingPlanId: line.sellingPlanId,
+      quantity: line.unitsPerShipment,
+      deliveryIntervalMonths: line.shipEveryMonths,
+      pricePerDelivery: line.pricePerDelivery,
+      attributes: [
+        { key: 'stackId', value: blueprint.id },
+        { key: 'stackName', value: blueprint.stackName },
+        { key: 'plan', value: 'subscription' },
+        { key: 'deliveryEveryMonths', value: String(line.shipEveryMonths) },
+        { key: 'source', value: 'quiz-stack-builder' },
+      ],
+    })
+  }
+
+  if (errors.length > 0) return { ok: false, errors }
+
+  return {
+    ok: true,
+    checkout: {
+      lines,
+      flatMonthly: pricing.subscriptionTotal,
+      firstMonth: pricing.subscriptionFirstMonth,
+      introDiscountPct: pricing.subscriptionIntroDiscountPct,
+      minMonths: pricing.subscriptionMinMonths,
+      minTermTotal: pricing.subscriptionMinTermTotal,
+    },
+  }
+}
+
 /** Human-readable message for a ValidationError. */
 export function validationErrorMessage(err: ValidationError): string {
   switch (err.type) {
@@ -142,5 +245,7 @@ export function validationErrorMessage(err: ValidationError): string {
       return `${err.slotTitle} — ${err.variantTitle} is currently out of stock. Please swap to a different option.`
     case 'no-shopify-id':
       return `${err.slotTitle} isn't connected to the store yet. Try refreshing or contact support.`
+    case 'no-selling-plan':
+      return `${err.slotTitle} doesn't have a subscription plan set up yet. Try refreshing or contact support.`
   }
 }

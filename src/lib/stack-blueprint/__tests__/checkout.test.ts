@@ -1,4 +1,4 @@
-import { validateCheckout, validationErrorMessage, buildCartPermalink, gidToNumeric } from '../checkout'
+import { validateCheckout, validationErrorMessage, buildCartPermalink, gidToNumeric, buildSubscriptionCheckout } from '../checkout'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -202,5 +202,58 @@ describe('gidToNumeric', () => {
   })
   it('returns original when not a GID', () => {
     expect(gidToNumeric('simple-id')).toBe('simple-id')
+  })
+})
+
+// ─── buildSubscriptionCheckout ────────────────────────────────────────────────
+
+describe('buildSubscriptionCheckout', () => {
+  it('builds recurring lines and the flat/intro/commitment figures', () => {
+    const product = makeProduct() // protein, daily, 30 servings, variant has a GID
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
+    const result = buildSubscriptionCheckout(blueprint, [product])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const { lines, flatMonthly, firstMonth, introDiscountPct, minMonths, minTermTotal } = result.checkout
+    expect(lines).toHaveLength(1)
+    expect(lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/111')
+    expect(lines[0].quantity).toBe(1)                 // daily → 1 unit / month
+    expect(lines[0].deliveryIntervalMonths).toBe(1)
+    expect(lines[0].pricePerDelivery).toBe(Math.round(30 * 0.85 * 100) / 100)  // 25.50
+    expect(lines[0].attributes).toEqual(
+      expect.arrayContaining([{ key: 'plan', value: 'subscription' }]),
+    )
+    expect(flatMonthly).toBe(25.5)
+    expect(introDiscountPct).toBe(50)
+    expect(firstMonth).toBe(Math.round(25.5 * 0.5 * 100) / 100)  // 12.75
+    expect(minMonths).toBe(4)
+    expect(minTermTotal).toBe(Math.round((firstMonth + 3 * flatMonthly) * 100) / 100)
+  })
+
+  it('rejects when Shopify IDs are required but missing (mock variant)', () => {
+    const product = makeProduct({ variants: [makeVariant({ shopifyVariantId: null })] })
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
+    const result = buildSubscriptionCheckout(blueprint, [product], null, { requireShopifyIds: true })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.errors[0].type).toBe('no-shopify-id')
+  })
+
+  it('rejects when selling plans are required but missing', () => {
+    const product = makeProduct() // GID present, but no sellingPlanId
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
+    const result = buildSubscriptionCheckout(blueprint, [product], null, { requireSellingPlans: true })
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.errors[0].type).toBe('no-selling-plan')
+  })
+
+  it('carries the selling plan id onto the line when present', () => {
+    const product = makeProduct({ variants: [makeVariant({ sellingPlanId: 'gid://shopify/SellingPlan/999' })] })
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
+    const result = buildSubscriptionCheckout(blueprint, [product], null, { requireSellingPlans: true })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.checkout.lines[0].sellingPlanId).toBe('gid://shopify/SellingPlan/999')
   })
 })

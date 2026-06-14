@@ -101,6 +101,7 @@ const GET_PRODUCTS = `
             compareAtPriceV2 { amount currencyCode }
             image { url altText width height }
             product { title handle images(first:1){edges{node{url altText width height}}} }
+            sellingPlanAllocations(first: 1) { edges { node { sellingPlan { id } } } }
           }}}
           metafields(identifiers: [
             {namespace: "chrgd", key: "safe_wording"},
@@ -153,7 +154,7 @@ function normaliseCart(raw: RawCart): ShopifyCart {
 }
 
 export async function createCart(
-  lines: { merchandiseId: string; quantity: number; attributes?: { key: string; value: string }[] }[],
+  lines: { merchandiseId: string; quantity: number; sellingPlanId?: string; attributes?: { key: string; value: string }[] }[],
 ): Promise<ShopifyCart> {
   // Use the attributes-capable mutation when any line carries attributes
   const hasAttrs = lines.some((l) => l.attributes && l.attributes.length > 0)

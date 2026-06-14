@@ -20,6 +20,7 @@ import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
+import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
 
@@ -114,8 +115,8 @@ export function StackReviewPage() {
   const { state: checkoutState, checkout, reset: resetCheckout } = useStackCheckout()
 
   const handleCheckout = useCallback(
-    () => checkout(blueprint, products),
-    [checkout, blueprint, products],
+    () => checkout(blueprint, products, planType, answers),
+    [checkout, blueprint, products, planType, answers],
   )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
@@ -167,6 +168,17 @@ export function StackReviewPage() {
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-[var(--color-muted)] text-sm">Building your stack…</p>
       </div>
+    )
+  }
+
+  if (checkoutState.status === 'success') {
+    return (
+      <CheckoutSuccess
+        plan={checkoutState.plan}
+        mock={checkoutState.mock}
+        subscription={checkoutState.subscription}
+        onBack={resetCheckout}
+      />
     )
   }
 

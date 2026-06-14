@@ -367,6 +367,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     compareAtPrice: node.compareAtPriceV2 ? parseFloat(node.compareAtPriceV2.amount) : null,
     available: node.availableForSale,
     shopifyVariantId: node.id,
+    sellingPlanId: node.sellingPlanAllocations?.edges?.[0]?.node?.sellingPlan?.id ?? null,
   }))
 
   const defaultVariant = variants[0]

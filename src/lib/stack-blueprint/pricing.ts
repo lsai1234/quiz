@@ -121,6 +121,10 @@ export interface SubscriptionLine {
   shipEveryMonths: number
   /** Average units consumed per month (unitsPerShipment / shipEveryMonths). */
   monthlyUnits: number
+  /** The variant id that will be billed/shipped (internal id, or Shopify GID when live). */
+  variantId: string
+  /** Shopify selling-plan GID for this line, when configured. */
+  sellingPlanId: string | null
   /** Undiscounted price of one unit. */
   unitPrice: number
   /** Discounted amount billed each delivery (unitsPerShipment × unitPrice × discount). */
@@ -163,10 +167,13 @@ export function buildSubscriptionPlan(
 
     // Self-subscription respects the chosen variant; a mapped refill uses its
     // own default available variant.
-    const unitPrice =
+    const variant =
       sub.id === slotProduct.id
-        ? slotPrice(slot, sub)
-        : sub.variants.find((v) => v.available)?.price ?? sub.basePrice
+        ? sub.variants.find((v) => v.id === slot.selectedVariantId) ??
+          sub.variants.find((v) => v.available) ??
+          sub.variants[0]
+        : sub.variants.find((v) => v.available) ?? sub.variants[0]
+    const unitPrice = variant?.price ?? sub.basePrice
 
     // How much is needed per month, from the consumption protocol + answers.
     const { cadence, dosesPerUnit } = resolveConsumption(sub)
@@ -198,6 +205,8 @@ export function buildSubscriptionPlan(
       unitsPerShipment,
       shipEveryMonths,
       monthlyUnits,
+      variantId: variant?.shopifyVariantId ?? variant?.id ?? sub.id,
+      sellingPlanId: variant?.sellingPlanId ?? null,
       unitPrice: round(unitPrice),
       pricePerDelivery: round(discounted(unitsPerShipment * unitPrice)),
       monthlyBaseline: round(monthlyUnits * unitPrice),

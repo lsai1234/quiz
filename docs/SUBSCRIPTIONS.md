@@ -113,12 +113,26 @@ The plan is a **flat-price monthly membership**, not lumpy per-delivery charges:
   creatine every 3 months…) even though billing is one flat monthly amount.
 - **Commitment total** = `subscriptionMinTermTotal` — disclose this up front.
 
-### Checkout (Phase 2)
+### Checkout (Phase 2 — built, mock-first)
 
-At checkout we hand Recharge the stack (via selling plans it manages, or its
-API): the flat monthly price, the first-order discount, the minimum cycles, and
-the per-item delivery cadence. The cart line carries the `sellingPlanId`; the
-checkout validation already has the hook for it.
+The checkout flow is wired end to end and works today on mock data:
+
+- `buildSubscriptionCheckout()` (in `checkout.ts`) turns the stack into the
+  payload: recurring lines (`merchandiseId`, `sellingPlanId`, `quantity` =
+  units/delivery, `deliveryIntervalMonths`, `pricePerDelivery`) plus the flat
+  monthly / first month / minimum-term figures.
+- `useStackCheckout` is plan-aware: one-off → `POST /api/cart`, subscription →
+  `POST /api/subscribe`.
+- `POST /api/subscribe` — in mock mode returns a confirmation; in live mode it
+  creates a Shopify cart whose lines carry `sellingPlanId` + quantity, so
+  Shopify checkout starts the subscription and **Recharge picks it up**.
+- Variant `sellingPlanId` is read from Storefront `sellingPlanAllocations`
+  (null until Recharge selling plans are configured).
+
+To go live: configure Recharge selling plans on the products (so each variant
+gets a selling-plan allocation), set `NEXT_PUBLIC_DATA_SOURCE=shopify`, and the
+same flow creates real subscriptions. The intro discount, flat membership price
+and minimum cycles are configured on the Recharge plan to match `PRICING_CONFIG`.
 
 ### The Phase 3 hub
 
