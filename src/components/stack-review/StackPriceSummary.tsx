@@ -1,7 +1,7 @@
 'use client'
 
 import type { StackPricing } from '@/lib/stack-blueprint/pricing'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 
 interface Props {
@@ -46,13 +46,21 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
     subscriptionIntroDiscountPct,
     subscriptionMinMonths,
     subscriptionMinTermTotal,
+    subscriptionMinOrderMet,
+    bundleDiscountPct,
+    bundleTierLabel,
   } = pricing
 
   const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
+  const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet
 
   const hasRrpSaving = bundleSaving > 0.01
-  const hasSubscriptionItems = subscriptionItemCount > 0
-  const isSub = planType === 'subscription' && hasSubscriptionItems
+  const isSub = planType === 'subscription' && canSubscribe
+  const subTabLabel = canSubscribe
+    ? `${formatGBP(subscriptionTotal)}/mo`
+    : subscriptionItemCount > 0
+      ? `Min ${formatGBP(PRICING_CONFIG.minSubscriptionMonthly)}/mo`
+      : 'Unavailable'
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden">
@@ -70,9 +78,9 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
           />
           <PlanTab
             label="Subscribe monthly"
-            sub={hasSubscriptionItems ? `${formatGBP(subscriptionTotal)}/mo` : 'Unavailable'}
+            sub={subTabLabel}
             active={isSub}
-            disabled={!hasSubscriptionItems}
+            disabled={!canSubscribe}
             onClick={() => onPlanChange('subscription')}
           />
         </div>
@@ -143,6 +151,17 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
               </div>
             )}
 
+            {bundleDiscountPct > 0 && bundleTierLabel && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs" style={{ color: 'var(--color-accent)' }}>
+                  Bundle deal · {bundleTierLabel}
+                </span>
+                <span className="text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
+                  {bundleDiscountPct}% off
+                </span>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-[var(--color-text-2)]">One-off total</span>
               <span className="text-base font-black text-[var(--color-text)]">{formatGBP(oneOffTotal)}</span>
@@ -150,14 +169,14 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
 
             {hasRrpSaving && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-emerald-400">Bundle saving</span>
+                <span className="text-xs text-emerald-400">Total saving</span>
                 <span className="text-xs font-semibold text-emerald-400">
                   −{formatGBP(bundleSaving)} ({bundleSavingPct}% off)
                 </span>
               </div>
             )}
 
-            {hasSubscriptionItems && subscriptionSavingPct > 0 && (
+            {canSubscribe && subscriptionSavingPct > 0 && (
               <button
                 onClick={() => onPlanChange('subscription')}
                 className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-center leading-snug active:scale-[0.98] transition-transform"

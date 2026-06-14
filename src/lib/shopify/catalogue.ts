@@ -423,6 +423,9 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const rawMinMonths = metaValue(p.metafields, 'min_subscription_months')
   const minSubscriptionMonths = rawMinMonths ? parseInt(rawMinMonths, 10) : undefined
 
+  const rawCost = metaValue(p.metafields, 'cost')
+  const cost = rawCost ? parseFloat(rawCost) : undefined
+
   const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawFormats = metaValue(p.metafields, 'formats')
@@ -442,6 +445,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     variants,
     basePrice: defaultVariant?.price ?? 0,
     compareAtPrice: defaultVariant?.compareAtPrice ?? null,
+    cost,
     subscriptionEligible,
     daysOfSupply,
     subscriptionProductId,

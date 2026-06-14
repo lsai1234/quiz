@@ -146,6 +146,9 @@ export interface CatalogueProduct {
   /** Price of the default (first available) variant */
   basePrice: number
   compareAtPrice: number | null
+  /** Cost of goods for one (default) unit. Used for margin/profit guardrails.
+   *  When omitted, estimated as basePrice × PRICING_CONFIG.defaultCostRatio. */
+  cost?: number
   subscriptionEligible: boolean
   /**
    * Approximate number of days one unit lasts at the recommended dose.

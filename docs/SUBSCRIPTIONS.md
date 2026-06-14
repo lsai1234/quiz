@@ -69,6 +69,41 @@ slots resolve to the same product — but it is not used by default.)
   (default 1 → "cancel anytime"), raised by any product's
   `minSubscriptionMonths` override.
 
+## Pricing rules & profit guardrails (portal-controlled)
+
+All discount/margin rules live in `PRICING_CONFIG` as data, ready for the portal
+to edit. They're profit-aware so discounts can't quietly lose money.
+
+**Tiered discounts (min order values).**
+- `bundleTiers` — one-off bundle discounts that unlock at order-value (or item)
+  thresholds; the best-qualifying tier wins. Defaults: £60+ → 7.5%, £90+ →
+  12.5%, £120+ → 15%.
+- `subscriptionTiers` — optional extra subscribe-&-save on top of the base
+  `subscriptionDiscount` (15%) for bigger monthly orders. Empty by default.
+
+**Margin protection.**
+- Every product has a `cost` (cost of goods); when unset it's estimated as
+  `price × defaultCostRatio` (0.35). Read from the `chrgd.cost` metafield live.
+- `marginFloorPct` (0.15) — a discount never takes a line below
+  `cost × (1 + floor)`, capped at list price. So a deep tier or sale can't sell
+  below margin.
+
+**Profit on cancel (the key one).** `calculatePricing` reports, for the portal:
+- `subscriptionMonthlyMargin` — margin per month.
+- `subscriptionCommittedMargin` — margin across the whole minimum term
+  (committed revenue − cost of goods actually shipped during the term).
+- `subscriptionProfitableOnCancel` — true when that committed margin is ≥ 0, i.e.
+  even a customer who cancels at the earliest allowed point has been profitable.
+  This is what couples the intro discount + minimum term + costs together: the
+  portal can tune any of them and immediately see whether the offer still
+  profits on the worst-case cancel.
+
+**Minimum order to subscribe.** `minSubscriptionMonthly` (£25) — the flat monthly
+must clear this for the Subscribe option to be offered.
+
+These are PORTAL-facing numbers (margins aren't shown to customers); the final
+phase exposes them as editable controls + a profitability readout.
+
 ## Product data → Shopify metafields
 
 All of this is mock-first today and reads from `chrgd.*` metafields the moment
@@ -83,6 +118,7 @@ you go live. The Storefront query (`src/lib/shopify/operations.ts`), the mapper
 | `consumption.cadence` | `consumption_cadence` | `daily` / `per-workout` |
 | `consumption.dosesPerUnit` | `doses_per_unit` | number_integer |
 | `minSubscriptionMonths` | `min_subscription_months` | number_integer |
+| `cost` | `cost` | number_decimal |
 | `subscriptionProductId` | `subscription_product_handle` | text (handle) |
 | `isSubscriptionOnly` | `subscription_only` | boolean |
 

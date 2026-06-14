@@ -5,32 +5,51 @@ import type { QuizAnswers } from '@/lib/types'
 const DAYS_PER_MONTH = 30
 
 // ─── Config ──────────────────────────────────────────────────────────────────
-// All discount rates live here so they can be changed without touching UI code.
+// All pricing rules live here so they can be changed without touching UI code.
+// The portal (final phase) will edit these — they're written as data, not logic.
+
+/** A volume/value discount tier. Qualifies when the order meets every set threshold. */
+export interface DiscountTier {
+  id: string
+  label: string
+  /** Minimum order subtotal (£) to qualify. */
+  minSubtotal?: number
+  /** Minimum number of products to qualify. */
+  minItems?: number
+  /** Discount as a fraction, 0–1. */
+  discountPct: number
+}
 
 export const PRICING_CONFIG = {
-  /** One-off bundle discount applied to the whole stack subtotal (0–1). The
-   *  default is 0 because the one-off saving currently comes from per-product
-   *  RRP markdowns; the portal can switch on a flat bundle % here later. */
-  bundleDiscount: 0,
-  /** Monthly subscription discount applied to subscription products (0–1). */
+  /** Subscription discount applied to subscription products (0–1). The base
+   *  "subscribe & save"; can be beaten by a subscriptionTier for bigger orders. */
   subscriptionDiscount: 0.15,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
-  /**
-   * Preferred approach: a product that lasts longer than a month stays the SAME
-   * product and simply ships less often (every N months). A product only flips
-   * to a different monthly SKU when `subscriptionProductId` is explicitly set
-   * (in the portal). This threshold flags, for the portal, products long enough
-   * that a smaller monthly refill *could* be worth offering.
-   */
+
+  // ── One-off bundle discount tiers (best-qualifying wins) ──
+  bundleTiers: [
+    { id: 'bundle-60', label: '£60+ bundle', minSubtotal: 60, discountPct: 0.075 },
+    { id: 'bundle-90', label: '£90+ bundle', minSubtotal: 90, discountPct: 0.125 },
+    { id: 'bundle-120', label: '£120+ bundle', minSubtotal: 120, discountPct: 0.15 },
+  ] as DiscountTier[],
+  // ── Extra subscription discount tiers, on top of the base rate (best wins) ──
+  subscriptionTiers: [] as DiscountTier[],
+
+  // ── Margin / profit guardrails ──
+  /** When a product has no explicit cost, estimate it as price × this. */
+  defaultCostRatio: 0.35,
+  /** Never discount a line below cost × (1 + this). */
+  marginFloorPct: 0.15,
+  /** Minimum flat monthly value for the subscription to be offered (£). */
+  minSubscriptionMonthly: 25,
+
+  // ── Subscription cadence / commitment ──
+  /** Products longer-lived than this (days) are candidates for a monthly refill SKU. */
   maxSubscriptionDaysOfSupply: 35,
   /** Never schedule a delivery more than this many months apart. */
   maxDeliveryMonths: 6,
-  /**
-   * Bill ONE flat amount every month (the long-run average) instead of lumpy
-   * per-delivery charges; items still ship on their own cadence. The minimum
-   * term below protects against early-cancel, since the flat amount is smoothed.
-   */
+  /** Bill one flat amount every month (smoothed average); minimum term protects it. */
   subscriptionFlatMonthly: true,
   /** Minimum subscription commitment in months (per-product can override up). */
   minSubscriptionMonths: 4,
@@ -39,6 +58,40 @@ export const PRICING_CONFIG = {
     /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it. */
     firstMonthDiscount: 0.5,
   },
+}
+
+// ─── Discount tiers & margin helpers ─────────────────────────────────────────
+
+/** Best-qualifying tier for an order. Returns the highest discount it unlocks. */
+export function resolveTier(
+  tiers: DiscountTier[],
+  subtotal: number,
+  itemCount: number,
+): { pct: number; tier: DiscountTier | null } {
+  let best: DiscountTier | null = null
+  for (const t of tiers) {
+    const meetsSubtotal = t.minSubtotal == null || subtotal >= t.minSubtotal
+    const meetsItems = t.minItems == null || itemCount >= t.minItems
+    if (meetsSubtotal && meetsItems && (!best || t.discountPct > best.discountPct)) best = t
+  }
+  return { pct: best?.discountPct ?? 0, tier: best }
+}
+
+/** Cost of one unit — explicit, or estimated from price. */
+export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>, unitPrice: number, config = PRICING_CONFIG): number {
+  if (product.cost != null) return product.cost
+  return Math.round(unitPrice * config.defaultCostRatio * 100) / 100
+}
+
+/**
+ * Apply a discount to a unit price, but never below the margin floor
+ * (cost × (1+floor)). The floor is capped at the list price, so a product whose
+ * cost is already above the floor simply gets no discount (never a markup).
+ */
+export function discountWithFloor(unitPrice: number, rate: number, cost: number, config = PRICING_CONFIG): number {
+  const discounted = unitPrice * (1 - rate)
+  const floor = Math.min(unitPrice, cost * (1 + config.marginFloorPct))
+  return Math.max(discounted, floor)
 }
 
 // ─── Subscription qualification & resolution ─────────────────────────────────
@@ -127,7 +180,9 @@ export interface SubscriptionLine {
   sellingPlanId: string | null
   /** Undiscounted price of one unit. */
   unitPrice: number
-  /** Discounted amount billed each delivery (unitsPerShipment × unitPrice × discount). */
+  /** Cost of goods for one unit. */
+  unitCost: number
+  /** Discounted amount billed each delivery (unitsPerShipment × discounted unit price). */
   pricePerDelivery: number
   /** Amortised undiscounted monthly cost. */
   monthlyBaseline: number
@@ -141,6 +196,25 @@ export interface SubscriptionLine {
  * the SAME subscription product are merged into one line (billed once).
  * Slots whose resolved product isn't subscriptionEligible are skipped.
  */
+interface RawSubLine {
+  product: CatalogueProduct
+  coversSlotIds: string[]
+  cadence: ConsumptionCadence
+  occasionsPerMonth: number
+  dosesPerUnit: number
+  unitsPerShipment: number
+  shipEveryMonths: number
+  monthlyUnits: number
+  variant: CatalogueProduct['variants'][number] | undefined
+  productRef: CatalogueProduct
+  unitPrice: number
+}
+
+/** The effective subscription discount for an order: base rate, beaten by any tier. */
+export function resolveSubscriptionRate(monthlySubtotal: number, itemCount: number, config = PRICING_CONFIG): number {
+  return Math.max(config.subscriptionDiscount, resolveTier(config.subscriptionTiers, monthlySubtotal, itemCount).pct)
+}
+
 export function buildSubscriptionPlan(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
@@ -148,9 +222,10 @@ export function buildSubscriptionPlan(
   config = PRICING_CONFIG,
 ): SubscriptionLine[] {
   const round = (n: number) => Math.round(n * 100) / 100
-  const lines = new Map<string, SubscriptionLine>()
   const woPerMonth = workoutsPerMonth(answers)
 
+  // ── Pass 1: build raw, deduplicated lines (no discount applied yet) ──
+  const raw = new Map<string, RawSubLine>()
   for (const slot of blueprint.slots) {
     const slotProduct = catalogue.find((p) => p.id === slot.selectedProductId)
     if (!slotProduct) continue
@@ -158,15 +233,13 @@ export function buildSubscriptionPlan(
     const sub = getSubscriptionProduct(slotProduct, catalogue)
     if (!sub.subscriptionEligible) continue
 
-    const existing = lines.get(sub.id)
+    const existing = raw.get(sub.id)
     if (existing) {
-      // Two slots resolve to the same subscription product — bill it once.
       existing.coversSlotIds.push(slot.slotId)
       continue
     }
 
-    // Self-subscription respects the chosen variant; a mapped refill uses its
-    // own default available variant.
+    // Self-subscription respects the chosen variant; a mapped refill uses its default.
     const variant =
       sub.id === slotProduct.id
         ? sub.variants.find((v) => v.id === slot.selectedVariantId) ??
@@ -175,7 +248,6 @@ export function buildSubscriptionPlan(
         : sub.variants.find((v) => v.available) ?? sub.variants[0]
     const unitPrice = variant?.price ?? sub.basePrice
 
-    // How much is needed per month, from the consumption protocol + answers.
     const { cadence, dosesPerUnit } = resolveConsumption(sub)
     const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : Math.max(woPerMonth, 1)
     const monthsOneUnitLasts = dosesPerUnit / occasionsPerMonth
@@ -183,20 +255,14 @@ export function buildSubscriptionPlan(
     let unitsPerShipment: number
     let shipEveryMonths: number
     if (monthsOneUnitLasts >= 1) {
-      // One unit lasts a month or more → ship one unit, spaced out (capped).
       unitsPerShipment = 1
       shipEveryMonths = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(monthsOneUnitLasts)))
     } else {
-      // Need more than one unit a month → ship several each month.
       unitsPerShipment = Math.max(1, Math.round(occasionsPerMonth / dosesPerUnit))
       shipEveryMonths = 1
     }
-    // "Pay for what ships": monthly cost is the per-delivery cost amortised over
-    // the delivery interval — so the headline £/mo and the schedule always agree.
-    const monthlyUnits = unitsPerShipment / shipEveryMonths
-    const discounted = (n: number) => n * (1 - config.subscriptionDiscount)
 
-    lines.set(sub.id, {
+    raw.set(sub.id, {
       product: sub,
       coversSlotIds: [slot.slotId],
       cadence,
@@ -204,17 +270,39 @@ export function buildSubscriptionPlan(
       dosesPerUnit,
       unitsPerShipment,
       shipEveryMonths,
-      monthlyUnits,
-      variantId: variant?.shopifyVariantId ?? variant?.id ?? sub.id,
-      sellingPlanId: variant?.sellingPlanId ?? null,
-      unitPrice: round(unitPrice),
-      pricePerDelivery: round(discounted(unitsPerShipment * unitPrice)),
-      monthlyBaseline: round(monthlyUnits * unitPrice),
-      monthlyPrice: round(discounted(monthlyUnits * unitPrice)),
+      monthlyUnits: unitsPerShipment / shipEveryMonths,
+      variant,
+      productRef: sub,
+      unitPrice,
     })
   }
 
-  return [...lines.values()]
+  // ── Resolve the order-level discount, then apply it (with the margin floor) ──
+  const rawLines = [...raw.values()]
+  const monthlySubtotal = rawLines.reduce((s, r) => s + r.monthlyUnits * r.unitPrice, 0)
+  const rate = resolveSubscriptionRate(monthlySubtotal, rawLines.length, config)
+
+  return rawLines.map((r) => {
+    const unitCost = unitCostOf(r.productRef, r.unitPrice, config)
+    const discountedUnit = discountWithFloor(r.unitPrice, rate, unitCost, config)
+    return {
+      product: r.product,
+      coversSlotIds: r.coversSlotIds,
+      cadence: r.cadence,
+      occasionsPerMonth: r.occasionsPerMonth,
+      dosesPerUnit: r.dosesPerUnit,
+      unitsPerShipment: r.unitsPerShipment,
+      shipEveryMonths: r.shipEveryMonths,
+      monthlyUnits: r.monthlyUnits,
+      variantId: r.variant?.shopifyVariantId ?? r.variant?.id ?? r.product.id,
+      sellingPlanId: r.variant?.sellingPlanId ?? null,
+      unitPrice: round(r.unitPrice),
+      unitCost: round(unitCost),
+      pricePerDelivery: round(r.unitsPerShipment * discountedUnit),
+      monthlyBaseline: round(r.monthlyUnits * r.unitPrice),
+      monthlyPrice: round(r.monthlyUnits * discountedUnit),
+    }
+  })
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -228,6 +316,14 @@ export interface StackPricing {
   bundleSaving: number
   /** bundleSaving / rrpTotal expressed as 0–100. 0 when no compare prices exist. */
   bundleSavingPct: number
+  /** The resolved one-off bundle discount tier, 0–100. */
+  bundleDiscountPct: number
+  /** Label of the qualifying bundle tier (e.g. "£90+ bundle"), null if none. */
+  bundleTierLabel: string | null
+  /** One-off gross margin (oneOffTotal − cost of goods). PORTAL-facing, not shown to customers. */
+  oneOffMargin: number
+  /** One-off margin as a percentage of oneOffTotal. */
+  oneOffMarginPct: number
   /**
    * Monthly price of the subscription: each slot resolved to its subscription
    * product, deduplicated, with subscriptionDiscount applied to each line.
@@ -253,6 +349,14 @@ export interface StackPricing {
   subscriptionIntroDiscountPct: number
   /** Total the customer commits to across the minimum term (first month + the rest). */
   subscriptionMinTermTotal: number
+  /** Subscription gross margin per month (monthly total − monthly cost of goods). PORTAL-facing. */
+  subscriptionMonthlyMargin: number
+  /** Margin across the whole minimum commitment (committed revenue − cost of goods shipped in the term). PORTAL-facing. */
+  subscriptionCommittedMargin: number
+  /** True when the minimum-term commitment is profitable even if the customer cancels at the earliest point. */
+  subscriptionProfitableOnCancel: boolean
+  /** True when the flat monthly meets the minimum order value to offer a subscription. */
+  subscriptionMinOrderMet: boolean
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -298,17 +402,23 @@ export function calculatePricing(
 ): StackPricing {
   const round = (n: number) => Math.round(n * 100) / 100
 
-  // ── One-off bundle ──
-  let oneOffSubtotal = 0
-  let rrpTotal = 0
+  // ── One-off bundle (tiered discount, margin-floored per line) ──
+  const oneOffLines: { price: number; rrp: number; cost: number }[] = []
   for (const slot of blueprint.slots) {
     const product = catalogue.find((p) => p.id === slot.selectedProductId)
     if (!product) continue
-    oneOffSubtotal += slotPrice(slot, product)
-    rrpTotal += slotRrp(slot, product)
+    const price = slotPrice(slot, product)
+    oneOffLines.push({ price, rrp: slotRrp(slot, product), cost: unitCostOf(product, price, config) })
   }
-  const oneOffTotal = round(oneOffSubtotal * (1 - config.bundleDiscount))
+  const oneOffSubtotal = oneOffLines.reduce((s, l) => s + l.price, 0)
+  const rrpTotal = oneOffLines.reduce((s, l) => s + l.rrp, 0)
+  const bundleTier = resolveTier(config.bundleTiers, oneOffSubtotal, oneOffLines.length)
+  const oneOffTotal = round(
+    oneOffLines.reduce((s, l) => s + discountWithFloor(l.price, bundleTier.pct, l.cost, config), 0),
+  )
+  const oneOffCost = round(oneOffLines.reduce((s, l) => s + l.cost, 0))
   const bundleSaving = round(rrpTotal - oneOffTotal)
+  const oneOffMargin = round(oneOffTotal - oneOffCost)
 
   // ── Monthly subscription (resolved, deduplicated, quantity-aware) ──
   const subPlan = buildSubscriptionPlan(blueprint, catalogue, answers, config)
@@ -336,6 +446,20 @@ export function calculatePricing(
     subscriptionFirstMonth + Math.max(0, subscriptionMinMonths - 1) * subscriptionTotal,
   )
 
+  // ── Margin / profit guardrails (portal-facing, not shown to customers) ──
+  let monthlyCost = 0
+  let committedCost = 0
+  for (const line of subPlan) {
+    monthlyCost += line.monthlyUnits * line.unitCost
+    // Deliveries within the minimum term (first delivery at signup / month 0).
+    const deliveries = Math.floor((subscriptionMinMonths - 1) / line.shipEveryMonths) + 1
+    committedCost += deliveries * line.unitsPerShipment * line.unitCost
+  }
+  const subscriptionMonthlyMargin = round(subscriptionTotal - monthlyCost)
+  const subscriptionCommittedMargin = round(subscriptionMinTermTotal - committedCost)
+  const subscriptionProfitableOnCancel = subPlan.length > 0 && subscriptionCommittedMargin >= 0
+  const subscriptionMinOrderMet = subPlan.length > 0 && subscriptionTotal >= config.minSubscriptionMonthly
+
   // Per-slot counts: how many flip to a refill, how many can't subscribe at all.
   let subscriptionSwappedCount = 0
   let excludedFromSubscriptionCount = 0
@@ -355,6 +479,10 @@ export function calculatePricing(
     rrpTotal: round(rrpTotal),
     bundleSaving,
     bundleSavingPct: rrpTotal > 0 ? Math.round((bundleSaving / rrpTotal) * 100) : 0,
+    bundleDiscountPct: Math.round(bundleTier.pct * 1000) / 10,
+    bundleTierLabel: bundleTier.tier?.label ?? null,
+    oneOffMargin,
+    oneOffMarginPct: oneOffTotal > 0 ? Math.round((oneOffMargin / oneOffTotal) * 100) : 0,
     subscriptionTotal,
     subscriptionItemsOneOffTotal,
     subscriptionSaving,
@@ -369,6 +497,10 @@ export function calculatePricing(
     subscriptionFirstMonth,
     subscriptionIntroDiscountPct: Math.round(introDiscount * 100),
     subscriptionMinTermTotal,
+    subscriptionMonthlyMargin,
+    subscriptionCommittedMargin,
+    subscriptionProfitableOnCancel,
+    subscriptionMinOrderMet,
   }
 }
 

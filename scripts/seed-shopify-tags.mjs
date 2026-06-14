@@ -327,6 +327,10 @@ function buildMetafields(cfg) {
   if (cfg.minSubscriptionMonths) {
     fields.push({ namespace: 'chrgd', key: 'min_subscription_months', type: 'number_integer', value: String(cfg.minSubscriptionMonths) })
   }
+  // Cost of goods (for margin/profit guardrails).
+  if (cfg.cost != null) {
+    fields.push({ namespace: 'chrgd', key: 'cost', type: 'number_decimal', value: String(cfg.cost) })
+  }
   return fields
 }
 

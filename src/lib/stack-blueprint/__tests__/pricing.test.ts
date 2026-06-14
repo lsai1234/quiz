@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, PRICING_CONFIG } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -377,5 +377,77 @@ describe('formatSaving', () => {
   })
   it('formats positive saving with pct', () => {
     expect(formatSaving(10, 25)).toBe('Save £10.00 (25% off)')
+  })
+})
+
+// ─── Pricing rules: tiers, margin floor, profit guardrails ────────────────────
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+const oneVariant = (price: number) => [{ id: 'v', title: '', flavour: null, size: null, price, compareAtPrice: null, available: true, shopifyVariantId: null }]
+
+describe('pricing rules — discount tiers', () => {
+  it('resolveTier picks the highest qualifying tier', () => {
+    const tiers = [
+      { id: 'a', label: 'A', minSubtotal: 50, discountPct: 0.05 },
+      { id: 'b', label: 'B', minSubtotal: 100, discountPct: 0.1 },
+    ]
+    expect(resolveTier(tiers, 40, 1).pct).toBe(0)
+    expect(resolveTier(tiers, 60, 1).pct).toBe(0.05)
+    expect(resolveTier(tiers, 120, 1).tier?.id).toBe('b')
+  })
+
+  it('applies the one-off bundle tier to a qualifying stack', () => {
+    const a = makeProduct({ id: 'a', basePrice: 70, compareAtPrice: null, variants: oneVariant(70) })
+    const b = makeProduct({ id: 'b', basePrice: 70, compareAtPrice: null, variants: [{ id: 'v2', title: '', flavour: null, size: null, price: 70, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const bp = makeBlueprint([
+      { selectedProductId: 'a', selectedVariantId: 'v' },
+      { selectedProductId: 'b', selectedVariantId: 'v2', slotType: 'performance' } as never,
+    ])
+    const p = calculatePricing(bp, [a, b]) // subtotal 140 → £120+ tier (15%)
+    expect(p.bundleDiscountPct).toBe(15)
+    expect(p.bundleTierLabel).toBe('£120+ bundle')
+    expect(p.oneOffTotal).toBe(round2(140 * 0.85))
+  })
+
+  it('gives no bundle discount below the first tier threshold', () => {
+    const a = makeProduct({ id: 'a', basePrice: 30, compareAtPrice: null, variants: oneVariant(30) })
+    const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
+    expect(p.bundleDiscountPct).toBe(0)
+    expect(p.oneOffTotal).toBe(30)
+  })
+})
+
+describe('pricing rules — margin floor & cost', () => {
+  it('estimates unit cost from price when not set', () => {
+    expect(unitCostOf({ cost: undefined, basePrice: 100 }, 100)).toBe(round2(100 * PRICING_CONFIG.defaultCostRatio))
+    expect(unitCostOf({ cost: 12, basePrice: 100 }, 100)).toBe(12)
+  })
+
+  it('never discounts below the margin floor, never above list price', () => {
+    expect(discountWithFloor(100, 0.15, 35)).toBe(85)        // floor 40.25 doesn't bind
+    expect(discountWithFloor(20, 0.5, 18)).toBe(20)          // floor 20.7 capped to list price → no discount
+    expect(discountWithFloor(20, 0.15, 15)).toBe(20 * 0.85 < 15 * 1.15 ? 17.25 : 17)
+  })
+})
+
+describe('pricing rules — subscription profit guardrails', () => {
+  it('reports monthly margin and is profitable on cancel under the default config', () => {
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'], daysOfSupply: 30, basePrice: 40, cost: 10, compareAtPrice: null, variants: oneVariant(40) })
+    const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
+    expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.85 - 10))  // 34 - 10 = 24
+    expect(p.subscriptionProfitableOnCancel).toBe(true)
+    expect(p.subscriptionCommittedMargin).toBe(round2(p.subscriptionMinTermTotal - 4 * 10)) // monthly delivery → 4 deliveries
+  })
+
+  it('flags a config that loses money if cancelled early', () => {
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'], daysOfSupply: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
+    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9 } }
+    const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, badConfig)
+    expect(p.subscriptionProfitableOnCancel).toBe(false)
+  })
+
+  it('gates subscription on the minimum monthly order value', () => {
+    const cheap = makeProduct({ id: 'a', stackSlots: ['protein'], daysOfSupply: 30, basePrice: 10, compareAtPrice: null, variants: oneVariant(10) })
+    expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [cheap]).subscriptionMinOrderMet).toBe(false)
   })
 })

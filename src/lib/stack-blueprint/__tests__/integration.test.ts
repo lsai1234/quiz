@@ -434,10 +434,10 @@ describe('Feature 8: dynamic pricing', () => {
     const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, daysOfSupply: 30, subscriptionProductId: null }))
     const bp = buildStackBlueprint(BASE_ANSWERS, allEligible)
     // Daily training so per-workout items also ship at 1 unit/month — then the
-    // whole stack is simply discounted by the subscription rate.
-    const { oneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible, { ...BASE_ANSWERS, trainingFrequency: 'daily' })
-    if (oneOffTotal > 0) {
-      const expectedSub = Math.round(oneOffTotal * (1 - PRICING_CONFIG.subscriptionDiscount) * 100) / 100
+    // monthly baseline is simply discounted by the subscription rate.
+    const { subscriptionItemsOneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible, { ...BASE_ANSWERS, trainingFrequency: 'daily' })
+    if (subscriptionItemsOneOffTotal > 0) {
+      const expectedSub = Math.round(subscriptionItemsOneOffTotal * (1 - PRICING_CONFIG.subscriptionDiscount) * 100) / 100
       expect(Math.abs(subscriptionTotal - expectedSub)).toBeLessThan(0.02) // rounding tolerance
     }
   })
