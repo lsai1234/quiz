@@ -308,6 +308,40 @@ describe('consumption protocol & monthly quantities', () => {
     // The quantity flows through to the headline subscription total
     expect(calculatePricing(bp, [pre], answersWith('3-4x')).subscriptionTotal).toBe(light.monthlyPrice)
   })
+
+  it('keeps a long-lasting daily product as itself and ships it every few months', () => {
+    const creatine = makeProduct({ id: 'cr', stackSlots: ['performance'], daysOfSupply: 100, basePrice: 19.99,
+      variants: [{ id: 'cv', title: '', flavour: null, size: null, price: 19.99, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const bp = makeBlueprint([{ selectedProductId: 'cr', selectedVariantId: 'cv', slotType: 'performance' } as never])
+    const [line] = buildSubscriptionPlan(bp, [creatine], answersWith('3-4x'))
+    expect(line.product.id).toBe('cr')        // not swapped to a refill
+    expect(line.cadence).toBe('daily')
+    expect(line.shipEveryMonths).toBe(3)      // 100 servings ÷ 30/mo ≈ 3.3 → 3
+    expect(line.unitsPerShipment).toBe(1)
+    expect(line.pricePerDelivery).toBe(Math.round(19.99 * 0.85 * 100) / 100)        // 16.99 per delivery
+    expect(line.monthlyPrice).toBe(Math.round((19.99 / 3) * 0.85 * 100) / 100)      // 5.66 / mo
+    // The monthly figure and the per-delivery figure stay consistent.
+    expect(Math.abs(line.monthlyPrice - line.pricePerDelivery / line.shipEveryMonths)).toBeLessThan(0.01)
+  })
+
+  it('caps the delivery interval at maxDeliveryMonths', () => {
+    const longLife = makeProduct({ id: 'x', stackSlots: ['health'], daysOfSupply: 300, basePrice: 30,
+      variants: [{ id: 'xv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const bp = makeBlueprint([{ selectedProductId: 'x', selectedVariantId: 'xv', slotType: 'health' } as never])
+    const [line] = buildSubscriptionPlan(bp, [longLife])
+    expect(line.shipEveryMonths).toBe(PRICING_CONFIG.maxDeliveryMonths)  // 300/30 = 10 → capped to 6
+  })
+
+  it('reports the minimum subscription term from config and product overrides', () => {
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'] })
+    const b = makeProduct({ id: 'b', stackSlots: ['health'], minSubscriptionMonths: 3 })
+    const bp = makeBlueprint([
+      { selectedProductId: 'a' },
+      { selectedProductId: 'b', slotType: 'health' } as never,
+    ])
+    expect(calculatePricing(bp, [a, b]).subscriptionMinMonths).toBe(3)
+    expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a' }]), [a]).subscriptionMinMonths).toBe(1)
+  })
 })
 
 describe('formatGBP', () => {

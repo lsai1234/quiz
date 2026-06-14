@@ -8,7 +8,7 @@
  */
 
 import { buildStackBlueprint } from '../factory'
-import { calculatePricing, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, buildSubscriptionPlan, PRICING_CONFIG } from '../pricing'
 import {
   updateStackSlotProduct,
   updateStackSlotVariant,
@@ -383,6 +383,26 @@ describe('Feature 8: dynamic pricing', () => {
     const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
     const { oneOffTotal, subscriptionTotal } = calculatePricing(bp, MOCK_CATALOGUE)
     expect(subscriptionTotal).toBeLessThanOrEqual(oneOffTotal)
+  })
+
+  it('subscriptionTotal equals the summed monthly prices of the plan lines', () => {
+    const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
+    const plan = buildSubscriptionPlan(bp, MOCK_CATALOGUE, BASE_ANSWERS)
+    const summed = Math.round(plan.reduce((s, l) => s + l.monthlyPrice, 0) * 100) / 100
+    expect(calculatePricing(bp, MOCK_CATALOGUE, BASE_ANSWERS).subscriptionTotal).toBe(summed)
+    // Every line's monthly figure reconciles with its delivery schedule.
+    for (const line of plan) {
+      expect(Math.abs(line.monthlyPrice - line.pricePerDelivery / line.shipEveryMonths)).toBeLessThan(0.02)
+      expect(line.shipEveryMonths).toBeGreaterThanOrEqual(1)
+      expect(line.shipEveryMonths).toBeLessThanOrEqual(PRICING_CONFIG.maxDeliveryMonths)
+    }
+  })
+
+  it('never includes subscription-only refill products in the plan or the quiz', () => {
+    const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
+    expect(bp.slots.every((s) => !s.selectedProductId.endsWith('-monthly'))).toBe(true)
+    const plan = buildSubscriptionPlan(bp, MOCK_CATALOGUE, BASE_ANSWERS)
+    expect(plan.every((l) => !l.product.isSubscriptionOnly)).toBe(true)
   })
 
   it('subscription saving % is correct', () => {

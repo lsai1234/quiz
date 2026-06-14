@@ -17,12 +17,17 @@ export const PRICING_CONFIG = {
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
   /**
-   * Longest days-of-supply a product can have and still be a sensible *monthly*
-   * subscription as-is. Products that last longer should be mapped (via
-   * `subscriptionProductId`) to a monthly-sized refill so the monthly plan is
-   * always available — this threshold drives that recommendation in the portal.
+   * Preferred approach: a product that lasts longer than a month stays the SAME
+   * product and simply ships less often (every N months). A product only flips
+   * to a different monthly SKU when `subscriptionProductId` is explicitly set
+   * (in the portal). This threshold flags, for the portal, products long enough
+   * that a smaller monthly refill *could* be worth offering.
    */
   maxSubscriptionDaysOfSupply: 35,
+  /** Never schedule a delivery more than this many months apart. */
+  maxDeliveryMonths: 6,
+  /** Minimum subscription commitment in months (per-product can override up). */
+  minSubscriptionMonths: 1,
 }
 
 // ─── Subscription qualification & resolution ─────────────────────────────────
@@ -103,8 +108,12 @@ export interface SubscriptionLine {
   unitsPerShipment: number
   /** Ship cadence in months (e.g. 2 = one unit every two months). */
   shipEveryMonths: number
+  /** Average units consumed per month (unitsPerShipment / shipEveryMonths). */
+  monthlyUnits: number
   /** Undiscounted price of one unit. */
   unitPrice: number
+  /** Discounted amount billed each delivery (unitsPerShipment × unitPrice × discount). */
+  pricePerDelivery: number
   /** Amortised undiscounted monthly cost. */
   monthlyBaseline: number
   /** Amortised monthly cost after the subscription discount. */
@@ -150,23 +159,24 @@ export function buildSubscriptionPlan(
 
     // How much is needed per month, from the consumption protocol + answers.
     const { cadence, dosesPerUnit } = resolveConsumption(sub)
-    const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : woPerMonth
-    const monthsOneUnitLasts = dosesPerUnit / Math.max(occasionsPerMonth, 1)
+    const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : Math.max(woPerMonth, 1)
+    const monthsOneUnitLasts = dosesPerUnit / occasionsPerMonth
 
     let unitsPerShipment: number
     let shipEveryMonths: number
-    let monthlyUnits: number
     if (monthsOneUnitLasts >= 1) {
-      // One unit lasts a month or more → ship one unit, spaced out.
+      // One unit lasts a month or more → ship one unit, spaced out (capped).
       unitsPerShipment = 1
-      shipEveryMonths = Math.max(1, Math.round(monthsOneUnitLasts))
-      monthlyUnits = 1 / shipEveryMonths
+      shipEveryMonths = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(monthsOneUnitLasts)))
     } else {
       // Need more than one unit a month → ship several each month.
-      unitsPerShipment = Math.ceil(occasionsPerMonth / Math.max(dosesPerUnit, 1))
+      unitsPerShipment = Math.max(1, Math.round(occasionsPerMonth / dosesPerUnit))
       shipEveryMonths = 1
-      monthlyUnits = unitsPerShipment
     }
+    // "Pay for what ships": monthly cost is the per-delivery cost amortised over
+    // the delivery interval — so the headline £/mo and the schedule always agree.
+    const monthlyUnits = unitsPerShipment / shipEveryMonths
+    const discounted = (n: number) => n * (1 - config.subscriptionDiscount)
 
     lines.set(sub.id, {
       product: sub,
@@ -176,9 +186,11 @@ export function buildSubscriptionPlan(
       dosesPerUnit,
       unitsPerShipment,
       shipEveryMonths,
+      monthlyUnits,
       unitPrice: round(unitPrice),
+      pricePerDelivery: round(discounted(unitsPerShipment * unitPrice)),
       monthlyBaseline: round(monthlyUnits * unitPrice),
-      monthlyPrice: round(monthlyUnits * unitPrice * (1 - config.subscriptionDiscount)),
+      monthlyPrice: round(discounted(monthlyUnits * unitPrice)),
     })
   }
 
@@ -213,6 +225,8 @@ export interface StackPricing {
   subscriptionSwappedCount: number
   /** Number of slots that can't subscribe at all (resolved product isn't subscriptionEligible). */
   excludedFromSubscriptionCount: number
+  /** Minimum subscription commitment in months for this stack (≥ 1). */
+  subscriptionMinMonths: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -282,6 +296,13 @@ export function calculatePricing(
   subscriptionItemsOneOffTotal = round(subscriptionItemsOneOffTotal)
   const subscriptionSaving = round(subscriptionItemsOneOffTotal - subscriptionTotal)
 
+  // Minimum commitment: the config floor, raised by any product that requires a
+  // longer term (set in the portal).
+  const subscriptionMinMonths = subPlan.reduce(
+    (min, line) => Math.max(min, line.product.minSubscriptionMonths ?? 0),
+    config.minSubscriptionMonths,
+  )
+
   // Per-slot counts: how many flip to a refill, how many can't subscribe at all.
   let subscriptionSwappedCount = 0
   let excludedFromSubscriptionCount = 0
@@ -311,6 +332,7 @@ export function calculatePricing(
     subscriptionItemCount: subPlan.length,
     subscriptionSwappedCount,
     excludedFromSubscriptionCount,
+    subscriptionMinMonths,
   }
 }
 

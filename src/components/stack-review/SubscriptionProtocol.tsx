@@ -19,7 +19,7 @@ function unitNoun(formats: string[]): string {
   return 'pack'
 }
 
-function quantityLabel(line: SubscriptionLine): string {
+function deliveryLabel(line: SubscriptionLine): string {
   const noun = unitNoun(line.product.formats)
   if (line.shipEveryMonths > 1) return `1 ${noun} every ${line.shipEveryMonths} months`
   if (line.unitsPerShipment > 1) return `${line.unitsPerShipment} ${noun}s a month`
@@ -28,20 +28,22 @@ function quantityLabel(line: SubscriptionLine): string {
 
 function cadenceLabel(line: SubscriptionLine): string {
   return line.cadence === 'daily'
-    ? 'Take every day'
-    : `Take on training days (~${line.occasionsPerMonth}/month)`
+    ? 'Every day'
+    : `On training days (~${line.occasionsPerMonth}/mo)`
 }
 
 interface Props {
   plan: SubscriptionLine[]
   answers?: QuizAnswers | null
   slotTitleById: Record<string, string>
+  minMonths?: number
 }
 
-export function SubscriptionProtocol({ plan, answers, slotTitleById }: Props) {
+export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths = 1 }: Props) {
   if (plan.length === 0) return null
 
   const freq = answers?.trainingFrequency ? FREQ_LABEL[answers.trainingFrequency] : null
+  const monthlyTotal = plan.reduce((sum, l) => sum + l.monthlyPrice, 0)
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
@@ -54,11 +56,11 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById }: Props) {
         </p>
         <p className="text-xs text-[var(--color-muted)] mb-4 leading-relaxed">
           {freq
-            ? `Sized to how you train — ${freq}. Daily staples come monthly; training-day items scale to your sessions.`
-            : 'Daily staples come monthly; training-day items scale to how often you train.'}
+            ? `Sized to how you train — ${freq}. Daily staples come monthly; longer-lasting and training-day items ship less often.`
+            : 'Daily staples come monthly; longer-lasting and training-day items ship less often.'}
         </p>
 
-        <div className="space-y-3">
+        <div className="space-y-3.5">
           {plan.map((line) => {
             const covers = line.coversSlotIds
               .map((id) => slotTitleById[id])
@@ -77,18 +79,35 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById }: Props) {
                     {line.product.title}
                   </p>
                   <p className="text-[11px] mt-1 leading-snug" style={{ color: 'var(--color-text-2)' }}>
-                    {cadenceLabel(line)} · {quantityLabel(line)}
+                    {cadenceLabel(line)} · {deliveryLabel(line)}
                   </p>
                 </div>
-                <span
-                  className="text-sm font-black flex-shrink-0"
-                  style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}
-                >
-                  {formatGBP(line.monthlyPrice)}/mo
-                </span>
+                <div className="flex-shrink-0 text-right">
+                  <p
+                    className="text-sm font-black"
+                    style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}
+                  >
+                    {formatGBP(line.monthlyPrice)}/mo
+                  </p>
+                  {line.shipEveryMonths > 1 && (
+                    <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
+                      {formatGBP(line.pricePerDelivery)} every {line.shipEveryMonths} mo
+                    </p>
+                  )}
+                </div>
               </div>
             )
           })}
+        </div>
+
+        {/* Footer: total + commitment */}
+        <div className="mt-4 pt-4 border-t border-[var(--color-border)] flex items-center justify-between">
+          <span className="text-xs font-semibold text-[var(--color-text-2)]">
+            {minMonths > 1 ? `Minimum ${minMonths}-month subscription` : 'Cancel or pause anytime'}
+          </span>
+          <span className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            {formatGBP(monthlyTotal)}/mo
+          </span>
         </div>
       </div>
     </div>

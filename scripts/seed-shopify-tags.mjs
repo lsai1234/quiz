@@ -122,8 +122,7 @@ const PRODUCT_MAP = {
     slots:               ['performance'],
     goals:               ['muscle', 'performance', 'bulking', 'energy'],
     swapGroup:           'creatine',
-    daysOfSupply:        90,
-    subscriptionProductHandle: 'chrgd-creatine-monthly',
+    daysOfSupply:        100,
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
     coreEligible:        true,
@@ -219,7 +218,6 @@ const PRODUCT_MAP = {
     goals:               ['health', 'recovery'],
     swapGroup:           'omega-3',
     daysOfSupply:        90,
-    subscriptionProductHandle: 'chrgd-omega-3-monthly',
     dietary:             ['gluten-free', 'dairy-free'],
     stimulant:           false,
     coreEligible:        true,
@@ -236,7 +234,6 @@ const PRODUCT_MAP = {
     goals:               ['health'],
     swapGroup:           'vitamin-d',
     daysOfSupply:        60,
-    subscriptionProductHandle: 'chrgd-vitamin-d-monthly',
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
     coreEligible:        true,
@@ -293,59 +290,6 @@ const PRODUCT_MAP = {
     productType:         'Recovery',
     formats:             'capsules',
   },
-
-  // ─── Monthly subscription refills (hidden from the quiz) ──────────────────────
-  'chrgd-creatine-monthly': {
-    slots:               ['performance'],
-    goals:               ['muscle', 'performance', 'bulking'],
-    swapGroup:           'creatine',
-    daysOfSupply:        30,
-    subscriptionOnly:    true,
-    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    stimulant:           false,
-    coreEligible:        false,
-    boosterEligible:     false,
-    stackPriority:       9,
-    marginPriority:      9,
-    safeWording:         'Monthly-sized creatine refill — same 5g daily dose, sized for monthly delivery.',
-    subscriptionEligible: true,
-    productType:         'Performance',
-    formats:             'powder',
-  },
-  'chrgd-omega-3-monthly': {
-    slots:               ['health'],
-    goals:               ['health', 'recovery', 'focus'],
-    swapGroup:           'omega-3',
-    daysOfSupply:        30,
-    subscriptionOnly:    true,
-    dietary:             ['gluten-free', 'dairy-free'],
-    stimulant:           false,
-    coreEligible:        false,
-    boosterEligible:     false,
-    stackPriority:       6,
-    marginPriority:      6,
-    safeWording:         'Monthly-sized omega-3 refill — same daily EPA & DHA, sized for monthly delivery.',
-    subscriptionEligible: true,
-    productType:         'Health',
-    formats:             'softgels',
-  },
-  'chrgd-vitamin-d-monthly': {
-    slots:               ['health'],
-    goals:               ['health', 'immune'],
-    swapGroup:           'vitamin-d',
-    daysOfSupply:        30,
-    subscriptionOnly:    true,
-    dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
-    stimulant:           false,
-    coreEligible:        false,
-    boosterEligible:     false,
-    stackPriority:       5,
-    marginPriority:      6,
-    safeWording:         'Monthly-sized vitamin D3 + K2 refill, sized for monthly delivery.',
-    subscriptionEligible: true,
-    productType:         'Health',
-    formats:             'capsules',
-  },
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -378,6 +322,10 @@ function buildMetafields(cfg) {
   // The monthly refill a longer-lasting product flips to on subscription.
   if (cfg.subscriptionProductHandle) {
     fields.push({ namespace: 'chrgd', key: 'subscription_product_handle', type: 'single_line_text_field', value: cfg.subscriptionProductHandle })
+  }
+  // Optional minimum subscription commitment (months).
+  if (cfg.minSubscriptionMonths) {
+    fields.push({ namespace: 'chrgd', key: 'min_subscription_months', type: 'number_integer', value: String(cfg.minSubscriptionMonths) })
   }
   return fields
 }

@@ -419,6 +419,9 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     consumption = { cadence: rawCadence, dosesPerUnit: (rawDoses ? parseInt(rawDoses, 10) : 0) || daysOfSupply }
   }
 
+  const rawMinMonths = metaValue(p.metafields, 'min_subscription_months')
+  const minSubscriptionMonths = rawMinMonths ? parseInt(rawMinMonths, 10) : undefined
+
   const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawFormats = metaValue(p.metafields, 'formats')
@@ -443,6 +446,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     subscriptionProductId,
     isSubscriptionOnly,
     consumption,
+    minSubscriptionMonths,
     swapGroup,
     recommendationPriority,
     marginPriority,

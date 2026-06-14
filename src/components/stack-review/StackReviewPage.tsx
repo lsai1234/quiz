@@ -237,6 +237,7 @@ export function StackReviewPage() {
               plan={subscriptionPlan}
               answers={answers}
               slotTitleById={slotTitleById}
+              minMonths={pricing.subscriptionMinMonths}
             />
           )}
           <StackPriceSummary

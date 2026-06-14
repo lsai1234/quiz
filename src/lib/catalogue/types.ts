@@ -167,6 +167,8 @@ export interface CatalogueProduct {
    * per-workout, everything else = daily) and daysOfSupply.
    */
   consumption?: ProductConsumption
+  /** Minimum subscription commitment in months for this product (portal-set). */
+  minSubscriptionMonths?: number
 
   // ── Stack logic ───────────────────────────────────────────────────────────────
   /**
