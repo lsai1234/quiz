@@ -6,9 +6,15 @@
  * portal) agrees on one answer.
  *
  * Resolution order (highest priority first):
- *   1. Explicit override  — DATA_SOURCE / NEXT_PUBLIC_DATA_SOURCE = mock|shopify
- *   2. `auto` (default)   — use Shopify when Storefront credentials are present
- *   3. Fallback           — mock
+ *   1. Explicit override  — DATA_SOURCE / NEXT_PUBLIC_DATA_SOURCE = mock | shopify | auto
+ *   2. Default            — MOCK (mock-first while the catalogue is being built)
+ *
+ * Mock is the default ON PURPOSE for now: the app uses the local mock catalogue
+ * even when Shopify credentials are present, so subscriptions/pricing all work
+ * without seeding Shopify. To go live, set `NEXT_PUBLIC_DATA_SOURCE=shopify`
+ * (always use Shopify) or `=auto` (use Shopify when credentials are present) —
+ * and remember to seed the chrgd.* metafields first (scripts/seed-shopify-tags.mjs),
+ * otherwise products come back without subscription data.
  *
  * The override is read from an env var for now. The portal (later phase) will
  * persist a runtime override in the database; `getDataSourceMode()` is the only
@@ -32,20 +38,23 @@ export function hasShopifyCredentials(): boolean {
 
 /**
  * The requested mode, before credentials are taken into account.
- * `NEXT_PUBLIC_DATA_SOURCE` wins over `DATA_SOURCE` so the client and server
- * resolve identically when both are set.
+ * Defaults to `mock` (mock-first). `NEXT_PUBLIC_DATA_SOURCE` wins over
+ * `DATA_SOURCE` so the client and server resolve identically when both are set.
  */
 export function getDataSourceMode(): DataSourceMode {
   const raw = (
     process.env.NEXT_PUBLIC_DATA_SOURCE ??
     process.env.DATA_SOURCE ??
-    'auto'
+    'mock'
   )
     .toString()
     .trim()
     .toLowerCase()
 
-  return raw === 'mock' || raw === 'shopify' ? raw : 'auto'
+  if (raw === 'shopify') return 'shopify'
+  if (raw === 'auto') return 'auto'
+  // Default and anything unrecognised → mock (mock-first).
+  return 'mock'
 }
 
 /**

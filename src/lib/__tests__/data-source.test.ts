@@ -47,17 +47,33 @@ describe('data-source resolver', () => {
     })
   })
 
-  describe('auto mode (default)', () => {
+  describe('default (mock-first)', () => {
     it('resolves to mock when no override and no credentials', () => {
-      expect(getDataSourceMode()).toBe('auto')
+      expect(getDataSourceMode()).toBe('mock')
       expect(getDataSource()).toBe('mock')
       expect(isShopifyLive()).toBe(false)
     })
 
-    it('resolves to shopify when credentials are present', () => {
+    it('stays on mock even when credentials are present (no override)', () => {
       setCredentials()
+      expect(getDataSourceMode()).toBe('mock')
+      expect(getDataSource()).toBe('mock')
+      expect(isShopifyLive()).toBe(false)
+    })
+  })
+
+  describe('auto mode (explicit)', () => {
+    it('uses shopify when credentials are present', () => {
+      setCredentials()
+      process.env.DATA_SOURCE = 'auto'
+      expect(getDataSourceMode()).toBe('auto')
       expect(getDataSource()).toBe('shopify')
       expect(isShopifyLive()).toBe(true)
+    })
+
+    it('falls back to mock without credentials', () => {
+      process.env.DATA_SOURCE = 'auto'
+      expect(getDataSource()).toBe('mock')
     })
   })
 
@@ -81,9 +97,11 @@ describe('data-source resolver', () => {
       expect(getDataSource()).toBe('mock')
     })
 
-    it('ignores unrecognised values and treats them as auto', () => {
+    it('ignores unrecognised values and treats them as mock', () => {
+      setCredentials()
       process.env.DATA_SOURCE = 'nonsense'
-      expect(getDataSourceMode()).toBe('auto')
+      expect(getDataSourceMode()).toBe('mock')
+      expect(getDataSource()).toBe('mock')
     })
 
     it('is case-insensitive', () => {
