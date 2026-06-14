@@ -334,13 +334,27 @@ describe('consumption protocol & monthly quantities', () => {
 
   it('reports the minimum subscription term from config and product overrides', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'] })
-    const b = makeProduct({ id: 'b', stackSlots: ['health'], minSubscriptionMonths: 3 })
+    const b = makeProduct({ id: 'b', stackSlots: ['health'], minSubscriptionMonths: 6 })
     const bp = makeBlueprint([
       { selectedProductId: 'a' },
       { selectedProductId: 'b', slotType: 'health' } as never,
     ])
-    expect(calculatePricing(bp, [a, b]).subscriptionMinMonths).toBe(3)
-    expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a' }]), [a]).subscriptionMinMonths).toBe(1)
+    // Config floor is 4; a product can only raise it.
+    expect(calculatePricing(bp, [a, b]).subscriptionMinMonths).toBe(6)
+    expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a' }]), [a]).subscriptionMinMonths).toBe(PRICING_CONFIG.minSubscriptionMonths)
+  })
+
+  it('applies the first-month intro discount and reports the commitment total', () => {
+    const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], daysOfSupply: 30 })
+    const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
+    const p = calculatePricing(bp, [a])
+    const monthly = Math.round(30 * 0.85 * 100) / 100   // daily, 1/month → 25.50
+    expect(p.subscriptionTotal).toBe(monthly)
+    expect(p.subscriptionIntroDiscountPct).toBe(Math.round(PRICING_CONFIG.introOffer.firstMonthDiscount * 100))
+    expect(p.subscriptionFirstMonth).toBe(Math.round(monthly * (1 - PRICING_CONFIG.introOffer.firstMonthDiscount) * 100) / 100)
+    // Commitment = discounted first month + the remaining months at the flat rate.
+    const expectedTerm = Math.round((p.subscriptionFirstMonth + (p.subscriptionMinMonths - 1) * monthly) * 100) / 100
+    expect(p.subscriptionMinTermTotal).toBe(expectedTerm)
   })
 })
 

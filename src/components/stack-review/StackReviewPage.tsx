@@ -238,6 +238,9 @@ export function StackReviewPage() {
               answers={answers}
               slotTitleById={slotTitleById}
               minMonths={pricing.subscriptionMinMonths}
+              monthlyTotal={pricing.subscriptionTotal}
+              firstMonth={pricing.subscriptionFirstMonth}
+              introPct={pricing.subscriptionIntroDiscountPct}
             />
           )}
           <StackPriceSummary

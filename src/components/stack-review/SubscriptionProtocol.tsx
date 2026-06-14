@@ -37,13 +37,16 @@ interface Props {
   answers?: QuizAnswers | null
   slotTitleById: Record<string, string>
   minMonths?: number
+  monthlyTotal: number
+  firstMonth?: number
+  introPct?: number
 }
 
-export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths = 1 }: Props) {
+export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths = 1, monthlyTotal, firstMonth, introPct = 0 }: Props) {
   if (plan.length === 0) return null
 
   const freq = answers?.trainingFrequency ? FREQ_LABEL[answers.trainingFrequency] : null
-  const monthlyTotal = plan.reduce((sum, l) => sum + l.monthlyPrice, 0)
+  const hasIntro = introPct > 0 && firstMonth != null && firstMonth < monthlyTotal
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
@@ -56,8 +59,8 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths =
         </p>
         <p className="text-xs text-[var(--color-muted)] mb-4 leading-relaxed">
           {freq
-            ? `Sized to how you train — ${freq}. Daily staples come monthly; longer-lasting and training-day items ship less often.`
-            : 'Daily staples come monthly; longer-lasting and training-day items ship less often.'}
+            ? `One flat payment a month, sized to how you train — ${freq}. Each item arrives on its own schedule.`
+            : 'One flat payment a month. Each item arrives on its own schedule.'}
         </p>
 
         <div className="space-y-3.5">
@@ -100,14 +103,35 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths =
           })}
         </div>
 
-        {/* Footer: total + commitment */}
-        <div className="mt-4 pt-4 border-t border-[var(--color-border)] flex items-center justify-between">
-          <span className="text-xs font-semibold text-[var(--color-text-2)]">
-            {minMonths > 1 ? `Minimum ${minMonths}-month subscription` : 'Cancel or pause anytime'}
-          </span>
-          <span className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-            {formatGBP(monthlyTotal)}/mo
-          </span>
+        {/* Footer: flat fee + intro + commitment */}
+        <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-1.5">
+          {hasIntro ? (
+            <>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-[var(--color-text-2)]">First month ({introPct}% off)</span>
+                <span className="flex items-baseline gap-1.5">
+                  <span className="text-[11px] text-[var(--color-muted)] line-through">{formatGBP(monthlyTotal)}</span>
+                  <span className="text-sm font-black" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(firstMonth!)}
+                  </span>
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-[var(--color-muted)]">Then per month</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{formatGBP(monthlyTotal)}/mo</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-[var(--color-text-2)]">Flat monthly</span>
+              <span className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(monthlyTotal)}/mo
+              </span>
+            </div>
+          )}
+          <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+            {minMonths > 1 ? `${minMonths}-month minimum, then cancel or pause anytime.` : 'Cancel or pause anytime.'}
+          </p>
         </div>
       </div>
     </div>

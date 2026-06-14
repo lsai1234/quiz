@@ -1,7 +1,7 @@
 'use client'
 
 import type { StackPricing } from '@/lib/stack-blueprint/pricing'
-import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 
 interface Props {
@@ -42,8 +42,13 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
     subscriptionSaving,
     subscriptionSavingPct,
     subscriptionItemCount,
-    subscriptionSwappedCount,
+    subscriptionFirstMonth,
+    subscriptionIntroDiscountPct,
+    subscriptionMinMonths,
+    subscriptionMinTermTotal,
   } = pricing
+
+  const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
 
   const hasRrpSaving = bundleSaving > 0.01
   const hasSubscriptionItems = subscriptionItemCount > 0
@@ -75,20 +80,40 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
         {/* Active plan breakdown */}
         {isSub ? (
           <div className="space-y-2.5 mb-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[var(--color-text-2)]">
-                Monthly plan · {subscriptionItemCount} {subscriptionItemCount === 1 ? 'product' : 'products'}
-              </span>
-              <span className="text-base font-black" style={{ color: 'var(--color-accent)' }}>
-                {formatGBP(subscriptionTotal)}/mo
-              </span>
-            </div>
+            {hasIntro ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[var(--color-text-2)]">
+                    First month <span className="text-[var(--color-muted)]">({subscriptionIntroDiscountPct}% off)</span>
+                  </span>
+                  <span className="flex items-baseline gap-1.5">
+                    <span className="text-xs text-[var(--color-muted)] line-through">{formatGBP(subscriptionTotal)}</span>
+                    <span className="text-base font-black" style={{ color: 'var(--color-accent)' }}>
+                      {formatGBP(subscriptionFirstMonth)}
+                    </span>
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-[var(--color-text-2)]">Then per month</span>
+                  <span className="text-sm font-bold text-[var(--color-text)]">{formatGBP(subscriptionTotal)}/mo</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-[var(--color-text-2)]">
+                  Flat monthly · {subscriptionItemCount} {subscriptionItemCount === 1 ? 'product' : 'products'}
+                </span>
+                <span className="text-base font-black" style={{ color: 'var(--color-accent)' }}>
+                  {formatGBP(subscriptionTotal)}/mo
+                </span>
+              </div>
+            )}
 
             {subscriptionSaving > 0.01 && (
               <div className="flex items-center justify-between">
-                <span className="text-xs" style={{ color: 'var(--color-accent)' }}>Subscription saving</span>
+                <span className="text-xs" style={{ color: 'var(--color-accent)' }}>Vs buying one-off</span>
                 <span className="text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
-                  −{formatGBP(subscriptionSaving)}/mo ({subscriptionSavingPct}% off)
+                  Save {subscriptionSavingPct}%/mo
                 </span>
               </div>
             )}
@@ -100,17 +125,14 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
                 background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)',
               }}
             >
-              Save {subscriptionSavingPct}% every month with the {PRICING_CONFIG.subscriptionPlanLabel}
+              One flat payment a month — items arrive on their own schedule.
             </div>
 
-            {subscriptionSwappedCount > 0 && (
-              <p className="text-[11px] leading-relaxed text-[var(--color-muted)]">
-                {subscriptionSwappedCount}{' '}
-                {subscriptionSwappedCount === 1 ? 'product switches' : 'products switch'} to a
-                monthly-sized refill so {subscriptionSwappedCount === 1 ? 'it ships' : 'they ship'} every
-                month — see the product cards above.
-              </p>
-            )}
+            <p className="text-[11px] leading-relaxed text-[var(--color-muted)] text-center">
+              {subscriptionMinMonths > 1
+                ? `${subscriptionMinMonths}-month minimum (${formatGBP(subscriptionMinTermTotal)} total), then cancel anytime.`
+                : 'Cancel or pause anytime.'}
+            </p>
           </div>
         ) : (
           <div className="space-y-2.5 mb-4">

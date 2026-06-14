@@ -26,8 +26,19 @@ export const PRICING_CONFIG = {
   maxSubscriptionDaysOfSupply: 35,
   /** Never schedule a delivery more than this many months apart. */
   maxDeliveryMonths: 6,
+  /**
+   * Bill ONE flat amount every month (the long-run average) instead of lumpy
+   * per-delivery charges; items still ship on their own cadence. The minimum
+   * term below protects against early-cancel, since the flat amount is smoothed.
+   */
+  subscriptionFlatMonthly: true,
   /** Minimum subscription commitment in months (per-product can override up). */
-  minSubscriptionMonths: 1,
+  minSubscriptionMonths: 4,
+  /** First-cycle intro offer. */
+  introOffer: {
+    /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it. */
+    firstMonthDiscount: 0.5,
+  },
 }
 
 // ─── Subscription qualification & resolution ─────────────────────────────────
@@ -227,6 +238,12 @@ export interface StackPricing {
   excludedFromSubscriptionCount: number
   /** Minimum subscription commitment in months for this stack (≥ 1). */
   subscriptionMinMonths: number
+  /** Flat monthly price billed on the first cycle, after the intro discount. */
+  subscriptionFirstMonth: number
+  /** Intro discount applied to the first month, 0–100. */
+  subscriptionIntroDiscountPct: number
+  /** Total the customer commits to across the minimum term (first month + the rest). */
+  subscriptionMinTermTotal: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -303,6 +320,13 @@ export function calculatePricing(
     config.minSubscriptionMonths,
   )
 
+  // Intro offer: a discount on the first month; the rest bill at the flat total.
+  const introDiscount = subPlan.length > 0 ? config.introOffer.firstMonthDiscount : 0
+  const subscriptionFirstMonth = round(subscriptionTotal * (1 - introDiscount))
+  const subscriptionMinTermTotal = round(
+    subscriptionFirstMonth + Math.max(0, subscriptionMinMonths - 1) * subscriptionTotal,
+  )
+
   // Per-slot counts: how many flip to a refill, how many can't subscribe at all.
   let subscriptionSwappedCount = 0
   let excludedFromSubscriptionCount = 0
@@ -333,6 +357,9 @@ export function calculatePricing(
     subscriptionSwappedCount,
     excludedFromSubscriptionCount,
     subscriptionMinMonths,
+    subscriptionFirstMonth,
+    subscriptionIntroDiscountPct: Math.round(introDiscount * 100),
+    subscriptionMinTermTotal,
   }
 }
 

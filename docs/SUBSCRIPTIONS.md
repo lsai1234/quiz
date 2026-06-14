@@ -11,7 +11,15 @@ When the stack is revealed the customer chooses between:
   per-product RRP markdowns (an explicit flat `bundleDiscount` knob also exists
   in `PRICING_CONFIG`, default 0).
 - **Subscribe monthly** — a recurring plan. Every product is included; nothing
-  is ever "unavailable".
+  is ever "unavailable". It bills **one flat amount every month** (the long-run
+  average), with an **intro discount on the first month** and a **minimum term**.
+  Defaults (all in `PRICING_CONFIG`): flat monthly, 50% off the first month,
+  4-month minimum. Example for a 3–4×/week stack: **£60.05/mo, first month
+  £30.03, 4-month minimum (£210.18 commitment), cancel anytime after.**
+
+  The minimum term is what makes flat monthly billing safe: because the flat
+  amount is the smoothed average, a customer can't cancel after one month having
+  received a long-lasting item they haven't finished paying for.
 
 All the logic lives in `src/lib/stack-blueprint/pricing.ts` and is fully unit
 tested.
@@ -80,29 +88,48 @@ you go live. The Storefront query (`src/lib/shopify/operations.ts`), the mapper
 
 Run `node scripts/seed-shopify-tags.mjs` to write these to your products.
 
-## Connecting Shopify subscriptions (Phase 2)
+## Connecting Shopify subscriptions — decided approach: Recharge
 
-Shopify subscriptions are built on **selling plans**. Each `SubscriptionLine`
-maps to a selling plan on a selling-plan group:
+The subscription engine and billing run on **Recharge** (Shopify subscription
+app). We build **our own branded customer portal** (the Phase 3 hub) on top of
+**Recharge's API** — Recharge owns the billing engine (card vaulting, recurring
+charges, retries/dunning, Shopify order sync), we own the experience. We do NOT
+rebuild billing ourselves.
 
-- **Delivery interval** = `shipEveryMonths` (a `MONTH` interval of N).
-- **Quantity** = `unitsPerShipment`.
-- **Price adjustment** = `subscriptionDiscount` (a percentage adjustment).
-- **Billed per cycle** = `pricePerDelivery`.
+### How the model maps to Recharge
 
-Cart/checkout then attaches the chosen variant's `sellingPlanId` to the cart
-line (the checkout validation already has the hook for this).
+The plan is a **flat-price monthly membership**, not lumpy per-delivery charges:
 
-### Which plugin?
+- **Flat monthly charge** = `StackPricing.subscriptionTotal` — a single
+  recurring price (the smoothed average of all items). In Recharge this is one
+  subscription billed monthly at a fixed price.
+- **First-month intro** = `subscriptionFirstMonth` — a Recharge **first-order
+  discount** (`introOffer.firstMonthDiscount`, default 50%).
+- **Minimum term** = `subscriptionMinMonths` — Recharge **minimum cycles**
+  before cancellation (default 4). This is enforced by Recharge refusing early
+  cancellation (clearly disclosed at checkout), NOT by charging an exit fee.
+- **What ships when** = each `SubscriptionLine`'s `shipEveryMonths` /
+  `unitsPerShipment`. Items still arrive on their own cadence (whey monthly,
+  creatine every 3 months…) even though billing is one flat monthly amount.
+- **Commitment total** = `subscriptionMinTermTotal` — disclose this up front.
 
-- **Shopify Subscriptions** (free, first-party) — supports selling plans, fixed
-  delivery intervals and discounts. Enough for the MVP checkout in Phase 2.
-- **Recharge / Skio / Loop / Awtomic / Bold** — third-party. Worth it when you
-  need the richer **customer portal** (swap products, change dispatch date,
-  pause/skip, manage payment) that the Phase 3 subscriber hub describes, plus
-  dunning and analytics. **Recharge** or **Skio** are the usual choices for that
-  depth and both expose an API the hub can drive.
+### Checkout (Phase 2)
 
-Recommendation: ship Phase 2 on native Shopify Subscriptions; evaluate
-Recharge/Skio before building the Phase 3 hub, since the hub's swap/dispatch/
-direct-debit features lean heavily on the subscription app's customer API.
+At checkout we hand Recharge the stack (via selling plans it manages, or its
+API): the flat monthly price, the first-order discount, the minimum cycles, and
+the per-item delivery cadence. The cart line carries the `sellingPlanId`; the
+checkout validation already has the hook for it.
+
+### The Phase 3 hub
+
+Built as our own UI calling Recharge's customer API: swap products, change the
+dispatch date, pause/skip, update payment. Recharge handles the billing and
+sync underneath. (Skio/Awtomic are comparable alternatives if Recharge's API
+ever proves limiting, but Recharge is the chosen default.)
+
+### UK compliance note
+
+Minimum terms and intro discounts are standard and fine, but disclose clearly
+at checkout: the intro price, the ongoing price, the minimum term + total
+commitment, and that cancellation is easy after the term (UK DMCC subscription
+rules + Consumer Contracts Regs).
