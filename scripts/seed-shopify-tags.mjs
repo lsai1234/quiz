@@ -122,6 +122,7 @@ const PRODUCT_MAP = {
     slots:               ['performance'],
     goals:               ['muscle', 'performance', 'bulking', 'energy'],
     swapGroup:           'creatine',
+    daysOfSupply:        90,
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
     coreEligible:        true,
@@ -212,6 +213,7 @@ const PRODUCT_MAP = {
     slots:               ['health'],
     goals:               ['health', 'recovery'],
     swapGroup:           'omega-3',
+    daysOfSupply:        90,
     dietary:             ['gluten-free', 'dairy-free'],
     stimulant:           false,
     coreEligible:        true,
@@ -227,6 +229,7 @@ const PRODUCT_MAP = {
     slots:               ['health'],
     goals:               ['health'],
     swapGroup:           'vitamin-d',
+    daysOfSupply:        60,
     dietary:             ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     stimulant:           false,
     coreEligible:        true,
@@ -306,6 +309,7 @@ function buildMetafields(cfg) {
     { namespace: 'chrgd', key: 'margin_priority',       type: 'number_integer',         value: String(cfg.marginPriority) },
     { namespace: 'chrgd', key: 'safe_wording',          type: 'single_line_text_field', value: cfg.safeWording },
     { namespace: 'chrgd', key: 'subscription_eligible', type: 'boolean',                value: String(cfg.subscriptionEligible) },
+    { namespace: 'chrgd', key: 'days_of_supply',        type: 'number_integer',         value: String(cfg.daysOfSupply ?? 30) },
     { namespace: 'chrgd', key: 'formats',               type: 'single_line_text_field', value: cfg.formats },
   ]
 }

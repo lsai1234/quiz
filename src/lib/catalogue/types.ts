@@ -127,6 +127,13 @@ export interface CatalogueProduct {
   basePrice: number
   compareAtPrice: number | null
   subscriptionEligible: boolean
+  /**
+   * Approximate number of days one unit lasts at the recommended dose.
+   * Used to decide whether a product fits a monthly subscription — a product
+   * that lasts much longer than a month ships too infrequently to subscribe to.
+   * See `qualifiesForSubscription` in stack-blueprint/pricing.
+   */
+  daysOfSupply: number
 
   // ── Stack logic ───────────────────────────────────────────────────────────────
   /**

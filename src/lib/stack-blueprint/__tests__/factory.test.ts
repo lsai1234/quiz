@@ -364,7 +364,7 @@ describe('buildStackBlueprint — eligibility gates', () => {
         description: 'A thermogenic fat burner', imageUrl: null, category: 'Body Composition',
         stackSlots: ['health'], goals: ['cutting'],
         dietaryTags: [], formats: ['capsule'], variants: [],
-        basePrice: 29.99, compareAtPrice: null, subscriptionEligible: false,
+        basePrice: 29.99, compareAtPrice: null, subscriptionEligible: false, daysOfSupply: 30,
         swapGroup: 'fat-burner', recommendationPriority: 7, marginPriority: 5,
         isCoreEligible: false, isBoosterEligible: false, hasStimulants: true,
         shortReason: 'Supports fat loss.', warnings: [], shopifyProductId: null,

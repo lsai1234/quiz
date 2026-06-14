@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, PRICING_CONFIG } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -22,6 +22,7 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   basePrice: 30,
   compareAtPrice: 40,
   subscriptionEligible: true,
+  daysOfSupply: 30,
   swapGroup: 'protein-whey',
   recommendationPriority: 8,
   marginPriority: 7,
@@ -120,16 +121,27 @@ describe('calculatePricing', () => {
     expect(p.subscriptionSavingPct).toBe(Math.round(((30 - expected) / 30) * 100))
   })
 
-  it('does not apply subscription discount to ineligible products', () => {
+  it('excludes ineligible products from the subscription entirely', () => {
     const product = makeProduct({ subscriptionEligible: false })
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(blueprint, [product])
-    expect(p.subscriptionTotal).toBe(p.oneOffTotal)
+    expect(p.subscriptionTotal).toBe(0)
     expect(p.subscriptionSaving).toBe(0)
+    expect(p.subscriptionItemCount).toBe(0)
+    expect(p.excludedFromSubscriptionCount).toBe(1)
   })
 
-  it('sums correctly across multiple slots', () => {
-    const prodA = makeProduct({ id: 'prod-a', basePrice: 30, subscriptionEligible: true, variants: [{ id: 'va', title: 'A', flavour: null, size: null, price: 30, compareAtPrice: 40, available: true, shopifyVariantId: null }] })
+  it('excludes products that last longer than a month even when eligible', () => {
+    const product = makeProduct({ subscriptionEligible: true, daysOfSupply: 90 })
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
+    const p = calculatePricing(blueprint, [product])
+    expect(p.subscriptionTotal).toBe(0)
+    expect(p.subscriptionItemCount).toBe(0)
+    expect(p.excludedFromSubscriptionCount).toBe(1)
+  })
+
+  it('sums correctly across multiple slots, excluding non-qualifying products from the subscription', () => {
+    const prodA = makeProduct({ id: 'prod-a', basePrice: 30, subscriptionEligible: true, daysOfSupply: 30, variants: [{ id: 'va', title: 'A', flavour: null, size: null, price: 30, compareAtPrice: 40, available: true, shopifyVariantId: null }] })
     const prodB = makeProduct({ id: 'prod-b', basePrice: 20, compareAtPrice: null, subscriptionEligible: false, variants: [{ id: 'vb', title: 'B', flavour: null, size: null, price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }] })
     const blueprint = makeBlueprint([
       { selectedProductId: 'prod-a', selectedVariantId: 'va' },
@@ -139,8 +151,12 @@ describe('calculatePricing', () => {
     expect(p.oneOffTotal).toBe(50)
     expect(p.rrpTotal).toBe(60)   // 40 + 20 (no compare for B)
     expect(p.bundleSaving).toBe(10)
+    // Only prodA qualifies for the monthly plan; prodB (ineligible) is excluded.
     const subA = Math.round(30 * 0.85 * 100) / 100
-    expect(p.subscriptionTotal).toBe(Math.round((subA + 20) * 100) / 100)
+    expect(p.subscriptionTotal).toBe(subA)
+    expect(p.subscriptionItemsOneOffTotal).toBe(30)
+    expect(p.subscriptionItemCount).toBe(1)
+    expect(p.excludedFromSubscriptionCount).toBe(1)
   })
 
   it('skips slots whose product is not in the catalogue', () => {
@@ -148,6 +164,22 @@ describe('calculatePricing', () => {
     const p = calculatePricing(blueprint, [])
     expect(p.oneOffTotal).toBe(0)
     expect(p.subscriptionTotal).toBe(0)
+  })
+})
+
+describe('qualifiesForSubscription', () => {
+  it('is true for an eligible product that lasts about a month', () => {
+    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 30 })).toBe(true)
+    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 35 })).toBe(true)
+  })
+
+  it('is false for a product that lasts longer than a month', () => {
+    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 36 })).toBe(false)
+    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 90 })).toBe(false)
+  })
+
+  it('is false for an ineligible product regardless of supply', () => {
+    expect(qualifiesForSubscription({ subscriptionEligible: false, daysOfSupply: 30 })).toBe(false)
   })
 })
 

@@ -31,6 +31,7 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   basePrice: 30,
   compareAtPrice: 40,
   subscriptionEligible: true,
+  daysOfSupply: 30,
   swapGroup: 'protein-whey',
   recommendationPriority: 8,
   marginPriority: 7,

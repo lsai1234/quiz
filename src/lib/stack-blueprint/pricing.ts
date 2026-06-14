@@ -8,7 +8,29 @@ export const PRICING_CONFIG = {
   /** Subscription discount applied to subscriptionEligible products (0–1). */
   subscriptionDiscount: 0.15,
   /** Label shown on the subscription saving line. */
-  subscriptionPlanLabel: 'CHRGD 90-Day Stack Plan',
+  subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
+  /**
+   * Longest days-of-supply a product can have and still belong in a *monthly*
+   * subscription. Products that last much longer (e.g. a 90-day creatine tub)
+   * ship too infrequently to subscribe to monthly and are offered one-off instead.
+   */
+  maxSubscriptionDaysOfSupply: 35,
+}
+
+// ─── Subscription qualification ─────────────────────────────────────────────
+
+/**
+ * Whether a product belongs in the monthly subscription: it must be flagged
+ * subscriptionEligible AND last roughly a month at its recommended dose.
+ */
+export function qualifiesForSubscription(
+  product: Pick<CatalogueProduct, 'subscriptionEligible' | 'daysOfSupply'>,
+  config = PRICING_CONFIG,
+): boolean {
+  return (
+    product.subscriptionEligible &&
+    product.daysOfSupply <= config.maxSubscriptionDaysOfSupply
+  )
 }
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -22,12 +44,21 @@ export interface StackPricing {
   bundleSaving: number
   /** bundleSaving / rrpTotal expressed as 0–100. 0 when no compare prices exist. */
   bundleSavingPct: number
-  /** Monthly price applying subscriptionDiscount to eligible products. */
+  /**
+   * Monthly price of the subscription: only products that qualify
+   * (see qualifiesForSubscription) are included, each with subscriptionDiscount applied.
+   */
   subscriptionTotal: number
-  /** oneOffTotal − subscriptionTotal */
+  /** Undiscounted one-off price of just the subscription-qualifying products — the baseline for subscriptionSaving. */
+  subscriptionItemsOneOffTotal: number
+  /** subscriptionItemsOneOffTotal − subscriptionTotal */
   subscriptionSaving: number
-  /** subscriptionSaving / oneOffTotal expressed as 0–100. */
+  /** subscriptionSaving / subscriptionItemsOneOffTotal expressed as 0–100. */
   subscriptionSavingPct: number
+  /** Number of slots whose product qualifies for the monthly subscription. */
+  subscriptionItemCount: number
+  /** Number of slots excluded from the subscription (one-off only). */
+  excludedFromSubscriptionCount: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -73,6 +104,9 @@ export function calculatePricing(
   let oneOffTotal = 0
   let rrpTotal = 0
   let subscriptionTotal = 0
+  let subscriptionItemsOneOffTotal = 0
+  let subscriptionItemCount = 0
+  let excludedFromSubscriptionCount = 0
 
   for (const slot of blueprint.slots) {
     const product = catalogue.find((p) => p.id === slot.selectedProductId)
@@ -80,18 +114,24 @@ export function calculatePricing(
 
     const price = slotPrice(slot, product)
     const rrp = slotRrp(slot, product)
-    const subPrice = product.subscriptionEligible
-      ? price * (1 - config.subscriptionDiscount)
-      : price
 
     oneOffTotal += price
     rrpTotal += rrp
-    subscriptionTotal += subPrice
+
+    // The subscription only contains products that last roughly a month — others
+    // are excluded entirely (the customer buys them one-off, less frequently).
+    if (qualifiesForSubscription(product, config)) {
+      subscriptionItemsOneOffTotal += price
+      subscriptionTotal += price * (1 - config.subscriptionDiscount)
+      subscriptionItemCount += 1
+    } else {
+      excludedFromSubscriptionCount += 1
+    }
   }
 
   const round = (n: number) => Math.round(n * 100) / 100
   const bundleSaving = round(rrpTotal - oneOffTotal)
-  const subscriptionSaving = round(oneOffTotal - subscriptionTotal)
+  const subscriptionSaving = round(subscriptionItemsOneOffTotal - subscriptionTotal)
 
   return {
     oneOffTotal: round(oneOffTotal),
@@ -99,8 +139,14 @@ export function calculatePricing(
     bundleSaving,
     bundleSavingPct: rrpTotal > 0 ? Math.round((bundleSaving / rrpTotal) * 100) : 0,
     subscriptionTotal: round(subscriptionTotal),
+    subscriptionItemsOneOffTotal: round(subscriptionItemsOneOffTotal),
     subscriptionSaving,
-    subscriptionSavingPct: oneOffTotal > 0 ? Math.round((subscriptionSaving / oneOffTotal) * 100) : 0,
+    subscriptionSavingPct:
+      subscriptionItemsOneOffTotal > 0
+        ? Math.round((subscriptionSaving / subscriptionItemsOneOffTotal) * 100)
+        : 0,
+    subscriptionItemCount,
+    excludedFromSubscriptionCount,
   }
 }
 

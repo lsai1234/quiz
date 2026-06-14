@@ -401,6 +401,11 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const shortReason = metaValue(p.metafields, 'safe_wording') ?? shortDescription(p.description)
   const subscriptionEligible = metaValue(p.metafields, 'subscription_eligible') === 'true'
 
+  // Days a unit lasts at the recommended dose — defaults to ~a month when the
+  // metafield isn't set yet, so untagged live products still behave sensibly.
+  const rawDaysOfSupply = metaValue(p.metafields, 'days_of_supply')
+  const daysOfSupply = rawDaysOfSupply ? parseInt(rawDaysOfSupply, 10) : 30
+
   const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawFormats = metaValue(p.metafields, 'formats')
@@ -421,6 +426,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     basePrice: defaultVariant?.price ?? 0,
     compareAtPrice: defaultVariant?.compareAtPrice ?? null,
     subscriptionEligible,
+    daysOfSupply,
     swapGroup,
     recommendationPriority,
     marginPriority,

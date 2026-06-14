@@ -23,7 +23,7 @@ import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
-  const { stackBlueprint, setStackBlueprint } = useQuizStore()
+  const { stackBlueprint, setStackBlueprint, planType, setPlanType } = useQuizStore()
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -190,6 +190,7 @@ export function StackReviewPage() {
                 key={slot.slotId}
                 slot={slot}
                 product={product}
+                planType={planType}
                 onChangeProduct={handleOpenSwap}
                 onChangeVariant={handleChangeVariant}
                 onRemove={handleRemove}
@@ -225,6 +226,8 @@ export function StackReviewPage() {
           )}
           <StackPriceSummary
             pricing={pricing}
+            planType={planType}
+            onPlanChange={setPlanType}
             onCheckout={handleCheckout}
             isLoading={checkoutState.status === 'loading'}
           />

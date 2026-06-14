@@ -387,9 +387,9 @@ describe('Feature 8: dynamic pricing', () => {
 
   it('subscription saving % is correct', () => {
     const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
-    const { oneOffTotal, subscriptionTotal, subscriptionSaving, subscriptionSavingPct } = calculatePricing(bp, MOCK_CATALOGUE)
+    const { subscriptionItemsOneOffTotal, subscriptionSaving, subscriptionSavingPct } = calculatePricing(bp, MOCK_CATALOGUE)
     if (subscriptionSaving > 0) {
-      const expectedPct = Math.round((subscriptionSaving / oneOffTotal) * 100)
+      const expectedPct = Math.round((subscriptionSaving / subscriptionItemsOneOffTotal) * 100)
       expect(subscriptionSavingPct).toBe(expectedPct)
     }
   })
@@ -409,8 +409,9 @@ describe('Feature 8: dynamic pricing', () => {
   })
 
   it('PRICING_CONFIG.subscriptionDiscount is applied only to eligible products', () => {
-    // Create a blueprint where all selected products have subscriptionEligible=true
-    const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true }))
+    // Create a blueprint where every product qualifies for the subscription
+    // (eligible AND lasts about a month) so the whole stack is discounted.
+    const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, daysOfSupply: 30 }))
     const bp = buildStackBlueprint(BASE_ANSWERS, allEligible)
     const { oneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible)
     if (oneOffTotal > 0) {

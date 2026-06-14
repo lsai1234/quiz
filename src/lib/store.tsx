@@ -7,12 +7,16 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MOCK_PRODUCTS } from './mock-products'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 
+export type PlanType = 'oneoff' | 'subscription'
+
 interface QuizStore {
   step: number
   answers: QuizAnswers
   identity: StackIdentity | null
   stackLevel: StackLevel
   selectedProducts: Product[]
+  // Which offer the user is viewing on the stack page: one-off bundle vs monthly subscription
+  planType: PlanType
   // AI personalisation metadata for the current stack
   aiReasons: Record<string, string>
   stackPersonalised: boolean
@@ -36,6 +40,7 @@ interface QuizStore {
   setIdentity: (identity: StackIdentity) => void
   setStackLevel: (level: StackLevel) => void
   setSelectedProducts: (products: Product[]) => void
+  setPlanType: (plan: PlanType) => void
   setAiStackMeta: (reasons: Record<string, string>, personalised: boolean) => void
   setStackReady: (ready: boolean) => void
   toggleProduct: (product: Product) => void
@@ -74,6 +79,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   identity: null,
   stackLevel: 'performance',
   selectedProducts: [],
+  planType: 'oneoff',
   aiReasons: {},
   stackPersonalised: false,
   stackReady: false,
@@ -95,6 +101,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setIdentity: (identity) => set({ identity }),
   setStackLevel: (level) => set({ stackLevel: level }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
+  setPlanType: (plan) => set({ planType: plan }),
   setAiStackMeta: (reasons, personalised) => set({ aiReasons: reasons, stackPersonalised: personalised }),
   setStackReady: (ready) => set({ stackReady: ready }),
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
@@ -111,5 +118,5 @@ export const useQuizStore = create<QuizStore>((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], aiReasons: {}, stackPersonalised: false, stackReady: false }),
+  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', aiReasons: {}, stackPersonalised: false, stackReady: false }),
 }))

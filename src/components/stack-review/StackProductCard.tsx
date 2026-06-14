@@ -2,11 +2,14 @@
 
 import { useState } from 'react'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
+import { qualifiesForSubscription } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { PlanType } from '@/lib/store'
 
 interface Props {
   slot: StackSlotEntry
   product: CatalogueProduct | undefined
+  planType?: PlanType
   onChangeProduct?: (slotId: string) => void
   onChangeVariant?: (slotId: string, variantId: string) => void
   onRemove?: (slotId: string) => void
@@ -19,9 +22,13 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
   return parts.length > 0 ? parts.join(' · ') : v.title
 }
 
-export function StackProductCard({ slot, product, onChangeProduct, onChangeVariant, onRemove }: Props) {
+export function StackProductCard({ slot, product, planType = 'oneoff', onChangeProduct, onChangeVariant, onRemove }: Props) {
   const [variantsOpen, setVariantsOpen] = useState(false)
   const [reasonExpanded, setReasonExpanded] = useState(false)
+  const qualifiesForSub = product ? qualifiesForSubscription(product) : false
+  // In subscription view, products that last longer than a month aren't part of
+  // the monthly plan — dim them so it's clear they're one-off only.
+  const excludedFromPlan = planType === 'subscription' && !qualifiesForSub
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
     ?? product?.variants.find((v) => v.available)
     ?? product?.variants[0]
@@ -32,8 +39,12 @@ export function StackProductCard({ slot, product, onChangeProduct, onChangeVaria
 
   return (
     <div
-      className="rounded-2xl overflow-hidden"
-      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+      className="rounded-2xl overflow-hidden transition-opacity"
+      style={{
+        background: 'var(--color-surface)',
+        border: '1px solid var(--color-border)',
+        opacity: excludedFromPlan ? 0.72 : 1,
+      }}
     >
       <div className="p-4">
 
@@ -123,17 +134,39 @@ export function StackProductCard({ slot, product, onChangeProduct, onChangeVaria
           >
             {slot.required ? 'Core' : 'Optional'}
           </span>
-          {product?.subscriptionEligible && (
-            <span
-              className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-              style={{
-                color: ACCENT,
-                background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`,
-              }}
-            >
-              Sub eligible
-            </span>
+          {planType === 'subscription' ? (
+            qualifiesForSub ? (
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
+                style={{
+                  color: ACCENT,
+                  background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`,
+                }}
+              >
+                In monthly plan
+              </span>
+            ) : (
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
+                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
+              >
+                One-off only · ~{product?.daysOfSupply}d supply
+              </span>
+            )
+          ) : (
+            qualifiesForSub && (
+              <span
+                className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
+                style={{
+                  color: ACCENT,
+                  background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`,
+                }}
+              >
+                Subscribe-ready
+              </span>
+            )
           )}
         </div>
       </div>

@@ -106,7 +106,11 @@ const GET_PRODUCTS = `
             {namespace: "chrgd", key: "safe_wording"},
             {namespace: "chrgd", key: "accent_color"},
             {namespace: "chrgd", key: "stack_priority"},
-            {namespace: "chrgd", key: "subcategory"}
+            {namespace: "chrgd", key: "subcategory"},
+            {namespace: "chrgd", key: "margin_priority"},
+            {namespace: "chrgd", key: "subscription_eligible"},
+            {namespace: "chrgd", key: "days_of_supply"},
+            {namespace: "chrgd", key: "formats"}
           ]) { key value type }
         }
       }
