@@ -142,6 +142,39 @@ export function swapSubscriptionLine(
   return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
 }
 
+/**
+ * What a swap does to the customer's money. The monthly recurring amount always
+ * updates; if the change is applied to the imminent (already-funded) box there's
+ * a one-off top-up/credit for that delivery too.
+ */
+export interface SwapImpact {
+  currentMonthly: number
+  newMonthly: number
+  monthlyDelta: number
+  /** One-off charge (+) or credit (−) to apply the change to the next box now. */
+  oneOffNow: number
+  effectiveFrom: string // ISO date of the next dispatch
+}
+
+export function computeSwapImpact(
+  sub: MemberSubscription,
+  lineId: string,
+  newProduct: CatalogueProduct,
+  config = PRICING_CONFIG,
+): SwapImpact {
+  const oldLine = sub.lines.find((l) => l.id === lineId)
+  const newSub = swapSubscriptionLine(sub, lineId, newProduct, config)
+  const newLine = newSub.lines.find((l) => l.id === lineId)
+  const oneOffNow = oldLine && newLine ? round(newLine.pricePerDelivery - oldLine.pricePerDelivery) : 0
+  return {
+    currentMonthly: sub.flatMonthly,
+    newMonthly: newSub.flatMonthly,
+    monthlyDelta: round(newSub.flatMonthly - sub.flatMonthly),
+    oneOffNow,
+    effectiveFrom: nextDispatchDate(sub.dispatchDayOfMonth).toISOString(),
+  }
+}
+
 /** Products that can replace a line — same stack slot, excluding subscription-only refills. */
 export function swappableForLine(
   line: MemberSubscriptionLine,

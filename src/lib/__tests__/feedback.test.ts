@@ -3,6 +3,7 @@ import {
   basisForProduct,
   dimensionForSlot,
   recommendForSubscription,
+  recommendReplacements,
   type FeedbackCheckIn,
 } from '../feedback'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -86,5 +87,30 @@ describe('recommendForSubscription', () => {
     const recs = recommendForSubscription(s, [], catalogue)
     expect(recs[0].action).toBe('keep')
     expect(recs[0].reason).toMatch(/log/i)
+  })
+})
+
+describe('recommendReplacements', () => {
+  const whey = makeProduct({ id: 'whey', stackSlots: ['protein'], dietaryTags: [], basePrice: 35, recommendationPriority: 10, swapGroup: 'protein-whey' })
+  const plant = makeProduct({ id: 'plant', stackSlots: ['protein'], dietaryTags: ['vegan'], basePrice: 37, recommendationPriority: 9, swapGroup: 'protein-plant' })
+  const mass = makeProduct({ id: 'mass', stackSlots: ['protein'], dietaryTags: [], basePrice: 43, recommendationPriority: 8, swapGroup: 'protein-mass' })
+  const cat = [whey, plant, mass]
+  const wheyLine = line({ id: 'l', productId: 'whey', stackSlot: 'protein', swapGroup: 'protein-whey' })
+
+  it('excludes the current product', () => {
+    expect(recommendReplacements(wheyLine, 'exploring', cat).map((p) => p.id)).not.toContain('whey')
+  })
+
+  it('filters to vegan for the vegan reason', () => {
+    expect(recommendReplacements(wheyLine, 'vegan', cat).map((p) => p.id)).toEqual(['plant'])
+  })
+
+  it('puts the cheapest first for the cheaper reason', () => {
+    expect(recommendReplacements(wheyLine, 'cheaper', cat)[0].id).toBe('plant') // 37 < 43
+  })
+
+  it('prefers a different mechanism for "not working"', () => {
+    // both plant and mass are different swap groups; ranked by priority → plant (9) first
+    expect(recommendReplacements(wheyLine, 'not-working', cat)[0].id).toBe('plant')
   })
 })

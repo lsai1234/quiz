@@ -4,34 +4,19 @@ import { useMemo, useState } from 'react'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import type { StackSlotEntry } from '@/lib/stack-blueprint'
-import {
-  nextDispatchDate,
-  formatDispatchDate,
-  monthsRemainingOnTerm,
-  canCancel,
-  swappableForLine,
-} from '@/lib/recharge/mock'
-import type { MemberSubscriptionLine } from '@/lib/recharge/types'
+import { nextDispatchDate, formatDispatchDate, monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
 import { recommendForSubscription } from '@/lib/feedback'
-import { ProductSwapModal } from '@/components/stack-review/ProductSwapModal'
 import { FeedbackPanel } from './FeedbackPanel'
-import { StackRecommendations } from './StackRecommendations'
+import { StackItemCard } from './StackItemCard'
+import { ChangeProductFlow } from './ChangeProductFlow'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
 
-function cadenceLabel(line: MemberSubscriptionLine): string {
-  const qty = line.quantity > 1 ? `${line.quantity}× · ` : ''
-  return line.deliveryIntervalMonths > 1
-    ? `${qty}ships every ${line.deliveryIntervalMonths} months`
-    : `${qty}ships every month`
-}
-
 export function SubscriptionDashboard() {
   const { subscription: sub, feedback, logout, setDispatchDay, pause, resume, cancel, swapLine, submitFeedback } = useHubStore()
   const { products } = useCatalogueProducts()
-  const [swapLineId, setSwapLineId] = useState<string | null>(null)
+  const [changeLineId, setChangeLineId] = useState<string | null>(null)
 
   const nextDispatch = useMemo(
     () => (sub ? formatDispatchDate(nextDispatchDate(sub.dispatchDayOfMonth)) : ''),
@@ -45,21 +30,10 @@ export function SubscriptionDashboard() {
   if (!sub) return null
 
   const remaining = monthsRemainingOnTerm(sub)
-  const swapLineData = sub.lines.find((l) => l.id === swapLineId) ?? null
-  const swapAlternatives = swapLineData ? swappableForLine(swapLineData, products) : []
-
-  // Adapt a subscription line to the shared swap modal's slot shape.
-  const swapSlot = swapLineData
-    ? ({
-        slotId: swapLineData.id,
-        title: swapLineData.slotTitle,
-        recommendedProductId: swapLineData.productId,
-        selectedProductId: swapLineData.productId,
-      } as StackSlotEntry)
-    : null
-  const swapCurrentProduct = swapLineData ? products.find((p) => p.id === swapLineData.productId) : undefined
-
   const statusColor = sub.status === 'active' ? ACCENT : sub.status === 'paused' ? '#fbbf24' : 'var(--color-muted)'
+  const recById = Object.fromEntries(recommendations.map((r) => [r.lineId, r]))
+  const reviewCount = recommendations.filter((r) => r.action === 'consider-change').length
+  const changeLine = sub.lines.find((l) => l.id === changeLineId) ?? null
 
   return (
     <div className="max-w-lg mx-auto px-5 py-8 pb-16">
@@ -104,25 +78,39 @@ export function SubscriptionDashboard() {
 
       {sub.status !== 'cancelled' && (
         <>
-          {/* Feedback check-in */}
-          <FeedbackPanel
-            lastCheckIn={feedback[feedback.length - 1]?.date}
-            onSubmit={submitFeedback}
-          />
+          {/* Monthly pulse */}
+          <FeedbackPanel lastCheckIn={feedback[feedback.length - 1]?.date} onSubmit={submitFeedback} />
 
-          {/* Keep vs change recommendations */}
-          <StackRecommendations
-            recommendations={recommendations}
-            hasFeedback={feedback.length > 0}
-            onSwap={setSwapLineId}
-          />
+          {/* Your stack — integrated cards (status + advice + change) */}
+          <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1 mt-6" style={{ fontFamily: 'var(--font-display)' }}>
+            Your stack
+          </p>
+          <p className="text-xs text-[var(--color-muted)] mb-3 leading-relaxed">
+            {reviewCount > 0
+              ? `${reviewCount} ${reviewCount === 1 ? 'product is' : 'products are'} worth reviewing. Tap any product to change it.`
+              : feedback.length > 0
+                ? 'Everything’s working — your stack is dialled in. Tap any product to change it.'
+                : 'Tap any product to change it, or log a check-in to get tailored advice.'}
+          </p>
+          <div className="space-y-3">
+            {sub.lines.map((line) => (
+              <StackItemCard
+                key={line.id}
+                line={line}
+                recommendation={recById[line.id]}
+                onChange={setChangeLineId}
+              />
+            ))}
+          </div>
 
           {/* Dispatch date */}
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mb-4">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mt-6">
             <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
               Dispatch date
             </p>
-            <p className="text-xs text-[var(--color-muted)] mb-3">Pick the day of the month your order ships.</p>
+            <p className="text-xs text-[var(--color-muted)] mb-3">
+              Ships on the {sub.dispatchDayOfMonth}{ordinal(sub.dispatchDayOfMonth)} — next on {nextDispatch}.
+            </p>
             <div className="flex flex-wrap gap-2">
               {DAY_OPTIONS.map((day) => {
                 const active = sub.dispatchDayOfMonth === day
@@ -144,42 +132,8 @@ export function SubscriptionDashboard() {
             </div>
           </div>
 
-          {/* Lines */}
-          <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-3 mt-6" style={{ fontFamily: 'var(--font-display)' }}>
-            Your stack — {sub.lines.length} products
-          </p>
-          <div className="space-y-3">
-            {sub.lines.map((line) => (
-              <div key={line.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <span className="text-[9px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full inline-block mb-1.5"
-                      style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 12%, transparent)`, fontFamily: 'var(--font-display)' }}>
-                      {line.slotTitle}
-                    </span>
-                    <p className="text-sm font-bold text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
-                      {line.productTitle}
-                    </p>
-                    {line.variantTitle && <p className="text-xs text-[var(--color-muted)] mt-0.5">{line.variantTitle}</p>}
-                    <p className="text-[11px] text-[var(--color-text-2)] mt-1">{cadenceLabel(line)}</p>
-                  </div>
-                  <span className="text-sm font-black flex-shrink-0" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                    {formatGBP(line.pricePerDelivery)}
-                  </span>
-                </div>
-                <button
-                  onClick={() => setSwapLineId(line.id)}
-                  className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95"
-                  style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
-                >
-                  Swap product
-                </button>
-              </div>
-            ))}
-          </div>
-
           {/* Billing */}
-          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mt-6">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mt-4">
             <p className="text-sm font-bold text-[var(--color-text)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
               Billing & payment
             </p>
@@ -228,19 +182,28 @@ export function SubscriptionDashboard() {
         </div>
       )}
 
-      {swapSlot && (
-        <ProductSwapModal
-          slot={swapSlot}
-          currentProduct={swapCurrentProduct}
-          alternatives={swapAlternatives}
-          onSelect={(lineId, productId) => {
-            const product = products.find((p) => p.id === productId)
-            if (product) swapLine(lineId, product)
-            setSwapLineId(null)
+      {changeLine && (
+        <ChangeProductFlow
+          subscription={sub}
+          line={changeLine}
+          catalogue={products}
+          onConfirm={(newProduct) => {
+            swapLine(changeLine.id, newProduct)
+            setChangeLineId(null)
           }}
-          onClose={() => setSwapLineId(null)}
+          onClose={() => setChangeLineId(null)}
         />
       )}
     </div>
   )
+}
+
+function ordinal(n: number): string {
+  if (n >= 11 && n <= 13) return 'th'
+  switch (n % 10) {
+    case 1: return 'st'
+    case 2: return 'nd'
+    case 3: return 'rd'
+    default: return 'th'
+  }
 }

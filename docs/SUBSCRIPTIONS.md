@@ -210,6 +210,21 @@ the portal. The advice is deterministic (works offline); an AI pass via
 `/api/personalise-stack` can later refine the wording. Feedback history lives in
 the hub store today; live it would persist in the app database.
 
+**Integrated, product-first UX.** Each product is a single card (`StackItemCard`)
+showing slot, status (Essential / Working well / Worth reviewing), the advice
+and one **Change** action. Change opens a guided flow (`ChangeProductFlow`):
+1. **Why** — reason chips (not working / side effects / vegan / cheaper /
+   exploring). 2. **Pick** — replacements ranked for that reason
+   (`recommendReplacements`), each showing its monthly delta. 3. **Confirm** —
+   the pricing impact and when it applies.
+
+**Pricing on change (baked in).** `computeSwapImpact` returns the new flat
+monthly, the monthly delta, and a one-off top-up/credit for the imminent
+already-funded box, plus the effective date. The member chooses "next box"
+(one-off applies) or "from next payment" (monthly-only). Live, the one-off maps
+to a Recharge one-time line/proration and the new monthly to the updated
+subscription.
+
 ### UK compliance note
 
 Minimum terms and intro discounts are standard and fine, but disclose clearly

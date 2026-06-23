@@ -9,7 +9,7 @@
  */
 
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
-import type { MemberSubscription } from '@/lib/recharge/types'
+import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 
 export type RecommendationBasis = 'objective' | 'subjective'
 
@@ -65,6 +65,72 @@ export interface LineRecommendation {
   basis: RecommendationBasis
   action: 'keep' | 'consider-change'
   reason: string
+}
+
+// ─── Guided product change ───────────────────────────────────────────────────
+
+export type ChangeReason = 'not-working' | 'side-effects' | 'vegan' | 'cheaper' | 'exploring'
+
+export const CHANGE_REASONS: { id: ChangeReason; label: string }[] = [
+  { id: 'not-working', label: "I'm not feeling the benefit" },
+  { id: 'side-effects', label: 'Side effects / too strong' },
+  { id: 'vegan', label: 'I want a vegan option' },
+  { id: 'cheaper', label: 'I want lower cost' },
+  { id: 'exploring', label: 'Just exploring options' },
+]
+
+/**
+ * Expert-style replacement ranking: same-slot, subscribable products, ranked for
+ * the member's stated reason. Returns the best matches first.
+ */
+export function recommendReplacements(
+  line: MemberSubscriptionLine,
+  reason: ChangeReason,
+  catalogue: CatalogueProduct[],
+): CatalogueProduct[] {
+  const candidates = catalogue.filter(
+    (p) => p.stackSlots.includes(line.stackSlot) && p.id !== line.productId && !p.isSubscriptionOnly && p.subscriptionEligible,
+  )
+  const byPriority = (a: CatalogueProduct, b: CatalogueProduct) => b.recommendationPriority - a.recommendationPriority
+
+  switch (reason) {
+    case 'vegan':
+      return candidates.filter((p) => p.dietaryTags.includes('vegan')).sort(byPriority)
+    case 'cheaper':
+      return [...candidates].sort((a, b) => a.basePrice - b.basePrice || byPriority(a, b))
+    case 'side-effects':
+      // Gentler first: stim-free, fewer warnings.
+      return [...candidates].sort(
+        (a, b) =>
+          Number(a.hasStimulants) - Number(b.hasStimulants) ||
+          a.warnings.length - b.warnings.length ||
+          byPriority(a, b),
+      )
+    case 'not-working':
+      // A genuinely different option first: different mechanism (swap group), then strength.
+      return [...candidates].sort(
+        (a, b) =>
+          Number(a.swapGroup === line.swapGroup) - Number(b.swapGroup === line.swapGroup) || byPriority(a, b),
+      )
+    default:
+      return [...candidates].sort(byPriority)
+  }
+}
+
+/** One-line rationale for why an alternative suits the stated reason. */
+export function replacementRationale(product: CatalogueProduct, reason: ChangeReason): string {
+  switch (reason) {
+    case 'vegan':
+      return 'Fully plant-based'
+    case 'cheaper':
+      return 'Lower cost option'
+    case 'side-effects':
+      return product.hasStimulants ? 'Similar formula' : 'Gentler, stimulant-free'
+    case 'not-working':
+      return 'A different approach to try'
+    default:
+      return product.recommendationPriority >= 9 ? 'Premium pick' : 'Popular choice'
+  }
 }
 
 function objectiveReason(slot: StackSlot, productTitle: string): string {

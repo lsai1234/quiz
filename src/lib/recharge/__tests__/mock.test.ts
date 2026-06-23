@@ -10,6 +10,7 @@ import {
   swapSubscriptionLine,
   swappableForLine,
   flatMonthlyOf,
+  computeSwapImpact,
 } from '../mock'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 
@@ -91,5 +92,22 @@ describe('swapSubscriptionLine', () => {
       expect(alt.isSubscriptionOnly).toBeFalsy()
       expect(alt.subscriptionEligible).toBe(true)
     }
+  })
+})
+
+describe('computeSwapImpact', () => {
+  it('reports the monthly change, one-off and effective date for a swap', () => {
+    const s = sub()
+    const line = s.lines[0]
+    const alt = swappableForLine(line, MOCK_CATALOGUE)[0]
+    const impact = computeSwapImpact(s, line.id, alt)
+
+    expect(impact.currentMonthly).toBe(s.flatMonthly)
+    expect(impact.newMonthly).toBe(swapSubscriptionLine(s, line.id, alt).flatMonthly)
+    expect(impact.monthlyDelta).toBeCloseTo(impact.newMonthly - impact.currentMonthly, 2)
+    // one-off equals the per-delivery price difference for the imminent box
+    const newPpd = swapSubscriptionLine(s, line.id, alt).lines.find((l) => l.id === line.id)!.pricePerDelivery
+    expect(impact.oneOffNow).toBeCloseTo(newPpd - line.pricePerDelivery, 2)
+    expect(new Date(impact.effectiveFrom).getTime()).toBeGreaterThan(0)
   })
 })
