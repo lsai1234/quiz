@@ -60,6 +60,47 @@ export const PRICING_CONFIG = {
   },
 }
 
+// ─── Runtime config resolution (portal-overridable) ──────────────────────────
+// PRICING_CONFIG holds the defaults. The portal can override any of it at
+// runtime; getPricingConfig() returns the merged, current config. With no
+// overrides it equals the defaults, so behaviour is unchanged until edited.
+
+export type PricingConfig = typeof PRICING_CONFIG
+
+let _overrides: Partial<PricingConfig> = {}
+let _current: PricingConfig = PRICING_CONFIG
+
+function recomputeConfig() {
+  _current = {
+    ...PRICING_CONFIG,
+    ..._overrides,
+    introOffer: { ...PRICING_CONFIG.introOffer, ...(_overrides.introOffer ?? {}) },
+    bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
+    subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
+  }
+}
+
+/** Replace the current pricing overrides (portal save / client sync). */
+export function setPricingOverrides(overrides: Partial<PricingConfig>): void {
+  _overrides = overrides ?? {}
+  recomputeConfig()
+}
+
+export function getPricingOverrides(): Partial<PricingConfig> {
+  return _overrides
+}
+
+/** The current pricing config — defaults merged with any portal overrides. */
+export function getPricingConfig(): PricingConfig {
+  return _current
+}
+
+/** Clear all overrides (back to defaults). */
+export function resetPricingOverrides(): void {
+  _overrides = {}
+  _current = PRICING_CONFIG
+}
+
 // ─── Discount tiers & margin helpers ─────────────────────────────────────────
 
 /** Best-qualifying tier for an order. Returns the highest discount it unlocks. */
@@ -78,7 +119,7 @@ export function resolveTier(
 }
 
 /** Cost of one unit — explicit, or estimated from price. */
-export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>, unitPrice: number, config = PRICING_CONFIG): number {
+export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>, unitPrice: number, config = getPricingConfig()): number {
   if (product.cost != null) return product.cost
   return Math.round(unitPrice * config.defaultCostRatio * 100) / 100
 }
@@ -88,7 +129,7 @@ export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>
  * (cost × (1+floor)). The floor is capped at the list price, so a product whose
  * cost is already above the floor simply gets no discount (never a markup).
  */
-export function discountWithFloor(unitPrice: number, rate: number, cost: number, config = PRICING_CONFIG): number {
+export function discountWithFloor(unitPrice: number, rate: number, cost: number, config = getPricingConfig()): number {
   const discounted = unitPrice * (1 - rate)
   const floor = Math.min(unitPrice, cost * (1 + config.marginFloorPct))
   return Math.max(discounted, floor)
@@ -103,7 +144,7 @@ export function discountWithFloor(unitPrice: number, rate: number, cost: number,
  */
 export function qualifiesForSubscription(
   product: Pick<CatalogueProduct, 'subscriptionEligible' | 'daysOfSupply'>,
-  config = PRICING_CONFIG,
+  config = getPricingConfig(),
 ): boolean {
   return (
     product.subscriptionEligible &&
@@ -211,7 +252,7 @@ interface RawSubLine {
 }
 
 /** The effective subscription discount for an order: base rate, beaten by any tier. */
-export function resolveSubscriptionRate(monthlySubtotal: number, itemCount: number, config = PRICING_CONFIG): number {
+export function resolveSubscriptionRate(monthlySubtotal: number, itemCount: number, config = getPricingConfig()): number {
   return Math.max(config.subscriptionDiscount, resolveTier(config.subscriptionTiers, monthlySubtotal, itemCount).pct)
 }
 
@@ -219,7 +260,7 @@ export function buildSubscriptionPlan(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
   answers?: QuizAnswers | null,
-  config = PRICING_CONFIG,
+  config = getPricingConfig(),
 ): SubscriptionLine[] {
   const round = (n: number) => Math.round(n * 100) / 100
   const woPerMonth = workoutsPerMonth(answers)
@@ -398,7 +439,7 @@ export function calculatePricing(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
   answers?: QuizAnswers | null,
-  config = PRICING_CONFIG,
+  config = getPricingConfig(),
 ): StackPricing {
   const round = (n: number) => Math.round(n * 100) / 100
 

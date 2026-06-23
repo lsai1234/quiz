@@ -36,12 +36,25 @@ export function hasShopifyCredentials(): boolean {
   )
 }
 
+// Runtime override set by the portal (server in-memory, or synced to the client).
+// Takes precedence over env so the data source can be flipped without a redeploy.
+let _runtimeOverride: DataSourceMode | null = null
+
+export function setDataSourceOverride(mode: DataSourceMode | null): void {
+  _runtimeOverride = mode
+}
+
+export function getDataSourceOverride(): DataSourceMode | null {
+  return _runtimeOverride
+}
+
 /**
  * The requested mode, before credentials are taken into account.
- * Defaults to `mock` (mock-first). `NEXT_PUBLIC_DATA_SOURCE` wins over
- * `DATA_SOURCE` so the client and server resolve identically when both are set.
+ * Order: portal runtime override → env → `mock` default. `NEXT_PUBLIC_DATA_SOURCE`
+ * wins over `DATA_SOURCE` so the client and server resolve identically.
  */
 export function getDataSourceMode(): DataSourceMode {
+  if (_runtimeOverride) return _runtimeOverride
   const raw = (
     process.env.NEXT_PUBLIC_DATA_SOURCE ??
     process.env.DATA_SOURCE ??

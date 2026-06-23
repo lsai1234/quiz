@@ -15,7 +15,7 @@ import {
   calculatePricing,
   discountWithFloor,
   unitCostOf,
-  PRICING_CONFIG,
+  getPricingConfig,
 } from '@/lib/stack-blueprint/pricing'
 import type { MemberSubscription, MemberSubscriptionLine } from './types'
 
@@ -123,7 +123,7 @@ export function swapSubscriptionLine(
   sub: MemberSubscription,
   lineId: string,
   newProduct: CatalogueProduct,
-  config = PRICING_CONFIG,
+  config = getPricingConfig(),
 ): MemberSubscription {
   const lines = sub.lines.map((line) => {
     if (line.id !== lineId) return line
@@ -161,7 +161,7 @@ export function computeSwapImpact(
   sub: MemberSubscription,
   lineId: string,
   newProduct: CatalogueProduct,
-  config = PRICING_CONFIG,
+  config = getPricingConfig(),
 ): SwapImpact {
   const oldLine = sub.lines.find((l) => l.id === lineId)
   const newSub = swapSubscriptionLine(sub, lineId, newProduct, config)

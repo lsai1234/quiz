@@ -1,27 +1,9 @@
 import { NextResponse } from 'next/server'
 import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
-import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
-import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 
-// Revalidate every 5 minutes so the Next.js cache stays fresh
-export const revalidate = 300
-
-let _catalogueCache: CatalogueProduct[] | null = null
-let _cacheTime = 0
-const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-
-async function fetchShopifyCatalogue(): Promise<CatalogueProduct[]> {
-  const now = Date.now()
-  if (_catalogueCache && now - _cacheTime < CACHE_TTL_MS) return _catalogueCache
-
-  const { getProducts } = await import('@/lib/shopify/operations')
-  const { mapShopifyToCatalogueProduct } = await import('@/lib/shopify/catalogue')
-
-  const shopifyProducts = await getProducts(50)
-  _catalogueCache = shopifyProducts.map(mapShopifyToCatalogueProduct)
-  _cacheTime = now
-  return _catalogueCache
-}
+// Don't cache — the portal can flip the data source / edit products at runtime.
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -42,29 +24,6 @@ export async function GET(request: Request) {
     })
   }
 
-  if (getDataSource() === 'mock') {
-    return NextResponse.json({
-      products: MOCK_CATALOGUE,
-      source: 'mock',
-      count: MOCK_CATALOGUE.length,
-    })
-  }
-
-  try {
-    const products = await fetchShopifyCatalogue()
-    return NextResponse.json({
-      products,
-      source: 'shopify',
-      count: products.length,
-    })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[api/catalogue] Shopify error:', message)
-    return NextResponse.json({
-      products: MOCK_CATALOGUE,
-      source: 'mock',
-      count: MOCK_CATALOGUE.length,
-      shopifyError: message,
-    })
-  }
+  const { products, source } = await getResolvedCatalogue()
+  return NextResponse.json({ products, source, count: products.length })
 }

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Space_Grotesk, Inter } from 'next/font/google'
 import './globals.css'
+import { PortalSync } from '@/components/portal/PortalSync'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -30,7 +31,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`h-full ${spaceGrotesk.variable} ${inter.variable}`}>
-      <body className="min-h-full antialiased">{children}</body>
+      <body className="min-h-full antialiased"><PortalSync />{children}</body>
     </html>
   )
 }
