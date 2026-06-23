@@ -17,6 +17,7 @@ export function SubscriptionDashboard() {
   const { subscription: sub, feedback, logout, setDispatchDay, pause, resume, cancel, swapLine, submitFeedback } = useHubStore()
   const { products } = useCatalogueProducts()
   const [changeLineId, setChangeLineId] = useState<string | null>(null)
+  const [showCheckInResult, setShowCheckInResult] = useState(false)
 
   const nextDispatch = useMemo(
     () => (sub ? formatDispatchDate(nextDispatchDate(sub.dispatchDayOfMonth)) : ''),
@@ -32,8 +33,14 @@ export function SubscriptionDashboard() {
   const remaining = monthsRemainingOnTerm(sub)
   const statusColor = sub.status === 'active' ? ACCENT : sub.status === 'paused' ? '#fbbf24' : 'var(--color-muted)'
   const recById = Object.fromEntries(recommendations.map((r) => [r.lineId, r]))
-  const reviewCount = recommendations.filter((r) => r.action === 'consider-change').length
+  const flagged = recommendations.filter((r) => r.action === 'consider-change')
+  const reviewCount = flagged.length
   const changeLine = sub.lines.find((l) => l.id === changeLineId) ?? null
+
+  function openChange(lineId: string) {
+    setShowCheckInResult(false)
+    setChangeLineId(lineId)
+  }
 
   return (
     <div className="max-w-lg mx-auto px-5 py-8 pb-16">
@@ -79,7 +86,50 @@ export function SubscriptionDashboard() {
       {sub.status !== 'cancelled' && (
         <>
           {/* Monthly pulse */}
-          <FeedbackPanel lastCheckIn={feedback[feedback.length - 1]?.date} onSubmit={submitFeedback} />
+          <FeedbackPanel
+            lastCheckIn={feedback[feedback.length - 1]?.date}
+            onSubmit={(ratings, improvements, notes) => {
+              submitFeedback(ratings, improvements, notes)
+              setShowCheckInResult(true)
+            }}
+          />
+
+          {/* Immediate result of a check-in */}
+          {showCheckInResult && (
+            <div className="rounded-2xl border p-5 mb-4"
+              style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' }}>
+              <div className="flex items-start justify-between gap-2">
+                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                  Thanks for checking in
+                </p>
+                <button onClick={() => setShowCheckInResult(false)} className="text-xs text-[var(--color-muted)]" aria-label="Dismiss">✕</button>
+              </div>
+              {reviewCount > 0 ? (
+                <>
+                  <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
+                    Based on how you're feeling, {reviewCount === 1 ? 'this could be' : 'these could be'} worth changing:
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {flagged.map((rec) => (
+                      <button
+                        key={rec.lineId}
+                        onClick={() => openChange(rec.lineId)}
+                        className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-left active:scale-[0.98] transition-all"
+                        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+                      >
+                        <span className="text-sm font-semibold text-[var(--color-text)] truncate">{rec.productTitle}</span>
+                        <span className="text-xs font-bold flex-shrink-0" style={{ color: '#fbbf24' }}>Find a better fit →</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
+                  Everything's working — your stack is dialled in. Nothing to change right now. 💪
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Your stack — integrated cards (status + advice + change) */}
           <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1 mt-6" style={{ fontFamily: 'var(--font-display)' }}>
@@ -98,7 +148,7 @@ export function SubscriptionDashboard() {
                 key={line.id}
                 line={line}
                 recommendation={recById[line.id]}
-                onChange={setChangeLineId}
+                onChange={openChange}
               />
             ))}
           </div>
