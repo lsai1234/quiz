@@ -170,12 +170,25 @@ gets a selling-plan allocation), set `NEXT_PUBLIC_DATA_SOURCE=shopify`, and the
 same flow creates real subscriptions. The intro discount, flat membership price
 and minimum cycles are configured on the Recharge plan to match `PRICING_CONFIG`.
 
-### The Phase 3 hub
+### The Phase 3 hub — built, mock-first
 
-Built as our own UI calling Recharge's customer API: swap products, change the
-dispatch date, pause/skip, update payment. Recharge handles the billing and
-sync underneath. (Skio/Awtomic are comparable alternatives if Recharge's API
-ever proves limiting, but Recharge is the chosen default.)
+The subscriber hub lives at `/hub` and works today on mock data:
+
+- **Login** — email sign-in gate (`HubLogin`). Live, this is Shopify Customer
+  Account login; any email loads a sample subscription in mock mode.
+- **Dashboard** (`SubscriptionDashboard`) — status, flat monthly, next dispatch
+  date, payment method, and the stack with per-line delivery cadence.
+- **Manage** — change the dispatch day of the month, swap any product (reuses
+  the quiz `ProductSwapModal`, offering same-slot alternatives), pause/resume,
+  and cancel (blocked until the minimum term is met, with months-left shown).
+- **Billing** — links out to the Recharge billing portal (placeholder in mock).
+
+The data layer (`src/lib/recharge/`) is shaped like a Recharge subscription
+contract. `createMockSubscription` builds it from the quiz pricing engine, and
+the mutation helpers (swap / dispatch day / pause / cancel) are pure functions.
+The hub store (`src/lib/hub-store.tsx`) calls these today; when Recharge is
+connected, each action calls Recharge's customer API instead — same surface.
+(Skio/Awtomic are comparable alternatives, but Recharge is the chosen default.)
 
 ### UK compliance note
 
