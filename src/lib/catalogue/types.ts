@@ -179,6 +179,13 @@ export interface CatalogueProduct {
   consumption?: ProductConsumption
   /** Minimum subscription commitment in months for this product (portal-set). */
   minSubscriptionMonths?: number
+  /**
+   * Whether changes to this product should be driven by how the customer FEELS
+   * (`subjective` — sleep, energy, stress) or by an objective need they won't
+   * necessarily feel (`objective` — protein, creatine, vitamins). When omitted
+   * it's derived from the stack slot. Drives the hub's keep-vs-change advice.
+   */
+  recommendationBasis?: 'objective' | 'subjective'
 
   // ── Stack logic ───────────────────────────────────────────────────────────────
   /**

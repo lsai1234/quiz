@@ -119,6 +119,7 @@ you go live. The Storefront query (`src/lib/shopify/operations.ts`), the mapper
 | `consumption.dosesPerUnit` | `doses_per_unit` | number_integer |
 | `minSubscriptionMonths` | `min_subscription_months` | number_integer |
 | `cost` | `cost` | number_decimal |
+| `recommendationBasis` | `recommendation_basis` | `objective` / `subjective` |
 | `subscriptionProductId` | `subscription_product_handle` | text (handle) |
 | `isSubscriptionOnly` | `subscription_only` | boolean |
 
@@ -189,6 +190,25 @@ the mutation helpers (swap / dispatch day / pause / cancel) are pure functions.
 The hub store (`src/lib/hub-store.tsx`) calls these today; when Recharge is
 connected, each action calls Recharge's customer API instead — same surface.
 (Skio/Awtomic are comparable alternatives, but Recharge is the chosen default.)
+
+### Phase 4 — feedback & keep-vs-change advice (built, mock-first)
+
+In the hub, members log a check-in (`FeedbackPanel`) rating how they feel
+(energy, sleep, recovery, digestion, stress, 1–5) and whether they've noticed
+improvements. The engine (`src/lib/feedback.ts`) then advises per product:
+
+- **Objective products** (protein, creatine, vitamins, hydration) are *always
+  kept* — the reason explains they're a need you won't feel day to day, so they
+  never churn on a mood.
+- **Subjective products** (energy, sleep, recovery, gut) are judged on the trend
+  of the matching feedback dimension: a persistently low score → "consider
+  changing" (with a one-click swap), improving/good → "keep".
+
+`recommendationBasis` (objective | subjective) is a product field, derived from
+the stack slot and overridable via the `chrgd.recommendation_basis` metafield /
+the portal. The advice is deterministic (works offline); an AI pass via
+`/api/personalise-stack` can later refine the wording. Feedback history lives in
+the hub store today; live it would persist in the app database.
 
 ### UK compliance note
 

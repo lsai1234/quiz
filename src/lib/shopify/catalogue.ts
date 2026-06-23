@@ -426,6 +426,9 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const rawCost = metaValue(p.metafields, 'cost')
   const cost = rawCost ? parseFloat(rawCost) : undefined
 
+  const rawBasis = metaValue(p.metafields, 'recommendation_basis')
+  const recommendationBasis = rawBasis === 'objective' || rawBasis === 'subjective' ? rawBasis : undefined
+
   const category = parseCategoryFromTags(p.tags) ?? deriveDefaultCategory(p) ?? (p.productType || 'Supplement')
 
   const rawFormats = metaValue(p.metafields, 'formats')
@@ -452,6 +455,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     isSubscriptionOnly,
     consumption,
     minSubscriptionMonths,
+    recommendationBasis,
     swapGroup,
     recommendationPriority,
     marginPriority,

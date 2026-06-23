@@ -3,6 +3,7 @@
 import { create } from 'zustand'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import type { FeedbackCheckIn, FeedbackDimension } from '@/lib/feedback'
 import {
   createMockSubscription,
   setDispatchDay,
@@ -20,9 +21,15 @@ import {
 interface HubStore {
   session: { email: string } | null
   subscription: MemberSubscription | null
+  feedback: FeedbackCheckIn[]
 
   login: (email: string, catalogue: CatalogueProduct[]) => void
   logout: () => void
+  submitFeedback: (
+    ratings: Partial<Record<FeedbackDimension, number>>,
+    noticedImprovements: boolean,
+    notes?: string,
+  ) => void
 
   setDispatchDay: (day: number) => void
   pause: () => void
@@ -34,10 +41,18 @@ interface HubStore {
 export const useHubStore = create<HubStore>((set) => ({
   session: null,
   subscription: null,
+  feedback: [],
 
   login: (email, catalogue) =>
-    set({ session: { email }, subscription: createMockSubscription(catalogue, email) }),
-  logout: () => set({ session: null, subscription: null }),
+    set({ session: { email }, subscription: createMockSubscription(catalogue, email), feedback: [] }),
+  logout: () => set({ session: null, subscription: null, feedback: [] }),
+  submitFeedback: (ratings, noticedImprovements, notes) =>
+    set((s) => ({
+      feedback: [
+        ...s.feedback,
+        { id: `fb-${Date.now()}`, date: new Date().toISOString(), ratings, noticedImprovements, notes },
+      ],
+    })),
 
   setDispatchDay: (day) =>
     set((s) => (s.subscription ? { subscription: setDispatchDay(s.subscription, day) } : s)),

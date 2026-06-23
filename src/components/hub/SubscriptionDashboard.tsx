@@ -13,7 +13,10 @@ import {
   swappableForLine,
 } from '@/lib/recharge/mock'
 import type { MemberSubscriptionLine } from '@/lib/recharge/types'
+import { recommendForSubscription } from '@/lib/feedback'
 import { ProductSwapModal } from '@/components/stack-review/ProductSwapModal'
+import { FeedbackPanel } from './FeedbackPanel'
+import { StackRecommendations } from './StackRecommendations'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
@@ -26,13 +29,17 @@ function cadenceLabel(line: MemberSubscriptionLine): string {
 }
 
 export function SubscriptionDashboard() {
-  const { subscription: sub, logout, setDispatchDay, pause, resume, cancel, swapLine } = useHubStore()
+  const { subscription: sub, feedback, logout, setDispatchDay, pause, resume, cancel, swapLine, submitFeedback } = useHubStore()
   const { products } = useCatalogueProducts()
   const [swapLineId, setSwapLineId] = useState<string | null>(null)
 
   const nextDispatch = useMemo(
     () => (sub ? formatDispatchDate(nextDispatchDate(sub.dispatchDayOfMonth)) : ''),
     [sub],
+  )
+  const recommendations = useMemo(
+    () => (sub ? recommendForSubscription(sub, feedback, products) : []),
+    [sub, feedback, products],
   )
 
   if (!sub) return null
@@ -97,6 +104,19 @@ export function SubscriptionDashboard() {
 
       {sub.status !== 'cancelled' && (
         <>
+          {/* Feedback check-in */}
+          <FeedbackPanel
+            lastCheckIn={feedback[feedback.length - 1]?.date}
+            onSubmit={submitFeedback}
+          />
+
+          {/* Keep vs change recommendations */}
+          <StackRecommendations
+            recommendations={recommendations}
+            hasFeedback={feedback.length > 0}
+            onSwap={setSwapLineId}
+          />
+
           {/* Dispatch date */}
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mb-4">
             <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>

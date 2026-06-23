@@ -331,6 +331,10 @@ function buildMetafields(cfg) {
   if (cfg.cost != null) {
     fields.push({ namespace: 'chrgd', key: 'cost', type: 'number_decimal', value: String(cfg.cost) })
   }
+  // Keep-vs-change basis override (objective | subjective).
+  if (cfg.recommendationBasis) {
+    fields.push({ namespace: 'chrgd', key: 'recommendation_basis', type: 'single_line_text_field', value: cfg.recommendationBasis })
+  }
   return fields
 }
 
