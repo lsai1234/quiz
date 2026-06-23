@@ -105,7 +105,8 @@ export function setDispatchDay(sub: MemberSubscription, day: number): MemberSubs
 }
 
 export function pauseSubscription(sub: MemberSubscription): MemberSubscription {
-  return sub.status === 'active' ? { ...sub, status: 'paused' } : sub
+  // Pausing during the minimum term would side-step the commitment — block it.
+  return sub.status === 'active' && canCancel(sub) ? { ...sub, status: 'paused' } : sub
 }
 
 export function resumeSubscription(sub: MemberSubscription): MemberSubscription {

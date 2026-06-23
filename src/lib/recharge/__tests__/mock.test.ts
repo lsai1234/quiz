@@ -50,10 +50,16 @@ describe('dispatch day + pause/resume', () => {
     expect(setDispatchDay(sub(), 40).dispatchDayOfMonth).toBe(28)
   })
 
-  it('pauses and resumes', () => {
-    const paused = pauseSubscription(sub())
+  it('pauses (once past the minimum term) and resumes', () => {
+    const eligible = { ...sub(), minMonths: 4, monthsActive: 4 }
+    const paused = pauseSubscription(eligible)
     expect(paused.status).toBe('paused')
     expect(resumeSubscription(paused).status).toBe('active')
+  })
+
+  it('blocks pause during the minimum term', () => {
+    const s = { ...sub(), minMonths: 4, monthsActive: 2 }
+    expect(pauseSubscription(s).status).toBe('active')
   })
 })
 

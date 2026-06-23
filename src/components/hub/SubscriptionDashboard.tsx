@@ -209,8 +209,14 @@ export function SubscriptionDashboard() {
                 Resume subscription
               </button>
             ) : (
-              <button onClick={pause} className="flex-1 py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-text-2)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
-                Pause
+              <button
+                onClick={pause}
+                disabled={!canCancel(sub)}
+                title={canCancel(sub) ? undefined : `${remaining} months left on your minimum term`}
+                className="flex-1 py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-text-2)] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ fontFamily: 'var(--font-display)' }}
+              >
+                {canCancel(sub) ? 'Pause' : `Pause (in ${remaining}mo)`}
               </button>
             )}
             <button
