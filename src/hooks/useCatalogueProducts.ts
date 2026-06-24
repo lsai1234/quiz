@@ -7,6 +7,16 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 // Module-level guard — fetch /api/catalogue at most once per session.
 let fetchStarted = false
 
+/** Force a re-fetch (e.g. after the portal flips the data source). */
+export function invalidateCatalogue(): void {
+  fetchStarted = false
+  try {
+    useQuizStore.getState().setCatalogueProducts([])
+  } catch {
+    /* ignore */
+  }
+}
+
 interface UseCatalogueProductsReturn {
   products: CatalogueProduct[]
   isLoading: boolean

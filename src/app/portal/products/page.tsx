@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { ProductEditor } from '@/components/portal/ProductEditor'
+import { AiSuggestPanel } from '@/components/portal/AiSuggestPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
 
@@ -14,8 +15,7 @@ export default function ProductsPage() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<'all' | 'attention' | 'sub'>('all')
   const [editing, setEditing] = useState<CatalogueProduct | null>(null)
-  const [sorting, setSorting] = useState(false)
-  const [summary, setSummary] = useState<string | null>(null)
+  const [showAi, setShowAi] = useState(false)
 
   function load() {
     fetch('/api/portal/products').then((r) => r.json()).then((d) => setRows(d.products ?? [])).catch(() => setRows([]))
@@ -23,16 +23,6 @@ export default function ProductsPage() {
   useEffect(load, [])
 
   const notReady = (rows ?? []).filter((r) => r.readiness.overall !== 'ok').length
-
-  async function autoSort() {
-    setSorting(true)
-    setSummary(null)
-    const res = await fetch('/api/portal/ai-classify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apply: true }) })
-    const data = await res.json()
-    setSummary(res.ok ? `Auto-sorted ${data.fixed}/${data.count} product${data.count === 1 ? '' : 's'} using ${data.usedAI ? 'OpenAI' : 'built-in rules'}.` : 'Auto-sort failed')
-    load()
-    setSorting(false)
-  }
 
   const allProducts = useMemo(() => rows?.map((r) => r.product) ?? [], [rows])
   const filtered = useMemo(() => {
@@ -48,18 +38,15 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between gap-3 mb-3">
         <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Products</h1>
         <button
-          onClick={autoSort}
-          disabled={sorting || notReady === 0}
+          onClick={() => setShowAi(true)}
+          disabled={notReady === 0}
           className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-40"
           style={{ fontFamily: 'var(--font-display)' }}
-          title={notReady === 0 ? 'Everything is already ready' : `AI-classify ${notReady} not-ready product(s)`}
+          title={notReady === 0 ? 'Everything is already tagged' : `Get AI tag suggestions for ${notReady} product(s)`}
         >
-          {sorting ? 'Sorting…' : `✨ Auto-sort${notReady ? ` (${notReady})` : ''}`}
+          {`✨ Suggest tags${notReady ? ` (${notReady})` : ''}`}
         </button>
       </div>
-      {summary && (
-        <p className="text-xs rounded-xl p-3 mb-3" style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)', color: 'var(--color-text-2)' }}>{summary}</p>
-      )}
 
       <div className="flex gap-2 mb-4">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products…" className="flex-1 px-3 py-2 rounded-xl text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
@@ -104,6 +91,8 @@ export default function ProductsPage() {
           onSaved={load}
         />
       )}
+
+      {showAi && <AiSuggestPanel onClose={() => setShowAi(false)} onApplied={load} />}
     </div>
   )
 }
