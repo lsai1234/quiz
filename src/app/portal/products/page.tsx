@@ -48,12 +48,12 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products…" className="flex-1 px-3 py-2 rounded-xl text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products…" className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+      <div className="flex flex-wrap gap-2 mb-4">
         {(['all', 'attention', 'sub'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className="px-3 py-2 rounded-xl text-xs font-bold whitespace-nowrap"
+          <button key={f} onClick={() => setFilter(f)} className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
             style={{ background: filter === f ? 'var(--color-accent)' : 'var(--color-surface-2)', color: filter === f ? 'var(--color-bg)' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
-            {f === 'all' ? 'All' : f === 'attention' ? 'Needs attention' : 'Subscription'}
+            {f === 'all' ? `All (${rows?.length ?? 0})` : f === 'attention' ? `Needs attention (${notReady})` : 'Subscription'}
           </button>
         ))}
       </div>

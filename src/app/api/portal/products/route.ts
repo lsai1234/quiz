@@ -8,10 +8,11 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { products, source } = await getResolvedCatalogue()
+  const { products, source, error } = await getResolvedCatalogue()
   const live = source === 'shopify'
   return NextResponse.json({
     source,
+    error,
     products: products.map((p) => ({ product: p, readiness: productReadiness(p, { live }) })),
   })
 }

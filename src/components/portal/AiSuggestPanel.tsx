@@ -6,21 +6,20 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const ACCENT = '#00D4FF'
 
-type Patch = Partial<CatalogueProduct> & { consumption?: { cadence: string; dosesPerUnit: number } }
-interface Suggestion { id: string; title: string; patch: Patch; source: string }
-interface Field { key: keyof Patch; label: string }
+type Sug = Partial<CatalogueProduct> & { consumption?: { cadence: string; dosesPerUnit: number } }
+interface Result { id: string; title: string; suggestion: Sug; current: Partial<CatalogueProduct>; source: string }
 
-function describe(patch: Patch): Field[] {
-  const out: Field[] = []
-  if (patch.stackSlots?.length) out.push({ key: 'stackSlots', label: `Slots · ${patch.stackSlots.join(', ')}` })
-  if (patch.goals?.length) out.push({ key: 'goals', label: `Goals · ${(patch.goals as string[]).join(', ')}` })
-  if (patch.dietaryTags?.length) out.push({ key: 'dietaryTags', label: `Dietary · ${patch.dietaryTags.join(', ')}` })
-  if (patch.swapGroup) out.push({ key: 'swapGroup', label: `Swap group · ${patch.swapGroup}` })
-  if (patch.daysOfSupply) out.push({ key: 'daysOfSupply', label: `${patch.daysOfSupply}-day supply` })
-  if (patch.consumption) out.push({ key: 'consumption', label: `Cadence · ${patch.consumption.cadence}` })
-  if (patch.recommendationBasis) out.push({ key: 'recommendationBasis', label: `Basis · ${patch.recommendationBasis}` })
-  if (patch.cost != null) out.push({ key: 'cost', label: `Est. cost · £${patch.cost}` })
-  return out
+const KEY_FIELDS = ['stackSlots', 'goals', 'swapGroup', 'subscriptionEligible'] as const
+const OTHER_FIELDS = ['daysOfSupply', 'consumption', 'recommendationBasis', 'cost', 'dietaryTags'] as const
+
+function otherSummary(s: Sug): string {
+  const bits: string[] = []
+  if (s.daysOfSupply) bits.push(`${s.daysOfSupply}-day supply`)
+  if (s.consumption) bits.push(s.consumption.cadence === 'per-workout' ? 'taken per workout' : 'taken daily')
+  if (s.recommendationBasis) bits.push(s.recommendationBasis === 'subjective' ? 'felt benefit' : 'a need')
+  if (s.cost != null) bits.push(`est. cost £${s.cost}`)
+  if (s.dietaryTags?.length) bits.push(s.dietaryTags.join(', '))
+  return bits.join(' · ')
 }
 
 interface Props { onClose: () => void; onApplied: () => void }
@@ -28,69 +27,79 @@ interface Props { onClose: () => void; onApplied: () => void }
 export function AiSuggestPanel({ onClose, onApplied }: Props) {
   const [loading, setLoading] = useState(true)
   const [usedAI, setUsedAI] = useState(false)
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([])
-  const [excluded, setExcluded] = useState<Set<string>>(new Set()) // `${id}:${key}`
+  const [results, setResults] = useState<Result[]>([])
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const [applied, setApplied] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     fetch('/api/portal/ai-classify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apply: false }) })
       .then((r) => r.json())
-      .then((d) => {
-        setUsedAI(!!d.usedAI)
-        setSuggestions((d.results ?? []).filter((r: Suggestion) => Object.keys(r.patch).length > 0))
-      })
+      .then((d) => { setUsedAI(!!d.usedAI); setResults(d.results ?? []) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
-  const toggle = (id: string, key: string) => {
-    const k = `${id}:${key}`
-    setExcluded((s) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n })
+  const off = (id: string, key: string) => excluded.has(`${id}:${key}`)
+  const toggle = (id: string, key: string) => setExcluded((s) => { const n = new Set(s); const k = `${id}:${key}`; n.has(k) ? n.delete(k) : n.add(k); return n })
+
+  function buildPatch(r: Result): Sug {
+    const p: Sug = {}
+    for (const k of KEY_FIELDS) if (!off(r.id, k) && r.suggestion[k] !== undefined) (p as Record<string, unknown>)[k] = r.suggestion[k]
+    if (!off(r.id, 'other')) for (const k of OTHER_FIELDS) if (r.suggestion[k] !== undefined) (p as Record<string, unknown>)[k] = r.suggestion[k]
+    return p
   }
 
-  function includedPatch(s: Suggestion): Patch {
-    const patch: Patch = {}
-    for (const f of describe(s.patch)) {
-      if (!excluded.has(`${s.id}:${String(f.key)}`)) (patch as Record<string, unknown>)[f.key as string] = (s.patch as Record<string, unknown>)[f.key as string]
-    }
-    return patch
-  }
-
-  async function apply(s: Suggestion) {
-    const patch = includedPatch(s)
+  async function apply(r: Result) {
+    const patch = buildPatch(r)
     if (Object.keys(patch).length === 0) return
     setBusy(true)
-    await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id, patch }) })
-    setApplied((a) => new Set(a).add(s.id))
-    setBusy(false)
-    onApplied()
+    await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, patch }) })
+    setApplied((a) => new Set(a).add(r.id)); setBusy(false); onApplied()
   }
-
   async function applyAll() {
     setBusy(true)
-    for (const s of suggestions) {
-      if (applied.has(s.id)) continue
-      const patch = includedPatch(s)
+    for (const r of results) {
+      if (applied.has(r.id)) continue
+      const patch = buildPatch(r)
       if (Object.keys(patch).length === 0) continue
-      await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: s.id, patch }) })
-      setApplied((a) => new Set(a).add(s.id))
+      await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, patch }) })
+      setApplied((a) => new Set(a).add(r.id))
     }
-    setBusy(false)
-    onApplied()
+    setBusy(false); onApplied()
   }
 
-  const pending = suggestions.filter((s) => !applied.has(s.id))
+  const pending = results.filter((r) => !applied.has(r.id))
+
+  const Chip = ({ id, fkey, label }: { id: string; fkey: string; label: string }) => {
+    const isOff = off(id, fkey)
+    return (
+      <button onClick={() => toggle(id, fkey)} className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
+        style={{ background: isOff ? 'transparent' : `color-mix(in srgb, ${ACCENT} 12%, transparent)`, color: isOff ? 'var(--color-muted)' : ACCENT, border: `1px solid ${isOff ? 'var(--color-border)' : `color-mix(in srgb, ${ACCENT} 30%, transparent)`}`, textDecoration: isOff ? 'line-through' : 'none' }}>
+        {label}
+      </button>
+    )
+  }
+
+  function FieldRow({ r, fkey, title, children }: { r: Result; fkey: string; title: string; children: React.ReactNode }) {
+    return (
+      <div className="flex items-start gap-2 py-1.5">
+        <input type="checkbox" checked={!off(r.id, fkey)} onChange={() => toggle(r.id, fkey)} className="mt-1 accent-[var(--color-accent)]" />
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">{title}</p>
+          <div className="text-sm text-[var(--color-text)]">{children}</div>
+        </div>
+      </div>
+    )
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose() }} style={{ background: 'rgba(0,0,0,0.72)' }}>
       <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
         <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-[var(--color-border)]">
           <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              ✨ AI suggestions {usedAI ? '· OpenAI' : '· built-in rules'}
-            </p>
-            <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Review &amp; apply tags</h3>
+            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>✨ AI tagging {usedAI ? '· OpenAI' : '· built-in rules'}</p>
+            <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Review suggested tags</h3>
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)]">✕</button>
         </div>
@@ -99,44 +108,41 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
           {loading ? (
             <p className="text-sm text-[var(--color-muted)] py-8 text-center">Analysing your catalogue…</p>
           ) : pending.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)] py-8 text-center">{suggestions.length ? 'All suggestions applied ✓' : 'Nothing to suggest — everything looks tagged.'}</p>
+            <p className="text-sm text-[var(--color-muted)] py-8 text-center">{results.length ? 'All suggestions applied ✓' : 'Nothing to suggest.'}</p>
           ) : (
-            <p className="text-xs text-[var(--color-muted)] mb-3 leading-relaxed">
-              Suggested tags for {pending.length} product{pending.length === 1 ? '' : 's'} that need attention. Tap a chip to exclude it, then apply.
-            </p>
+            <p className="text-xs text-[var(--color-muted)] mb-3 leading-relaxed">Untick anything you don’t want, then apply. {pending.length} product{pending.length === 1 ? '' : 's'} to review.</p>
           )}
 
           <div className="space-y-3">
-            {suggestions.map((s) => {
-              const done = applied.has(s.id)
-              const fields = describe(s.patch)
+            {results.map((r) => {
+              const done = applied.has(r.id)
+              const s = r.suggestion
+              const subText = s.subscriptionEligible === false ? 'Not subscribable' : 'Subscribable'
               return (
-                <div key={s.id} className="rounded-2xl border p-4" style={{ background: 'var(--color-surface-2)', borderColor: done ? 'color-mix(in srgb, #34d399 40%, transparent)' : 'var(--color-border)', opacity: done ? 0.6 : 1 }}>
+                <div key={r.id} className="rounded-2xl border p-4" style={{ background: 'var(--color-surface-2)', borderColor: done ? 'color-mix(in srgb, #34d399 40%, transparent)' : 'var(--color-border)', opacity: done ? 0.6 : 1 }}>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{s.title}</p>
+                    <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.title}</p>
                     {done && <span className="text-[10px] font-bold" style={{ color: '#34d399' }}>Applied ✓</span>}
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {fields.map((f) => {
-                      const off = excluded.has(`${s.id}:${String(f.key)}`)
-                      return (
-                        <button key={String(f.key)} onClick={() => !done && toggle(s.id, String(f.key))} disabled={done}
-                          className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
-                          style={{
-                            background: off ? 'transparent' : `color-mix(in srgb, ${ACCENT} 12%, transparent)`,
-                            color: off ? 'var(--color-muted)' : ACCENT,
-                            border: `1px solid ${off ? 'var(--color-border)' : `color-mix(in srgb, ${ACCENT} 30%, transparent)`}`,
-                            textDecoration: off ? 'line-through' : 'none',
-                          }}>
-                          {f.label}
-                        </button>
-                      )
-                    })}
-                  </div>
+
                   {!done && (
-                    <button onClick={() => apply(s)} disabled={busy} className="mt-3 text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border-2)] text-[var(--color-text-2)]" style={{ fontFamily: 'var(--font-display)' }}>
-                      Apply to this product
-                    </button>
+                    <div className="divide-y divide-[var(--color-border)]">
+                      <FieldRow r={r} fkey="stackSlots" title="Slots">
+                        <span className="flex flex-wrap gap-1.5">{(s.stackSlots ?? []).map((x) => <Chip key={x} id={r.id} fkey="stackSlots" label={x} />)}</span>
+                      </FieldRow>
+                      <FieldRow r={r} fkey="goals" title="Goals">
+                        <span className="flex flex-wrap gap-1.5">{((s.goals as string[]) ?? []).map((x) => <Chip key={x} id={r.id} fkey="goals" label={x} />)}</span>
+                      </FieldRow>
+                      <FieldRow r={r} fkey="swapGroup" title="Swap group (alternatives)">{s.swapGroup}</FieldRow>
+                      <FieldRow r={r} fkey="subscriptionEligible" title="Subscription">{subText}</FieldRow>
+                      <FieldRow r={r} fkey="other" title="Other details">
+                        <span className="text-xs text-[var(--color-muted)]">{otherSummary(s) || '—'}</span>
+                      </FieldRow>
+                    </div>
+                  )}
+
+                  {!done && (
+                    <button onClick={() => apply(r)} disabled={busy} className="mt-3 text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border-2)] text-[var(--color-text-2)]" style={{ fontFamily: 'var(--font-display)' }}>Apply to this product</button>
                   )}
                 </div>
               )
@@ -146,9 +152,7 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
 
         {pending.length > 0 && (
           <div className="px-5 py-3 border-t border-[var(--color-border)]">
-            <button onClick={applyAll} disabled={busy} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>
-              {busy ? 'Applying…' : `Apply all (${pending.length})`}
-            </button>
+            <button onClick={applyAll} disabled={busy} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>{busy ? 'Applying…' : `Apply all (${pending.length})`}</button>
           </div>
         )}
       </div>

@@ -13,13 +13,13 @@ const OPTIONS: { mode: 'mock' | 'auto' | 'shopify'; label: string; desc: string 
 
 export function DataSourceToggle() {
   const [data, setData] = useState<{ mode: string; effective: string; hasCredentials: boolean } | null>(null)
-  const [sample, setSample] = useState<{ source: string; count: number; titles: string[] } | null>(null)
+  const [sample, setSample] = useState<{ source: string; count: number; titles: string[]; error?: string } | null>(null)
   const [saving, setSaving] = useState(false)
 
   const loadSample = useCallback(() => {
     fetch('/api/portal/products')
       .then((r) => r.json())
-      .then((d) => setSample({ source: d.source, count: d.products?.length ?? 0, titles: (d.products ?? []).slice(0, 3).map((p: { product: { title: string } }) => p.product.title) }))
+      .then((d) => setSample({ source: d.source, count: d.products?.length ?? 0, error: d.error, titles: (d.products ?? []).slice(0, 3).map((p: { product: { title: string } }) => p.product.title) }))
       .catch(() => {})
   }, [])
 
@@ -78,9 +78,12 @@ export function DataSourceToggle() {
         )}
         {wantsShopifyButMock ? (
           <p className="text-[var(--color-red)] leading-relaxed pt-1">
-            <strong>Can’t switch to Shopify yet.</strong> No Storefront credentials are set, so the app is still serving mock.
-            Add <code>NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN</code> and <code>NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN</code> (and seed
-            tags via <code>scripts/seed-shopify-tags.mjs</code>) to connect your real catalogue.
+            <strong>Can’t switch to Shopify yet.</strong>{' '}
+            {sample?.error
+              ? `Shopify connection failed: ${sample.error}`
+              : !data.hasCredentials
+                ? <>No Storefront credentials are set. Add <code>NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN</code> and <code>NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN</code>, then seed tags via <code>scripts/seed-shopify-tags.mjs</code>.</>
+                : 'Still serving mock.'}
           </p>
         ) : (
           <p className="text-[var(--color-muted)] pt-1">The quiz, hub and subscriptions use this on their next page load.</p>

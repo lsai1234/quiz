@@ -29,32 +29,43 @@ export async function POST(req: Request) {
     ? products.filter((p) => body.ids!.includes(p.id))
     : products.filter((p) => productReadiness(p, { live }).overall !== 'ok')
 
-  const results: { id: string; title: string; patch: Record<string, unknown>; applied: boolean; source: string; error?: string }[] = []
+  const results: { id: string; title: string; suggestion: Record<string, unknown>; current: Record<string, unknown>; patch: Record<string, unknown>; applied: boolean; source: string; error?: string }[] = []
   let usedAI = false
 
   for (const product of targets) {
     const { patch: suggestion, source: src } = await aiClassifyProduct(product)
     if (src === 'ai') usedAI = true
-    const patch = gapPatch(product, suggestion)
-    if (Object.keys(patch).length === 0) {
-      results.push({ id: product.id, title: product.title, patch: {}, applied: false, source: src })
-      continue
-    }
+    const patch = gapPatch(product, suggestion) // only-missing, for the editor's quick fill
     let applied = false
     let error: string | undefined
     if (apply) {
-      setProductOverride(product.id, patch)
-      applied = true
-      if (getDataSource() === 'shopify' && product.shopifyProductId) {
-        try {
-          const { writeProductConfig } = await import('@/lib/shopify/admin')
-          await writeProductConfig({ ...product, ...patch })
-        } catch (err) {
-          error = err instanceof Error ? err.message : String(err)
+      if (Object.keys(patch).length > 0) {
+        setProductOverride(product.id, patch)
+        applied = true
+        if (getDataSource() === 'shopify' && product.shopifyProductId) {
+          try {
+            const { writeProductConfig } = await import('@/lib/shopify/admin')
+            await writeProductConfig({ ...product, ...patch })
+          } catch (err) {
+            error = err instanceof Error ? err.message : String(err)
+          }
         }
       }
     }
-    results.push({ id: product.id, title: product.title, patch: patch as Record<string, unknown>, applied, source: src, error })
+    results.push({
+      id: product.id,
+      title: product.title,
+      // Full classification (for the review panel) + the product's current key values for comparison.
+      suggestion: suggestion as Record<string, unknown>,
+      current: {
+        stackSlots: product.stackSlots, goals: product.goals, swapGroup: product.swapGroup,
+        subscriptionEligible: product.subscriptionEligible,
+      },
+      patch: patch as Record<string, unknown>,
+      applied,
+      source: src,
+      error,
+    })
   }
 
   return NextResponse.json({ usedAI, count: results.length, fixed: results.filter((r) => r.applied).length, results })
