@@ -108,3 +108,35 @@ describe('AI auto-sort (heuristic fallback)', () => {
     expect(patch.cost).toBeUndefined()             // already set → untouched
   })
 })
+
+import { catalogueCoverage } from '../coverage'
+
+describe('catalogue coverage', () => {
+  it('flags a goal with no products as a gap, one as thin, two as covered', () => {
+    const cat = [
+      makeProduct({ id: 'a', goals: ['muscle'] }),
+      makeProduct({ id: 'b', goals: ['muscle'] }),
+      makeProduct({ id: 'c', goals: ['menopause'], stackSlots: ['menopause'] }),
+    ]
+    const cov = catalogueCoverage(cat)
+    expect(cov.goals.find((g) => g.key === 'goal:muscle')!.status).toBe('ok')        // 2 products
+    expect(cov.goals.find((g) => g.key === 'goal:menopause')!.status).toBe('warn')   // 1 product
+    expect(cov.goals.find((g) => g.key === 'goal:focus')!.status).toBe('fail')       // 0 products
+    expect(cov.gaps).toBeGreaterThan(0)
+  })
+
+  it('warns when a covered area has no subscription option', () => {
+    const cat = [
+      makeProduct({ id: 'a', goals: ['immune'], subscriptionEligible: false }),
+      makeProduct({ id: 'b', goals: ['immune'], subscriptionEligible: false }),
+    ]
+    const immune = catalogueCoverage(cat).goals.find((g) => g.key === 'goal:immune')!
+    expect(immune.status).toBe('warn')
+    expect(immune.subscriptionCount).toBe(0)
+  })
+
+  it('ignores subscription-only refills', () => {
+    const cat = [makeProduct({ id: 'r', goals: ['muscle'], isSubscriptionOnly: true })]
+    expect(catalogueCoverage(cat).goals.find((g) => g.key === 'goal:muscle')!.productCount).toBe(0)
+  })
+})

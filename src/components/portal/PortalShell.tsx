@@ -10,6 +10,7 @@ const NAV = [
   { href: '/portal', label: 'Home' },
   { href: '/portal/products', label: 'Products' },
   { href: '/portal/pricing', label: 'Pricing' },
+  { href: '/portal/coverage', label: 'Coverage' },
   { href: '/portal/readiness', label: 'Readiness' },
   { href: '/portal/settings', label: 'Settings' },
 ]

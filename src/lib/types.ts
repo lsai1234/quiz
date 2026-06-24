@@ -25,6 +25,12 @@ export const PERFORMANCE_GOALS: Goal[] = [
   'muscle', 'energy', 'performance', 'hydration', 'recovery', 'cutting', 'bulking',
 ]
 
+/** Every goal the quiz can recommend — used for catalogue coverage checks. */
+export const ALL_GOALS: Goal[] = [
+  'muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking',
+  'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health',
+]
+
 export type TrainingFrequency = '1-2x' | '3-4x' | '5-6x' | 'daily'
 export type TrainingType = 'strength' | 'cardio' | 'hiit' | 'sport' | 'mixed'
 export type DietLevel = 'clean' | 'mostly-good' | 'inconsistent' | 'poor'
