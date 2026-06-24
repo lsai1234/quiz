@@ -5,13 +5,15 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { calculatePricing, formatGBP, type PricingConfig, type DiscountTier } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
+import { defaultAnswers } from '@/lib/store'
 
 const ACCENT = '#00D4FF'
 
+const sample = (over: Partial<QuizAnswers>): QuizAnswers => ({ ...defaultAnswers, ...over })
 const SAMPLES: { name: string; answers: QuizAnswers }[] = [
-  { name: 'Performance', answers: { goals: ['muscle', 'energy'], trainingFrequency: '3-4x', budget: '50-80', track: 'performance' } as unknown as QuizAnswers },
-  { name: 'Wellbeing', answers: { goals: ['sleep-better', 'less-stress'], trainingFrequency: '1-2x', budget: '30-50', track: 'wellbeing' } as unknown as QuizAnswers },
-  { name: 'Budget', answers: { goals: ['health'], trainingFrequency: '1-2x', budget: 'under-30', track: 'wellbeing' } as unknown as QuizAnswers },
+  { name: 'Performance', answers: sample({ goals: ['muscle', 'energy'], trainingFrequency: '3-4x', budget: '50-80', track: 'performance' }) },
+  { name: 'Wellbeing', answers: sample({ goals: ['sleep-better', 'less-stress'], trainingFrequency: '1-2x', budget: '30-50', track: 'wellbeing' }) },
+  { name: 'Budget', answers: sample({ goals: ['health'], trainingFrequency: '1-2x', budget: 'under-30', track: 'wellbeing' }) },
 ]
 
 function pct(n: number) { return Math.round(n * 1000) / 10 }
@@ -29,10 +31,13 @@ export default function PricingPage() {
 
   const previews = useMemo(() => {
     if (!draft || catalogue.length === 0) return []
-    return SAMPLES.map((s) => {
-      const bp = buildStackBlueprint(s.answers, catalogue)
-      const p = calculatePricing(bp, catalogue, s.answers, draft)
-      return { name: s.name, p }
+    return SAMPLES.flatMap((s) => {
+      try {
+        const bp = buildStackBlueprint(s.answers, catalogue)
+        return [{ name: s.name, p: calculatePricing(bp, catalogue, s.answers, draft) }]
+      } catch {
+        return []
+      }
     })
   }, [draft, catalogue])
 
@@ -57,17 +62,6 @@ export default function PricingPage() {
     const d = await r.json(); setDraft(d.current); setSaving(false); setSaved(true)
   }
 
-  const Num = ({ label, value, onChange, step = 1, suffix }: { label: string; value: number; onChange: (n: number) => void; step?: number; suffix?: string }) => (
-    <label className="flex items-center justify-between gap-3 py-2">
-      <span className="text-xs text-[var(--color-text-2)]">{label}</span>
-      <span className="flex items-center gap-1">
-        <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))}
-          className="w-24 px-2 py-1.5 rounded-lg text-sm text-right outline-none"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
-        {suffix && <span className="text-[11px] text-[var(--color-muted)] w-6">{suffix}</span>}
-      </span>
-    </label>
-  )
 
   return (
     <div className="pb-10">
@@ -127,6 +121,20 @@ export default function PricingPage() {
         </div>
       </Section>
     </div>
+  )
+}
+
+function Num({ label, value, onChange, step = 1, suffix }: { label: string; value: number; onChange: (n: number) => void; step?: number; suffix?: string }) {
+  return (
+    <label className="flex items-center justify-between gap-3 py-2">
+      <span className="text-xs text-[var(--color-text-2)]">{label}</span>
+      <span className="flex items-center gap-1">
+        <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value))}
+          className="w-24 px-2 py-1.5 rounded-lg text-sm text-right outline-none"
+          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+        {suffix && <span className="text-[11px] text-[var(--color-muted)] w-6">{suffix}</span>}
+      </span>
+    </label>
   )
 }
 

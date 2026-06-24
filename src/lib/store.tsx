@@ -49,7 +49,7 @@ interface QuizStore {
   reset: () => void
 }
 
-const defaultAnswers: QuizAnswers = {
+export const defaultAnswers: QuizAnswers = {
   name: '',
   track: null,
   ageBracket: null,

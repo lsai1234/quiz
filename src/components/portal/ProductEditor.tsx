@@ -19,8 +19,24 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
   const [d, setD] = useState<CatalogueProduct>({ ...product, consumption: product.consumption ? { ...product.consumption } : undefined })
   const [saving, setSaving] = useState(false)
   const [result, setResult] = useState<string | null>(null)
+  const [suggesting, setSuggesting] = useState(false)
 
   const set = (patch: Partial<CatalogueProduct>) => setD((p) => ({ ...p, ...patch }))
+
+  async function aiSuggest() {
+    setSuggesting(true)
+    setResult(null)
+    const res = await fetch('/api/portal/ai-classify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [product.id], apply: false }) })
+    const data = await res.json()
+    const patch = data.results?.[0]?.patch ?? {}
+    if (Object.keys(patch).length) {
+      set(patch)
+      setResult(`AI filled: ${Object.keys(patch).join(', ')} (review & save)`)
+    } else {
+      setResult('Nothing missing — no suggestions.')
+    }
+    setSuggesting(false)
+  }
   const toggleIn = <T,>(arr: T[], v: T): T[] => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v])
 
   async function save() {
@@ -126,9 +142,10 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
           <Row label="Cost (£)">{numInput(d.cost, (n) => set({ cost: n }))}</Row>
         </div>
 
-        <div className="px-5 py-3 border-t border-[var(--color-border)] flex items-center gap-3">
-          {result && <span className="text-xs text-[var(--color-text-2)] flex-1">{result}</span>}
-          <button onClick={save} disabled={saving} className="ml-auto py-2.5 px-5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>{saving ? 'Saving…' : 'Save'}</button>
+        <div className="px-5 py-3 border-t border-[var(--color-border)] flex items-center gap-2">
+          {result && <span className="text-[11px] text-[var(--color-text-2)] flex-1 leading-snug">{result}</span>}
+          <button onClick={aiSuggest} disabled={suggesting} className="ml-auto py-2.5 px-3 rounded-2xl text-xs font-bold border border-[var(--color-border-2)] text-[var(--color-text-2)]" style={{ fontFamily: 'var(--font-display)' }}>{suggesting ? '…' : '✨ AI suggest'}</button>
+          <button onClick={save} disabled={saving} className="py-2.5 px-5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>{saving ? 'Saving…' : 'Save'}</button>
         </div>
       </div>
     </div>,

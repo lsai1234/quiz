@@ -80,3 +80,31 @@ describe('product readiness', () => {
     expect(r.overall).toBe('fail')
   })
 })
+
+import { heuristicClassify, gapPatch } from '../ai-classify'
+
+describe('AI auto-sort (heuristic fallback)', () => {
+  it('classifies a product from its title/description', () => {
+    const p = makeProduct({ id: 'x', title: 'CHRGD Creatine Monohydrate', description: '5g micronised creatine', stackSlots: [], goals: [], swapGroup: 'general' as any, cost: undefined })
+    const s = heuristicClassify(p)
+    expect(s.stackSlots).toContain('performance')
+    expect(s.swapGroup).toBe('creatine')
+    expect(s.recommendationBasis).toBe('objective')
+    expect(s.cost).toBeGreaterThan(0)
+  })
+
+  it('marks pre-workout as per-workout + subjective', () => {
+    const s = heuristicClassify(makeProduct({ title: 'CHRGD Pre-Workout', description: 'caffeine and beta-alanine', stackSlots: [], goals: [] }))
+    expect(s.consumption?.cadence).toBe('per-workout')
+    expect(s.recommendationBasis).toBe('subjective')
+  })
+
+  it('gapPatch only fills missing fields', () => {
+    const p = makeProduct({ stackSlots: [], goals: ['muscle'], swapGroup: 'protein-whey' as any, cost: 12 })
+    const patch = gapPatch(p, { stackSlots: ['protein'], goals: ['recovery'], swapGroup: 'creatine' as any, cost: 99 })
+    expect(patch.stackSlots).toEqual(['protein']) // was empty → filled
+    expect(patch.goals).toBeUndefined()            // already set → untouched
+    expect(patch.swapGroup).toBeUndefined()        // already set → untouched
+    expect(patch.cost).toBeUndefined()             // already set → untouched
+  })
+})
