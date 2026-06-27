@@ -20,6 +20,14 @@ import {
   bringForward as bringForwardMutation,
   delayDispatch as delayDispatchMutation,
 } from '@/lib/recharge/mock'
+import {
+  skipDelivery as skipDeliveryMutation,
+  unskipDelivery as unskipDeliveryMutation,
+  rescheduleDelivery as rescheduleDeliveryMutation,
+  addItemToDelivery as addItemToDeliveryMutation,
+  removeItemFromDelivery as removeItemFromDeliveryMutation,
+} from '@/lib/recharge/schedule'
+import type { DeliveryItem } from '@/lib/recharge/schedule'
 
 /**
  * Subscriber-hub state. Today it drives a mock subscription; when Recharge is
@@ -54,6 +62,13 @@ interface HubStore {
   sendNow: () => void
   bringForward: (days: number) => void
   delayDispatch: (days: number) => void
+
+  // Calendar: per-delivery edits
+  skipDelivery: (deliveryId: string) => void
+  unskipDelivery: (deliveryId: string) => void
+  rescheduleDelivery: (deliveryId: string, date: Date) => void
+  addItemToDelivery: (deliveryId: string, product: CatalogueProduct) => void
+  removeItemFromDelivery: (deliveryId: string, item: DeliveryItem) => void
 
   /** Log a single-dimension micro check-in (the inline "feeling it?" tap). */
   submitDimension: (dimension: FeedbackDimension, rating: number) => void
@@ -98,6 +113,17 @@ export const useHubStore = create<HubStore>((set) => ({
     set((s) => (s.subscription ? { subscription: bringForwardMutation(s.subscription, days) } : s)),
   delayDispatch: (days) =>
     set((s) => (s.subscription ? { subscription: delayDispatchMutation(s.subscription, days) } : s)),
+
+  skipDelivery: (deliveryId) =>
+    set((s) => (s.subscription ? { subscription: skipDeliveryMutation(s.subscription, deliveryId) } : s)),
+  unskipDelivery: (deliveryId) =>
+    set((s) => (s.subscription ? { subscription: unskipDeliveryMutation(s.subscription, deliveryId) } : s)),
+  rescheduleDelivery: (deliveryId, date) =>
+    set((s) => (s.subscription ? { subscription: rescheduleDeliveryMutation(s.subscription, deliveryId, date) } : s)),
+  addItemToDelivery: (deliveryId, product) =>
+    set((s) => (s.subscription ? { subscription: addItemToDeliveryMutation(s.subscription, deliveryId, product) } : s)),
+  removeItemFromDelivery: (deliveryId, item) =>
+    set((s) => (s.subscription ? { subscription: removeItemFromDeliveryMutation(s.subscription, deliveryId, item) } : s)),
 
   submitDimension: (dimension, rating) =>
     set((s) => ({

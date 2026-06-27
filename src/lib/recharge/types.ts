@@ -60,4 +60,22 @@ export interface MemberSubscription {
   startedAt: string
   paymentMethod: { brand: string; last4: string } | null
   lines: MemberSubscriptionLine[]
+  /**
+   * Per-delivery edits made from the calendar, keyed by delivery id (`YYYY-MM`).
+   * The flat monthly is unaffected — skips bank a credit, added items are
+   * one-offs — so this only changes WHAT ships WHEN, never the recurring price.
+   */
+  deliveryOverrides?: Record<string, DeliveryOverride>
+}
+
+/** A member's edit to a single scheduled delivery (from the calendar). */
+export interface DeliveryOverride {
+  /** Skip this box entirely (credits its value to the next payment). */
+  skipped?: boolean
+  /** Move this box to an explicit date (ISO). */
+  dateOverride?: string
+  /** Product ids added to this box as a one-off (full price). */
+  addedProductIds?: string[]
+  /** Recurring line ids pulled out of this box only. */
+  removedLineIds?: string[]
 }

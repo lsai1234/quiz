@@ -265,6 +265,35 @@ Live, these map onto Recharge: add/remove = subscription line changes, settlemen
 and "get one now" = one-time line items, skip = a skipped charge with credit,
 cadence = the line's order-interval, and the date controls = reschedule/charge-now.
 
+### Phase 6 — the delivery calendar (HelloFresh-style, built mock-first)
+
+The hub centres on a **delivery calendar** (`src/components/hub/DeliveryCalendar.tsx`)
+— a horizontal timeline of upcoming boxes. Billing stays **flat monthly**; the
+calendar only governs *what ships when*.
+
+- `buildDeliverySchedule(sub, catalogue, monthsAhead, now)`
+  (`src/lib/recharge/schedule.ts`) projects the flat plan into dated `Delivery`
+  boxes. Each line is due in a month when `(m − offset(line)) % cadence === 0`,
+  with a stable per-line `offset` so multi-month items **stagger** into different
+  boxes (realistic, varied deliveries). The `m=0` box honours `nextDispatchOverride`.
+- Per-box edits are stored on `MemberSubscription.deliveryOverrides` (keyed
+  `YYYY-MM`) and applied by `buildDeliverySchedule`. Pure mutations:
+  `skipDelivery` / `unskipDelivery`, `rescheduleDelivery(date)`,
+  `addItemToDelivery(product)` (a full-price one-off), `removeItemFromDelivery(item)`.
+  **None change the flat monthly** — skips bank a credit (`skipCredit`), adds are
+  one-offs. The detail sheet (`DeliveryDetailSheet`) is where you open a box and
+  add/remove/move/skip — bundle- and product-level, like HelloFresh.
+
+Live, this maps onto Recharge: skip = a skipped charge with credit, reschedule =
+a rescheduled charge, add to a box = a one-time line item on that order.
+
+**Clear status language.** `recommendForSubscription` now returns a member-facing
+`LineStatus` (`statusLabel` / `statusIcon` / `statusTone` + optional `progress`),
+mapped by `deriveStatus` from the onset phase: "Felt & working", "Daily
+essential", "Building {benefit} · wk X of Y" (with a progress ring), "Working
+quietly · long-term", "Not landing — let's adjust". No jargon, no catch-all
+"working for you" bucket — slow-build items show real progress, never a default.
+
 ### UK compliance note
 
 Minimum terms and intro discounts are standard and fine, but disclose clearly

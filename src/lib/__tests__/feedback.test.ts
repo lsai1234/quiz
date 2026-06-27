@@ -121,7 +121,33 @@ describe('recommendForSubscription', () => {
     const s = sub([line({ id: 'l-pre', productId: 'pre', stackSlot: 'energy', slotTitle: 'Energy' })])
     const recs = recommendForSubscription(s, [], catalogue)
     expect(recs[0].phase).toBe('check')
-    expect(recs[0].reason).toMatch(/log/i)
+    expect(recs[0].reason).toMatch(/tell us/i)
+  })
+
+  it('attaches clear, benefit-led statuses (no jargon, no catch-all)', () => {
+    // Never-felt need → essential.
+    const proteinRec = recommendForSubscription(
+      sub([line({ productId: 'protein', stackSlot: 'protein', slotTitle: 'Protein' })]),
+      [], catalogue,
+    )[0]
+    expect(proteinRec.statusTone).toBe('essential')
+    expect(proteinRec.statusLabel).toBe('Daily essential')
+
+    // Felt + good → good, with the "felt & working" label.
+    const preRec = recommendForSubscription(
+      sub([line({ productId: 'pre', stackSlot: 'energy', slotTitle: 'Energy' })]),
+      [checkIn({ energy: 4 }), checkIn({ energy: 5 })], catalogue,
+    )[0]
+    expect(preRec.statusTone).toBe('good')
+
+    // Slow-build within window → building, with a progress ring + week count.
+    const slowRec = recommendForSubscription(
+      sub([line({ productId: 'slow', stackSlot: 'energy', slotTitle: 'Energy', addedAt: daysAgo(7) })]),
+      [], catalogue,
+    )[0]
+    expect(slowRec.statusTone).toBe('building')
+    expect(slowRec.statusLabel).toMatch(/building energy · wk/i)
+    expect(slowRec.progress?.pct).toBeGreaterThan(0)
   })
 })
 

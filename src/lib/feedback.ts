@@ -130,7 +130,19 @@ export function lineTenureDays(line: MemberSubscriptionLine, now: Date = new Dat
  */
 export type LinePhase = 'unfelt' | 'too-early' | 'working' | 'review' | 'check'
 
-export interface LineRecommendation {
+/** Member-facing status tone — drives colour/grouping in the hub. */
+export type StatusTone = 'good' | 'building' | 'essential' | 'review'
+
+export interface LineStatus {
+  /** Plain, benefit-led label, e.g. "Felt & working", "Building energy · wk 2 of 3". */
+  statusLabel: string
+  statusIcon: string
+  statusTone: StatusTone
+  /** Set for building items so the UI can show a progress ring. */
+  progress?: { weeksElapsed: number; weeksTotal: number; pct: number }
+}
+
+export interface LineRecommendation extends LineStatus {
   lineId: string
   productTitle: string
   slotTitle: string
@@ -140,6 +152,57 @@ export interface LineRecommendation {
   /** Days until the benefit should become noticeable (0 once past the window). */
   daysUntilFelt: number
   reason: string
+}
+
+/** The plain-English benefit a slot delivers — used in status copy. */
+export function benefitLabel(slot: StackSlot): string {
+  switch (slot) {
+    case 'energy': return 'energy'
+    case 'sleep': return 'sleep quality'
+    case 'recovery': return 'recovery'
+    case 'gut': return 'digestion'
+    case 'health': return 'long-term health'
+    case 'performance': return 'strength'
+    case 'protein': return 'muscle'
+    case 'hydration': return 'hydration'
+    case 'menopause': return 'balance'
+    case 'vegan-support': return 'nutrition'
+    default: return 'results'
+  }
+}
+
+/** Turn a phase + timing into a clear, member-facing status (no jargon, no catch-alls). */
+export function deriveStatus(
+  phase: LinePhase,
+  onset: EffectOnset,
+  slot: StackSlot,
+  tenureDays: number,
+  windowDays: number,
+): LineStatus {
+  switch (phase) {
+    case 'review':
+      return { statusLabel: "Not landing — let's adjust", statusIcon: '⚠', statusTone: 'review' }
+    case 'unfelt':
+      return { statusLabel: 'Daily essential', statusIcon: '✓', statusTone: 'essential' }
+    case 'too-early': {
+      const weeksTotal = Math.max(1, Math.round(windowDays / 7))
+      const weeksElapsed = Math.min(weeksTotal, Math.floor(tenureDays / 7))
+      const pct = windowDays > 0 ? Math.min(1, tenureDays / windowDays) : 1
+      return {
+        statusLabel: `Building ${benefitLabel(slot)} · wk ${weeksElapsed} of ${weeksTotal}`,
+        statusIcon: '↗',
+        statusTone: 'building',
+        progress: { weeksElapsed, weeksTotal, pct },
+      }
+    }
+    case 'check':
+      return { statusLabel: 'Tell us how it’s going', statusIcon: '◔', statusTone: 'building' }
+    case 'working':
+      // A long-onset product is felt only faintly — don't overclaim it.
+      return onset === 'long'
+        ? { statusLabel: 'Working quietly · long-term', statusIcon: '🌱', statusTone: 'essential' }
+        : { statusLabel: 'Felt & working', statusIcon: '⚡', statusTone: 'good' }
+  }
 }
 
 /** Back-compat helper: the only phase that prompts a product change. */
@@ -259,42 +322,53 @@ export function recommendForSubscription(
     const window = onsetWindowDays(onset)
     const tenure = lineTenureDays(line, now)
     const daysUntilFelt = Number.isFinite(window) ? Math.max(0, window - tenure) : 0
-    const base = { lineId: line.id, productTitle: line.productTitle, slotTitle: line.slotTitle, basis, onset, daysUntilFelt }
-
-    // Never-felt needs: always keep, explain why feelings don't apply.
-    if (onset === 'none') {
-      return { ...base, phase: 'unfelt' as const, reason: objectiveReason(line.stackSlot, line.productTitle) }
-    }
-
     const dim = dimensionForSlot(line.stackSlot)
 
-    // Still inside the onset window → set expectations, don't judge.
-    if (tenure < window) {
-      return { ...base, phase: 'too-early' as const, reason: tooEarlyReason(line.productTitle, onset, daysUntilFelt) }
+    // Decide the phase + member-facing reason.
+    let phase: LinePhase
+    let reason: string
+    if (onset === 'none') {
+      phase = 'unfelt'
+      reason = objectiveReason(line.stackSlot, line.productTitle)
+    } else if (tenure < window) {
+      phase = 'too-early'
+      reason = tooEarlyReason(line.productTitle, onset, daysUntilFelt)
+    } else if (!dim) {
+      phase = 'working'
+      reason = `${line.productTitle} is doing its job ${onsetWindowLabel(onset)} — keep it.`
+    } else {
+      const label = DIMENSION_LABEL[dim]
+      const ratings = ratingsFor(history, dim)
+      if (ratings.length === 0) {
+        phase = 'check'
+        reason = `${line.productTitle} has had time to kick in — tell us how your ${label} is and we'll know if it's working.`
+      } else {
+        const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length
+        const improving = ratings.length >= 2 && ratings[ratings.length - 1] > ratings[0]
+        if (avg <= 2.5) {
+          phase = 'review'
+          reason = `Your ${label} hasn't improved much — it could be worth trying a different ${line.slotTitle.toLowerCase()}.`
+        } else {
+          phase = 'working'
+          reason = improving
+            ? `Your ${label} is trending up — ${line.productTitle} is working. Keep it.`
+            : `Your ${label} is in good shape — keep ${line.productTitle}.`
+        }
+      }
     }
 
-    // Felt but with no tracked dimension (e.g. health, menopause) → keep, working quietly.
-    if (!dim) {
-      return { ...base, phase: 'working' as const, reason: `${line.productTitle} is doing its job ${onsetWindowLabel(onset)} — keep it.` }
+    const status = deriveStatus(phase, onset, line.stackSlot, tenure, Number.isFinite(window) ? window : 0)
+    return {
+      lineId: line.id,
+      productTitle: line.productTitle,
+      slotTitle: line.slotTitle,
+      basis,
+      onset,
+      daysUntilFelt,
+      phase,
+      reason,
+      ...status,
     }
-
-    const label = DIMENSION_LABEL[dim]
-    const ratings = ratingsFor(history, dim)
-
-    if (ratings.length === 0) {
-      return { ...base, phase: 'check' as const, reason: `${line.productTitle} has had time to kick in — log how your ${label} is and we'll tell you if it's working.` }
-    }
-
-    const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length
-    const improving = ratings.length >= 2 && ratings[ratings.length - 1] > ratings[0]
-
-    if (avg <= 2.5) {
-      return { ...base, phase: 'review' as const, reason: `Your ${label} hasn't improved much — it could be worth trying a different ${line.slotTitle.toLowerCase()}.` }
-    }
-    if (improving) {
-      return { ...base, phase: 'working' as const, reason: `Your ${label} is trending up — ${line.productTitle} is working. Keep it.` }
-    }
-    return { ...base, phase: 'working' as const, reason: `Your ${label} is in good shape — keep ${line.productTitle}.` }
   })
 }
 
