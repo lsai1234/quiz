@@ -158,6 +158,37 @@ export function skipCredit(delivery: Delivery): number {
   return round(delivery.items.filter((it) => !it.oneOff).reduce((s, it) => s + it.price, 0))
 }
 
+/** What the member is actually charged next: the flat monthly, plus this box's one-offs, less credits. */
+export interface ChargeBreakdown {
+  /** Date of the next charge (the next box that ships), or null. */
+  date: string | null
+  /** The flat monthly membership amount (what's billed every cycle). */
+  plan: number
+  /** One-off extras riding on the next box (charged on top). */
+  extras: number
+  /** Banked credits applied to the next charge (e.g. from skips). */
+  credits: number
+  /** Net charged next = max(0, plan + extras − credits). */
+  net: number
+  /** Upcoming boxes that are skipped (no charge those cycles). */
+  skippedUpcoming: number
+}
+
+export function nextChargeBreakdown(sub: MemberSubscription, deliveries: Delivery[]): ChargeBreakdown {
+  const next = nextDelivery(deliveries)
+  const plan = sub.flatMonthly
+  const extras = next?.oneOffTotal ?? 0
+  const credits = round(sub.lines.reduce((s, l) => s + (l.pendingCredit ?? 0), 0))
+  return {
+    date: next?.date ?? null,
+    plan,
+    extras,
+    credits,
+    net: round(Math.max(0, plan + extras - credits)),
+    skippedUpcoming: deliveries.filter((d) => d.status === 'skipped').length,
+  }
+}
+
 // ─── Per-box mutations (pure) ─────────────────────────────────────────────────
 
 function withOverride(sub: MemberSubscription, id: string, patch: Partial<DeliveryOverride>): MemberSubscription {

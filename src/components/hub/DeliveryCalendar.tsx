@@ -29,6 +29,7 @@ export function DeliveryCalendar({ deliveries, onSelect }: Props) {
         </p>
         <span className="text-[11px] text-[var(--color-muted)]">Tap a box to edit</span>
       </div>
+      <p className="text-[11px] text-[var(--color-muted)] mb-2 -mt-1">Amounts show each box’s value — you’re billed one flat monthly amount, not per box.</p>
 
       <div
         className="flex gap-3 overflow-x-auto pb-2 -mx-5 px-5"

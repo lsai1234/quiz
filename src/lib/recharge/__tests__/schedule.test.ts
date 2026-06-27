@@ -2,6 +2,7 @@ import {
   buildDeliverySchedule,
   nextDelivery,
   skipCredit,
+  nextChargeBreakdown,
   skipDelivery,
   unskipDelivery,
   rescheduleDelivery,
@@ -90,6 +91,28 @@ describe('skipDelivery', () => {
     const after = skipDelivery(s, id)
     expect(skippedDeliveryCount(after)).toBe(1)
     expect(monthsRemainingOnTerm(after)).toBe(before + 1)
+  })
+})
+
+describe('nextChargeBreakdown', () => {
+  it('charges the flat monthly with no adjustments by default', () => {
+    const s = sub()
+    const c = nextChargeBreakdown(s, schedule(s))
+    expect(c.plan).toBe(s.flatMonthly)
+    expect(c.extras).toBe(0)
+    expect(c.credits).toBe(0)
+    expect(c.net).toBeCloseTo(s.flatMonthly, 2)
+    expect(c.date).toBe(nextDelivery(schedule(s))!.date)
+  })
+
+  it('adds one-off extras on top of the flat monthly', () => {
+    const s = sub()
+    const id = nextDelivery(schedule(s))!.id
+    const s2 = addItemToDelivery(s, id, addable(s))
+    const ds = buildDeliverySchedule(s2, MOCK_CATALOGUE, 6, NOW)
+    const c = nextChargeBreakdown(s2, ds)
+    expect(c.extras).toBeGreaterThan(0)
+    expect(c.net).toBeCloseTo(c.plan + c.extras - c.credits, 2)
   })
 })
 

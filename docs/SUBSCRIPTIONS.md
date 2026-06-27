@@ -298,6 +298,32 @@ add an extra of it to that box (a one-off). The add flow offers, per product,
 bumps how many of a line ship every time. All at the subscribe-&-save rate, above
 the margin floor.
 
+**What you're actually billed.** `nextChargeBreakdown` + the `BillingSummary`
+card (`src/components/hub/BillingSummary.tsx`) state it plainly: the flat monthly
+is the charge; each box's value is what *ships* (not a separate charge); one-off
+extras add to that month's bill; skips credit/pause that cycle. The calendar
+labels its amounts as box *value*, not charges.
+
+**Billing model & Recharge mapping (important, honest status).** The customer-
+facing model is a **flat monthly membership** that ships different items on
+different cadences. Native Shopify/Recharge subscriptions bill **per delivery per
+line**, not one smoothed amount — so the flat monthly is an app-side abstraction.
+Two ways to realise it on Recharge, to be decided when integration is built:
+1. **Membership plan (recommended for the flat-monthly UX):** one Recharge
+   subscription to a single membership/bundle SKU at `flatMonthly`; the calendar's
+   box contents drive *fulfilment* (Recharge bundles / a build-a-box), not separate
+   per-line charges. Matches the "one predictable bill" promise.
+2. **Per-line subscriptions:** each product is its own Recharge subscription on its
+   own interval; the customer is billed per delivery (variable) and "flat monthly"
+   becomes display-only.
+
+Today the checkout seams exist — `buildSubscriptionCheckout` emits cart lines with
+`sellingPlanId` + quantity, and `POST /api/subscribe` creates a Shopify cart that
+Recharge picks up (mock returns a placeholder) — but **all hub mutations
+(add/remove/cadence/skip/extras/delivery edits) run on the local mock object; none
+call a Recharge customer API yet.** Wiring that adapter (and choosing model 1 vs 2)
+is the remaining integration work.
+
 **Billing transparency.** A shared `BillingImpact` panel
 (`src/components/hub/BillingImpact.tsx`), fed by `lineEconomics` /
 `projectedEconomics` (`src/lib/recharge/mock.ts`), shows every change the same

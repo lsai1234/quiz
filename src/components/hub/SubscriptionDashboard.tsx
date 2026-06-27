@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
 import { buildDeliverySchedule, nextDelivery } from '@/lib/recharge/schedule'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
@@ -16,6 +15,7 @@ import { AddProductSheet } from './AddProductSheet'
 import { LineManageSheet } from './LineManageSheet'
 import { DeliveryCalendar } from './DeliveryCalendar'
 import { DeliveryDetailSheet } from './DeliveryDetailSheet'
+import { BillingSummary } from './BillingSummary'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
@@ -153,17 +153,15 @@ export function SubscriptionDashboard() {
             </div>
           </div>
 
-          {/* Monthly + status summary */}
-          <div className="flex items-stretch gap-3 mb-6" data-reveal>
-            <div className="flex-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>Monthly</p>
-              <p className="text-xl font-black mt-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{formatGBP(sub.flatMonthly)}</p>
-              {remaining > 0 && <p className="text-[10px] text-[var(--color-muted)] mt-1">{remaining}mo left on term</p>}
-            </div>
-            <div className="flex-1 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>Your stack</p>
-              <p className="text-sm font-bold text-[var(--color-text)] mt-1.5 leading-snug">{summary || `${sub.lines.length} products`}</p>
-            </div>
+          {/* What you're actually billed */}
+          <div className="mb-5" data-reveal>
+            <BillingSummary subscription={sub} deliveries={deliveries} />
+          </div>
+
+          {/* Stack status one-liner */}
+          <div className="flex items-center gap-2 mb-6 px-1" data-reveal>
+            <span className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>Stack</span>
+            <span className="text-xs font-semibold text-[var(--color-text-2)]">{summary || `${sub.lines.length} products`}</span>
           </div>
 
           {/* Delivery calendar */}

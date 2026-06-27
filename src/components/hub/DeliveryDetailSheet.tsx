@@ -114,9 +114,10 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                 ))}
               </div>
             )}
-            {delivery.oneOffTotal > 0.01 && (
-              <p className="text-[11px] text-[var(--color-muted)] mt-2">Includes {formatGBP(delivery.oneOffTotal)} of one-off extras, charged with this box.</p>
-            )}
+            <p className="text-[11px] text-[var(--color-muted)] mt-2 leading-relaxed">
+              This {formatGBP(delivery.total - delivery.oneOffTotal)} of regular items isn’t a separate charge — it’s part of your flat {formatGBP(subscription.flatMonthly)}/mo.
+              {delivery.oneOffTotal > 0.01 && <> One-off extras (<span style={{ color: GREEN }}>{formatGBP(delivery.oneOffTotal)}</span>) are added on top of that month’s bill.</>}
+            </p>
           </div>
 
           {/* Add to this box */}
