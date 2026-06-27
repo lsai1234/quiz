@@ -1,0 +1,53 @@
+# The Quiz — UX architecture & roadmap
+
+The acquisition funnel: `ScrollExperience` → `Act1Hero` → **`Act2Quiz`** →
+`Act3Analysis` → `Act4Reveal` (`StackReviewPage`) → `Act5Bundle`. Quiz state lives
+in `src/lib/store.tsx`.
+
+## Flow model (the questionnaire backbone)
+
+`Act2Quiz` is driven by a single ordered, id-based step sequence in
+`src/lib/quiz-flow.ts` (`QUIZ_STEPS` + `activeSteps(track)`):
+
+- Each step has an `id`, `section`, copy (+ wellbeing override), `tracks` it
+  belongs to, and an `advance` mode (`auto` single-choice / `manual` multi).
+- `activeSteps(track)` filters the sequence for the chosen track, so the
+  performance track includes the training steps and wellbeing skips them — with
+  **no numeric-index special-casing**. Progress, next/prev, and the review
+  "edit" jumps all read from this sequence.
+
+The order **leads with the goal** (engaging) and puts personal info second.
+
+## UX in `Act2Quiz`
+
+- Real **Step X of Y** counter + a top progress bar; a one-time "N quick
+  questions · about a minute" cue on the first step.
+- Consistent **Back** (every step past the first) + **Continue** (every manual
+  step); single-choice steps auto-advance but Back always works, including
+  across the wellbeing skip (it just walks the sequence).
+- **Focus management**: focus moves to the question heading on each step.
+- A terminal **review** step summarises the answers, each row tapping back to its
+  step to edit, before "Build my stack →" runs the existing
+  `handleFinish`/`generateStack` (engine, `Act3`, `Act4` untouched —
+  `QuizAnswers` is unchanged).
+
+## Retention-style UX roadmap (north-star: quiz-taking experience)
+
+**Done (this round):** questionnaire flow overhaul (sequence backbone, progress +
+time, consistent nav, lead-with-goal, focus, answer review).
+
+**Next:**
+- *Instant-start / skippable hero* — the Start CTA currently only appears at the
+  end of the hero animation; add a persistent Start so the quiz begins
+  immediately (showcase stays for those who scroll).
+- *Persist & resume* — `zustand/persist` the quiz store + a "resume where you
+  left off" prompt (a refresh currently wipes all answers).
+- *Results moment* — real fit score (not the `84` fallback), per-product "why
+  this for you" (reuse `aiReasons`), edit-answers-from-results, make the Act3
+  wait outcome-driven rather than a fixed ~3.4s.
+
+**Later:** contextual micro-feedback after answers (reuse the unused
+`components/quiz/LiveFeedback.tsx`); an accessibility pass (auto-advance +
+screen readers, colour-only cues, keyboard); mobile-hero perf review + deep-link
+to the quiz; consolidate the two checkout surfaces (`Act5Bundle` appears
+unreachable vs `StackReviewPage`).
