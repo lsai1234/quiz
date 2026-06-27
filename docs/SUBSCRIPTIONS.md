@@ -338,6 +338,29 @@ essential", "Building {benefit} · wk X of Y" (with a progress ring), "Working
 quietly · long-term", "Not landing — let's adjust". No jargon, no catch-all
 "working for you" bucket — slow-build items show real progress, never a default.
 
+### Phase 7 — retention "save" flow (built, mock-first)
+
+Cancelling used to be a dead-end gated button. It's now routed through a
+reason-led **save flow** (`src/components/hub/CancelSaveFlow.tsx`) — the highest-
+leverage churn lever — offering honest alternatives before an easy exit:
+
+- **Too expensive** → `downsizePreview` (`mock.ts`) proposes trimming the felt
+  "nice-to-have" lines to a lower flat monthly (keeps essentials), shown via
+  `BillingImpact`.
+- **Too much piling up** → skip the next box (defers the term).
+- **Not seeing results** → one-tap swap of any `review`-phase product
+  (`recommendForSubscription`), or reassurance for still-building items.
+- **Break / going away** → `snoozeSubscription(months)`: pauses billing + shipping
+  with a return date and **defers the minimum term** (`snoozedMonths` feeds
+  `monthsRemainingOnTerm`), so it never sidesteps the commitment. Allowed in-term.
+- **Honest exit** always available, still gated by the minimum term (UK DMCC).
+
+No discount bribes — saves reuse pause/skip/trim/swap, so margins are untouched.
+
+This is step 1 of a retention-focused roadmap (next: proactive lifecycle prompts,
+consumption-aware right-sizing, and outcomes-over-time; later: the Recharge
+customer-API adapter, dunning/account, goals re-stacking).
+
 ### UK compliance note
 
 Minimum terms and intro discounts are standard and fine, but disclose clearly

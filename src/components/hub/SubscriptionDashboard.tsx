@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
 import { buildDeliverySchedule, nextDelivery } from '@/lib/recharge/schedule'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
 import { CheckIn } from './CheckIn'
@@ -16,6 +15,7 @@ import { LineManageSheet } from './LineManageSheet'
 import { DeliveryCalendar } from './DeliveryCalendar'
 import { DeliveryDetailSheet } from './DeliveryDetailSheet'
 import { BillingSummary } from './BillingSummary'
+import { CancelSaveFlow } from './CancelSaveFlow'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
@@ -30,9 +30,10 @@ function countdownLabel(iso: string): string {
 export function SubscriptionDashboard() {
   const {
     subscription: sub, feedback, logout,
-    setDispatchDay, pause, resume, cancel,
+    setDispatchDay, resume,
     swapLine, addLine, removeLine, setLineCadence, setLineQuantity, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
+    snooze, applyDownsize, cancelWithReason,
   } = useHubStore()
   const { products } = useCatalogueProducts()
   const [changeLineId, setChangeLineId] = useState<string | null>(null)
@@ -41,6 +42,7 @@ export function SubscriptionDashboard() {
   const [showAdd, setShowAdd] = useState(false)
   const [showJourney, setShowJourney] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [showSave, setShowSave] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
 
   const recommendations = useMemo(
@@ -66,7 +68,6 @@ export function SubscriptionDashboard() {
 
   if (!sub) return null
 
-  const remaining = monthsRemainingOnTerm(sub)
   const recById = Object.fromEntries(recommendations.map((r) => [r.lineId, r]))
   const counts = {
     building: recommendations.filter((r) => r.statusTone === 'building').length,
@@ -123,9 +124,14 @@ export function SubscriptionDashboard() {
             <div className="relative">
               {sub.status === 'paused' ? (
                 <>
-                  <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: '#fbbf24', fontFamily: 'var(--font-display)' }}>Paused</p>
-                  <p className="text-lg font-black text-[var(--color-text)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>Your deliveries are on hold</p>
-                  <button onClick={resume} className="py-2.5 px-5 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>Resume</button>
+                  <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: '#fbbf24', fontFamily: 'var(--font-display)' }}>
+                    {sub.snoozeUntil ? 'Snoozed' : 'Paused'}
+                  </p>
+                  <p className="text-lg font-black text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Your deliveries are on hold</p>
+                  {sub.snoozeUntil && (
+                    <p className="text-xs text-[var(--color-text-2)] mb-3">Back on {new Date(sub.snoozeUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} — nothing billed until then.</p>
+                  )}
+                  <button onClick={resume} className="py-2.5 px-5 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>Resume now</button>
                 </>
               ) : next ? (
                 <>
@@ -255,17 +261,11 @@ export function SubscriptionDashboard() {
                   </button>
                 </div>
 
-                {/* Pause / cancel */}
-                <div className="flex gap-2">
-                  <button onClick={pause} disabled={!canCancel(sub)} title={canCancel(sub) ? undefined : `${remaining} months left on your minimum term`}
-                    className="flex-1 py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-text-2)] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={{ fontFamily: 'var(--font-display)' }}>
-                    {canCancel(sub) ? 'Pause' : `Pause (in ${remaining}mo)`}
-                  </button>
-                  <button onClick={cancel} disabled={!canCancel(sub)} title={canCancel(sub) ? undefined : `${remaining} months left on your minimum term`}
-                    className="flex-1 py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed" style={{ fontFamily: 'var(--font-display)' }}>
-                    {canCancel(sub) ? 'Cancel' : `Cancel (in ${remaining}mo)`}
-                  </button>
-                </div>
+                {/* Pause / cancel — routed through the save flow */}
+                <button onClick={() => setShowSave(true)}
+                  className="w-full py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                  Pause or cancel
+                </button>
               </div>
             )}
           </div>
@@ -318,6 +318,20 @@ export function SubscriptionDashboard() {
           catalogue={products}
           onAdd={(product) => { addLine(product, products); setShowAdd(false) }}
           onClose={() => setShowAdd(false)}
+        />
+      )}
+
+      {showSave && (
+        <CancelSaveFlow
+          subscription={sub}
+          catalogue={products}
+          recommendations={recommendations}
+          onSnooze={(m) => { snooze(m); setShowSave(false) }}
+          onDownsize={(ids) => { applyDownsize(ids); setShowSave(false) }}
+          onSkipNext={() => { if (next) skipDelivery(next.id); setShowSave(false) }}
+          onSwap={(lineId) => { setShowSave(false); openChange(lineId) }}
+          onCancel={(reason) => { cancelWithReason(reason); setShowSave(false) }}
+          onClose={() => setShowSave(false)}
         />
       )}
     </div>

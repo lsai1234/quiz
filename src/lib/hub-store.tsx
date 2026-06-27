@@ -10,6 +10,7 @@ import {
   pauseSubscription,
   resumeSubscription,
   cancelSubscription,
+  snoozeSubscription,
   swapSubscriptionLine,
   addLine as addLineMutation,
   removeLine as removeLineMutation,
@@ -53,6 +54,11 @@ interface HubStore {
   resume: () => void
   cancel: () => void
   swapLine: (lineId: string, newProduct: CatalogueProduct) => void
+
+  // Retention / save flow
+  snooze: (months: number) => void
+  applyDownsize: (dropLineIds: string[]) => void
+  cancelWithReason: (reason: string) => void
 
   // Flexibility: add / remove / cadence / skip / next-box date
   addLine: (product: CatalogueProduct, catalogue: CatalogueProduct[]) => void
@@ -99,6 +105,18 @@ export const useHubStore = create<HubStore>((set) => ({
   cancel: () => set((s) => (s.subscription ? { subscription: cancelSubscription(s.subscription) } : s)),
   swapLine: (lineId, newProduct) =>
     set((s) => (s.subscription ? { subscription: swapSubscriptionLine(s.subscription, lineId, newProduct) } : s)),
+
+  snooze: (months) =>
+    set((s) => (s.subscription ? { subscription: snoozeSubscription(s.subscription, months) } : s)),
+  applyDownsize: (dropLineIds) =>
+    set((s) => {
+      if (!s.subscription) return s
+      let sub = s.subscription
+      for (const id of dropLineIds) sub = removeLineMutation(sub, id).sub
+      return { subscription: sub }
+    }),
+  cancelWithReason: (reason) =>
+    set((s) => (s.subscription ? { subscription: cancelSubscription(s.subscription, reason) } : s)),
 
   addLine: (product, catalogue) =>
     set((s) => (s.subscription ? { subscription: addLineMutation(s.subscription, product, catalogue) } : s)),

@@ -20,6 +20,7 @@ import {
   getSubscriptionProduct,
   sizeConsumption,
 } from '@/lib/stack-blueprint/pricing'
+import { basisForProduct } from '@/lib/feedback'
 import type { MemberSubscription, MemberSubscriptionLine } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -108,11 +109,11 @@ export function skippedDeliveryCount(sub: MemberSubscription): number {
 }
 
 /**
- * Months still owed on the minimum commitment. Skipped deliveries push this
- * back — a skipped box isn't a paid cycle, so the term extends by one for each.
+ * Months still owed on the minimum commitment. Skipped deliveries and snoozed
+ * months push this back — neither is a paid cycle, so the term extends to match.
  */
 export function monthsRemainingOnTerm(sub: MemberSubscription): number {
-  return Math.max(0, sub.minMonths - sub.monthsActive + skippedDeliveryCount(sub))
+  return Math.max(0, sub.minMonths - sub.monthsActive + skippedDeliveryCount(sub) + (sub.snoozedMonths ?? 0))
 }
 
 export function canCancel(sub: MemberSubscription): boolean {
@@ -131,12 +132,25 @@ export function pauseSubscription(sub: MemberSubscription): MemberSubscription {
 }
 
 export function resumeSubscription(sub: MemberSubscription): MemberSubscription {
-  return sub.status === 'paused' ? { ...sub, status: 'active' } : sub
+  return sub.status === 'paused' ? { ...sub, status: 'active', snoozeUntil: undefined } : sub
 }
 
-export function cancelSubscription(sub: MemberSubscription): MemberSubscription {
+/**
+ * Snooze: pause billing + shipping for a set number of months with a clear return
+ * date. Allowed even during the minimum term because it DEFERS the term (adds to
+ * snoozedMonths) rather than sidestepping it — the strongest "don't cancel" save.
+ */
+export function snoozeSubscription(sub: MemberSubscription, months: number): MemberSubscription {
+  if (sub.status === 'cancelled') return sub
+  const m = Math.min(3, Math.max(1, Math.round(months)))
+  const until = new Date()
+  until.setMonth(until.getMonth() + m)
+  return { ...sub, status: 'paused', snoozeUntil: until.toISOString(), snoozedMonths: (sub.snoozedMonths ?? 0) + m }
+}
+
+export function cancelSubscription(sub: MemberSubscription, reason?: string): MemberSubscription {
   // Honour the minimum term — Recharge enforces this server-side too.
-  return canCancel(sub) ? { ...sub, status: 'cancelled' } : sub
+  return canCancel(sub) ? { ...sub, status: 'cancelled', cancelReason: reason ?? sub.cancelReason } : sub
 }
 
 /** Swap a line's product (within its swap group) and re-price it + the flat monthly. */
@@ -379,6 +393,40 @@ export function setLineQuantity(sub: MemberSubscription, lineId: string, quantit
 export function computeQuantityImpact(sub: MemberSubscription, lineId: string, quantity: number): PlanChangeImpact {
   const next = setLineQuantity(sub, lineId, quantity)
   return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
+}
+
+// ─── Save flow: downsize to essentials ────────────────────────────────────────
+
+export interface DownsizePreview {
+  currentMonthly: number
+  newMonthly: number
+  /** Lines kept (the essentials you won't feel day-to-day). */
+  keptLineIds: string[]
+  /** Felt "nice-to-have" lines proposed for removal, with their monthly cost. */
+  droppedLines: { id: string; productTitle: string; perMonth: number }[]
+}
+
+/**
+ * A "trim to essentials" proposal for the too-expensive save: drop the felt
+ * (subjective) discretionary products, keep the objective essentials (protein,
+ * creatine, vitamins). Always keeps at least one line. Margin floor is unaffected
+ * — it only removes lines.
+ */
+export function downsizePreview(sub: MemberSubscription, catalogue: CatalogueProduct[]): DownsizePreview {
+  const subjective = sub.lines.filter((l) => {
+    const p = catalogue.find((p) => p.id === l.productId)
+    return p ? basisForProduct(p) === 'subjective' : false
+  })
+  // Never drop everything.
+  const dropped = subjective.length < sub.lines.length ? subjective : subjective.slice(1)
+  const droppedIds = new Set(dropped.map((l) => l.id))
+  const kept = sub.lines.filter((l) => !droppedIds.has(l.id))
+  return {
+    currentMonthly: sub.flatMonthly,
+    newMonthly: flatMonthlyOf(kept),
+    keptLineIds: kept.map((l) => l.id),
+    droppedLines: dropped.map((l) => ({ id: l.id, productTitle: l.productTitle, perMonth: lineMonthly(l) })),
+  }
 }
 
 /**

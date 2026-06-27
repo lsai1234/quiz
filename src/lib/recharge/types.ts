@@ -60,6 +60,12 @@ export interface MemberSubscription {
   startedAt: string
   paymentMethod: { brand: string; last4: string } | null
   lines: MemberSubscriptionLine[]
+  /** When a snooze ends and deliveries resume (ISO). Set while paused via snooze. */
+  snoozeUntil?: string
+  /** Total months snoozed — defers the minimum term so a snooze never sidesteps it. */
+  snoozedMonths?: number
+  /** Reason captured if the member cancelled (for retention insight). */
+  cancelReason?: string
   /**
    * Per-delivery edits made from the calendar, keyed by delivery id (`YYYY-MM`).
    * The flat monthly is unaffected — skips bank a credit, added items are

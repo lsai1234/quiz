@@ -15,6 +15,8 @@ import {
   removeLine,
   setLineCadence,
   setLineQuantity,
+  snoozeSubscription,
+  downsizePreview,
   skipNextDelivery,
   oneOffCharge,
   lineMonthly,
@@ -224,6 +226,33 @@ describe('setLineCadence', () => {
       lineMonthly(slower.lines.find((l) => l.id === id)!) - 0.01,
     )
     expect(faster.flatMonthly).toBeCloseTo(flatMonthlyOf(faster.lines), 1)
+  })
+})
+
+describe('snoozeSubscription (save flow)', () => {
+  it('pauses with a future return date and defers the term — even mid-term', () => {
+    const s = { ...sub(), minMonths: 4, monthsActive: 2 }
+    const before = monthsRemainingOnTerm(s)
+    const snoozed = snoozeSubscription(s, 2)
+    expect(snoozed.status).toBe('paused')
+    expect(new Date(snoozed.snoozeUntil!).getTime()).toBeGreaterThan(Date.now())
+    expect(monthsRemainingOnTerm(snoozed)).toBe(before + 2) // deferred, not bypassed
+  })
+
+  it('clamps to 1..3 months', () => {
+    expect(snoozeSubscription(sub(), 0).snoozedMonths).toBe(1)
+    expect(snoozeSubscription(sub(), 9).snoozedMonths).toBe(3)
+  })
+})
+
+describe('downsizePreview (save flow)', () => {
+  it('drops felt extras, keeps essentials, lowers the monthly, never empties', () => {
+    const s = sub()
+    const d = downsizePreview(s, MOCK_CATALOGUE)
+    expect(d.keptLineIds.length).toBeGreaterThan(0)
+    expect(d.newMonthly).toBeLessThanOrEqual(d.currentMonthly)
+    if (d.droppedLines.length > 0) expect(d.newMonthly).toBeLessThan(d.currentMonthly)
+    expect(d.keptLineIds.length + d.droppedLines.length).toBe(s.lines.length)
   })
 })
 
