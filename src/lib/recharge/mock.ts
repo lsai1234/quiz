@@ -8,6 +8,7 @@
  */
 
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint/mock-blueprint'
 import {
@@ -16,6 +17,8 @@ import {
   discountWithFloor,
   unitCostOf,
   getPricingConfig,
+  getSubscriptionProduct,
+  sizeConsumption,
 } from '@/lib/stack-blueprint/pricing'
 import type { MemberSubscription, MemberSubscriptionLine } from './types'
 
@@ -41,6 +44,10 @@ export function createMockSubscription(
   const plan = buildSubscriptionPlan(MOCK_BLUEPRINT, catalogue, answers)
   const pricing = calculatePricing(MOCK_BLUEPRINT, catalogue, answers)
 
+  const startedAt = new Date()
+  startedAt.setMonth(startedAt.getMonth() - 2) // active for 2 months
+  const monthsActive = 2
+
   const lines: MemberSubscriptionLine[] = plan.map((l, i) => {
     const variant = l.product.variants.find((v) => v.id === l.variantId) ?? l.product.variants.find((v) => v.available) ?? l.product.variants[0]
     return {
@@ -54,11 +61,11 @@ export function createMockSubscription(
       deliveryIntervalMonths: l.shipEveryMonths,
       pricePerDelivery: l.pricePerDelivery,
       swapGroup: l.product.swapGroup,
+      // These lines have been in the stack since signup.
+      addedAt: startedAt.toISOString(),
+      deliveriesMade: deliveriesInMonths(monthsActive, l.shipEveryMonths),
     }
   })
-
-  const startedAt = new Date()
-  startedAt.setMonth(startedAt.getMonth() - 2) // active for 2 months
 
   return {
     id: 'mock-sub-1',
@@ -67,11 +74,16 @@ export function createMockSubscription(
     flatMonthly: pricing.subscriptionTotal,
     dispatchDayOfMonth: 15,
     minMonths: pricing.subscriptionMinMonths,
-    monthsActive: 2,
+    monthsActive,
     startedAt: startedAt.toISOString(),
     paymentMethod: { brand: 'Visa', last4: '4242' },
     lines,
   }
+}
+
+/** Deliveries shipped after `months` for a line shipping every `everyMonths` (first at signup). */
+export function deliveriesInMonths(months: number, everyMonths: number): number {
+  return Math.floor(Math.max(0, months) / Math.max(1, everyMonths)) + 1
 }
 
 // ─── Dates ────────────────────────────────────────────────────────────────────
@@ -184,4 +196,232 @@ export function swappableForLine(
   return catalogue.filter(
     (p) => p.stackSlots.includes(line.stackSlot) && p.id !== line.productId && !p.isSubscriptionOnly && p.subscriptionEligible,
   )
+}
+
+// ─── Flexibility: add / remove / cadence / skip / one-off ─────────────────────
+// Pure mutations + impact previews. Every one keeps the money invariants in
+// docs/SUBSCRIPTIONS.md: margin floor (discountWithFloor), pay-for-what-shipped
+// settlement on removal, intro discount never re-applied, one-offs at full price.
+
+/** A unit's discounted subscription price for `product` (margin-floored). */
+function discountedUnitFor(product: CatalogueProduct, config = getPricingConfig()): { unitPrice: number; discountedUnit: number } {
+  const variant = product.variants.find((v) => v.available) ?? product.variants[0]
+  const unitPrice = variant?.price ?? product.basePrice
+  const cost = unitCostOf(product, unitPrice, config)
+  return { unitPrice, discountedUnit: discountWithFloor(unitPrice, config.subscriptionDiscount, cost, config) }
+}
+
+/** Amortised monthly value of a single line (pricePerDelivery spread over its cadence). */
+export function lineMonthly(line: MemberSubscriptionLine): number {
+  return round(line.pricePerDelivery / Math.max(1, line.deliveryIntervalMonths))
+}
+
+/** Retail value of everything this line has already shipped. */
+export function shippedValueToDate(line: MemberSubscriptionLine): number {
+  return round(line.deliveriesMade * line.pricePerDelivery)
+}
+
+/** What the member has paid towards this line so far (flat amortised monthly × months active). */
+export function paidToDate(line: MemberSubscriptionLine, sub: MemberSubscription): number {
+  return round(sub.monthsActive * lineMonthly(line))
+}
+
+/**
+ * Pay-for-what-shipped settlement: the value of goods already dispatched that the
+ * member hasn't yet covered through their flat monthly. 0 before anything ships,
+ * 0 once they've paid it off. This is what makes removal exploit-proof.
+ */
+export function lineSettlement(line: MemberSubscriptionLine, sub: MemberSubscription): number {
+  return round(Math.max(0, shippedValueToDate(line) - paidToDate(line, sub)))
+}
+
+/** Add a product as a new subscription line (sized & priced at the sub rate, no intro). */
+export function addLine(
+  sub: MemberSubscription,
+  product: CatalogueProduct,
+  catalogue: CatalogueProduct[],
+  answers?: QuizAnswers | null,
+  config = getPricingConfig(),
+): MemberSubscription {
+  const subProduct = getSubscriptionProduct(product, catalogue)
+  if (!subProduct.subscriptionEligible) return sub
+  // De-dupe: never add a product that's already in the stack.
+  if (sub.lines.some((l) => l.productId === subProduct.id)) return sub
+
+  const sizing = sizeConsumption(subProduct, answers, config)
+  const variant = subProduct.variants.find((v) => v.available) ?? subProduct.variants[0]
+  const { discountedUnit } = discountedUnitFor(subProduct, config)
+
+  const newLine: MemberSubscriptionLine = {
+    id: `line-add-${Date.now()}-${subProduct.id}`,
+    productId: subProduct.id,
+    productTitle: subProduct.title,
+    variantTitle: variant ? variantLabel(variant) : '',
+    slotTitle: SLOT_LABELS[subProduct.stackSlots[0]] ?? subProduct.category,
+    stackSlot: subProduct.stackSlots[0],
+    quantity: sizing.unitsPerShipment,
+    deliveryIntervalMonths: sizing.shipEveryMonths,
+    pricePerDelivery: round(sizing.unitsPerShipment * discountedUnit),
+    swapGroup: subProduct.swapGroup,
+    addedAt: new Date().toISOString(),
+    deliveriesMade: 0, // hasn't shipped yet
+    nextShipAt: nextDispatchDate(sub.dispatchDayOfMonth).toISOString(),
+  }
+  const lines = [...sub.lines, newLine]
+  return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
+}
+
+/** Remove a line, returning the new subscription and the pay-for-what-shipped settlement. */
+export function removeLine(sub: MemberSubscription, lineId: string): { sub: MemberSubscription; settlement: number } {
+  const line = sub.lines.find((l) => l.id === lineId)
+  if (!line) return { sub, settlement: 0 }
+  const settlement = lineSettlement(line, sub)
+  const lines = sub.lines.filter((l) => l.id !== lineId)
+  return { sub: { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }, settlement }
+}
+
+/** Change how often a line ships (clamped 1–maxDeliveryMonths). Re-derives the flat monthly. */
+export function setLineCadence(
+  sub: MemberSubscription,
+  lineId: string,
+  months: number,
+  config = getPricingConfig(),
+): MemberSubscription {
+  const clamped = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(months)))
+  const lines = sub.lines.map((l) => (l.id === lineId ? { ...l, deliveryIntervalMonths: clamped } : l))
+  return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
+}
+
+/** Cadence options a line can move to, given the config bounds. */
+export function cadenceOptions(config = getPricingConfig()): number[] {
+  return Array.from({ length: config.maxDeliveryMonths }, (_, i) => i + 1)
+}
+
+/**
+ * Skip a line's next delivery: push its next ship date out by one cadence and
+ * bank a credit equal to that delivery's value against the next payment, so the
+ * member never pays for a box they didn't receive.
+ */
+export function skipNextDelivery(sub: MemberSubscription, lineId: string): MemberSubscription {
+  const lines = sub.lines.map((l) => {
+    if (l.id !== lineId) return l
+    const from = l.nextShipAt ? new Date(l.nextShipAt) : nextDispatchDate(sub.dispatchDayOfMonth)
+    const next = new Date(from)
+    next.setMonth(next.getMonth() + Math.max(1, l.deliveryIntervalMonths))
+    return { ...l, nextShipAt: next.toISOString(), pendingCredit: round((l.pendingCredit ?? 0) + l.pricePerDelivery) }
+  })
+  return { ...sub, lines }
+}
+
+/** Full-price one-off charge for sending `qty` more of a line now (plan unchanged). */
+export function oneOffCharge(line: MemberSubscriptionLine, qty = 1): number {
+  const perUnit = line.pricePerDelivery / Math.max(1, line.quantity)
+  return round(Math.max(1, qty) * perUnit)
+}
+
+// ─── Next-box date controls ──────────────────────────────────────────────────
+
+/** The effective next-box date: an explicit override, else the day-of-month rule. */
+export function effectiveNextDispatch(sub: MemberSubscription, from: Date = new Date()): Date {
+  if (sub.nextDispatchOverride) {
+    const d = new Date(sub.nextDispatchOverride)
+    if (!Number.isNaN(d.getTime())) return d
+  }
+  return nextDispatchDate(sub.dispatchDayOfMonth, from)
+}
+
+/** Set an explicit next-box date (not before today). */
+export function setNextDispatchDate(sub: MemberSubscription, date: Date): MemberSubscription {
+  const today = new Date()
+  const d = date < today ? today : date
+  return { ...sub, nextDispatchOverride: d.toISOString() }
+}
+
+/** Ship the next box today. */
+export function sendNow(sub: MemberSubscription): MemberSubscription {
+  return setNextDispatchDate(sub, new Date())
+}
+
+/** Bring the next box forward by `days` (never before today). */
+export function bringForward(sub: MemberSubscription, days: number): MemberSubscription {
+  const d = effectiveNextDispatch(sub)
+  d.setDate(d.getDate() - Math.abs(days))
+  return setNextDispatchDate(sub, d)
+}
+
+/** Push the next box back by `days`. */
+export function delayDispatch(sub: MemberSubscription, days: number): MemberSubscription {
+  const d = effectiveNextDispatch(sub)
+  d.setDate(d.getDate() + Math.abs(days))
+  return setNextDispatchDate(sub, d)
+}
+
+// ─── Impact previews (shown before confirming) ───────────────────────────────
+
+/** Unified money impact of a plan change. Fields are 0 when not applicable. */
+export interface PlanChangeImpact {
+  currentMonthly: number
+  newMonthly: number
+  monthlyDelta: number
+  /** One-off charge (+) due now (e.g. expedite). */
+  oneOffNow: number
+  /** Settlement charge (+) for goods already shipped (removal). */
+  settlement: number
+  /** Credit (stored positive) banked to the next payment (e.g. skip). */
+  credit: number
+  effectiveFrom: string
+}
+
+function blankImpact(sub: MemberSubscription): PlanChangeImpact {
+  return {
+    currentMonthly: sub.flatMonthly,
+    newMonthly: sub.flatMonthly,
+    monthlyDelta: 0,
+    oneOffNow: 0,
+    settlement: 0,
+    credit: 0,
+    effectiveFrom: effectiveNextDispatch(sub).toISOString(),
+  }
+}
+
+export function computeAddImpact(
+  sub: MemberSubscription,
+  product: CatalogueProduct,
+  catalogue: CatalogueProduct[],
+  answers?: QuizAnswers | null,
+  config = getPricingConfig(),
+): PlanChangeImpact {
+  const next = addLine(sub, product, catalogue, answers, config)
+  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
+}
+
+export function computeRemoveImpact(sub: MemberSubscription, lineId: string): PlanChangeImpact {
+  const { sub: next, settlement } = removeLine(sub, lineId)
+  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly), settlement }
+}
+
+export function computeCadenceImpact(
+  sub: MemberSubscription,
+  lineId: string,
+  months: number,
+  config = getPricingConfig(),
+): PlanChangeImpact {
+  const next = setLineCadence(sub, lineId, months, config)
+  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
+}
+
+export function computeOneOffImpact(sub: MemberSubscription, lineId: string, qty = 1): PlanChangeImpact {
+  const line = sub.lines.find((l) => l.id === lineId)
+  return { ...blankImpact(sub), oneOffNow: line ? oneOffCharge(line, qty) : 0, effectiveFrom: new Date().toISOString() }
+}
+
+export function computeSkipImpact(sub: MemberSubscription, lineId: string): PlanChangeImpact {
+  const line = sub.lines.find((l) => l.id === lineId)
+  const next = skipNextDelivery(sub, lineId)
+  const nextLine = next.lines.find((l) => l.id === lineId)
+  return {
+    ...blankImpact(sub),
+    credit: line ? round((nextLine?.pendingCredit ?? 0) - (line.pendingCredit ?? 0)) : 0,
+    effectiveFrom: nextLine?.nextShipAt ?? blankImpact(sub).effectiveFrom,
+  }
 }

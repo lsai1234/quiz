@@ -56,6 +56,7 @@ function buildMetafields(p: CatalogueProduct): Metafield[] {
   if (p.minSubscriptionMonths != null) mf.push({ namespace: 'chrgd', key: 'min_subscription_months', type: 'number_integer', value: String(p.minSubscriptionMonths) })
   if (p.cost != null) mf.push({ namespace: 'chrgd', key: 'cost', type: 'number_decimal', value: String(p.cost) })
   if (p.recommendationBasis) mf.push({ namespace: 'chrgd', key: 'recommendation_basis', type: 'single_line_text_field', value: p.recommendationBasis })
+  if (p.effectOnset) mf.push({ namespace: 'chrgd', key: 'effect_onset', type: 'single_line_text_field', value: p.effectOnset })
   return mf
 }
 

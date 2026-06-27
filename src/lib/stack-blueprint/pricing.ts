@@ -197,6 +197,57 @@ export function resolveConsumption(product: CatalogueProduct): { cadence: Consum
   }
 }
 
+/** How a product is sized into a subscription line: cadence + ship schedule. */
+export interface LineSizing {
+  cadence: ConsumptionCadence
+  /** Doses in one container. */
+  dosesPerUnit: number
+  /** Times taken per month (~30 daily, training sessions/month per-workout). */
+  occasionsPerMonth: number
+  /** Units sent each shipment. */
+  unitsPerShipment: number
+  /** Ship cadence in months. */
+  shipEveryMonths: number
+  /** Average units consumed per month (unitsPerShipment / shipEveryMonths). */
+  monthlyUnits: number
+}
+
+/**
+ * Size a product into a subscription line: derive its consumption protocol and
+ * the nearest sensible ship schedule for the member's training frequency. Shared
+ * by `buildSubscriptionPlan` (initial stack) and the hub's add/cadence helpers so
+ * every line is sized the same way.
+ */
+export function sizeConsumption(
+  product: CatalogueProduct,
+  answers?: QuizAnswers | null,
+  config = getPricingConfig(),
+): LineSizing {
+  const woPerMonth = workoutsPerMonth(answers)
+  const { cadence, dosesPerUnit } = resolveConsumption(product)
+  const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : Math.max(woPerMonth, 1)
+  const monthsOneUnitLasts = dosesPerUnit / occasionsPerMonth
+
+  let unitsPerShipment: number
+  let shipEveryMonths: number
+  if (monthsOneUnitLasts >= 1) {
+    unitsPerShipment = 1
+    shipEveryMonths = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(monthsOneUnitLasts)))
+  } else {
+    unitsPerShipment = Math.max(1, Math.round(occasionsPerMonth / dosesPerUnit))
+    shipEveryMonths = 1
+  }
+
+  return {
+    cadence,
+    dosesPerUnit,
+    occasionsPerMonth,
+    unitsPerShipment,
+    shipEveryMonths,
+    monthlyUnits: unitsPerShipment / shipEveryMonths,
+  }
+}
+
 /** A single line in the monthly subscription, after deduplication. */
 export interface SubscriptionLine {
   /** The monthly product that will actually be billed/shipped. */
@@ -263,7 +314,6 @@ export function buildSubscriptionPlan(
   config = getPricingConfig(),
 ): SubscriptionLine[] {
   const round = (n: number) => Math.round(n * 100) / 100
-  const woPerMonth = workoutsPerMonth(answers)
 
   // ── Pass 1: build raw, deduplicated lines (no discount applied yet) ──
   const raw = new Map<string, RawSubLine>()
@@ -289,29 +339,17 @@ export function buildSubscriptionPlan(
         : sub.variants.find((v) => v.available) ?? sub.variants[0]
     const unitPrice = variant?.price ?? sub.basePrice
 
-    const { cadence, dosesPerUnit } = resolveConsumption(sub)
-    const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : Math.max(woPerMonth, 1)
-    const monthsOneUnitLasts = dosesPerUnit / occasionsPerMonth
-
-    let unitsPerShipment: number
-    let shipEveryMonths: number
-    if (monthsOneUnitLasts >= 1) {
-      unitsPerShipment = 1
-      shipEveryMonths = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(monthsOneUnitLasts)))
-    } else {
-      unitsPerShipment = Math.max(1, Math.round(occasionsPerMonth / dosesPerUnit))
-      shipEveryMonths = 1
-    }
+    const sizing = sizeConsumption(sub, answers, config)
 
     raw.set(sub.id, {
       product: sub,
       coversSlotIds: [slot.slotId],
-      cadence,
-      occasionsPerMonth,
-      dosesPerUnit,
-      unitsPerShipment,
-      shipEveryMonths,
-      monthlyUnits: unitsPerShipment / shipEveryMonths,
+      cadence: sizing.cadence,
+      occasionsPerMonth: sizing.occasionsPerMonth,
+      dosesPerUnit: sizing.dosesPerUnit,
+      unitsPerShipment: sizing.unitsPerShipment,
+      shipEveryMonths: sizing.shipEveryMonths,
+      monthlyUnits: sizing.monthlyUnits,
       variant,
       productRef: sub,
       unitPrice,

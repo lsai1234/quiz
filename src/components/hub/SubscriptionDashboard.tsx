@@ -4,28 +4,41 @@ import { useMemo, useState } from 'react'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { nextDispatchDate, formatDispatchDate, monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
-import { recommendForSubscription } from '@/lib/feedback'
-import { FeedbackPanel } from './FeedbackPanel'
+import { effectiveNextDispatch, formatDispatchDate, monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
+import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
+import { CheckIn } from './CheckIn'
+import { CheckInJourney } from './CheckInJourney'
 import { StackItemCard } from './StackItemCard'
 import { ChangeProductFlow } from './ChangeProductFlow'
+import { AddProductSheet } from './AddProductSheet'
+import { LineManageSheet } from './LineManageSheet'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
 
 export function SubscriptionDashboard() {
-  const { subscription: sub, feedback, logout, setDispatchDay, pause, resume, cancel, swapLine, submitFeedback } = useHubStore()
+  const {
+    subscription: sub, feedback, logout,
+    setDispatchDay, sendNow, delayDispatch, pause, resume, cancel,
+    swapLine, addLine, removeLine, setLineCadence, skipNext, submitFeedback, submitDimension,
+  } = useHubStore()
   const { products } = useCatalogueProducts()
   const [changeLineId, setChangeLineId] = useState<string | null>(null)
-  const [showCheckInResult, setShowCheckInResult] = useState(false)
+  const [manageLineId, setManageLineId] = useState<string | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+  const [showJourney, setShowJourney] = useState(false)
 
   const nextDispatch = useMemo(
-    () => (sub ? formatDispatchDate(nextDispatchDate(sub.dispatchDayOfMonth)) : ''),
+    () => (sub ? formatDispatchDate(effectiveNextDispatch(sub)) : ''),
     [sub],
   )
   const recommendations = useMemo(
     () => (sub ? recommendForSubscription(sub, feedback, products) : []),
     [sub, feedback, products],
+  )
+  const checkInPlan = useMemo(
+    () => (sub ? buildCheckInQuestions(sub, products) : { questions: [], expectations: [] }),
+    [sub, products],
   )
 
   if (!sub) return null
@@ -33,12 +46,14 @@ export function SubscriptionDashboard() {
   const remaining = monthsRemainingOnTerm(sub)
   const statusColor = sub.status === 'active' ? ACCENT : sub.status === 'paused' ? '#fbbf24' : 'var(--color-muted)'
   const recById = Object.fromEntries(recommendations.map((r) => [r.lineId, r]))
-  const flagged = recommendations.filter((r) => r.action === 'consider-change')
-  const reviewCount = flagged.length
+  const reviewCount = recommendations.filter((r) => r.phase === 'review').length
+
   const changeLine = sub.lines.find((l) => l.id === changeLineId) ?? null
+  const manageLine = sub.lines.find((l) => l.id === manageLineId) ?? null
 
   function openChange(lineId: string) {
-    setShowCheckInResult(false)
+    setShowJourney(false)
+    setManageLineId(null)
     setChangeLineId(lineId)
   }
 
@@ -85,62 +100,43 @@ export function SubscriptionDashboard() {
 
       {sub.status !== 'cancelled' && (
         <>
-          {/* Monthly pulse */}
-          <FeedbackPanel
+          {/* Adaptive check-in */}
+          <CheckIn
             lastCheckIn={feedback[feedback.length - 1]?.date}
-            onSubmit={(ratings, improvements, notes) => {
-              submitFeedback(ratings, improvements, notes)
-              setShowCheckInResult(true)
+            plan={checkInPlan}
+            onComplete={(ratings) => {
+              const values = Object.values(ratings).filter((v): v is number => typeof v === 'number')
+              if (values.length > 0) submitFeedback(ratings, values.some((v) => v >= 4))
+              setShowJourney(true)
             }}
           />
 
-          {/* Immediate result of a check-in */}
-          {showCheckInResult && (
-            <div className="rounded-2xl border p-5 mb-4"
-              style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' }}>
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                  Thanks for checking in
-                </p>
-                <button onClick={() => setShowCheckInResult(false)} className="text-xs text-[var(--color-muted)]" aria-label="Dismiss">✕</button>
-              </div>
-              {reviewCount > 0 ? (
-                <>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
-                    Based on how you're feeling, {reviewCount === 1 ? 'this could be' : 'these could be'} worth changing:
-                  </p>
-                  <div className="mt-3 space-y-2">
-                    {flagged.map((rec) => (
-                      <button
-                        key={rec.lineId}
-                        onClick={() => openChange(rec.lineId)}
-                        className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-left active:scale-[0.98] transition-all"
-                        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-                      >
-                        <span className="text-sm font-semibold text-[var(--color-text)] truncate">{rec.productTitle}</span>
-                        <span className="text-xs font-bold flex-shrink-0" style={{ color: '#fbbf24' }}>Find a better fit →</span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
-                  Everything's working — your stack is dialled in. Nothing to change right now. 💪
-                </p>
-              )}
-            </div>
+          {/* Journey result */}
+          {showJourney && (
+            <CheckInJourney
+              recommendations={recommendations}
+              onChange={openChange}
+              onDismiss={() => setShowJourney(false)}
+            />
           )}
 
-          {/* Your stack — integrated cards (status + advice + change) */}
-          <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-1 mt-6" style={{ fontFamily: 'var(--font-display)' }}>
-            Your stack
-          </p>
+          {/* Your stack */}
+          <div className="flex items-center justify-between mt-6 mb-1">
+            <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
+              Your stack
+            </p>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+              style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, fontFamily: 'var(--font-display)' }}
+            >
+              + Add product
+            </button>
+          </div>
           <p className="text-xs text-[var(--color-muted)] mb-3 leading-relaxed">
             {reviewCount > 0
-              ? `${reviewCount} ${reviewCount === 1 ? 'product is' : 'products are'} worth reviewing. Tap any product to change it.`
-              : feedback.length > 0
-                ? 'Everything’s working — your stack is dialled in. Tap any product to change it.'
-                : 'Tap any product to change it, or log a check-in to get tailored advice.'}
+              ? `${reviewCount} ${reviewCount === 1 ? 'product is' : 'products are'} worth reviewing. Tap Manage to change cadence, skip, or remove anything.`
+              : 'Tap a quick face to log how it’s landing, or Manage to change cadence, skip, or remove.'}
           </p>
           <div className="space-y-3">
             {sub.lines.map((line) => (
@@ -149,21 +145,40 @@ export function SubscriptionDashboard() {
                 line={line}
                 recommendation={recById[line.id]}
                 onChange={openChange}
+                onManage={(id) => { setChangeLineId(null); setManageLineId(id) }}
+                onMicroFeedback={submitDimension}
               />
             ))}
           </div>
 
-          {/* Dispatch date */}
+          {/* Next box / dispatch date */}
           <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mt-6">
             <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
-              Dispatch date
+              Your next box
             </p>
             <p className="text-xs text-[var(--color-muted)] mb-3">
-              Ships on the {sub.dispatchDayOfMonth}{ordinal(sub.dispatchDayOfMonth)} — next on {nextDispatch}.
+              Arriving {nextDispatch}. Need it sooner or later?
             </p>
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={sendNow}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+              >
+                Send it now
+              </button>
+              <button
+                onClick={() => delayDispatch(7)}
+                className="flex-1 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
+                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
+              >
+                Delay a week
+              </button>
+            </div>
+            <p className="text-[11px] text-[var(--color-muted)] mb-2">Regular ship day of the month</p>
             <div className="flex flex-wrap gap-2">
               {DAY_OPTIONS.map((day) => {
-                const active = sub.dispatchDayOfMonth === day
+                const active = sub.dispatchDayOfMonth === day && !sub.nextDispatchOverride
                 return (
                   <button
                     key={day}
@@ -234,7 +249,7 @@ export function SubscriptionDashboard() {
 
       {sub.status === 'cancelled' && (
         <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-6 text-center">
-          <p className="text-sm text-[var(--color-text-2)]">Your subscription has been cancelled. You won't be charged again.</p>
+          <p className="text-sm text-[var(--color-text-2)]">Your subscription has been cancelled. You won&apos;t be charged again.</p>
         </div>
       )}
 
@@ -250,16 +265,27 @@ export function SubscriptionDashboard() {
           onClose={() => setChangeLineId(null)}
         />
       )}
+
+      {manageLine && (
+        <LineManageSheet
+          subscription={sub}
+          line={manageLine}
+          onSetCadence={(months) => { setLineCadence(manageLine.id, months); setManageLineId(null) }}
+          onSkip={() => { skipNext(manageLine.id); setManageLineId(null) }}
+          onExpedite={() => { alert('Live, this charges a one-off and ships it with your next box.'); setManageLineId(null) }}
+          onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}
+          onClose={() => setManageLineId(null)}
+        />
+      )}
+
+      {showAdd && (
+        <AddProductSheet
+          subscription={sub}
+          catalogue={products}
+          onAdd={(product) => { addLine(product, products); setShowAdd(false) }}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
     </div>
   )
-}
-
-function ordinal(n: number): string {
-  if (n >= 11 && n <= 13) return 'th'
-  switch (n % 10) {
-    case 1: return 'st'
-    case 2: return 'nd'
-    case 3: return 'rd'
-    default: return 'th'
-  }
 }

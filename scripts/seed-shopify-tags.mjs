@@ -335,6 +335,10 @@ function buildMetafields(cfg) {
   if (cfg.recommendationBasis) {
     fields.push({ namespace: 'chrgd', key: 'recommendation_basis', type: 'single_line_text_field', value: cfg.recommendationBasis })
   }
+  // Effect onset — when the benefit is felt (immediate | short | long | none).
+  if (cfg.effectOnset) {
+    fields.push({ namespace: 'chrgd', key: 'effect_onset', type: 'single_line_text_field', value: cfg.effectOnset })
+  }
   return fields
 }
 

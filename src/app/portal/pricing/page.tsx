@@ -144,6 +144,16 @@ export default function PricingPage() {
         <Num label="Longest gap between deliveries" value={draft.maxDeliveryMonths} suffix="mo" help="We’ll never wait longer than this to ship a product." onChange={(n) => set({ maxDeliveryMonths: n })} />
       </Section>
 
+      {/* Hub flexibility guards — read-only explainer */}
+      <Section title="Hub flexibility — how it stays safe" desc="What happens when a member adds, removes, skips or expedites in the hub.">
+        <ul className="text-xs text-[var(--color-text-2)] leading-relaxed list-disc pl-4 space-y-1.5">
+          <li><span className="font-semibold text-[var(--color-text)]">Adding</span> prices the new item at the subscribe-&-save rate (above the profit floor) — the intro offer is never re-applied.</li>
+          <li><span className="font-semibold text-[var(--color-text)]">Removing</span> is free before anything ships; once a box has gone out, a one-off settlement recovers the value already sent that the member hasn’t paid off (pay-for-what-shipped). They can’t take a tub cheap and cancel.</li>
+          <li><span className="font-semibold text-[var(--color-text)]">Shipping more/less often</span> just changes frequency — the per-unit price (and its profit floor) never moves.</li>
+          <li><span className="font-semibold text-[var(--color-text)]">“Get one now”</span> is charged in full up front; skipping a box credits its value so nobody pays for a box they didn’t get.</li>
+        </ul>
+      </Section>
+
       {/* Bundle tiers */}
       <Section title="One-off bundle discounts" desc="Spend more in a single order, save more. The best-qualifying tier applies.">
         <div className="space-y-2">

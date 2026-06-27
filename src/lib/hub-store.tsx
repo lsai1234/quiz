@@ -11,6 +11,14 @@ import {
   resumeSubscription,
   cancelSubscription,
   swapSubscriptionLine,
+  addLine as addLineMutation,
+  removeLine as removeLineMutation,
+  setLineCadence as setLineCadenceMutation,
+  skipNextDelivery as skipNextMutation,
+  setNextDispatchDate as setNextDispatchDateMutation,
+  sendNow as sendNowMutation,
+  bringForward as bringForwardMutation,
+  delayDispatch as delayDispatchMutation,
 } from '@/lib/recharge/mock'
 
 /**
@@ -36,6 +44,19 @@ interface HubStore {
   resume: () => void
   cancel: () => void
   swapLine: (lineId: string, newProduct: CatalogueProduct) => void
+
+  // Flexibility: add / remove / cadence / skip / next-box date
+  addLine: (product: CatalogueProduct, catalogue: CatalogueProduct[]) => void
+  removeLine: (lineId: string) => void
+  setLineCadence: (lineId: string, months: number) => void
+  skipNext: (lineId: string) => void
+  setNextDispatchDate: (date: Date) => void
+  sendNow: () => void
+  bringForward: (days: number) => void
+  delayDispatch: (days: number) => void
+
+  /** Log a single-dimension micro check-in (the inline "feeling it?" tap). */
+  submitDimension: (dimension: FeedbackDimension, rating: number) => void
 }
 
 export const useHubStore = create<HubStore>((set) => ({
@@ -61,4 +82,28 @@ export const useHubStore = create<HubStore>((set) => ({
   cancel: () => set((s) => (s.subscription ? { subscription: cancelSubscription(s.subscription) } : s)),
   swapLine: (lineId, newProduct) =>
     set((s) => (s.subscription ? { subscription: swapSubscriptionLine(s.subscription, lineId, newProduct) } : s)),
+
+  addLine: (product, catalogue) =>
+    set((s) => (s.subscription ? { subscription: addLineMutation(s.subscription, product, catalogue) } : s)),
+  removeLine: (lineId) =>
+    set((s) => (s.subscription ? { subscription: removeLineMutation(s.subscription, lineId).sub } : s)),
+  setLineCadence: (lineId, months) =>
+    set((s) => (s.subscription ? { subscription: setLineCadenceMutation(s.subscription, lineId, months) } : s)),
+  skipNext: (lineId) =>
+    set((s) => (s.subscription ? { subscription: skipNextMutation(s.subscription, lineId) } : s)),
+  setNextDispatchDate: (date) =>
+    set((s) => (s.subscription ? { subscription: setNextDispatchDateMutation(s.subscription, date) } : s)),
+  sendNow: () => set((s) => (s.subscription ? { subscription: sendNowMutation(s.subscription) } : s)),
+  bringForward: (days) =>
+    set((s) => (s.subscription ? { subscription: bringForwardMutation(s.subscription, days) } : s)),
+  delayDispatch: (days) =>
+    set((s) => (s.subscription ? { subscription: delayDispatchMutation(s.subscription, days) } : s)),
+
+  submitDimension: (dimension, rating) =>
+    set((s) => ({
+      feedback: [
+        ...s.feedback,
+        { id: `fb-${Date.now()}`, date: new Date().toISOString(), ratings: { [dimension]: rating }, noticedImprovements: rating >= 4 },
+      ],
+    })),
 }))

@@ -4,6 +4,10 @@ import {
   dimensionForSlot,
   recommendForSubscription,
   recommendReplacements,
+  effectOnsetForProduct,
+  onsetForSlot,
+  onsetWindowDays,
+  buildCheckInQuestions,
   type FeedbackCheckIn,
 } from '../feedback'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -21,7 +25,7 @@ const makeProduct = (o: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
 const line = (o: Partial<MemberSubscriptionLine>): MemberSubscriptionLine => ({
   id: 'l1', productId: 'p', productTitle: 'P', variantTitle: '', slotTitle: 'Protein',
   stackSlot: 'protein', quantity: 1, deliveryIntervalMonths: 1, pricePerDelivery: 25,
-  swapGroup: 'protein-whey', ...o,
+  swapGroup: 'protein-whey', addedAt: new Date().toISOString(), deliveriesMade: 0, ...o,
 })
 
 const sub = (lines: MemberSubscriptionLine[]): MemberSubscription => ({
@@ -56,37 +60,95 @@ describe('basis derivation', () => {
   })
 })
 
+describe('onset derivation', () => {
+  it('derives onset from the stack slot', () => {
+    expect(onsetForSlot('energy')).toBe('immediate')
+    expect(onsetForSlot('sleep')).toBe('short')
+    expect(onsetForSlot('health')).toBe('long')
+    expect(onsetForSlot('protein')).toBe('none')
+  })
+
+  it('honours an explicit product onset', () => {
+    expect(effectOnsetForProduct(makeProduct({ stackSlots: ['energy'], effectOnset: 'long' }))).toBe('long')
+    expect(effectOnsetForProduct(makeProduct({ stackSlots: ['energy'] }))).toBe('immediate')
+  })
+
+  it('orders windows immediate < short < long < never', () => {
+    expect(onsetWindowDays('immediate')).toBe(0)
+    expect(onsetWindowDays('short')).toBeLessThan(onsetWindowDays('long'))
+    expect(onsetWindowDays('none')).toBe(Infinity)
+  })
+})
+
 describe('recommendForSubscription', () => {
   const protein = makeProduct({ id: 'protein', stackSlots: ['protein'] })
   const preworkout = makeProduct({ id: 'pre', stackSlots: ['energy'] })
-  const catalogue = [protein, preworkout]
+  // A felt product with a deliberately long onset (e.g. a slow-build energy blend).
+  const slowEnergy = makeProduct({ id: 'slow', stackSlots: ['energy'], effectOnset: 'long' })
+  const catalogue = [protein, preworkout, slowEnergy]
 
-  it('always keeps objective products, regardless of feedback', () => {
+  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
+
+  it('marks never-felt products as unfelt, regardless of feedback', () => {
     const s = sub([line({ id: 'l-pro', productId: 'protein', stackSlot: 'protein', slotTitle: 'Protein' })])
     const recs = recommendForSubscription(s, [checkIn({ energy: 1 })], catalogue)
     expect(recs[0].basis).toBe('objective')
-    expect(recs[0].action).toBe('keep')
+    expect(recs[0].phase).toBe('unfelt')
     expect(recs[0].reason).toMatch(/protein/i)
   })
 
-  it('suggests changing a subjective product when its dimension stays low', () => {
+  it('flags a felt product for review when its dimension stays low (past its window)', () => {
     const s = sub([line({ id: 'l-pre', productId: 'pre', stackSlot: 'energy', slotTitle: 'Energy' })])
     const recs = recommendForSubscription(s, [checkIn({ energy: 2 }), checkIn({ energy: 1 })], catalogue)
-    expect(recs[0].basis).toBe('subjective')
-    expect(recs[0].action).toBe('consider-change')
+    expect(recs[0].phase).toBe('review')
   })
 
-  it('keeps a subjective product when its dimension is good', () => {
+  it('NEVER reviews a slow-build product still inside its onset window', () => {
+    // Added today, low energy ratings — but onset is long, so it's too early.
+    const s = sub([line({ id: 'l-slow', productId: 'slow', stackSlot: 'energy', slotTitle: 'Energy', addedAt: daysAgo(3) })])
+    const recs = recommendForSubscription(s, [checkIn({ energy: 1 }), checkIn({ energy: 1 })], catalogue)
+    expect(recs[0].phase).toBe('too-early')
+    expect(recs[0].daysUntilFelt).toBeGreaterThan(0)
+  })
+
+  it('keeps a felt product when its dimension is good', () => {
     const s = sub([line({ id: 'l-pre', productId: 'pre', stackSlot: 'energy', slotTitle: 'Energy' })])
     const recs = recommendForSubscription(s, [checkIn({ energy: 4 }), checkIn({ energy: 5 })], catalogue)
-    expect(recs[0].action).toBe('keep')
+    expect(recs[0].phase).toBe('working')
   })
 
-  it('keeps (with a prompt) when there is no feedback for the dimension', () => {
+  it('prompts a check-in when a felt product is past its window with no feedback', () => {
     const s = sub([line({ id: 'l-pre', productId: 'pre', stackSlot: 'energy', slotTitle: 'Energy' })])
     const recs = recommendForSubscription(s, [], catalogue)
-    expect(recs[0].action).toBe('keep')
+    expect(recs[0].phase).toBe('check')
     expect(recs[0].reason).toMatch(/log/i)
+  })
+})
+
+describe('buildCheckInQuestions', () => {
+  const protein = makeProduct({ id: 'protein', stackSlots: ['protein'] })
+  const preworkout = makeProduct({ id: 'pre', stackSlots: ['energy'] })
+  const slowEnergy = makeProduct({ id: 'slow', stackSlots: ['energy'], effectOnset: 'long' })
+  const catalogue = [protein, preworkout, slowEnergy]
+  const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString()
+
+  it('asks only about felt, past-onset dimensions and reassures about the rest', () => {
+    const s = sub([
+      line({ id: 'l-pro', productId: 'protein', stackSlot: 'protein', slotTitle: 'Protein' }),
+      line({ id: 'l-pre', productId: 'pre', stackSlot: 'energy', slotTitle: 'Energy' }),
+    ])
+    const plan = buildCheckInQuestions(s, catalogue)
+    expect(plan.questions.map((q) => q.dimension)).toEqual(['energy'])
+    expect(plan.questions[0].immediate).toBe(true) // pre-workout is felt same session
+    expect(plan.expectations.some((e) => e.productTitle === 'P' && e.onset === 'none')).toBe(true)
+  })
+
+  it('does not ask about a product still inside its onset window', () => {
+    const s = sub([line({ id: 'l-slow', productId: 'slow', stackSlot: 'energy', slotTitle: 'Energy', addedAt: daysAgo(2) })])
+    const plan = buildCheckInQuestions(s, catalogue)
+    expect(plan.questions).toHaveLength(0)
+    expect(plan.expectations).toHaveLength(1)
+    expect(plan.expectations[0].daysUntilFelt).toBeGreaterThan(0)
   })
 })
 

@@ -115,6 +115,19 @@ export interface ProductConsumption {
   dosesPerUnit: number
 }
 
+// ─── Effect onset ──────────────────────────────────────────────────────────────
+// WHEN a benefit becomes noticeable. Orthogonal to recommendationBasis (which
+// says WHETHER feelings should drive a change): onset says when a feeling is even
+// valid to judge. Drives the hub's check-in expectation-setting so a slow-build
+// product (vitamin C, omega-3) is never flagged "not working" before its time,
+// and an immediate product (pre-workout) is reviewed straight away.
+
+export type EffectOnset =
+  | 'immediate'  // felt the same session — pre-workout, electrolytes
+  | 'short'      // ~1–3 weeks — sleep, energy, recovery, gut
+  | 'long'       // ~6–12 weeks, subtle/preventative — omega-3, vitamin D/C, collagen, multivitamin
+  | 'none'       // never consciously felt — protein, creatine
+
 // ─── Product ──────────────────────────────────────────────────────────────────
 
 export interface CatalogueProduct {
@@ -186,6 +199,12 @@ export interface CatalogueProduct {
    * it's derived from the stack slot. Drives the hub's keep-vs-change advice.
    */
   recommendationBasis?: 'objective' | 'subjective'
+  /**
+   * When this product's benefit becomes noticeable. When omitted it's derived
+   * from the stack slot / recommendationBasis (see `effectOnsetForProduct` in
+   * src/lib/feedback.ts). Read from the `chrgd.effect_onset` metafield live.
+   */
+  effectOnset?: EffectOnset
 
   // ── Stack logic ───────────────────────────────────────────────────────────────
   /**

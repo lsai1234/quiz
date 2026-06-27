@@ -41,7 +41,7 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
       stackSlots: d.stackSlots, goals: d.goals, dietaryTags: d.dietaryTags, swapGroup: d.swapGroup, category: d.category,
       subscriptionEligible: d.subscriptionEligible, daysOfSupply: d.daysOfSupply, consumption: d.consumption,
       subscriptionProductId: d.subscriptionProductId ?? null, isSubscriptionOnly: d.isSubscriptionOnly, minSubscriptionMonths: d.minSubscriptionMonths,
-      recommendationBasis: d.recommendationBasis, recommendationPriority: d.recommendationPriority, marginPriority: d.marginPriority,
+      recommendationBasis: d.recommendationBasis, effectOnset: d.effectOnset, recommendationPriority: d.recommendationPriority, marginPriority: d.marginPriority,
       isCoreEligible: d.isCoreEligible, isBoosterEligible: d.isBoosterEligible, cost: d.cost,
     }
     const res = await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id, patch }) })
@@ -128,6 +128,15 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
                   <option value="auto">Auto</option>
                   <option value="objective">A need (don’t change on a mood)</option>
                   <option value="subjective">Felt (change if not working)</option>
+                </select>
+              </Row>
+              <Row label="When it’s felt (onset)" help="Drives the hub check-in: slow-build items aren’t judged before their time; immediate ones are reviewed straight away.">
+                <select value={d.effectOnset ?? 'auto'} onChange={(e) => set({ effectOnset: e.target.value === 'auto' ? undefined : (e.target.value as NonNullable<CatalogueProduct['effectOnset']>) })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                  <option value="auto">Auto</option>
+                  <option value="immediate">Immediate (same session)</option>
+                  <option value="short">Short (~1–3 weeks)</option>
+                  <option value="long">Long (~6–12 weeks)</option>
+                  <option value="none">Never felt (a need)</option>
                 </select>
               </Row>
               <Row label="Recommendation priority (1–10)">{numInput(d.recommendationPriority, (n) => set({ recommendationPriority: n }))}</Row>

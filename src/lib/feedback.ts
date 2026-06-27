@@ -8,7 +8,7 @@
  * an AI pass can later refine the wording via /api/personalise-stack.
  */
 
-import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
+import type { CatalogueProduct, StackSlot, EffectOnset } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 
 export type RecommendationBasis = 'objective' | 'subjective'
@@ -58,13 +58,93 @@ export function dimensionForSlot(slot: StackSlot): FeedbackDimension | null {
   }
 }
 
+// ─── Effect onset — WHEN a benefit becomes noticeable ─────────────────────────
+// This is what makes the check-in feel intelligent: a slow-build product (vitamin
+// C, omega-3) is never judged "not working" before its onset window, and an
+// immediate product (pre-workout) is reviewed straight away.
+
+/** Default onset derived from a slot when a product doesn't set one explicitly. */
+export function onsetForSlot(slot: StackSlot): EffectOnset {
+  switch (slot) {
+    case 'energy':
+    case 'hydration':
+      return 'immediate'
+    case 'sleep':
+    case 'recovery':
+    case 'gut':
+      return 'short'
+    case 'health':
+    case 'menopause':
+      return 'long'
+    case 'protein':
+    case 'performance':
+    case 'vegan-support':
+      return 'none'
+    default:
+      return 'short'
+  }
+}
+
+export function effectOnsetForProduct(product: CatalogueProduct): EffectOnset {
+  if (product.effectOnset) return product.effectOnset
+  return onsetForSlot(product.stackSlots[0])
+}
+
+/** How long before a product's benefit should be noticeable, in days. */
+export function onsetWindowDays(onset: EffectOnset): number {
+  switch (onset) {
+    case 'immediate': return 0
+    case 'short': return 21   // ~3 weeks
+    case 'long': return 42    // ~6 weeks
+    case 'none': return Infinity // never consciously felt
+  }
+}
+
+/** Human label for an onset window, e.g. "a few weeks". */
+export function onsetWindowLabel(onset: EffectOnset): string {
+  switch (onset) {
+    case 'immediate': return 'right away'
+    case 'short': return 'within a few weeks'
+    case 'long': return 'over the first couple of months'
+    case 'none': return 'quietly in the background'
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000
+
+/** How long a line has been in the stack, in days. */
+export function lineTenureDays(line: MemberSubscriptionLine, now: Date = new Date()): number {
+  const added = new Date(line.addedAt)
+  if (Number.isNaN(added.getTime())) return Infinity // legacy lines → treat as established
+  return Math.max(0, Math.floor((now.getTime() - added.getTime()) / DAY_MS))
+}
+
+/**
+ * Where a line sits in its feedback journey:
+ * - `unfelt`    — a need you won't consciously feel (protein, creatine). Keep.
+ * - `too-early` — still inside its onset window; set expectations, don't judge.
+ * - `working`   — past its window and the member feels good / improving. Keep.
+ * - `review`    — past its window and the relevant feeling stayed low. The ONLY
+ *                 phase that suggests a change.
+ * - `check`     — past its window but no feedback logged yet → prompt a check-in.
+ */
+export type LinePhase = 'unfelt' | 'too-early' | 'working' | 'review' | 'check'
+
 export interface LineRecommendation {
   lineId: string
   productTitle: string
   slotTitle: string
   basis: RecommendationBasis
-  action: 'keep' | 'consider-change'
+  onset: EffectOnset
+  phase: LinePhase
+  /** Days until the benefit should become noticeable (0 once past the window). */
+  daysUntilFelt: number
   reason: string
+}
+
+/** Back-compat helper: the only phase that prompts a product change. */
+export function isReview(rec: LineRecommendation): boolean {
+  return rec.phase === 'review'
 }
 
 // ─── Guided product change ───────────────────────────────────────────────────
@@ -153,42 +233,145 @@ function ratingsFor(history: FeedbackCheckIn[], dim: FeedbackDimension): number[
   return history.map((c) => c.ratings[dim]).filter((r): r is number => typeof r === 'number')
 }
 
+function tooEarlyReason(productTitle: string, onset: EffectOnset, daysUntilFelt: number): string {
+  const weeks = Math.max(1, Math.round(daysUntilFelt / 7))
+  if (onset === 'long') {
+    return `${productTitle} works ${onsetWindowLabel(onset)} — you won't necessarily feel it, and that's normal. Give it ~${weeks} more ${weeks === 1 ? 'week' : 'weeks'} before judging.`
+  }
+  return `Give ${productTitle} ~${weeks} more ${weeks === 1 ? 'week' : 'weeks'} to kick in — we'll start checking how you feel then.`
+}
+
 /**
- * Per-line keep-vs-change advice. Objective products are always kept (with a
- * reason that explains why feelings don't apply). Subjective products are judged
- * on the trend of the relevant feedback dimension.
+ * Per-line advice, now onset- and tenure-aware. A line is only ever flagged for
+ * review once it's PAST its onset window AND the matching feeling has stayed low —
+ * so slow-build products are never churned before they've had a fair chance.
  */
 export function recommendForSubscription(
   sub: MemberSubscription,
   history: FeedbackCheckIn[],
   catalogue: CatalogueProduct[],
+  now: Date = new Date(),
 ): LineRecommendation[] {
   return sub.lines.map((line) => {
     const product = catalogue.find((p) => p.id === line.productId)
     const basis = product ? basisForProduct(product) : basisForSlot(line.stackSlot)
-    const base = { lineId: line.id, productTitle: line.productTitle, slotTitle: line.slotTitle, basis }
+    const onset = product ? effectOnsetForProduct(product) : onsetForSlot(line.stackSlot)
+    const window = onsetWindowDays(onset)
+    const tenure = lineTenureDays(line, now)
+    const daysUntilFelt = Number.isFinite(window) ? Math.max(0, window - tenure) : 0
+    const base = { lineId: line.id, productTitle: line.productTitle, slotTitle: line.slotTitle, basis, onset, daysUntilFelt }
 
-    if (basis === 'objective') {
-      return { ...base, action: 'keep' as const, reason: objectiveReason(line.stackSlot, line.productTitle) }
+    // Never-felt needs: always keep, explain why feelings don't apply.
+    if (onset === 'none') {
+      return { ...base, phase: 'unfelt' as const, reason: objectiveReason(line.stackSlot, line.productTitle) }
     }
 
     const dim = dimensionForSlot(line.stackSlot)
-    const ratings = dim ? ratingsFor(history, dim) : []
-    const label = dim ? DIMENSION_LABEL[dim] : 'how you feel'
+
+    // Still inside the onset window → set expectations, don't judge.
+    if (tenure < window) {
+      return { ...base, phase: 'too-early' as const, reason: tooEarlyReason(line.productTitle, onset, daysUntilFelt) }
+    }
+
+    // Felt but with no tracked dimension (e.g. health, menopause) → keep, working quietly.
+    if (!dim) {
+      return { ...base, phase: 'working' as const, reason: `${line.productTitle} is doing its job ${onsetWindowLabel(onset)} — keep it.` }
+    }
+
+    const label = DIMENSION_LABEL[dim]
+    const ratings = ratingsFor(history, dim)
 
     if (ratings.length === 0) {
-      return { ...base, action: 'keep' as const, reason: `Log how your ${label} is going and we'll tell you whether to keep or change ${line.productTitle}.` }
+      return { ...base, phase: 'check' as const, reason: `${line.productTitle} has had time to kick in — log how your ${label} is and we'll tell you if it's working.` }
     }
 
     const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length
     const improving = ratings.length >= 2 && ratings[ratings.length - 1] > ratings[0]
 
     if (avg <= 2.5) {
-      return { ...base, action: 'consider-change' as const, reason: `Your ${label} hasn't improved much — it could be worth trying a different ${line.slotTitle.toLowerCase()}.` }
+      return { ...base, phase: 'review' as const, reason: `Your ${label} hasn't improved much — it could be worth trying a different ${line.slotTitle.toLowerCase()}.` }
     }
     if (improving) {
-      return { ...base, action: 'keep' as const, reason: `Your ${label} is trending up — ${line.productTitle} is working. Keep it.` }
+      return { ...base, phase: 'working' as const, reason: `Your ${label} is trending up — ${line.productTitle} is working. Keep it.` }
     }
-    return { ...base, action: 'keep' as const, reason: `Your ${label} is in good shape — keep ${line.productTitle}.` }
+    return { ...base, phase: 'working' as const, reason: `Your ${label} is in good shape — keep ${line.productTitle}.` }
   })
+}
+
+// ─── Adaptive check-in builder ────────────────────────────────────────────────
+// The check-in only asks about dimensions the CURRENT stack actually targets and
+// that are PAST their onset window. Slow-build / unfelt lines become expectation
+// cards instead of questions — so members are never asked to rate something that
+// can't be felt yet.
+
+export interface CheckInQuestion {
+  dimension: FeedbackDimension
+  label: string
+  /** The question copy, framed for immediate vs sustained effects. */
+  prompt: string
+  /** True when at least one targeting product is felt the same session (e.g. pre-workout). */
+  immediate: boolean
+  /** Lines this question covers. */
+  lineIds: string[]
+}
+
+export interface CheckInExpectation {
+  lineId: string
+  productTitle: string
+  onset: EffectOnset
+  daysUntilFelt: number
+  message: string
+}
+
+export interface CheckInPlan {
+  questions: CheckInQuestion[]
+  /** Still-building / unfelt lines — shown as reassurance, not asked about. */
+  expectations: CheckInExpectation[]
+}
+
+/** Build the adaptive check-in for a subscription's current stack. */
+export function buildCheckInQuestions(
+  sub: MemberSubscription,
+  catalogue: CatalogueProduct[],
+  now: Date = new Date(),
+): CheckInPlan {
+  const byDimension = new Map<FeedbackDimension, { lineIds: string[]; immediate: boolean }>()
+  const expectations: CheckInExpectation[] = []
+
+  for (const line of sub.lines) {
+    const product = catalogue.find((p) => p.id === line.productId)
+    const onset = product ? effectOnsetForProduct(product) : onsetForSlot(line.stackSlot)
+    const window = onsetWindowDays(onset)
+    const tenure = lineTenureDays(line, now)
+    const dim = dimensionForSlot(line.stackSlot)
+
+    // Past its window AND trackable → ask about it.
+    if (dim && tenure >= window && onset !== 'none') {
+      const entry = byDimension.get(dim) ?? { lineIds: [], immediate: false }
+      entry.lineIds.push(line.id)
+      if (onset === 'immediate') entry.immediate = true
+      byDimension.set(dim, entry)
+      continue
+    }
+
+    // Otherwise it's reassurance: still building, or works in the background.
+    if (onset === 'none') {
+      expectations.push({ lineId: line.id, productTitle: line.productTitle, onset, daysUntilFelt: 0, message: `${line.productTitle} works ${onsetWindowLabel(onset)} — no need to "feel" it.` })
+    } else if (tenure < window) {
+      const daysUntilFelt = Math.max(0, window - tenure)
+      expectations.push({ lineId: line.id, productTitle: line.productTitle, onset, daysUntilFelt, message: tooEarlyReason(line.productTitle, onset, daysUntilFelt) })
+    }
+  }
+
+  const questions: CheckInQuestion[] = [...byDimension.entries()].map(([dimension, { lineIds, immediate }]) => ({
+    dimension,
+    label: DIMENSION_LABEL[dimension],
+    immediate,
+    lineIds,
+    prompt: immediate
+      ? `How did your last few sessions feel for ${DIMENSION_LABEL[dimension]}?`
+      : `How's your ${DIMENSION_LABEL[dimension]} been lately?`,
+  }))
+
+  return { questions, expectations }
 }

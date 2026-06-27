@@ -141,6 +141,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     isSubscriptionOnly: false,
     daysOfSupply: 100,
     swapGroup: 'creatine',
+    effectOnset: 'none', // builds up over time; works whether or not you feel it
     recommendationPriority: 9,
     marginPriority: 9,
     isCoreEligible: true,
@@ -176,6 +177,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     isSubscriptionOnly: false,
     daysOfSupply: 30,
     swapGroup: 'pre-workout-stim',
+    effectOnset: 'immediate', // you feel a pre-workout the same session
     recommendationPriority: 8,
     marginPriority: 8,
     isCoreEligible: true,
@@ -309,6 +311,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     isSubscriptionOnly: false,
     daysOfSupply: 30,
     swapGroup: 'collagen',
+    effectOnset: 'long', // skin/joint benefits build slowly — overrides the recovery-slot default
     recommendationPriority: 5,
     marginPriority: 6,
     isCoreEligible: false,
@@ -343,6 +346,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     isSubscriptionOnly: false,
     daysOfSupply: 90,
     swapGroup: 'omega-3',
+    effectOnset: 'long', // a quiet, preventative benefit you won't feel day to day
     recommendationPriority: 6,
     marginPriority: 6,
     isCoreEligible: true,
@@ -532,6 +536,7 @@ export const MOCK_CATALOGUE: CatalogueProduct[] = [
     isSubscriptionOnly: false,
     daysOfSupply: 90,
     swapGroup: 'vitamin-c',
+    effectOnset: 'long', // works quietly in the background — you won't notice it straight away
     recommendationPriority: 4,
     marginPriority: 5,
     isCoreEligible: true,
