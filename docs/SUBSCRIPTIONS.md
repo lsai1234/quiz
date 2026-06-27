@@ -287,6 +287,24 @@ calendar only governs *what ships when*.
 Live, this maps onto Recharge: skip = a skipped charge with credit, reschedule =
 a rescheduled charge, add to a box = a one-time line item on that order.
 
+**Skipping defers the term.** A skipped box isn't a paid cycle, so
+`monthsRemainingOnTerm` adds `skippedDeliveryCount` — the minimum term simply
+moves back a month per skip (no charge, no month burned).
+
+**Extras: this delivery vs every delivery.** Each box item has − / + to remove or
+add an extra of it to that box (a one-off). The add flow offers, per product,
+**"Just this box"** (a full-price one-off, `addItemToDelivery` — stacks) or
+**"Every delivery"** (joins the recurring plan, `addLine`). `setLineQuantity`
+bumps how many of a line ship every time. All at the subscribe-&-save rate, above
+the margin floor.
+
+**Billing transparency.** A shared `BillingImpact` panel
+(`src/components/hub/BillingImpact.tsx`), fed by `lineEconomics` /
+`projectedEconomics` (`src/lib/recharge/mock.ts`), shows every change the same
+way: list → discounted unit (with the % saved), units × cadence per box, the
+monthly spread, monthly before → after, any one-off/credit/settlement, and the
+effective date. Used in the manage, add, swap and delivery sheets.
+
 **Clear status language.** `recommendForSubscription` now returns a member-facing
 `LineStatus` (`statusLabel` / `statusIcon` / `statusTone` + optional `progress`),
 mapped by `deriveStatus` from the onset phase: "Felt & working", "Daily

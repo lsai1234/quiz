@@ -31,7 +31,7 @@ export function SubscriptionDashboard() {
   const {
     subscription: sub, feedback, logout,
     setDispatchDay, pause, resume, cancel,
-    swapLine, addLine, removeLine, setLineCadence, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineCadence, setLineQuantity, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
   } = useHubStore()
   const { products } = useCatalogueProducts()
@@ -289,7 +289,9 @@ export function SubscriptionDashboard() {
         <LineManageSheet
           subscription={sub}
           line={manageLine}
+          product={products.find((p) => p.id === manageLine.productId)}
           onSetCadence={(months) => { setLineCadence(manageLine.id, months); setManageLineId(null) }}
+          onSetQuantity={(quantity) => { setLineQuantity(manageLine.id, quantity); setManageLineId(null) }}
           onSkip={() => { skipNext(manageLine.id); setManageLineId(null) }}
           onExpedite={() => { alert('Live, this charges a one-off and ships it with your next box.'); setManageLineId(null) }}
           onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}
@@ -306,6 +308,7 @@ export function SubscriptionDashboard() {
           onUnskip={() => unskipDelivery(selectedDelivery.id)}
           onReschedule={(date) => rescheduleDelivery(selectedDelivery.id, date)}
           onAddItem={(product) => addItemToDelivery(selectedDelivery.id, product)}
+          onAddRecurring={(product) => addLine(product, products)}
           onRemoveItem={(item) => removeItemFromDelivery(selectedDelivery.id, item)}
           onClose={() => setSelectedDeliveryId(null)}
         />

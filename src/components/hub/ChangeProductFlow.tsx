@@ -5,7 +5,8 @@ import { createPortal } from 'react-dom'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { CHANGE_REASONS, recommendReplacements, replacementRationale } from '@/lib/feedback'
 import type { ChangeReason } from '@/lib/feedback'
-import { computeSwapImpact } from '@/lib/recharge/mock'
+import { computeSwapImpact, projectedEconomics } from '@/lib/recharge/mock'
+import { BillingImpact } from './BillingImpact'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -150,27 +151,16 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
               </div>
 
               {/* Pricing impact */}
-              <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-[var(--color-text-2)]">Monthly</span>
-                  <span className="font-bold text-[var(--color-text)]">
-                    {formatGBP(impact.currentMonthly)} → <span style={{ color: ACCENT }}>{formatGBP(impact.newMonthly)}</span>
-                  </span>
-                </div>
-                {Math.abs(oneOff) > 0.01 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-[var(--color-text-2)]">{oneOff > 0 ? 'One-off top-up now' : 'Credit to next payment'}</span>
-                    <span className="font-bold" style={{ color: oneOff > 0 ? 'var(--color-text)' : '#34d399' }}>
-                      {oneOff > 0 ? formatGBP(oneOff) : `−${formatGBP(Math.abs(oneOff))}`}
-                    </span>
-                  </div>
-                )}
-                <p className="text-[11px] text-[var(--color-muted)] pt-1">
-                  {applyToNextBox
-                    ? `Ships in your next box on ${effectiveDate}.`
-                    : `Your current box is unchanged; this applies from your next payment.`}
-                </p>
-              </div>
+              <BillingImpact
+                monthlyBefore={impact.currentMonthly}
+                monthlyAfter={impact.newMonthly}
+                oneOffNow={oneOff > 0 ? oneOff : 0}
+                credit={oneOff < 0 ? Math.abs(oneOff) : 0}
+                economics={projectedEconomics(selected)}
+                note={applyToNextBox
+                  ? `Ships in your next box on ${effectiveDate}.`
+                  : 'Your current box is unchanged; this applies from your next payment.'}
+              />
 
               <button
                 onClick={() => onConfirm(selected, applyToNextBox)}

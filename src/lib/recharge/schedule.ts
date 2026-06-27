@@ -177,17 +177,19 @@ export function rescheduleDelivery(sub: MemberSubscription, id: string, date: Da
   return withOverride(sub, id, { dateOverride: date.toISOString() })
 }
 
+/** Add a one-off of a product to this box only. Stacks — call again for a 2nd extra. */
 export function addItemToDelivery(sub: MemberSubscription, id: string, product: CatalogueProduct): MemberSubscription {
   const cur = sub.deliveryOverrides?.[id]?.addedProductIds ?? []
-  if (cur.includes(product.id)) return sub
   return withOverride(sub, id, { addedProductIds: [...cur, product.id] })
 }
 
-/** Remove an item from one box: a recurring line is pulled for that box; a one-off is undone. */
+/** Remove an item from one box: a recurring line is pulled for that box; one one-off is undone. */
 export function removeItemFromDelivery(sub: MemberSubscription, id: string, item: DeliveryItem): MemberSubscription {
   if (item.oneOff || item.lineId == null) {
     const cur = sub.deliveryOverrides?.[id]?.addedProductIds ?? []
-    return withOverride(sub, id, { addedProductIds: cur.filter((pid) => pid !== item.productId) })
+    const idx = cur.indexOf(item.productId)
+    const next = idx >= 0 ? [...cur.slice(0, idx), ...cur.slice(idx + 1)] : cur
+    return withOverride(sub, id, { addedProductIds: next })
   }
   const cur = sub.deliveryOverrides?.[id]?.removedLineIds ?? []
   if (cur.includes(item.lineId)) return sub

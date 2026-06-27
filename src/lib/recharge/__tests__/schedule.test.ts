@@ -9,7 +9,7 @@ import {
   removeItemFromDelivery,
   oneOffUnitPrice,
 } from '../schedule'
-import { createMockSubscription } from '../mock'
+import { createMockSubscription, monthsRemainingOnTerm, skippedDeliveryCount } from '../mock'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 
 const NOW = new Date('2026-06-27T12:00:00Z')
@@ -81,6 +81,15 @@ describe('skipDelivery', () => {
     const id = nextDelivery(schedule(s))!.id
     const restored = buildDeliverySchedule(unskipDelivery(skipDelivery(s, id), id), MOCK_CATALOGUE, 6, NOW)
     expect(restored.find((d) => d.id === id)!.status).toBe('scheduled')
+  })
+
+  it('defers the minimum term instead of burning a month', () => {
+    const s = { ...sub(), minMonths: 4, monthsActive: 2 }
+    const before = monthsRemainingOnTerm(s)
+    const id = nextDelivery(buildDeliverySchedule(s, MOCK_CATALOGUE, 6, NOW))!.id
+    const after = skipDelivery(s, id)
+    expect(skippedDeliveryCount(after)).toBe(1)
+    expect(monthsRemainingOnTerm(after)).toBe(before + 1)
   })
 })
 

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { skipCredit, oneOffUnitPrice } from '@/lib/recharge/schedule'
+import { projectedEconomics } from '@/lib/recharge/mock'
 import type { Delivery, DeliveryItem } from '@/lib/recharge/schedule'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -19,7 +20,10 @@ interface Props {
   onSkip: () => void
   onUnskip: () => void
   onReschedule: (date: Date) => void
+  /** Add a one-off of a product to this box only. */
   onAddItem: (product: CatalogueProduct) => void
+  /** Add a product to the recurring plan (every delivery). */
+  onAddRecurring: (product: CatalogueProduct) => void
   onRemoveItem: (item: DeliveryItem) => void
   onClose: () => void
 }
@@ -32,7 +36,7 @@ function toInputDate(iso: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip, onUnskip, onReschedule, onAddItem, onRemoveItem, onClose }: Props) {
+export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip, onUnskip, onReschedule, onAddItem, onAddRecurring, onRemoveItem, onClose }: Props) {
   const [mounted, setMounted] = useState(false)
   const [adding, setAdding] = useState(false)
 
@@ -48,10 +52,10 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
 
-  const inBox = useMemo(() => new Set(delivery.items.map((it) => it.productId)), [delivery.items])
+  const recurringIds = useMemo(() => new Set(subscription.lines.map((l) => l.productId)), [subscription.lines])
   const addable = useMemo(
-    () => catalogue.filter((p) => p.subscriptionEligible && !p.isSubscriptionOnly && !inBox.has(p.id)),
-    [catalogue, inBox],
+    () => catalogue.filter((p) => p.subscriptionEligible && !p.isSubscriptionOnly && !recurringIds.has(p.id)),
+    [catalogue, recurringIds],
   )
 
   if (!mounted) return null
@@ -102,6 +106,9 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-sm font-black" style={{ color: it.oneOff ? GREEN : ACCENT, fontFamily: 'var(--font-display)' }}>{formatGBP(it.price)}</span>
                       <button onClick={() => onRemoveItem(it)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] active:scale-90" aria-label={`Remove ${it.productTitle}`}>−</button>
+                      {(() => { const prod = catalogue.find((p) => p.id === it.productId); return prod ? (
+                        <button onClick={() => onAddItem(prod)} className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-[var(--color-bg)] active:scale-90" style={{ background: ACCENT }} aria-label={`Add an extra ${it.productTitle} to this box`} title="Add an extra to this box">+</button>
+                      ) : null })()}
                     </div>
                   </div>
                 ))}
@@ -121,19 +128,33 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
               </button>
             ) : (
               <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Add a one-off (full price, just this box)</p>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Add a product</p>
                   <button onClick={() => setAdding(false)} className="text-xs text-[var(--color-muted)]">Done</button>
                 </div>
-                <div className="space-y-1.5 max-h-52 overflow-y-auto">
-                  {addable.map((p) => (
-                    <button key={p.id} onClick={() => { onAddItem(p); setAdding(false) }}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl text-left active:scale-[0.98] transition-all"
-                      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                      <span className="text-sm font-semibold text-[var(--color-text)] truncate">{p.title}</span>
-                      <span className="text-xs font-bold flex-shrink-0" style={{ color: GREEN }}>+{formatGBP(oneOffUnitPrice(p))}</span>
-                    </button>
-                  ))}
+                <p className="text-[11px] text-[var(--color-muted)] mb-2">Just this box (one-off, full price) or every delivery (joins your plan & spreads the cost).</p>
+                <div className="space-y-2 max-h-72 overflow-y-auto">
+                  {addable.map((p) => {
+                    const econ = projectedEconomics(p)
+                    return (
+                      <div key={p.id} className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] p-3">
+                        <p className="text-sm font-semibold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
+                        {econ.discountPct > 0 && (
+                          <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                            <span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% on plan
+                          </p>
+                        )}
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <button onClick={() => { onAddItem(p); setAdding(false) }} className="py-2 rounded-lg text-xs font-bold active:scale-95 transition-all" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                            Just this box · +{formatGBP(oneOffUnitPrice(p))}
+                          </button>
+                          <button onClick={() => { onAddRecurring(p); setAdding(false) }} className="py-2 rounded-lg text-xs font-bold active:scale-95 transition-all" style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
+                            Every delivery · +{formatGBP(econ.perMonth)}/mo
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -161,10 +182,15 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
               Restore this delivery
             </button>
           ) : (
-            <button onClick={onSkip} className="w-full py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all"
-              style={{ border: `1px solid color-mix(in srgb, ${AMBER} 35%, transparent)`, color: AMBER, fontFamily: 'var(--font-display)' }}>
-              Skip this box{credit > 0 ? ` · credit ${formatGBP(credit)}` : ''}
-            </button>
+            <div>
+              <button onClick={onSkip} className="w-full py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all"
+                style={{ border: `1px solid color-mix(in srgb, ${AMBER} 35%, transparent)`, color: AMBER, fontFamily: 'var(--font-display)' }}>
+                Skip this box{credit > 0 ? ` · credit ${formatGBP(credit)}` : ''}
+              </button>
+              <p className="text-[11px] text-[var(--color-muted)] mt-2 text-center leading-relaxed">
+                You won’t be charged for it, and it won’t use up a month — your plan and minimum term simply move back a month.
+              </p>
+            </div>
           )}
         </div>
       </div>

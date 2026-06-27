@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { computeAddImpact } from '@/lib/recharge/mock'
+import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
@@ -85,6 +85,7 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose }: Pro
               <div className="space-y-2">
                 {products.map((p) => {
                   const impact = computeAddImpact(subscription, p, catalogue)
+                  const econ = projectedEconomics(p)
                   return (
                     <div key={p.id} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
                       <div className="flex items-start justify-between gap-2">
@@ -92,12 +93,16 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose }: Pro
                         <span className="text-xs font-bold flex-shrink-0" style={{ color: ACCENT }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
                       </div>
                       <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
+                      <p className="text-[11px] text-[var(--color-muted)] mt-1.5">
+                        {econ.discountPct > 0 && <><span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% · </>}
+                        {econ.shipEveryMonths > 1 ? `ships every ${econ.shipEveryMonths} months, spread to ${formatGBP(econ.perMonth)}/mo` : 'ships every month'}
+                      </p>
                       <button
                         onClick={() => onAdd(p)}
                         className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"
                         style={{ fontFamily: 'var(--font-display)' }}
                       >
-                        + Add to stack
+                        + Add to every delivery
                       </button>
                     </div>
                   )

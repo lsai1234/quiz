@@ -14,6 +14,7 @@ import {
   addLine,
   removeLine,
   setLineCadence,
+  setLineQuantity,
   skipNextDelivery,
   oneOffCharge,
   lineMonthly,
@@ -223,6 +224,26 @@ describe('setLineCadence', () => {
       lineMonthly(slower.lines.find((l) => l.id === id)!) - 0.01,
     )
     expect(faster.flatMonthly).toBeCloseTo(flatMonthlyOf(faster.lines), 1)
+  })
+})
+
+describe('setLineQuantity', () => {
+  it('scales price per delivery with quantity and keeps the unit price', () => {
+    const s = sub()
+    const line = s.lines[0]
+    const unit = line.pricePerDelivery / line.quantity
+    const next = setLineQuantity(s, line.id, line.quantity + 1)
+    const nl = next.lines.find((l) => l.id === line.id)!
+    expect(nl.quantity).toBe(line.quantity + 1)
+    expect(nl.pricePerDelivery / nl.quantity).toBeCloseTo(unit, 2)
+    expect(next.flatMonthly).toBeGreaterThan(s.flatMonthly)
+    expect(next.flatMonthly).toBeCloseTo(flatMonthlyOf(next.lines), 1)
+  })
+
+  it('clamps to 1..6', () => {
+    const s = sub()
+    expect(setLineQuantity(s, s.lines[0].id, 0).lines.find((l) => l.id === s.lines[0].id)!.quantity).toBe(1)
+    expect(setLineQuantity(s, s.lines[0].id, 99).lines.find((l) => l.id === s.lines[0].id)!.quantity).toBe(6)
   })
 })
 

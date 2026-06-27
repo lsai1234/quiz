@@ -102,8 +102,17 @@ export function formatDispatchDate(date: Date): string {
 
 // ─── Minimum-term guard ──────────────────────────────────────────────────────
 
+/** Deliveries the member has skipped — these defer the term, they don't count toward it. */
+export function skippedDeliveryCount(sub: MemberSubscription): number {
+  return Object.values(sub.deliveryOverrides ?? {}).filter((o) => o.skipped).length
+}
+
+/**
+ * Months still owed on the minimum commitment. Skipped deliveries push this
+ * back — a skipped box isn't a paid cycle, so the term extends by one for each.
+ */
 export function monthsRemainingOnTerm(sub: MemberSubscription): number {
-  return Math.max(0, sub.minMonths - sub.monthsActive)
+  return Math.max(0, sub.minMonths - sub.monthsActive + skippedDeliveryCount(sub))
 }
 
 export function canCancel(sub: MemberSubscription): boolean {
@@ -216,6 +225,61 @@ export function lineMonthly(line: MemberSubscriptionLine): number {
   return round(line.pricePerDelivery / Math.max(1, line.deliveryIntervalMonths))
 }
 
+/** The plain economics of a line, for the billing explainer: list → discount → spread. */
+export interface LineEconomics {
+  /** Undiscounted unit price (RRP-ish), if the product is known. */
+  listUnit: number
+  /** Discounted unit price actually charged (subscribe & save). */
+  discountedUnit: number
+  /** Discount applied, 0–100. */
+  discountPct: number
+  /** Units per delivery. */
+  units: number
+  /** Ship cadence in months. */
+  shipEveryMonths: number
+  /** Charged each delivery. */
+  perDelivery: number
+  /** Amortised monthly contribution. */
+  perMonth: number
+}
+
+/** Economics for an existing line (pass the product to show the discount vs list price). */
+export function lineEconomics(line: MemberSubscriptionLine, product?: CatalogueProduct): LineEconomics {
+  const discountedUnit = round(line.pricePerDelivery / Math.max(1, line.quantity))
+  const variant = product?.variants.find((v) => v.available) ?? product?.variants[0]
+  const listUnit = variant?.price ?? product?.basePrice ?? discountedUnit
+  return {
+    listUnit: round(listUnit),
+    discountedUnit,
+    discountPct: listUnit > 0 ? Math.round((1 - discountedUnit / listUnit) * 100) : 0,
+    units: line.quantity,
+    shipEveryMonths: line.deliveryIntervalMonths,
+    perDelivery: line.pricePerDelivery,
+    perMonth: lineMonthly(line),
+  }
+}
+
+/** Economics for a product about to be added (sized & priced like it would join the plan). */
+export function projectedEconomics(
+  product: CatalogueProduct,
+  answers?: QuizAnswers | null,
+  config = getPricingConfig(),
+): LineEconomics {
+  const sizing = sizeConsumption(product, answers, config)
+  const variant = product.variants.find((v) => v.available) ?? product.variants[0]
+  const listUnit = variant?.price ?? product.basePrice
+  const { discountedUnit } = discountedUnitFor(product, config)
+  return {
+    listUnit: round(listUnit),
+    discountedUnit: round(discountedUnit),
+    discountPct: listUnit > 0 ? Math.round((1 - discountedUnit / listUnit) * 100) : 0,
+    units: sizing.unitsPerShipment,
+    shipEveryMonths: sizing.shipEveryMonths,
+    perDelivery: round(sizing.unitsPerShipment * discountedUnit),
+    perMonth: round((sizing.unitsPerShipment / sizing.shipEveryMonths) * discountedUnit),
+  }
+}
+
 /** Retail value of everything this line has already shipped. */
 export function shippedValueToDate(line: MemberSubscriptionLine): number {
   return round(line.deliveriesMade * line.pricePerDelivery)
@@ -295,6 +359,26 @@ export function setLineCadence(
 /** Cadence options a line can move to, given the config bounds. */
 export function cadenceOptions(config = getPricingConfig()): number[] {
   return Array.from({ length: config.maxDeliveryMonths }, (_, i) => i + 1)
+}
+
+/**
+ * Change how many units of a line ship each delivery ("I need an extra one every
+ * time"). Keeps the same discounted unit price, re-prices the delivery and the
+ * flat monthly. Clamped to 1–6.
+ */
+export function setLineQuantity(sub: MemberSubscription, lineId: string, quantity: number): MemberSubscription {
+  const q = Math.min(6, Math.max(1, Math.round(quantity)))
+  const lines = sub.lines.map((l) => {
+    if (l.id !== lineId) return l
+    const unit = l.pricePerDelivery / Math.max(1, l.quantity)
+    return { ...l, quantity: q, pricePerDelivery: round(q * unit) }
+  })
+  return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
+}
+
+export function computeQuantityImpact(sub: MemberSubscription, lineId: string, quantity: number): PlanChangeImpact {
+  const next = setLineQuantity(sub, lineId, quantity)
+  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
 }
 
 /**
