@@ -2,16 +2,18 @@ import type { QuizAnswers } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackBlueprint } from './types'
 import type { SlotOption, BlueprintAIResult } from '@/lib/ai-stack'
+import { getApprovedClaims } from './approved-claims'
 import { getArchetype, scoreProduct, type SlotType } from './factory'
 
-const MAX_OPTIONS_PER_SLOT = 6
+const MAX_OPTIONS_PER_SLOT = 8
 
 /**
  * For each slot, builds the list of eligible products the AI may choose from.
- * Eligibility reuses the factory's own scoring (score >= 0 means it passed every
- * hard gate — dietary, stimulant, already-taking, goal relevance), so the AI can
- * only ever pick a product the deterministic engine would also consider valid.
- * Products already chosen for other slots are excluded to avoid duplicates.
+ * Eligibility reuses the factory's own hard gates (score > -Infinity means it
+ * passed every hard gate — dietary, stimulant, already-taking, narrow-use
+ * exclusions); the soft scoring ranking itself is left to the AI, which sees
+ * the full gated pool and weighs goals/lifestyle/budget itself. Products
+ * already chosen for other slots are excluded to avoid duplicates.
  */
 export function buildSlotOptions(
   blueprint: StackBlueprint,
@@ -28,7 +30,7 @@ export function buildSlotOptions(
     const scored = catalogue
       .filter(p => p.stackSlots.includes(slot.slotType) && !usedElsewhere.has(p.id))
       .map(p => ({ p, score: scoreProduct(p, slot.slotType as SlotType, answers, archetype) }))
-      .filter(({ p, score }) => score >= 0 || p.id === slot.selectedProductId)
+      .filter(({ p, score }) => score > -Infinity || p.id === slot.selectedProductId)
       .sort((a, b) => b.score - a.score)
 
     // Always keep the engine's current pick in the option set.
@@ -45,6 +47,7 @@ export function buildSlotOptions(
       vegan: p.dietaryTags.includes('vegan'),
       stimulant: p.hasStimulants,
       reason: p.shortReason || p.description,
+      claims: getApprovedClaims(p.swapGroup),
     }))
 
     return {

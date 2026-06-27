@@ -1,9 +1,8 @@
-import type { QuizAnswers, Product } from './types'
-import { getRole } from './product-roles'
+import type { QuizAnswers } from './types'
 
-// Pure, network-free helpers for the AI stack ranker. Kept separate from the
-// route handler so the prompt shape and output validation can be unit-tested
-// without calling OpenAI.
+// Pure, network-free helpers for the AI blueprint personaliser. Kept separate
+// from the route handler so the prompt shape and output validation can be
+// unit-tested without calling OpenAI.
 
 const GOAL_LABELS: Record<string, string> = {
   muscle: 'build muscle',
@@ -30,108 +29,14 @@ const BUDGET_LABELS: Record<string, string> = {
   '80-plus': '£80+/month',
 }
 
-/** The structured shape we ask the model to return. */
-export interface AIStackResult {
-  /** Eligible product ids, ordered most-important first. */
-  order: string[]
-  /** Short, personalised reason per recommended product id. */
-  reasons: Record<string, string>
-}
-
-/**
- * System role for the ranker. Establishing the rules here (rather than only in
- * the user turn) improves instruction adherence and keeps the per-request user
- * prompt — and therefore token cost — small. Health-claim guardrails mirror the
- * existing identity prompt so generated copy stays advertising-compliant.
- */
-export const RANKING_SYSTEM_PROMPT = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand. You assemble personalised supplement stacks.
-
-Rules:
-- Recommend ONLY from the eligible product ids given in the user message. Never invent products or ids.
-- Rank by how well each product fits this specific person's goals, lifestyle, training and budget — most important first. You need not include every product, but cover their main goals.
-- Write one reason per recommended product: a single sentence, max 18 words, warm and specific to this person, plain text (no markdown or asterisks).
-- No medical claims and no guaranteed outcomes. Say "may support", never "will improve". Never suggest a supplement can treat, manage or replace medical care for any condition.
-- Respond with a single JSON object only, no prose: {"order":["id", ...],"reasons":{"id":"reason", ...}}`
-
-/**
- * Builds the per-request user prompt: the person's profile and the eligible
- * candidate list. The model is only ever shown candidates that already passed
- * the deterministic gates, so it can re-rank but cannot recommend something the
- * rules forbid.
- */
-export function buildRankingPrompt(answers: QuizAnswers, candidates: Product[]): string {
-  const firstName = answers.name?.split(' ')[0]?.trim() || null
-  const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || 'general wellbeing'
-  const budget = BUDGET_LABELS[answers.budget ?? ''] ?? '£50–80/month'
-  const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? 'unknown')
-  const gender = answers.gender && answers.gender !== 'not-specified' ? answers.gender : 'unspecified'
-  const lifestyle = answers.lifestyle.length ? answers.lifestyle.join(', ') : 'none noted'
-  const current = answers.currentSupplements.length ? answers.currentSupplements.join(', ') : 'none'
-
-  const lines = candidates.map(p => {
-    const flags = [p.stimulant ? 'stimulant' : null, p.vegan ? 'vegan' : null, p.beginner ? 'beginner-friendly' : null]
-      .filter(Boolean)
-      .join(', ')
-    return `- ${p.id} | ${p.name} | role: ${getRole(p).label} | ${p.category} | £${p.price.toFixed(2)} | goals: ${p.goalTags.join('/')}${flags ? ` | ${flags}` : ''}`
-  })
-
-  return `Build the ideal personalised stack for this person.
-
-PERSON
-${firstName ? `- Name: ${firstName}` : ''}
-- Age: ${age}
-- Gender: ${gender}
-- Goals: ${goalText}
-- Training: ${answers.trainingFrequency ?? 'unknown'} per week, ${answers.trainingType ?? 'mixed'}-focused
-- Diet: ${answers.diet ?? 'balanced'}
-- Lifestyle factors: ${lifestyle}
-- Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
-- Already taking: ${current}
-- Monthly budget: ${budget}
-- Stack preference: ${answers.stackPreference ?? 'balanced'}
-
-ELIGIBLE PRODUCTS (choose only from these ids)
-${lines.join('\n')}`
-}
-
 const stripMd = (s: string) => s.replace(/\*+/g, '').replace(/_{2,}/g, '').trim()
-
-/**
- * Validates and normalises the model's raw output: keeps only ids that exist in
- * the eligible set, de-duplicates the order, and sanitises/truncates the reason
- * strings. Returns null if nothing usable came back so the caller can fall back.
- */
-export function parseAIStackResult(raw: unknown, eligibleIds: Set<string>): AIStackResult | null {
-  if (!raw || typeof raw !== 'object') return null
-  const obj = raw as Record<string, unknown>
-
-  const rawOrder = Array.isArray(obj.order) ? obj.order : []
-  const seen = new Set<string>()
-  const order: string[] = []
-  for (const id of rawOrder) {
-    if (typeof id === 'string' && eligibleIds.has(id) && !seen.has(id)) {
-      seen.add(id)
-      order.push(id)
-    }
-  }
-
-  const reasons: Record<string, string> = {}
-  const rawReasons = obj.reasons && typeof obj.reasons === 'object' ? (obj.reasons as Record<string, unknown>) : {}
-  for (const [id, reason] of Object.entries(rawReasons)) {
-    if (!eligibleIds.has(id) || typeof reason !== 'string') continue
-    const clean = stripMd(reason).slice(0, 160)
-    if (clean) reasons[id] = clean
-  }
-
-  if (order.length === 0) return null
-  return { order, reasons }
-}
 
 // ─── Blueprint slot personalisation ──────────────────────────────────────────
 // The main flow shows a slot-based stack (protein / performance / sleep …). The
 // deterministic factory decides which slots exist, the budget cap and every hard
-// gate; the AI then picks the best product to fill each slot from that slot's
-// already-eligible options and writes the personalised reason.
+// gate (caffeine, vegan, allergens, already-taking, narrow-use exclusions); the
+// AI then picks the best product to fill each slot from that slot's
+// already-eligible options and writes the personalised, sales-style reason.
 
 /** One slot offered to the model, with its eligible product options. */
 export interface SlotOption {
@@ -147,6 +52,8 @@ export interface SlotOption {
     vegan: boolean
     stimulant: boolean
     reason: string
+    /** Approved, advertising-compliant claims the AI may draw on for this product. */
+    claims: string[]
   }>
 }
 
@@ -157,12 +64,12 @@ export interface BlueprintAIResult {
   reasons: Record<string, string>
 }
 
-export const BLUEPRINT_SYSTEM_PROMPT = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand. You personalise a supplement stack for one person.
+export const BLUEPRINT_SYSTEM_PROMPT = `You are a specialist nutrition advisor and copywriter for CHRGD, a premium UK supplement brand. You personalise a supplement stack for one person and write the sales copy that sells it back to them.
 
-The stack has fixed slots (each a job like Protein or Sleep). For each slot you are given a short list of eligible product options. Your job:
-- Pick the single best product option for this specific person for each slot — choose by id, from that slot's options only. Never invent ids or move a product between slots.
-- Write one reason per slot: a single sentence, max 20 words, warm and specific to this person, explaining why that product suits them. Plain text, no markdown or asterisks.
-- No medical claims, no guaranteed outcomes. Say "may support", never "will improve". Never suggest a supplement can treat, manage or replace medical care for any condition.
+The stack has fixed slots (each a job like Protein or Sleep). For each slot you are given a short list of eligible product options, each with a set of pre-approved claims. Your job:
+- Pick the single best product option for this specific person for each slot — choose by id, from that slot's options only. Never invent ids or move a product between slots. Weigh their goals, training, lifestyle, diet and budget to make the best possible call — you have full discretion here, every option you're shown already passed the brand's hard safety/eligibility gates (e.g. no stimulant or allergen options are ever shown if the person opted out).
+- Write one reason per slot: 1-2 sentences (roughly 25-40 words), warm, premium and specific to this person — sell them on why this exact product fits their goals and life. Ground every factual/benefit claim ONLY in that product's listed claims; you may rephrase and combine them naturally, but never invent a mechanism, benefit or outcome not listed. Plain text, no markdown or asterisks.
+- No medical claims, no disease/cure/treatment language, no guaranteed outcomes. Say "may support" or "supports", never "will cure", "will fix" or "guarantees". Never suggest a supplement can treat, manage or replace medical care for any condition.
 - Respond with a single JSON object only, no prose: {"choices":{"slotId":"productId", ...},"reasons":{"slotId":"reason", ...}}`
 
 export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]): string {
@@ -175,7 +82,8 @@ export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]):
   const slotBlocks = slots.map(s => {
     const opts = s.options.map(o => {
       const flags = [o.vegan ? 'vegan' : null, o.stimulant ? 'stimulant' : null].filter(Boolean).join(', ')
-      return `    - ${o.id} | ${o.name} | ${o.category} | £${o.price.toFixed(2)}${flags ? ` | ${flags}` : ''} | ${o.reason}`
+      const claims = o.claims.length ? ` | approved claims: ${o.claims.join('; ')}` : ''
+      return `    - ${o.id} | ${o.name} | ${o.category} | £${o.price.toFixed(2)}${flags ? ` | ${flags}` : ''} | ${o.reason}${claims}`
     })
     return `  Slot "${s.slotId}" (${s.title} — ${s.description}); current: ${s.currentProductId}\n${opts.join('\n')}`
   })
@@ -221,7 +129,7 @@ export function parseBlueprintResult(
   const rawReasons = obj.reasons && typeof obj.reasons === 'object' ? (obj.reasons as Record<string, unknown>) : {}
   for (const [slotId, reason] of Object.entries(rawReasons)) {
     if (!optionIdsBySlot[slotId] || typeof reason !== 'string') continue
-    const clean = stripMd(reason).slice(0, 180)
+    const clean = stripMd(reason).slice(0, 280)
     if (clean) reasons[slotId] = clean
   }
 

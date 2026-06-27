@@ -46,10 +46,10 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: prompt },
         ],
         response_format: { type: 'json_object' },
-        max_tokens: 700,
-        temperature: 0.3,
+        max_tokens: 1200,
+        temperature: 0.4,
       },
-      { timeout: 9000 },
+      { timeout: 12000 },
     )
 
     const rawContent = completion.choices[0]?.message?.content?.trim() ?? ''

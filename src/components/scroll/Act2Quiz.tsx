@@ -2,7 +2,6 @@
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
-import { useProducts } from '@/hooks/useProducts'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
@@ -445,11 +444,9 @@ interface Props { onComplete: () => void; reducedMotion: boolean }
 export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
     step, answers, nextStep, prevStep, setStep,
-    setGoals, setAnswer, setIdentity, setSelectedProducts, setStackLevel, setAiStackMeta, setStackReady,
+    setGoals, setAnswer, setIdentity, setStackLevel, setStackReady,
   } = useQuizStore()
 
-  // Hydrate live catalogue while the user answers the quiz
-  useProducts()
   const { products: liveCatalogue } = useCatalogueProducts() // Populates store.catalogueProducts for blueprint generation
 
   // Pre-compute the full ranked stack (with unlimited budget) so budget cards
@@ -563,7 +560,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   async function generateStack() {
     try {
-      const { fetchRecommendedStack } = await import('@/lib/recommendation')
       const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
       const { personaliseBlueprint } = await import('@/lib/stack-blueprint/personalise')
 
@@ -572,19 +568,16 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
       // Run the AI passes concurrently. Each falls back to deterministic output
       // on failure, and identity falls back too, so this never rejects.
-      const [identity, stack, blueprint] = await Promise.all([
+      const [identity, blueprint] = await Promise.all([
         fetch('/api/generate-identity', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(answers),
         }).then(r => r.json()).catch(() => FALLBACK_IDENTITY),
-        fetchRecommendedStack(answers, useQuizStore.getState().catalogue),
         personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
       ])
 
       setIdentity(identity ?? FALLBACK_IDENTITY)
-      setSelectedProducts(stack.core)
-      setAiStackMeta(stack.aiReasons, stack.personalised)
       setStackLevel(
         answers.stackPreference === 'simple' ? 'essentials'
           : answers.stackPreference === 'complete' ? 'complete'
