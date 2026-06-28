@@ -12,7 +12,9 @@ type Act = 1 | 2 | 3 | 4 | 5
 const TRANSITIONS: Record<Act, string> = {
   1: 'animate-[fade-in_0.6s_ease_both]',
   2: 'animate-[slide-from-right_0.5s_cubic-bezier(0.22,1,0.36,1)_both]',
-  3: 'animate-[fade-in_0.4s_ease_both]',
+  // Act 3 enters with no wrapper fade so the charge rail can morph seamlessly
+  // into the machine battery across the Act 2 -> Act 3 boundary.
+  3: '',
   4: 'animate-[slide-from-right_0.5s_cubic-bezier(0.22,1,0.36,1)_both]',
   5: 'animate-[slide-from-right_0.5s_cubic-bezier(0.22,1,0.36,1)_both]',
 }
