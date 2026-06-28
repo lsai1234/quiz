@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
 
@@ -48,14 +48,17 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   const coreRingRef = useRef<SVGCircleElement>(null)
   const flareRef = useRef<HTMLDivElement>(null)
   const sparkRef = useRef<HTMLDivElement>(null)
-  const morphRef = useRef<HTMLDivElement>(null)
-  const morphFillRef = useRef<HTMLDivElement>(null)
+  const shellRef = useRef<HTMLDivElement>(null)
+  const capRef = useRef<HTMLDivElement>(null)
+  const boltRef = useRef<HTMLDivElement>(null)
+  const highlightRef = useRef<HTMLDivElement>(null)
+  const slotRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLParagraphElement>(null)
   const [docked, setDocked] = useState(reducedMotion)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const minDisplay = reducedMotion ? 900 : 4200
-    const dockAt = reducedMotion ? 0 : 1.0 // seconds until the battery is seated
+    const dockAt = reducedMotion ? 0 : 1.15 // seconds until the battery is seated
     let animDone = false
     let ready = useQuizStore.getState().stackReady
     let finished = false
@@ -71,6 +74,14 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
     }
     render()
 
+    // The battery is a fixed element sat exactly over its in-flow slot, so the
+    // SAME element can morph from the rail's shape to the battery's without
+    // reflowing the machine beneath it (and with no second element to "flip").
+    const slot = slotRef.current?.getBoundingClientRect()
+    const seat = () => {
+      if (slot) gsap.set(batteryRef.current, { position: 'fixed', margin: 0, zIndex: 30, left: slot.left, top: slot.top, width: slot.width, height: slot.height })
+    }
+
     const finish = () => {
       if (finished || !animDone || !ready) return
       finished = true
@@ -79,8 +90,8 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       gsap.to(proxy, { p: 1, duration: 0.5, ease: 'power2.in', onUpdate: render })
       if (flareRef.current) flareRef.current.style.animation = 'core-flare 0.65s ease-out forwards'
       gsap.to(coreRef.current, { scale: 1.12, duration: 0.28, ease: 'power2.out', delay: 0.18, yoyo: true, repeat: 1 })
-      gsap.to([batteryRef.current], { opacity: 0.25, duration: 0.4, ease: 'power2.in', delay: 0.2 })
-      gsap.to([vizRef.current], { opacity: 0, scale: 1.06, duration: 0.5, ease: 'power2.in', delay: 0.6, onComplete })
+      gsap.to(batteryRef.current, { opacity: 0.25, duration: 0.4, ease: 'power2.in', delay: 0.2 })
+      gsap.to(vizRef.current, { opacity: 0, scale: 1.06, duration: 0.5, ease: 'power2.in', delay: 0.6, onComplete })
       gsap.to(textRef.current, { opacity: 0, duration: 0.35, ease: 'power2.in', delay: 0.6 })
     }
 
@@ -93,40 +104,42 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
 
     let tl: gsap.core.Timeline | null = null
 
-    if (!reducedMotion) {
+    if (reducedMotion) {
+      seat()
+      gsap.set(batteryRef.current, { opacity: 1 })
+    } else if (slot) {
       tl = gsap.timeline()
-      // Stage fades up.
       tl.fromTo(vizRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0)
       // Core sits dim until the battery docks.
       gsap.set(coreRef.current, { opacity: 0.32 })
-      // The real battery starts hidden; the morphing rail overlay becomes it.
-      gsap.set(batteryRef.current, { opacity: 0 })
 
-      // 1) Morph — the side charge rail detaches from the screen edge and reshapes
-      //    into the machine battery. Shared-element continuity from the quiz: the
-      //    overlay starts exactly where/how the rail sat, then becomes the battery.
-      const morph = morphRef.current
-      const bRect = batteryRef.current?.getBoundingClientRect()
-      if (morph && bRect && bRect.width) {
-        const vw = window.innerWidth
-        const vh = window.innerHeight
-        const H = Math.min(vh * 0.56, 420) // matches ChargeRail's inner height
-        gsap.set(morph, { left: vw - 24, top: (vh - H) / 2 + 10, width: 6, height: H - 46, borderRadius: 999, opacity: 1 })
-        // Top the charge off to full as the rail becomes the battery.
-        const fillProxy = { h: 92 }
-        tl.to(fillProxy, {
-          h: 100, duration: 0.85, ease: 'power2.out',
-          onUpdate: () => { if (morphFillRef.current) morphFillRef.current.style.height = `${fillProxy.h}%` },
-        }, 0.05)
-        tl.to(morph, {
-          left: bRect.left, top: bRect.top, width: bRect.width, height: bRect.height, borderRadius: 18,
-          duration: 0.9, ease: 'power3.inOut',
-        }, 0.05)
-      }
+      // Start the battery AS the charge rail: slim, pinned to the screen edge,
+      // the glass details hidden so only the cyan fill reads (exactly the rail).
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const H = Math.min(vh * 0.56, 420) // matches ChargeRail's inner height
+      gsap.set(batteryRef.current, { position: 'fixed', margin: 0, zIndex: 30, opacity: 1, left: vw - 24, top: (vh - H) / 2 + 10, width: 6, height: H - 46 })
+      gsap.set(shellRef.current, { borderRadius: 999 })
+      gsap.set([capRef.current, highlightRef.current, pctRef.current, boltRef.current], { opacity: 0 })
+      if (fillRef.current) fillRef.current.style.height = '92%'
 
-      // 2) Dock/handoff — overlay cross-fades into the real battery; core wakes.
-      tl.to(batteryRef.current, { opacity: 1, duration: 0.22, ease: 'power2.out' }, dockAt - 0.06)
-      if (morph) tl.to(morph, { opacity: 0, duration: 0.22, ease: 'power2.in' }, dockAt - 0.02)
+      // One continuous motion: the SAME element reshapes (size + corner radius)
+      // and glides to the dock on a single eased curve — no shape "flip".
+      const ease = 'power2.inOut'
+      tl.to(batteryRef.current, { left: slot.left, top: slot.top, width: slot.width, height: slot.height, duration: 1.15, ease }, 0)
+      tl.to(shellRef.current, { borderRadius: 18, duration: 1.15, ease }, 0)
+
+      // Top the charge off to full as it becomes the battery.
+      const fillProxy = { h: 92 }
+      tl.to(fillProxy, { h: 100, duration: 0.95, ease: 'power1.out', onUpdate: () => { if (fillRef.current) fillRef.current.style.height = `${fillProxy.h}%` } }, 0.1)
+
+      // The battery's glass details emerge as the shape resolves — no sudden pop.
+      tl.to(capRef.current, { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.62)
+      tl.to(highlightRef.current, { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.62)
+      tl.to(boltRef.current, { opacity: 0.3, duration: 0.55, ease: 'power2.out' }, 0.66)
+      tl.to(pctRef.current, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 0.85)
+
+      // Dock — connectors spark, core wakes.
       tl.add(() => {
         setDocked(true)
         if (sparkRef.current) sparkRef.current.style.animation = 'charge-burst 0.5s ease-out forwards'
@@ -134,7 +147,7 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       tl.to(coreRef.current, { opacity: 1, duration: 0.4, ease: 'power2.out' }, dockAt)
       tl.fromTo(coreRef.current, { scale: 0.94 }, { scale: 1, duration: 0.45, ease: 'back.out(1.6)' }, dockAt)
 
-      // 3) Discharge — drain most of the battery into the core.
+      // Discharge — drain most of the battery into the core.
       tl.to(proxy, { p: 0.92, duration: minDisplay / 1000 - dockAt - 0.5, ease: 'power1.inOut', onUpdate: render }, dockAt + 0.1)
 
       const messages = ['Plugging in your charge…', 'Powering CHRGD Intelligence…', 'Reading your profile…', 'Building your stack…']
@@ -146,6 +159,10 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
           }
         }, [], dockAt + 0.1 + i * ((minDisplay / 1000 - dockAt - 0.5) / 4))
       })
+    } else {
+      // Fallback (no slot measured): just show the battery in place.
+      seat()
+      gsap.set(batteryRef.current, { opacity: 1 })
     }
 
     return () => { unsub(); clearTimeout(minTimer); tl?.kill() }
@@ -154,51 +171,42 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   return (
     <div className="w-full min-h-[100dvh] bg-[#0A0A0A] flex flex-col items-center justify-center px-6 overflow-hidden">
 
-      {/* Morph overlay — starts as the quiz charge rail (slim, screen edge) and
-          reshapes into the machine battery, then hands off to the real one. */}
-      {!reducedMotion && (
+      {/* Battery — a single element that starts as the quiz charge rail and morphs
+          into this glass cell (fixed, sat over its in-flow slot below). */}
+      <div ref={batteryRef} style={{ position: 'fixed', zIndex: 30, width: 68, height: 120, opacity: reducedMotion ? 1 : 0 }}>
+        {/* terminal cap */}
+        <div ref={capRef} className="absolute left-1/2 -translate-x-1/2 -top-[6px] rounded-[3px]" style={{ width: 26, height: 6, background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
+        {/* shell */}
         <div
-          ref={morphRef}
-          aria-hidden
-          className="fixed pointer-events-none overflow-hidden"
-          style={{ opacity: 0, zIndex: 40, left: 0, top: 0, width: 6, height: 100, borderRadius: 999, background: 'rgba(255,255,255,0.05)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}
+          ref={shellRef}
+          className="absolute inset-0 overflow-hidden"
+          style={{
+            borderRadius: 18,
+            background: 'linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015))',
+            boxShadow: reducedMotion
+              ? 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06)'
+              : 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06), 0 0 26px -6px rgba(0,212,255,0.5)',
+            animation: reducedMotion ? undefined : 'battery-hum 2.8s ease-in-out infinite',
+          }}
         >
-          <div ref={morphFillRef} className="absolute inset-x-0 bottom-0" style={{ height: '92%', borderRadius: 999, background: 'linear-gradient(to top, #00D4FF, rgba(0,212,255,0.5))', boxShadow: '0 0 14px rgba(0,212,255,0.45)' }}>
-            <div className="absolute inset-x-0 top-0 rounded-full" style={{ height: 9, background: 'linear-gradient(to bottom, rgba(255,255,255,0.7), transparent)' }} />
+          {/* charge fill */}
+          <div ref={fillRef} className="absolute inset-x-0 bottom-0" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
+            <div className="absolute inset-x-0 top-0" style={{ height: 8, background: 'linear-gradient(180deg, rgba(255,255,255,0.65), transparent)' }} />
           </div>
+          {/* bolt watermark */}
+          <div ref={boltRef} className="absolute inset-0 flex items-center justify-center opacity-30 mix-blend-overlay"><Bolt /></div>
+          {/* glass highlight */}
+          <div ref={highlightRef} className="absolute inset-y-2 left-2 w-2 rounded-full pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent 60%)' }} />
         </div>
-      )}
+        <span ref={pctRef} className="absolute -right-11 top-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>100%</span>
+        {/* contact spark at the terminal */}
+        <div ref={sparkRef} className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full pointer-events-none" style={{ width: 22, height: 22, opacity: 0, background: 'radial-gradient(circle, rgba(255,255,255,0.95), rgba(0,212,255,0.6) 50%, transparent 70%)' }} />
+      </div>
 
       <div ref={vizRef} className="relative flex flex-col items-center" style={{ opacity: reducedMotion ? 1 : 0, width: 320 }}>
 
-        {/* Battery — a refined glass cell */}
-        <div ref={batteryRef} className="relative" style={{ width: 68, height: 120, opacity: reducedMotion ? 1 : 0 }}>
-          {/* terminal cap */}
-          <div className="absolute left-1/2 -translate-x-1/2 -top-[6px] rounded-[3px]" style={{ width: 26, height: 6, background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
-          {/* shell */}
-          <div
-            className="absolute inset-0 rounded-[18px] overflow-hidden"
-            style={{
-              background: 'linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015))',
-              boxShadow: reducedMotion
-                ? 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06)'
-                : 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06), 0 0 26px -6px rgba(0,212,255,0.5)',
-              animation: reducedMotion ? undefined : 'battery-hum 2.8s ease-in-out infinite',
-            }}
-          >
-            {/* charge fill */}
-            <div ref={fillRef} className="absolute inset-x-0 bottom-0" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
-              <div className="absolute inset-x-0 top-0" style={{ height: 8, background: 'linear-gradient(180deg, rgba(255,255,255,0.65), transparent)' }} />
-            </div>
-            {/* bolt watermark */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-30 mix-blend-overlay"><Bolt /></div>
-            {/* glass highlight */}
-            <div className="absolute inset-y-2 left-2 w-2 rounded-full pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent 60%)' }} />
-          </div>
-          <span ref={pctRef} className="absolute -right-11 top-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>100%</span>
-          {/* contact spark at the terminal */}
-          <div ref={sparkRef} className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full pointer-events-none" style={{ width: 22, height: 22, opacity: 0, background: 'radial-gradient(circle, rgba(255,255,255,0.95), rgba(0,212,255,0.6) 50%, transparent 70%)' }} />
-        </div>
+        {/* Battery slot — reserves the docked battery's space in the column */}
+        <div ref={slotRef} aria-hidden style={{ width: 68, height: 120 }} />
 
         {/* Conduit gap — electric bolts leap from the battery into the core when docked */}
         <div className="relative my-1.5" style={{ width: 60, height: 52 }}>
