@@ -237,14 +237,12 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
     if (!section) return
 
     const L = getLayout()
-    let mobileCleanup: (() => void) | null = null
 
     // ── Progress feedback ───────────────────────────────────────────────────
     // Drives the side rail fill, the % readout, the beat ticks, and fades the
     // rail + scroll prompt out as the intro nears its end. Called from
-    // ScrollTrigger (desktop) and the physics ticker (mobile) — direct DOM
-    // writes, no React re-renders. `beatFracs` is filled once the timeline
-    // exists (see below) and read by closure here.
+    // ScrollTrigger's onUpdate — direct DOM writes, no React re-renders.
+    // `beatFracs` is filled once the timeline exists (see below).
     let beatFracs: number[] = []
     const updateProgress = (p: number) => {
       const cp = Math.max(0, Math.min(1, p))
@@ -433,109 +431,25 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         if (el && beatFracs[i] !== undefined) el.style.top = `${beatFracs[i] * 100}%`
       })
 
-      if (L.mobile) {
-        // ── Mobile: physics momentum ────────────────────────────────────────
-        // The section is fixed in the viewport. Touch events feed a velocity
-        // into a friction loop: big flick → animation plays fast then coasts
-        // to a stop, just like a page decelerating after a scroll.
-        gsap.set(section, { position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', zIndex: 10 })
-        updateProgress(0)
-
-        const FRICTION    = 0.985   // velocity multiplier per 16.67 ms frame — higher = longer coast
-        const MAX_VEL     = 0.00035 // progress/ms cap
-        const PX_SCALE    = 0.00015 // converts px/ms swipe speed → progress/ms
-        const STOP_BELOW  = 0.000001
-
-        let velocity = 0
-        let samples: { y: number; t: number }[] = []
-
-        // Each frame: apply friction and advance timeline by current velocity
-        const tick = (_time: number, deltaTime: number) => {
-          if (Math.abs(velocity) < STOP_BELOW) { velocity = 0; return }
-          const dt = Math.min(deltaTime, 50)
-          velocity *= Math.pow(FRICTION, dt / 16.67)
-          tl.progress(Math.max(0, Math.min(1, tl.progress() + velocity * dt)))
-          updateProgress(tl.progress())
-        }
-        gsap.ticker.add(tick)
-
-        const onTouchStart = (e: TouchEvent) => {
-          // Let taps on buttons/links pass through so the CTA still works
-          if ((e.target as Element).closest('button, a')) return
-          e.preventDefault()
-          velocity = 0
-          samples = [{ y: e.touches[0].clientY, t: performance.now() }]
-        }
-
-        const onTouchMove = (e: TouchEvent) => {
-          if (!samples.length) return  // touchstart was not intercepted (interactive target)
-          e.preventDefault()
-          const y = e.touches[0].clientY
-          const t = performance.now()
-          samples.push({ y, t })
-          if (samples.length > 6) samples.shift()
-          if (samples.length >= 2) {
-            const prev = samples[samples.length - 2]
-            const dt = t - prev.t
-            if (dt > 0) {
-              // Lerp towards target velocity so acceleration feels gradual
-              const target = ((prev.y - y) / dt) * PX_SCALE
-              const clamped = Math.max(-MAX_VEL, Math.min(MAX_VEL, target))
-              velocity = velocity * 0.75 + clamped * 0.25
-            }
-          }
-        }
-
-        const onTouchEnd = () => {
-          // Launch with the velocity measured just before lift
-          if (samples.length >= 2) {
-            const now = performance.now()
-            const recent = samples.filter(s => now - s.t < 120)
-            if (recent.length >= 2) {
-              const first = recent[0], last = recent[recent.length - 1]
-              const dt = last.t - first.t
-              if (dt > 0) {
-                const v = ((first.y - last.y) / dt) * PX_SCALE
-                velocity = Math.max(-MAX_VEL, Math.min(MAX_VEL, v))
-              }
-            } else {
-              velocity *= 0.4  // stale samples — dampen heavily
-            }
-          }
-          samples = []
-        }
-
-        section.addEventListener('touchstart',  onTouchStart, { passive: false })
-        section.addEventListener('touchmove',   onTouchMove,  { passive: false })
-        section.addEventListener('touchend',    onTouchEnd,   { passive: true })
-        section.addEventListener('touchcancel', onTouchEnd,   { passive: true })
-
-        mobileCleanup = () => {
-          gsap.ticker.remove(tick)
-          section.removeEventListener('touchstart',  onTouchStart)
-          section.removeEventListener('touchmove',   onTouchMove)
-          section.removeEventListener('touchend',    onTouchEnd)
-          section.removeEventListener('touchcancel', onTouchEnd)
-        }
-
-      } else {
-        // ── Desktop: scroll-scrubbed ────────────────────────────────────────
-        ScrollTrigger.create({
-          trigger:       section,
-          start:         'top top',
-          end:           '+=320%',
-          pin:           true,
-          scrub:         1,
-          animation:     tl,
-          anticipatePin: 1,
-          onUpdate:      (self) => updateProgress(self.progress),
-        })
-        updateProgress(0)
-      }
+      // ── Native scroll-scrubbed (desktop + mobile) ───────────────────────
+      // One pinned, scroll-linked timeline drives the whole intro. This uses the
+      // page's own scroll on every device — no touch hijacking, no custom physics
+      // — so it's smooth, predictable and never traps the user.
+      ScrollTrigger.create({
+        trigger:       section,
+        start:         'top top',
+        end:           '+=320%',
+        pin:           true,
+        scrub:         L.mobile ? 0.6 : 1,   // a touch snappier on mobile
+        animation:     tl,
+        anticipatePin: 1,
+        onUpdate:      (self) => updateProgress(self.progress),
+      })
+      updateProgress(0)
 
     }, section)  // scope gsap.context to the section element
 
-    return () => { mobileCleanup?.(); ctx.revert() }
+    return () => { ctx.revert() }
   }, [assetsReady, reducedMotion, getLayout, resizeKey])
 
   // ── Reduced-motion: static composed layout ────────────────────────────────
