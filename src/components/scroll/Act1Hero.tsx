@@ -43,14 +43,12 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   const setAnswer = useQuizStore((s) => s.setAnswer)
   const setGoals = useQuizStore((s) => s.setGoals)
 
-  function start(track: QuizTrack | null) {
+  function start(track: QuizTrack) {
     setAnswer('track', track)
-    if (track) {
-      // Fresh goals/follow-ups for the chosen track; the quiz's goals step then
-      // renders the grid directly (no duplicate track chooser).
-      setGoals([])
-      setAnswer('wellbeingAnswers', {})
-    }
+    // Fresh goals/follow-ups for the chosen track; the quiz's goals step then
+    // renders the grid directly (no duplicate track chooser).
+    setGoals([])
+    setAnswer('wellbeingAnswers', {})
     onEnterQuiz()
   }
 
@@ -118,11 +116,6 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
             </button>
           ))}
         </div>
-
-        {/* Undecided escape */}
-        <button onClick={() => start(null)} className="mt-5 text-xs text-white/35 underline underline-offset-2 active:opacity-60">
-          Not sure? Start anyway →
-        </button>
 
         {/* Trust row (honest cues; real social proof can slot in here later) */}
         <div className="flex items-center justify-center gap-2.5 mt-9 flex-wrap">
