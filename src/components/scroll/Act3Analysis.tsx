@@ -32,9 +32,8 @@ function Bolt() {
 }
 
 const DATA_POINTS = [
-  { x: 16, y: 24, s: 3, d: 0 }, { x: 84, y: 18, s: 2, d: 0.4 }, { x: 90, y: 60, s: 3, d: 0.8 },
-  { x: 78, y: 84, s: 2, d: 0.2 }, { x: 18, y: 80, s: 3, d: 0.6 }, { x: 8, y: 52, s: 2, d: 1.0 },
-  { x: 50, y: 8, s: 2, d: 0.3 }, { x: 50, y: 92, s: 2, d: 0.7 },
+  { x: 16, y: 24, s: 2, d: 0 }, { x: 88, y: 30, s: 2, d: 0.6 }, { x: 84, y: 76, s: 2, d: 1.0 },
+  { x: 20, y: 80, s: 2, d: 0.3 }, { x: 50, y: 10, s: 2, d: 0.8 },
 ]
 
 const CORE_R = 52
@@ -75,7 +74,7 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       if (finished || !animDone || !ready) return
       finished = true
       if (reducedMotion) { onComplete(); return }
-      if (textRef.current) textRef.current.textContent = 'Powering on ⚡'
+      if (textRef.current) textRef.current.textContent = 'Powering on'
       gsap.to(proxy, { p: 1, duration: 0.5, ease: 'power2.in', onUpdate: render })
       if (flareRef.current) flareRef.current.style.animation = 'core-flare 0.65s ease-out forwards'
       gsap.to(coreRef.current, { scale: 1.12, duration: 0.28, ease: 'power2.out', delay: 0.18, yoyo: true, repeat: 1 })
@@ -100,9 +99,9 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       // Core sits dim until the battery docks.
       gsap.set(coreRef.current, { opacity: 0.32 })
 
-      // 1) Arrive — the battery flies in from the top-right and seats upright.
-      gsap.set(batteryRef.current, { x: 150, y: -140, rotate: 26, scale: 0.5, opacity: 0, transformOrigin: 'center' })
-      tl.to(batteryRef.current, { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1, duration: 0.95, ease: 'power3.inOut' }, 0.15)
+      // 1) Arrive — the rail-battery detaches from the right edge and seats upright.
+      gsap.set(batteryRef.current, { x: 210, y: 36, rotate: 14, scale: 0.62, opacity: 0, transformOrigin: 'center' })
+      tl.to(batteryRef.current, { x: 0, y: 0, rotate: 0, scale: 1, opacity: 1, duration: 1.05, ease: 'power3.inOut' }, 0.15)
       // motion streak trailing the glide
       if (streakRef.current) {
         tl.fromTo(streakRef.current, { opacity: 0 }, { opacity: 0.5, duration: 0.3, ease: 'power1.out' }, 0.2)
@@ -135,31 +134,54 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   }, [onComplete, reducedMotion])
 
   return (
-    <div className="w-full min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-6 overflow-hidden">
+    <div className="w-full min-h-[100dvh] bg-[#0A0A0A] flex flex-col items-center justify-center px-6 overflow-hidden">
       <div ref={vizRef} className="relative flex flex-col items-center" style={{ opacity: 0, width: 320 }}>
 
-        {/* Motion streak (trails the battery's glide) */}
-        <div ref={streakRef} className="absolute pointer-events-none" style={{ opacity: 0, top: 6, right: 28, width: 150, height: 2, transform: 'rotate(42deg)', transformOrigin: 'right center', background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.85))', filter: 'blur(2px)' }} />
+        {/* Motion streak (trails the battery's glide in from the rail edge) */}
+        <div ref={streakRef} className="absolute pointer-events-none" style={{ opacity: 0, top: 54, right: -24, width: 180, height: 2, transform: 'rotate(9deg)', transformOrigin: 'right center', background: 'linear-gradient(90deg, transparent, rgba(0,212,255,0.8))', filter: 'blur(2px)' }} />
 
-        {/* Battery */}
-        <div ref={batteryRef} className="relative" style={{ width: 70, height: 120 }}>
-          <div className="absolute left-1/2 -translate-x-1/2 -top-[7px] rounded-md" style={{ width: 28, height: 7, background: 'rgba(255,255,255,0.32)' }} />
-          <div className="absolute inset-0 rounded-2xl border-2 overflow-hidden" style={{ borderColor: 'rgba(255,255,255,0.28)', animation: reducedMotion ? undefined : 'battery-hum 2.4s ease-in-out infinite' }}>
-            <div ref={fillRef} className="absolute inset-x-0 bottom-0" style={{ height: '100%', background: 'linear-gradient(180deg, #00D4FF, rgba(0,212,255,0.5))' }}>
-              {!reducedMotion && <div className="absolute inset-x-0 top-0 h-1/3" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.5), transparent)' }} />}
+        {/* Battery — a refined glass cell */}
+        <div ref={batteryRef} className="relative" style={{ width: 68, height: 120 }}>
+          {/* terminal cap */}
+          <div className="absolute left-1/2 -translate-x-1/2 -top-[6px] rounded-[3px]" style={{ width: 26, height: 6, background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
+          {/* shell */}
+          <div
+            className="absolute inset-0 rounded-[18px] overflow-hidden"
+            style={{
+              background: 'linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015))',
+              boxShadow: reducedMotion
+                ? 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06)'
+                : 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06), 0 0 26px -6px rgba(0,212,255,0.5)',
+              animation: reducedMotion ? undefined : 'battery-hum 2.8s ease-in-out infinite',
+            }}
+          >
+            {/* charge fill */}
+            <div ref={fillRef} className="absolute inset-x-0 bottom-0" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
+              <div className="absolute inset-x-0 top-0" style={{ height: 8, background: 'linear-gradient(180deg, rgba(255,255,255,0.65), transparent)' }} />
             </div>
-            <div className="absolute inset-0 flex items-center justify-center mix-blend-overlay"><Bolt /></div>
+            {/* bolt watermark */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-30 mix-blend-overlay"><Bolt /></div>
+            {/* glass highlight */}
+            <div className="absolute inset-y-2 left-2 w-2 rounded-full pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.35), transparent 60%)' }} />
           </div>
-          <span ref={pctRef} className="absolute -right-11 top-1/2 -translate-y-1/2 text-sm font-black tabular-nums" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>100%</span>
+          <span ref={pctRef} className="absolute -right-11 top-1/2 -translate-y-1/2 text-sm font-semibold tabular-nums" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>100%</span>
           {/* contact spark at the terminal */}
           <div ref={sparkRef} className="absolute left-1/2 -translate-x-1/2 -bottom-2 rounded-full pointer-events-none" style={{ width: 22, height: 22, opacity: 0, background: 'radial-gradient(circle, rgba(255,255,255,0.95), rgba(0,212,255,0.6) 50%, transparent 70%)' }} />
         </div>
 
-        {/* Conduit gap — energy arcs leap from the battery into the core when docked */}
+        {/* Conduit gap — electric bolts leap from the battery into the core when docked */}
         <div className="relative my-1.5" style={{ width: 60, height: 52 }}>
-          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0" style={{ width: 2, background: 'rgba(0,212,255,0.12)' }} />
-          {docked && !reducedMotion && [0, 0.36, 0.72].map((d, i) => (
-            <div key={i} className="absolute left-1/2 top-0 rounded-full" style={{ width: 6, height: 6, background: '#fff', boxShadow: '0 0 10px 2px rgba(0,212,255,0.9)', '--arc': '78px', animation: `arc-fly 0.95s linear ${d}s infinite` } as React.CSSProperties} />
+          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0" style={{ width: 1, background: 'linear-gradient(180deg, rgba(0,212,255,0.28), rgba(0,212,255,0.06))' }} />
+          {docked && !reducedMotion && [0, 0.34, 0.68].map((d, i) => (
+            <div
+              key={i}
+              className="absolute left-1/2 top-0"
+              style={{ '--arc': '76px', animation: `arc-fly 1s linear ${d}s infinite`, filter: 'drop-shadow(0 0 5px rgba(0,212,255,0.9))' } as React.CSSProperties}
+            >
+              <svg width="9" height="13" viewBox="0 0 100 115" fill="none">
+                <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#fff" />
+              </svg>
+            </div>
           ))}
         </div>
 
@@ -175,7 +197,7 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
             <circle ref={coreRingRef} cx="95" cy="95" r={CORE_R} fill="none" stroke={ACCENT} strokeWidth="3" strokeLinecap="round"
               strokeDasharray={CORE_CIRC} strokeDashoffset={CORE_CIRC} style={{ filter: 'drop-shadow(0 0 5px rgba(0,212,255,0.8))' }} />
           </svg>
-          <div className="absolute inset-0" style={{ animation: reducedMotion ? undefined : 'spin-slow 3.5s linear infinite' }}>
+          <div className="absolute inset-0" style={{ animation: reducedMotion ? undefined : 'spin-slow 6s linear infinite' }}>
             <svg viewBox="0 0 190 190" fill="none" className="w-full h-full">
               <circle cx="95" cy="95" r="84" stroke={ACCENT} strokeWidth="1.2" strokeLinecap="round" strokeDasharray="44 500" style={{ filter: 'drop-shadow(0 0 5px rgba(0,212,255,0.8))' }} />
             </svg>
@@ -192,8 +214,8 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         <p ref={textRef} className="text-sm text-white/55 text-center mt-8" style={{ fontFamily: 'var(--font-display)', minHeight: '1.5em' }}>
           Plugging in your charge…
         </p>
-        <p className="text-[10px] tracking-[0.2em] uppercase text-white/25 flex items-center gap-1.5 mt-3" style={{ fontFamily: 'var(--font-display)' }}>
-          <span className="text-[#00D4FF]">✦</span> Powered by your charge
+        <p className="text-[10px] tracking-[0.22em] uppercase text-white/25 flex items-center gap-2 mt-3" style={{ fontFamily: 'var(--font-display)' }}>
+          <span className="inline-block w-1 h-1 rounded-full bg-[#00D4FF]" /> Powered by your charge
         </p>
       </div>
     </div>

@@ -6,8 +6,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
-import { ChargeMeter } from '@/components/quiz/ChargeMeter'
-import { ChargeAura } from '@/components/quiz/ChargeAura'
+import { ChargeRail } from '@/components/quiz/ChargeRail'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -285,28 +284,60 @@ const labelsOf = (data: Array<{ id: string; label: string }>, ids: string[]) => 
 
 // ─── Single option component ──────────────────────────────────────────────────
 
+// Editorial-minimal selection mark — a small precise check, accent on select.
+function CheckMark({ selected, reduced }: { selected: boolean; reduced?: boolean }) {
+  return (
+    <div
+      className={[
+        'shrink-0 w-[18px] h-[18px] rounded-full flex items-center justify-center border transition-all duration-200',
+        selected ? 'border-[#00D4FF] bg-[#00D4FF]' : 'border-white/15 bg-transparent',
+      ].join(' ')}
+      style={selected && !reduced ? { animation: 'check-pop 0.22s cubic-bezier(0.34,1.56,0.64,1) both' } : undefined}
+    >
+      {selected && (
+        <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+          <path d="M1 4L3.5 6.5L9 1" stroke="#0A0A0A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </div>
+  )
+}
+
+// One refined option card. No icons — confident type, a hairline border, and a
+// crisp accent-selected state. `multi` lays out a compact grid card; otherwise a
+// full-width row with optional sub-label. `icon` is accepted but intentionally
+// not rendered (editorial-minimal).
 function AnswerOption({
-  label, sub, icon, selected, multi, onClick,
+  label, sub, selected, multi, onClick,
 }: {
   label: string; sub?: string; icon?: string; selected: boolean
   multi?: boolean; onClick: () => void
 }) {
+  const base = selected
+    ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]'
+    : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]'
+
   if (multi) {
     return (
       <button
         onClick={onClick}
         aria-pressed={selected}
         className={[
-          'flex flex-col items-start gap-1.5 px-4 py-4 rounded-2xl border text-left w-full',
-          'transition-[background-color,border-color] duration-150',
-          'active:scale-[0.95] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50',
-          selected
-            ? 'border-[#00D4FF] bg-[#00D4FF] text-[#0A0A0A]'
-            : 'border-white/10 bg-white/[0.04] text-white/65 option-hover',
+          'relative w-full text-left rounded-xl border px-4 py-3.5 pr-9',
+          'transition-all duration-200 active:scale-[0.98]',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
+          base,
         ].join(' ')}
       >
-        {icon && <span className="text-xl leading-none">{icon}</span>}
-        <span className="text-xs font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
+        <span
+          className={`text-[13px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/70'}`}
+          style={{ fontFamily: 'var(--font-display)' }}
+        >
+          {label}
+        </span>
+        <div className="absolute top-1/2 right-3 -translate-y-1/2">
+          <CheckMark selected={selected} />
+        </div>
       </button>
     )
   }
@@ -316,30 +347,22 @@ function AnswerOption({
       onClick={onClick}
       aria-pressed={selected}
       className={[
-        'w-full flex items-center gap-4 px-5 py-4 rounded-2xl border text-left',
-        'transition-[background-color,border-color,box-shadow] duration-150',
-        'active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50',
-        selected
-          ? 'border-[#00D4FF] bg-[#00D4FF]/10 text-white'
-          : 'border-white/10 bg-white/[0.04] text-white/70 option-hover',
+        'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
+        'transition-all duration-200 active:scale-[0.99]',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
+        base,
       ].join(' ')}
-      style={selected ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.25), inset 0 0 20px rgba(0,212,255,0.06)' } : undefined}
     >
-      <div className={`shrink-0 w-1 h-7 rounded-full transition-colors duration-150 ${selected ? 'bg-[#00D4FF]' : 'bg-transparent'}`} />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-        {sub && <div className="text-xs mt-0.5 text-white/35">{sub}</div>}
-      </div>
-      {selected && (
         <div
-          className="shrink-0 w-5 h-5 rounded-full bg-[#00D4FF] flex items-center justify-center"
-          style={{ animation: 'check-pop 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}
+          className={`text-[15px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/80'}`}
+          style={{ fontFamily: 'var(--font-display)' }}
         >
-          <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-            <path d="M1 4L3.5 6.5L9 1" stroke="#0A0A0A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          {label}
         </div>
-      )}
+        {sub && <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>}
+      </div>
+      <CheckMark selected={selected} />
     </button>
   )
 }
@@ -402,15 +425,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
-  // ── Charge Meter (the getCHRGD signature) — climbs as you answer ──
+  // ── Charge rail (the getCHRGD signature) — climbs as you answer ──
   // Tops out at ~92% in the quiz; Act 3 finishes the charge and "powers on".
   const charge = Math.round(8 + (index / Math.max(1, seq.length - 1)) * 84)
   const [surgeKey, setSurgeKey] = useState(0)
-  const [chargeDelta, setChargeDelta] = useState(0)
   const prevChargeRef = useRef(charge)
   useEffect(() => {
-    const d = charge - prevChargeRef.current
-    if (d > 0) { setChargeDelta(d); setSurgeKey((k) => k + 1) }
+    if (charge > prevChargeRef.current) setSurgeKey((k) => k + 1)
     prevChargeRef.current = charge
   }, [charge])
 
@@ -573,10 +594,17 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative min-h-screen bg-[#0A0A0A] text-white">
+    <div className="fixed top-0 left-0 right-0 h-[100dvh] bg-[#0A0A0A] text-white flex flex-col overflow-hidden">
 
-      {/* Ambient charge aura — the room charges up as you answer */}
-      <ChargeAura charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
+      {/* Charge rail — the getCHRGD signature, always in frame */}
+      <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
+
+      {/* A whisper of charge at the floor — calm, never competes with the question */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-0"
+        style={{ height: 180, background: 'radial-gradient(120% 100% at 50% 135%, rgba(0,212,255,0.06), transparent 70%)' }}
+      />
 
       {/* Generating overlay */}
       {isGenerating && (
@@ -588,94 +616,91 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           </div>
           <div className="text-center">
-            <p className="text-xl font-black text-white mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
-              Fully charged ⚡
+            <p className="text-xl font-semibold text-white mb-1.5 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+              Fully charged
             </p>
             <p className="text-sm text-white/35">Powering on your personalised stack…</p>
           </div>
           <div className="flex gap-1.5 mt-2">
             {Array.from({ length: 5 }).map((_, i) => (
-              <div key={i} className="h-2 w-6 rounded-full bg-[#00D4FF] animate-pulse"
-                style={{ boxShadow: '0 0 8px rgba(0,212,255,0.6)', animationDelay: `${i * 0.18}s` }} />
+              <div key={i} className="h-1.5 w-6 rounded-full bg-[#00D4FF] animate-pulse"
+                style={{ boxShadow: '0 0 8px rgba(0,212,255,0.5)', animationDelay: `${i * 0.18}s` }} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Top bar — logo + Charge Meter (the getCHRGD signature) */}
-      <div className="fixed top-0 left-0 right-0 z-40 h-16 flex items-center justify-between px-5">
-        <div className="flex items-center gap-2">
-          <CHRGDIcon size={18} />
-          <span className="text-white/50 text-xs font-bold tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>
+      {/* Brand + progress bar (persistent) */}
+      <div className="relative z-20 shrink-0 flex items-center justify-between pl-5 pr-[42px] pt-5 pb-1">
+        <div className="flex items-center gap-2.5">
+          {index > 0 && (
+            <button
+              onClick={goBack}
+              className="-ml-1 w-7 h-7 flex items-center justify-center rounded-full text-white/40 hover:text-white/80 transition-colors"
+              aria-label="Back"
+            >
+              <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
+          <CHRGDIcon size={16} />
+          <span className="text-white/40 text-[11px] font-semibold tracking-[0.18em]" style={{ fontFamily: 'var(--font-display)' }}>
             getCHRGD
           </span>
         </div>
-        <div className="flex flex-col items-end gap-0.5">
-          <ChargeMeter charge={charge} surgeKey={surgeKey} delta={chargeDelta} reducedMotion={reducedMotion} />
-          <span className="text-[9px] font-semibold tracking-wide text-white/30 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-            {id === 'review' ? 'Final step' : `Step ${index + 1} of ${seq.length - 1}`}
-          </span>
-        </div>
+        <span className="text-[10px] font-medium tracking-[0.12em] text-white/25 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
+          {id === 'review' ? 'FINAL STEP' : `${index + 1} / ${seq.length - 1}`}
+        </span>
       </div>
 
-      {/* Back button */}
-      {index > 0 && (
-        <button
-          onClick={goBack}
-          className="fixed top-[68px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50"
-          aria-label="Back"
-        >
-          <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-            <path d="M12 4L6 10L12 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      )}
-
-      {/* Step content */}
-      <div className="relative z-10 min-h-screen flex flex-col justify-center px-5 pt-28 pb-32 max-w-lg mx-auto">
-        <div key={`${id}-${animKey}`} className={slideClass}>
-
+      {/* Header zone — eyebrow + question + hint (always framed) */}
+      <div className="relative z-10 shrink-0 pl-5 pr-[42px] pt-4 pb-4">
+        <div key={`h-${id}-${animKey}`} className={`max-w-lg mx-auto w-full ${slideClass}`}>
           <span
-            className="text-[10px] font-bold tracking-[0.28em] uppercase text-[#00D4FF] mb-3 block"
-            style={{ fontFamily: 'var(--font-display)', textShadow: '0 0 14px rgba(0,212,255,0.4)' }}
+            className="text-[10px] font-semibold tracking-[0.26em] uppercase text-white/35 mb-3 block"
+            style={{ fontFamily: 'var(--font-display)' }}
           >
             {section}
           </span>
           <h2
             ref={headingRef}
             tabIndex={-1}
-            className="text-[1.9rem] font-black leading-tight tracking-tight text-white mb-2 outline-none"
+            className="text-[1.7rem] font-semibold leading-[1.12] tracking-[-0.02em] text-white outline-none"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {q}
           </h2>
-          <p className="text-sm text-white/35 mb-2">{hint}</p>
+          <p className="text-sm text-white/40 mt-2.5 leading-snug">{hint}</p>
           {isFirst && (
-            <p className="text-[11px] text-white/25 mb-6 flex items-center gap-1.5">
-              <span className="text-[#00D4FF]">✦</span>
+            <p className="text-[11px] text-white/25 mt-2">
               {seq.length - 1} quick questions · about a minute
             </p>
           )}
-          {!isFirst && <div className="mb-7" />}
+        </div>
+      </div>
+
+      {/* Options zone — the only thing that may scroll, and only within itself */}
+      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto scrollbar-hide pl-5 pr-[42px] pb-5">
+        <div key={`o-${id}-${animKey}`} className={`max-w-lg mx-auto w-full ${slideClass}`}>
 
           {/* ── Goals (track chooser → goals) ── */}
           {id === 'goals' && !answers.track && (
             <div className="flex flex-col gap-3">
               {([
-                { id: 'performance' as const, icon: '🏋️', label: 'Performance & training', sub: 'Build muscle, energy, recovery — for people who train' },
-                { id: 'wellbeing' as const, icon: '🌿', label: 'Everyday wellbeing', sub: 'Sleep, stress, focus, immunity — how you feel day to day' },
-              ]).map(({ id: tid, icon, label, sub }) => (
+                { id: 'performance' as const, label: 'Performance & training', sub: 'Build muscle, energy, recovery — for people who train' },
+                { id: 'wellbeing' as const, label: 'Everyday wellbeing', sub: 'Sleep, stress, focus, immunity — how you feel day to day' },
+              ]).map(({ id: tid, label, sub }) => (
                 <button
                   key={`track-${tid}`}
                   onClick={() => { setAnswer('track', tid); setGoals([]); setAnswer('wellbeingAnswers', {}) }}
-                  className="w-full flex items-center gap-4 px-5 py-6 rounded-2xl border border-white/10 bg-white/[0.04] text-left option-hover transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50"
+                  className="group w-full flex items-center gap-4 px-5 py-5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
                 >
-                  <span className="text-3xl leading-none">{icon}</span>
                   <div className="flex-1 min-w-0">
-                    <div className="text-base font-bold text-white" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-                    <div className="text-xs mt-1 text-white/35">{sub}</div>
+                    <div className="text-[15px] font-medium text-white" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+                    <div className="text-[13px] mt-1 text-white/40 leading-snug">{sub}</div>
                   </div>
-                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="text-white/30">
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="text-white/25 transition-transform duration-200 group-hover:translate-x-0.5">
                     <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
@@ -720,7 +745,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 ))}
                 <AnswerOption
                   key="gw-health"
-                  icon="🌿" label="General health" multi
+                  label="General health" multi
                   selected={answers.goals.includes('health')}
                   onClick={() => {
                     const c = answers.goals
@@ -858,7 +883,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   }}
                 />
               ))}
-              <AnswerOption key="l-none" icon="✓" label="None of these" multi selected={answers.lifestyle.length === 0} onClick={() => setAnswer('lifestyle', [])} />
+              <AnswerOption key="l-none" label="None of these" multi selected={answers.lifestyle.length === 0} onClick={() => setAnswer('lifestyle', [])} />
             </div>
           )}
 
@@ -967,20 +992,19 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   <button
                     key={`b-${bid}`}
                     onClick={() => { setAnswer('budget', bid); setAnswer('stackPreference', pref) }}
-                    className={['w-full flex flex-col gap-2 px-5 py-4 rounded-2xl border text-left transition-all duration-150 active:scale-[0.98]', active ? 'border-[#00D4FF] bg-[#00D4FF]/8 text-white' : 'border-white/10 bg-white/[0.04] text-white/70 option-hover'].join(' ')}
-                    style={active ? { boxShadow: '0 0 0 1px rgba(0,212,255,0.2), inset 0 0 24px rgba(0,212,255,0.05)' } : undefined}
+                    className={['w-full flex flex-col gap-2 px-5 py-4 rounded-xl border text-left transition-all duration-200 active:scale-[0.99]', active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07] text-white' : 'border-white/[0.08] bg-white/[0.015] text-white/70 hover:border-white/20 hover:bg-white/[0.04]'].join(' ')}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
-                      <div className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border transition-colors ${active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'}`}>{budget}</div>
+                      <span className="text-[15px] font-medium" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
+                      <div className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border transition-colors ${active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'}`}>{budget}</div>
                     </div>
-                    <p className={`text-xs leading-snug ${active ? 'text-white/60' : 'text-white/30'}`}>{sub}</p>
+                    <p className={`text-[13px] leading-snug ${active ? 'text-white/55' : 'text-white/30'}`}>{sub}</p>
                     <div className="flex items-start gap-1.5">
                       <span className={`text-[10px] mt-px ${active ? 'text-[#00D4FF]/60' : 'text-white/20'}`}>Includes</span>
-                      <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/70' : 'text-white/25'}`}>{includes}</span>
+                      <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/65' : 'text-white/25'}`}>{includes}</span>
                     </div>
                     <div className="flex justify-end">
-                      <span className={`text-[9px] font-bold tracking-widest uppercase ${active ? 'text-[#00D4FF]/70' : 'text-white/15'}`}>
+                      <span className={`text-[9px] font-semibold tracking-[0.16em] uppercase ${active ? 'text-[#00D4FF]/70' : 'text-white/15'}`}>
                         {actualCount} product{actualCount !== 1 ? 's' : ''}
                       </span>
                     </div>
@@ -995,12 +1019,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             <div className="flex flex-col gap-2">
               {reviewRows().map((r) => (
                 <button key={r.label} onClick={() => jumpTo(r.edit)}
-                  className="w-full flex items-start justify-between gap-3 px-4 py-3.5 rounded-2xl border border-white/10 bg-white/[0.04] text-left option-hover active:scale-[0.98] transition-all">
+                  className="w-full flex items-start justify-between gap-3 px-4 py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] active:scale-[0.99]">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold tracking-widest uppercase text-white/30" style={{ fontFamily: 'var(--font-display)' }}>{r.label}</p>
-                    <p className="text-sm font-semibold text-white mt-0.5 leading-snug">{r.value}</p>
+                    <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-white/30" style={{ fontFamily: 'var(--font-display)' }}>{r.label}</p>
+                    <p className="text-sm font-medium text-white mt-1 leading-snug">{r.value}</p>
                   </div>
-                  <span className="text-[11px] font-bold text-[#00D4FF] flex-shrink-0 mt-0.5">Edit</span>
+                  <span className="text-[11px] font-semibold text-[#00D4FF] flex-shrink-0 mt-0.5">Edit</span>
                 </button>
               ))}
             </div>
@@ -1026,25 +1050,25 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </div>
       </div>
 
-      {/* CTA footer — shown on every manual step */}
+      {/* CTA footer — an in-flow zone (no page scroll), shown on manual steps */}
       {current.advance === 'manual' && (
-        <div className="fixed bottom-0 left-0 right-0 px-5 pt-4 pb-8 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/90 to-transparent z-30">
+        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-7 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
           <div className="max-w-lg mx-auto">
             <button
               onClick={advance}
               disabled={!canContinue}
-              className={`w-full py-4 rounded-2xl text-sm font-bold tracking-wide transition-all active:scale-95 ${
+              className={`w-full py-4 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 active:scale-[0.99] ${
                 canContinue
                   ? (id === 'review' || id === 'budget') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
-                  : 'bg-white/8 text-white/20 cursor-not-allowed'
+                  : 'bg-white/[0.06] text-white/25 cursor-not-allowed'
               }`}
-              style={{ fontFamily: 'var(--font-display)', ...(canContinue && id === 'review' ? { animation: 'pulse-glow 2s ease-in-out infinite' } : {}) }}
+              style={{ fontFamily: 'var(--font-display)' }}
             >
-              {id === 'review' ? 'Build my stack →'
-                : id === 'budget' ? 'Review my answers →'
-                : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''} →`
-                : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()} →`
-                : 'Continue →'}
+              {id === 'review' ? 'Build my stack'
+                : id === 'budget' ? 'Review my answers'
+                : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`
+                : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()}`
+                : 'Continue'}
             </button>
           </div>
         </div>

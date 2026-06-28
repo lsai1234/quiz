@@ -104,14 +104,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
             <button
               key={t.id}
               onClick={() => start(t.id)}
-              className="w-full flex items-center gap-4 px-5 py-5 rounded-2xl border border-white/10 bg-white/[0.04] text-left option-hover transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50"
+              className="group w-full flex items-center gap-4 px-5 py-5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
             >
-              <span className="text-3xl leading-none">{t.icon}</span>
               <div className="flex-1 min-w-0">
-                <div className="text-base font-bold" style={{ fontFamily: 'var(--font-display)' }}>{t.label}</div>
-                <div className="text-xs mt-1 text-white/40">{t.sub}</div>
+                <div className="text-[15px] font-medium" style={{ fontFamily: 'var(--font-display)' }}>{t.label}</div>
+                <div className="text-[13px] mt-1 text-white/40 leading-snug">{t.sub}</div>
               </div>
-              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="text-white/30 flex-shrink-0">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="text-white/25 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
                 <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
