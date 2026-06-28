@@ -47,6 +47,12 @@ const GLYPHS: Record<string, ReactNode> = {
   bar: <><rect x="3" y="8.5" width="18" height="7" rx="2" /><path d="M7.5 8.5v7M11.5 8.5v7M15.5 8.5v7" /></>,
   grid: <><rect x="3.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="3.5" width="7" height="7" rx="1.5" /><rect x="3.5" y="13.5" width="7" height="7" rx="1.5" /><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" /></>,
   minus: <><circle cx="12" cy="12" r="9" /><path d="M8 12h8" /></>,
+
+  // Bundle tiers — an ascending bar chart whose height/count grows with the tier.
+  bundle1: <path d="M4.5 19v-4" />,
+  bundle2: <><path d="M4.5 19v-4" /><path d="M10.5 19v-7" /></>,
+  bundle3: <><path d="M4.5 19v-4" /><path d="M10.5 19v-7" /><path d="M16.5 19v-10" /></>,
+  bundle4: <><path d="M4.5 19v-4" /><path d="M10.5 19v-7" /><path d="M16.5 19v-10" /><path d="M22.5 19v-13" /></>,
 }
 
 export function QuizIcon({ name, size = 18, className }: { name?: string; size?: number; className?: string }) {

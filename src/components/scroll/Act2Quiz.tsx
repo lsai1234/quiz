@@ -249,12 +249,12 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
 ]
 const BUDGET_DATA: Array<{
   id: Budget; name: string; budget: string; sub: string
-  pref: StackPreference; slots: number
+  pref: StackPreference; slots: number; icon: string
 }> = [
-  { id: 'under-30', name: 'Starter Bundle',   budget: 'Up to £30/mo', sub: 'The essentials that move the needle most', pref: 'simple', slots: 2 },
-  { id: '30-50',    name: 'Saver Bundle',      budget: '£30–50/mo',    sub: 'Core supplements to cover your main goal', pref: 'simple', slots: 3 },
-  { id: '50-80',    name: 'Performance Bundle', budget: '£50–80/mo',   sub: 'A well-rounded daily stack', pref: 'balanced', slots: 5 },
-  { id: '80-plus',  name: 'Complete Bundle',   budget: '£80+/mo',      sub: 'Every angle covered — nothing left out', pref: 'complete', slots: 7 },
+  { id: 'under-30', name: 'Starter Bundle',   budget: 'Up to £30/mo', sub: 'The essentials that move the needle most', pref: 'simple', slots: 2, icon: 'bundle1' },
+  { id: '30-50',    name: 'Saver Bundle',      budget: '£30–50/mo',    sub: 'Core supplements to cover your main goal', pref: 'simple', slots: 3, icon: 'bundle2' },
+  { id: '50-80',    name: 'Performance Bundle', budget: '£50–80/mo',   sub: 'A well-rounded daily stack', pref: 'balanced', slots: 5, icon: 'bundle3' },
+  { id: '80-plus',  name: 'Complete Bundle',   budget: '£80+/mo',      sub: 'Every angle covered — nothing left out', pref: 'complete', slots: 7, icon: 'bundle4' },
 ]
 
 function formatIncludes(slots: Array<{ title: string }>, count: number): string {
@@ -1032,7 +1032,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {/* ── Budget ── */}
           {id === 'budget' && (
             <div className="flex flex-col gap-3">
-              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, slots }) => {
+              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, slots, icon }) => {
                 const active = answers.budget === bid
                 const actualCount = Math.min(slots, rankedSlots.length || slots)
                 const includes = formatIncludes(rankedSlots, slots)
@@ -1043,7 +1043,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     className={['w-full flex flex-col gap-2 px-5 py-4 rounded-xl border text-left transition-all duration-200 active:scale-[0.99]', active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07] text-white' : 'border-white/[0.08] bg-white/[0.015] text-white/70 hover:border-white/20 hover:bg-white/[0.04]'].join(' ')}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-[15px] font-medium" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <QuizIcon name={icon} size={18} className={`shrink-0 transition-colors duration-200 ${active ? 'text-[#00D4FF]' : 'text-white/40'}`} />
+                        <span className="text-[15px] font-medium" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
+                      </div>
                       <div className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border transition-colors ${active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'}`}>{budget}</div>
                     </div>
                     <p className={`text-[13px] leading-snug ${active ? 'text-white/55' : 'text-white/30'}`}>{sub}</p>
