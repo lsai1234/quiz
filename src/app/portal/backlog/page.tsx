@@ -11,7 +11,7 @@ import {
   type BacklogPriority,
   type BacklogStatus,
   type BacklogSize,
-} from '@/lib/portal/backlog'
+} from '@/lib/portal/backlog-types'
 
 const ACCENT = '#00D4FF'
 
