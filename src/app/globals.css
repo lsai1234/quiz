@@ -49,6 +49,12 @@
   50%       { box-shadow: 0 0 40px 4px color-mix(in oklch, #00D4FF 60%, transparent); }
 }
 
+/* Ambient hero bottle — a gentle, non-blocking float (disabled for reduced motion in JS) */
+@keyframes hero-float {
+  0%, 100% { transform: translateY(0) rotate(-0.5deg); }
+  50%       { transform: translateY(-14px) rotate(0.5deg); }
+}
+
 @keyframes slide-from-right {
   from { opacity: 0; transform: translateX(32px); }
   to   { opacity: 1; transform: translateX(0); }

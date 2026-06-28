@@ -1,737 +1,137 @@
 'use client'
 
 /**
- * Act1Hero — "The Deconstruction" scroll experience
+ * Act 1 — question-first instant-start hero.
  *
- * ── ASSET SPECS ──────────────────────────────────────────────────────────────
- * Drop real PNG cutouts into /public/hero/ with these exact filenames:
- *
- *   bottle.png      600 × 900 px   Transparent bg. Bottle body only (no lid).
- *                                  Portrait orientation, centred in canvas.
- *   lid.png         200 × 112 px   Transparent bg. Cap only. Bottom edge of
- *                                  cap = bottom edge of canvas (seats onto neck).
- *   capsule-1.png   200 × 80 px    Transparent bg. Horizontal pill shape
- *   …capsule-5.png                 (long axis = width). Brand colours.
- *
- * SVG placeholders with identical names live in /public/hero/ already.
- * Swap real PNGs in with the same filenames and dimensions.
- *
- * ── COORDINATE SYSTEM ────────────────────────────────────────────────────────
- * All animated <img> and caption <div> elements are rendered at
- * position:absolute left:0 top:0.  gsap.set() places them at their natural
- * starting coordinates using absolute pixel values from the section top-left.
- * GSAP x/y tweens are then direct pixel positions — no offset arithmetic.
- * ─────────────────────────────────────────────────────────────────────────────
+ * The first interaction IS the quiz: a clear value prop + the quiz's first
+ * decision (Performance vs Everyday wellbeing) as two tappable cards. Tapping a
+ * card sets the track and drops the user straight into the goal grid. No scroll
+ * engine, no pinning, no physics — fast, robust and reduced-motion safe.
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-
-gsap.registerPlugin(ScrollTrigger)
-
-// ── Ingredient config ─────────────────────────────────────────────────────────
-// Edit names / benefits here. `img` must match a file in /public/hero/.
-const INGREDIENTS = [
-  { name: 'Creatine Monohydrate', benefit: 'Strength + power output', img: '/hero/capsule-1.webp' },
-  { name: 'Whey Isolate',         benefit: 'Fast muscle recovery',    img: '/hero/capsule-2.webp' },
-  { name: 'Beta-Alanine',         benefit: 'Endurance + buffer',      img: '/hero/capsule-3.webp' },
-  { name: 'Electrolyte Complex',  benefit: 'Hydration + performance', img: '/hero/capsule-4.webp' },
-  { name: 'Ashwagandha KSM-66',   benefit: 'Stress + sleep quality',  img: '/hero/capsule-5.webp' },
-]
-
-// Rendered dimensions — derived from real PNG aspect ratios:
-//   bottle   1024 × 1536  → 2:3   → 240 × 360
-//   lid      1536 × 1024  → 3:2   → 200 × 133  (covers full bottle shoulder)
-//   capsules 1983 × 793   → 2.5:1 → 100 × 40
-const BOTTLE_W  = 240
-const BOTTLE_H  = 360
-const LID_W     = 200
-const LID_H     = 133
-const CAP_W     = 100
-const CAP_H     = 40
-
-const BOTTLE_SRC = '/hero/bottle.webp'
-const LID_SRC    = '/hero/lid.webp'
-
-// ── Progress-rail beat labels ───────────────────────────────────────────────────
-// What's coming, in order. Each light up as the scroll passes its point on the
-// timeline. `at` is resolved to a 0–1 fraction at runtime from the real beat
-// start times, so the ticks stay in sync if the timeline timing is retuned.
-const BEAT_LABELS = ['Open', 'Ingredients', 'Your stack'] as const
-
-// ── Image preloader ───────────────────────────────────────────────────────────
-
-function preloadImages(srcs: string[]): Promise<void> {
-  return Promise.all(
-    srcs.map(
-      (src) =>
-        new Promise<void>((resolve) => {
-          const img = new Image()
-          img.onload  = () => resolve()
-          img.onerror = () => resolve() // keep going — SVG placeholder still paints
-          img.src = src
-        }),
-    ),
-  ).then(() => undefined)
-}
-
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Pos { x: number; y: number }
+import { useQuizStore } from '@/lib/store'
+import type { QuizTrack } from '@/lib/types'
 
 interface Props {
   onEnterQuiz: () => void
   reducedMotion: boolean
 }
 
-// ── Logo SVG ──────────────────────────────────────────────────────────────────
+const ACCENT = '#00D4FF'
 
-function CHRGDIcon({ size = 28 }: { size?: number }) {
+const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
+  { id: 'performance', icon: '🏋️', label: 'Performance & training', sub: 'Muscle, energy, recovery — for people who train' },
+  { id: 'wellbeing',   icon: '🌿', label: 'Everyday wellbeing',     sub: 'Sleep, stress, focus, immunity — how you feel' },
+]
+
+const TRUST = ['~90 seconds', 'No sign-up', 'Built around you']
+
+function CHRGDIcon({ size = 26 }: { size?: number }) {
   return (
     <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
-      <rect x="36" y="1"  width="28" height="13"  rx="6"  fill="white" />
-      <rect x="6"  y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
-      <rect x="19" y="28" width="62" height="13"  rx="4"  fill="white" />
-      <rect x="19" y="48" width="62" height="13"  rx="4"  fill="white" />
-      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#00D4FF" />
+      <rect x="36" y="1" width="28" height="13" rx="6" fill="white" />
+      <rect x="6" y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
+      <rect x="19" y="28" width="62" height="13" rx="4" fill="white" />
+      <rect x="19" y="48" width="62" height="13" rx="4" fill="white" />
+      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill={ACCENT} />
     </svg>
   )
 }
-
-// ── Bouncing chevron (mobile scroll cue) ───────────────────────────────────────
-
-function Chevron({ delay }: { delay: string }) {
-  return (
-    <svg
-      width="18" height="10" viewBox="0 0 18 10" fill="none"
-      style={{ animation: 'chevron-bounce 1.4s ease-in-out infinite', animationDelay: delay }}
-    >
-      <path d="M1 1L9 8L17 1" stroke="#00D4FF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
 
 export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
-  const sectionRef   = useRef<HTMLElement>(null)
-  const bottleRef    = useRef<HTMLImageElement>(null)
-  const lidRef       = useRef<HTMLImageElement>(null)
-  const sweepRef     = useRef<HTMLDivElement>(null)
-  const ringRef      = useRef<HTMLDivElement>(null)
-  const capsuleRefs  = useRef<(HTMLImageElement | null)[]>([])
-  const captionRefs  = useRef<(HTMLDivElement | null)[]>([])
-  const headline1Ref = useRef<HTMLDivElement>(null)
-  const headline2Ref = useRef<HTMLDivElement>(null)
-  const ctaRef       = useRef<HTMLDivElement>(null)
-  const railRef      = useRef<HTMLDivElement>(null)
-  const railFillRef  = useRef<HTMLDivElement>(null)
-  const pctRef       = useRef<HTMLSpanElement>(null)
-  const hintRef      = useRef<HTMLDivElement>(null)
-  const beatRefs     = useRef<(HTMLDivElement | null)[]>([])
-  const firedMilestones = useRef<Set<number>>(new Set())
+  const setAnswer = useQuizStore((s) => s.setAnswer)
+  const setGoals = useQuizStore((s) => s.setGoals)
 
-  const [assetsReady, setAssetsReady]  = useState(false)
-  const [resizeKey,   setResizeKey]    = useState(0)
-
-  // Stable ref to avoid stale closure in CTA click handler
-  const onEnterQuizRef = useRef(onEnterQuiz)
-  useEffect(() => { onEnterQuizRef.current = onEnterQuiz }, [onEnterQuiz])
-
-  // ── Shelf positions ───────────────────────────────────────────────────────
-  // Returns absolute (x, y) from section top-left for each capsule.
-  // x = left edge of the capsule img at its shelf position.
-  // y = top  edge of the capsule img at its shelf position.
-  const getLayout = useCallback(() => {
-    const vw = window.innerWidth
-    const vh = window.innerHeight
-    const mobile = vw < 768
-
-    // Bottle: centred horizontally, vertically centred
-    const bottleX = (vw - BOTTLE_W) / 2
-    const bottleY = (vh - BOTTLE_H) / 2
-
-    // Lid: centred over bottle. The lid PNG origin is at the bottom of the cap
-    // (per spec), so lidY bottom = bottleY + neckDepth where neckDepth is how far
-    // the bottle neck sits below the bottle's top edge (~10% of bottle height).
-    // Increase neckDepth to move the lid DOWN; decrease to raise it.
-    const neckDepth = Math.round(BOTTLE_H * 0.08)  // ≈ 29px — tweak if seam looks wrong
-    const lidX = (vw - LID_W) / 2
-    const lidY = bottleY + neckDepth - LID_H
-
-    // Capsule starting position: at bottle mouth (neck centre ~18% down bottle)
-    const capStartX = (vw - CAP_W) / 2
-    // Capsule spawn point: just below the bottle mouth (≈ 12% from top of bottle)
-    const capStartY = bottleY + Math.round(BOTTLE_H * 0.12)
-
-    // Ring pulse: same centre as the bottle mouth
-    const ringSize = 80
-    const ringX = (vw - ringSize) / 2
-    const ringY = capStartY + (CAP_H - ringSize) / 2  // vertically centred on mouth
-
-    // Beat 2 — how far the lid lifts.
-    // Mobile: cap so the lid stays ≥ 25px below viewport top (never flies off-screen).
-    const lidLift = mobile ? Math.max(0, lidY - 25) : 140
-
-    // Beat 3 — bottle movement params.
-    // Mobile: shift bottle UP instead of left, shrink more, to clear space for capsule grid.
-    const bottleShiftX  = mobile ? 0          : -(vw * 0.14)
-    const bottleShiftY  = mobile ? -(vh * 0.16) : 0
-    const bottleScaleB3 = mobile ? 0.65        : 0.85
-
-    // Shelf positions (where each capsule lands)
-    let shelf: Pos[]
-    if (mobile) {
-      // Single column — pill on the left, text to its right.
-      // Each row is CAP_H tall so text sits vertically centred beside the pill
-      // with no wrapping or row-overlap issues.
-      const bottleVisualBottomB3 = (bottleY + bottleShiftY) + BOTTLE_H * (1 + bottleScaleB3) / 2
-      const shelfStartY = bottleVisualBottomB3 + 24
-      // Reserve 72px at the bottom for the swipe hint; fit all rows above it
-      const maxGridBottom = vh - 72
-      const rowH = Math.max(40, Math.min(80, (maxGridBottom - CAP_H - shelfStartY) / (INGREDIENTS.length - 1)))
-      const col  = Math.round(vw * 0.06)
-      shelf = INGREDIENTS.map((_, i) => ({ x: col, y: shelfStartY + i * rowH }))
-    } else {
-      const shelfX = vw * 0.58
-      const shelfY = vh * 0.18
-      const rowH   = vh * 0.115
-      shelf = INGREDIENTS.map((_, i) => ({ x: shelfX, y: shelfY + i * rowH }))
+  function start(track: QuizTrack | null) {
+    setAnswer('track', track)
+    if (track) {
+      // Fresh goals/follow-ups for the chosen track; the quiz's goals step then
+      // renders the grid directly (no duplicate track chooser).
+      setGoals([])
+      setAnswer('wellbeingAnswers', {})
     }
-
-    // Caption positions: right of capsule, vertically centred (same formula mobile + desktop)
-    const captions: Pos[] = shelf.map((s) => ({
-      x: s.x + CAP_W + 10,
-      y: s.y + CAP_H / 2 - 10,
-    }))
-
-    return { vw, vh, mobile, bottleX, bottleY, lidX, lidY, capStartX, capStartY, ringX, ringY,
-             shelf, captions, bottleShiftX, bottleShiftY, bottleScaleB3, lidLift }
-  }, [])
-
-  // ── Preload assets ────────────────────────────────────────────────────────
-  // Only the bottle + lid are needed for the first frame; the capsules don't
-  // appear until Beat 3, so load them in the background rather than blocking the
-  // hero (and the spinner) behind every asset.
-  useEffect(() => {
-    preloadImages([BOTTLE_SRC, LID_SRC]).then(() => setAssetsReady(true))
-    void preloadImages(INGREDIENTS.map((i) => i.img))
-  }, [])
-
-  // ── Debounced resize → rebuild ────────────────────────────────────────────
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>
-    const handler = () => {
-      clearTimeout(timer)
-      timer = setTimeout(() => setResizeKey((k) => k + 1), 250)
-    }
-    window.addEventListener('resize', handler, { passive: true })
-    return () => { clearTimeout(timer); window.removeEventListener('resize', handler) }
-  }, [])
-
-  // ── Main animation effect ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!assetsReady || reducedMotion) return
-    const section = sectionRef.current
-    if (!section) return
-
-    const L = getLayout()
-
-    // ── Progress feedback ───────────────────────────────────────────────────
-    // Drives the side rail fill, the % readout, the beat ticks, and fades the
-    // rail + scroll prompt out as the intro nears its end. Called from
-    // ScrollTrigger's onUpdate — direct DOM writes, no React re-renders.
-    // `beatFracs` is filled once the timeline exists (see below).
-    let beatFracs: number[] = []
-    const updateProgress = (p: number) => {
-      const cp = Math.max(0, Math.min(1, p))
-      // Fade rail + prompt out together over the final stretch, so the CTA gets
-      // a clean stage once the intro is essentially done.
-      const fade = 1 - Math.max(0, Math.min(1, (cp - 0.86) / 0.12))
-      if (railFillRef.current) railFillRef.current.style.transform = `scaleY(${cp})`
-      if (pctRef.current)      pctRef.current.textContent = `${Math.round(cp * 100)}%`
-      if (railRef.current)     railRef.current.style.opacity = String(fade)
-      if (hintRef.current)     hintRef.current.style.opacity = String(fade)
-      // Light up each beat tick once the scroll passes its point on the timeline.
-      beatRefs.current.forEach((el, i) => {
-        if (!el || beatFracs[i] === undefined) return
-        el.dataset.active = cp >= beatFracs[i] - 0.001 ? 'true' : 'false'
-      })
-      // Fire one-time scroll-progress milestones for drop-off analytics.
-      for (const m of [25, 50, 75, 100]) {
-        if (cp * 100 >= m && !firedMilestones.current.has(m)) {
-          firedMilestones.current.add(m)
-          const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> }
-          w.dataLayer?.push({ event: 'hero_progress', percent: m })
-          window.dispatchEvent(new CustomEvent('hero-progress', { detail: m }))
-        }
-      }
-    }
-
-    const ctx = gsap.context(() => {
-
-      // ── Set every element to its correct starting position ──────────────
-      // All elements live at left:0 top:0 in CSS; GSAP x/y = pixels from section origin.
-
-      gsap.set(bottleRef.current, {
-        x: L.bottleX, y: L.bottleY - 20, scale: 1.1, opacity: 1,
-      })
-      gsap.set(lidRef.current, {
-        x: L.lidX, y: L.lidY, rotation: 0, scale: 1, opacity: 1,
-      })
-      gsap.set(sweepRef.current, { x: '-110%', opacity: 0 })
-      gsap.set(ringRef.current,  { x: L.ringX, y: L.ringY, scale: 0.3, opacity: 0 })
-      gsap.set(headline1Ref.current, { opacity: 0, y: 24 })
-      gsap.set(headline2Ref.current, { opacity: 0, y: 24 })
-      gsap.set(ctaRef.current,       { opacity: 0, y: 16 })
-
-      capsuleRefs.current.forEach((el) => {
-        if (el) gsap.set(el, {
-          x: L.capStartX, y: L.capStartY,
-          opacity: 0, scale: 0.5, rotation: 12,
-        })
-      })
-
-      captionRefs.current.forEach((el, i) => {
-        if (el) gsap.set(el, {
-          x: L.captions[i].x + 14,  // 14px nudge-in offset; tween removes it on arrival
-          y: L.captions[i].y,
-          opacity: 0,
-        })
-      })
-
-      // ── ONE timeline — G = breathing gap between major beats ────────────
-      const tl = gsap.timeline({ paused: true })
-      const G = 0.55  // pause between beats (time units) — tightened for pacing
-
-      // ── Beat 1 · ARRIVAL (t 0 → 1.2) ────────────────────────────────────
-      tl.to(bottleRef.current, {
-        scale: 1.0, y: L.bottleY,
-        duration: 1.2, ease: 'none',
-      }, 0)
-      tl.fromTo(sweepRef.current,
-        { x: '-110%', opacity: 0 },
-        { x: '130%',  opacity: 0.5, duration: 0.8, ease: 'none' },
-        0.2,
-      )
-      tl.to(sweepRef.current, { opacity: 0, duration: 0.25, ease: 'none' }, 0.85)
-
-      // ── Beat 2 · THE OPENING (after G gap) ───────────────────────────────
-      const b2 = 1.2 + G
-      tl.to(lidRef.current, {
-        x: L.lidX - L.vw * 0.02,
-        y: L.lidY - L.lidLift,
-        rotation: -14, scale: 1.03, opacity: 0.6,
-        duration: 1.6, ease: 'none',
-      }, b2)
-      tl.to(bottleRef.current, { scale: 0.98, duration: 0.5, ease: 'none' }, b2 + 0.15)
-      tl.to(bottleRef.current, { scale: 1.0,  duration: 0.8, ease: 'none' }, b2 + 0.65)
-      tl.to(ringRef.current, { scale: 2.6, opacity: 0.5, duration: 0.5, ease: 'none' }, b2 + 0.3)
-      tl.to(ringRef.current, { opacity: 0,                duration: 0.6, ease: 'none' }, b2 + 0.6)
-
-      // ── Beat 3 · THE INGREDIENTS (after another G gap) ───────────────────
-      const b3 = b2 + 1.6 + G
-      tl.to(bottleRef.current, {
-        x: L.bottleX + L.bottleShiftX,
-        y: L.bottleY + L.bottleShiftY,
-        scale: L.bottleScaleB3,
-        duration: 1.3, ease: 'none',
-      }, b3)
-      tl.to(lidRef.current, {
-        x: L.lidX + L.bottleShiftX - L.vw * 0.02,
-        duration: 1.3, ease: 'none',
-      }, b3)
-
-      // Capsules rise one at a time — wider window gives breathing room between each
-      const capFirst      = b3 + 0.2
-      const capsuleWindow = 6
-      const perCap        = capsuleWindow / INGREDIENTS.length  // 1.5 each
-
-      INGREDIENTS.forEach((_, i) => {
-        const t0   = capFirst + i * perCap
-        const t1   = t0 + perCap * 0.50
-        const tCap = t0 + perCap * 0.85
-
-        const el  = capsuleRefs.current[i]
-        const cap = captionRefs.current[i]
-        if (!el) return
-
-        const arcX = L.capStartX + (L.shelf[i].x - L.capStartX) * 0.3
-                     + (i % 2 === 0 ? -18 : 18)
-        const arcY = L.capStartY - L.vh * 0.13
-
-        tl.to(el, {
-          x: arcX, y: arcY,
-          opacity: 1, scale: 0.82, rotation: 7,
-          duration: perCap * 0.50, ease: 'none',
-        }, t0)
-        tl.to(el, {
-          x: L.shelf[i].x, y: L.shelf[i].y,
-          scale: 1, rotation: 0,
-          duration: perCap * 0.35, ease: 'none',
-        }, t1)
-        if (cap) {
-          tl.to(cap, {
-            x: L.captions[i].x, opacity: 1,
-            duration: perCap * 0.22, ease: 'none',
-          }, tCap)
-        }
-      })
-
-      // ── Beat 4 · REASSEMBLY (after G gap past last capsule) ──────────────
-      const rStart = capFirst + capsuleWindow + G
-
-      captionRefs.current.forEach((el) => {
-        if (el) tl.to(el, { opacity: 0, x: `+=8`, duration: 0.3, ease: 'none' }, rStart)
-      })
-
-      const returnPer = 0.20
-      ;[...INGREDIENTS].reverse().forEach((_, ri) => {
-        const i  = INGREDIENTS.length - 1 - ri
-        const el = capsuleRefs.current[i]
-        if (!el) return
-        tl.to(el, {
-          x: L.capStartX, y: L.capStartY,
-          opacity: 0, scale: 0.5, rotation: 12,
-          duration: returnPer + 0.12, ease: 'none',
-        }, rStart + 0.28 + ri * returnPer)
-      })
-
-      const bReturn = rStart + 0.15
-      tl.to(bottleRef.current, {
-        x: L.bottleX, y: L.bottleY, scale: 1.0,
-        duration: 1.05, ease: 'none',
-      }, bReturn)
-      tl.to(lidRef.current, {
-        x: L.lidX, y: L.lidY - 4,
-        rotation: 0, scale: 1.0, opacity: 1,
-        duration: 0.95, ease: 'none',
-      }, bReturn)
-      tl.to(lidRef.current, {
-        y: L.lidY,
-        duration: 0.32, ease: 'none',
-      }, bReturn + 0.95)
-
-      // ── Beat 5 · HANDOFF (after G gap past reassembly) ───────────────────
-      const hStart = rStart + 1.6 + G
-      tl.to(bottleRef.current, { opacity: 0.8, duration: 0.45, ease: 'none' }, hStart)
-      tl.to(headline1Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.15)
-      tl.to(headline2Ref.current, { opacity: 1, y: 0, duration: 0.65, ease: 'none' }, hStart + 0.65)
-      tl.to(ctaRef.current,       { opacity: 1, y: 0, duration: 0.55, ease: 'none' }, hStart + 1.1)
-
-      // ── Resolve beat-tick positions from real timeline times ─────────────
-      // Map each labelled beat to the moment it begins on the timeline, then
-      // position its tick down the rail at that fraction. Order matches
-      // BEAT_LABELS: Open (lid lifts) → Ingredients (capsules rise) →
-      // Your stack (bottle reassembled).
-      const total = tl.duration()
-      beatFracs = [b2, capFirst, rStart].map((t) => t / total)
-      beatRefs.current.forEach((el, i) => {
-        if (el && beatFracs[i] !== undefined) el.style.top = `${beatFracs[i] * 100}%`
-      })
-
-      // ── Native scroll-scrubbed (desktop + mobile) ───────────────────────
-      // One pinned, scroll-linked timeline drives the whole intro. This uses the
-      // page's own scroll on every device — no touch hijacking, no custom physics
-      // — so it's smooth, predictable and never traps the user.
-      ScrollTrigger.create({
-        trigger:       section,
-        start:         'top top',
-        end:           '+=320%',
-        pin:           true,
-        scrub:         L.mobile ? 0.6 : 1,   // a touch snappier on mobile
-        animation:     tl,
-        anticipatePin: 1,
-        onUpdate:      (self) => updateProgress(self.progress),
-      })
-      updateProgress(0)
-
-    }, section)  // scope gsap.context to the section element
-
-    return () => { ctx.revert() }
-  }, [assetsReady, reducedMotion, getLayout, resizeKey])
-
-  // ── Reduced-motion: static composed layout ────────────────────────────────
-  if (reducedMotion) {
-    return (
-      <section className="relative w-full min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-6 py-20">
-        <div className="absolute top-6 left-0 right-0 flex justify-center z-10">
-          <div className="flex items-center gap-3">
-            <CHRGDIcon />
-            <span className="text-white font-black text-lg tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-              getCHRGD
-            </span>
-          </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row items-center gap-12 max-w-4xl mx-auto pt-16">
-          <div className="relative shrink-0">
-            <img src={LID_SRC}    alt="" width={LID_W}    height={LID_H}    className="absolute left-1/2 -translate-x-1/2 -top-8 object-contain" style={{ mixBlendMode: 'screen' }} />
-            <img src={BOTTLE_SRC} alt="" width={BOTTLE_W} height={BOTTLE_H} className="object-contain" style={{ maxHeight: 240, mixBlendMode: 'screen' }} />
-          </div>
-          <div className="flex flex-col gap-4">
-            {INGREDIENTS.map((ing, i) => (
-              <div key={i} className="flex items-center gap-3">
-                <img src={ing.img} alt="" width={CAP_W * 0.75} height={CAP_H * 0.75} className="object-contain shrink-0" style={{ mixBlendMode: 'screen' }} />
-                <div>
-                  <p className="text-white text-sm font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{ing.name}</p>
-                  <p className="text-white/40 text-xs mt-0.5">{ing.benefit}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="text-center mt-12 max-w-xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-black text-white leading-tight tracking-tight" style={{ fontFamily: 'var(--font-display)', textShadow: '0 2px 16px rgba(0,0,0,0.9)' }}>
-            Every body is different.
-          </h1>
-          <p className="text-4xl md:text-5xl font-black leading-tight tracking-tight mt-1" style={{ fontFamily: 'var(--font-display)', color: '#00D4FF', textShadow: '0 0 28px rgba(0,212,255,0.55), 0 2px 12px rgba(0,0,0,0.95)' }}>
-            Find your stack.
-          </p>
-          <button
-            onClick={onEnterQuiz}
-            className="mt-10 px-8 py-4 rounded-full bg-[#00D4FF] text-[#0A0A0A] text-sm font-bold tracking-wide active:scale-95 transition-transform"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            Start your profile →
-          </button>
-          <p className="mt-3 text-[11px] text-white/40 max-w-xs mx-auto">
-            These are just examples — yours is built from your answers. Takes about a minute.
-          </p>
-        </div>
-      </section>
-    )
+    onEnterQuiz()
   }
 
-  // ── Animated layout ───────────────────────────────────────────────────────
-  // All animated elements use position:absolute left:0 top:0.
-  // gsap.set() inside useEffect places them at their real starting coordinates.
-  // CSS positioning here is just the render fallback before the effect runs.
   return (
-    <section
-      ref={sectionRef}
-      className="relative w-full h-screen bg-[#0A0A0A] overflow-hidden"
-    >
-      {/* Background radial glow */}
+    <section className="relative min-h-[100dvh] bg-[#0A0A0A] text-white overflow-hidden flex flex-col">
+      {/* Ambient glow */}
       <div
         className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse 60% 55% at 50% 62%, rgba(0,212,255,0.07), transparent)' }}
+        style={{ background: 'radial-gradient(ellipse 75% 55% at 50% 28%, rgba(0,212,255,0.10), transparent 70%)' }}
       />
 
-      {/* Logo + early value hook */}
-      <div className="absolute top-6 left-0 right-0 flex flex-col items-center gap-1.5 z-30 pointer-events-none px-5">
-        <div className="flex items-center gap-3">
-          <CHRGDIcon />
-          <span className="text-white font-black text-lg tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-            getCHRGD
-          </span>
-        </div>
-        <span className="text-[11px] font-semibold tracking-wide text-white/45 text-center">
-          A supplement stack built around you
-        </span>
-      </div>
+      {/* Logo */}
+      <header className="relative z-10 flex items-center justify-center gap-2.5 pt-7">
+        <CHRGDIcon />
+        <span className="font-black text-lg tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>getCHRGD</span>
+      </header>
 
-      {/* Always-available start — never trap anyone behind the animation */}
-      <button
-        onClick={() => onEnterQuizRef.current()}
-        className="absolute top-6 right-4 z-40 px-4 py-2 rounded-full bg-white/10 border border-white/15 text-white text-xs font-bold tracking-wide active:scale-95 transition-transform pointer-events-auto"
-        style={{ fontFamily: 'var(--font-display)' }}
-      >
-        Skip intro →
-      </button>
-
-      {/* Loading state */}
-      {!assetsReady && (
-        <div className="absolute inset-0 flex items-center justify-center z-40">
-          <div className="w-9 h-9 rounded-full border-2 border-white/10 border-t-[#00D4FF] animate-spin" />
-        </div>
-      )}
-
-      {/* Light sweep — full-viewport diagonal gradient, translates across */}
-      <div
-        ref={sweepRef}
-        className="absolute inset-0 pointer-events-none z-10"
-        style={{ background: 'linear-gradient(108deg, transparent 30%, rgba(255,255,255,0.09) 50%, transparent 70%)' }}
-      />
-
-      {/* Ring pulse at bottle mouth */}
-      <div
-        ref={ringRef}
-        className="absolute pointer-events-none z-10"
-        style={{
-          width: 80, height: 80,
-          left: 0, top: 0,
-          borderRadius: '50%',
-          border: '1.5px solid rgba(0,212,255,0.7)',
-          willChange: 'transform, opacity',
-        }}
-      />
-
-      {/* Bottle body */}
-      <img
-        ref={bottleRef}
-        src={BOTTLE_SRC}
-        alt="CHRGD supplement bottle"
-        width={BOTTLE_W}
-        height={BOTTLE_H}
-        draggable={false}
-        decoding="async"
-        fetchPriority="high"
-        className="absolute object-contain pointer-events-none z-10"
-        style={{
-          left: 0, top: 0,
-          willChange: 'transform, opacity',
-          opacity: assetsReady ? 1 : 0,
-          mixBlendMode: 'screen',
-        }}
-      />
-
-      {/* Lid */}
-      <img
-        ref={lidRef}
-        src={LID_SRC}
-        alt=""
-        width={LID_W}
-        height={LID_H}
-        draggable={false}
-        decoding="async"
-        className="absolute object-contain pointer-events-none z-20"
-        style={{
-          left: 0, top: 0,
-          willChange: 'transform, opacity',
-          opacity: assetsReady ? 1 : 0,
-          mixBlendMode: 'screen',
-        }}
-      />
-
-      {/* Capsules — all start at left:0 top:0; gsap.set() positions them */}
-      {INGREDIENTS.map((ing, i) => (
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-md mx-auto w-full text-center">
+        {/* Ambient bottle — gentle float, disabled for reduced motion */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          key={i}
-          ref={(el) => { capsuleRefs.current[i] = el }}
-          src={ing.img}
-          alt={ing.name}
-          width={CAP_W}
-          height={CAP_H}
-          draggable={false}
-          className="absolute object-contain pointer-events-none z-20"
-          style={{ left: 0, top: 0, willChange: 'transform, opacity', opacity: 0, mixBlendMode: 'screen' }}
+          src="/hero/bottle.webp"
+          alt=""
+          width={132}
+          height={198}
+          decoding="async"
+          fetchPriority="high"
+          className="object-contain mb-5"
+          style={{
+            mixBlendMode: 'screen',
+            filter: 'drop-shadow(0 14px 44px rgba(0,212,255,0.28))',
+            animation: reducedMotion ? undefined : 'hero-float 6s ease-in-out infinite',
+          }}
         />
-      ))}
 
-      {/* Captions — one per capsule; gsap.set() positions each independently */}
-      {INGREDIENTS.map((ing, i) => (
-        <div
-          key={i}
-          ref={(el) => { captionRefs.current[i] = el }}
-          className="absolute pointer-events-none z-20"
-          style={{ left: 0, top: 0, willChange: 'transform, opacity', opacity: 0 }}
-        >
-          <p
-            className="text-white text-[11px] font-semibold leading-none whitespace-nowrap"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {ing.name}
-          </p>
-          <p className="text-white/40 text-[10px] mt-1 whitespace-nowrap leading-none">
-            {ing.benefit}
-          </p>
-        </div>
-      ))}
+        {/* Headline + value */}
+        <h1 className="text-[2.5rem] sm:text-5xl font-black leading-[1.05] tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+          Every body&apos;s different.
+          <br />
+          <span style={{ color: ACCENT, textShadow: '0 0 28px rgba(0,212,255,0.5)' }}>Build your stack.</span>
+        </h1>
+        <p className="text-sm text-white/50 mt-4 max-w-sm leading-relaxed">
+          Answer a few quick questions and get a supplement stack built around your goals, training and diet.
+        </p>
 
-      {/* Headlines + CTA — centred flex, opacity-only animation from GSAP */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-30 px-6 text-center">
-        <div ref={headline1Ref} style={{ willChange: 'transform, opacity' }}>
-          <h1
-            className="text-4xl sm:text-[3.5rem] font-black text-white leading-tight tracking-tight"
-            style={{ fontFamily: 'var(--font-display)', textShadow: '0 2px 16px rgba(0,0,0,0.9)' }}
-          >
-            Every body is different.
-          </h1>
-        </div>
-        <div ref={headline2Ref} className="mt-1" style={{ willChange: 'transform, opacity' }}>
-          <p
-            className="text-4xl sm:text-[3.5rem] font-black leading-tight tracking-tight"
-            style={{
-              fontFamily: 'var(--font-display)',
-              color: '#00D4FF',
-              textShadow: '0 0 28px rgba(0,212,255,0.55), 0 2px 12px rgba(0,0,0,0.95)',
-            }}
-          >
-            Find your stack.
-          </p>
-        </div>
-        <div ref={ctaRef} className="flex flex-col items-center" style={{ willChange: 'transform, opacity' }}>
-          <button
-            onClick={() => onEnterQuizRef.current()}
-            className="pointer-events-auto mt-10 px-8 py-4 rounded-full bg-[#00D4FF] text-[#0A0A0A] text-sm font-bold tracking-wide active:scale-95 transition-transform"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            Start your profile →
-          </button>
-          <p className="mt-3 text-[11px] text-white/40 max-w-xs text-center">
-            These are just examples — yours is built from your answers. Takes about a minute.
-          </p>
-        </div>
-      </div>
-
-      {/* Scroll-progress rail — fills as you advance, with a live % readout and
-          labelled beat ticks (Open → Ingredients → Your stack) that light up as
-          you pass them. Spells out both how far you are and what's still coming.
-          Fades out with the prompt as the intro completes. */}
-      <div ref={railRef} className="absolute right-4 sm:right-6 top-1/2 -translate-y-1/2 flex flex-col items-center gap-3 z-30 pointer-events-none">
-        <span className="text-[8px] tracking-[0.25em] uppercase text-white/35 [writing-mode:vertical-rl] rotate-180">
-          Intro
-        </span>
-        <div className="relative h-[34vh] flex justify-center">
-          {/* Track + fill */}
-          <div className="w-[3px] h-full rounded-full bg-white/10 overflow-hidden">
-            <div
-              ref={railFillRef}
-              className="w-full h-full rounded-full bg-[#00D4FF]"
-              style={{ transform: 'scaleY(0)', transformOrigin: 'top', boxShadow: '0 0 8px rgba(0,212,255,0.7)' }}
-            />
-          </div>
-          {/* Beat ticks — positioned down the rail by top% in the effect */}
-          {BEAT_LABELS.map((label, i) => (
-            <div
-              key={i}
-              ref={(el) => { beatRefs.current[i] = el }}
-              data-active="false"
-              className="group absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center"
-              style={{ top: '0%' }}
+        {/* First question — the quiz starts right here */}
+        <p className="text-[11px] font-bold tracking-[0.25em] uppercase mt-9 mb-3" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+          What&apos;s your goal?
+        </p>
+        <div className="w-full flex flex-col gap-3">
+          {TRACKS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => start(t.id)}
+              className="w-full flex items-center gap-4 px-5 py-5 rounded-2xl border border-white/10 bg-white/[0.04] text-left option-hover transition-all active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00D4FF]/50"
             >
-              <span className="absolute right-3 text-right whitespace-nowrap text-[8px] tracking-[0.15em] uppercase leading-none text-white/30 transition-colors duration-300 group-data-[active=true]:text-white/80">
-                {label}
-              </span>
-              <span className="block w-[7px] h-[7px] rounded-full border border-white/25 bg-[#0A0A0A] transition-all duration-300 group-data-[active=true]:bg-[#00D4FF] group-data-[active=true]:border-[#00D4FF] group-data-[active=true]:shadow-[0_0_6px_rgba(0,212,255,0.8)]" />
-            </div>
+              <span className="text-3xl leading-none">{t.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-base font-bold" style={{ fontFamily: 'var(--font-display)' }}>{t.label}</div>
+                <div className="text-xs mt-1 text-white/40">{t.sub}</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="text-white/30 flex-shrink-0">
+                <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
           ))}
         </div>
-        <span ref={pctRef} className="text-[10px] font-semibold tabular-nums text-white/45" style={{ fontFamily: 'var(--font-display)' }}>
-          0%
-        </span>
-      </div>
 
-      {/* Scroll / swipe prompt — animated, imperative, fades out near the end */}
-      <div ref={hintRef} className="absolute bottom-7 left-0 right-0 flex flex-col items-center gap-2.5 pointer-events-none z-30">
-        {/* Mobile: bouncing chevrons. Desktop: mouse with drifting wheel dot. */}
-        <div className="md:hidden flex flex-col items-center -space-y-1">
-          <Chevron delay="0s" />
-          <Chevron delay="0.15s" />
+        {/* Undecided escape */}
+        <button onClick={() => start(null)} className="mt-5 text-xs text-white/35 underline underline-offset-2 active:opacity-60">
+          Not sure? Start anyway →
+        </button>
+
+        {/* Trust row (honest cues; real social proof can slot in here later) */}
+        <div className="flex items-center justify-center gap-2.5 mt-9 flex-wrap">
+          {TRUST.map((t, i) => (
+            <span key={t} className="inline-flex items-center gap-2.5 text-[11px] text-white/40">
+              {i > 0 && <span className="w-1 h-1 rounded-full bg-white/20" />}
+              {t}
+            </span>
+          ))}
         </div>
-        <div className="hidden md:flex w-[26px] h-[42px] rounded-full border-2 border-white/40 justify-center pt-2">
-          <div
-            className="w-1 h-2 rounded-full bg-[#00D4FF]"
-            style={{ animation: 'scroll-wheel 1.6s ease-in-out infinite', boxShadow: '0 0 6px rgba(0,212,255,0.8)' }}
-          />
-        </div>
-        <p className="text-[11px] font-semibold tracking-[0.2em] uppercase text-white/70" style={{ fontFamily: 'var(--font-display)' }}>
-          <span className="md:hidden">Keep swiping up</span>
-          <span className="hidden md:inline">Keep scrolling</span>
-        </p>
       </div>
     </section>
   )
