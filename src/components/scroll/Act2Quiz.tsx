@@ -7,6 +7,7 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
+import { QuizIcon } from '@/components/quiz/QuizIcon'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -72,35 +73,35 @@ function getSubQuestion(stepId: StepId, value: string): SubQuestion | null {
 
 // Vitamin options shown when "vitamins" is selected in the supps step
 const VITAMIN_OPTIONS = [
-  { id: 'vitamin-d',    label: 'Vitamin D',        icon: '☀️' },
-  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: '🐟' },
-  { id: 'multivitamin', label: 'Multivitamin',     icon: '💊' },
-  { id: 'vitamin-c',    label: 'Vitamin C',        icon: '🍊' },
-  { id: 'b-complex',    label: 'B12 / B-complex',  icon: '⚡' },
-  { id: 'magnesium',    label: 'Magnesium',        icon: '🌙' },
-  { id: 'zinc',         label: 'Zinc',             icon: '🔩' },
-  { id: 'other',        label: 'Other / unsure',   icon: '✦' },
+  { id: 'vitamin-d',    label: 'Vitamin D',        icon: 'sun' },
+  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: 'droplet' },
+  { id: 'multivitamin', label: 'Multivitamin',     icon: 'capsule' },
+  { id: 'vitamin-c',    label: 'Vitamin C',        icon: 'citrus' },
+  { id: 'b-complex',    label: 'B12 / B-complex',  icon: 'bolt' },
+  { id: 'magnesium',    label: 'Magnesium',        icon: 'hexagon' },
+  { id: 'zinc',         label: 'Zinc',             icon: 'diamond' },
+  { id: 'other',        label: 'Other / unsure',   icon: 'sparkle' },
 ]
 
 const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
-  { id: 'muscle',      label: 'Build muscle',     icon: '💪' },
-  { id: 'cutting',     label: 'Get lean',         icon: '🔥' },
-  { id: 'energy',      label: 'More energy',      icon: '⚡' },
-  { id: 'performance', label: 'Peak performance', icon: '🏆' },
-  { id: 'recovery',    label: 'Recover faster',   icon: '😴' },
-  { id: 'health',      label: 'Feel healthier',   icon: '🌿' },
-  { id: 'bulking',     label: 'Gain mass',        icon: '📈' },
-  { id: 'hydration',   label: 'Stay hydrated',    icon: '💧' },
+  { id: 'muscle',      label: 'Build muscle',     icon: 'dumbbell' },
+  { id: 'cutting',     label: 'Get lean',         icon: 'flame' },
+  { id: 'energy',      label: 'More energy',      icon: 'bolt' },
+  { id: 'performance', label: 'Peak performance', icon: 'peak' },
+  { id: 'recovery',    label: 'Recover faster',   icon: 'refresh' },
+  { id: 'health',      label: 'Feel healthier',   icon: 'heart' },
+  { id: 'bulking',     label: 'Gain mass',        icon: 'trending-up' },
+  { id: 'hydration',   label: 'Stay hydrated',    icon: 'droplet' },
 ]
 
 const WELLBEING_DATA: Array<{ id: Goal; label: string; icon: string }> = [
-  { id: 'sleep-better',    label: 'Sleep better',        icon: '😴' },
-  { id: 'less-stress',     label: 'Less stress',         icon: '🧘' },
-  { id: 'focus',           label: 'Focus & brain fog',   icon: '🧠' },
-  { id: 'immune',          label: 'Immune support',      icon: '🛡️' },
-  { id: 'skin-hair-nails', label: 'Skin, hair & nails',  icon: '✨' },
-  { id: 'gut-health',      label: 'Gut health',          icon: '🦠' },
-  { id: 'menopause',       label: 'Menopause support',   icon: '🌡' },
+  { id: 'sleep-better',    label: 'Sleep better',        icon: 'moon' },
+  { id: 'less-stress',     label: 'Less stress',         icon: 'wave' },
+  { id: 'focus',           label: 'Focus & brain fog',   icon: 'crosshair' },
+  { id: 'immune',          label: 'Immune support',      icon: 'shield' },
+  { id: 'skin-hair-nails', label: 'Skin, hair & nails',  icon: 'sparkle' },
+  { id: 'gut-health',      label: 'Gut health',          icon: 'spiral' },
+  { id: 'menopause',       label: 'Menopause support',   icon: 'thermometer' },
 ]
 
 // ─── Wellbeing follow-up question bank ────────────────────────────────────────
@@ -200,19 +201,19 @@ const TYPE_DATA: Array<{ id: TrainingType; label: string; sub: string }> = [
   { id: 'mixed',    label: 'Mixed training',     sub: 'Bit of everything' },
 ]
 const LIFESTYLE_DATA = [
-  { id: 'vegan',        label: 'Plant-based diet',       icon: '🌱' },
-  { id: 'poor-sleep',   label: 'Struggling with sleep',  icon: '😴' },
-  { id: 'desk-job',     label: 'Desk job / sedentary',   icon: '💻' },
-  { id: 'high-stress',  label: 'High stress levels',     icon: '🧠' },
-  { id: 'joint-issues', label: 'Joint or old injuries',  icon: '🦴' },
+  { id: 'vegan',        label: 'Plant-based diet',       icon: 'leaf' },
+  { id: 'poor-sleep',   label: 'Struggling with sleep',  icon: 'moon' },
+  { id: 'desk-job',     label: 'Desk job / sedentary',   icon: 'monitor' },
+  { id: 'high-stress',  label: 'High stress levels',     icon: 'brain' },
+  { id: 'joint-issues', label: 'Joint or old injuries',  icon: 'bone' },
 ]
 const WELLBEING_LIFESTYLE_DATA = [
-  { id: 'vegan',        label: 'Plant-based diet',           icon: '🌱' },
-  { id: 'desk-job',     label: 'Desk job / mostly indoors',  icon: '💻' },
-  { id: 'shift-work',   label: 'Shift work / irregular hours', icon: '🌙' },
-  { id: 'run-down',     label: 'Get run down easily',        icon: '🤧' },
-  { id: 'active',       label: 'Train or exercise regularly', icon: '🏃' },
-  { id: 'joint-issues', label: 'Joint or old injuries',      icon: '🦴' },
+  { id: 'vegan',        label: 'Plant-based diet',           icon: 'leaf' },
+  { id: 'desk-job',     label: 'Desk job / mostly indoors',  icon: 'monitor' },
+  { id: 'shift-work',   label: 'Shift work / irregular hours', icon: 'clock' },
+  { id: 'run-down',     label: 'Get run down easily',        icon: 'trending-down' },
+  { id: 'active',       label: 'Train or exercise regularly', icon: 'activity' },
+  { id: 'joint-issues', label: 'Joint or old injuries',      icon: 'bone' },
 ]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
   { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
@@ -221,18 +222,18 @@ const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
   { id: 'poor',         label: 'Room for improvement',   sub: 'Convenience-first right now' },
 ]
 const SUPPS_DATA = [
-  { id: 'protein',     label: 'Protein',        icon: '🥤' },
-  { id: 'creatine',    label: 'Creatine',       icon: '⚗️' },
-  { id: 'pre-workout', label: 'Pre-workout',    icon: '⚡' },
-  { id: 'vitamins',    label: 'Vitamins',       icon: '💊' },
-  { id: 'none',        label: 'Starting fresh', icon: '✦' },
+  { id: 'protein',     label: 'Protein',        icon: 'shaker' },
+  { id: 'creatine',    label: 'Creatine',       icon: 'flask' },
+  { id: 'pre-workout', label: 'Pre-workout',    icon: 'bolt' },
+  { id: 'vitamins',    label: 'Vitamins',       icon: 'capsule' },
+  { id: 'none',        label: 'Starting fresh', icon: 'sparkle' },
 ]
 const WELLBEING_SUPPS_DATA = [
-  { id: 'multivitamin', label: 'Multivitamin',     icon: '💊' },
-  { id: 'vitamin-d',    label: 'Vitamin D',        icon: '☀️' },
-  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: '🐟' },
-  { id: 'magnesium',    label: 'Magnesium',        icon: '🌙' },
-  { id: 'none',         label: 'None of these',    icon: '✦' },
+  { id: 'multivitamin', label: 'Multivitamin',     icon: 'capsule' },
+  { id: 'vitamin-d',    label: 'Vitamin D',        icon: 'sun' },
+  { id: 'omega-3',      label: 'Omega-3 / Fish oil', icon: 'droplet' },
+  { id: 'magnesium',    label: 'Magnesium',        icon: 'hexagon' },
+  { id: 'none',         label: 'None of these',    icon: 'minus' },
 ]
 const TRAINING_TIME_DATA: Array<{ id: string; label: string; sub: string }> = [
   { id: 'morning',   label: 'Morning',   sub: 'Before 11am' },
@@ -267,10 +268,10 @@ function formatIncludes(slots: Array<{ title: string }>, count: number): string 
 }
 
 const FORMAT_DATA = [
-  { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: '🥤' },
-  { id: 'capsules', label: 'Capsules / Tabs', sub: 'Easy to take anywhere',          icon: '💊' },
-  { id: 'bars',     label: 'Bars & Snacks',   sub: 'On-the-go protein hits',         icon: '🍫' },
-  { id: 'any',      label: 'No preference',   sub: 'Best product regardless of form', icon: '✦' },
+  { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: 'shaker' },
+  { id: 'capsules', label: 'Capsules / Tabs', sub: 'Easy to take anywhere',          icon: 'capsule' },
+  { id: 'bars',     label: 'Bars & Snacks',   sub: 'On-the-go protein hits',         icon: 'bar' },
+  { id: 'any',      label: 'No preference',   sub: 'Best product regardless of form', icon: 'grid' },
 ]
 
 // ─── Label lookups (for the review summary) ───────────────────────────────────
@@ -303,12 +304,12 @@ function CheckMark({ selected, reduced }: { selected: boolean; reduced?: boolean
   )
 }
 
-// One refined option card. No icons — confident type, a hairline border, and a
-// crisp accent-selected state. `multi` lays out a compact grid card; otherwise a
-// full-width row with optional sub-label. `icon` is accepted but intentionally
-// not rendered (editorial-minimal).
+// One refined option card. A leading monoline icon (muted, accent on select)
+// gives back at-a-glance scannability without the emoji look; confident type, a
+// hairline border, and a crisp accent-selected state with a small check. `multi`
+// lays out a compact grid card; otherwise a full-width row with optional sub.
 function AnswerOption({
-  label, sub, selected, multi, onClick,
+  label, sub, icon, selected, multi, onClick,
 }: {
   label: string; sub?: string; icon?: string; selected: boolean
   multi?: boolean; onClick: () => void
@@ -316,6 +317,7 @@ function AnswerOption({
   const base = selected
     ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]'
     : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]'
+  const iconColor = selected ? 'text-[#00D4FF]' : 'text-white/40'
 
   if (multi) {
     return (
@@ -323,12 +325,13 @@ function AnswerOption({
         onClick={onClick}
         aria-pressed={selected}
         className={[
-          'relative w-full text-left rounded-xl border px-4 py-3.5 pr-9',
+          'relative w-full flex items-center gap-2 text-left rounded-xl border px-3 py-3 pr-8',
           'transition-all duration-200 active:scale-[0.98]',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
           base,
         ].join(' ')}
       >
+        {icon && <QuizIcon name={icon} size={17} className={`shrink-0 transition-colors duration-200 ${iconColor}`} />}
         <span
           className={`text-[13px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/70'}`}
           style={{ fontFamily: 'var(--font-display)' }}
@@ -347,12 +350,13 @@ function AnswerOption({
       onClick={onClick}
       aria-pressed={selected}
       className={[
-        'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
+        'w-full flex items-center gap-3.5 px-5 py-4 rounded-xl border text-left',
         'transition-all duration-200 active:scale-[0.99]',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
         base,
       ].join(' ')}
     >
+      {icon && <QuizIcon name={icon} size={20} className={`shrink-0 transition-colors duration-200 ${iconColor}`} />}
       <div className="flex-1 min-w-0">
         <div
           className={`text-[15px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/80'}`}
@@ -688,14 +692,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {id === 'goals' && !answers.track && (
             <div className="flex flex-col gap-3">
               {([
-                { id: 'performance' as const, label: 'Performance & training', sub: 'Build muscle, energy, recovery — for people who train' },
-                { id: 'wellbeing' as const, label: 'Everyday wellbeing', sub: 'Sleep, stress, focus, immunity — how you feel day to day' },
-              ]).map(({ id: tid, label, sub }) => (
+                { id: 'performance' as const, icon: 'dumbbell', label: 'Performance & training', sub: 'Build muscle, energy, recovery — for people who train' },
+                { id: 'wellbeing' as const, icon: 'leaf', label: 'Everyday wellbeing', sub: 'Sleep, stress, focus, immunity — how you feel day to day' },
+              ]).map(({ id: tid, icon, label, sub }) => (
                 <button
                   key={`track-${tid}`}
                   onClick={() => { setAnswer('track', tid); setGoals([]); setAnswer('wellbeingAnswers', {}) }}
                   className="group w-full flex items-center gap-4 px-5 py-5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
                 >
+                  <QuizIcon name={icon} size={22} className="shrink-0 text-white/45 transition-colors duration-200 group-hover:text-[#00D4FF]" />
                   <div className="flex-1 min-w-0">
                     <div className="text-[15px] font-medium text-white" style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
                     <div className="text-[13px] mt-1 text-white/40 leading-snug">{sub}</div>
@@ -745,7 +750,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 ))}
                 <AnswerOption
                   key="gw-health"
-                  label="General health" multi
+                  icon="leaf" label="General health" multi
                   selected={answers.goals.includes('health')}
                   onClick={() => {
                     const c = answers.goals
@@ -883,7 +888,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   }}
                 />
               ))}
-              <AnswerOption key="l-none" label="None of these" multi selected={answers.lifestyle.length === 0} onClick={() => setAnswer('lifestyle', [])} />
+              <AnswerOption key="l-none" icon="minus" label="None of these" multi selected={answers.lifestyle.length === 0} onClick={() => setAnswer('lifestyle', [])} />
             </div>
           )}
 

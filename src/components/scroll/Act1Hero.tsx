@@ -10,6 +10,7 @@
  */
 
 import { useQuizStore } from '@/lib/store'
+import { QuizIcon } from '@/components/quiz/QuizIcon'
 import type { QuizTrack } from '@/lib/types'
 
 interface Props {
@@ -20,8 +21,8 @@ interface Props {
 const ACCENT = '#00D4FF'
 
 const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
-  { id: 'performance', icon: '🏋️', label: 'Performance & training', sub: 'Muscle, energy, recovery — for people who train' },
-  { id: 'wellbeing',   icon: '🌿', label: 'Everyday wellbeing',     sub: 'Sleep, stress, focus, immunity — how you feel' },
+  { id: 'performance', icon: 'dumbbell', label: 'Performance & training', sub: 'Muscle, energy, recovery — for people who train' },
+  { id: 'wellbeing',   icon: 'leaf',     label: 'Everyday wellbeing',     sub: 'Sleep, stress, focus, immunity — how you feel' },
 ]
 
 const TRUST = ['~90 seconds', 'No sign-up', 'Built around you']
@@ -106,6 +107,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
               onClick={() => start(t.id)}
               className="group w-full flex items-center gap-4 px-5 py-5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
             >
+              <QuizIcon name={t.icon} size={22} className="shrink-0 text-white/45 transition-colors duration-200 group-hover:text-[#00D4FF]" />
               <div className="flex-1 min-w-0">
                 <div className="text-[15px] font-medium" style={{ fontFamily: 'var(--font-display)' }}>{t.label}</div>
                 <div className="text-[13px] mt-1 text-white/40 leading-snug">{t.sub}</div>
