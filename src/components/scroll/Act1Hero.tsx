@@ -33,11 +33,11 @@ gsap.registerPlugin(ScrollTrigger)
 // ── Ingredient config ─────────────────────────────────────────────────────────
 // Edit names / benefits here. `img` must match a file in /public/hero/.
 const INGREDIENTS = [
-  { name: 'Creatine Monohydrate', benefit: 'Strength + power output', img: '/hero/capsule-1.png' },
-  { name: 'Whey Isolate',         benefit: 'Fast muscle recovery',    img: '/hero/capsule-2.png' },
-  { name: 'Beta-Alanine',         benefit: 'Endurance + buffer',      img: '/hero/capsule-3.png' },
-  { name: 'Electrolyte Complex',  benefit: 'Hydration + performance', img: '/hero/capsule-4.png' },
-  { name: 'Ashwagandha KSM-66',   benefit: 'Stress + sleep quality',  img: '/hero/capsule-5.png' },
+  { name: 'Creatine Monohydrate', benefit: 'Strength + power output', img: '/hero/capsule-1.webp' },
+  { name: 'Whey Isolate',         benefit: 'Fast muscle recovery',    img: '/hero/capsule-2.webp' },
+  { name: 'Beta-Alanine',         benefit: 'Endurance + buffer',      img: '/hero/capsule-3.webp' },
+  { name: 'Electrolyte Complex',  benefit: 'Hydration + performance', img: '/hero/capsule-4.webp' },
+  { name: 'Ashwagandha KSM-66',   benefit: 'Stress + sleep quality',  img: '/hero/capsule-5.webp' },
 ]
 
 // Rendered dimensions — derived from real PNG aspect ratios:
@@ -51,8 +51,8 @@ const LID_H     = 133
 const CAP_W     = 100
 const CAP_H     = 40
 
-const BOTTLE_SRC = '/hero/bottle.png'
-const LID_SRC    = '/hero/lid.png'
+const BOTTLE_SRC = '/hero/bottle.webp'
+const LID_SRC    = '/hero/lid.webp'
 
 // ── Progress-rail beat labels ───────────────────────────────────────────────────
 // What's coming, in order. Each light up as the scroll passes its point on the
@@ -210,9 +210,12 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   }, [])
 
   // ── Preload assets ────────────────────────────────────────────────────────
+  // Only the bottle + lid are needed for the first frame; the capsules don't
+  // appear until Beat 3, so load them in the background rather than blocking the
+  // hero (and the spinner) behind every asset.
   useEffect(() => {
-    const srcs = [BOTTLE_SRC, LID_SRC, ...INGREDIENTS.map((i) => i.img)]
-    preloadImages(srcs).then(() => setAssetsReady(true))
+    preloadImages([BOTTLE_SRC, LID_SRC]).then(() => setAssetsReady(true))
+    void preloadImages(INGREDIENTS.map((i) => i.img))
   }, [])
 
   // ── Debounced resize → rebuild ────────────────────────────────────────────
@@ -635,6 +638,8 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         width={BOTTLE_W}
         height={BOTTLE_H}
         draggable={false}
+        decoding="async"
+        fetchPriority="high"
         className="absolute object-contain pointer-events-none z-10"
         style={{
           left: 0, top: 0,
@@ -652,6 +657,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         width={LID_W}
         height={LID_H}
         draggable={false}
+        decoding="async"
         className="absolute object-contain pointer-events-none z-20"
         style={{
           left: 0, top: 0,
