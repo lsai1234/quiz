@@ -93,3 +93,65 @@ export async function writeProductConfig(product: CatalogueProduct): Promise<voi
     })
   }
 }
+
+/**
+ * Delete a product from Shopify by its product GID (or numeric id). Used by the
+ * Founders Hub product dashboard's "Remove" action when running live.
+ */
+export async function deleteProduct(shopifyProductId: string | null): Promise<void> {
+  const id = numericId(shopifyProductId)
+  if (!id) throw new Error('Product has no Shopify id to delete')
+  await adminFetch(`/products/${id}.json`, { method: 'DELETE' })
+}
+
+/**
+ * Create a product in Shopify from a catalogue product (used by bulk import when
+ * live). Maps the catalogue's variants → Shopify variants (Flavour option, price,
+ * compare-at, SKU), sets description/category/tags, and attaches the image.
+ * Returns the new product GID + per-variant GIDs so callers can persist them.
+ */
+export async function createProduct(product: CatalogueProduct): Promise<{
+  shopifyProductId: string
+  variantIds: Record<string, string>
+}> {
+  const hasFlavours = product.variants.some((v) => v.flavour)
+  const payload = {
+    product: {
+      title: product.title,
+      body_html: product.description,
+      product_type: product.category,
+      tags: buildTags(product).join(', '),
+      status: 'draft' as const,
+      ...(hasFlavours ? { options: [{ name: 'Flavour' }] } : {}),
+      variants: product.variants.map((v) => ({
+        ...(v.flavour ? { option1: v.flavour } : {}),
+        price: String(v.price),
+        ...(v.compareAtPrice != null ? { compare_at_price: String(v.compareAtPrice) } : {}),
+        ...(v.sku ? { sku: v.sku } : {}),
+      })),
+      ...(product.imageUrl ? { images: [{ src: product.imageUrl }] } : {}),
+    },
+  }
+
+  const created = await adminFetch('/products.json', { method: 'POST', body: JSON.stringify(payload) })
+  const newId: number = created.product.id
+  const gid = `gid://shopify/Product/${newId}`
+
+  // Map our variant ids → the created Shopify variant GIDs, by position.
+  const variantIds: Record<string, string> = {}
+  const createdVariants: { id: number }[] = created.product?.variants ?? []
+  product.variants.forEach((v, i) => {
+    const cv = createdVariants[i]
+    if (cv) variantIds[v.id] = `gid://shopify/ProductVariant/${cv.id}`
+  })
+
+  // Push the chrgd.* metafields so the new product is launch-ready.
+  for (const mf of buildMetafields({ ...product, shopifyProductId: gid })) {
+    await adminFetch(`/products/${newId}/metafields.json`, {
+      method: 'POST',
+      body: JSON.stringify({ metafield: { ...mf, owner_resource: 'product', owner_id: newId } }),
+    })
+  }
+
+  return { shopifyProductId: gid, variantIds }
+}

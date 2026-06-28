@@ -22,6 +22,9 @@ export default function PortalHome() {
   const warn = rows?.filter((r) => r.readiness.overall === 'warn').length ?? 0
 
   const cards = [
+    { href: '/portal/dashboard', title: 'Product dashboard', desc: 'Browse the catalogue and remove products from Shopify.' },
+    { href: '/portal/import', title: 'Bulk import', desc: 'Import dropship products (Olivit) from a CSV template.' },
+    { href: '/portal/backlog', title: 'Improvements backlog', desc: 'Track and prioritise requests for the hub, portal and quiz.' },
     { href: '/portal/products', title: 'Products', desc: 'Edit tags, subscription settings, cost and recommendation basis.' },
     { href: '/portal/pricing', title: 'Pricing rules', desc: 'Discount tiers, subscription offer, margins — with a profit preview.' },
     { href: '/portal/readiness', title: 'Readiness', desc: 'See which products are launch-ready vs need attention.' },
@@ -30,7 +33,7 @@ export default function PortalHome() {
 
   return (
     <div>
-      <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Control centre</h1>
+      <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Founders Hub</h1>
       <p className="text-sm text-[var(--color-muted)] mb-5">
         Serving <strong style={{ color: 'var(--color-text)' }}>{source === 'shopify' ? 'live Shopify' : 'mock'}</strong> data.
       </p>

@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server'
-import { PORTAL_COOKIE, expectedToken, verifyPassword } from '@/lib/portal/auth'
+import { PORTAL_COOKIE, verifyFounder } from '@/lib/portal/auth'
 
 export async function POST(req: Request) {
-  let body: { password?: string }
+  let body: { email?: string; password?: string }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
-  if (!verifyPassword(body.password ?? '')) {
-    return NextResponse.json({ error: 'Incorrect password' }, { status: 401 })
+  const result = verifyFounder(body.email ?? '', body.password ?? '')
+  if (!result) {
+    return NextResponse.json({ error: 'Incorrect email or password' }, { status: 401 })
   }
-  const res = NextResponse.json({ ok: true })
-  res.cookies.set(PORTAL_COOKIE, expectedToken(), {
+  const res = NextResponse.json({ ok: true, founder: result.founder })
+  res.cookies.set(PORTAL_COOKIE, result.token, {
     httpOnly: true,
     sameSite: 'lax',
     path: '/',

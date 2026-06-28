@@ -8,7 +8,10 @@ const ACCENT = '#00D4FF'
 
 const NAV = [
   { href: '/portal', label: 'Home' },
+  { href: '/portal/dashboard', label: 'Dashboard' },
   { href: '/portal/products', label: 'Products' },
+  { href: '/portal/backlog', label: 'Backlog' },
+  { href: '/portal/import', label: 'Import' },
   { href: '/portal/pricing', label: 'Pricing' },
   { href: '/portal/coverage', label: 'Coverage' },
   { href: '/portal/readiness', label: 'Readiness' },
@@ -18,10 +21,15 @@ const NAV = [
 export function PortalShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [source, setSource] = useState<{ mode: string; effective: string } | null>(null)
+  const [founder, setFounder] = useState<{ name: string } | null>(null)
 
   useEffect(() => {
     fetch('/api/portal/data-source').then((r) => (r.ok ? r.json() : null)).then((d) => d && setSource(d)).catch(() => {})
   }, [pathname])
+
+  useEffect(() => {
+    fetch('/api/portal/me').then((r) => (r.ok ? r.json() : null)).then((d) => d?.founder && setFounder(d.founder)).catch(() => {})
+  }, [])
 
   async function logout() {
     await fetch('/api/portal/logout', { method: 'POST' })
@@ -34,9 +42,10 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
       <header className="sticky top-0 z-10 border-b border-[var(--color-border)]" style={{ background: 'var(--color-surface)' }}>
         <div className="max-w-3xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
           <span className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-            CHRGD <span style={{ color: ACCENT }}>Control Centre</span>
+            CHRGD <span style={{ color: ACCENT }}>Founders Hub</span>
           </span>
           <div className="flex items-center gap-3">
+            {founder && <span className="text-[11px] font-semibold text-[var(--color-muted)] hidden sm:inline">{founder.name}</span>}
             {source && (
               <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full"
                 style={{

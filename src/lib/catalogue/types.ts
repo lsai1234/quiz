@@ -88,6 +88,8 @@ export interface CatalogueVariant {
   price: number
   compareAtPrice: number | null
   available: boolean
+  /** Supplier/Shopify SKU for this variant. Null when not tracked. */
+  sku?: string | null
   /**
    * Shopify variant GID — populated when connected to live Storefront API.
    * Null in mock/development mode.
