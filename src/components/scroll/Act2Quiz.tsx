@@ -428,6 +428,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [isGenerating, setIsGenerating] = useState(false)
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
+  const optionsRef = useRef<HTMLDivElement>(null)
+  const subRef = useRef<HTMLDivElement>(null)
+  // Whether the options region has content below the fold (drives the scroll cue).
+  const [moreBelow, setMoreBelow] = useState(false)
 
   // ── Charge rail (the getCHRGD signature) — climbs as you answer ──
   // Tops out at ~92% in the quiz; Act 3 finishes the charge and "powers on".
@@ -451,6 +455,44 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     const t = setTimeout(() => headingRef.current?.focus(), 60)
     return () => clearTimeout(t)
   }, [index, reducedMotion])
+
+  // Track whether there's hidden content below in the options region so we can
+  // show a "more below" cue — the fix for sub-questions/answers being off-screen.
+  const recomputeMoreBelow = () => {
+    const el = optionsRef.current
+    if (!el) { setMoreBelow(false); return }
+    setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 16)
+  }
+  useEffect(() => {
+    const el = optionsRef.current
+    if (!el) return
+    recomputeMoreBelow()
+    el.addEventListener('scroll', recomputeMoreBelow, { passive: true })
+    let ro: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(recomputeMoreBelow)
+      ro.observe(el)
+      if (el.firstElementChild) ro.observe(el.firstElementChild)
+    }
+    return () => { el.removeEventListener('scroll', recomputeMoreBelow); ro?.disconnect() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // Recompute after content swaps (step change, sub-question, answer toggles).
+  useEffect(() => {
+    const t = setTimeout(recomputeMoreBelow, 80)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, animKey, subQuestion, index, answers])
+
+  // When a follow-up sub-question appears, bring it into view so it's never
+  // hidden below the fold — the user shouldn't have to guess that it's there.
+  useEffect(() => {
+    if (!subQuestion) return
+    const t = setTimeout(() => {
+      subRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' })
+    }, 90)
+    return () => clearTimeout(t)
+  }, [subQuestion, reducedMotion])
 
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
@@ -685,7 +727,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       </div>
 
       {/* Options zone — the only thing that may scroll, and only within itself */}
-      <div className="relative z-10 flex-1 min-h-0 overflow-y-auto scrollbar-hide pl-5 pr-[42px] pb-5">
+      <div className="relative z-10 flex-1 min-h-0">
+       <div ref={optionsRef} className="absolute inset-0 overflow-y-auto scrollbar-hide pl-5 pr-[42px] pb-5">
         <div key={`o-${id}-${animKey}`} className={`max-w-lg mx-auto w-full ${slideClass}`}>
 
           {/* ── Goals (track chooser → goals) ── */}
@@ -1037,7 +1080,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
           {/* Sub-question */}
           {subQuestion && (
-            <div className="mt-8 pt-6 border-t border-white/8" style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}>
+            <div ref={subRef} className="mt-8 pt-6 border-t border-white/8 scroll-mt-4" style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-px h-4 bg-[#00D4FF]" />
                 <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]" style={{ fontFamily: 'var(--font-display)' }}>Follow-up</span>
@@ -1053,6 +1096,21 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           )}
 
         </div>
+       </div>
+
+        {/* "More below" cue — appears whenever the options region has hidden
+            content underneath (e.g. a follow-up that needs answering). */}
+        {moreBelow && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 pr-[42px]">
+            <div className="mx-auto max-w-lg h-14 flex items-end justify-center pb-1.5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/85 to-transparent">
+              <span className="text-[#00D4FF]/85" style={{ animation: reducedMotion ? undefined : 'chevron-bounce 1.4s ease-in-out infinite' }}>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CTA footer — an in-flow zone (no page scroll), shown on manual steps */}
