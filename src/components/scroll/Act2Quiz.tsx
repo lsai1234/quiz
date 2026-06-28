@@ -6,6 +6,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
+import { ChargeMeter } from '@/components/quiz/ChargeMeter'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -400,6 +401,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
+  // ── Charge Meter (the getCHRGD signature) — climbs as you answer ──
+  // Tops out at ~92% in the quiz; Act 3 finishes the charge and "powers on".
+  const charge = Math.round(8 + (index / Math.max(1, seq.length - 1)) * 84)
+  const [surgeKey, setSurgeKey] = useState(0)
+  const [chargeDelta, setChargeDelta] = useState(0)
+  const prevChargeRef = useRef(charge)
+  useEffect(() => {
+    const d = charge - prevChargeRef.current
+    if (d > 0) { setChargeDelta(d); setSurgeKey((k) => k + 1) }
+    prevChargeRef.current = charge
+  }, [charge])
+
   // Personal-info local state (written to the store on advance).
   const [localName, setLocalName] = useState(answers.name || '')
   const [localAge, setLocalAge] = useState<AgeBracket | ''>(answers.ageBracket || '')
@@ -532,8 +545,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       ? 'animate-[slide-from-right_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
       : 'animate-[slide-from-left_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
 
-  const progressPct = ((index + 1) / seq.length) * 100
-
   // ─── Review summary rows ─────────────────────────────────────────────────────
 
   function reviewRows(): Array<{ label: string; value: string; edit: StepId }> {
@@ -574,9 +585,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           </div>
           <div className="text-center">
             <p className="text-xl font-black text-white mb-1.5" style={{ fontFamily: 'var(--font-display)' }}>
-              Connecting to CHRGD Intelligence…
+              Fully charged ⚡
             </p>
-            <p className="text-sm text-white/35">Our AI is personalising every pick</p>
+            <p className="text-sm text-white/35">Powering on your personalised stack…</p>
           </div>
           <div className="flex gap-1.5 mt-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -587,32 +598,27 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         </div>
       )}
 
-      {/* Top bar — logo + live step counter */}
-      <div className="fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between px-5">
+      {/* Top bar — logo + Charge Meter (the getCHRGD signature) */}
+      <div className="fixed top-0 left-0 right-0 z-40 h-16 flex items-center justify-between px-5">
         <div className="flex items-center gap-2">
           <CHRGDIcon size={18} />
           <span className="text-white/50 text-xs font-bold tracking-widest" style={{ fontFamily: 'var(--font-display)' }}>
             getCHRGD
           </span>
         </div>
-        <span className="text-[11px] font-bold tabular-nums text-white/45" style={{ fontFamily: 'var(--font-display)' }}>
-          {id === 'review' ? 'Review' : `Step ${index + 1} of ${seq.length - 1}`}
-        </span>
-      </div>
-
-      {/* Progress bar */}
-      <div className="fixed top-14 left-0 right-0 z-40 h-[3px] bg-white/8">
-        <div
-          className="h-full bg-[#00D4FF] transition-[width] duration-500 ease-out"
-          style={{ width: `${progressPct}%`, boxShadow: '0 0 8px rgba(0,212,255,0.6)' }}
-        />
+        <div className="flex flex-col items-end gap-0.5">
+          <ChargeMeter charge={charge} surgeKey={surgeKey} delta={chargeDelta} reducedMotion={reducedMotion} />
+          <span className="text-[9px] font-semibold tracking-wide text-white/30 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
+            {id === 'review' ? 'Final step' : `Step ${index + 1} of ${seq.length - 1}`}
+          </span>
+        </div>
       </div>
 
       {/* Back button */}
       {index > 0 && (
         <button
           onClick={goBack}
-          className="fixed top-[62px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50"
+          className="fixed top-[68px] left-4 z-40 w-8 h-8 flex items-center justify-center rounded-full bg-white/6 text-white/40 active:opacity-50"
           aria-label="Back"
         >
           <svg width="14" height="14" viewBox="0 0 20 20" fill="none">

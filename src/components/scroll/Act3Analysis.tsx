@@ -78,12 +78,12 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         tl.fromTo(progressTrackRef.current, { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0.4)
       }
 
-      // AI-forward status messages. The last one holds if the AI is still working.
+      // Charge-themed status messages. The last one holds if the AI is still working.
       const messages = [
-        'Connecting to CHRGD Intelligence…',
-        'Our AI is reading your profile…',
+        'Charging your profile…',
+        'CHRGD Intelligence is reading you…',
         'Matching you to supplement science…',
-        'Personalising your stack…',
+        'Almost fully charged…',
       ]
       messages.forEach((msg, i) => {
         tl!.call(() => {
