@@ -70,6 +70,34 @@
   100% { opacity: 0; transform: translateY(-14px); }
 }
 
+/* Act 3 — battery discharges into the CHRGD Intelligence machine */
+@keyframes conduit-flow {
+  0%   { transform: translateY(0);    opacity: 0; }
+  15%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(72px); opacity: 0; }
+}
+@keyframes core-flare {
+  0%   { opacity: 0.9; transform: translate(-50%, -50%) scale(0.5); }
+  100% { opacity: 0;   transform: translate(-50%, -50%) scale(2.6); }
+}
+@keyframes battery-hum {
+  0%, 100% { box-shadow: 0 0 18px -2px rgba(0,212,255,0.45); }
+  50%       { box-shadow: 0 0 30px 2px rgba(0,212,255,0.7); }
+}
+@keyframes ring-pulse {
+  0%   { opacity: 0.5; transform: translate(-50%, -50%) scale(0.85); }
+  100% { opacity: 0;   transform: translate(-50%, -50%) scale(1.25); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.45; }
+  50%       { opacity: 1; }
+}
+
 @keyframes slide-from-right {
   from { opacity: 0; transform: translateX(32px); }
   to   { opacity: 1; transform: translateX(0); }
