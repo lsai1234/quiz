@@ -7,6 +7,7 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
 import { ChargeMeter } from '@/components/quiz/ChargeMeter'
+import { ChargeAura } from '@/components/quiz/ChargeAura'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -574,6 +575,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   return (
     <div className="relative min-h-screen bg-[#0A0A0A] text-white">
 
+      {/* Ambient charge aura — the room charges up as you answer */}
+      <ChargeAura charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
+
       {/* Generating overlay */}
       {isGenerating && (
         <div className="fixed inset-0 z-50 bg-[#0A0A0A] flex flex-col items-center justify-center gap-6">
@@ -628,7 +632,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       )}
 
       {/* Step content */}
-      <div className="min-h-screen flex flex-col justify-center px-5 pt-28 pb-32 max-w-lg mx-auto">
+      <div className="relative z-10 min-h-screen flex flex-col justify-center px-5 pt-28 pb-32 max-w-lg mx-auto">
         <div key={`${id}-${animKey}`} className={slideClass}>
 
           <span

@@ -34,32 +34,33 @@ export function ChargeMeter({ charge, surgeKey = 0, delta = 0, reducedMotion }: 
 
   return (
     <div className="relative flex items-center gap-1.5" aria-label={`${pct}% charged`}>
-      {/* Battery */}
-      <div className="relative" style={{ width: 60, height: 20 }}>
-        <div className="absolute inset-0 rounded-[6px] border" style={{ borderColor: 'rgba(255,255,255,0.28)' }} />
+      {/* Battery — a liquid charge cell */}
+      <div className="relative" style={{ width: 64, height: 22, animation: reducedMotion ? undefined : 'battery-hum 2.6s ease-in-out infinite', borderRadius: 7 }}>
+        <div className="absolute inset-0 rounded-[7px] border" style={{ borderColor: 'rgba(255,255,255,0.3)' }} />
         {/* Cap nub */}
-        <div className="absolute" style={{ right: -4, top: 6, width: 3, height: 8, borderRadius: 2, background: 'rgba(255,255,255,0.3)' }} />
-        {/* Fill */}
+        <div className="absolute" style={{ right: -4, top: 7, width: 3, height: 8, borderRadius: 2, background: 'rgba(255,255,255,0.32)' }} />
+        {/* Liquid fill */}
         <div
-          className="absolute top-[3px] bottom-[3px] left-[3px] rounded-[3px] overflow-hidden"
+          className="absolute top-[3px] bottom-[3px] left-[3px] rounded-[4px] overflow-hidden"
           style={{
             width: `calc(${pct}% - 6px)`,
             minWidth: pct > 0 ? 5 : 0,
-            background: `linear-gradient(90deg, rgba(0,212,255,0.65), ${ACCENT})`,
-            boxShadow: '0 0 8px rgba(0,212,255,0.6)',
-            transition: 'width 600ms cubic-bezier(0.22,1,0.36,1)',
+            background: `linear-gradient(90deg, rgba(0,212,255,0.6), ${ACCENT})`,
+            boxShadow: '0 0 10px rgba(0,212,255,0.7)',
+            transition: 'width 650ms cubic-bezier(0.22,1,0.36,1)',
           }}
         >
+          {/* meniscus highlight at the leading edge — gives it a 'liquid' read */}
           {!reducedMotion && (
-            <div
-              className="absolute inset-y-0 w-1/2"
-              style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)', animation: 'charge-shimmer 1.8s linear infinite' }}
-            />
+            <div className="absolute right-0 top-0 bottom-0" style={{ width: 6, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.7))', animation: 'liquid-wave 1.6s ease-in-out infinite' }} />
+          )}
+          {!reducedMotion && (
+            <div className="absolute inset-y-0 w-1/2" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.45), transparent)', animation: 'charge-shimmer 1.9s linear infinite' }} />
           )}
         </div>
         {/* Surge burst ring */}
         {!reducedMotion && pulse > 0 && (
-          <div key={pulse} className="absolute inset-0 rounded-[6px] pointer-events-none" style={{ border: `1px solid ${ACCENT}`, animation: 'charge-burst 0.5s ease-out forwards' }} />
+          <div key={pulse} className="absolute inset-0 rounded-[7px] pointer-events-none" style={{ border: `1px solid ${ACCENT}`, animation: 'charge-burst 0.5s ease-out forwards' }} />
         )}
       </div>
 
