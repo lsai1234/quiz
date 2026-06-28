@@ -4,6 +4,7 @@ import type { StackBlueprint } from './types'
 import type { SlotOption, BlueprintAIResult } from '@/lib/ai-stack'
 import { getApprovedClaims } from './approved-claims'
 import { getArchetype, scoreProduct, type SlotType } from './factory'
+import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig, type PricingConfig } from './pricing'
 
 const MAX_OPTIONS_PER_SLOT = 8
 
@@ -88,10 +89,71 @@ export function applyBlueprintAIResult(
   return { ...blueprint, slots, personalised: true }
 }
 
+/** The discounted one-off (price, cost) lines for a blueprint — mirrors how
+ *  `calculatePricing` resolves each slot's price, so the budget check here lines
+ *  up exactly with the reveal total. */
+function oneOffLinesForBlueprint(
+  blueprint: StackBlueprint,
+  catalogue: CatalogueProduct[],
+  config: PricingConfig,
+): { price: number; cost: number }[] {
+  const lines: { price: number; cost: number }[] = []
+  for (const slot of blueprint.slots) {
+    const product = catalogue.find(p => p.id === slot.selectedProductId)
+    if (!product) continue
+    const variant = slot.selectedVariantId ? product.variants.find(v => v.id === slot.selectedVariantId) : undefined
+    const price = variant?.price ?? product.variants.find(v => v.available)?.price ?? product.basePrice
+    lines.push({ price, cost: unitCostOf(product, price, config) })
+  }
+  return lines
+}
+
+/**
+ * Applies AI choices + reasons like `applyBlueprintAIResult`, but GATES every
+ * product swap against the bundle's hard price cap: a swap is only kept if the
+ * stack's discounted one-off total stays within the cap. Over-budget swaps are
+ * dropped (the engine's affordable pick is retained); the AI's reason is always
+ * applied. The engine blueprint is already within budget, so the result always
+ * is too. With no cap (top tier) this behaves exactly like the ungated apply.
+ */
+export function applyBlueprintAIResultWithinBudget(
+  blueprint: StackBlueprint,
+  result: BlueprintAIResult,
+  catalogue: CatalogueProduct[],
+  cap: number | null,
+  config: PricingConfig = getPricingConfig(),
+): StackBlueprint {
+  const used = new Set(blueprint.slots.map(s => s.selectedProductId))
+  const working = blueprint.slots.map(s => ({ ...s }))
+
+  for (let i = 0; i < working.length; i++) {
+    const slot = working[i]
+    const choice = result.choices[slot.slotId]
+    if (choice && choice !== slot.selectedProductId && !used.has(choice)) {
+      const candidate = working.map((s, j) =>
+        j === i ? { ...s, selectedProductId: choice, selectedVariantId: null } : s,
+      )
+      const total = cap == null
+        ? 0
+        : discountedOneOffTotal(oneOffLinesForBlueprint({ ...blueprint, slots: candidate }, catalogue, config), config)
+      if (cap == null || total <= cap + 0.001) {
+        used.delete(slot.selectedProductId)
+        used.add(choice)
+        working[i] = { ...slot, selectedProductId: choice, selectedVariantId: null }
+      }
+    }
+    const reason = result.reasons[slot.slotId]
+    if (reason) working[i] = { ...working[i], reason }
+  }
+
+  return { ...blueprint, slots: working, personalised: true }
+}
+
 /**
  * Asks the AI to personalise the blueprint's product choices and reasons via
  * /api/personalise-stack, falling back to the unchanged blueprint on any error
- * so the flow can never get stuck.
+ * so the flow can never get stuck. AI swaps are gated to the bundle's hard price
+ * cap so personalisation can never push the stack over budget.
  */
 export async function personaliseBlueprint(
   answers: QuizAnswers,
@@ -100,6 +162,9 @@ export async function personaliseBlueprint(
 ): Promise<StackBlueprint> {
   const slots = buildSlotOptions(blueprint, answers, catalogue)
   if (slots.length === 0) return blueprint
+
+  const config = getPricingConfig()
+  const cap = budgetCapFor(answers.budget, config)
 
   try {
     const res = await fetch('/api/personalise-stack', {
@@ -110,7 +175,13 @@ export async function personaliseBlueprint(
     if (!res.ok) throw new Error(`personalise-stack ${res.status}`)
     const data = (await res.json()) as BlueprintAIResult & { personalised: boolean }
     if (!data.personalised) return blueprint
-    return applyBlueprintAIResult(blueprint, { choices: data.choices ?? {}, reasons: data.reasons ?? {} })
+    return applyBlueprintAIResultWithinBudget(
+      blueprint,
+      { choices: data.choices ?? {}, reasons: data.reasons ?? {} },
+      catalogue,
+      cap,
+      config,
+    )
   } catch {
     return blueprint
   }

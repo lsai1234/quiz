@@ -100,6 +100,9 @@ ${firstName ? `- Name: ${firstName}` : ''}
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
 - Monthly budget: ${budget}
 
+BUDGET RULE
+- The combined one-off list price of the products you choose must stay within the top of this person's monthly budget. If a pricier option would push the total over, choose a cheaper option from that slot that still fits. Use the budget well — but never exceed it.
+
 SLOTS (pick one product id per slot, from that slot's options only)
 ${slotBlocks.join('\n')}`
 }

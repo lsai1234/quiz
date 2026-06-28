@@ -6,6 +6,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
+import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } from './pricing'
 
 const SLOT_ORDER = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep'] as const
 export type SlotType = typeof SLOT_ORDER[number]
@@ -534,6 +535,30 @@ export function buildStackBlueprint(
   const usedProductIds = new Set<string>()
   let displayOrder = 0
 
+  // ── Budget cap ──────────────────────────────────────────────────────────────
+  // Each bundle has a HARD discounted one-off price cap. We track the chosen
+  // products' (price, cost) lines and only add a product if the stack's
+  // discounted one-off total stays within the cap — picking the most relevant
+  // product that fits, so we get as close to the ceiling as possible without
+  // ever going over. null cap (top tier) means no upper limit.
+  const pricingConfig = getPricingConfig()
+  const budgetCap = budgetCapFor(answers.budget, pricingConfig)
+  const selectedLines: { price: number; cost: number }[] = []
+
+  function lineFor(product: CatalogueProduct): { price: number; cost: number } {
+    const firstAvailable = product.variants.find(v => v.available)
+    const price = firstAvailable?.price ?? product.basePrice
+    return { price, cost: unitCostOf(product, price, pricingConfig) }
+  }
+
+  /** Would adding this product keep the discounted one-off total within the cap? */
+  function fitsWithinBudget(product: CatalogueProduct): boolean {
+    if (budgetCap == null) return true
+    const total = discountedOneOffTotal([...selectedLines, lineFor(product)], pricingConfig)
+    return total <= budgetCap + 0.001
+  }
+
+  /** Highest-scoring candidate (score ≥ 0). Ignores the budget cap. */
   function pickBest(candidates: CatalogueProduct[], slotType: SlotType): { product: CatalogueProduct; score: number } | null {
     let bestProduct: CatalogueProduct | null = null
     let bestScore = -Infinity
@@ -548,12 +573,29 @@ export function buildStackBlueprint(
     return { product: bestProduct, score: bestScore }
   }
 
+  /**
+   * The best-scoring candidate that also FITS the budget cap. Candidates are
+   * ranked by relevance; we take the highest-scoring one whose addition keeps the
+   * stack within the cap (so relevance wins, but the cap is never breached).
+   */
+  function pickBestAffordable(candidates: CatalogueProduct[], slotType: SlotType): { product: CatalogueProduct; score: number } | null {
+    const scored = candidates
+      .map(product => ({ product, score: scoreProduct(product, slotType, answers, archetype) }))
+      .filter(x => x.score >= 0)
+      .sort((a, b) => b.score - a.score)
+    for (const c of scored) {
+      if (fitsWithinBudget(c.product)) return c
+    }
+    return null
+  }
+
   function pushSlot(opts: {
     slotId: string; slotType: SlotType; title: string; description: string
     product: CatalogueProduct; score: number; reason: string; required: boolean
   }) {
     const firstAvailableVariant = opts.product.variants.find(v => v.available) ?? null
     usedProductIds.add(opts.product.id)
+    selectedLines.push(lineFor(opts.product))
     slots.push({
       slotId: opts.slotId,
       slotType: opts.slotType as any,
@@ -580,7 +622,7 @@ export function buildStackBlueprint(
       if (slots.length >= maxSlots) break
       const candidates = effectiveCatalogue.filter(p => p.stackSlots.includes(slotType as any) && !usedProductIds.has(p.id))
       if (candidates.length === 0) continue
-      const best = pickBest(candidates, slotType)
+      const best = pickBestAffordable(candidates, slotType)
       if (!best) continue
       pushSlot({
         slotId: `slot-${slotType}`,
@@ -618,7 +660,7 @@ export function buildStackBlueprint(
         p => p.goals.includes(cfg.goal) && !usedProductIds.has(p.id) && !usedSwapGroups.has(p.swapGroup)
       )
       if (candidates.length === 0) continue
-      const best = pickBest(candidates, cfg.slotType)
+      const best = pickBestAffordable(candidates, cfg.slotType)
       if (!best) continue
       usedSwapGroups.add(best.product.swapGroup)
       pushSlot({
@@ -665,6 +707,8 @@ export function buildStackBlueprint(
         if (slots.length >= maxSlots) break
         // Don't add two products from the same swap group (e.g. two magnesiums)
         if (usedSwapGroups.has(product.swapGroup)) continue
+        // Hard budget cap: only top up while we stay within the bundle ceiling.
+        if (!fitsWithinBudget(product)) continue
         usedSwapGroups.add(product.swapGroup)
         pushSlot({
           slotId: `slot-extra-${product.id}`,
@@ -703,6 +747,33 @@ export function buildStackBlueprint(
           required: false,
         })
       }
+    }
+  }
+
+  // Non-empty guarantee: if the cap was too low for any single product to fit
+  // (degenerate — e.g. a £30 cap with no product under £30), still return the one
+  // most relevant pick. This is the ONLY case the cap may be exceeded, and only
+  // by a single essential product so the user is never shown an empty stack.
+  if (slots.length === 0) {
+    let fallbackProduct: CatalogueProduct | null = null
+    let fallbackScore = -Infinity
+    let fallbackSlot: SlotType = 'health'
+    for (const product of effectiveCatalogue) {
+      const slotType = (product.stackSlots[0] ?? 'health') as SlotType
+      const score = scoreProduct(product, slotType, answers, archetype)
+      if (score > fallbackScore) { fallbackScore = score; fallbackProduct = product; fallbackSlot = slotType }
+    }
+    if (fallbackProduct) {
+      pushSlot({
+        slotId: `slot-${fallbackSlot}`,
+        slotType: fallbackSlot,
+        title: SLOT_TITLES[fallbackSlot] ?? 'Daily Support',
+        description: SLOT_DESCRIPTIONS[fallbackSlot] ?? '',
+        product: fallbackProduct,
+        score: Math.max(0, fallbackScore),
+        reason: fallbackProduct.shortReason || SLOT_DESCRIPTIONS[fallbackSlot] || '',
+        required: false,
+      })
     }
   }
 

@@ -1,6 +1,6 @@
 import type { StackBlueprint } from './types'
 import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
-import type { QuizAnswers } from '@/lib/types'
+import type { QuizAnswers, Budget } from '@/lib/types'
 
 const DAYS_PER_MONTH = 30
 
@@ -35,6 +35,20 @@ export const PRICING_CONFIG = {
   ] as DiscountTier[],
   // ── Extra subscription discount tiers, on top of the base rate (best wins) ──
   subscriptionTiers: [] as DiscountTier[],
+
+  // ── Per-bundle hard price caps ──
+  /**
+   * The maximum discounted one-off total (£) a stack may reach for each budget
+   * tier. The factory selects products up to (and as close as possible to) this
+   * ceiling and never over it; the AI personaliser is gated to the same cap.
+   * null = no upper cap (the open-ended top tier).
+   */
+  budgetCaps: {
+    'under-30': 30,
+    '30-50': 50,
+    '50-80': 80,
+    '80-plus': null,
+  } as Record<Budget, number | null>,
 
   // ── Margin / profit guardrails ──
   /** When a product has no explicit cost, estimate it as price × this. */
@@ -77,6 +91,7 @@ function recomputeConfig() {
     introOffer: { ...PRICING_CONFIG.introOffer, ...(_overrides.introOffer ?? {}) },
     bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
     subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
+    budgetCaps: _overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,
   }
 }
 
@@ -133,6 +148,30 @@ export function discountWithFloor(unitPrice: number, rate: number, cost: number,
   const discounted = unitPrice * (1 - rate)
   const floor = Math.min(unitPrice, cost * (1 + config.marginFloorPct))
   return Math.max(discounted, floor)
+}
+
+// ─── Per-bundle price caps ────────────────────────────────────────────────────
+
+/** The hard discounted one-off cap (£) for a budget tier, or null when uncapped. */
+export function budgetCapFor(budget: Budget | null, config = getPricingConfig()): number | null {
+  if (!budget) return null
+  return config.budgetCaps[budget] ?? null
+}
+
+/**
+ * The discounted one-off total for a set of (price, cost) lines: the best
+ * qualifying bundle-tier discount applied per line with the margin floor — the
+ * SAME maths `calculatePricing` uses for `oneOffTotal`, so the cap enforced at
+ * selection/personalisation time matches the price shown at the reveal.
+ */
+export function discountedOneOffTotal(
+  lines: { price: number; cost: number }[],
+  config = getPricingConfig(),
+): number {
+  const subtotal = lines.reduce((s, l) => s + l.price, 0)
+  const { pct } = resolveTier(config.bundleTiers, subtotal, lines.length)
+  const total = lines.reduce((s, l) => s + discountWithFloor(l.price, pct, l.cost, config), 0)
+  return Math.round(total * 100) / 100
 }
 
 // ─── Subscription qualification & resolution ─────────────────────────────────
