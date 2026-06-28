@@ -124,12 +124,13 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   const captionRefs  = useRef<(HTMLDivElement | null)[]>([])
   const headline1Ref = useRef<HTMLDivElement>(null)
   const headline2Ref = useRef<HTMLDivElement>(null)
-  const ctaRef       = useRef<HTMLButtonElement>(null)
+  const ctaRef       = useRef<HTMLDivElement>(null)
   const railRef      = useRef<HTMLDivElement>(null)
   const railFillRef  = useRef<HTMLDivElement>(null)
   const pctRef       = useRef<HTMLSpanElement>(null)
   const hintRef      = useRef<HTMLDivElement>(null)
   const beatRefs     = useRef<(HTMLDivElement | null)[]>([])
+  const firedMilestones = useRef<Set<number>>(new Set())
 
   const [assetsReady, setAssetsReady]  = useState(false)
   const [resizeKey,   setResizeKey]    = useState(0)
@@ -259,6 +260,15 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         if (!el || beatFracs[i] === undefined) return
         el.dataset.active = cp >= beatFracs[i] - 0.001 ? 'true' : 'false'
       })
+      // Fire one-time scroll-progress milestones for drop-off analytics.
+      for (const m of [25, 50, 75, 100]) {
+        if (cp * 100 >= m && !firedMilestones.current.has(m)) {
+          firedMilestones.current.add(m)
+          const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> }
+          w.dataLayer?.push({ event: 'hero_progress', percent: m })
+          window.dispatchEvent(new CustomEvent('hero-progress', { detail: m }))
+        }
+      }
     }
 
     const ctx = gsap.context(() => {
@@ -295,7 +305,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
 
       // ── ONE timeline — G = breathing gap between major beats ────────────
       const tl = gsap.timeline({ paused: true })
-      const G = 0.7  // pause between beats (time units)
+      const G = 0.55  // pause between beats (time units) — tightened for pacing
 
       // ── Beat 1 · ARRIVAL (t 0 → 1.2) ────────────────────────────────────
       tl.to(bottleRef.current, {
@@ -337,7 +347,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
 
       // Capsules rise one at a time — wider window gives breathing room between each
       const capFirst      = b3 + 0.2
-      const capsuleWindow = 7.5
+      const capsuleWindow = 6
       const perCap        = capsuleWindow / INGREDIENTS.length  // 1.5 each
 
       INGREDIENTS.forEach((_, i) => {
@@ -513,7 +523,7 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         ScrollTrigger.create({
           trigger:       section,
           start:         'top top',
-          end:           '+=400%',
+          end:           '+=320%',
           pin:           true,
           scrub:         1,
           animation:     tl,
@@ -573,6 +583,9 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
           >
             Start your profile →
           </button>
+          <p className="mt-3 text-[11px] text-white/40 max-w-xs mx-auto">
+            These are just examples — yours is built from your answers. Takes about a minute.
+          </p>
         </div>
       </section>
     )
@@ -593,15 +606,27 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
         style={{ background: 'radial-gradient(ellipse 60% 55% at 50% 62%, rgba(0,212,255,0.07), transparent)' }}
       />
 
-      {/* Logo */}
-      <div className="absolute top-6 left-0 right-0 flex justify-center z-30 pointer-events-none">
+      {/* Logo + early value hook */}
+      <div className="absolute top-6 left-0 right-0 flex flex-col items-center gap-1.5 z-30 pointer-events-none px-5">
         <div className="flex items-center gap-3">
           <CHRGDIcon />
           <span className="text-white font-black text-lg tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
             getCHRGD
           </span>
         </div>
+        <span className="text-[11px] font-semibold tracking-wide text-white/45 text-center">
+          A supplement stack built around you
+        </span>
       </div>
+
+      {/* Always-available start — never trap anyone behind the animation */}
+      <button
+        onClick={() => onEnterQuizRef.current()}
+        className="absolute top-6 right-4 z-40 px-4 py-2 rounded-full bg-white/10 border border-white/15 text-white text-xs font-bold tracking-wide active:scale-95 transition-transform pointer-events-auto"
+        style={{ fontFamily: 'var(--font-display)' }}
+      >
+        Skip intro →
+      </button>
 
       {/* Loading state */}
       {!assetsReady && (
@@ -724,14 +749,18 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
             Find your stack.
           </p>
         </div>
-        <button
-          ref={ctaRef}
-          onClick={() => onEnterQuizRef.current()}
-          className="pointer-events-auto mt-10 px-8 py-4 rounded-full bg-[#00D4FF] text-[#0A0A0A] text-sm font-bold tracking-wide active:scale-95 transition-transform"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          Start your profile →
-        </button>
+        <div ref={ctaRef} className="flex flex-col items-center" style={{ willChange: 'transform, opacity' }}>
+          <button
+            onClick={() => onEnterQuizRef.current()}
+            className="pointer-events-auto mt-10 px-8 py-4 rounded-full bg-[#00D4FF] text-[#0A0A0A] text-sm font-bold tracking-wide active:scale-95 transition-transform"
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            Start your profile →
+          </button>
+          <p className="mt-3 text-[11px] text-white/40 max-w-xs text-center">
+            These are just examples — yours is built from your answers. Takes about a minute.
+          </p>
+        </div>
       </div>
 
       {/* Scroll-progress rail — fills as you advance, with a live % readout and
