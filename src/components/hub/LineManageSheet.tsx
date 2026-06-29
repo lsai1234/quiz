@@ -6,6 +6,7 @@ import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/
 import {
   computeRemoveImpact,
   oneOffCharge,
+  setLineUsage,
   formatDispatchDate,
   effectiveNextDispatch,
 } from '@/lib/recharge/mock'
@@ -54,6 +55,11 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
 
   if (!mounted) return null
 
+  const usageChanged = usage !== (line.usageLevel ?? 'standard')
+  // Pure projection of the pending slider choice (not applied until confirmed).
+  const previewLine = product
+    ? setLineUsage(subscription, line.id, product, usage).lines.find((l) => l.id === line.id) ?? line
+    : line
   const removeImpact = computeRemoveImpact(subscription, line.id)
   const oneOff = oneOffCharge(line, 1)
   const nextBox = formatDispatchDate(effectiveNextDispatch(subscription))
@@ -85,20 +91,29 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
             <p className="text-xs text-[var(--color-muted)] mb-3">Slide it — we&apos;ll sort how much ships and how often. You only ever pay for what ships.</p>
             <input
               type="range" min={0} max={2} step={1} value={USAGE_LEVELS.indexOf(usage)}
-              onChange={(e) => { const lvl = USAGE_LEVELS[Number(e.target.value)]; setUsage(lvl); onSetUsage(lvl) }}
+              onChange={(e) => setUsage(USAGE_LEVELS[Number(e.target.value)])}
               className="w-full" style={{ accentColor: ACCENT }}
             />
             <div className="flex justify-between mt-1 mb-3">
               {USAGE_LEVELS.map((lvl) => (
-                <button key={lvl} onClick={() => { setUsage(lvl); onSetUsage(lvl) }} className="text-[10px] font-semibold" style={{ color: usage === lvl ? ACCENT : 'var(--color-muted)' }}>
+                <button key={lvl} onClick={() => setUsage(lvl)} className="text-[10px] font-semibold" style={{ color: usage === lvl ? ACCENT : 'var(--color-muted)' }}>
                   {USAGE_LABEL[lvl]}
                 </button>
               ))}
             </div>
-            {/* Always-present result line — updates in place as you slide, so nothing jumps. */}
+            {/* Live preview of the pending choice — text only, so nothing reflows. */}
             <p className="text-xs text-[var(--color-muted)]">
-              {shipSummary(line.quantity, line.deliveryIntervalMonths, noun)} · {formatGBP(line.pricePerDelivery)}/box · {formatGBP(subscription.flatMonthly)}/mo total
+              {shipSummary(previewLine.quantity, previewLine.deliveryIntervalMonths, noun)} · {formatGBP(previewLine.pricePerDelivery)}/box
             </p>
+            {/* Always rendered (disabled when unchanged) so it never shifts the layout. */}
+            <button
+              onClick={() => onSetUsage(usage)}
+              disabled={!usageChanged}
+              className="w-full mt-3 py-3 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-40"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Review change →
+            </button>
           </div>
 
           {/* Quick moves */}

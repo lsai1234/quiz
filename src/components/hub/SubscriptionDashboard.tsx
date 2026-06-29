@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { buildDeliverySchedule, nextDelivery } from '@/lib/recharge/schedule'
+import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice } from '@/lib/recharge/schedule'
+import { computeAddImpact, computeSkipImpact, computeUsageImpact, projectedEconomics, oneOffCharge } from '@/lib/recharge/mock'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
 import { CheckIn } from './CheckIn'
 import { CheckInJourney } from './CheckInJourney'
@@ -16,6 +17,7 @@ import { DeliveryCalendar } from './DeliveryCalendar'
 import { DeliveryDetailSheet } from './DeliveryDetailSheet'
 import { BillingSummary } from './BillingSummary'
 import { CancelSaveFlow } from './CancelSaveFlow'
+import { ChangeSummary, type PendingChange } from './ChangeSummary'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
@@ -40,6 +42,7 @@ export function SubscriptionDashboard() {
   const [manageLineId, setManageLineId] = useState<string | null>(null)
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [pending, setPending] = useState<PendingChange | null>(null)
   const [showJourney, setShowJourney] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showSave, setShowSave] = useState(false)
@@ -290,10 +293,45 @@ export function SubscriptionDashboard() {
           product={products.find((p) => p.id === manageLine.productId)}
           onSetUsage={(level) => {
             const p = products.find((p) => p.id === manageLine.productId)
-            if (p) setLineUsage(manageLine.id, p, level)
+            if (!p) return
+            const imp = computeUsageImpact(sub, manageLine.id, p, level)
+            setPending({
+              title: 'Change how much you get through',
+              subtitle: manageLine.productTitle,
+              monthlyBefore: imp.currentMonthly,
+              monthlyAfter: imp.newMonthly,
+              effectiveFrom: imp.effectiveFrom,
+              confirmLabel: 'Confirm change',
+              onConfirm: () => { setLineUsage(manageLine.id, p, level); setManageLineId(null) },
+            })
           }}
-          onSkip={() => { skipNext(manageLine.id); setManageLineId(null) }}
-          onExpedite={() => { alert('Live, this charges a one-off and ships it with your next box.'); setManageLineId(null) }}
+          onSkip={() => {
+            const imp = computeSkipImpact(sub, manageLine.id)
+            setPending({
+              title: 'Skip next delivery',
+              subtitle: manageLine.productTitle,
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: sub.flatMonthly,
+              credit: imp.credit,
+              effectiveFrom: imp.effectiveFrom,
+              note: 'No box, no charge — its value is credited to your next payment. Your monthly plan is unchanged.',
+              confirmLabel: 'Skip & credit',
+              onConfirm: () => { skipNext(manageLine.id); setManageLineId(null) },
+            })
+          }}
+          onExpedite={(qty) => {
+            setPending({
+              title: 'Get one now',
+              subtitle: manageLine.productTitle,
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: sub.flatMonthly,
+              oneOffNow: oneOffCharge(manageLine, qty),
+              effectiveFrom: new Date().toISOString(),
+              note: 'A one-off charge now; it ships with your next box. Your monthly plan is unchanged.',
+              confirmLabel: 'Confirm one-off',
+              onConfirm: () => setManageLineId(null),
+            })
+          }}
           onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}
           onClose={() => setManageLineId(null)}
         />
@@ -307,8 +345,26 @@ export function SubscriptionDashboard() {
           onSkip={() => skipDelivery(selectedDelivery.id)}
           onUnskip={() => unskipDelivery(selectedDelivery.id)}
           onReschedule={(date) => rescheduleDelivery(selectedDelivery.id, date)}
-          onAddItem={(product) => addItemToDelivery(selectedDelivery.id, product)}
-          onAddRecurring={(product) => addLine(product, products)}
+          onAddItem={(product) => {
+            setPending({
+              title: 'Add to this box', subtitle: product.title,
+              monthlyBefore: sub.flatMonthly, monthlyAfter: sub.flatMonthly,
+              oneOffNow: oneOffUnitPrice(product), effectiveFrom: selectedDelivery.date,
+              note: 'A one-off added to this box only. Your monthly plan is unchanged.',
+              confirmLabel: 'Add to box',
+              onConfirm: () => addItemToDelivery(selectedDelivery.id, product),
+            })
+          }}
+          onAddRecurring={(product) => {
+            const imp = computeAddImpact(sub, product, products)
+            setPending({
+              title: 'Add to every delivery', subtitle: product.title,
+              monthlyBefore: imp.currentMonthly, monthlyAfter: imp.newMonthly,
+              effectiveFrom: imp.effectiveFrom, economics: projectedEconomics(product),
+              confirmLabel: 'Add to plan',
+              onConfirm: () => addLine(product, products),
+            })
+          }}
           onRemoveItem={(item) => removeItemFromDelivery(selectedDelivery.id, item)}
           onClose={() => setSelectedDeliveryId(null)}
         />
@@ -318,10 +374,22 @@ export function SubscriptionDashboard() {
         <AddProductSheet
           subscription={sub}
           catalogue={products}
-          onAdd={(product) => { addLine(product, products); setShowAdd(false) }}
+          onAdd={(product) => {
+            setShowAdd(false)
+            const imp = computeAddImpact(sub, product, products)
+            setPending({
+              title: 'Add to your plan', subtitle: product.title,
+              monthlyBefore: imp.currentMonthly, monthlyAfter: imp.newMonthly,
+              effectiveFrom: imp.effectiveFrom, economics: projectedEconomics(product),
+              confirmLabel: 'Add to plan',
+              onConfirm: () => addLine(product, products),
+            })
+          }}
           onClose={() => setShowAdd(false)}
         />
       )}
+
+      {pending && <ChangeSummary change={pending} onClose={() => setPending(null)} />}
 
       {showSave && (
         <CancelSaveFlow
