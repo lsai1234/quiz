@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
 import {
@@ -31,6 +31,7 @@ export function StackReviewPage() {
     stackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
+  const stackRef = useRef<HTMLDivElement>(null)
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -204,7 +205,7 @@ export function StackReviewPage() {
         <div className="h-px bg-[var(--color-border)] mx-5" />
 
         {/* Core + added booster product cards */}
-        <div className="px-5 pt-7 max-w-lg mx-auto space-y-3">
+        <div ref={stackRef} className="px-5 pt-7 max-w-lg mx-auto space-y-3" style={{ scrollMarginTop: 16 }}>
           <p
             className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
             style={{ fontFamily: 'var(--font-display)' }}
@@ -279,6 +280,7 @@ export function StackReviewPage() {
             planType={planType}
             onPlanChange={setPlanType}
             onCheckout={handleCheckout}
+            onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             isLoading={checkoutState.status === 'loading'}
           />
 

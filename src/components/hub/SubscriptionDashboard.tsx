@@ -291,7 +291,6 @@ export function SubscriptionDashboard() {
           onSetUsage={(level) => {
             const p = products.find((p) => p.id === manageLine.productId)
             if (p) setLineUsage(manageLine.id, p, level)
-            setManageLineId(null)
           }}
           onSkip={() => { skipNext(manageLine.id); setManageLineId(null) }}
           onExpedite={() => { alert('Live, this charges a one-off and ships it with your next box.'); setManageLineId(null) }}
