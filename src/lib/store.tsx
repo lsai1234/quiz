@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import { MOCK_PRODUCTS } from './mock-products'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 
@@ -17,6 +18,11 @@ interface QuizStore {
   selectedProducts: Product[]
   // Which offer the user is viewing on the stack page: one-off bundle vs monthly subscription
   planType: PlanType
+  // Per-product usage level chosen in the subscription customisation journey
+  // (productId → 'light' | 'standard' | 'heavy'). Drives ship cadence + quantity.
+  subscriptionUsage: Record<string, UsageLevel>
+  // True once the member has been through the subscription customisation journey.
+  subscriptionCustomised: boolean
   // AI personalisation metadata for the current stack
   aiReasons: Record<string, string>
   stackPersonalised: boolean
@@ -41,6 +47,8 @@ interface QuizStore {
   setStackLevel: (level: StackLevel) => void
   setSelectedProducts: (products: Product[]) => void
   setPlanType: (plan: PlanType) => void
+  setSubscriptionUsage: (usage: Record<string, UsageLevel>) => void
+  setSubscriptionCustomised: (done: boolean) => void
   setAiStackMeta: (reasons: Record<string, string>, personalised: boolean) => void
   setStackReady: (ready: boolean) => void
   toggleProduct: (product: Product) => void
@@ -80,6 +88,8 @@ export const useQuizStore = create<QuizStore>((set) => ({
   stackLevel: 'performance',
   selectedProducts: [],
   planType: 'oneoff',
+  subscriptionUsage: {},
+  subscriptionCustomised: false,
   aiReasons: {},
   stackPersonalised: false,
   stackReady: false,
@@ -102,6 +112,8 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setStackLevel: (level) => set({ stackLevel: level }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
   setPlanType: (plan) => set({ planType: plan }),
+  setSubscriptionUsage: (usage) => set({ subscriptionUsage: usage }),
+  setSubscriptionCustomised: (done) => set({ subscriptionCustomised: done }),
   setAiStackMeta: (reasons, personalised) => set({ aiReasons: reasons, stackPersonalised: personalised }),
   setStackReady: (ready) => set({ stackReady: ready }),
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
@@ -118,5 +130,5 @@ export const useQuizStore = create<QuizStore>((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', aiReasons: {}, stackPersonalised: false, stackReady: false }),
+  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, aiReasons: {}, stackPersonalised: false, stackReady: false }),
 }))

@@ -2,14 +2,12 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import {
-  cadenceOptions,
-  computeCadenceImpact,
-  computeQuantityImpact,
+  computeUsageImpact,
+  setLineUsage,
   computeRemoveImpact,
   oneOffCharge,
-  lineEconomics,
   formatDispatchDate,
   effectiveNextDispatch,
 } from '@/lib/recharge/mock'
@@ -24,22 +22,24 @@ interface Props {
   subscription: MemberSubscription
   line: MemberSubscriptionLine
   product?: CatalogueProduct
-  onSetCadence: (months: number) => void
-  onSetQuantity: (quantity: number) => void
+  onSetUsage: (usageLevel: UsageLevel) => void
   onSkip: () => void
   onExpedite: (qty: number) => void
   onRemove: () => void
   onClose: () => void
 }
 
-function cadenceLabel(months: number): string {
-  return months === 1 ? 'Every month' : `Every ${months} months`
+const USAGE_LABEL: Record<UsageLevel, string> = { light: 'A little', standard: 'As recommended', heavy: 'A lot' }
+
+function shipSummary(units: number, months: number, noun: string): string {
+  if (months > 1) return `1 ${noun} every ${months} months`
+  if (units > 1) return `${units} ${noun}s a month`
+  return `1 ${noun} a month`
 }
 
-export function LineManageSheet({ subscription, line, product, onSetCadence, onSetQuantity, onSkip, onExpedite, onRemove, onClose }: Props) {
+export function LineManageSheet({ subscription, line, product, onSetUsage, onSkip, onExpedite, onRemove, onClose }: Props) {
   const [mounted, setMounted] = useState(false)
-  const [months, setMonths] = useState(line.deliveryIntervalMonths)
-  const [qty, setQty] = useState(line.quantity)
+  const [usage, setUsage] = useState<UsageLevel>(line.usageLevel ?? 'standard')
   const [confirmRemove, setConfirmRemove] = useState(false)
 
   useEffect(() => { setMounted(true) }, [])
@@ -56,14 +56,15 @@ export function LineManageSheet({ subscription, line, product, onSetCadence, onS
 
   if (!mounted) return null
 
-  const econ = lineEconomics(line, product)
-  const cadenceChanged = months !== line.deliveryIntervalMonths
-  const qtyChanged = qty !== line.quantity
-  const cadenceImpact = computeCadenceImpact(subscription, line.id, months)
-  const qtyImpact = computeQuantityImpact(subscription, line.id, qty)
+  const usageChanged = usage !== (line.usageLevel ?? 'standard')
+  const usageImpact = product ? computeUsageImpact(subscription, line.id, product, usage) : null
+  const previewLine = product
+    ? setLineUsage(subscription, line.id, product, usage).lines.find((l) => l.id === line.id)
+    : undefined
   const removeImpact = computeRemoveImpact(subscription, line.id)
   const oneOff = oneOffCharge(line, 1)
   const nextBox = formatDispatchDate(effectiveNextDispatch(subscription))
+  const noun = (product?.formats[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
 
   return createPortal(
     <div
@@ -85,45 +86,31 @@ export function LineManageSheet({ subscription, line, product, onSetCadence, onS
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-6">
-          {/* How much each delivery (recurring extra) */}
+          {/* How much you get through — one slider, we do the maths */}
           <div>
-            <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>How many each delivery?</p>
-            <p className="text-xs text-[var(--color-muted)] mb-3">Need an extra one every time? Bump it up — it ships with every box at your plan price.</p>
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-3 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border)] px-2 py-1.5">
-                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-9 h-9 rounded-lg text-lg font-black text-[var(--color-text)] bg-[var(--color-surface)] border border-[var(--color-border)] active:scale-90" aria-label="Fewer">−</button>
-                <span className="w-6 text-center text-base font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{qty}</span>
-                <button onClick={() => setQty((q) => Math.min(6, q + 1))} className="w-9 h-9 rounded-lg text-lg font-black text-[var(--color-text)] bg-[var(--color-surface)] border border-[var(--color-border)] active:scale-90" aria-label="More">+</button>
-              </div>
-              <span className="text-xs text-[var(--color-muted)]">{qty} × {formatGBP(econ.discountedUnit)} = {formatGBP(qty * econ.discountedUnit)}/box</span>
+            <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>How much do you get through?</p>
+            <p className="text-xs text-[var(--color-muted)] mb-3">Slide it — we&apos;ll sort how much ships and how often. You only ever pay for what ships.</p>
+            <input
+              type="range" min={0} max={2} step={1} value={USAGE_LEVELS.indexOf(usage)}
+              onChange={(e) => setUsage(USAGE_LEVELS[Number(e.target.value)])}
+              className="w-full" style={{ accentColor: ACCENT }}
+            />
+            <div className="flex justify-between mt-1 mb-3">
+              {USAGE_LEVELS.map((lvl) => (
+                <button key={lvl} onClick={() => setUsage(lvl)} className="text-[10px] font-semibold" style={{ color: usage === lvl ? ACCENT : 'var(--color-muted)' }}>
+                  {USAGE_LABEL[lvl]}
+                </button>
+              ))}
             </div>
-            {qtyChanged && (
-              <div className="mt-3 space-y-2">
-                <BillingImpact monthlyBefore={qtyImpact.currentMonthly} monthlyAfter={qtyImpact.newMonthly} effectiveFrom={effectiveNextDispatch(subscription).toISOString()} economics={{ ...econ, units: qty, perDelivery: Math.round(qty * econ.discountedUnit * 100) / 100, perMonth: Math.round((qty * econ.discountedUnit / Math.max(1, line.deliveryIntervalMonths)) * 100) / 100 }} />
-                <button onClick={() => onSetQuantity(qty)} className="w-full py-3 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>Save quantity</button>
-              </div>
+            {previewLine && (
+              <p className="text-xs text-[var(--color-muted)]">
+                {shipSummary(previewLine.quantity, previewLine.deliveryIntervalMonths, noun)} · {formatGBP(previewLine.pricePerDelivery)}/box
+              </p>
             )}
-          </div>
-
-          {/* How often it ships */}
-          <div>
-            <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>How often should it ship?</p>
-            <p className="text-xs text-[var(--color-muted)] mb-3">Going through it faster or stockpiling? You only ever pay for what ships.</p>
-            <div className="flex flex-wrap gap-2">
-              {cadenceOptions().map((m) => {
-                const active = months === m
-                return (
-                  <button key={m} onClick={() => setMonths(m)} className="px-3.5 h-10 rounded-xl text-xs font-bold transition-all active:scale-95"
-                    style={{ background: active ? 'var(--color-accent)' : 'var(--color-surface-2)', color: active ? 'var(--color-bg)' : 'var(--color-text-2)', border: '1px solid var(--color-border)' }}>
-                    {cadenceLabel(m)}
-                  </button>
-                )
-              })}
-            </div>
-            {cadenceChanged && (
+            {usageChanged && usageImpact && (
               <div className="mt-3 space-y-2">
-                <BillingImpact monthlyBefore={cadenceImpact.currentMonthly} monthlyAfter={cadenceImpact.newMonthly} effectiveFrom={effectiveNextDispatch(subscription).toISOString()} />
-                <button onClick={() => onSetCadence(months)} className="w-full py-3 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>Save cadence</button>
+                <BillingImpact monthlyBefore={usageImpact.currentMonthly} monthlyAfter={usageImpact.newMonthly} effectiveFrom={effectiveNextDispatch(subscription).toISOString()} />
+                <button onClick={() => onSetUsage(usage)} className="w-full py-3 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>Save</button>
               </div>
             )}
           </div>

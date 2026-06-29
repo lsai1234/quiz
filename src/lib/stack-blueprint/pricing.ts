@@ -1,6 +1,6 @@
 import type { StackBlueprint } from './types'
 import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
-import type { QuizAnswers, Budget } from '@/lib/types'
+import type { QuizAnswers, Budget, StackLevel } from '@/lib/types'
 
 const DAYS_PER_MONTH = 30
 
@@ -22,8 +22,20 @@ export interface DiscountTier {
 
 export const PRICING_CONFIG = {
   /** Subscription discount applied to subscription products (0–1). The base
-   *  "subscribe & save"; can be beaten by a subscriptionTier for bigger orders. */
+   *  "subscribe & save"; overridden by the per-bundle rate below and can be
+   *  beaten by a subscriptionTier for bigger orders. */
   subscriptionDiscount: 0.15,
+  /**
+   * Fixed subscribe-&-save discount per bundle (stack level). This is the
+   * headline selling point shown on each bundle: bigger bundle, better rate.
+   * The resolved rate is still margin-floored per line and can be beaten by a
+   * subscriptionTier. Falls back to `subscriptionDiscount` if a level is unset.
+   */
+  levelSubscriptionDiscount: {
+    essentials: 0.1,
+    performance: 0.15,
+    complete: 0.2,
+  } as Record<StackLevel, number>,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
 
@@ -59,8 +71,8 @@ export const PRICING_CONFIG = {
   minSubscriptionMonthly: 25,
 
   // ── Subscription cadence / commitment ──
-  /** Products longer-lived than this (days) are candidates for a monthly refill SKU. */
-  maxSubscriptionDaysOfSupply: 35,
+  /** Products with more servings than this are candidates for a monthly refill SKU. */
+  maxSubscriptionServings: 35,
   /** Never schedule a delivery more than this many months apart. */
   maxDeliveryMonths: 3,
   /** Bill one flat amount every month (smoothed average); minimum term protects it. */
@@ -92,6 +104,10 @@ function recomputeConfig() {
     bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
     subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
     budgetCaps: _overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,
+    levelSubscriptionDiscount: {
+      ...PRICING_CONFIG.levelSubscriptionDiscount,
+      ...(_overrides.levelSubscriptionDiscount ?? {}),
+    },
   }
 }
 
@@ -182,12 +198,12 @@ export function discountedOneOffTotal(
  * should be mapped to a monthly refill via `subscriptionProductId`.
  */
 export function qualifiesForSubscription(
-  product: Pick<CatalogueProduct, 'subscriptionEligible' | 'daysOfSupply'>,
+  product: Pick<CatalogueProduct, 'subscriptionEligible' | 'servings'>,
   config = getPricingConfig(),
 ): boolean {
   return (
     product.subscriptionEligible &&
-    product.daysOfSupply <= config.maxSubscriptionDaysOfSupply
+    product.servings <= config.maxSubscriptionServings
   )
 }
 
@@ -225,24 +241,44 @@ export function workoutsPerMonth(answers?: QuizAnswers | null): number {
 /**
  * The consumption protocol for a product — explicit if set, otherwise derived
  * from its stack slots (energy/hydration are taken per-workout, the rest daily)
- * and daysOfSupply (which doubles as doses-per-container at one dose per use).
+ * and servings (servings per container at the normal dose).
  */
-export function resolveConsumption(product: CatalogueProduct): { cadence: ConsumptionCadence; dosesPerUnit: number } {
+export function resolveConsumption(product: CatalogueProduct): { cadence: ConsumptionCadence; servingsPerUnit: number } {
   if (product.consumption) return product.consumption
   const perWorkout = product.stackSlots.some((s) => s === 'energy' || s === 'hydration')
   return {
     cadence: perWorkout ? 'per-workout' : 'daily',
-    dosesPerUnit: product.daysOfSupply > 0 ? product.daysOfSupply : DAYS_PER_MONTH,
+    servingsPerUnit: product.servings > 0 ? product.servings : DAYS_PER_MONTH,
   }
 }
+
+// ─── Usage levels (the customisation journey's sliders) ──────────────────────
+// A member dials in how much they get through on a friendly, no-maths scale.
+// Each level is a multiplier on servings-per-occasion: 'light' = fewer servings
+// per day/workout (a tub lasts longer, ships less often), 'heavy' = more.
+// 'standard' is the suggested default — what the engine picks automatically.
+
+export const USAGE_LEVELS = ['light', 'standard', 'heavy'] as const
+export type UsageLevel = (typeof USAGE_LEVELS)[number]
+
+/** Servings consumed per occasion (per day for daily, per session for per-workout). */
+export const USAGE_SERVINGS_PER_OCCASION: Record<UsageLevel, number> = {
+  light: 0.5,
+  standard: 1,
+  heavy: 2,
+}
+
+export const DEFAULT_USAGE_LEVEL: UsageLevel = 'standard'
 
 /** How a product is sized into a subscription line: cadence + ship schedule. */
 export interface LineSizing {
   cadence: ConsumptionCadence
-  /** Doses in one container. */
-  dosesPerUnit: number
+  /** Servings in one container. */
+  servingsPerUnit: number
   /** Times taken per month (~30 daily, training sessions/month per-workout). */
   occasionsPerMonth: number
+  /** The usage level applied (member-chosen, defaults to 'standard'). */
+  usageLevel: UsageLevel
   /** Units sent each shipment. */
   unitsPerShipment: number
   /** Ship cadence in months. */
@@ -253,19 +289,25 @@ export interface LineSizing {
 
 /**
  * Size a product into a subscription line: derive its consumption protocol and
- * the nearest sensible ship schedule for the member's training frequency. Shared
- * by `buildSubscriptionPlan` (initial stack) and the hub's add/cadence helpers so
- * every line is sized the same way.
+ * the nearest sensible ship schedule for the member's training frequency and
+ * chosen usage level. Shared by `buildSubscriptionPlan` (initial stack) and the
+ * hub's add/cadence helpers so every line is sized the same way.
+ *
+ * `usageLevel` scales servings-per-occasion (the journey's per-product slider);
+ * 'standard' reproduces the previous one-serving-per-occasion default.
  */
 export function sizeConsumption(
   product: CatalogueProduct,
   answers?: QuizAnswers | null,
   config = getPricingConfig(),
+  usageLevel: UsageLevel = DEFAULT_USAGE_LEVEL,
 ): LineSizing {
   const woPerMonth = workoutsPerMonth(answers)
-  const { cadence, dosesPerUnit } = resolveConsumption(product)
+  const { cadence, servingsPerUnit } = resolveConsumption(product)
   const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : Math.max(woPerMonth, 1)
-  const monthsOneUnitLasts = dosesPerUnit / occasionsPerMonth
+  const servingsPerOccasion = USAGE_SERVINGS_PER_OCCASION[usageLevel] ?? 1
+  const servingsPerMonth = occasionsPerMonth * servingsPerOccasion
+  const monthsOneUnitLasts = servingsPerMonth > 0 ? servingsPerUnit / servingsPerMonth : config.maxDeliveryMonths
 
   let unitsPerShipment: number
   let shipEveryMonths: number
@@ -273,14 +315,15 @@ export function sizeConsumption(
     unitsPerShipment = 1
     shipEveryMonths = Math.min(config.maxDeliveryMonths, Math.max(1, Math.round(monthsOneUnitLasts)))
   } else {
-    unitsPerShipment = Math.max(1, Math.round(occasionsPerMonth / dosesPerUnit))
+    unitsPerShipment = Math.max(1, Math.round(servingsPerMonth / servingsPerUnit))
     shipEveryMonths = 1
   }
 
   return {
     cadence,
-    dosesPerUnit,
+    servingsPerUnit,
     occasionsPerMonth,
+    usageLevel,
     unitsPerShipment,
     shipEveryMonths,
     monthlyUnits: unitsPerShipment / shipEveryMonths,
@@ -297,8 +340,10 @@ export interface SubscriptionLine {
   cadence: ConsumptionCadence
   /** Times taken per month: ~30 for daily, training sessions/month for per-workout. */
   occasionsPerMonth: number
-  /** Doses in one container. */
-  dosesPerUnit: number
+  /** Servings in one container. */
+  servingsPerUnit: number
+  /** The member's chosen usage level for this line (defaults to 'standard'). */
+  usageLevel: UsageLevel
   /** Units sent each shipment. */
   unitsPerShipment: number
   /** Ship cadence in months (e.g. 2 = one unit every two months). */
@@ -332,7 +377,8 @@ interface RawSubLine {
   coversSlotIds: string[]
   cadence: ConsumptionCadence
   occasionsPerMonth: number
-  dosesPerUnit: number
+  servingsPerUnit: number
+  usageLevel: UsageLevel
   unitsPerShipment: number
   shipEveryMonths: number
   monthlyUnits: number
@@ -341,9 +387,42 @@ interface RawSubLine {
   unitPrice: number
 }
 
-/** The effective subscription discount for an order: base rate, beaten by any tier. */
-export function resolveSubscriptionRate(monthlySubtotal: number, itemCount: number, config = getPricingConfig()): number {
-  return Math.max(config.subscriptionDiscount, resolveTier(config.subscriptionTiers, monthlySubtotal, itemCount).pct)
+/** Options for building/pricing a subscription plan. */
+export interface SubscriptionPlanOptions {
+  /** Per-product usage level chosen in the customisation journey. */
+  usageByProductId?: Record<string, UsageLevel>
+  /** The bundle/stack level, for the fixed subscribe-&-save rate. */
+  level?: StackLevel
+}
+
+/**
+ * The bundle (stack level) for a blueprint: explicit `level` if set, otherwise
+ * derived from how many products it has — bigger stack = higher bundle.
+ */
+export function stackLevelOf(blueprint: Pick<StackBlueprint, 'slots'> & { level?: StackLevel }): StackLevel {
+  if (blueprint.level) return blueprint.level
+  const n = blueprint.slots.length
+  if (n <= 3) return 'essentials'
+  if (n <= 5) return 'performance'
+  return 'complete'
+}
+
+/** The fixed subscribe-&-save rate for a bundle/level (before any tier upgrade). */
+export function levelSubscriptionRate(level: StackLevel | undefined, config = getPricingConfig()): number {
+  return (level && config.levelSubscriptionDiscount[level]) || config.subscriptionDiscount
+}
+
+/**
+ * The effective subscription discount for an order: the bundle's fixed per-level
+ * rate, beaten by any qualifying subscription tier.
+ */
+export function resolveSubscriptionRate(
+  monthlySubtotal: number,
+  itemCount: number,
+  config = getPricingConfig(),
+  level?: StackLevel,
+): number {
+  return Math.max(levelSubscriptionRate(level, config), resolveTier(config.subscriptionTiers, monthlySubtotal, itemCount).pct)
 }
 
 export function buildSubscriptionPlan(
@@ -351,8 +430,11 @@ export function buildSubscriptionPlan(
   catalogue: CatalogueProduct[],
   answers?: QuizAnswers | null,
   config = getPricingConfig(),
+  opts: SubscriptionPlanOptions = {},
 ): SubscriptionLine[] {
   const round = (n: number) => Math.round(n * 100) / 100
+  const usageByProductId = opts.usageByProductId ?? {}
+  const level = stackLevelOf({ ...blueprint, level: opts.level ?? blueprint.level })
 
   // ── Pass 1: build raw, deduplicated lines (no discount applied yet) ──
   const raw = new Map<string, RawSubLine>()
@@ -378,14 +460,15 @@ export function buildSubscriptionPlan(
         : sub.variants.find((v) => v.available) ?? sub.variants[0]
     const unitPrice = variant?.price ?? sub.basePrice
 
-    const sizing = sizeConsumption(sub, answers, config)
+    const sizing = sizeConsumption(sub, answers, config, usageByProductId[sub.id])
 
     raw.set(sub.id, {
       product: sub,
       coversSlotIds: [slot.slotId],
       cadence: sizing.cadence,
       occasionsPerMonth: sizing.occasionsPerMonth,
-      dosesPerUnit: sizing.dosesPerUnit,
+      servingsPerUnit: sizing.servingsPerUnit,
+      usageLevel: sizing.usageLevel,
       unitsPerShipment: sizing.unitsPerShipment,
       shipEveryMonths: sizing.shipEveryMonths,
       monthlyUnits: sizing.monthlyUnits,
@@ -398,7 +481,7 @@ export function buildSubscriptionPlan(
   // ── Resolve the order-level discount, then apply it (with the margin floor) ──
   const rawLines = [...raw.values()]
   const monthlySubtotal = rawLines.reduce((s, r) => s + r.monthlyUnits * r.unitPrice, 0)
-  const rate = resolveSubscriptionRate(monthlySubtotal, rawLines.length, config)
+  const rate = resolveSubscriptionRate(monthlySubtotal, rawLines.length, config, level)
 
   return rawLines.map((r) => {
     const unitCost = unitCostOf(r.productRef, r.unitPrice, config)
@@ -408,7 +491,8 @@ export function buildSubscriptionPlan(
       coversSlotIds: r.coversSlotIds,
       cadence: r.cadence,
       occasionsPerMonth: r.occasionsPerMonth,
-      dosesPerUnit: r.dosesPerUnit,
+      servingsPerUnit: r.servingsPerUnit,
+      usageLevel: r.usageLevel,
       unitsPerShipment: r.unitsPerShipment,
       shipEveryMonths: r.shipEveryMonths,
       monthlyUnits: r.monthlyUnits,
@@ -475,6 +559,10 @@ export interface StackPricing {
   subscriptionProfitableOnCancel: boolean
   /** True when the flat monthly meets the minimum order value to offer a subscription. */
   subscriptionMinOrderMet: boolean
+  /** The bundle tier (stack level) the subscription rate is based on. */
+  bundleLevel: StackLevel
+  /** The fixed subscribe-&-save discount for this bundle, 0–100 (the headline selling point). */
+  subscriptionDiscountPct: number
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -517,8 +605,10 @@ export function calculatePricing(
   catalogue: CatalogueProduct[],
   answers?: QuizAnswers | null,
   config = getPricingConfig(),
+  opts: SubscriptionPlanOptions = {},
 ): StackPricing {
   const round = (n: number) => Math.round(n * 100) / 100
+  const bundleLevel = stackLevelOf({ ...blueprint, level: opts.level ?? blueprint.level })
 
   // ── One-off bundle (tiered discount, margin-floored per line) ──
   const oneOffLines: { price: number; rrp: number; cost: number }[] = []
@@ -539,7 +629,13 @@ export function calculatePricing(
   const oneOffMargin = round(oneOffTotal - oneOffCost)
 
   // ── Monthly subscription (resolved, deduplicated, quantity-aware) ──
-  const subPlan = buildSubscriptionPlan(blueprint, catalogue, answers, config)
+  const subPlan = buildSubscriptionPlan(blueprint, catalogue, answers, config, { ...opts, level: bundleLevel })
+  const subscriptionDiscountRate = resolveSubscriptionRate(
+    subPlan.reduce((s, l) => s + l.monthlyBaseline, 0),
+    subPlan.length,
+    config,
+    bundleLevel,
+  )
   let subscriptionTotal = 0
   let subscriptionItemsOneOffTotal = 0
   for (const line of subPlan) {
@@ -619,7 +715,35 @@ export function calculatePricing(
     subscriptionCommittedMargin,
     subscriptionProfitableOnCancel,
     subscriptionMinOrderMet,
+    bundleLevel,
+    subscriptionDiscountPct: Math.round(subscriptionDiscountRate * 1000) / 10,
   }
+}
+
+// ─── Usage clamp (keeps the journey's sliders profitable) ────────────────────
+
+/**
+ * The usage levels a product may be set to in the customisation journey without
+ * dropping the whole plan below the minimum monthly order value. Heavier usage
+ * only ever raises revenue, so the cap is the *lighter* end; combined with the
+ * per-unit margin floor (`discountWithFloor`) and the `maxDeliveryMonths` cadence
+ * cap, this is what stops a member dialling the subscription into the red.
+ */
+export function allowedUsageLevels(
+  blueprint: StackBlueprint,
+  catalogue: CatalogueProduct[],
+  answers: QuizAnswers | null | undefined,
+  productId: string,
+  usageByProductId: Record<string, UsageLevel>,
+  config = getPricingConfig(),
+): UsageLevel[] {
+  const allowed = USAGE_LEVELS.filter((level) => {
+    const trial = { ...usageByProductId, [productId]: level }
+    const total = calculatePricing(blueprint, catalogue, answers, config, { usageByProductId: trial }).subscriptionTotal
+    return total >= config.minSubscriptionMonthly
+  })
+  // Never strand a product with no options — always allow at least 'standard'.
+  return allowed.length > 0 ? allowed : [DEFAULT_USAGE_LEVEL]
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────

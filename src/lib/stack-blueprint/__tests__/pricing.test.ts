@@ -26,7 +26,7 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   basePrice: 30,
   compareAtPrice: 40,
   subscriptionEligible: true,
-  daysOfSupply: 30,
+  servings: 30,
   swapGroup: 'protein-whey',
   recommendationPriority: 8,
   marginPriority: 7,
@@ -67,6 +67,8 @@ const makeBlueprint = (slots: Partial<StackBlueprint['slots'][number]>[] = []): 
   estimatedSubscriptionPrice: 0,
   savingsSummary: '',
   createdAt: new Date().toISOString(),
+  // These tests assert the 15% rate, which is the 'performance' bundle level.
+  level: 'performance',
 })
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -137,7 +139,7 @@ describe('calculatePricing', () => {
 
   it('flips a long-lasting product to its mapped monthly subscription product', () => {
     const longProduct = makeProduct({
-      id: 'creatine', basePrice: 20, daysOfSupply: 90, subscriptionProductId: 'creatine-monthly',
+      id: 'creatine', basePrice: 20, servings: 90, subscriptionProductId: 'creatine-monthly',
       variants: [{ id: 'cv', title: '500g', flavour: null, size: '500g', price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }],
     })
     const monthly = makeProduct({
@@ -156,11 +158,11 @@ describe('calculatePricing', () => {
 
   it('deduplicates when two slots resolve to the same subscription product', () => {
     const vitD = makeProduct({
-      id: 'vit-d', basePrice: 13, daysOfSupply: 60, subscriptionProductId: 'vit-d-monthly', stackSlots: ['health'],
+      id: 'vit-d', basePrice: 13, servings: 60, subscriptionProductId: 'vit-d-monthly', stackSlots: ['health'],
       variants: [{ id: 'vdv', title: '', flavour: null, size: null, price: 13, compareAtPrice: null, available: true, shopifyVariantId: null }],
     })
     const bone = makeProduct({
-      id: 'bone', basePrice: 18, daysOfSupply: 45, subscriptionProductId: 'vit-d-monthly', stackSlots: ['menopause'],
+      id: 'bone', basePrice: 18, servings: 45, subscriptionProductId: 'vit-d-monthly', stackSlots: ['menopause'],
       variants: [{ id: 'bv', title: '', flavour: null, size: null, price: 18, compareAtPrice: null, available: true, shopifyVariantId: null }],
     })
     const monthly = makeProduct({
@@ -180,7 +182,7 @@ describe('calculatePricing', () => {
   })
 
   it('sums correctly across multiple slots, excluding non-qualifying products from the subscription', () => {
-    const prodA = makeProduct({ id: 'prod-a', basePrice: 30, subscriptionEligible: true, daysOfSupply: 30, variants: [{ id: 'va', title: 'A', flavour: null, size: null, price: 30, compareAtPrice: 40, available: true, shopifyVariantId: null }] })
+    const prodA = makeProduct({ id: 'prod-a', basePrice: 30, subscriptionEligible: true, servings: 30, variants: [{ id: 'va', title: 'A', flavour: null, size: null, price: 30, compareAtPrice: 40, available: true, shopifyVariantId: null }] })
     const prodB = makeProduct({ id: 'prod-b', basePrice: 20, compareAtPrice: null, subscriptionEligible: false, variants: [{ id: 'vb', title: 'B', flavour: null, size: null, price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }] })
     const blueprint = makeBlueprint([
       { selectedProductId: 'prod-a', selectedVariantId: 'va' },
@@ -208,17 +210,17 @@ describe('calculatePricing', () => {
 
 describe('qualifiesForSubscription', () => {
   it('is true for an eligible product that lasts about a month', () => {
-    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 30 })).toBe(true)
-    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 35 })).toBe(true)
+    expect(qualifiesForSubscription({ subscriptionEligible: true, servings: 30 })).toBe(true)
+    expect(qualifiesForSubscription({ subscriptionEligible: true, servings: 35 })).toBe(true)
   })
 
   it('is false for a product that lasts longer than a month', () => {
-    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 36 })).toBe(false)
-    expect(qualifiesForSubscription({ subscriptionEligible: true, daysOfSupply: 90 })).toBe(false)
+    expect(qualifiesForSubscription({ subscriptionEligible: true, servings: 36 })).toBe(false)
+    expect(qualifiesForSubscription({ subscriptionEligible: true, servings: 90 })).toBe(false)
   })
 
   it('is false for an ineligible product regardless of supply', () => {
-    expect(qualifiesForSubscription({ subscriptionEligible: false, daysOfSupply: 30 })).toBe(false)
+    expect(qualifiesForSubscription({ subscriptionEligible: false, servings: 30 })).toBe(false)
   })
 })
 
@@ -264,22 +266,22 @@ describe('consumption protocol & monthly quantities', () => {
     expect(workoutsPerMonth(null)).toBe(12)
   })
 
-  it('derives cadence from the stack slot and doses from daysOfSupply', () => {
-    expect(resolveConsumption(makeProduct({ stackSlots: ['protein'], daysOfSupply: 30 })))
-      .toEqual({ cadence: 'daily', dosesPerUnit: 30 })
-    expect(resolveConsumption(makeProduct({ stackSlots: ['energy'], daysOfSupply: 30 })).cadence)
+  it('derives cadence from the stack slot and doses from servings', () => {
+    expect(resolveConsumption(makeProduct({ stackSlots: ['protein'], servings: 30 })))
+      .toEqual({ cadence: 'daily', servingsPerUnit: 30 })
+    expect(resolveConsumption(makeProduct({ stackSlots: ['energy'], servings: 30 })).cadence)
       .toBe('per-workout')
-    expect(resolveConsumption(makeProduct({ stackSlots: ['hydration'], daysOfSupply: 30 })).cadence)
+    expect(resolveConsumption(makeProduct({ stackSlots: ['hydration'], servings: 30 })).cadence)
       .toBe('per-workout')
   })
 
   it('uses an explicit consumption override when present', () => {
-    const p = makeProduct({ stackSlots: ['protein'], consumption: { cadence: 'per-workout', dosesPerUnit: 20 } })
-    expect(resolveConsumption(p)).toEqual({ cadence: 'per-workout', dosesPerUnit: 20 })
+    const p = makeProduct({ stackSlots: ['protein'], consumption: { cadence: 'per-workout', servingsPerUnit: 20 } })
+    expect(resolveConsumption(p)).toEqual({ cadence: 'per-workout', servingsPerUnit: 20 })
   })
 
   it('keeps a daily product at one unit per month', () => {
-    const daily = makeProduct({ id: 'd', stackSlots: ['health'], daysOfSupply: 30, basePrice: 20,
+    const daily = makeProduct({ id: 'd', stackSlots: ['health'], servings: 30, basePrice: 20,
       variants: [{ id: 'dv', title: '', flavour: null, size: null, price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }] })
     const bp = makeBlueprint([{ selectedProductId: 'd', selectedVariantId: 'dv', slotType: 'health' } as never])
     const [line] = buildSubscriptionPlan(bp, [daily], answersWith('1-2x'))
@@ -289,7 +291,7 @@ describe('consumption protocol & monthly quantities', () => {
   })
 
   it('scales a per-workout product to training frequency', () => {
-    const pre = makeProduct({ id: 'pre', stackSlots: ['energy'], daysOfSupply: 30, basePrice: 30,
+    const pre = makeProduct({ id: 'pre', stackSlots: ['energy'], servings: 30, basePrice: 30,
       variants: [{ id: 'pv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null }] })
     const bp = makeBlueprint([{ selectedProductId: 'pre', selectedVariantId: 'pv', slotType: 'energy' } as never])
 
@@ -310,7 +312,7 @@ describe('consumption protocol & monthly quantities', () => {
   })
 
   it('keeps a long-lasting daily product as itself and ships it every few months', () => {
-    const creatine = makeProduct({ id: 'cr', stackSlots: ['performance'], daysOfSupply: 100, basePrice: 19.99,
+    const creatine = makeProduct({ id: 'cr', stackSlots: ['performance'], servings: 100, basePrice: 19.99,
       variants: [{ id: 'cv', title: '', flavour: null, size: null, price: 19.99, compareAtPrice: null, available: true, shopifyVariantId: null }] })
     const bp = makeBlueprint([{ selectedProductId: 'cr', selectedVariantId: 'cv', slotType: 'performance' } as never])
     const [line] = buildSubscriptionPlan(bp, [creatine], answersWith('3-4x'))
@@ -325,7 +327,7 @@ describe('consumption protocol & monthly quantities', () => {
   })
 
   it('caps the delivery interval at maxDeliveryMonths', () => {
-    const longLife = makeProduct({ id: 'x', stackSlots: ['health'], daysOfSupply: 300, basePrice: 30,
+    const longLife = makeProduct({ id: 'x', stackSlots: ['health'], servings: 300, basePrice: 30,
       variants: [{ id: 'xv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null }] })
     const bp = makeBlueprint([{ selectedProductId: 'x', selectedVariantId: 'xv', slotType: 'health' } as never])
     const [line] = buildSubscriptionPlan(bp, [longLife])
@@ -345,7 +347,7 @@ describe('consumption protocol & monthly quantities', () => {
   })
 
   it('applies the first-month intro discount and reports the commitment total', () => {
-    const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], daysOfSupply: 30 })
+    const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a])
     const monthly = Math.round(30 * 0.85 * 100) / 100   // daily, 1/month → 25.50
@@ -432,7 +434,7 @@ describe('pricing rules — margin floor & cost', () => {
 
 describe('pricing rules — subscription profit guardrails', () => {
   it('reports monthly margin and is profitable on cancel under the default config', () => {
-    const a = makeProduct({ id: 'a', stackSlots: ['protein'], daysOfSupply: 30, basePrice: 40, cost: 10, compareAtPrice: null, variants: oneVariant(40) })
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 40, cost: 10, compareAtPrice: null, variants: oneVariant(40) })
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
     expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.85 - 10))  // 34 - 10 = 24
     expect(p.subscriptionProfitableOnCancel).toBe(true)
@@ -440,14 +442,14 @@ describe('pricing rules — subscription profit guardrails', () => {
   })
 
   it('flags a config that loses money if cancelled early', () => {
-    const a = makeProduct({ id: 'a', stackSlots: ['protein'], daysOfSupply: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
     const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9 } }
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, badConfig)
     expect(p.subscriptionProfitableOnCancel).toBe(false)
   })
 
   it('gates subscription on the minimum monthly order value', () => {
-    const cheap = makeProduct({ id: 'a', stackSlots: ['protein'], daysOfSupply: 30, basePrice: 10, compareAtPrice: null, variants: oneVariant(10) })
+    const cheap = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 10, compareAtPrice: null, variants: oneVariant(10) })
     expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [cheap]).subscriptionMinOrderMet).toBe(false)
   })
 })

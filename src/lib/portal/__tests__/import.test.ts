@@ -21,7 +21,7 @@ describe('CSV parsing', () => {
 
 describe('parseImportCsv validation + mapping', () => {
   it('maps a valid single-flavour row to a catalogue product', () => {
-    const csv = 'handle,title,description,category,price,compare_at_price,cost,sku,flavours,image_url,days_of_supply,subscription_eligible\n' +
+    const csv = 'handle,title,description,category,price,compare_at_price,cost,sku,flavours,image_url,servings,subscription_eligible\n' +
       'chrgd-creatine,CHRGD Creatine,"Pure creatine.",Performance,24.99,29.99,8.5,OLV-CRE,Unflavoured,https://img/c.jpg,60,true'
     const preview = parseImportCsv(csv)
     expect(preview.validCount).toBe(1)
@@ -32,7 +32,7 @@ describe('parseImportCsv validation + mapping', () => {
     expect(p.compareAtPrice).toBe(29.99)
     expect(p.cost).toBe(8.5)
     expect(p.subscriptionEligible).toBe(true)
-    expect(p.daysOfSupply).toBe(60)
+    expect(p.servings).toBe(60)
     expect(p.variants).toHaveLength(1)
     expect(p.variants[0].sku).toBe('OLV-CRE')
   })

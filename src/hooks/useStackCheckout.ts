@@ -10,7 +10,8 @@ import {
 import type { CheckoutLineItem, ValidationError, SubscriptionCheckout } from '@/lib/stack-blueprint/checkout'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { QuizAnswers } from '@/lib/types'
+import type { QuizAnswers, StackLevel } from '@/lib/types'
+import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 
 export type CheckoutState =
@@ -35,6 +36,7 @@ export function useStackCheckout() {
       catalogue: CatalogueProduct[],
       planType: PlanType = 'oneoff',
       answers?: QuizAnswers | null,
+      subOpts: { usageByProductId?: Record<string, UsageLevel>; level?: StackLevel } = {},
     ) => {
       setState({ status: 'loading' })
       const live = isShopifyLive()
@@ -44,6 +46,8 @@ export function useStackCheckout() {
         const result = buildSubscriptionCheckout(blueprint, catalogue, answers, {
           requireShopifyIds: live,
           requireSellingPlans: live,
+          usageByProductId: subOpts.usageByProductId,
+          level: subOpts.level,
         })
         if (!result.ok) {
           setState({ status: 'error', messages: result.errors.map(validationErrorMessage) })

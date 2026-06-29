@@ -6,15 +6,15 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const ACCENT = '#00D4FF'
 
-type Sug = Partial<CatalogueProduct> & { consumption?: { cadence: string; dosesPerUnit: number } }
+type Sug = Partial<CatalogueProduct> & { consumption?: { cadence: string; servingsPerUnit: number } }
 interface Result { id: string; title: string; suggestion: Sug; current: Partial<CatalogueProduct>; source: string }
 
 const KEY_FIELDS = ['stackSlots', 'goals', 'swapGroup', 'subscriptionEligible'] as const
-const OTHER_FIELDS = ['daysOfSupply', 'consumption', 'recommendationBasis', 'cost', 'dietaryTags'] as const
+const OTHER_FIELDS = ['servings', 'consumption', 'recommendationBasis', 'cost', 'dietaryTags'] as const
 
 function otherSummary(s: Sug): string {
   const bits: string[] = []
-  if (s.daysOfSupply) bits.push(`${s.daysOfSupply}-day supply`)
+  if (s.servings) bits.push(`${s.servings} servings`)
   if (s.consumption) bits.push(s.consumption.cadence === 'per-workout' ? 'taken per workout' : 'taken daily')
   if (s.recommendationBasis) bits.push(s.recommendationBasis === 'subjective' ? 'felt benefit' : 'a need')
   if (s.cost != null) bits.push(`est. cost £${s.cost}`)

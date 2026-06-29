@@ -31,7 +31,7 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   basePrice: 30,
   compareAtPrice: 40,
   subscriptionEligible: true,
-  daysOfSupply: 30,
+  servings: 30,
   swapGroup: 'protein-whey',
   recommendationPriority: 8,
   marginPriority: 7,
@@ -74,6 +74,8 @@ const makeBlueprint = (
   estimatedSubscriptionPrice: 0,
   savingsSummary: '',
   createdAt: new Date().toISOString(),
+  // Asserts the 15% rate → the 'performance' bundle level.
+  level: 'performance',
 })
 
 // ─── validateCheckout ─────────────────────────────────────────────────────────

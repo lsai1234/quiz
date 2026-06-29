@@ -14,7 +14,7 @@ const makeProduct = (o: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
   id: 'p', title: 'P', handle: 'p', description: '', imageUrl: 'https://img/x.jpg', category: 'Protein',
   stackSlots: ['protein'], goals: ['muscle'], dietaryTags: [], formats: ['powder'],
   variants: [{ id: 'v', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: 'gid://shopify/ProductVariant/1', sellingPlanId: 'gid://shopify/SellingPlan/1' }],
-  basePrice: 30, compareAtPrice: null, cost: 10, subscriptionEligible: true, daysOfSupply: 30,
+  basePrice: 30, compareAtPrice: null, cost: 10, subscriptionEligible: true, servings: 30,
   swapGroup: 'protein-whey', recommendationPriority: 8, marginPriority: 7, isCoreEligible: true,
   isBoosterEligible: false, hasStimulants: false, shortReason: 'x', warnings: [],
   shopifyProductId: 'gid://shopify/Product/1', ...o,

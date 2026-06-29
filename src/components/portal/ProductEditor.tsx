@@ -39,7 +39,7 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
     setSaving(true)
     const patch: Partial<CatalogueProduct> = {
       stackSlots: d.stackSlots, goals: d.goals, dietaryTags: d.dietaryTags, swapGroup: d.swapGroup, category: d.category,
-      subscriptionEligible: d.subscriptionEligible, daysOfSupply: d.daysOfSupply, consumption: d.consumption,
+      subscriptionEligible: d.subscriptionEligible, servings: d.servings, consumption: d.consumption,
       subscriptionProductId: d.subscriptionProductId ?? null, isSubscriptionOnly: d.isSubscriptionOnly, minSubscriptionMonths: d.minSubscriptionMonths,
       recommendationBasis: d.recommendationBasis, effectOnset: d.effectOnset, recommendationPriority: d.recommendationPriority, marginPriority: d.marginPriority,
       isCoreEligible: d.isCoreEligible, isBoosterEligible: d.isBoosterEligible, cost: d.cost,
@@ -93,9 +93,9 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
           {/* Subscription */}
           <Group title="Subscription">
             <Row label="Offer on subscription">{toggle(d.subscriptionEligible, (b) => set({ subscriptionEligible: b }))}</Row>
-            <Row label="Lasts about (days)" help="How long one unit lasts at the normal dose.">{numInput(d.daysOfSupply, (n) => set({ daysOfSupply: n }))}</Row>
+            <Row label="Servings per unit" help="How many servings one unit/container holds at the normal dose.">{numInput(d.servings, (n) => set({ servings: n }))}</Row>
             <Row label="How it’s taken">
-              <select value={d.consumption?.cadence ?? 'auto'} onChange={(e) => set({ consumption: e.target.value === 'auto' ? undefined : { cadence: e.target.value as 'daily' | 'per-workout', dosesPerUnit: d.consumption?.dosesPerUnit ?? d.daysOfSupply } })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+              <select value={d.consumption?.cadence ?? 'auto'} onChange={(e) => set({ consumption: e.target.value === 'auto' ? undefined : { cadence: e.target.value as 'daily' | 'per-workout', servingsPerUnit: d.consumption?.servingsPerUnit ?? d.servings } })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
                 <option value="auto">Auto</option>
                 <option value="daily">Every day</option>
                 <option value="per-workout">On training days</option>
@@ -114,7 +114,7 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
           </button>
           {advanced && (
             <Group title="">
-              <Row label="Servings per unit">{numInput(d.consumption?.dosesPerUnit, (n) => set({ consumption: { cadence: d.consumption?.cadence ?? 'daily', dosesPerUnit: n } }))}</Row>
+              <Row label="Servings per unit override">{numInput(d.consumption?.servingsPerUnit, (n) => set({ consumption: { cadence: d.consumption?.cadence ?? 'daily', servingsPerUnit: n } }))}</Row>
               <Row label="Monthly refill product" help="If this lasts longer than a month, the smaller product it ships on subscription.">
                 <select value={d.subscriptionProductId ?? ''} onChange={(e) => set({ subscriptionProductId: e.target.value || null })} className="w-44 px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
                   <option value="">— Ships as itself —</option>

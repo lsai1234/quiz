@@ -431,8 +431,9 @@ describe('Feature 8: dynamic pricing', () => {
   it('PRICING_CONFIG.subscriptionDiscount is applied only to eligible products', () => {
     // Create a blueprint where every product subscribes as itself (no refill
     // mapping) and is eligible, so the whole stack is discounted directly.
-    const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, daysOfSupply: 30, subscriptionProductId: null }))
-    const bp = buildStackBlueprint(BASE_ANSWERS, allEligible)
+    const allEligible = MOCK_CATALOGUE.map((p) => ({ ...p, subscriptionEligible: true, servings: 30, subscriptionProductId: null }))
+    // Pin the bundle to 'performance' so the rate equals the base subscriptionDiscount.
+    const bp = { ...buildStackBlueprint(BASE_ANSWERS, allEligible), level: 'performance' as const }
     // Daily training so per-workout items also ship at 1 unit/month — then the
     // monthly baseline is simply discounted by the subscription rate.
     const { subscriptionItemsOneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible, { ...BASE_ANSWERS, trainingFrequency: 'daily' })

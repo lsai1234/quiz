@@ -6,6 +6,7 @@ import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
 import { useShopifyCart } from '@/hooks/useShopifyCart'
 import { isShopifyLive } from '@/lib/data-source'
+import { levelSubscriptionRate } from '@/lib/stack-blueprint/pricing'
 import type { Product } from '@/lib/types'
 
 interface Props {
@@ -56,7 +57,7 @@ function ProductBundleCard({
 }
 
 export function Act5Bundle({ reducedMotion }: Props) {
-  const { selectedProducts, answers, identity } = useQuizStore()
+  const { selectedProducts, answers, identity, stackLevel } = useQuizStore()
   const shopify = useShopifyCart()
   const isLive = isShopifyLive()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -107,7 +108,11 @@ export function Act5Bundle({ reducedMotion }: Props) {
 
   const total = selectedProducts.reduce((s, p) => s + p.price * (quantities[p.shopifyVariantId] ?? 1), 0)
   const activeItems = selectedProducts.filter((p) => (quantities[p.shopifyVariantId] ?? 1) > 0)
-  const discountRate = activeItems.length >= 2 ? 0.15 : 0
+  // Subscribe & save rate is fixed per bundle (stack level), the same rate the
+  // stack-review flow uses, so the legacy bundle screen advertises it consistently.
+  const subRate = levelSubscriptionRate(stackLevel)
+  const subPct = Math.round(subRate * 100)
+  const discountRate = activeItems.length >= 2 ? subRate : 0
   const discount = total * discountRate
   const discountedTotal = total - discount
 
@@ -198,7 +203,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
             <path d="M4 7l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <span className="text-xs font-semibold text-emerald-700">
-            15% first-order bundle discount applied — you save £{discount.toFixed(2)}/mo
+            {subPct}% subscribe &amp; save discount applied — you save £{discount.toFixed(2)}/mo
           </span>
         </div>
       )}
@@ -221,7 +226,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
           })}
           {discountRate > 0 && (
             <div className="flex items-center justify-between py-1.5 border-b border-[#0A0A0A]/4">
-              <span className="text-xs text-emerald-600 font-medium">Bundle discount (15%)</span>
+              <span className="text-xs text-emerald-600 font-medium">Subscribe &amp; save ({subPct}%)</span>
               <span className="text-xs font-semibold text-emerald-600">−£{discount.toFixed(2)}</span>
             </div>
           )}

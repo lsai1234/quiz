@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { FeedbackCheckIn, FeedbackDimension } from '@/lib/feedback'
 import {
@@ -16,6 +17,7 @@ import {
   removeLine as removeLineMutation,
   setLineCadence as setLineCadenceMutation,
   setLineQuantity as setLineQuantityMutation,
+  setLineUsage as setLineUsageMutation,
   skipNextDelivery as skipNextMutation,
   setNextDispatchDate as setNextDispatchDateMutation,
   sendNow as sendNowMutation,
@@ -65,6 +67,7 @@ interface HubStore {
   removeLine: (lineId: string) => void
   setLineCadence: (lineId: string, months: number) => void
   setLineQuantity: (lineId: string, quantity: number) => void
+  setLineUsage: (lineId: string, product: CatalogueProduct, usageLevel: UsageLevel) => void
   skipNext: (lineId: string) => void
   setNextDispatchDate: (date: Date) => void
   sendNow: () => void
@@ -126,6 +129,8 @@ export const useHubStore = create<HubStore>((set) => ({
     set((s) => (s.subscription ? { subscription: setLineCadenceMutation(s.subscription, lineId, months) } : s)),
   setLineQuantity: (lineId, quantity) =>
     set((s) => (s.subscription ? { subscription: setLineQuantityMutation(s.subscription, lineId, quantity) } : s)),
+  setLineUsage: (lineId, product, usageLevel) =>
+    set((s) => (s.subscription ? { subscription: setLineUsageMutation(s.subscription, lineId, product, usageLevel) } : s)),
   skipNext: (lineId) =>
     set((s) => (s.subscription ? { subscription: skipNextMutation(s.subscription, lineId) } : s)),
   setNextDispatchDate: (date) =>

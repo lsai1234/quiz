@@ -44,13 +44,13 @@ function buildMetafields(p: CatalogueProduct): Metafield[] {
     { namespace: 'chrgd', key: 'margin_priority', type: 'number_integer', value: String(p.marginPriority) },
     { namespace: 'chrgd', key: 'safe_wording', type: 'single_line_text_field', value: p.shortReason },
     { namespace: 'chrgd', key: 'subscription_eligible', type: 'boolean', value: String(p.subscriptionEligible) },
-    { namespace: 'chrgd', key: 'days_of_supply', type: 'number_integer', value: String(p.daysOfSupply) },
+    { namespace: 'chrgd', key: 'servings', type: 'number_integer', value: String(p.servings) },
     { namespace: 'chrgd', key: 'subscription_only', type: 'boolean', value: String(!!p.isSubscriptionOnly) },
     { namespace: 'chrgd', key: 'formats', type: 'single_line_text_field', value: p.formats.join(',') },
   ]
   if (p.consumption) {
     mf.push({ namespace: 'chrgd', key: 'consumption_cadence', type: 'single_line_text_field', value: p.consumption.cadence })
-    mf.push({ namespace: 'chrgd', key: 'doses_per_unit', type: 'number_integer', value: String(p.consumption.dosesPerUnit) })
+    mf.push({ namespace: 'chrgd', key: 'servings_per_unit', type: 'number_integer', value: String(p.consumption.servingsPerUnit) })
   }
   if (p.subscriptionProductId) mf.push({ namespace: 'chrgd', key: 'subscription_product_handle', type: 'single_line_text_field', value: p.subscriptionProductId })
   if (p.minSubscriptionMonths != null) mf.push({ namespace: 'chrgd', key: 'min_subscription_months', type: 'number_integer', value: String(p.minSubscriptionMonths) })

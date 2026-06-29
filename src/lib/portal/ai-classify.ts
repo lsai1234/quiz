@@ -54,8 +54,8 @@ export function heuristicClassify(p: CatalogueProduct): Partial<CatalogueProduct
     swapGroup,
     hasStimulants: /caffeine|stimulant|pre-?workout/i.test(text) && !/stim-free/i.test(text),
     subscriptionEligible: true,
-    daysOfSupply: 30,
-    consumption: { cadence: perWorkout ? 'per-workout' : 'daily', dosesPerUnit: 30 },
+    servings: 30,
+    consumption: { cadence: perWorkout ? 'per-workout' : 'daily', servingsPerUnit: 30 },
     recommendationBasis: perWorkout || stackSlots.some((s) => ['sleep', 'recovery', 'gut', 'menopause'].includes(s)) ? 'subjective' : 'objective',
     cost: Math.round(p.basePrice * getPricingConfig().defaultCostRatio * 100) / 100,
   }
@@ -64,14 +64,14 @@ export function heuristicClassify(p: CatalogueProduct): Partial<CatalogueProduct
 // ─── AI classification ───────────────────────────────────────────────────────
 
 const SYSTEM = `You are a supplements catalogue expert. Given a product, classify it for a UK supplement store. Reply ONLY with JSON:
-{"stackSlots":[],"goals":[],"dietaryTags":[],"swapGroup":"","hasStimulants":false,"subscriptionEligible":true,"daysOfSupply":30,"cadence":"daily|per-workout","recommendationBasis":"objective|subjective"}
+{"stackSlots":[],"goals":[],"dietaryTags":[],"swapGroup":"","hasStimulants":false,"subscriptionEligible":true,"servings":30,"cadence":"daily|per-workout","recommendationBasis":"objective|subjective"}
 - stackSlots from: ${STACK_SLOTS.join(', ')}
 - goals from: ${VALID_GOALS.join(', ')}
 - dietaryTags from: vegan, vegetarian, gluten-free, dairy-free, nut-free, halal, keto-friendly
 - swapGroup from: ${VALID_SWAP.join(', ')}
 - cadence: 'per-workout' for pre-workout/electrolytes/intra-workout, else 'daily'
 - recommendationBasis: 'subjective' if the benefit is felt (energy, sleep, recovery, gut), 'objective' if it's a need you don't feel (protein, creatine, vitamins)
-- daysOfSupply: approx days one container lasts at the normal dose`
+- servings: approx number of servings in one container at the normal dose`
 
 export async function aiClassifyProduct(p: CatalogueProduct): Promise<{ patch: Partial<CatalogueProduct>; source: 'ai' | 'heuristic' }> {
   const client = getClient()
@@ -99,7 +99,7 @@ export async function aiClassifyProduct(p: CatalogueProduct): Promise<{ patch: P
     const swap = VALID_SWAP.includes(raw.swapGroup) ? raw.swapGroup : heuristic.swapGroup
     const cadence = raw.cadence === 'per-workout' ? 'per-workout' : 'daily'
     const basis = raw.recommendationBasis === 'subjective' ? 'subjective' : 'objective'
-    const days = Number.isFinite(raw.daysOfSupply) && raw.daysOfSupply > 0 ? Math.round(raw.daysOfSupply) : 30
+    const servingsVal = Number.isFinite(raw.servings) && raw.servings > 0 ? Math.round(raw.servings) : 30
     return {
       source: 'ai',
       patch: {
@@ -109,8 +109,8 @@ export async function aiClassifyProduct(p: CatalogueProduct): Promise<{ patch: P
         swapGroup: swap,
         hasStimulants: !!raw.hasStimulants,
         subscriptionEligible: raw.subscriptionEligible !== false,
-        daysOfSupply: days,
-        consumption: { cadence, dosesPerUnit: days },
+        servings: servingsVal,
+        consumption: { cadence, servingsPerUnit: servingsVal },
         recommendationBasis: basis,
         cost: heuristic.cost, // cost stays an estimate, not an AI guess
       },
@@ -127,7 +127,7 @@ export function gapPatch(p: CatalogueProduct, suggestion: Partial<CatalogueProdu
   if (p.goals.length === 0 && suggestion.goals) patch.goals = suggestion.goals
   if ((!p.swapGroup || p.swapGroup === 'general') && suggestion.swapGroup) patch.swapGroup = suggestion.swapGroup
   if (p.dietaryTags.length === 0 && suggestion.dietaryTags?.length) patch.dietaryTags = suggestion.dietaryTags
-  if (!(p.daysOfSupply > 0) && suggestion.daysOfSupply) patch.daysOfSupply = suggestion.daysOfSupply
+  if (!(p.servings > 0) && suggestion.servings) patch.servings = suggestion.servings
   if (p.cost == null && suggestion.cost != null) patch.cost = suggestion.cost
   if (!p.recommendationBasis && suggestion.recommendationBasis) patch.recommendationBasis = suggestion.recommendationBasis
   if (!p.consumption && suggestion.consumption) patch.consumption = suggestion.consumption

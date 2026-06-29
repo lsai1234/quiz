@@ -21,6 +21,13 @@ When the stack is revealed the customer chooses between:
   amount is the smoothed average, a customer can't cancel after one month having
   received a long-lasting item they haven't finished paying for.
 
+The **subscribe-&-save discount is fixed per bundle** (stack level): Essentials
+10%, Performance 15%, Complete 20% (`PRICING_CONFIG.levelSubscriptionDiscount`,
+resolved by `levelSubscriptionRate` / `resolveSubscriptionRate`). It's advertised
+as a selling point on each bundle and in the subscribe-&-save area, carried on the
+subscription (`MemberSubscription.subscriptionDiscountRate`) so added/swapped lines
+keep the bundle's rate, and still margin-floored per line.
+
 All the logic lives in `src/lib/stack-blueprint/pricing.ts` and is fully unit
 tested.
 
@@ -31,17 +38,22 @@ Each product has a **consumption protocol**:
 - `cadence`: `daily` (protein, creatine, multivitamin…) or `per-workout`
   (pre-workout, electrolytes, BCAA). Derived from the stack slot when not set
   explicitly (energy/hydration → per-workout, else daily).
-- `dosesPerUnit`: servings in one container (defaults from `daysOfSupply`).
+- `servingsPerUnit`: servings in one container (defaults from the product's `servings`).
 
 From the quiz we get **training frequency** → `workoutsPerMonth`
-(1-2x≈6, 3-4x≈15, 5-6x≈24, daily≈30).
+(1-2x≈6, 3-4x≈15, 5-6x≈24, daily≈30). The member can refine this — and how much
+they get through per product — in the **subscription customisation journey** (a
+per-product "light / as recommended / a lot" usage slider, `UsageLevel`), which
+scales servings-per-occasion. The slider range is clamped (`allowedUsageLevels`)
+so it can never drop the flat monthly below the minimum order value.
 
 For each line we compute how long one container lasts and ship it on the
 nearest sensible cadence:
 
 ```
-occasionsPerMonth = cadence === 'daily' ? 30 : workoutsPerMonth
-monthsOneUnitLasts = dosesPerUnit / occasionsPerMonth
+occasionsPerMonth   = cadence === 'daily' ? 30 : workoutsPerMonth
+servingsPerMonth    = occasionsPerMonth × usageServingsPerOccasion  // usage slider
+monthsOneUnitLasts = servingsPerUnit / servingsPerMonth
 shipEveryMonths    = clamp(round(monthsOneUnitLasts), 1, maxDeliveryMonths)   // when ≥ 1 month
 monthlyUnits       = unitsPerShipment / shipEveryMonths
 pricePerDelivery   = unitsPerShipment × unitPrice × (1 − subscriptionDiscount)
@@ -114,9 +126,9 @@ you go live. The Storefront query (`src/lib/shopify/operations.ts`), the mapper
 | App field | Shopify metafield (`chrgd.*`) | Type |
 |---|---|---|
 | `subscriptionEligible` | `subscription_eligible` | boolean |
-| `daysOfSupply` | `days_of_supply` | number_integer |
+| `servings` | `servings` | number_integer |
 | `consumption.cadence` | `consumption_cadence` | `daily` / `per-workout` |
-| `consumption.dosesPerUnit` | `doses_per_unit` | number_integer |
+| `consumption.servingsPerUnit` | `servings_per_unit` | number_integer |
 | `minSubscriptionMonths` | `min_subscription_months` | number_integer |
 | `cost` | `cost` | number_decimal |
 | `recommendationBasis` | `recommendation_basis` | `objective` / `subjective` |

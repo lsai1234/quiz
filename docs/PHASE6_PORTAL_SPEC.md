@@ -105,9 +105,10 @@ Editable, grouped, with inline help and validation. All map to `PRICING_CONFIG`:
 
 - **Bundle tiers** (one-off): add/edit/remove tiers `{ label, minSubtotal,
   minItems, discountPct }`; best-qualifying wins.
-- **Subscription:** base `subscriptionDiscount`, optional `subscriptionTiers`,
-  `introOffer.firstMonthDiscount`, `minSubscriptionMonths`, `minSubscriptionMonthly`.
-- **Cadence:** `maxDeliveryMonths`, `maxSubscriptionDaysOfSupply`.
+- **Subscription:** base `subscriptionDiscount`, per-bundle `levelSubscriptionDiscount`,
+  optional `subscriptionTiers`, `introOffer.firstMonthDiscount`, `minSubscriptionMonths`,
+  `minSubscriptionMonthly`.
+- **Cadence:** `maxDeliveryMonths`, `maxSubscriptionServings`.
 - **Guardrails:** `marginFloorPct`, `defaultCostRatio`.
 - **Live profit preview:** pick a representative stack (or the demo blueprint)
   and show, as rules change: one-off total + margin %, flat monthly, first month,
@@ -121,8 +122,8 @@ Editable, grouped, with inline help and validation. All map to `PRICING_CONFIG`:
   subscription-eligible, needs-attention).
 - **Editor (per product):**
   - Classification: stack slots, goals, dietary tags, swap group, category.
-  - Subscription: `subscriptionEligible`, `daysOfSupply`, `consumption.cadence`
-    + `dosesPerUnit`, `subscriptionProductId` (mapped refill), `isSubscriptionOnly`,
+  - Subscription: `subscriptionEligible`, `servings`, `consumption.cadence`
+    + `servingsPerUnit`, `subscriptionProductId` (mapped refill), `isSubscriptionOnly`,
     `minSubscriptionMonths`.
   - Recommendation: `recommendationBasis` (objective/subjective), `recommendationPriority`,
     `marginPriority`, `isCoreEligible`, `isBoosterEligible`.
@@ -138,7 +139,7 @@ Per product, traffic-light checks with a "what's missing" list:
 - **Identity (mock vs actual):** real `shopifyProductId` + real image → green;
   placeholder/mock → amber/red.
 - **Tagged correctly:** ≥1 stack slot, ≥1 goal, a swap group, a category.
-- **Subscription-ready:** `subscriptionEligible` set; `daysOfSupply` set;
+- **Subscription-ready:** `subscriptionEligible` set; `servings` set;
   consumption cadence; if long-lasting either ships ≤ `maxDeliveryMonths` or has
   a `subscriptionProductId`; `sellingPlanId` present when live.
 - **Pricing-ready:** `cost` set (for margin); `recommendationBasis` set/derivable.

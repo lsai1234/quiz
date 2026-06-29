@@ -12,7 +12,7 @@
 import type { StackBlueprint, StackSlotEntry } from './types'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
-import { buildSubscriptionPlan, calculatePricing } from './pricing'
+import { buildSubscriptionPlan, calculatePricing, type SubscriptionPlanOptions } from './pricing'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -185,11 +185,12 @@ export function buildSubscriptionCheckout(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
   answers?: QuizAnswers | null,
-  options: { requireShopifyIds?: boolean; requireSellingPlans?: boolean } = {},
+  options: { requireShopifyIds?: boolean; requireSellingPlans?: boolean } & SubscriptionPlanOptions = {},
 ): SubscriptionCheckoutResult {
-  const { requireShopifyIds = false, requireSellingPlans = false } = options
-  const plan = buildSubscriptionPlan(blueprint, catalogue, answers)
-  const pricing = calculatePricing(blueprint, catalogue, answers)
+  const { requireShopifyIds = false, requireSellingPlans = false, usageByProductId, level } = options
+  const planOpts = { usageByProductId, level }
+  const plan = buildSubscriptionPlan(blueprint, catalogue, answers, undefined, planOpts)
+  const pricing = calculatePricing(blueprint, catalogue, answers, undefined, planOpts)
   const errors: ValidationError[] = []
   const lines: SubscriptionCheckoutLine[] = []
 

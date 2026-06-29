@@ -3,6 +3,9 @@
 import type { StackPricing } from '@/lib/stack-blueprint/pricing'
 import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
+import type { StackLevel } from '@/lib/types'
+
+const LEVEL_LABEL: Record<StackLevel, string> = { essentials: 'Essentials', performance: 'Performance', complete: 'Complete' }
 
 interface Props {
   pricing: StackPricing
@@ -39,8 +42,6 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
     bundleSaving,
     bundleSavingPct,
     subscriptionTotal,
-    subscriptionSaving,
-    subscriptionSavingPct,
     subscriptionItemCount,
     subscriptionFirstMonth,
     subscriptionIntroDiscountPct,
@@ -49,6 +50,8 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
     subscriptionMinOrderMet,
     bundleDiscountPct,
     bundleTierLabel,
+    subscriptionDiscountPct,
+    bundleLevel,
   } = pricing
 
   const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
@@ -117,14 +120,12 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
               </div>
             )}
 
-            {subscriptionSaving > 0.01 && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs" style={{ color: 'var(--color-accent)' }}>Vs buying one-off</span>
-                <span className="text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
-                  Save {subscriptionSavingPct}%/mo
-                </span>
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs" style={{ color: 'var(--color-accent)' }}>{LEVEL_LABEL[bundleLevel]} bundle</span>
+              <span className="text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
+                {subscriptionDiscountPct}% off every month
+              </span>
+            </div>
 
             <div
               className="px-3 py-2.5 rounded-xl text-xs font-semibold text-center leading-snug"
@@ -176,7 +177,7 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
               </div>
             )}
 
-            {canSubscribe && subscriptionSavingPct > 0 && (
+            {canSubscribe && subscriptionDiscountPct > 0 && (
               <button
                 onClick={() => onPlanChange('subscription')}
                 className="w-full px-3 py-2.5 rounded-xl text-xs font-semibold text-center leading-snug active:scale-[0.98] transition-transform"
@@ -185,7 +186,7 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
                   background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)',
                 }}
               >
-                Subscribe &amp; save {subscriptionSavingPct}% a month →
+                Subscribe &amp; save {subscriptionDiscountPct}% — {LEVEL_LABEL[bundleLevel]} bundle →
               </button>
             )}
           </div>

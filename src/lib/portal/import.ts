@@ -8,7 +8,7 @@
  *
  * Template columns (header row, order-independent):
  *   handle, title, description, category, price, compare_at_price, cost, sku,
- *   flavours, image_url, days_of_supply, subscription_eligible
+ *   flavours, image_url, servings, subscription_eligible
  *
  * `flavours` and `sku` are pipe-separated lists ("Chocolate|Vanilla"). When more
  * than one flavour is given, one variant is created per flavour (sharing price /
@@ -19,7 +19,7 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 export const IMPORT_COLUMNS = [
   'handle', 'title', 'description', 'category', 'price', 'compare_at_price',
-  'cost', 'sku', 'flavours', 'image_url', 'days_of_supply', 'subscription_eligible',
+  'cost', 'sku', 'flavours', 'image_url', 'servings', 'subscription_eligible',
 ] as const
 
 export interface ParsedRow {
@@ -90,7 +90,7 @@ function rowToProduct(raw: Record<string, string>): { product?: CatalogueProduct
   const price = parseFloat(raw.price)
   const compareAt = raw.compare_at_price?.trim() ? parseFloat(raw.compare_at_price) : null
   const cost = raw.cost?.trim() ? parseFloat(raw.cost) : undefined
-  const daysOfSupply = raw.days_of_supply?.trim() ? parseInt(raw.days_of_supply, 10) : 30
+  const servings = raw.servings?.trim() ? parseInt(raw.servings, 10) : 30
 
   if (!title) errors.push('title is required')
   if (!handle) errors.push('handle/title is required to derive an id')
@@ -149,7 +149,7 @@ function rowToProduct(raw: Record<string, string>): { product?: CatalogueProduct
     subscriptionEligible,
     subscriptionProductId: null,
     isSubscriptionOnly: false,
-    daysOfSupply: Number.isNaN(daysOfSupply) ? 30 : daysOfSupply,
+    servings: Number.isNaN(servings) ? 30 : servings,
     swapGroup: 'general',
     recommendationPriority: 5,
     marginPriority: 5,

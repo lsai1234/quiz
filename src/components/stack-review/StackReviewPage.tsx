@@ -20,12 +20,17 @@ import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
+import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
 
 export function StackReviewPage() {
-  const { stackBlueprint, setStackBlueprint, planType, setPlanType, answers } = useQuizStore()
+  const {
+    stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
+    stackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
+  } = useQuizStore()
+  const [journeyOpen, setJourneyOpen] = useState(false)
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -114,16 +119,31 @@ export function StackReviewPage() {
 
   const { state: checkoutState, checkout, reset: resetCheckout } = useStackCheckout()
 
+  const subOpts = useMemo(
+    () => ({ usageByProductId: subscriptionUsage, level: stackLevel }),
+    [subscriptionUsage, stackLevel],
+  )
+
   const handleCheckout = useCallback(
-    () => checkout(blueprint, products, planType, answers),
-    [checkout, blueprint, products, planType, answers],
+    () => checkout(blueprint, products, planType, answers, subOpts),
+    [checkout, blueprint, products, planType, answers, subOpts],
+  )
+
+  // Switching to the subscription offer opens the customisation journey the
+  // first time, so the plan is sized to the member before they commit.
+  const handlePlanChange = useCallback(
+    (plan: typeof planType) => {
+      setPlanType(plan)
+      if (plan === 'subscription' && !subscriptionCustomised) setJourneyOpen(true)
+    },
+    [setPlanType, subscriptionCustomised],
   )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
-  const pricing = calculatePricing(blueprint, products, answers)
+  const pricing = calculatePricing(blueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
-    () => buildSubscriptionPlan(blueprint, products, answers),
-    [blueprint, products, answers],
+    () => buildSubscriptionPlan(blueprint, products, answers, undefined, subOpts),
+    [blueprint, products, answers, subOpts],
   )
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
 
@@ -245,20 +265,29 @@ export function StackReviewPage() {
             </div>
           )}
           {planType === 'subscription' && (
-            <SubscriptionProtocol
-              plan={subscriptionPlan}
-              answers={answers}
-              slotTitleById={slotTitleById}
-              minMonths={pricing.subscriptionMinMonths}
-              monthlyTotal={pricing.subscriptionTotal}
-              firstMonth={pricing.subscriptionFirstMonth}
-              introPct={pricing.subscriptionIntroDiscountPct}
-            />
+            <>
+              <SubscriptionProtocol
+                plan={subscriptionPlan}
+                answers={answers}
+                slotTitleById={slotTitleById}
+                minMonths={pricing.subscriptionMinMonths}
+                monthlyTotal={pricing.subscriptionTotal}
+                firstMonth={pricing.subscriptionFirstMonth}
+                introPct={pricing.subscriptionIntroDiscountPct}
+              />
+              <button
+                onClick={() => setJourneyOpen(true)}
+                className="w-full -mt-2 mb-4 py-2.5 rounded-xl text-xs font-bold active:scale-[0.99] transition-all"
+                style={{ color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}
+              >
+                {subscriptionCustomised ? 'Adjust how much you need →' : 'Customise your subscription →'}
+              </button>
+            </>
           )}
           <StackPriceSummary
             pricing={pricing}
             planType={planType}
-            onPlanChange={setPlanType}
+            onPlanChange={handlePlanChange}
             onCheckout={handleCheckout}
             isLoading={checkoutState.status === 'loading'}
           />
@@ -279,6 +308,20 @@ export function StackReviewPage() {
           alternatives={swapAlternatives}
           onSelect={handleSelectSwap}
           onClose={() => setSwapSlot(null)}
+        />
+      )}
+
+      {journeyOpen && (
+        <SubscriptionJourney
+          blueprint={blueprint}
+          products={products}
+          answers={answers}
+          level={stackLevel}
+          usage={subscriptionUsage}
+          onUsageChange={setSubscriptionUsage}
+          onTrainingFrequencyChange={(freq) => setAnswer('trainingFrequency', freq)}
+          onConfirm={() => { setSubscriptionCustomised(true); setPlanType('subscription'); setJourneyOpen(false) }}
+          onClose={() => setJourneyOpen(false)}
         />
       )}
     </>

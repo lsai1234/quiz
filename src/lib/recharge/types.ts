@@ -1,4 +1,5 @@
 import type { SwapGroup, StackSlot } from '@/lib/catalogue/types'
+import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 
 /** Subscription as the customer manages it — shaped like a Recharge subscription contract. */
 
@@ -18,6 +19,11 @@ export interface MemberSubscriptionLine {
   quantity: number
   /** Delivery cadence in months. */
   deliveryIntervalMonths: number
+  /**
+   * How much the member gets through, on the friendly journey scale. Drives the
+   * quantity + cadence above (we do the maths). Defaults to 'standard'.
+   */
+  usageLevel?: UsageLevel
   /** Amount billed each delivery. */
   pricePerDelivery: number
   swapGroup: SwapGroup
@@ -45,6 +51,12 @@ export interface MemberSubscription {
   customerEmail: string
   /** Flat amount billed every month. */
   flatMonthly: number
+  /**
+   * The fixed subscribe-&-save discount rate (0–1) for this member's bundle.
+   * Added lines and swaps are priced at this rate so the bundle's advertised
+   * discount carries through the whole subscription. Defaults to the base rate.
+   */
+  subscriptionDiscountRate?: number
   /** Day of the month deliveries/charges land (1–28). */
   dispatchDayOfMonth: number
   /**

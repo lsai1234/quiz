@@ -53,7 +53,7 @@ export default function ImportPage() {
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 mb-3">
         <p className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>1 · Get the template</p>
         <p className="text-xs text-[var(--color-muted)] mb-2 leading-relaxed">
-          Columns: handle, title, description, category, price, compare_at_price, cost, sku, flavours, image_url, days_of_supply, subscription_eligible.
+          Columns: handle, title, description, category, price, compare_at_price, cost, sku, flavours, image_url, servings, subscription_eligible.
           Use <code>|</code> to separate multiple flavours / SKUs (e.g. <code>Berry|Original</code>).
         </p>
         <a href="/templates/olivit-import-template.csv" download className="text-xs font-bold inline-block" style={{ color: ACCENT }}>↓ Download CSV template</a>

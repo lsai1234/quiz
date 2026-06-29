@@ -19,6 +19,7 @@ import {
   getPricingConfig,
   getSubscriptionProduct,
   sizeConsumption,
+  type UsageLevel,
 } from '@/lib/stack-blueprint/pricing'
 import { basisForProduct } from '@/lib/feedback'
 import type { MemberSubscription, MemberSubscriptionLine } from './types'
@@ -33,6 +34,11 @@ function variantLabel(v: { flavour: string | null; size: string | null; title: s
 /** Monthly cost = sum of each line's per-delivery price amortised over its cadence. */
 export function flatMonthlyOf(lines: MemberSubscriptionLine[]): number {
   return round(lines.reduce((s, l) => s + l.pricePerDelivery / l.deliveryIntervalMonths, 0))
+}
+
+/** The member's bundle subscribe-&-save rate, falling back to the base config rate. */
+export function subRateOf(sub: MemberSubscription, config = getPricingConfig()): number {
+  return sub.subscriptionDiscountRate ?? config.subscriptionDiscount
 }
 
 /** Build a representative active subscription for a logged-in member. */
@@ -60,6 +66,7 @@ export function createMockSubscription(
       stackSlot: l.product.stackSlots[0],
       quantity: l.unitsPerShipment,
       deliveryIntervalMonths: l.shipEveryMonths,
+      usageLevel: l.usageLevel,
       pricePerDelivery: l.pricePerDelivery,
       swapGroup: l.product.swapGroup,
       // These lines have been in the stack since signup.
@@ -73,6 +80,7 @@ export function createMockSubscription(
     status: 'active',
     customerEmail: email,
     flatMonthly: pricing.subscriptionTotal,
+    subscriptionDiscountRate: pricing.subscriptionDiscountPct / 100,
     dispatchDayOfMonth: 15,
     minMonths: pricing.subscriptionMinMonths,
     monthsActive,
@@ -160,12 +168,13 @@ export function swapSubscriptionLine(
   newProduct: CatalogueProduct,
   config = getPricingConfig(),
 ): MemberSubscription {
+  const rate = subRateOf(sub, config)
   const lines = sub.lines.map((line) => {
     if (line.id !== lineId) return line
     const variant = newProduct.variants.find((v) => v.available) ?? newProduct.variants[0]
     const unitPrice = variant?.price ?? newProduct.basePrice
     const cost = unitCostOf(newProduct, unitPrice, config)
-    const discountedUnit = discountWithFloor(unitPrice, config.subscriptionDiscount, cost, config)
+    const discountedUnit = discountWithFloor(unitPrice, rate, cost, config)
     return {
       ...line,
       productId: newProduct.id,
@@ -226,12 +235,12 @@ export function swappableForLine(
 // docs/SUBSCRIPTIONS.md: margin floor (discountWithFloor), pay-for-what-shipped
 // settlement on removal, intro discount never re-applied, one-offs at full price.
 
-/** A unit's discounted subscription price for `product` (margin-floored). */
-function discountedUnitFor(product: CatalogueProduct, config = getPricingConfig()): { unitPrice: number; discountedUnit: number } {
+/** A unit's discounted subscription price for `product` (margin-floored, at the member's bundle rate). */
+function discountedUnitFor(product: CatalogueProduct, config = getPricingConfig(), rate = config.subscriptionDiscount): { unitPrice: number; discountedUnit: number } {
   const variant = product.variants.find((v) => v.available) ?? product.variants[0]
   const unitPrice = variant?.price ?? product.basePrice
   const cost = unitCostOf(product, unitPrice, config)
-  return { unitPrice, discountedUnit: discountWithFloor(unitPrice, config.subscriptionDiscount, cost, config) }
+  return { unitPrice, discountedUnit: discountWithFloor(unitPrice, rate, cost, config) }
 }
 
 /** Amortised monthly value of a single line (pricePerDelivery spread over its cadence). */
@@ -328,7 +337,7 @@ export function addLine(
 
   const sizing = sizeConsumption(subProduct, answers, config)
   const variant = subProduct.variants.find((v) => v.available) ?? subProduct.variants[0]
-  const { discountedUnit } = discountedUnitFor(subProduct, config)
+  const { discountedUnit } = discountedUnitFor(subProduct, config, subRateOf(sub, config))
 
   const newLine: MemberSubscriptionLine = {
     id: `line-add-${Date.now()}-${subProduct.id}`,
@@ -339,6 +348,7 @@ export function addLine(
     stackSlot: subProduct.stackSlots[0],
     quantity: sizing.unitsPerShipment,
     deliveryIntervalMonths: sizing.shipEveryMonths,
+    usageLevel: sizing.usageLevel,
     pricePerDelivery: round(sizing.unitsPerShipment * discountedUnit),
     swapGroup: subProduct.swapGroup,
     addedAt: new Date().toISOString(),
@@ -392,6 +402,48 @@ export function setLineQuantity(sub: MemberSubscription, lineId: string, quantit
 
 export function computeQuantityImpact(sub: MemberSubscription, lineId: string, quantity: number): PlanChangeImpact {
   const next = setLineQuantity(sub, lineId, quantity)
+  return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
+}
+
+/**
+ * Set a line's usage level (the hub's "how much do you get through" slider). We
+ * re-derive the units-per-delivery and ship cadence from `sizeConsumption` — the
+ * member never touches quantity or cadence directly; the slider does the maths.
+ * Re-prices the line at the member's bundle rate and re-derives the flat monthly.
+ */
+export function setLineUsage(
+  sub: MemberSubscription,
+  lineId: string,
+  product: CatalogueProduct,
+  usageLevel: UsageLevel,
+  answers?: QuizAnswers | null,
+  config = getPricingConfig(),
+): MemberSubscription {
+  const sizing = sizeConsumption(product, answers, config, usageLevel)
+  const { discountedUnit } = discountedUnitFor(product, config, subRateOf(sub, config))
+  const lines = sub.lines.map((l) =>
+    l.id === lineId
+      ? {
+          ...l,
+          usageLevel,
+          quantity: sizing.unitsPerShipment,
+          deliveryIntervalMonths: sizing.shipEveryMonths,
+          pricePerDelivery: round(sizing.unitsPerShipment * discountedUnit),
+        }
+      : l,
+  )
+  return { ...sub, lines, flatMonthly: flatMonthlyOf(lines) }
+}
+
+export function computeUsageImpact(
+  sub: MemberSubscription,
+  lineId: string,
+  product: CatalogueProduct,
+  usageLevel: UsageLevel,
+  answers?: QuizAnswers | null,
+  config = getPricingConfig(),
+): PlanChangeImpact {
+  const next = setLineUsage(sub, lineId, product, usageLevel, answers, config)
   return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
 }
 

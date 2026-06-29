@@ -1,4 +1,4 @@
-import type { Goal } from '@/lib/types'
+import type { Goal, StackLevel } from '@/lib/types'
 import type { StackSlot, SwapGroup } from '@/lib/catalogue/types'
 
 // NOTE: 'StackSlotEntry' is used instead of 'StackSlot' to avoid naming conflict with catalogue's StackSlot type
@@ -33,4 +33,9 @@ export interface StackBlueprint {
   createdAt: string                 // ISO date string
   /** True when an AI pass personalised the product choices / reasons. */
   personalised?: boolean
+  /**
+   * The bundle tier this stack represents. Drives the fixed subscribe-&-save
+   * rate. When unset, derived from the product count via `stackLevelOf`.
+   */
+  level?: StackLevel
 }

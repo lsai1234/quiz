@@ -402,10 +402,10 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const shortReason = metaValue(p.metafields, 'safe_wording') ?? shortDescription(p.description)
   const subscriptionEligible = metaValue(p.metafields, 'subscription_eligible') === 'true'
 
-  // Days a unit lasts at the recommended dose — defaults to ~a month when the
-  // metafield isn't set yet, so untagged live products still behave sensibly.
-  const rawDaysOfSupply = metaValue(p.metafields, 'days_of_supply')
-  const daysOfSupply = rawDaysOfSupply ? parseInt(rawDaysOfSupply, 10) : 30
+  // Servings in one unit at the recommended dose — defaults to ~a month's worth
+  // when the metafield isn't set yet, so untagged live products still behave sensibly.
+  const rawServings = metaValue(p.metafields, 'servings')
+  const servings = rawServings ? parseInt(rawServings, 10) : 30
 
   // The correlating monthly subscription product (a Shopify handle, since our
   // catalogue ids ARE handles) and whether this product is a refill-only item.
@@ -414,10 +414,10 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
 
   // Consumption protocol (how it's taken) — drives monthly subscription quantity.
   const rawCadence = metaValue(p.metafields, 'consumption_cadence')
-  const rawDoses = metaValue(p.metafields, 'doses_per_unit')
+  const rawServingsPerUnit = metaValue(p.metafields, 'servings_per_unit')
   let consumption: ProductConsumption | undefined
   if (rawCadence === 'daily' || rawCadence === 'per-workout') {
-    consumption = { cadence: rawCadence, dosesPerUnit: (rawDoses ? parseInt(rawDoses, 10) : 0) || daysOfSupply }
+    consumption = { cadence: rawCadence, servingsPerUnit: (rawServingsPerUnit ? parseInt(rawServingsPerUnit, 10) : 0) || servings }
   }
 
   const rawMinMonths = metaValue(p.metafields, 'min_subscription_months')
@@ -454,7 +454,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     compareAtPrice: defaultVariant?.compareAtPrice ?? null,
     cost,
     subscriptionEligible,
-    daysOfSupply,
+    servings,
     subscriptionProductId,
     isSubscriptionOnly,
     consumption,

@@ -71,7 +71,7 @@ export default function ProductsPage() {
                     <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product.title}</p>
                   </div>
                   <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
-                    {product.category} · {product.subscriptionEligible ? 'subscribable' : 'one-off'} · {product.daysOfSupply}d
+                    {product.category} · {product.subscriptionEligible ? 'subscribable' : 'one-off'} · {product.servings}d
                     {product.cost == null && ' · no cost set'}
                   </p>
                 </div>

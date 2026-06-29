@@ -113,8 +113,8 @@ export type ConsumptionCadence =
 
 export interface ProductConsumption {
   cadence: ConsumptionCadence
-  /** Number of doses/servings in one (default) container. */
-  dosesPerUnit: number
+  /** Number of servings in one (default) container. */
+  servingsPerUnit: number
 }
 
 // ─── Effect onset ──────────────────────────────────────────────────────────────
@@ -166,12 +166,12 @@ export interface CatalogueProduct {
   cost?: number
   subscriptionEligible: boolean
   /**
-   * Approximate number of days one unit lasts at the recommended dose.
-   * Used to decide whether a product fits a monthly subscription — a product
-   * that lasts much longer than a month ships too infrequently to subscribe to.
+   * Number of servings in one unit/container at the recommended dose.
+   * Used to size the monthly subscription — a product with far more servings
+   * than a month's worth ships less often rather than subscribing per month.
    * See `qualifiesForSubscription` in stack-blueprint/pricing.
    */
-  daysOfSupply: number
+  servings: number
   /**
    * The correlating product to bill/ship monthly when this product is put on
    * subscription. Used so the monthly plan is always available even for items
@@ -189,7 +189,7 @@ export interface CatalogueProduct {
   /**
    * How the product is consumed — drives the monthly subscription quantity.
    * When omitted, it's derived from the stack slot (energy/hydration =
-   * per-workout, everything else = daily) and daysOfSupply.
+   * per-workout, everything else = daily) and servings.
    */
   consumption?: ProductConsumption
   /** Minimum subscription commitment in months for this product (portal-set). */

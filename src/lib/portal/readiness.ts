@@ -58,15 +58,15 @@ export function productReadiness(p: CatalogueProduct, opts: { live: boolean }): 
   if (!p.subscriptionEligible) {
     subStatus = 'warn'
     subDetail = 'Not subscription-eligible'
-  } else if (!(p.daysOfSupply > 0)) {
+  } else if (!(p.servings > 0)) {
     subStatus = 'fail'
-    subDetail = 'No days-of-supply set'
+    subDetail = 'No servings set'
   } else {
-    const longLasting = p.daysOfSupply > config.maxSubscriptionDaysOfSupply
-    const lastsTooLong = p.daysOfSupply / 30 > config.maxDeliveryMonths
+    const longLasting = p.servings > config.maxSubscriptionServings
+    const lastsTooLong = p.servings / 30 > config.maxDeliveryMonths
     if (longLasting && lastsTooLong && !p.subscriptionProductId) {
       subStatus = 'warn'
-      subDetail = `Lasts ${p.daysOfSupply}d — map a monthly refill`
+      subDetail = `${p.servings} servings — map a monthly refill`
     } else if (opts.live && !p.variants.some((v) => v.sellingPlanId)) {
       subStatus = 'warn'
       subDetail = 'No selling plan configured'

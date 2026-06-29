@@ -31,7 +31,7 @@ export function SubscriptionDashboard() {
   const {
     subscription: sub, feedback, logout,
     setDispatchDay, resume,
-    swapLine, addLine, removeLine, setLineCadence, setLineQuantity, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineUsage, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
     snooze, applyDownsize, cancelWithReason,
   } = useHubStore()
@@ -288,8 +288,11 @@ export function SubscriptionDashboard() {
           subscription={sub}
           line={manageLine}
           product={products.find((p) => p.id === manageLine.productId)}
-          onSetCadence={(months) => { setLineCadence(manageLine.id, months); setManageLineId(null) }}
-          onSetQuantity={(quantity) => { setLineQuantity(manageLine.id, quantity); setManageLineId(null) }}
+          onSetUsage={(level) => {
+            const p = products.find((p) => p.id === manageLine.productId)
+            if (p) setLineUsage(manageLine.id, p, level)
+            setManageLineId(null)
+          }}
           onSkip={() => { skipNext(manageLine.id); setManageLineId(null) }}
           onExpedite={() => { alert('Live, this charges a one-off and ships it with your next box.'); setManageLineId(null) }}
           onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}

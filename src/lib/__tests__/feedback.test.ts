@@ -16,7 +16,7 @@ import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/
 const makeProduct = (o: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
   id: 'p', title: 'P', handle: 'p', description: '', imageUrl: null, category: 'X',
   stackSlots: ['protein'], goals: [], dietaryTags: [], formats: ['powder'], variants: [],
-  basePrice: 30, compareAtPrice: null, subscriptionEligible: true, daysOfSupply: 30,
+  basePrice: 30, compareAtPrice: null, subscriptionEligible: true, servings: 30,
   swapGroup: 'protein-whey', recommendationPriority: 5, marginPriority: 5,
   isCoreEligible: true, isBoosterEligible: false, hasStimulants: false, shortReason: '',
   warnings: [], shopifyProductId: null, ...o,
