@@ -4,7 +4,9 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
+import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
@@ -267,6 +269,58 @@ function formatIncludes(slots: Array<{ title: string }>, count: number): string 
   return `${main} ${last}`
 }
 
+// ─── Bundle insight (the budget step's premium framing) ───────────────────────
+// Each bundle is a prefix of the previewed "complete" stack. We surface, per
+// bundle, how much of the member's OWN goals it covers and which products it adds
+// over the tier below. Coverage is the honest "see the benefit" cue; the adds
+// make the upgrade concrete. It's never used to pressure — lower bundles stay
+// framed by what they DO cover, and the recommendation never exceeds real need.
+
+const PREF_TO_LEVEL: Record<StackPreference, 'essentials' | 'performance' | 'complete'> = {
+  simple: 'essentials', balanced: 'performance', complete: 'complete',
+}
+
+/** The subscribe-&-save rate (%) a bundle unlocks — the reward for going bigger. */
+function saveRateFor(pref: StackPreference): number {
+  return Math.round((PRICING_CONFIG.levelSubscriptionDiscount[PREF_TO_LEVEL[pref]] ?? 0) * 100)
+}
+
+interface BundleInsight {
+  /** How many of the member's chosen goals this bundle covers. */
+  covered: number
+  /** Total goals the member chose (the coverage denominator). */
+  totalGoals: number
+  /** Product titles this bundle adds over the tier below it. */
+  addedTitles: string[]
+}
+
+function computeBundleInsights(
+  rankedSlots: Array<{ selectedProductId: string; title: string }>,
+  catalogue: CatalogueProduct[],
+  goals: Goal[],
+  tierSlotCounts: number[],
+): BundleInsight[] {
+  const productById = new Map(catalogue.map(p => [p.id, p]))
+  const totalGoals = new Set(goals).size
+  let prevTake = 0
+  return tierSlotCounts.map((count) => {
+    const take = Math.min(count, rankedSlots.length)
+    const active = rankedSlots.slice(0, take)
+    const goalSet = new Set<string>()
+    for (const s of active) productById.get(s.selectedProductId)?.goals.forEach(g => goalSet.add(g))
+    const covered = goals.filter(g => goalSet.has(g)).length
+    const addedTitles = rankedSlots.slice(prevTake, take).map(s => s.title)
+    prevTake = take
+    return { covered, totalGoals, addedTitles }
+  })
+}
+
+/** Compact "Protein, Creatine + 2 more" for the products a bundle adds. */
+function formatAdds(titles: string[]): string {
+  if (titles.length <= 3) return titles.join(', ')
+  return `${titles.slice(0, 2).join(', ')} + ${titles.length - 2} more`
+}
+
 const FORMAT_DATA = [
   { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: 'shaker' },
   { id: 'capsules', label: 'Capsules / Tabs', sub: 'Easy to take anywhere',          icon: 'capsule' },
@@ -420,6 +474,25 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     answers.preferredFormats, answers.trainingFocus, answers.gender, answers.ageBracket,
     answers.trainingTime, answers.trainingExperience, liveCatalogue,
   ])
+
+  // Per-bundle coverage + "what it adds", computed from the previewed stack.
+  const bundleInsights = useMemo(
+    () => computeBundleInsights(
+      rankedSlots,
+      liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE,
+      answers.goals,
+      BUDGET_DATA.map(b => b.slots),
+    ),
+    [rankedSlots, liveCatalogue, answers.goals],
+  )
+
+  // Recommend the SMALLEST bundle that covers every goal the member chose —
+  // honest (never upsells past their needs) yet naturally lands on a premium
+  // bundle for anyone with several goals. Falls back to the top bundle.
+  const recommendedBudgetId = useMemo(() => {
+    const idx = bundleInsights.findIndex(b => b.totalGoals > 0 && b.covered >= b.totalGoals)
+    return BUDGET_DATA[idx === -1 ? BUDGET_DATA.length - 1 : idx].id
+  }, [bundleInsights])
 
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
@@ -1031,17 +1104,37 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
           {/* ── Budget ── */}
           {id === 'budget' && (
-            <div className="flex flex-col gap-3">
-              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, slots, icon }) => {
+            <div className="flex flex-col gap-3.5">
+              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, slots, icon }, i) => {
                 const active = answers.budget === bid
+                const insight = bundleInsights[i]
                 const actualCount = Math.min(slots, rankedSlots.length || slots)
                 const includes = formatIncludes(rankedSlots, slots)
+                const fullyCovers = !!insight && insight.totalGoals > 0 && insight.covered >= insight.totalGoals
+                const isRecommended = bid === recommendedBudgetId
+                const saveRate = saveRateFor(pref)
+                const adds = i > 0 && insight && insight.addedTitles.length > 0 ? formatAdds(insight.addedTitles) : ''
                 return (
                   <button
                     key={`b-${bid}`}
                     onClick={() => { setAnswer('budget', bid); setAnswer('stackPreference', pref) }}
-                    className={['w-full flex flex-col gap-2 px-5 py-4 rounded-xl border text-left transition-all duration-200 active:scale-[0.99]', active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07] text-white' : 'border-white/[0.08] bg-white/[0.015] text-white/70 hover:border-white/20 hover:bg-white/[0.04]'].join(' ')}
+                    className={['relative w-full flex flex-col gap-2 px-5 py-4 rounded-xl border text-left transition-all duration-200 active:scale-[0.99]',
+                      active
+                        ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07] text-white'
+                        : isRecommended
+                          ? 'border-[#00D4FF]/30 bg-white/[0.025] text-white/80'
+                          : 'border-white/[0.08] bg-white/[0.015] text-white/70 hover:border-white/20 hover:bg-white/[0.04]'].join(' ')}
                   >
+                    {/* Recommended ribbon — the centre-stage nudge (honest: it's the
+                        smallest bundle that covers every goal they chose) */}
+                    {isRecommended && (
+                      <span
+                        className="absolute -top-2 right-4 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-[0.14em] uppercase bg-[#00D4FF] text-[#0A0A0A]"
+                        style={{ fontFamily: 'var(--font-display)' }}
+                      >
+                        Recommended
+                      </span>
+                    )}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <QuizIcon name={icon} size={18} className={`shrink-0 transition-colors duration-200 ${active ? 'text-[#00D4FF]' : 'text-white/40'}`} />
@@ -1050,11 +1143,34 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                       <div className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border transition-colors ${active ? 'border-[#00D4FF]/40 text-[#00D4FF] bg-[#00D4FF]/10' : 'border-white/15 text-white/35'}`}>{budget}</div>
                     </div>
                     <p className={`text-[13px] leading-snug ${active ? 'text-white/55' : 'text-white/30'}`}>{sub}</p>
+
+                    {/* Goal coverage — the honest "see the benefit" signal */}
+                    {insight && insight.totalGoals > 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" className="shrink-0">
+                          <circle cx="7" cy="7" r="6.25" stroke={fullyCovers ? '#00D4FF' : active ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.18)'} strokeWidth="1.25" />
+                          {fullyCovers && <path d="M4.3 7.1l1.8 1.8 3.6-3.9" stroke="#00D4FF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+                        </svg>
+                        <span className={`text-[11px] font-semibold ${fullyCovers ? 'text-[#00D4FF]' : active ? 'text-white/60' : 'text-white/35'}`}>
+                          {fullyCovers
+                            ? `Covers all ${insight.totalGoals} of your goals`
+                            : `Covers ${insight.covered} of your ${insight.totalGoals} goals`}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* What this bundle includes — or what it adds over the one below */}
                     <div className="flex items-start gap-1.5">
-                      <span className={`text-[10px] mt-px ${active ? 'text-[#00D4FF]/60' : 'text-white/20'}`}>Includes</span>
-                      <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/65' : 'text-white/25'}`}>{includes}</span>
+                      <span className={`text-[10px] mt-px ${active ? 'text-[#00D4FF]/60' : 'text-white/20'}`}>{adds ? 'Adds' : 'Includes'}</span>
+                      <span className={`text-[11px] font-medium leading-snug ${active ? 'text-white/70' : 'text-white/28'}`}>{adds || includes}</span>
                     </div>
-                    <div className="flex justify-end">
+
+                    <div className="flex items-center justify-between">
+                      {saveRate > 0 ? (
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${active ? 'bg-[#00D4FF]/15 text-[#00D4FF]' : 'bg-white/[0.04] text-white/30'}`}>
+                          Subscribe &amp; save {saveRate}%
+                        </span>
+                      ) : <span />}
                       <span className={`text-[9px] font-semibold tracking-[0.16em] uppercase ${active ? 'text-[#00D4FF]/70' : 'text-white/15'}`}>
                         {actualCount} product{actualCount !== 1 ? 's' : ''}
                       </span>
