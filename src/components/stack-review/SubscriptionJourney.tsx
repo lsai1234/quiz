@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers, StackLevel } from '@/lib/types'
@@ -57,6 +58,22 @@ interface Props {
 export function SubscriptionJourney({
   blueprint, products, answers, level, usage, onUsageChange, onTrainingFrequencyChange, onConfirm, onClose,
 }: Props) {
+  // Render through a portal to document.body: StackReviewPage sits inside an
+  // animated (transformed) wrapper, which would otherwise make `position: fixed`
+  // positioned relative to that wrapper instead of the viewport.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  }, [onClose])
+
   const planOpts = useMemo(() => ({ usageByProductId: usage, level }), [usage, level])
   const plan = useMemo(
     () => buildSubscriptionPlan(blueprint, products, answers, undefined, planOpts),
@@ -73,7 +90,9 @@ export function SubscriptionJourney({
     onUsageChange({ ...usage, [productId]: levelChoice })
   }
 
-  return (
+  if (!mounted) return null
+
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--color-bg)' }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
@@ -177,6 +196,7 @@ export function SubscriptionJourney({
           Looks good →
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

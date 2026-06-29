@@ -129,16 +129,6 @@ export function StackReviewPage() {
     [checkout, blueprint, products, planType, answers, subOpts],
   )
 
-  // Switching to the subscription offer opens the customisation journey the
-  // first time, so the plan is sized to the member before they commit.
-  const handlePlanChange = useCallback(
-    (plan: typeof planType) => {
-      setPlanType(plan)
-      if (plan === 'subscription' && !subscriptionCustomised) setJourneyOpen(true)
-    },
-    [setPlanType, subscriptionCustomised],
-  )
-
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
   const pricing = calculatePricing(blueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
@@ -287,7 +277,7 @@ export function StackReviewPage() {
           <StackPriceSummary
             pricing={pricing}
             planType={planType}
-            onPlanChange={handlePlanChange}
+            onPlanChange={setPlanType}
             onCheckout={handleCheckout}
             isLoading={checkoutState.status === 'loading'}
           />
