@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, PRICING_CONFIG } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -416,6 +416,35 @@ describe('pricing rules — discount tiers', () => {
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
     expect(p.bundleDiscountPct).toBe(0)
     expect(p.oneOffTotal).toBe(30)
+  })
+})
+
+describe('bundle save-rate consistency (budget step ↔ final screen)', () => {
+  it('maps each stack preference to the right bundle tier', () => {
+    expect(levelForStackPreference('simple')).toBe('essentials')
+    expect(levelForStackPreference('balanced')).toBe('performance')
+    expect(levelForStackPreference('complete')).toBe('complete')
+    expect(levelForStackPreference(null)).toBe('performance')
+  })
+
+  it('the save % the budget card advertises equals the rate the final screen applies', () => {
+    // The budget card shows levelSubscriptionRate(levelForStackPreference(pref)).
+    // The final screen prices the chosen stack at that same level. For every
+    // preference the two must produce an identical headline percentage.
+    for (const pref of ['simple', 'balanced', 'complete'] as const) {
+      const level = levelForStackPreference(pref)
+      const advertised = Math.round(levelSubscriptionRate(level) * 1000) / 10
+      const product = makeProduct({ id: 'a', basePrice: 40, variants: oneVariant(40) })
+      const bp = makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }])
+      const pricing = calculatePricing(bp, [product], null, undefined, { level })
+      expect(pricing.subscriptionDiscountPct).toBe(advertised)
+    }
+  })
+
+  it('advertises the expected default rates: 10 / 15 / 20', () => {
+    expect(Math.round(levelSubscriptionRate(levelForStackPreference('simple')) * 100)).toBe(10)
+    expect(Math.round(levelSubscriptionRate(levelForStackPreference('balanced')) * 100)).toBe(15)
+    expect(Math.round(levelSubscriptionRate(levelForStackPreference('complete')) * 100)).toBe(20)
   })
 })
 

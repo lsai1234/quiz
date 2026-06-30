@@ -1,6 +1,6 @@
 import type { StackBlueprint } from './types'
 import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
-import type { QuizAnswers, Budget, StackLevel } from '@/lib/types'
+import type { QuizAnswers, Budget, StackLevel, StackPreference } from '@/lib/types'
 
 const DAYS_PER_MONTH = 30
 
@@ -405,6 +405,15 @@ export function stackLevelOf(blueprint: Pick<StackBlueprint, 'slots'> & { level?
   if (n <= 3) return 'essentials'
   if (n <= 5) return 'performance'
   return 'complete'
+}
+
+/**
+ * The bundle tier a quiz stack-preference maps to. Single source of truth shared
+ * by the budget step's advertised save-rate AND the stack the member actually
+ * gets, so the two can never drift. 'balanced' and any unset value → performance.
+ */
+export function levelForStackPreference(pref: StackPreference | null | undefined): StackLevel {
+  return pref === 'simple' ? 'essentials' : pref === 'complete' ? 'complete' : 'performance'
 }
 
 /** The fixed subscribe-&-save rate for a bundle/level (before any tier upgrade). */

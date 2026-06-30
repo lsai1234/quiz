@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
-import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { getPricingConfig, levelForStackPreference } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
@@ -264,25 +264,21 @@ const BUDGET_DATA: Array<{
 // bundles visibly carry more. Static merchandising badges drive the classic
 // pricing-ladder nudge; the subscribe-&-save rate rewards going bigger.
 
-const PREF_TO_LEVEL: Record<StackPreference, 'essentials' | 'performance' | 'complete'> = {
-  simple: 'essentials', balanced: 'performance', complete: 'complete',
-}
-
-/** The subscribe-&-save rate (%) a bundle unlocks — the reward for going bigger. */
+/**
+ * The subscribe-&-save rate (%) a bundle unlocks — the reward for going bigger.
+ * Reads the LIVE pricing config (defaults + any portal overrides) via the shared
+ * preference→tier mapping, so the advertised rate always equals what the final
+ * stack screen applies.
+ */
 function saveRateFor(pref: StackPreference): number {
-  return Math.round((PRICING_CONFIG.levelSubscriptionDiscount[PREF_TO_LEVEL[pref]] ?? 0) * 100)
+  const cfg = getPricingConfig()
+  return Math.round((cfg.levelSubscriptionDiscount[levelForStackPreference(pref)] ?? 0) * 100)
 }
 
 /** Merchandising badge per bundle — the good/better/best sales ladder. */
 const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
   '50-80': 'Most popular',
   '80-plus': 'Best value',
-}
-
-/** The product titles a bundle contains: the first N of the previewed stack. */
-function bundleContents(rankedSlots: Array<{ title: string }>, count: number): string[] {
-  if (rankedSlots.length === 0) return []
-  return rankedSlots.slice(0, Math.min(count, rankedSlots.length)).map(s => s.title)
 }
 
 const FORMAT_DATA = [
@@ -422,15 +418,22 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const isFirst = index === 0
 
   // Full ranked stack (unlimited budget) so budget cards show real products.
-  const rankedSlots = useMemo(() => {
-    if (answers.goals.length === 0) return []
-    try {
-      const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
-      const preview = buildStackBlueprint({ ...answers, budget: '80-plus', stackPreference: 'complete' }, catalogue)
-      return preview.slots
-    } catch {
-      return []
-    }
+  // Build each bundle's ACTUAL stack at its own budget + preference, so the
+  // "what you get" tick-list shows exactly what that bundle would contain — never
+  // a product that the bundle's price cap would actually exclude. Aligned to
+  // BUDGET_DATA order. Mirrors what generateStack builds when the bundle is picked
+  // (AI personalisation only swaps products within slots, never the slot titles).
+  const bundlePreviews = useMemo<string[][]>(() => {
+    if (answers.goals.length === 0) return BUDGET_DATA.map(() => [])
+    const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
+    return BUDGET_DATA.map((b) => {
+      try {
+        return buildStackBlueprint({ ...answers, budget: b.id, stackPreference: b.pref }, catalogue)
+          .slots.map((s) => s.title)
+      } catch {
+        return []
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     answers.goals, answers.lifestyle, answers.currentSupplements, answers.currentVitamins,
@@ -600,11 +603,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
       ])
       setIdentity(identity ?? FALLBACK_IDENTITY)
-      setStackLevel(
-        answers.stackPreference === 'simple' ? 'essentials'
-          : answers.stackPreference === 'complete' ? 'complete'
-            : 'performance',
-      )
+      setStackLevel(levelForStackPreference(answers.stackPreference))
       useQuizStore.getState().setStackBlueprint(blueprint)
     } catch {
       if (!useQuizStore.getState().identity) setIdentity(FALLBACK_IDENTITY)
@@ -1050,10 +1049,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {/* ── Budget ── */}
           {id === 'budget' && (
             <div className="flex flex-col gap-4">
-              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, slots, icon }) => {
+              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, icon }, i) => {
                 const active = answers.budget === bid
-                const contents = bundleContents(rankedSlots, slots)
-                const actualCount = contents.length || Math.min(slots, rankedSlots.length || slots)
+                const contents = bundlePreviews[i] ?? []
+                const actualCount = contents.length
                 const badge = BUNDLE_BADGE[bid]
                 const featured = bid === '50-80' // the hero of the ladder
                 const saveRate = saveRateFor(pref)
@@ -1114,7 +1113,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     {/* Footer count */}
                     <div className={`mt-3.5 pt-3 border-t flex items-center justify-between ${active ? 'border-[#00D4FF]/20' : 'border-white/[0.06]'}`}>
                       <span className={`text-[11px] font-semibold ${active ? 'text-white/70' : 'text-white/35'}`}>
-                        {actualCount} product{actualCount !== 1 ? 's' : ''} in this bundle
+                        {actualCount > 0 ? `${actualCount} product${actualCount !== 1 ? 's' : ''} in this bundle` : 'Tailored to your goals'}
                       </span>
                       <span className={`text-[11px] font-bold tracking-wide ${active ? 'text-[#00D4FF]' : 'text-white/30'}`} style={{ fontFamily: 'var(--font-display)' }}>
                         {active ? 'Selected ✓' : 'Choose'}
