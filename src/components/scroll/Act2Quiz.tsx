@@ -553,6 +553,17 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setStep(i)
   }
 
+  // Training styles are multi-select — toggle in the array, no auto-advance.
+  function handleMultiType(tid: TrainingType) {
+    const cur = answers.trainingType
+    const next = cur.includes(tid) ? cur.filter((x) => x !== tid) : [...cur, tid]
+    setAnswer('trainingType', next)
+    // The style follow-up (strength focus / sport type) only makes sense for a
+    // single chosen style — clear the focus answer whenever it no longer applies.
+    const followUp = next.length === 1 ? getSubQuestion('type', next[0]) : null
+    if (!followUp) setAnswer('trainingFocus', null)
+  }
+
   // Single-select: auto-advance after a brief beat so the choice registers.
   function handleSingle(key: string, value: string) {
     setAnswer(key as keyof typeof answers, value as never)
@@ -612,10 +623,16 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
       case 'lifestyle': case 'supps': case 'formats': case 'review': return true
+      case 'type': return answers.trainingType.length > 0
       case 'budget': return !!answers.budget
       default: return false
     }
   })()
+
+  // Style follow-up shown only when exactly one training style is chosen.
+  const typeFollowUp = answers.trainingType.length === 1
+    ? getSubQuestion('type', answers.trainingType[0])
+    : null
 
   const slideClass = reducedMotion
     ? ''
@@ -630,7 +647,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     rows.push({ label: 'Goals', value: answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || '—', edit: 'goals' })
     if (localAge) rows.push({ label: 'You', value: [localName.trim(), localExactAge ? `${localExactAge}` : localAge].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
-      const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelOf(TYPE_DATA, answers.trainingType)].filter(Boolean).join(' · ')
+      const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
       if (t) rows.push({ label: 'Training', value: t, edit: 'frequency' })
     }
     const lifestyleData = answers.track === 'wellbeing' ? WELLBEING_LIFESTYLE_DATA : LIFESTYLE_DATA
@@ -921,12 +938,33 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Type ── */}
+          {/* ── Type (multi-select) ── */}
           {id === 'type' && (
             <div className="flex flex-col gap-2.5">
               {TYPE_DATA.map(({ id: tid, label, sub }) => (
-                <AnswerOption key={`t-${tid}`} label={label} sub={sub} selected={answers.trainingType === tid} onClick={() => handleSingle('trainingType', tid)} />
+                <AnswerOption key={`t-${tid}`} label={label} sub={sub} multi
+                  selected={answers.trainingType.includes(tid)}
+                  onClick={() => handleMultiType(tid)} />
               ))}
+
+              {/* Inline refinement when a single style is chosen */}
+              {typeFollowUp && (
+                <div className="mt-6 pt-6 border-t border-white/8">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-px h-4 bg-[#00D4FF]" />
+                    <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]" style={{ fontFamily: 'var(--font-display)' }}>Follow-up</span>
+                  </div>
+                  <p className="text-base font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>{typeFollowUp.question}</p>
+                  <p className="text-xs text-white/35 mb-4">{typeFollowUp.hint}</p>
+                  <div className="flex flex-col gap-2">
+                    {typeFollowUp.options.map((opt) => (
+                      <AnswerOption key={`tf-${opt.id}`} label={opt.label} sub={opt.sub}
+                        selected={answers.trainingFocus === opt.id}
+                        onClick={() => setAnswer('trainingFocus', opt.id)} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

@@ -30,7 +30,7 @@ const BASE_ANSWERS: QuizAnswers = {
   gender: 'male',
   goals: ['muscle', 'recovery'],
   trainingFrequency: '3-4x',
-  trainingType: 'strength',
+  trainingType: ['strength'],
   lifestyle: [],
   diet: 'clean',
   currentSupplements: [],

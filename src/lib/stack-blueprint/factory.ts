@@ -779,7 +779,7 @@ export function buildStackBlueprint(
 
   const userProfileSummary = [
     answers.ageBracket,
-    answers.trainingType ? `${answers.trainingType} training` : null,
+    answers.trainingType?.length ? `${answers.trainingType.join(' & ')} training` : null,
     answers.trainingFrequency ? `${answers.trainingFrequency}/week` : null,
   ].filter(Boolean).join(', ')
 

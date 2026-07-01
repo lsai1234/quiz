@@ -94,7 +94,7 @@ PERSON
 ${firstName ? `- Name: ${firstName}` : ''}
 - Age: ${age}
 - Goals: ${goalText}
-- Training: ${answers.trainingFrequency ?? 'unknown'} per week, ${answers.trainingType ?? 'mixed'}-focused
+- Training: ${answers.trainingFrequency ?? 'unknown'} per week, ${answers.trainingType?.length ? answers.trainingType.join(' & ') : 'mixed'}-focused
 - Diet: ${answers.diet ?? 'balanced'}
 - Lifestyle factors: ${lifestyle}
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}

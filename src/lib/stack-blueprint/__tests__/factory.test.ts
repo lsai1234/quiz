@@ -11,7 +11,7 @@ function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
     gender: 'male',
     goals: ['health'],
     trainingFrequency: '3-4x',
-    trainingType: 'strength',
+    trainingType: ['strength'],
     lifestyle: [],
     diet: 'mostly-good',
     currentSupplements: [],

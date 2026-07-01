@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ')
     const freq = answers.trainingFrequency ?? 'unknown frequency'
-    const type = answers.trainingType ?? 'mixed'
+    const type = answers.trainingType?.length ? answers.trainingType.join(' & ') : 'mixed'
     const diet = answers.diet ?? 'balanced'
     const caffeine = answers.caffeineLevel ?? 'moderate'
     const budget = answers.budget ?? '50-80'

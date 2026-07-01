@@ -65,7 +65,7 @@ export const defaultAnswers: QuizAnswers = {
   gender: null,
   goals: [],
   trainingFrequency: null,
-  trainingType: null,
+  trainingType: [],
   lifestyle: [],
   diet: null,
   currentSupplements: [],

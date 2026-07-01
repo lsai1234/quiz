@@ -38,7 +38,7 @@ export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", advance: 'manual' },
   { id: 'personal', section: 'ABOUT YOU', q: 'A little about you.', hint: 'Helps us tailor the doses and picks to you.', advance: 'manual' },
   { id: 'frequency', section: 'TRAINING', q: 'How often do you train?', hint: 'Your frequency shapes the whole stack.', tracks: ['performance'], advance: 'auto' },
-  { id: 'type', section: 'TRAINING', q: "What's your training style?", hint: 'Choose what fits closest.', tracks: ['performance'], advance: 'auto' },
+  { id: 'type', section: 'TRAINING', q: "What's your training style?", hint: 'Pick everything you do — add as many as apply.', tracks: ['performance'], advance: 'manual' },
   { id: 'lifestyle', section: 'LIFESTYLE', q: 'Tell us about yourself', hint: 'Select anything that applies — helps us fine-tune.', wellbeing: { q: 'Tell us about your day-to-day', hint: 'Select anything that applies — context changes what we recommend.' }, advance: 'manual' },
   { id: 'diet', section: 'NUTRITION', q: "How's the diet?", hint: 'Honest answer = better results.', advance: 'auto' },
   { id: 'supps', section: 'WHAT YOU HAVE', q: 'Already using any of these?', hint: "We won't recommend what you've already got.", wellbeing: { q: 'Already taking any of these?', hint: "We won't recommend what you've already got covered." }, advance: 'manual' },

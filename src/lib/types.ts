@@ -52,7 +52,8 @@ export interface QuizAnswers {
   gender: Gender | null
   goals: Goal[]
   trainingFrequency: TrainingFrequency | null
-  trainingType: TrainingType | null
+  /** Training styles — multi-select (Weights, Cardio, HIIT, Sport, Mixed). */
+  trainingType: TrainingType[]
   lifestyle: string[]
   diet: DietLevel | null
   currentSupplements: string[]

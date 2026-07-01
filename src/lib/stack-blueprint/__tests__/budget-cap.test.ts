@@ -21,7 +21,7 @@ function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
     gender: 'male',
     goals: ['muscle', 'energy', 'recovery'],
     trainingFrequency: '5-6x',
-    trainingType: 'strength',
+    trainingType: ['strength'],
     lifestyle: [],
     diet: 'mostly-good',
     currentSupplements: [],
@@ -83,7 +83,7 @@ describe('budget cap is a hard ceiling on the discounted one-off total', () => {
         budget,
         goals: ['sleep-better', 'less-stress', 'immune', 'focus'],
         trainingFrequency: null,
-        trainingType: null,
+        trainingType: [],
       })
       const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
       const pricing = calculatePricing(blueprint, MOCK_CATALOGUE, answers)
