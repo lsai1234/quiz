@@ -277,7 +277,7 @@ function saveRateFor(pref: StackPreference): number {
 
 /** Merchandising badge per bundle — the good/better/best sales ladder. */
 const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
-  '50-80': 'Most popular',
+  '50-80': 'Recommended',
   '80-plus': 'Best value',
 }
 
