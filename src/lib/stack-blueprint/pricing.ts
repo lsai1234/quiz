@@ -79,6 +79,12 @@ export const PRICING_CONFIG = {
   subscriptionFlatMonthly: true,
   /** Minimum subscription commitment in months (per-product can override up). */
   minSubscriptionMonths: 4,
+
+  // ── Fulfilment ──
+  /** Order total (£) at or above which delivery is free. Advertised on the
+   *  bundle selector; 0 disables the free-delivery messaging entirely. */
+  freeDeliveryThreshold: 50,
+
   /** First-cycle intro offer. */
   introOffer: {
     /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it. */
@@ -414,6 +420,11 @@ export function stackLevelOf(blueprint: Pick<StackBlueprint, 'slots'> & { level?
  */
 export function levelForStackPreference(pref: StackPreference | null | undefined): StackLevel {
   return pref === 'simple' ? 'essentials' : pref === 'complete' ? 'complete' : 'performance'
+}
+
+/** Whether an order total qualifies for free delivery (threshold > 0 and met). */
+export function qualifiesForFreeDelivery(total: number, config = getPricingConfig()): boolean {
+  return config.freeDeliveryThreshold > 0 && total >= config.freeDeliveryThreshold
 }
 
 /** The fixed subscribe-&-save rate for a bundle/level (before any tier upgrade). */

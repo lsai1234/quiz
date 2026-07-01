@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, qualifiesForFreeDelivery, PRICING_CONFIG } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -448,6 +448,19 @@ describe('bundle save-rate consistency (budget step ↔ final screen)', () => {
     expect(Math.round(levelSubscriptionRate(levelForStackPreference('simple')) * 100)).toBe(10)
     expect(Math.round(levelSubscriptionRate(levelForStackPreference('balanced')) * 100)).toBe(15)
     expect(Math.round(levelSubscriptionRate(levelForStackPreference('complete')) * 100)).toBe(20)
+  })
+})
+
+describe('free delivery threshold', () => {
+  it('qualifies at or above the threshold, not below', () => {
+    const t = PRICING_CONFIG.freeDeliveryThreshold
+    expect(qualifiesForFreeDelivery(t)).toBe(true)
+    expect(qualifiesForFreeDelivery(t + 5)).toBe(true)
+    expect(qualifiesForFreeDelivery(t - 0.01)).toBe(false)
+  })
+
+  it('is disabled when the threshold is 0', () => {
+    expect(qualifiesForFreeDelivery(100, { ...PRICING_CONFIG, freeDeliveryThreshold: 0 })).toBe(false)
   })
 })
 

@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
-import { getPricingConfig, levelForStackPreference } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, getPricingConfig, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
@@ -423,15 +423,17 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // a product that the bundle's price cap would actually exclude. Aligned to
   // BUDGET_DATA order. Mirrors what generateStack builds when the bundle is picked
   // (AI personalisation only swaps products within slots, never the slot titles).
-  const bundlePreviews = useMemo<string[][]>(() => {
-    if (answers.goals.length === 0) return BUDGET_DATA.map(() => [])
+  const bundlePreviews = useMemo<Array<{ titles: string[]; freeDelivery: boolean }>>(() => {
+    if (answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], freeDelivery: false }))
     const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
     return BUDGET_DATA.map((b) => {
       try {
-        return buildStackBlueprint({ ...answers, budget: b.id, stackPreference: b.pref }, catalogue)
-          .slots.map((s) => s.title)
+        const a = { ...answers, budget: b.id, stackPreference: b.pref }
+        const bp = buildStackBlueprint(a, catalogue)
+        const { oneOffTotal } = calculatePricing(bp, catalogue, a, undefined, { level: levelForStackPreference(b.pref) })
+        return { titles: bp.slots.map((s) => s.title), freeDelivery: qualifiesForFreeDelivery(oneOffTotal) }
       } catch {
-        return []
+        return { titles: [], freeDelivery: false }
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1051,7 +1053,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             <div className="flex flex-col gap-4">
               {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, icon }, i) => {
                 const active = answers.budget === bid
-                const contents = bundlePreviews[i] ?? []
+                const preview = bundlePreviews[i] ?? { titles: [], freeDelivery: false }
+                const contents = preview.titles
                 const actualCount = contents.length
                 const badge = BUNDLE_BADGE[bid]
                 const featured = bid === '50-80' // the hero of the ladder
@@ -1107,6 +1110,19 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                             <span className={`text-[13px] ${active ? 'text-white/90' : 'text-white/65'}`}>{title}</span>
                           </div>
                         ))}
+                      </div>
+                    )}
+
+                    {/* Free delivery perk (order over the free-delivery threshold) */}
+                    {preview.freeDelivery && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" className="shrink-0">
+                          <path d="M1.5 5.5h9v7h-9v-7Z" stroke={active ? '#00D4FF' : '#00D4FF'} strokeWidth="1.3" strokeLinejoin="round" />
+                          <path d="M10.5 8h4l3 3v1.5h-7V8Z" stroke="#00D4FF" strokeWidth="1.3" strokeLinejoin="round" />
+                          <circle cx="5" cy="14.5" r="1.6" stroke="#00D4FF" strokeWidth="1.3" />
+                          <circle cx="14.5" cy="14.5" r="1.6" stroke="#00D4FF" strokeWidth="1.3" />
+                        </svg>
+                        <span className={`text-[12px] font-semibold ${active ? 'text-[#00D4FF]' : 'text-[#00D4FF]/85'}`}>Free delivery included</span>
                       </div>
                     )}
 
