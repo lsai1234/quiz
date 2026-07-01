@@ -45,7 +45,7 @@ export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'caffeine', section: 'ENERGY', q: 'How do you handle caffeine?', hint: 'Shapes your pre-workout recommendation.', advance: 'auto' },
   { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'Caffeine timing matters — tells us whether to include stimulants.', wellbeing: { q: 'When do you usually move or exercise?', hint: 'Even light exercise timing affects what we recommend.' }, advance: 'auto' },
   { id: 'formats', section: 'YOUR STYLE', q: 'What formats do you prefer?', hint: "We'll match your stack to products you'll actually use.", advance: 'manual' },
-  { id: 'budget', section: 'BUDGET', q: 'Monthly supplement budget?', hint: 'Sets your stack size — almost there.', advance: 'manual' },
+  { id: 'budget', section: 'BUDGET', q: "What's your stack budget?", hint: 'Sets your stack size — almost there.', advance: 'manual' },
   { id: 'review', section: 'REVIEW', q: 'Quick check before we build.', hint: 'Tap anything to change it.', advance: 'manual' },
 ]
 
