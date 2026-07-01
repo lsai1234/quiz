@@ -4,7 +4,7 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
-import { calculatePricing, getPricingConfig, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
@@ -264,17 +264,6 @@ const BUDGET_DATA: Array<{
 // bundles visibly carry more. Static merchandising badges drive the classic
 // pricing-ladder nudge; the subscribe-&-save rate rewards going bigger.
 
-/**
- * The subscribe-&-save rate (%) a bundle unlocks — the reward for going bigger.
- * Reads the LIVE pricing config (defaults + any portal overrides) via the shared
- * preference→tier mapping, so the advertised rate always equals what the final
- * stack screen applies.
- */
-function saveRateFor(pref: StackPreference): number {
-  const cfg = getPricingConfig()
-  return Math.round((cfg.levelSubscriptionDiscount[levelForStackPreference(pref)] ?? 0) * 100)
-}
-
 /** Merchandising badge per bundle — the good/better/best sales ladder. */
 const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
   '50-80': 'Recommended',
@@ -423,17 +412,17 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // a product that the bundle's price cap would actually exclude. Aligned to
   // BUDGET_DATA order. Mirrors what generateStack builds when the bundle is picked
   // (AI personalisation only swaps products within slots, never the slot titles).
-  const bundlePreviews = useMemo<Array<{ titles: string[]; freeDelivery: boolean }>>(() => {
-    if (answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], freeDelivery: false }))
+  const bundlePreviews = useMemo<Array<{ titles: string[]; price: number; freeDelivery: boolean }>>(() => {
+    if (answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], price: 0, freeDelivery: false }))
     const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
     return BUDGET_DATA.map((b) => {
       try {
         const a = { ...answers, budget: b.id, stackPreference: b.pref }
         const bp = buildStackBlueprint(a, catalogue)
         const { oneOffTotal } = calculatePricing(bp, catalogue, a, undefined, { level: levelForStackPreference(b.pref) })
-        return { titles: bp.slots.map((s) => s.title), freeDelivery: qualifiesForFreeDelivery(oneOffTotal) }
+        return { titles: bp.slots.map((s) => s.title), price: oneOffTotal, freeDelivery: qualifiesForFreeDelivery(oneOffTotal) }
       } catch {
-        return { titles: [], freeDelivery: false }
+        return { titles: [], price: 0, freeDelivery: false }
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1053,12 +1042,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             <div className="flex flex-col gap-4">
               {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, icon }, i) => {
                 const active = answers.budget === bid
-                const preview = bundlePreviews[i] ?? { titles: [], freeDelivery: false }
+                const preview = bundlePreviews[i] ?? { titles: [], price: 0, freeDelivery: false }
                 const contents = preview.titles
                 const actualCount = contents.length
                 const badge = BUNDLE_BADGE[bid]
                 const featured = bid === '50-80' // the hero of the ladder
-                const saveRate = saveRateFor(pref)
                 return (
                   <button
                     key={`b-${bid}`}
@@ -1088,9 +1076,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                         <span className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
                       </div>
                       <div className="text-right shrink-0">
-                        <div className={`text-[15px] font-bold leading-none ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{budget}</div>
-                        {saveRate > 0 && (
-                          <div className={`text-[10px] font-semibold mt-1 ${active ? 'text-[#00D4FF]' : 'text-[#00D4FF]/70'}`}>Save up to {saveRate}% on subscription</div>
+                        {preview.price > 0 ? (
+                          <>
+                            <div className={`text-[17px] font-bold leading-none ${active ? 'text-white' : 'text-white/85'}`} style={{ fontFamily: 'var(--font-display)' }}>£{preview.price.toFixed(2)}</div>
+                            <div className={`text-[10px] font-medium mt-1 ${active ? 'text-white/55' : 'text-white/35'}`}>one-off price</div>
+                          </>
+                        ) : (
+                          <div className={`text-[15px] font-bold leading-none ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{budget}</div>
                         )}
                       </div>
                     </div>
