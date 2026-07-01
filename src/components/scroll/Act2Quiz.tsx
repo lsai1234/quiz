@@ -1087,7 +1087,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                       <div className="text-right shrink-0">
                         <div className={`text-[15px] font-bold leading-none ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{budget}</div>
                         {saveRate > 0 && (
-                          <div className={`text-[10px] font-semibold mt-1 ${active ? 'text-[#00D4FF]' : 'text-[#00D4FF]/70'}`}>Save {saveRate}% on subscription</div>
+                          <div className={`text-[10px] font-semibold mt-1 ${active ? 'text-[#00D4FF]' : 'text-[#00D4FF]/70'}`}>Save up to {saveRate}% on subscription</div>
                         )}
                       </div>
                     </div>

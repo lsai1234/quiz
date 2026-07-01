@@ -38,9 +38,7 @@ function PlanTab({
 export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false }: Props) {
   const {
     oneOffTotal,
-    rrpTotal,
-    bundleSaving,
-    bundleSavingPct,
+    oneOffSubtotal,
     subscriptionTotal,
     subscriptionItemCount,
     subscriptionFirstMonth,
@@ -57,7 +55,10 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
   const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
   const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet
 
-  const hasRrpSaving = bundleSaving > 0.01
+  // Saving is measured against the sum of the products' own prices (never RRP),
+  // so it always reconciles with the bundle discount shown.
+  const oneOffSaving = Math.round((oneOffSubtotal - oneOffTotal) * 100) / 100
+  const hasOneOffSaving = oneOffSaving > 0.01
   const isSub = planType === 'subscription' && canSubscribe
   const subTabLabel = canSubscribe
     ? `${formatGBP(subscriptionTotal)}/mo`
@@ -123,7 +124,7 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
             <div className="flex items-center justify-between">
               <span className="text-xs" style={{ color: 'var(--color-accent)' }}>{LEVEL_LABEL[bundleLevel]} bundle</span>
               <span className="text-xs font-semibold" style={{ color: 'var(--color-accent)' }}>
-                {subscriptionDiscountPct}% off every month
+                up to {subscriptionDiscountPct}% off every month
               </span>
             </div>
 
@@ -145,10 +146,10 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
           </div>
         ) : (
           <div className="space-y-2.5 mb-4">
-            {hasRrpSaving && (
+            {hasOneOffSaving && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-[var(--color-muted)]">Individual RRP</span>
-                <span className="text-xs text-[var(--color-muted)] line-through">{formatGBP(rrpTotal)}</span>
+                <span className="text-xs text-[var(--color-muted)]">Regular price</span>
+                <span className="text-xs text-[var(--color-muted)] line-through">{formatGBP(oneOffSubtotal)}</span>
               </div>
             )}
 
@@ -168,11 +169,11 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
               <span className="text-base font-black text-[var(--color-text)]">{formatGBP(oneOffTotal)}</span>
             </div>
 
-            {hasRrpSaving && (
+            {hasOneOffSaving && (
               <div className="flex items-center justify-between">
-                <span className="text-xs text-emerald-400">Total saving</span>
+                <span className="text-xs text-emerald-400">You save</span>
                 <span className="text-xs font-semibold text-emerald-400">
-                  −{formatGBP(bundleSaving)} ({bundleSavingPct}% off)
+                  −{formatGBP(oneOffSaving)}
                 </span>
               </div>
             )}
@@ -186,7 +187,7 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
                   background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)',
                 }}
               >
-                Subscribe &amp; save {subscriptionDiscountPct}% — {LEVEL_LABEL[bundleLevel]} bundle →
+                Subscribe &amp; save up to {subscriptionDiscountPct}% — {LEVEL_LABEL[bundleLevel]} bundle →
               </button>
             )}
           </div>

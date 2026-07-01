@@ -409,6 +409,9 @@ describe('pricing rules — discount tiers', () => {
     expect(p.bundleDiscountPct).toBe(15)
     expect(p.bundleTierLabel).toBe('£120+ bundle')
     expect(p.oneOffTotal).toBe(round2(140 * 0.85))
+    // The pre-discount selling subtotal drives the customer-facing saving line.
+    expect(p.oneOffSubtotal).toBe(140)
+    expect(round2(p.oneOffSubtotal - p.oneOffTotal)).toBe(round2(140 * 0.15))
   })
 
   it('gives no bundle discount below the first tier threshold', () => {

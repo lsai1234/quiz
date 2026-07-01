@@ -521,6 +521,10 @@ export function buildSubscriptionPlan(
 export interface StackPricing {
   /** Sum of selected variant prices (or basePrice fallback). */
   oneOffTotal: number
+  /** Sum of selected variant prices BEFORE the bundle discount — the "regular"
+   *  one-off price the discount is applied to. Equals oneOffTotal when no
+   *  bundle discount qualifies. */
+  oneOffSubtotal: number
   /** Sum of compareAtPrice (RRP) across all slots. Equals oneOffTotal when no compare prices exist. */
   rrpTotal: number
   /** rrpTotal − oneOffTotal. 0 when no compare prices exist. */
@@ -699,6 +703,7 @@ export function calculatePricing(
 
   return {
     oneOffTotal,
+    oneOffSubtotal: round(oneOffSubtotal),
     rrpTotal: round(rrpTotal),
     bundleSaving,
     bundleSavingPct: rrpTotal > 0 ? Math.round((bundleSaving / rrpTotal) * 100) : 0,

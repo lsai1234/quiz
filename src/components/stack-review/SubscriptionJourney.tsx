@@ -98,7 +98,7 @@ export function SubscriptionJourney({
       <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)]">
         <div>
           <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-            {LEVEL_LABEL[level]} bundle · Subscribe & save {pricing.subscriptionDiscountPct}%
+            {LEVEL_LABEL[level]} bundle · Subscribe & save up to {pricing.subscriptionDiscountPct}%
           </p>
           <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
             Tune your monthly plan
