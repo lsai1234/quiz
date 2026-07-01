@@ -41,7 +41,9 @@ export const PRICING_CONFIG = {
 
   // ── One-off bundle discount tiers (best-qualifying wins) ──
   bundleTiers: [
-    { id: 'bundle-60', label: '£60+ bundle', minSubtotal: 60, discountPct: 0.1 },
+    // First tier aligned to the free-delivery threshold (£50) so both perks kick
+    // in together — no dead zone where delivery is free but the discount isn't.
+    { id: 'bundle-50', label: '£50+ bundle', minSubtotal: 50, discountPct: 0.1 },
     { id: 'bundle-90', label: '£90+ bundle', minSubtotal: 90, discountPct: 0.15 },
     { id: 'bundle-120', label: '£120+ bundle', minSubtotal: 120, discountPct: 0.2 },
   ] as DiscountTier[],

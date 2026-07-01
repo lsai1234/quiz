@@ -190,9 +190,10 @@ describe('calculatePricing', () => {
       { selectedProductId: 'prod-b', selectedVariantId: 'vb', slotType: 'performance' } as never,
     ])
     const p = calculatePricing(blueprint, [prodA, prodB])
-    expect(p.oneOffTotal).toBe(50)
+    // £50 subtotal qualifies for the £50+ bundle tier (10% off): 27 + 18 = 45.
+    expect(p.oneOffTotal).toBe(45)
     expect(p.rrpTotal).toBe(60)   // 40 + 20 (no compare for B)
-    expect(p.bundleSaving).toBe(10)
+    expect(p.bundleSaving).toBe(15)
     // Only prodA qualifies for the monthly plan; prodB (ineligible) is excluded.
     const subA = Math.round(30 * 0.8 * 100) / 100
     expect(p.subscriptionTotal).toBe(subA)
