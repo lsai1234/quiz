@@ -1,7 +1,7 @@
 'use client'
 
 import type { StackPricing } from '@/lib/stack-blueprint/pricing'
-import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, getPricingConfig, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 import type { StackLevel } from '@/lib/types'
 
@@ -60,11 +60,18 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
   const oneOffSaving = Math.round((oneOffSubtotal - oneOffTotal) * 100) / 100
   const hasOneOffSaving = oneOffSaving > 0.01
   const isSub = planType === 'subscription' && canSubscribe
+  const config = getPricingConfig()
   const subTabLabel = canSubscribe
     ? `${formatGBP(subscriptionTotal)}/mo`
     : subscriptionItemCount > 0
-      ? `Min ${formatGBP(PRICING_CONFIG.minSubscriptionMonthly)}/mo`
+      ? `Min ${formatGBP(config.minSubscriptionMonthly)}/mo`
       : 'Unavailable'
+
+  // Free delivery is judged against whatever plan is active, and recomputes as
+  // add-ons change the totals (so it applies/unapplies retrospectively).
+  const activeTotal = isSub ? subscriptionTotal : oneOffTotal
+  const freeDelivery = qualifiesForFreeDelivery(activeTotal, config)
+  const freeDeliveryRemaining = Math.max(0, Math.round((config.freeDeliveryThreshold - activeTotal) * 100) / 100)
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden">
@@ -88,6 +95,19 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
             onClick={() => onPlanChange('subscription')}
           />
         </div>
+
+        {/* Why subscribe is unavailable — so the disabled tab isn't a mystery.
+            Recomputes as add-ons change the monthly total. */}
+        {!canSubscribe && (
+          <div
+            className="-mt-2 mb-4 rounded-xl px-3 py-2.5 text-[11px] leading-snug text-[var(--color-muted)]"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+          >
+            {subscriptionItemCount === 0
+              ? 'None of the products in this stack can be subscribed to monthly yet.'
+              : `Monthly subscription unlocks at ${formatGBP(config.minSubscriptionMonthly)}/mo. Your monthly plan works out to ${formatGBP(subscriptionTotal)} — add a product to enable Subscribe & Save.`}
+          </div>
+        )}
 
         {/* Active plan breakdown */}
         {isSub ? (
@@ -189,6 +209,32 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
               >
                 Subscribe &amp; save up to {subscriptionDiscountPct}% — {LEVEL_LABEL[bundleLevel]} bundle →
               </button>
+            )}
+          </div>
+        )}
+
+        {/* Free delivery — applies/unapplies retrospectively with the total */}
+        {config.freeDeliveryThreshold > 0 && (
+          <div
+            className="mb-3 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold"
+            style={
+              freeDelivery
+                ? { color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }
+                : { color: 'var(--color-muted)', background: 'var(--color-surface)', border: '1px solid var(--color-border)' }
+            }
+          >
+            {freeDelivery ? (
+              <>
+                <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+                  <path d="M1.5 5.5h9v7h-9v-7Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                  <path d="M10.5 8h4l3 3v1.5h-7V8Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                  <circle cx="5" cy="14.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+                  <circle cx="14.5" cy="14.5" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+                </svg>
+                Free delivery included
+              </>
+            ) : (
+              `Spend ${formatGBP(freeDeliveryRemaining)} more for free delivery`
             )}
           </div>
         )}
