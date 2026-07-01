@@ -32,18 +32,18 @@ export const PRICING_CONFIG = {
    * subscriptionTier. Falls back to `subscriptionDiscount` if a level is unset.
    */
   levelSubscriptionDiscount: {
-    essentials: 0.1,
-    performance: 0.15,
-    complete: 0.2,
+    essentials: 0.15,
+    performance: 0.2,
+    complete: 0.25,
   } as Record<StackLevel, number>,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
 
   // ── One-off bundle discount tiers (best-qualifying wins) ──
   bundleTiers: [
-    { id: 'bundle-60', label: '£60+ bundle', minSubtotal: 60, discountPct: 0.075 },
-    { id: 'bundle-90', label: '£90+ bundle', minSubtotal: 90, discountPct: 0.125 },
-    { id: 'bundle-120', label: '£120+ bundle', minSubtotal: 120, discountPct: 0.15 },
+    { id: 'bundle-60', label: '£60+ bundle', minSubtotal: 60, discountPct: 0.1 },
+    { id: 'bundle-90', label: '£90+ bundle', minSubtotal: 90, discountPct: 0.15 },
+    { id: 'bundle-120', label: '£120+ bundle', minSubtotal: 120, discountPct: 0.2 },
   ] as DiscountTier[],
   // ── Extra subscription discount tiers, on top of the base rate (best wins) ──
   subscriptionTiers: [] as DiscountTier[],

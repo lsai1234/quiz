@@ -221,13 +221,13 @@ describe('buildSubscriptionCheckout', () => {
     expect(lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/111')
     expect(lines[0].quantity).toBe(1)                 // daily → 1 unit / month
     expect(lines[0].deliveryIntervalMonths).toBe(1)
-    expect(lines[0].pricePerDelivery).toBe(Math.round(30 * 0.85 * 100) / 100)  // 25.50
+    expect(lines[0].pricePerDelivery).toBe(Math.round(30 * 0.8 * 100) / 100)  // 24.00 (performance = 20% off)
     expect(lines[0].attributes).toEqual(
       expect.arrayContaining([{ key: 'plan', value: 'subscription' }]),
     )
-    expect(flatMonthly).toBe(25.5)
+    expect(flatMonthly).toBe(24)
     expect(introDiscountPct).toBe(50)
-    expect(firstMonth).toBe(Math.round(25.5 * 0.5 * 100) / 100)  // 12.75
+    expect(firstMonth).toBe(Math.round(24 * 0.5 * 100) / 100)  // 12.00
     expect(minMonths).toBe(4)
     expect(minTermTotal).toBe(Math.round((firstMonth + 3 * flatMonthly) * 100) / 100)
   })

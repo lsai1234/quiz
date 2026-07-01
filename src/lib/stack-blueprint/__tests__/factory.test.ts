@@ -1,4 +1,4 @@
-import { buildStackBlueprint } from '../factory'
+import { buildStackBlueprint, scoreProduct, getArchetype } from '../factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { QuizAnswers, Goal } from '@/lib/types'
 
@@ -316,14 +316,14 @@ describe('buildStackBlueprint — new scoring signals', () => {
   })
 
   it('45+ age bracket boosts vitamin D priority', () => {
-    const older = buildStackBlueprint(
-      makeAnswers({ goals: ['health'], ageBracket: '45+' }), MOCK_CATALOGUE)
-    const younger = buildStackBlueprint(
-      makeAnswers({ goals: ['health'], ageBracket: '16-24' }), MOCK_CATALOGUE)
-    const olderVitD = older.slots.find(s => s.selectedProductId === 'chrgd-vitamin-d3-k2')
-    const youngerVitD = younger.slots.find(s => s.selectedProductId === 'chrgd-vitamin-d3-k2')
-    // older user should have vitamin D in their stack
-    expect(olderVitD).toBeDefined()
+    // Test the scoring boost directly — robust to how the budget cap happens to
+    // fill the stack (which shifts as bundle discounts change).
+    const vitD = MOCK_CATALOGUE.find(p => p.id === 'chrgd-vitamin-d3-k2')!
+    const older = makeAnswers({ goals: ['health'], ageBracket: '45+' })
+    const younger = makeAnswers({ goals: ['health'], ageBracket: '16-24' })
+    const archetype = getArchetype(older.goals)
+    expect(scoreProduct(vitD, 'health', older, archetype))
+      .toBeGreaterThan(scoreProduct(vitD, 'health', younger, archetype))
   })
 
   it('joint-issues lifestyle flag boosts collagen', () => {

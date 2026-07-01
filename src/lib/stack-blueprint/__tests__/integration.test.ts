@@ -438,7 +438,7 @@ describe('Feature 8: dynamic pricing', () => {
     // monthly baseline is simply discounted by the subscription rate.
     const { subscriptionItemsOneOffTotal, subscriptionTotal } = calculatePricing(bp, allEligible, { ...BASE_ANSWERS, trainingFrequency: 'daily' })
     if (subscriptionItemsOneOffTotal > 0) {
-      const expectedSub = Math.round(subscriptionItemsOneOffTotal * (1 - PRICING_CONFIG.subscriptionDiscount) * 100) / 100
+      const expectedSub = Math.round(subscriptionItemsOneOffTotal * (1 - PRICING_CONFIG.levelSubscriptionDiscount.performance) * 100) / 100
       expect(Math.abs(subscriptionTotal - expectedSub)).toBeLessThan(0.02) // rounding tolerance
     }
   })

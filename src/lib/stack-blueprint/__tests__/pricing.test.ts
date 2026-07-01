@@ -121,7 +121,8 @@ describe('calculatePricing', () => {
     const product = makeProduct({ subscriptionEligible: true })
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(blueprint, [product])
-    const expected = Math.round(30 * (1 - PRICING_CONFIG.subscriptionDiscount) * 100) / 100
+    // makeBlueprint is a 'performance' bundle, so the level rate applies.
+    const expected = Math.round(30 * (1 - PRICING_CONFIG.levelSubscriptionDiscount.performance) * 100) / 100
     expect(p.subscriptionTotal).toBe(expected)
     expect(p.subscriptionSaving).toBe(Math.round((30 - expected) * 100) / 100)
     expect(p.subscriptionSavingPct).toBe(Math.round(((30 - expected) / 30) * 100))
@@ -150,7 +151,7 @@ describe('calculatePricing', () => {
     const p = calculatePricing(blueprint, [longProduct, monthly])
     expect(p.oneOffTotal).toBe(20)                          // one-off uses the 500g tub
     expect(p.subscriptionItemsOneOffTotal).toBe(9)          // subscription uses the monthly refill
-    expect(p.subscriptionTotal).toBe(Math.round(9 * 0.85 * 100) / 100)
+    expect(p.subscriptionTotal).toBe(Math.round(9 * 0.8 * 100) / 100)
     expect(p.subscriptionItemCount).toBe(1)
     expect(p.subscriptionSwappedCount).toBe(1)
     expect(p.excludedFromSubscriptionCount).toBe(0)
@@ -177,7 +178,7 @@ describe('calculatePricing', () => {
     // Both slots map to the same monthly product → billed once.
     expect(p.subscriptionItemCount).toBe(1)
     expect(p.subscriptionItemsOneOffTotal).toBe(8)
-    expect(p.subscriptionTotal).toBe(Math.round(8 * 0.85 * 100) / 100)
+    expect(p.subscriptionTotal).toBe(Math.round(8 * 0.8 * 100) / 100)
     expect(p.subscriptionSwappedCount).toBe(2)
   })
 
@@ -193,7 +194,7 @@ describe('calculatePricing', () => {
     expect(p.rrpTotal).toBe(60)   // 40 + 20 (no compare for B)
     expect(p.bundleSaving).toBe(10)
     // Only prodA qualifies for the monthly plan; prodB (ineligible) is excluded.
-    const subA = Math.round(30 * 0.85 * 100) / 100
+    const subA = Math.round(30 * 0.8 * 100) / 100
     expect(p.subscriptionTotal).toBe(subA)
     expect(p.subscriptionItemsOneOffTotal).toBe(30)
     expect(p.subscriptionItemCount).toBe(1)
@@ -287,7 +288,7 @@ describe('consumption protocol & monthly quantities', () => {
     const [line] = buildSubscriptionPlan(bp, [daily], answersWith('1-2x'))
     expect(line.cadence).toBe('daily')
     expect(line.shipEveryMonths).toBe(1)
-    expect(line.monthlyPrice).toBe(Math.round(20 * 0.85 * 100) / 100)
+    expect(line.monthlyPrice).toBe(Math.round(20 * 0.8 * 100) / 100)
   })
 
   it('scales a per-workout product to training frequency', () => {
@@ -300,12 +301,12 @@ describe('consumption protocol & monthly quantities', () => {
     expect(light.cadence).toBe('per-workout')
     expect(light.occasionsPerMonth).toBe(15)
     expect(light.shipEveryMonths).toBe(2)
-    expect(light.monthlyPrice).toBe(Math.round((30 / 2) * 0.85 * 100) / 100)
+    expect(light.monthlyPrice).toBe(Math.round((30 / 2) * 0.8 * 100) / 100)
 
     // Daily training → 30/month → ships every month at full quantity
     const [heavy] = buildSubscriptionPlan(bp, [pre], answersWith('daily'))
     expect(heavy.shipEveryMonths).toBe(1)
-    expect(heavy.monthlyPrice).toBe(Math.round(30 * 0.85 * 100) / 100)
+    expect(heavy.monthlyPrice).toBe(Math.round(30 * 0.8 * 100) / 100)
 
     // The quantity flows through to the headline subscription total
     expect(calculatePricing(bp, [pre], answersWith('3-4x')).subscriptionTotal).toBe(light.monthlyPrice)
@@ -320,8 +321,8 @@ describe('consumption protocol & monthly quantities', () => {
     expect(line.cadence).toBe('daily')
     expect(line.shipEveryMonths).toBe(3)      // 100 servings ÷ 30/mo ≈ 3.3 → 3
     expect(line.unitsPerShipment).toBe(1)
-    expect(line.pricePerDelivery).toBe(Math.round(19.99 * 0.85 * 100) / 100)        // 16.99 per delivery
-    expect(line.monthlyPrice).toBe(Math.round((19.99 / 3) * 0.85 * 100) / 100)      // 5.66 / mo
+    expect(line.pricePerDelivery).toBe(Math.round(19.99 * 0.8 * 100) / 100)         // per delivery
+    expect(line.monthlyPrice).toBe(Math.round((19.99 / 3) * 0.8 * 100) / 100)       // / mo
     // The monthly figure and the per-delivery figure stay consistent.
     expect(Math.abs(line.monthlyPrice - line.pricePerDelivery / line.shipEveryMonths)).toBeLessThan(0.01)
   })
@@ -350,7 +351,7 @@ describe('consumption protocol & monthly quantities', () => {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a])
-    const monthly = Math.round(30 * 0.85 * 100) / 100   // daily, 1/month → 25.50
+    const monthly = Math.round(30 * 0.8 * 100) / 100   // daily, 1/month
     expect(p.subscriptionTotal).toBe(monthly)
     expect(p.subscriptionIntroDiscountPct).toBe(Math.round(PRICING_CONFIG.introOffer.firstMonthDiscount * 100))
     expect(p.subscriptionFirstMonth).toBe(Math.round(monthly * (1 - PRICING_CONFIG.introOffer.firstMonthDiscount) * 100) / 100)
@@ -405,13 +406,13 @@ describe('pricing rules — discount tiers', () => {
       { selectedProductId: 'a', selectedVariantId: 'v' },
       { selectedProductId: 'b', selectedVariantId: 'v2', slotType: 'performance' } as never,
     ])
-    const p = calculatePricing(bp, [a, b]) // subtotal 140 → £120+ tier (15%)
-    expect(p.bundleDiscountPct).toBe(15)
+    const p = calculatePricing(bp, [a, b]) // subtotal 140 → £120+ tier (20%)
+    expect(p.bundleDiscountPct).toBe(20)
     expect(p.bundleTierLabel).toBe('£120+ bundle')
-    expect(p.oneOffTotal).toBe(round2(140 * 0.85))
+    expect(p.oneOffTotal).toBe(round2(140 * 0.8))
     // The pre-discount selling subtotal drives the customer-facing saving line.
     expect(p.oneOffSubtotal).toBe(140)
-    expect(round2(p.oneOffSubtotal - p.oneOffTotal)).toBe(round2(140 * 0.15))
+    expect(round2(p.oneOffSubtotal - p.oneOffTotal)).toBe(round2(140 * 0.2))
   })
 
   it('gives no bundle discount below the first tier threshold', () => {
@@ -444,10 +445,10 @@ describe('bundle save-rate consistency (budget step ↔ final screen)', () => {
     }
   })
 
-  it('advertises the expected default rates: 10 / 15 / 20', () => {
-    expect(Math.round(levelSubscriptionRate(levelForStackPreference('simple')) * 100)).toBe(10)
-    expect(Math.round(levelSubscriptionRate(levelForStackPreference('balanced')) * 100)).toBe(15)
-    expect(Math.round(levelSubscriptionRate(levelForStackPreference('complete')) * 100)).toBe(20)
+  it('advertises the expected default rates: 15 / 20 / 25', () => {
+    expect(Math.round(levelSubscriptionRate(levelForStackPreference('simple')) * 100)).toBe(15)
+    expect(Math.round(levelSubscriptionRate(levelForStackPreference('balanced')) * 100)).toBe(20)
+    expect(Math.round(levelSubscriptionRate(levelForStackPreference('complete')) * 100)).toBe(25)
   })
 })
 
@@ -481,7 +482,7 @@ describe('pricing rules — subscription profit guardrails', () => {
   it('reports monthly margin and is profitable on cancel under the default config', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 40, cost: 10, compareAtPrice: null, variants: oneVariant(40) })
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
-    expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.85 - 10))  // 34 - 10 = 24
+    expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.8 - 10))  // 32 - 10 = 22
     expect(p.subscriptionProfitableOnCancel).toBe(true)
     expect(p.subscriptionCommittedMargin).toBe(round2(p.subscriptionMinTermTotal - 4 * 10)) // monthly delivery → 4 deliveries
   })

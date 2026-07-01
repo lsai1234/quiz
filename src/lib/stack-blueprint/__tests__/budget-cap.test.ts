@@ -53,12 +53,12 @@ describe('budgetCapFor', () => {
 
 describe('discountedOneOffTotal', () => {
   it('sums lines and applies the best qualifying bundle tier', () => {
-    // Two £50 lines (£100 subtotal) → qualifies for the £90+ tier (12.5%).
+    // Two £50 lines (£100 subtotal) → qualifies for the £90+ tier (15%).
     const lines = [
       { price: 50, cost: 10 },
       { price: 50, cost: 10 },
     ]
-    expect(discountedOneOffTotal(lines)).toBeCloseTo(87.5, 2)
+    expect(discountedOneOffTotal(lines)).toBeCloseTo(85, 2)
   })
 })
 
