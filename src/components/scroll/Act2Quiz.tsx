@@ -376,6 +376,87 @@ function AnswerOption({
   )
 }
 
+// ─── Deep-dive loading — the AI writing your questions ───────────────────────
+// A charged "thinking" moment in the house language: the bolt breathes inside
+// a glass orb with an orbiting spark, status copy cycles, and two ghost
+// question cards shimmer where the real ones will land.
+
+const DD_MESSAGES = ['Reading your answers…', 'Spotting the patterns…', 'Writing your questions…']
+
+function DeepDiveLoading({ reducedMotion }: { reducedMotion: boolean }) {
+  const [msg, setMsg] = useState(0)
+
+  useEffect(() => {
+    if (reducedMotion) return
+    const t = setInterval(() => setMsg((m) => Math.min(m + 1, DD_MESSAGES.length - 1)), 1500)
+    return () => clearInterval(t)
+  }, [reducedMotion])
+
+  return (
+    <div aria-live="polite" aria-busy="true" className="flex flex-col items-center pt-2">
+      {/* Bolt orb */}
+      <div className="relative mb-5" style={{ width: 64, height: 64 }}>
+        <div
+          className="absolute inset-0 rounded-full flex items-center justify-center"
+          style={{
+            background: 'radial-gradient(circle at 38% 30%, rgba(0,212,255,0.16), rgba(0,212,255,0.04) 60%)',
+            boxShadow: 'inset 0 0 0 1px rgba(0,212,255,0.25), 0 0 18px -4px rgba(0,212,255,0.55)',
+            animation: reducedMotion ? undefined : 'dd-orb 2s ease-in-out infinite',
+          }}
+        >
+          <svg width="20" height="26" viewBox="0 0 100 115" fill="none">
+            <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#00D4FF" style={{ filter: 'drop-shadow(0 0 6px rgba(0,212,255,0.8))' }} />
+          </svg>
+        </div>
+        {!reducedMotion && (
+          <div className="absolute top-1/2 left-1/2" style={{ animation: 'dd-orbit 2.6s linear infinite' }}>
+            <div className="rounded-full" style={{ width: 4, height: 4, marginLeft: -2, marginTop: -2, background: '#fff', boxShadow: '0 0 8px 2px rgba(0,212,255,0.9)' }} />
+          </div>
+        )}
+      </div>
+
+      {/* Cycling status */}
+      <p
+        key={`ddmsg-${msg}`}
+        className="text-[13px] font-medium text-white/60 mb-7"
+        style={{ fontFamily: 'var(--font-display)', animation: reducedMotion ? undefined : 'fade-up 0.4s ease-out both' }}
+      >
+        {reducedMotion ? 'Writing your questions…' : DD_MESSAGES[msg]}
+      </p>
+
+      {/* Ghost question cards — the shape of what's coming */}
+      <div className="w-full flex flex-col gap-6">
+        {[0, 1].map((card) => (
+          <div
+            key={`dd-ghost-${card}`}
+            className="relative w-full overflow-hidden"
+            style={{ animation: reducedMotion ? undefined : `slide-up-in 0.4s cubic-bezier(0.22,1,0.36,1) ${card * 0.12}s both` }}
+          >
+            <div className="h-3.5 rounded-full mb-2" style={{ width: card === 0 ? '72%' : '58%', background: 'rgba(255,255,255,0.08)' }} />
+            <div className="h-2.5 rounded-full mb-3.5" style={{ width: '42%', background: 'rgba(255,255,255,0.045)' }} />
+            <div className="flex flex-col gap-2">
+              {[0, 1, 2].map((row) => (
+                <div key={`dd-ghost-${card}-${row}`} className="h-[46px] rounded-xl border border-white/[0.06] bg-white/[0.02]" />
+              ))}
+            </div>
+            {/* light sweep across the whole card */}
+            {!reducedMotion && (
+              <div
+                className="absolute inset-y-0 pointer-events-none"
+                style={{
+                  width: '32%',
+                  background: 'linear-gradient(100deg, transparent, rgba(0,212,255,0.05) 40%, rgba(255,255,255,0.08) 50%, rgba(0,212,255,0.05) 60%, transparent)',
+                  animation: `charge-shimmer 2s ease-in-out ${card * 0.4}s infinite`,
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CHRGDIcon({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
@@ -1090,16 +1171,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
           {/* ── Deep dive (AI-tailored follow-ups) ── */}
           {id === 'deepDive' && (deepDiveStatus !== 'ready' || !deepDiveQuestions ? (
-            <div className="flex flex-col gap-2.5" aria-live="polite" aria-busy="true">
-              <p className="text-xs text-white/35 mb-1">Writing your follow-ups…</p>
-              {Array.from({ length: 3 }).map((_, i) => (
-                <div
-                  key={`dd-skeleton-${i}`}
-                  className="h-14 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
-              ))}
-            </div>
+            <DeepDiveLoading reducedMotion={reducedMotion} />
           ) : (
             <div className="flex flex-col gap-7">
               {deepDiveQuestions.map((dq, qi) => (

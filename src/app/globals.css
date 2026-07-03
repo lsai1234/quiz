@@ -116,6 +116,47 @@
   100% { opacity: 0;   transform: scale(1.6); }
 }
 
+/* Charge rail / battery — energy visibly streaming upward inside the fill.
+   The overlay is double-height with a periodic gradient; one period of travel
+   loops seamlessly. */
+@keyframes rail-flow {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-28px); }
+}
+
+/* Charge rail — a bright streak rushing up the fill on each answer */
+@keyframes rail-rise {
+  0%   { transform: translateY(110%); opacity: 0; }
+  18%  { opacity: 0.95; }
+  100% { transform: translateY(-30%); opacity: 0; }
+}
+
+/* Deep-dive loading — the bolt orb breathing while the AI writes */
+@keyframes dd-orb {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 18px -4px rgba(0,212,255,0.55); }
+  50%      { transform: scale(1.06); box-shadow: 0 0 30px -2px rgba(0,212,255,0.85); }
+}
+
+/* Deep-dive loading — an orbiting spark around the orb */
+@keyframes dd-orbit {
+  from { transform: rotate(0deg)   translateX(27px) rotate(0deg); }
+  to   { transform: rotate(360deg) translateX(27px) rotate(-360deg); }
+}
+
+/* Act 3 — ring contracting INTO the core as it absorbs each energy arc */
+@keyframes core-absorb {
+  0%   { opacity: 0;    transform: translate(-50%, -50%) scale(1.35); }
+  30%  { opacity: 0.55; }
+  100% { opacity: 0;    transform: translate(-50%, -50%) scale(0.82); }
+}
+
+/* Act 3 — full-screen power-on flash when the machine wakes */
+@keyframes power-flash {
+  0%   { opacity: 0; }
+  22%  { opacity: 0.95; }
+  100% { opacity: 0; }
+}
+
 @keyframes slide-from-right {
   from { opacity: 0; transform: translateX(32px); }
   to   { opacity: 1; transform: translateX(0); }

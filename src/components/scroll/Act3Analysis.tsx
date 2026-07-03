@@ -54,6 +54,8 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   const highlightRef = useRef<HTMLDivElement>(null)
   const slotRef = useRef<HTMLDivElement>(null)
   const textRef = useRef<HTMLParagraphElement>(null)
+  const ambientRef = useRef<HTMLDivElement>(null)
+  const screenFlashRef = useRef<HTMLDivElement>(null)
   const [docked, setDocked] = useState(reducedMotion)
 
   useLayoutEffect(() => {
@@ -64,13 +66,15 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
     let finished = false
 
     // p = charge transferred into the machine (0→1). Battery charge = 1 − p.
-    // One source drives the battery fill, the % counter and the core ring.
+    // One source drives the battery fill, the % counter, the core ring and the
+    // ambient room glow — the scene itself brightens as the machine powers up.
     const proxy = { p: 0 }
     const render = () => {
       const charge = 1 - proxy.p
       if (fillRef.current) fillRef.current.style.height = `${Math.max(0, charge * 100)}%`
       if (pctRef.current) pctRef.current.textContent = `${Math.round(charge * 100)}%`
       if (coreRingRef.current) coreRingRef.current.style.strokeDashoffset = String(CORE_CIRC * (1 - proxy.p))
+      if (ambientRef.current && !reducedMotion) ambientRef.current.style.opacity = String(proxy.p * 0.75)
     }
     render()
 
@@ -89,6 +93,8 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       if (textRef.current) textRef.current.textContent = 'Powering on'
       gsap.to(proxy, { p: 1, duration: 0.5, ease: 'power2.in', onUpdate: render })
       if (flareRef.current) flareRef.current.style.animation = 'core-flare 0.65s ease-out forwards'
+      // The machine wakes: a full-screen flash rides the last of the charge.
+      if (screenFlashRef.current) screenFlashRef.current.style.animation = 'power-flash 0.8s ease-out 0.3s forwards'
       gsap.to(coreRef.current, { scale: 1.12, duration: 0.28, ease: 'power2.out', delay: 0.18, yoyo: true, repeat: 1 })
       gsap.to(batteryRef.current, { opacity: 0.25, duration: 0.4, ease: 'power2.in', delay: 0.2 })
       gsap.to(vizRef.current, { opacity: 0, scale: 1.06, duration: 0.5, ease: 'power2.in', delay: 0.6, onComplete })
@@ -171,6 +177,29 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   return (
     <div className="w-full min-h-[100dvh] bg-[#0A0A0A] flex flex-col items-center justify-center px-6 overflow-hidden">
 
+      {/* Ambient room glow — the scene brightens as charge transfers into the
+          machine (opacity driven from the same source as the battery fill). */}
+      <div
+        ref={ambientRef}
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{
+          opacity: 0,
+          background: 'radial-gradient(75% 55% at 50% 58%, rgba(0,212,255,0.13), rgba(0,212,255,0.035) 55%, transparent 75%)',
+        }}
+      />
+
+      {/* Power-on flash — fires once as the machine wakes at the end. */}
+      <div
+        ref={screenFlashRef}
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-40"
+        style={{
+          opacity: 0,
+          background: 'radial-gradient(60% 45% at 50% 55%, rgba(255,255,255,0.9), rgba(0,212,255,0.5) 45%, transparent 75%)',
+        }}
+      />
+
       {/* Battery — a single element that starts as the quiz charge rail and morphs
           into this glass cell (fixed, sat over its in-flow slot below). */}
       <div ref={batteryRef} style={{ position: 'fixed', zIndex: 30, width: 68, height: 120, opacity: reducedMotion ? 1 : 0 }}>
@@ -190,7 +219,20 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
           }}
         >
           {/* charge fill */}
-          <div ref={fillRef} className="absolute inset-x-0 bottom-0" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
+          <div ref={fillRef} className="absolute inset-x-0 bottom-0 overflow-hidden" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
+            {/* energy stream — the same upward drift the quiz rail carries,
+                so the cell still reads as live charge, not a static block */}
+            {!reducedMotion && (
+              <div
+                className="absolute inset-x-0"
+                style={{
+                  top: 0,
+                  height: 'calc(100% + 28px)',
+                  background: 'repeating-linear-gradient(to top, transparent 0 18px, rgba(255,255,255,0.13) 18px 22px, transparent 22px 28px)',
+                  animation: 'rail-flow 1.6s linear infinite',
+                }}
+              />
+            )}
             <div className="absolute inset-x-0 top-0" style={{ height: 8, background: 'linear-gradient(180deg, rgba(255,255,255,0.65), transparent)' }} />
           </div>
           {/* bolt watermark */}
@@ -227,6 +269,14 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         {/* Machine core */}
         <div ref={coreRef} className="relative" style={{ width: 190, height: 190 }}>
           <div ref={flareRef} className="absolute top-1/2 left-1/2 rounded-full pointer-events-none" style={{ width: 190, height: 190, opacity: 0, background: 'radial-gradient(circle, rgba(0,212,255,0.55), transparent 60%)' }} />
+          {/* absorb pulses — rings contracting into the core as each arc lands */}
+          {docked && !reducedMotion && [0, 0.34, 0.68].map((d, i) => (
+            <div
+              key={`absorb-${i}`}
+              className="absolute top-1/2 left-1/2 rounded-full pointer-events-none border border-[#00D4FF]/50"
+              style={{ width: 128, height: 128, opacity: 0, animation: `core-absorb 1s ease-in ${d + 0.55}s infinite` }}
+            />
+          ))}
           {[0.5, 0.72, 0.94].map((r, i) => (
             <div key={i} className="absolute rounded-full border border-[#00D4FF]/20 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
               style={{ width: `${r * 190}px`, height: `${r * 190}px`, animation: reducedMotion ? undefined : `ring-pulse ${2.4 + i * 0.6}s ease-out ${i * 0.5}s infinite` }} />
