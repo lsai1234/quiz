@@ -79,6 +79,12 @@ export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]):
   const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? 'unknown')
   const lifestyle = answers.lifestyle.length ? answers.lifestyle.join(', ') : 'none noted'
 
+  // Q&A from the AI deep-dive step — the root-cause context behind the goals
+  // (e.g. WHY this person is low on energy), which the flat profile can't carry.
+  const deepDive = Object.values(answers.dynamicAnswers ?? {})
+    .filter(d => d.question && d.answer)
+    .map(d => `- ${stripMd(d.question)} → ${stripMd(d.answer)}`)
+
   const slotBlocks = slots.map(s => {
     const opts = s.options.map(o => {
       const flags = [o.vegan ? 'vegan' : null, o.stimulant ? 'stimulant' : null].filter(Boolean).join(', ')
@@ -99,7 +105,7 @@ ${firstName ? `- Name: ${firstName}` : ''}
 - Lifestyle factors: ${lifestyle}
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
 - Monthly budget: ${budget}
-
+${deepDive.length ? `\nDEEPER CONTEXT (their answers to tailored follow-up questions — use this to break ties between options and to make the reasons specific)\n${deepDive.join('\n')}\n` : ''}
 BUDGET RULE
 - The combined one-off list price of the products you choose must stay within the top of this person's monthly budget. If a pricier option would push the total over, choose a cheaper option from that slot that still fits. Use the budget well — but never exceed it.
 

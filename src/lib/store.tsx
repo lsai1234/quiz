@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
+import type { DynamicQuestion } from '@/lib/ai-questions'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
@@ -38,6 +39,18 @@ interface QuizStore {
   catalogueProducts: CatalogueProduct[]
   setCatalogueProducts: (products: CatalogueProduct[]) => void
 
+  // AI-generated deep-dive follow-up questions (the deepDive quiz step).
+  // Prefetched mid-quiz; `key` fingerprints the answers they were generated
+  // for so stale questions are regenerated when the user back-edits.
+  deepDiveQuestions: DynamicQuestion[] | null
+  deepDiveStatus: 'idle' | 'loading' | 'ready'
+  deepDiveKey: string | null
+  setDeepDive: (s: {
+    questions?: DynamicQuestion[] | null
+    status?: 'idle' | 'loading' | 'ready'
+    key?: string | null
+  }) => void
+
   setStep: (step: number) => void
   nextStep: () => void
   prevStep: () => void
@@ -72,6 +85,7 @@ export const defaultAnswers: QuizAnswers = {
   currentVitamins: [],
   preferredFormats: [],
   wellbeingAnswers: {},
+  dynamicAnswers: {},
   caffeineLevel: null,
   budget: null,
   stackPreference: null,
@@ -97,6 +111,16 @@ export const useQuizStore = create<QuizStore>((set) => ({
   catalogueSource: 'mock',
   stackBlueprint: null,
   catalogueProducts: MOCK_CATALOGUE,
+  deepDiveQuestions: null,
+  deepDiveStatus: 'idle',
+  deepDiveKey: null,
+
+  setDeepDive: (s) =>
+    set((prev) => ({
+      deepDiveQuestions: s.questions !== undefined ? s.questions : prev.deepDiveQuestions,
+      deepDiveStatus: s.status ?? prev.deepDiveStatus,
+      deepDiveKey: s.key !== undefined ? s.key : prev.deepDiveKey,
+    })),
 
   setStep: (step) => set({ step }),
   nextStep: () => set((s) => ({ step: s.step + 1 })),
@@ -130,5 +154,5 @@ export const useQuizStore = create<QuizStore>((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, aiReasons: {}, stackPersonalised: false, stackReady: false }),
+  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
 }))

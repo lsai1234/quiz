@@ -52,6 +52,12 @@ export async function POST(req: NextRequest) {
 
     const isWellbeingOnly = answers.goals.length > 0 && !answers.goals.some(g => PERFORMANCE_GOAL_IDS.includes(g))
 
+    // Q&A from the AI deep-dive step — day-to-day context that makes the
+    // identity feel written for this person rather than their goal labels.
+    const deepDive = Object.values(answers.dynamicAnswers ?? {})
+      .filter(d => d.question && d.answer)
+      .map(d => `- ${d.question} → ${d.answer}`)
+
     const prompt = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand.
 
 Create a personalised supplement stack identity for ${isWellbeingOnly ? 'someone focused on everyday wellbeing (not a gym-focused athlete — avoid training/athlete language)' : 'an athlete'} with this profile:
@@ -66,7 +72,7 @@ ${answers.trainingFrequency ? `- Training: ${freq} per week, ${type}-focused ses
 - Budget: £${budget}/month
 - Stack preference: ${pref}
 - Preferred product formats: ${formats}
-
+${deepDive.length ? `\nDeeper context from their tailored follow-up answers:\n${deepDive.join('\n')}\n` : ''}
 Return ONLY a JSON object (no markdown, no explanation, no asterisks in any field) with exactly these fields:
 {
   "name": "A punchy 2-3 word stack name (e.g. 'Iron Foundations', 'Peak Protocol', 'Lean Machine'). Plain text only — no asterisks or markdown.",

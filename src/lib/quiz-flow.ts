@@ -14,6 +14,7 @@ export type StepId =
   | 'type'
   | 'lifestyle'
   | 'diet'
+  | 'deepDive'
   | 'supps'
   | 'caffeine'
   | 'trainingTime'
@@ -41,6 +42,7 @@ export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'type', section: 'TRAINING', q: "What's your training style?", hint: 'Pick everything you do — add as many as apply.', tracks: ['performance'], advance: 'manual' },
   { id: 'lifestyle', section: 'LIFESTYLE', q: 'Tell us about yourself', hint: 'Select anything that applies — helps us fine-tune.', wellbeing: { q: 'Tell us about your day-to-day', hint: 'Select anything that applies — context changes what we recommend.' }, advance: 'manual' },
   { id: 'diet', section: 'NUTRITION', q: "How's the diet?", hint: 'Honest answer = better results.', advance: 'auto' },
+  { id: 'deepDive', section: 'GOING DEEPER', q: 'A couple of quick follow-ups.', hint: 'Written for you, based on what you’ve told us so far.', advance: 'manual' },
   { id: 'supps', section: 'WHAT YOU HAVE', q: 'Already using any of these?', hint: "We won't recommend what you've already got.", wellbeing: { q: 'Already taking any of these?', hint: "We won't recommend what you've already got covered." }, advance: 'manual' },
   { id: 'caffeine', section: 'ENERGY', q: 'How do you handle caffeine?', hint: 'Shapes your pre-workout recommendation.', advance: 'auto' },
   { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'Caffeine timing matters — tells us whether to include stimulants.', wellbeing: { q: 'When do you usually move or exercise?', hint: 'Even light exercise timing affects what we recommend.' }, advance: 'auto' },

@@ -7,6 +7,8 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { calculatePricing, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
+import { withDeepDiveSignals } from '@/lib/ai-questions'
+import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from '@/lib/deep-dive'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import type {
@@ -394,6 +396,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const {
     step, answers, setStep,
     setGoals, setAnswer, setIdentity, setStackLevel, setStackReady,
+    deepDiveQuestions, deepDiveStatus,
   } = useQuizStore()
 
   const { products: liveCatalogue } = useCatalogueProducts()
@@ -417,7 +420,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
     return BUDGET_DATA.map((b) => {
       try {
-        const a = { ...answers, budget: b.id, stackPreference: b.pref }
+        const a = { ...withDeepDiveSignals(answers), budget: b.id, stackPreference: b.pref }
         const bp = buildStackBlueprint(a, catalogue)
         // One-off total decides the free-delivery perk (not shown as a price —
         // the card advertises the one-off budget range instead).
@@ -431,6 +434,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   }, [
     answers.goals, answers.lifestyle, answers.currentSupplements, answers.currentVitamins,
     answers.stimPreference, answers.caffeineLevel, answers.wellbeingAnswers, answers.diet,
+    answers.dynamicAnswers,
     answers.preferredFormats, answers.trainingFocus, answers.gender, answers.ageBracket,
     answers.trainingTime, answers.trainingExperience, liveCatalogue,
   ])
@@ -498,6 +502,17 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, animKey, subQuestion, index, answers])
 
+  // On the deep-dive step: make sure generation is running (covers back-edits
+  // that changed the answers), and if it still isn't ready after the wait
+  // budget, fall back to the static question bank rather than blocking.
+  useEffect(() => {
+    if (id !== 'deepDive') return
+    maybePrefetchDeepDive()
+    if (useQuizStore.getState().deepDiveStatus === 'ready') return
+    const t = setTimeout(applyDeepDiveFallback, DEEP_DIVE_WAIT_MS)
+    return () => clearTimeout(t)
+  }, [id])
+
   // When a follow-up sub-question appears, bring it into view so it's never
   // hidden below the fold — the user shouldn't have to guess that it's there.
   useEffect(() => {
@@ -527,6 +542,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setSubQuestion(null)
     setSubAnswerId(null)
     if (id === 'personal') commitPersonal()
+    // Prefetch the AI deep-dive questions with a full step of headroom (diet
+    // auto-advances) so they're ready when the user arrives at the step.
+    if (id === 'lifestyle') maybePrefetchDeepDive()
     if (id === 'review') { handleFinish(); return }
     setDirection('forward')
     setAnimKey((k) => k + 1)
@@ -597,14 +615,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
       const { personaliseBlueprint } = await import('@/lib/stack-blueprint/personalise')
       const catalogueProducts = useQuizStore.getState().catalogueProducts
-      const baseBlueprint = buildStackBlueprint(answers, catalogueProducts)
+      // Deep-dive signal tags folded into lifestyle sharpen the deterministic
+      // ranking; the raw Q&A transcript rides along in dynamicAnswers for the
+      // AI prompts.
+      const engineAnswers = withDeepDiveSignals(answers)
+      const baseBlueprint = buildStackBlueprint(engineAnswers, catalogueProducts)
       const [identity, blueprint] = await Promise.all([
         fetch('/api/generate-identity', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(answers),
+          body: JSON.stringify(engineAnswers),
         }).then(r => r.json()).catch(() => FALLBACK_IDENTITY),
-        personaliseBlueprint(answers, baseBlueprint, catalogueProducts),
+        personaliseBlueprint(engineAnswers, baseBlueprint, catalogueProducts),
       ])
       setIdentity(identity ?? FALLBACK_IDENTITY)
       setStackLevel(levelForStackPreference(answers.stackPreference))
@@ -622,7 +644,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     switch (id) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
-      case 'lifestyle': case 'supps': case 'formats': case 'review': return true
+      case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
       case 'type': return answers.trainingType.length > 0
       case 'budget': return !!answers.budget
       default: return false
@@ -653,6 +675,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     const lifestyleData = answers.track === 'wellbeing' ? WELLBEING_LIFESTYLE_DATA : LIFESTYLE_DATA
     if (answers.lifestyle.length) rows.push({ label: 'Lifestyle', value: labelsOf(lifestyleData, answers.lifestyle).join(', '), edit: 'lifestyle' })
     if (answers.diet) rows.push({ label: 'Diet', value: labelOf(DIET_DATA, answers.diet), edit: 'diet' })
+    const dyn = Object.values(answers.dynamicAnswers ?? {})
+    if (dyn.length) rows.push({ label: 'Your follow-ups', value: dyn.map(d => d.answer).join(', '), edit: 'deepDive' })
     const have = answers.track === 'wellbeing'
       ? labelsOf(WELLBEING_SUPPS_DATA, answers.currentVitamins)
       : [...labelsOf(SUPPS_DATA, answers.currentSupplements), ...labelsOf(VITAMIN_OPTIONS, answers.currentVitamins)]
@@ -1042,6 +1066,46 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               )}
             </div>
           )}
+
+          {/* ── Deep dive (AI-tailored follow-ups) ── */}
+          {id === 'deepDive' && (deepDiveStatus !== 'ready' || !deepDiveQuestions ? (
+            <div className="flex flex-col gap-2.5" aria-live="polite" aria-busy="true">
+              <p className="text-xs text-white/35 mb-1">Writing your follow-ups…</p>
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={`dd-skeleton-${i}`}
+                  className="h-14 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse"
+                  style={{ animationDelay: `${i * 0.15}s` }}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-7">
+              {deepDiveQuestions.map((dq, qi) => (
+                <div
+                  key={`dd-${dq.id}`}
+                  className={qi > 0 ? 'pt-6 border-t border-white/8' : ''}
+                  style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+                >
+                  <p className="text-base font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>{dq.question}</p>
+                  <p className="text-xs text-white/35 mb-3">{dq.hint}</p>
+                  <div className="flex flex-col gap-2">
+                    {dq.options.map((opt) => (
+                      <AnswerOption
+                        key={`dd-${dq.id}-${opt.id}`}
+                        label={opt.label} sub={opt.sub}
+                        selected={answers.dynamicAnswers?.[dq.id]?.optionId === opt.id}
+                        onClick={() => setAnswer('dynamicAnswers', {
+                          ...(answers.dynamicAnswers ?? {}),
+                          [dq.id]: { optionId: opt.id, question: dq.question, answer: opt.label, signals: opt.signals },
+                        })}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
 
           {/* ── Caffeine ── */}
           {id === 'caffeine' && (

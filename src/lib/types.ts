@@ -43,6 +43,20 @@ export type StimPreference = 'yes' | 'no'
 
 export type QuizTrack = 'performance' | 'wellbeing'
 
+/** One answered AI deep-dive follow-up. Stores the display text alongside the
+ *  engine signals so the Q&A can travel with the answers object into the AI
+ *  prompts (personalise-stack / generate-identity) and the review screen. */
+export interface DynamicAnswer {
+  /** Chosen option id — selection state for re-rendering the step. */
+  optionId: string
+  /** The question as shown to the user. */
+  question: string
+  /** The chosen option's label as shown to the user. */
+  answer: string
+  /** Whitelisted lifestyle signal tags implied by the chosen option. */
+  signals: string[]
+}
+
 export interface QuizAnswers {
   name: string
   /** Which quiz track the user chose on the goal step */
@@ -62,6 +76,9 @@ export interface QuizAnswers {
   /** Answers to wellbeing follow-up questions, keyed by question id
    *  (sleepQuality, stressPattern, immuneBaseline, collagenOk) */
   wellbeingAnswers: Record<string, string>
+  /** Answers to the AI-generated deep-dive follow-ups, keyed by question id.
+   *  Optional — older sessions and API payloads may not carry it. */
+  dynamicAnswers?: Record<string, DynamicAnswer>
   caffeineLevel: CaffeineLevel | null
   budget: Budget | null
   stackPreference: StackPreference | null
