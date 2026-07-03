@@ -7,11 +7,11 @@ import {
   type DynamicQuestion,
 } from './ai-questions'
 
-// Client-side orchestration for the AI deep-dive step. Generation is
-// prefetched when the user leaves the lifestyle step, so the questions are
-// normally ready before they arrive at deepDive — the quiz never waits on
-// OpenAI. Every failure path lands on the static fallback bank, so the step
-// always renders.
+// Client-side orchestration for the optional AI deep-dive step. Generation is
+// prefetched when the user arrives at the review screen, so if they take the
+// "go deeper" offer the questions are normally already waiting — the quiz
+// never waits on OpenAI. Every failure path lands on the static fallback
+// bank, so the step always renders.
 
 /** How long the deepDive step will show its loading state before giving up
  *  and rendering the fallback questions. */

@@ -158,8 +158,6 @@ describe('deepDiveKey', () => {
     const a = makeAnswers({ goals: ['muscle', 'energy'], budget: '30-50' })
     const b = makeAnswers({ goals: ['energy', 'muscle'], budget: '80-plus' })
     expect(deepDiveKey(a)).toBe(deepDiveKey(b))
-    // diet is answered between prefetch and arrival — must not invalidate
-    expect(deepDiveKey(makeAnswers({ diet: null }))).toBe(deepDiveKey(makeAnswers({ diet: 'poor' })))
   })
 
   it('changes when generation-relevant answers change', () => {
@@ -167,6 +165,7 @@ describe('deepDiveKey', () => {
     expect(deepDiveKey(a)).not.toBe(deepDiveKey(makeAnswers({ goals: ['recovery'] })))
     expect(deepDiveKey(a)).not.toBe(deepDiveKey(makeAnswers({ lifestyle: ['poor-sleep'] })))
     expect(deepDiveKey(a)).not.toBe(deepDiveKey(makeAnswers({ track: 'wellbeing' })))
+    expect(deepDiveKey(a)).not.toBe(deepDiveKey(makeAnswers({ diet: 'poor' })))
   })
 })
 

@@ -453,7 +453,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   // ── Charge rail (the getCHRGD signature) — climbs as you answer ──
   // Tops out at ~92% in the quiz; Act 3 finishes the charge and "powers on".
-  const charge = Math.round(8 + (index / Math.max(1, seq.length - 1)) * 84)
+  // The optional deepDive step sits after review, so review is full charge
+  // and deepDive just holds it there.
+  const charge = Math.min(92, Math.round(8 + (index / Math.max(1, seq.length - 2)) * 84))
   const [surgeKey, setSurgeKey] = useState(0)
   const prevChargeRef = useRef(charge)
   useEffect(() => {
@@ -495,6 +497,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     return () => { el.removeEventListener('scroll', recomputeMoreBelow); ro?.disconnect() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+  // Every step starts at the top of its options — without this, the scroll
+  // offset left by a long previous step (e.g. a scrolled review list) carries
+  // over and the next step opens mid-content.
+  useEffect(() => {
+    optionsRef.current?.scrollTo({ top: 0 })
+  }, [index])
+
   // Recompute after content swaps (step change, sub-question, answer toggles).
   useEffect(() => {
     const t = setTimeout(recomputeMoreBelow, 80)
@@ -502,10 +511,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, animKey, subQuestion, index, answers])
 
-  // On the deep-dive step: make sure generation is running (covers back-edits
+  // Prefetch the AI deep-dive questions on arrival at review, so if the user
+  // takes the "go deeper" offer the questions are already waiting. On the
+  // deep-dive step itself: make sure generation is running (covers back-edits
   // that changed the answers), and if it still isn't ready after the wait
   // budget, fall back to the static question bank rather than blocking.
   useEffect(() => {
+    if (id === 'review') { maybePrefetchDeepDive(); return }
     if (id !== 'deepDive') return
     maybePrefetchDeepDive()
     if (useQuizStore.getState().deepDiveStatus === 'ready') return
@@ -542,13 +554,22 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setSubQuestion(null)
     setSubAnswerId(null)
     if (id === 'personal') commitPersonal()
-    // Prefetch the AI deep-dive questions with a full step of headroom (diet
-    // auto-advances) so they're ready when the user arrives at the step.
-    if (id === 'lifestyle') maybePrefetchDeepDive()
-    if (id === 'review') { handleFinish(); return }
+    // Both closing steps build the stack: review directly ("straight to
+    // results"), deepDive after the optional extra questions.
+    if (id === 'review' || id === 'deepDive') { handleFinish(); return }
     setDirection('forward')
     setAnimKey((k) => k + 1)
     setStep(Math.min(index + 1, seq.length - 1))
+  }
+
+  // Opt in to the optional AI deep-dive from the review screen.
+  function goDeeper() {
+    clearPending()
+    const i = seq.findIndex((s) => s.id === 'deepDive')
+    if (i < 0) return
+    setDirection('forward')
+    setAnimKey((k) => k + 1)
+    setStep(i)
   }
 
   function goBack() {
@@ -747,7 +768,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           </span>
         </div>
         <span className="text-[10px] font-medium tracking-[0.12em] text-white/25 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-          {id === 'review' ? 'FINAL STEP' : `${index + 1} / ${seq.length - 1}`}
+          {id === 'review' ? 'FINAL STEP' : id === 'deepDive' ? 'OPTIONAL' : `${index + 1} / ${seq.length - 2}`}
         </span>
       </div>
 
@@ -771,7 +792,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           <p className="text-sm text-white/40 mt-2.5 leading-snug">{hint}</p>
           {isFirst && (
             <p className="text-[11px] text-white/25 mt-2">
-              {seq.length - 1} quick questions · about a minute
+              {seq.length - 2} quick questions · about a minute
             </p>
           )}
         </div>
@@ -1234,6 +1255,27 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {/* ── Review ── */}
           {id === 'review' && (
             <div className="flex flex-col gap-2">
+              {/* The optional AI deep-dive offer — go deeper, or the CTA below
+                  goes straight to results. First thing on the screen so the
+                  choice is never missed; hidden once the follow-ups are
+                  answered (their row appears in the list instead). */}
+              {Object.keys(answers.dynamicAnswers ?? {}).length === 0 && (
+                <button
+                  onClick={goDeeper}
+                  className="group w-full flex items-center gap-4 px-4 py-4 mb-2 rounded-xl border border-[#00D4FF]/30 bg-[#00D4FF]/[0.04] text-left transition-all duration-200 hover:border-[#00D4FF]/60 hover:bg-[#00D4FF]/[0.08] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
+                >
+                  <QuizIcon name="sparkle" size={20} className="shrink-0 text-[#00D4FF]" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#00D4FF]/80" style={{ fontFamily: 'var(--font-display)' }}>Optional · 30 seconds</p>
+                    <p className="text-sm font-semibold text-white mt-1" style={{ fontFamily: 'var(--font-display)' }}>Go deeper for sharper picks</p>
+                    <p className="text-[12px] text-white/40 mt-0.5 leading-snug">A couple of extra questions, written for you — we&apos;ll fine-tune every choice in your stack.</p>
+                  </div>
+                  <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-[#00D4FF]/70 transition-transform duration-200 group-hover:translate-x-0.5">
+                    <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              )}
+
               {reviewRows().map((r) => (
                 <button key={r.label} onClick={() => jumpTo(r.edit)}
                   className="w-full flex items-start justify-between gap-3 px-4 py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-left transition-all duration-200 hover:border-white/20 hover:bg-white/[0.04] active:scale-[0.99]">
@@ -1244,6 +1286,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   <span className="text-[11px] font-semibold text-[#00D4FF] flex-shrink-0 mt-0.5">Edit</span>
                 </button>
               ))}
+
             </div>
           )}
 
@@ -1291,12 +1334,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               disabled={!canContinue}
               className={`w-full py-4 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 active:scale-[0.99] ${
                 canContinue
-                  ? (id === 'review' || id === 'budget') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
+                  ? (id === 'review' || id === 'deepDive' || id === 'budget') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
                   : 'bg-white/[0.06] text-white/25 cursor-not-allowed'
               }`}
               style={{ fontFamily: 'var(--font-display)' }}
             >
               {id === 'review' ? 'Build my stack'
+                : id === 'deepDive' ? 'Build my stack'
                 : id === 'budget' ? 'Review my answers'
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`
                 : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()}`

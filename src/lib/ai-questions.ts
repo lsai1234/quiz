@@ -110,12 +110,13 @@ ${firstName ? `- Name: ${firstName}` : ''}
 - Goals: ${goalText}
 - Training: ${training}
 - Lifestyle flags they ticked: ${lifestyle}
+${answers.diet ? `- Diet self-rating: ${answers.diet}` : ''}
 ${wellbeing ? `- Wellbeing follow-ups already answered: ${wellbeing}` : ''}
 
 ALLOWED SIGNAL TAGS (use only these, only when clearly implied)
 ${SIGNAL_TAGS.map(t => `- ${t}`).join('\n')}
 
-Also still to be asked later in the quiz (do NOT ask about these): diet quality, current supplements, caffeine tolerance, training/exercise time of day, product format preferences, budget.`
+The quiz has already asked about (do NOT ask about these): diet quality, current supplements, caffeine tolerance, training/exercise time of day, product format preferences, budget.`
 }
 
 // ─── Structured-output JSON schema ────────────────────────────────────────────
@@ -285,9 +286,8 @@ export function fallbackQuestions(track: QuizTrack | null): DynamicQuestion[] {
 
 /** Stable fingerprint of the answers the questions are generated from — when it
  *  changes (user back-edited goals/lifestyle/etc.), questions are regenerated.
- *  Deliberately excludes diet: it's answered between the prefetch (leaving the
- *  lifestyle step) and arrival at deepDive, and isn't in the prompt — including
- *  it would invalidate the prefetch on every single pass. */
+ *  Prefetch fires on arrival at the review step, so every field here is
+ *  answered by then. */
 export function deepDiveKey(answers: QuizAnswers): string {
   return JSON.stringify([
     answers.track,
@@ -297,6 +297,7 @@ export function deepDiveKey(answers: QuizAnswers): string {
     answers.trainingFrequency,
     [...(answers.trainingType ?? [])].sort(),
     answers.trainingFocus,
+    answers.diet,
     answers.ageBracket,
     answers.exactAge,
     answers.gender,
