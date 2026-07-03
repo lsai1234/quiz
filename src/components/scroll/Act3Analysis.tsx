@@ -56,11 +56,13 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   const textRef = useRef<HTMLParagraphElement>(null)
   const ambientRef = useRef<HTMLDivElement>(null)
   const screenFlashRef = useRef<HTMLDivElement>(null)
+  const waveWrapRef = useRef<HTMLDivElement>(null)
+  const bubbleWrapRef = useRef<HTMLDivElement>(null)
   const [docked, setDocked] = useState(reducedMotion)
 
   useLayoutEffect(() => {
     const minDisplay = reducedMotion ? 900 : 4200
-    const dockAt = reducedMotion ? 0 : 1.15 // seconds until the battery is seated
+    const dockAt = reducedMotion ? 0 : 1.5 // seconds until the cell is seated
     let animDone = false
     let ready = useQuizStore.getState().stackReady
     let finished = false
@@ -119,31 +121,37 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       // Core sits dim until the battery docks.
       gsap.set(coreRef.current, { opacity: 0.32 })
 
-      // Start the battery AS the charge rail: slim, pinned to the screen edge,
+      // Start the cell AS the charge rail: slim, pinned to the screen edge,
       // the glass details hidden so only the cyan fill reads (exactly the rail).
       const vw = window.innerWidth
       const vh = window.innerHeight
       const H = Math.min(vh * 0.56, 420) // matches ChargeRail's inner height
-      gsap.set(batteryRef.current, { position: 'fixed', margin: 0, zIndex: 30, opacity: 1, left: vw - 24, top: (vh - H) / 2 + 10, width: 6, height: H - 46 })
-      gsap.set(shellRef.current, { borderRadius: 999 })
-      gsap.set([capRef.current, highlightRef.current, pctRef.current, boltRef.current], { opacity: 0 })
+      gsap.set(batteryRef.current, { position: 'fixed', margin: 0, zIndex: 30, opacity: 1, left: vw - 24, top: (vh - H) / 2 + 10, width: 6, height: H - 46, rotation: 0, transformOrigin: '50% 50%' })
+      gsap.set([capRef.current, highlightRef.current, pctRef.current, boltRef.current, waveWrapRef.current, bubbleWrapRef.current], { opacity: 0 })
       if (fillRef.current) fillRef.current.style.height = '92%'
 
-      // One continuous motion: the SAME element reshapes (size + corner radius)
-      // and glides to the dock on a single eased curve — no shape "flip".
-      const ease = 'power2.inOut'
-      tl.to(batteryRef.current, { left: slot.left, top: slot.top, width: slot.width, height: slot.height, duration: 1.15, ease }, 0)
-      tl.to(shellRef.current, { borderRadius: 18, duration: 1.15, ease }, 0)
+      // Phase 1 — the rail snaps free and flies as a slim comet, leaning into
+      // a curved path (x and y run on different eases, so the route arcs
+      // rather than beelines).
+      tl.to(batteryRef.current, { left: slot.left + slot.width / 2 - 7, width: 14, rotation: -8, duration: 0.9, ease: 'power3.out' }, 0)
+      tl.to(batteryRef.current, { top: slot.top + 12, height: slot.height - 24, duration: 0.9, ease: 'power2.inOut' }, 0)
 
-      // Top the charge off to full as it becomes the battery.
+      // Phase 2 — it plumps into the capsule with a jelly overshoot…
+      tl.to(batteryRef.current, { left: slot.left, top: slot.top, width: slot.width, height: slot.height, rotation: 0, duration: 0.55, ease: 'back.out(2.4)' }, 0.9)
+      // …and settles into the dock with a tiny shimmy.
+      tl.to(batteryRef.current, { rotation: 1.8, duration: 0.13, ease: 'power1.inOut' }, 1.5)
+      tl.to(batteryRef.current, { rotation: 0, duration: 0.55, ease: 'elastic.out(1.2, 0.3)' }, 1.63)
+
+      // Top the charge off to full as it becomes the cell.
       const fillProxy = { h: 92 }
-      tl.to(fillProxy, { h: 100, duration: 0.95, ease: 'power1.out', onUpdate: () => { if (fillRef.current) fillRef.current.style.height = `${fillProxy.h}%` } }, 0.1)
+      tl.to(fillProxy, { h: 100, duration: 1.0, ease: 'power1.out', onUpdate: () => { if (fillRef.current) fillRef.current.style.height = `${fillProxy.h}%` } }, 0.15)
 
-      // The battery's glass details emerge as the shape resolves — no sudden pop.
-      tl.to(capRef.current, { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.62)
-      tl.to(highlightRef.current, { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.62)
-      tl.to(boltRef.current, { opacity: 0.3, duration: 0.55, ease: 'power2.out' }, 0.66)
-      tl.to(pctRef.current, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 0.85)
+      // The glass details and the liquid's life emerge as the shape resolves.
+      tl.to(capRef.current, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 1.0)
+      tl.to(highlightRef.current, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 1.0)
+      tl.to(boltRef.current, { opacity: 0.3, duration: 0.5, ease: 'power2.out' }, 1.05)
+      tl.to([waveWrapRef.current, bubbleWrapRef.current], { opacity: 1, duration: 0.6, ease: 'power2.out' }, 1.1)
+      tl.to(pctRef.current, { opacity: 1, duration: 0.4, ease: 'power2.out' }, 1.25)
 
       // Dock — connectors spark, core wakes.
       tl.add(() => {
@@ -200,17 +208,18 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         }}
       />
 
-      {/* Battery — a single element that starts as the quiz charge rail and morphs
-          into this glass cell (fixed, sat over its in-flow slot below). */}
+      {/* Charge cell — a single element that starts as the quiz charge rail and
+          becomes this glass capsule of liquid charge (fixed, sat over its
+          in-flow slot below). Capsule on purpose: it's a supplement brand. */}
       <div ref={batteryRef} style={{ position: 'fixed', zIndex: 30, width: 68, height: 120, opacity: reducedMotion ? 1 : 0 }}>
-        {/* terminal cap */}
-        <div ref={capRef} className="absolute left-1/2 -translate-x-1/2 -top-[6px] rounded-[3px]" style={{ width: 26, height: 6, background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
-        {/* shell */}
+        {/* terminal collar */}
+        <div ref={capRef} className="absolute left-1/2 -translate-x-1/2 -top-[6px] rounded-full" style={{ width: 22, height: 6, background: 'linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0.15))' }} />
+        {/* glass shell */}
         <div
           ref={shellRef}
           className="absolute inset-0 overflow-hidden"
           style={{
-            borderRadius: 18,
+            borderRadius: 999,
             background: 'linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.015))',
             boxShadow: reducedMotion
               ? 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 2px 10px rgba(255,255,255,0.06)'
@@ -218,22 +227,47 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
             animation: reducedMotion ? undefined : 'battery-hum 2.8s ease-in-out infinite',
           }}
         >
-          {/* charge fill */}
-          <div ref={fillRef} className="absolute inset-x-0 bottom-0 overflow-hidden" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
-            {/* energy stream — the same upward drift the quiz rail carries,
-                so the cell still reads as live charge, not a static block */}
+          {/* liquid charge */}
+          <div ref={fillRef} className="absolute inset-x-0 bottom-0" style={{ height: '100%', background: 'linear-gradient(180deg, rgba(0,212,255,0.95), rgba(0,170,204,0.55))' }}>
+            {/* meniscus — two drifting waves riding the surface */}
             {!reducedMotion && (
-              <div
-                className="absolute inset-x-0"
-                style={{
-                  top: 0,
-                  height: 'calc(100% + 28px)',
-                  background: 'repeating-linear-gradient(to top, transparent 0 18px, rgba(255,255,255,0.13) 18px 22px, transparent 22px 28px)',
-                  animation: 'rail-flow 1.6s linear infinite',
-                }}
-              />
+              <div ref={waveWrapRef} className="absolute inset-x-0 pointer-events-none" style={{ top: -8, height: 16 }}>
+                <div className="absolute top-0 h-full" style={{ left: 0, width: '200%', animation: 'wave-drift 2.6s linear infinite' }}>
+                  <svg width="100%" height="100%" viewBox="0 0 400 16" preserveAspectRatio="none">
+                    <path d="M0,8 Q12.5,2 25,8 T50,8 T75,8 T100,8 T125,8 T150,8 T175,8 T200,8 T225,8 T250,8 T275,8 T300,8 T325,8 T350,8 T375,8 T400,8 L400,16 L0,16 Z" fill="rgba(0,212,255,0.95)" />
+                  </svg>
+                </div>
+                <div className="absolute top-0 h-full" style={{ left: 0, width: '200%', animation: 'wave-drift 4.1s linear infinite reverse', opacity: 0.45 }}>
+                  <svg width="100%" height="100%" viewBox="0 0 400 16" preserveAspectRatio="none">
+                    <path d="M0,9 Q12.5,4 25,9 T50,9 T75,9 T100,9 T125,9 T150,9 T175,9 T200,9 T225,9 T250,9 T275,9 T300,9 T325,9 T350,9 T375,9 T400,9 L400,16 L0,16 Z" fill="rgba(255,255,255,0.5)" />
+                  </svg>
+                </div>
+              </div>
             )}
-            <div className="absolute inset-x-0 top-0" style={{ height: 8, background: 'linear-gradient(180deg, rgba(255,255,255,0.65), transparent)' }} />
+            {/* surface light */}
+            <div className="absolute inset-x-0 top-0" style={{ height: 6, background: 'linear-gradient(180deg, rgba(255,255,255,0.55), transparent)' }} />
+            {/* bubbles — clipped to the liquid so they never rise above it */}
+            {!reducedMotion && (
+              <div ref={bubbleWrapRef} className="absolute inset-0 overflow-hidden pointer-events-none">
+                {([
+                  { left: '22%', s: 4, dur: 2.6, delay: 0,   sway: '3px'  },
+                  { left: '56%', s: 3, dur: 3.1, delay: 0.9, sway: '-4px' },
+                  { left: '72%', s: 5, dur: 2.3, delay: 1.5, sway: '2px'  },
+                  { left: '38%', s: 3, dur: 2.9, delay: 2.1, sway: '-2px' },
+                ]).map((b, i) => (
+                  <div
+                    key={`bubble-${i}`}
+                    className="absolute rounded-full"
+                    style={{
+                      left: b.left, bottom: 4, width: b.s, height: b.s,
+                      background: 'radial-gradient(circle at 35% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.25))',
+                      animation: `bubble-rise ${b.dur}s ease-in ${b.delay}s infinite`,
+                      ['--sway' as string]: b.sway,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
           {/* bolt watermark */}
           <div ref={boltRef} className="absolute inset-0 flex items-center justify-center opacity-30 mix-blend-overlay"><Bolt /></div>
@@ -250,18 +284,24 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         {/* Battery slot — reserves the docked battery's space in the column */}
         <div ref={slotRef} aria-hidden style={{ width: 68, height: 120 }} />
 
-        {/* Conduit gap — electric bolts leap from the battery into the core when docked */}
+        {/* Conduit gap — the machine drinks: droplets of liquid charge drip from
+            the cell and fall into the core when docked */}
         <div className="relative my-1.5" style={{ width: 60, height: 52 }}>
           <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0" style={{ width: 1, background: 'linear-gradient(180deg, rgba(0,212,255,0.28), rgba(0,212,255,0.06))' }} />
-          {docked && !reducedMotion && [0, 0.34, 0.68].map((d, i) => (
+          {docked && !reducedMotion && [0, 0.5, 1.0].map((d, i) => (
             <div
-              key={i}
+              key={`drip-${i}`}
               className="absolute left-1/2 top-0"
-              style={{ '--arc': '76px', animation: `arc-fly 1s linear ${d}s infinite`, filter: 'drop-shadow(0 0 5px rgba(0,212,255,0.9))' } as React.CSSProperties}
+              style={{ '--drip': '74px', animation: `drip-fall 1.5s cubic-bezier(0.4,0,0.75,0.6) ${d}s infinite` } as React.CSSProperties}
             >
-              <svg width="9" height="13" viewBox="0 0 100 115" fill="none">
-                <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#fff" />
-              </svg>
+              <div
+                className="rounded-full"
+                style={{
+                  width: 6, height: 8,
+                  background: 'radial-gradient(circle at 40% 30%, rgba(255,255,255,0.95), rgba(0,212,255,0.85) 60%)',
+                  boxShadow: '0 0 8px 2px rgba(0,212,255,0.65)',
+                }}
+              />
             </div>
           ))}
         </div>
@@ -269,12 +309,13 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         {/* Machine core */}
         <div ref={coreRef} className="relative" style={{ width: 190, height: 190 }}>
           <div ref={flareRef} className="absolute top-1/2 left-1/2 rounded-full pointer-events-none" style={{ width: 190, height: 190, opacity: 0, background: 'radial-gradient(circle, rgba(0,212,255,0.55), transparent 60%)' }} />
-          {/* absorb pulses — rings contracting into the core as each arc lands */}
-          {docked && !reducedMotion && [0, 0.34, 0.68].map((d, i) => (
+          {/* absorb pulses — rings contracting into the core as each droplet
+              lands (same 1.5s cycle as drip-fall, offset to the splash moment) */}
+          {docked && !reducedMotion && [0, 0.5, 1.0].map((d, i) => (
             <div
               key={`absorb-${i}`}
               className="absolute top-1/2 left-1/2 rounded-full pointer-events-none border border-[#00D4FF]/50"
-              style={{ width: 128, height: 128, opacity: 0, animation: `core-absorb 1s ease-in ${d + 0.55}s infinite` }}
+              style={{ width: 128, height: 128, opacity: 0, animation: `core-absorb 1.5s ease-in ${d + 1.2}s infinite` }}
             />
           ))}
           {[0.5, 0.72, 0.94].map((r, i) => (

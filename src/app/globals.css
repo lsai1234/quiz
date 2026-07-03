@@ -143,6 +143,29 @@
   to   { transform: rotate(360deg) translateX(27px) rotate(-360deg); }
 }
 
+/* Liquid charge cell — meniscus waves drifting across the surface.
+   The tile is 200% wide with a periodic path; -50% travel loops seamlessly. */
+@keyframes wave-drift {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Liquid charge cell — bubbles rising through the charge */
+@keyframes bubble-rise {
+  0%   { transform: translateY(0) translateX(0) scale(0.6);                 opacity: 0; }
+  12%  { opacity: 0.9; }
+  70%  { transform: translateY(-58px) translateX(var(--sway, 3px)) scale(1); opacity: 0.7; }
+  100% { transform: translateY(-86px) translateX(0) scale(0.45);             opacity: 0; }
+}
+
+/* Conduit — a droplet of charge drips from the cell and falls into the core */
+@keyframes drip-fall {
+  0%   { transform: translate(-50%, 0) scaleY(0.5);                 opacity: 0; }
+  14%  { transform: translate(-50%, 7px) scaleY(1.25);              opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translate(-50%, var(--drip, 74px)) scaleY(0.7); opacity: 0; }
+}
+
 /* Act 3 — ring contracting INTO the core as it absorbs each energy arc */
 @keyframes core-absorb {
   0%   { opacity: 0;    transform: translate(-50%, -50%) scale(1.35); }
