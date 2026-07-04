@@ -60,7 +60,7 @@ export async function POST(req: Request) {
     }
   }
 
-  if (toStore.length > 0) addImportedProducts(toStore)
+  if (toStore.length > 0) await addImportedProducts(toStore)
 
   return NextResponse.json({
     ok: true,

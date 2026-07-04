@@ -7,7 +7,7 @@ export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return NextResponse.json({
     defaults: PRICING_CONFIG,
-    overrides: getPortalPricingOverrides(),
+    overrides: await getPortalPricingOverrides(),
     current: getPricingConfig(),
   })
 }
@@ -21,9 +21,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
   if (body.reset) {
-    resetPortalPricing()
+    await resetPortalPricing()
   } else {
-    setPortalPricingOverrides(body.overrides ?? {})
+    await setPortalPricingOverrides(body.overrides ?? {})
   }
-  return NextResponse.json({ overrides: getPortalPricingOverrides(), current: getPricingConfig() })
+  return NextResponse.json({ overrides: await getPortalPricingOverrides(), current: getPricingConfig() })
 }

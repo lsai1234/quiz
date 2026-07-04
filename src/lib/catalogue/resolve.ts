@@ -4,6 +4,7 @@ import {
   applyProductOverrides,
   getImportedProducts,
   getRemovedProductIds,
+  hydrateStore,
 } from '@/lib/portal/store'
 import type { CatalogueProduct } from './types'
 
@@ -24,6 +25,9 @@ function composeCatalogue(base: CatalogueProduct[]): CatalogueProduct[] {
  * resolved data source, with founder overrides/imports/removals applied.
  */
 export async function getResolvedCatalogue(): Promise<{ products: CatalogueProduct[]; source: 'mock' | 'shopify'; error?: string }> {
+  // Load persisted founder state (overrides/imports/removals, data-source mode)
+  // before composing — on serverless this is what makes portal edits durable.
+  await hydrateStore()
   if (getDataSource() === 'shopify') {
     try {
       const { getProducts } = await import('@/lib/shopify/operations')

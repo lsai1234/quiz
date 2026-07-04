@@ -8,7 +8,7 @@ const MODES: DataSourceMode[] = ['auto', 'mock', 'shopify']
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   return NextResponse.json({
-    mode: getDataSourceSetting(),
+    mode: await getDataSourceSetting(),
     effective: getDataSource(),
     hasCredentials: hasShopifyCredentials(),
   })
@@ -25,6 +25,6 @@ export async function POST(req: Request) {
   if (!MODES.includes(body.mode as DataSourceMode)) {
     return NextResponse.json({ error: 'mode must be auto | mock | shopify' }, { status: 400 })
   }
-  setDataSourceSetting(body.mode as DataSourceMode)
-  return NextResponse.json({ mode: getDataSourceSetting(), effective: getDataSource() })
+  await setDataSourceSetting(body.mode as DataSourceMode)
+  return NextResponse.json({ mode: await getDataSourceSetting(), effective: getDataSource() })
 }

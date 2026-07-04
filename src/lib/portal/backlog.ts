@@ -1,11 +1,18 @@
 /**
  * Improvements backlog — founder-managed requests for the hub, the portal and the
- * quiz. Durable across restarts via the JSON-file store (see ./persist.ts).
+ * quiz. Durable via the key→JSON store (see ./persist.ts — Postgres when
+ * `DATABASE_URL` is set, `.data/` JSON files otherwise).
  *
  * A backlog item has an app it belongs to, a priority, a status (the board
  * columns), and an order within its status column for manual ranking. Impact and
- * effort are optional planning fields. Server-only (touches the fs-backed store).
+ * effort are optional planning fields. Server-only (touches the persisted store).
+ *
+ * Items live in module memory per instance: hydrated once per process on the fs
+ * backend, re-read on a short TTL on the database backend (so edits from other
+ * serverless instances show up). Every mutation hydrates first, then persists
+ * the whole list (last write wins — fine for a couple of founders).
  */
+import { hasDatabase } from '@/lib/db'
 import { readJson, writeJson } from './persist'
 import type { BacklogItem, BacklogStatus, NewBacklogItem } from './backlog-types'
 
@@ -15,10 +22,22 @@ export * from './backlog-types'
 
 const BACKLOG_FILE = 'backlog'
 
-let items: BacklogItem[] = readJson<BacklogItem[]>(BACKLOG_FILE, [])
+let items: BacklogItem[] = []
 
-function save(): void {
-  writeJson(BACKLOG_FILE, items)
+const HYDRATE_TTL_MS = 5_000
+let hydratedAt = 0
+
+async function hydrate(): Promise<void> {
+  const stale = hasDatabase()
+    ? Date.now() - hydratedAt > HYDRATE_TTL_MS
+    : hydratedAt === 0
+  if (!stale) return
+  hydratedAt = Date.now()
+  items = await readJson<BacklogItem[]>(BACKLOG_FILE, [])
+}
+
+async function save(): Promise<void> {
+  await writeJson(BACKLOG_FILE, items)
 }
 
 function nextOrder(status: BacklogStatus): number {
@@ -26,11 +45,13 @@ function nextOrder(status: BacklogStatus): number {
   return inColumn.length === 0 ? 0 : Math.max(...inColumn.map((i) => i.order)) + 1
 }
 
-export function listItems(): BacklogItem[] {
+export async function listItems(): Promise<BacklogItem[]> {
+  await hydrate()
   return [...items].sort((a, b) => a.order - b.order)
 }
 
-export function createItem(input: NewBacklogItem, createdBy: string): BacklogItem {
+export async function createItem(input: NewBacklogItem, createdBy: string): Promise<BacklogItem> {
+  await hydrate()
   const now = new Date().toISOString()
   const status = input.status ?? 'idea'
   const item: BacklogItem = {
@@ -48,13 +69,14 @@ export function createItem(input: NewBacklogItem, createdBy: string): BacklogIte
     updatedAt: now,
   }
   items.push(item)
-  save()
+  await save()
   return item
 }
 
 const EDITABLE = ['title', 'detail', 'app', 'priority', 'status', 'impact', 'effort', 'order'] as const
 
-export function updateItem(id: string, patch: Partial<BacklogItem>): BacklogItem | null {
+export async function updateItem(id: string, patch: Partial<BacklogItem>): Promise<BacklogItem | null> {
+  await hydrate()
   const item = items.find((i) => i.id === id)
   if (!item) return null
   for (const key of EDITABLE) {
@@ -66,24 +88,26 @@ export function updateItem(id: string, patch: Partial<BacklogItem>): BacklogItem
     item.order = nextOrder(item.status)
   }
   item.updatedAt = new Date().toISOString()
-  save()
+  await save()
   return item
 }
 
 /** Set an explicit ordering of ids (e.g. after a drag-reorder within a column). */
-export function reorder(orderedIds: string[]): BacklogItem[] {
+export async function reorder(orderedIds: string[]): Promise<BacklogItem[]> {
+  await hydrate()
   orderedIds.forEach((id, idx) => {
     const item = items.find((i) => i.id === id)
     if (item) item.order = idx
   })
-  save()
+  await save()
   return listItems()
 }
 
-export function deleteItem(id: string): boolean {
+export async function deleteItem(id: string): Promise<boolean> {
+  await hydrate()
   const before = items.length
   items = items.filter((i) => i.id !== id)
   if (items.length === before) return false
-  save()
+  await save()
   return true
 }

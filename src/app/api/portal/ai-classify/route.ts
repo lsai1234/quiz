@@ -40,7 +40,7 @@ export async function POST(req: Request) {
     let error: string | undefined
     if (apply) {
       if (Object.keys(patch).length > 0) {
-        setProductOverride(product.id, patch)
+        await setProductOverride(product.id, patch)
         applied = true
         if (getDataSource() === 'shopify' && product.shopifyProductId) {
           try {

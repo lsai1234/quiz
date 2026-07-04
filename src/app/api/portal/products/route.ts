@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   const existing = products.find((p) => p.id === body.id)
 
   // Always record the override (so the app reflects it immediately, in either mode).
-  setProductOverride(body.id, body.patch)
+  await setProductOverride(body.id, body.patch)
 
   // When live, also push the change to Shopify (tags + metafields).
   let shopify: { written: boolean; error?: string } = { written: false }
@@ -81,6 +81,6 @@ export async function DELETE(req: Request) {
   }
 
   // Hide it from the catalogue everywhere (covers mock + imported products too).
-  markProductRemoved(body.id)
+  await markProductRemoved(body.id)
   return NextResponse.json({ ok: true, shopify })
 }

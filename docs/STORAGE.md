@@ -1,6 +1,6 @@
 # Storage & Accounts — Architecture Spec
 
-Status: **spec for review, no code written yet.** Branch:
+Status: **agreed (hosting: Vercel + Neon); milestone 8.1 built.** Branch:
 `claude/quiz-hub-storage-setup-c65sjz`.
 
 This answers: what database the app needs, what lives in it vs in
@@ -31,9 +31,11 @@ Five distinct needs, in rough build order:
 
 ## 2. Recommendation in one paragraph
 
-Add **one Postgres database** (managed serverless Postgres — **Neon** is the
-default recommendation; Supabase is the alternative if we ever want its extras)
-accessed through **Drizzle ORM** for schema + migrations. Keep Shopify and
+Add **one Postgres database** (managed serverless Postgres — **Neon**, created
+from Vercel's Storage tab so the `DATABASE_URL` env var is wired automatically)
+accessed via the `@neondatabase/serverless` driver — Drizzle ORM joins for
+schema + migrations when the relational tables land (the `kv` table
+bootstraps itself, so 8.1 needs no migration step). Keep Shopify and
 Recharge as the systems of record for commerce and billing — the app DB never
 duplicates money state. Phase 1 is tiny because `persist.ts` was built as the
 seam: its `readJson`/`writeJson` name→JSON contract maps 1:1 onto a single
@@ -220,11 +222,14 @@ infrastructure worth building.**
 
 ## 8. Build milestones
 
-1. **8.1 DB foundation** — Neon + Drizzle + migrations; `kv` table; swap
-   `persist.ts` internals from fs → `kv` (env-gated: no `DATABASE_URL` → fs
-   fallback, so local dev and mock mode still work offline). One ripple to
-   absorb: reads become async, so the portal store/backlog hydrate paths go
-   async — contained, routes are already async.
+1. **8.1 DB foundation — BUILT.** `src/lib/db.ts` (Neon driver + self-
+   bootstrapping `kv` table); `persist.ts` swapped to async fs/db dual backend
+   (no `DATABASE_URL` → fs fallback, so local dev and mock mode work offline);
+   store + backlog hydrate lazily (once per process on fs, 5s-TTL re-read on db
+   so other serverless instances' edits show up), and every mutation hydrates
+   before saving so a cold instance can't wipe unseen state. Bonus fixes over
+   the old behaviour: pricing overrides and the data-source toggle are now
+   persisted too (both used to reset on restart).
 2. **8.2 Quiz sessions** — mint/persist `session_id`, upsert answers + stack,
    status transitions; cart attribute on both checkout routes.
 3. **8.3 Webhook + subscribers** — `/api/webhooks/shopify` (HMAC), link on
@@ -242,11 +247,9 @@ skips webhook linking and logs in with the sample subscription, as today).
 
 ## 9. Open decisions (your call before the build)
 
-1. **Where will this app be hosted?** Vercel (assumed — spec optimises for it)
-   vs the same VPS as the studio. Vercel → Neon; VPS-forever → could even stay
-   SQLite. This is the only decision that changes the recommendation.
-2. **Neon vs Supabase.** Both fine. Supabase only wins if you want its admin
-   UI/auth extras; its auth is redundant here since Shopify owns customer login.
+1. ~~**Where will this app be hosted?**~~ **Decided: Vercel + Neon** (created
+   via Vercel's Storage tab, which wires `DATABASE_URL` automatically).
+2. ~~**Neon vs Supabase.**~~ **Decided: Neon** (via Vercel).
 3. **PostHog alongside** (free tier) for session replays/funnels while the
    portal Insights page matures — zero backend work, can be added or dropped
    any time.
