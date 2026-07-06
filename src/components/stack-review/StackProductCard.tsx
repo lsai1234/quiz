@@ -135,13 +135,7 @@ export function StackProductCard({ slot, product, planType = 'oneoff', subscript
             className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
             style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
           >
-            Recommended
-          </span>
-          <span
-            className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-            style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
-          >
-            {slot.required ? 'Core' : 'Optional'}
+            {slot.required ? 'Core product' : 'Optional'}
           </span>
           {inSubView ? (
             !canSubscribe ? (

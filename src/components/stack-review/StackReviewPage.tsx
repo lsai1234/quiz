@@ -19,6 +19,7 @@ import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
+import { StickyCheckoutBar } from './StickyCheckoutBar'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
@@ -32,6 +33,8 @@ export function StackReviewPage() {
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const stackRef = useRef<HTMLDivElement>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
+  const summaryRef = useRef<HTMLDivElement>(null)
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -195,7 +198,7 @@ export function StackReviewPage() {
 
   return (
     <>
-      <div className="pb-10">
+      <div ref={pageRef} className="pb-10">
         <StackHero
           blueprint={blueprint}
           productCount={sortedSlots.length}
@@ -241,7 +244,13 @@ export function StackReviewPage() {
         <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
         {/* Price summary + checkout */}
-        <div className="px-5 pt-6 max-w-lg mx-auto">
+        <div ref={summaryRef} className="px-5 pt-6 max-w-lg mx-auto" style={{ scrollMarginTop: 16 }}>
+          <p
+            className="text-[10px] font-bold tracking-widest uppercase mb-4"
+            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-muted)' }}
+          >
+            Checkout — one-off or monthly
+          </p>
           {checkoutState.status === 'error' && (
             <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
               {checkoutState.messages.map((msg, i) => (
@@ -292,6 +301,16 @@ export function StackReviewPage() {
           </p>
         </div>
       </div>
+
+      <StickyCheckoutBar
+        pricing={pricing}
+        planType={planType}
+        productCount={sortedSlots.length}
+        isLoading={checkoutState.status === 'loading'}
+        onCheckout={handleCheckout}
+        sectionRef={pageRef}
+        summaryRef={summaryRef}
+      />
 
       {swapSlot && (
         <ProductSwapModal

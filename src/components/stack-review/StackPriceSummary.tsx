@@ -13,6 +13,8 @@ interface Props {
   onPlanChange: (plan: PlanType) => void
   onCheckout?: () => void
   onCustomise?: () => void
+  /** Label for the secondary (scroll-back) button. */
+  customiseLabel?: string
   isLoading?: boolean
 }
 
@@ -35,7 +37,7 @@ function PlanTab({
   )
 }
 
-export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false }: Props) {
+export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout, onCustomise, customiseLabel = 'Customise Stack', isLoading = false }: Props) {
   const {
     oneOffTotal,
     oneOffSubtotal,
@@ -166,6 +168,9 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
           </div>
         ) : (
           <div className="space-y-2.5 mb-4">
+            <p className="text-[11px] leading-snug text-center" style={{ color: 'var(--color-muted)' }}>
+              Pay once — the whole stack arrives as a single order. No subscription.
+            </p>
             {hasOneOffSaving && (
               <div className="flex items-center justify-between">
                 <span className="text-xs text-[var(--color-muted)]">Regular price</span>
@@ -258,7 +263,7 @@ export function StackPriceSummary({ pricing, planType, onPlanChange, onCheckout,
             className="w-full py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Customise Stack
+            {customiseLabel}
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 import type { PrebuiltBundle, BundleAddOn } from '@/lib/bundles'
 import type { StackBlueprint, StackSlotEntry } from '@/lib/stack-blueprint'
 import { updateStackSlotVariant, removeOptionalSlot } from '@/lib/stack-blueprint/helpers'
@@ -10,6 +11,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackProductCard } from '@/components/stack-review/StackProductCard'
 import { StackPriceSummary } from '@/components/stack-review/StackPriceSummary'
+import { StickyCheckoutBar } from '@/components/stack-review/StickyCheckoutBar'
 import { CheckoutSuccess } from '@/components/stack-review/CheckoutSuccess'
 import { BundleHero } from './BundleHero'
 import { BundleAddOnCard } from './BundleAddOnCard'
@@ -34,6 +36,8 @@ export function BundleLandingPage({ bundle }: Props) {
   const [rawBlueprint, setBlueprint] = useState<StackBlueprint>(bundle.blueprint)
   const [planType, setPlanType] = useState<PlanType>('oneoff')
   const stackRef = useRef<HTMLDivElement>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
+  const summaryRef = useRef<HTMLDivElement>(null)
 
   // Default any slot without a selected variant to the product's first
   // available variant so the picker and price always agree.
@@ -122,7 +126,33 @@ export function BundleLandingPage({ bundle }: Props) {
   }
 
   return (
-    <div className="min-h-screen pb-10" style={{ background: 'var(--color-bg)' }}>
+    <div ref={pageRef} className="min-h-screen pb-10" style={{ background: 'var(--color-bg)' }}>
+      {/* Minimal brand header — first-time visitors land here cold */}
+      <header
+        className="sticky top-0 z-30 border-b border-[var(--color-border)]"
+        style={{
+          background: 'color-mix(in srgb, var(--color-bg) 88%, transparent)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}
+      >
+        <div className="max-w-lg mx-auto px-5 py-3.5 flex items-center justify-between">
+          <span
+            className="text-base font-black tracking-tight"
+            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
+          >
+            getCHRGD
+          </span>
+          <Link
+            href="/"
+            className="text-xs font-semibold active:opacity-70 transition-opacity"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            Build your own stack →
+          </Link>
+        </div>
+      </header>
+
       <BundleHero bundle={bundle} productCount={sortedSlots.length} totalPrice={pricing.oneOffTotal} />
 
       <div className="h-px bg-[var(--color-border)] mx-5" />
@@ -130,10 +160,13 @@ export function BundleLandingPage({ bundle }: Props) {
       {/* What's inside */}
       <div ref={stackRef} className="px-5 pt-7 max-w-lg mx-auto space-y-3" style={{ scrollMarginTop: 16 }}>
         <p
-          className="text-[10px] font-bold tracking-widest uppercase mb-4"
+          className="text-[10px] font-bold tracking-widest uppercase"
           style={{ fontFamily: 'var(--font-display)', color: 'var(--color-muted)' }}
         >
           What&apos;s inside — {sortedSlots.length} products
+        </p>
+        <p className="text-xs leading-relaxed !mt-1 mb-4" style={{ color: 'var(--color-text-2)' }}>
+          Pick your flavours — everything arrives together in one order.
         </p>
         {sortedSlots.map((slot) => {
           const product = products.find((p) => p.id === slot.selectedProductId)
@@ -171,7 +204,13 @@ export function BundleLandingPage({ bundle }: Props) {
       <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
       {/* Price summary + checkout */}
-      <div className="px-5 pt-6 max-w-lg mx-auto">
+      <div ref={summaryRef} className="px-5 pt-6 max-w-lg mx-auto" style={{ scrollMarginTop: 64 }}>
+        <p
+          className="text-[10px] font-bold tracking-widest uppercase mb-4"
+          style={{ fontFamily: 'var(--font-display)', color: 'var(--color-muted)' }}
+        >
+          Checkout — one-off or monthly
+        </p>
         {checkoutState.status === 'error' && (
           <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
             {checkoutState.messages.map((msg, i) => (
@@ -191,6 +230,7 @@ export function BundleLandingPage({ bundle }: Props) {
           onPlanChange={setPlanType}
           onCheckout={handleCheckout}
           onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          customiseLabel="Back to products"
           isLoading={checkoutState.status === 'loading'}
         />
 
@@ -204,6 +244,16 @@ export function BundleLandingPage({ bundle }: Props) {
           prescribed medication (including HRT).
         </p>
       </div>
+
+      <StickyCheckoutBar
+        pricing={pricing}
+        planType={planType}
+        productCount={sortedSlots.length}
+        isLoading={checkoutState.status === 'loading'}
+        onCheckout={handleCheckout}
+        sectionRef={pageRef}
+        summaryRef={summaryRef}
+      />
     </div>
   )
 }
