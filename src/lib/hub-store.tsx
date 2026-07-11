@@ -72,8 +72,8 @@ interface HubStore {
   feedback: FeedbackCheckIn[]
   /** True once the initial /api/auth/me restore has completed. */
   hydrated: boolean
-  /** Whether the server has Google OAuth configured (shows the button). */
-  googleEnabled: boolean
+  /** OAuth providers the server has configured (which buttons to show). */
+  providers: { id: string; label: string }[]
 
   /** Restore the signed-in state on load (cookie session → account data). */
   hydrate: () => Promise<void>
@@ -140,26 +140,26 @@ export const useHubStore = create<HubStore>((set) => ({
   subscription: null,
   feedback: [],
   hydrated: false,
-  googleEnabled: false,
+  providers: [],
 
   hydrate: async () => {
     try {
       const me = (await (await fetch('/api/auth/me')).json()) as {
-        user?: { email: string; name: string } | null
-        googleEnabled?: boolean
+        user?: { email: string | null; name: string } | null
+        providers?: { id: string; label: string }[]
       }
-      const googleEnabled = !!me.googleEnabled
+      const providers = me.providers ?? []
       if (!me.user) {
-        set({ hydrated: true, googleEnabled })
+        set({ hydrated: true, providers })
         return
       }
       const { subscription, feedback } = await loadAccountData()
       set({
-        session: { email: me.user.email, name: me.user.name },
+        session: { email: me.user.email ?? '', name: me.user.name },
         subscription,
         feedback,
         hydrated: true,
-        googleEnabled,
+        providers,
       })
     } catch {
       set({ hydrated: true })
@@ -173,10 +173,10 @@ export const useHubStore = create<HubStore>((set) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-      const data = (await res.json()) as { user?: { email: string; name: string }; error?: string }
+      const data = (await res.json()) as { user?: { email: string | null; name: string }; error?: string }
       if (!res.ok || !data.user) return data.error ?? 'Something went wrong — try again'
       const { subscription, feedback } = await loadAccountData()
-      set({ session: { email: data.user.email, name: data.user.name }, subscription, feedback })
+      set({ session: { email: data.user.email ?? '', name: data.user.name }, subscription, feedback })
       return null
     } catch {
       return 'Network error — try again'

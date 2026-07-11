@@ -32,6 +32,28 @@ export async function saveSubscription(userId: string, subscription: MemberSubsc
   )
 }
 
+/** The quiz answers + stack context the member subscribed with (for the hub). */
+export async function getQuiz<T = unknown>(userId: string): Promise<T | null> {
+  const db = await getEngine()
+  const row = await db.get<{ quiz: string | null }>('SELECT quiz FROM subscriptions WHERE user_id = ?', [userId])
+  if (!row?.quiz) return null
+  try {
+    return JSON.parse(row.quiz) as T
+  } catch {
+    return null
+  }
+}
+
+/** Persist quiz answers alongside the subscription (upsert; keeps existing data). */
+export async function saveQuiz(userId: string, quiz: unknown): Promise<void> {
+  const db = await getEngine()
+  await db.run(
+    `INSERT INTO subscriptions (user_id, data, quiz, updated_at) VALUES (?, '{}', ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET quiz = excluded.quiz, updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(quiz), now()],
+  )
+}
+
 export async function listFeedback(userId: string): Promise<FeedbackCheckIn[]> {
   const db = await getEngine()
   const rows = await db.all<{ payload: string }>(

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { ProviderButtons } from '@/components/auth/ProviderButtons'
 
 const ACCENT = '#00D4FF'
 
@@ -8,11 +9,11 @@ interface Props {
   /** Sign in or create an account. Resolves to an error message, or null on success. */
   onAuthenticate: (mode: 'login' | 'signup', email: string, password: string) => Promise<string | null>
   loading?: boolean
-  /** Whether the server has Google OAuth configured. */
-  googleEnabled?: boolean
+  /** OAuth providers the server has configured (which buttons to show). */
+  providers?: { id: string; label: string }[]
 }
 
-export function HubLogin({ onAuthenticate, loading, googleEnabled }: Props) {
+export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
   const [mode, setMode] = useState<'login' | 'signup'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -92,26 +93,7 @@ export function HubLogin({ onAuthenticate, loading, googleEnabled }: Props) {
         </button>
       </form>
 
-      {googleEnabled && (
-        <a
-          href="/api/auth/google"
-          className="w-full mt-3 py-4 rounded-2xl text-sm font-bold tracking-wide active:scale-95 transition-all flex items-center justify-center gap-2"
-          style={{
-            fontFamily: 'var(--font-display)',
-            background: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text)',
-          }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z" />
-            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z" />
-            <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z" />
-            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-          </svg>
-          Continue with Google
-        </a>
-      )}
+      <ProviderButtons providers={providers} returnTo="/hub" />
 
       <button
         type="button"

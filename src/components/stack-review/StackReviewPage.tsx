@@ -24,6 +24,7 @@ import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
+import { AccountGate } from '@/components/auth/AccountGate'
 
 export function StackReviewPage() {
   const {
@@ -118,7 +119,7 @@ export function StackReviewPage() {
     [blueprint, setStackBlueprint],
   )
 
-  const { state: checkoutState, checkout, reset: resetCheckout } = useStackCheckout()
+  const { state: checkoutState, checkout, resume: resumeCheckout, reset: resetCheckout } = useStackCheckout()
 
   const subOpts = useMemo(
     () => ({ usageByProductId: subscriptionUsage, level: stackLevel }),
@@ -314,6 +315,14 @@ export function StackReviewPage() {
           onTrainingFrequencyChange={(freq) => setAnswer('trainingFrequency', freq)}
           onConfirm={() => { setSubscriptionCustomised(true); setPlanType('subscription'); setJourneyOpen(false) }}
           onClose={() => setJourneyOpen(false)}
+        />
+      )}
+
+      {checkoutState.status === 'needs-account' && (
+        <AccountGate
+          payload={checkoutState.payload}
+          onAuthenticated={resumeCheckout}
+          onCancel={resetCheckout}
         />
       )}
     </>

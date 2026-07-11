@@ -5,8 +5,9 @@ import {
   createUser,
   getUserByEmail,
   getUserById,
-  getUserByGoogleSub,
-  linkGoogle,
+  getUserByIdentity,
+  addIdentity,
+  upsertOAuthUser,
   toPublicUser,
 } from '../users'
 import { createSession, getUserForSession, deleteSession } from '../sessions'
@@ -36,17 +37,46 @@ describe('users', () => {
     expect(['SQLITE_CONSTRAINT_UNIQUE', '23505']).toContain((rejection as { code?: string }).code)
   })
 
-  it('links a Google identity to an existing account', async () => {
+  it('links a provider identity to an existing account', async () => {
     const user = await createUser({ email: 'link@example.com', passwordHash: 'hash' })
-    await linkGoogle(user.id, 'google-sub-1', 'https://pic')
-    const found = await getUserByGoogleSub('google-sub-1')
+    await addIdentity(user.id, 'google', 'google-sub-1')
+    const found = await getUserByIdentity('google', 'google-sub-1')
     expect(found?.id).toBe(user.id)
-    expect(found?.picture).toBe('https://pic')
+    expect(await getUserByIdentity('google', 'no-such-sub')).toBeNull()
   })
 
   it('never exposes the password hash in the public shape', async () => {
     const user = await createUser({ email: 'pub@example.com', passwordHash: 'secret' })
     expect(toPublicUser(user)).not.toHaveProperty('passwordHash')
+  })
+})
+
+describe('upsertOAuthUser', () => {
+  it('creates once per identity, then returns the same account', async () => {
+    const profile = { provider: 'facebook', sub: 'fb-1', email: 'fbook@example.com', emailVerified: true, name: 'Fbee' }
+    const first = await upsertOAuthUser(profile)
+    const second = await upsertOAuthUser(profile)
+    expect(second.id).toBe(first.id)
+  })
+
+  it('links to an existing account when the verified email matches', async () => {
+    const existing = await createUser({ email: 'shared@example.com', passwordHash: 'hash' })
+    const linked = await upsertOAuthUser({ provider: 'google', sub: 'g-shared', email: 'shared@example.com', emailVerified: true })
+    expect(linked.id).toBe(existing.id)
+    expect((await getUserByIdentity('google', 'g-shared'))?.id).toBe(existing.id)
+  })
+
+  it('does NOT link on an unverified email (creates a separate account)', async () => {
+    const existing = await createUser({ email: 'careful@example.com', passwordHash: 'hash' })
+    const created = await upsertOAuthUser({ provider: 'facebook', sub: 'fb-careful', email: 'careful@example.com', emailVerified: false })
+    expect(created.id).not.toBe(existing.id)
+  })
+
+  it('gives an email-less provider (X) a placeholder address, surfaced as null', async () => {
+    const x = await upsertOAuthUser({ provider: 'twitter', sub: 'x-1', email: null, emailVerified: false, name: 'Xavier' })
+    expect(x.email).toContain('@placeholder.invalid')
+    expect(toPublicUser(x).email).toBeNull()
+    expect(x.name).toBe('Xavier')
   })
 })
 

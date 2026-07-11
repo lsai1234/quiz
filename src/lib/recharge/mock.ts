@@ -10,6 +10,7 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
+import type { StackBlueprint } from '@/lib/stack-blueprint'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint/mock-blueprint'
 import {
   buildSubscriptionPlan,
@@ -20,6 +21,7 @@ import {
   getSubscriptionProduct,
   sizeConsumption,
   type UsageLevel,
+  type SubscriptionPlanOptions,
 } from '@/lib/stack-blueprint/pricing'
 import { basisForProduct } from '@/lib/feedback'
 import type { MemberSubscription, MemberSubscriptionLine } from './types'
@@ -41,19 +43,26 @@ export function subRateOf(sub: MemberSubscription, config = getPricingConfig()):
   return sub.subscriptionDiscountRate ?? config.subscriptionDiscount
 }
 
-/** Build a representative active subscription for a logged-in member. */
-export function createMockSubscription(
+/**
+ * Build a `MemberSubscription` from any stack blueprint — the hub's management
+ * view of a member's bundle. Used both to seed the demo (from MOCK_BLUEPRINT)
+ * and, at checkout, to persist the member's *actual* chosen stack so it shows
+ * in the hub when they log back in.
+ */
+export function buildMemberSubscription(
+  blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
   email: string,
   answers?: QuizAnswers | null,
+  opts: SubscriptionPlanOptions & { id?: string; monthsActive?: number; dispatchDayOfMonth?: number } = {},
 ): MemberSubscription {
-  const slotTitleById = Object.fromEntries(MOCK_BLUEPRINT.slots.map((s) => [s.slotId, s.title]))
-  const plan = buildSubscriptionPlan(MOCK_BLUEPRINT, catalogue, answers)
-  const pricing = calculatePricing(MOCK_BLUEPRINT, catalogue, answers)
+  const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
+  const plan = buildSubscriptionPlan(blueprint, catalogue, answers, getPricingConfig(), opts)
+  const pricing = calculatePricing(blueprint, catalogue, answers, getPricingConfig(), opts)
 
+  const monthsActive = opts.monthsActive ?? 0
   const startedAt = new Date()
-  startedAt.setMonth(startedAt.getMonth() - 2) // active for 2 months
-  const monthsActive = 2
+  startedAt.setMonth(startedAt.getMonth() - monthsActive)
 
   const lines: MemberSubscriptionLine[] = plan.map((l, i) => {
     const variant = l.product.variants.find((v) => v.id === l.variantId) ?? l.product.variants.find((v) => v.available) ?? l.product.variants[0]
@@ -69,25 +78,33 @@ export function createMockSubscription(
       usageLevel: l.usageLevel,
       pricePerDelivery: l.pricePerDelivery,
       swapGroup: l.product.swapGroup,
-      // These lines have been in the stack since signup.
       addedAt: startedAt.toISOString(),
       deliveriesMade: deliveriesInMonths(monthsActive, l.shipEveryMonths),
     }
   })
 
   return {
-    id: 'mock-sub-1',
+    id: opts.id ?? 'mock-sub-1',
     status: 'active',
     customerEmail: email,
     flatMonthly: pricing.subscriptionTotal,
     subscriptionDiscountRate: pricing.subscriptionDiscountPct / 100,
-    dispatchDayOfMonth: 15,
+    dispatchDayOfMonth: opts.dispatchDayOfMonth ?? 15,
     minMonths: pricing.subscriptionMinMonths,
     monthsActive,
     startedAt: startedAt.toISOString(),
     paymentMethod: { brand: 'Visa', last4: '4242' },
     lines,
   }
+}
+
+/** Build a representative *demo* subscription (2 months in) from the mock blueprint. */
+export function createMockSubscription(
+  catalogue: CatalogueProduct[],
+  email: string,
+  answers?: QuizAnswers | null,
+): MemberSubscription {
+  return buildMemberSubscription(MOCK_BLUEPRINT, catalogue, email, answers, { monthsActive: 2 })
 }
 
 /** Deliveries shipped after `months` for a line shipping every `everyMonths` (first at signup). */

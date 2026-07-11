@@ -71,21 +71,32 @@ state from the DB at the start of the request paths that depend on it
 hot paths cheap. Product overrides/imports/removals and the backlog are read
 straight from the DB per request.
 
-## Customer accounts (hub)
+## Customer accounts (hub + checkout)
 
-The hub (`/hub`) now uses real accounts instead of the "any email" demo login.
-Two ways in, both landing in the same `users` row:
+Accounts use real credentials instead of the old "any email" demo login. A
+person can have several sign-in methods linked to one account (the `identities`
+table, `provider` + `provider_user_id` → `user_id`):
 
 - **Email + password** — `POST /api/auth/signup` / `POST /api/auth/login`.
   Passwords are scrypt-hashed (`src/lib/auth/password.ts`, node:crypto, no
   extra dependency), 8-character minimum.
-- **Google OAuth** — `GET /api/auth/google` → Google consent →
-  `GET /api/auth/google/callback`. Hand-rolled authorization-code flow
-  (`src/lib/auth/google.ts`) with a CSRF state cookie. Enabled only when
-  `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` are set — the hub hides the
-  button otherwise (mock-first). A Google sign-in whose **verified** email
-  matches an existing password account links to it rather than duplicating
-  the person.
+- **Social sign-in** — Google, Apple, Facebook and X. All four go through one
+  generic pair of routes, `GET /api/auth/<provider>` →
+  `GET|POST /api/auth/<provider>/callback`, driven by a small provider registry
+  (`src/lib/auth/providers/`). Each provider is **env-gated** — it only appears
+  (on the hub and the checkout gate) once its credentials are set, so the app
+  stays mock-first. State cookies guard CSRF; X adds PKCE; Apple returns via
+  `form_post` (POST) and its client secret is an ES256 JWT built on the fly.
+
+**Account linking & email.** A social sign-in whose **verified** email matches
+an existing account links to it rather than duplicating the person
+(`upsertOAuthUser`). X returns no email, so those accounts get a non-routable
+`…@placeholder.invalid` address (surfaced as `null`, never shown) and can't be
+matched to another provider by email.
+
+**Adding a provider** is a config change: drop a module in
+`src/lib/auth/providers/`, register it in `index.ts`, add its env vars. The
+routes and the sign-in UI (`ProviderButtons`) pick it up automatically.
 
 Sessions are database rows, not JWTs: the `hub_session` httpOnly cookie holds
 a random token whose hash is stored in `sessions` — revocable server-side,
@@ -94,6 +105,29 @@ a random token whose hash is stored in `sessions` — revocable server-side,
 
 The founders' portal keeps its own separate realm (`portal_session`,
 env-configured founder accounts) — customers can never reach `/portal`.
+
+### Account gate before subscription checkout
+
+Subscribing requires an account, so the bundle can be saved and managed. When a
+signed-out member starts a **subscription** checkout (one-off stays guest), the
+stack page shows the `AccountGate`:
+
+- **Email/password** signs in inline (no redirect), then `POST /api/checkout/finalize`
+  saves the member's bundle + quiz answers to their account and returns the
+  payment URL.
+- **Social** can't survive the OAuth redirect with client state, so the order is
+  stashed server-side first (`POST /api/checkout/pending`, keyed by a cookie
+  token in the `kv` table), the provider round-trip returns to
+  `GET /api/checkout/continue`, which finalizes the same way and redirects on to
+  Shopify (live) or the hub (mock).
+
+What's stored per subscription: the member's real bundle as a `MemberSubscription`
+(built from *their* stack via `buildMemberSubscription`, not the demo blueprint)
+plus their quiz answers in the `subscriptions.quiz` column. On next sign-in the
+hub loads that real bundle (no demo seed), so they see and manage exactly what
+they bought. The live charge still goes through Shopify from server-validated
+lines; the stored document is the hub's management view (a Recharge mirror once
+that's connected).
 
 ### What persists per account
 
@@ -107,14 +141,30 @@ env-configured founder accounts) — customers can never reach `/portal`.
 - **Portal edits** — product overrides, imports, removals and the backlog now
   live in the `kv` table instead of loose JSON files.
 
-### Setting up Google sign-in
+### Setting up social sign-in
 
-1. Google Cloud console → APIs & Services → Credentials → Create OAuth client
-   (type: Web application).
-2. Authorized redirect URI: `http://localhost:3000/api/auth/google/callback`
-   (plus the production origin's equivalent).
-3. Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local`.
-4. Deployed behind a proxy/custom domain, set `APP_URL` to the public origin.
+Each provider's redirect URI is `<origin>/api/auth/<provider>/callback`
+(provider = `google` | `apple` | `facebook` | `twitter`). Set `APP_URL` to your
+public origin when deployed behind a proxy/custom domain. All keys go in
+`.env.local` (local) or the Vercel env vars (deployed); see `.env.example`.
+
+- **Google** — Google Cloud console → Credentials → OAuth client (Web
+  application). Redirect URI `<origin>/api/auth/google/callback`. Set
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`.
+- **Facebook** — developers.facebook.com → Facebook Login. Set
+  `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. The `email` permission needs
+  Facebook **app review** before it works for the public.
+- **X / Twitter** — developer.x.com → OAuth 2.0 (Confidential client, PKCE). Set
+  `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`. X returns **no email** (see
+  above).
+- **Apple** — needs a **paid Apple Developer account** and works only over
+  **HTTPS** (your live domain, not localhost). Create a Services ID + a Sign in
+  with Apple key (.p8). Set `APPLE_CLIENT_ID` (the Services ID), `APPLE_TEAM_ID`,
+  `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the .p8 contents; `\n` for newlines is
+  fine).
+
+Only the providers you configure appear as buttons — the rest stay hidden, so
+you can turn them on one at a time as you get each set of credentials.
 
 ## Deploying on Vercel
 
@@ -128,9 +178,10 @@ already in place.
    it and uses Postgres. Migrations run on the first request after deploy.
 2. **Set the founder login** so the portal isn't on the public demo password:
    `FOUNDER_1_EMAIL` / `FOUNDER_1_PASSWORD` (Settings → Environment Variables).
-3. **(Optional) Google sign-in:** add `GOOGLE_CLIENT_ID`,
-   `GOOGLE_CLIENT_SECRET`, and `APP_URL=https://<your-domain>` — and register
-   `https://<your-domain>/api/auth/google/callback` as the redirect URI.
+3. **(Optional) Social sign-in:** add `APP_URL=https://<your-domain>` plus the
+   credentials for whichever providers you want (see "Setting up social
+   sign-in" above), registering `https://<your-domain>/api/auth/<provider>/callback`
+   as each provider's redirect URI. Buttons appear only for configured providers.
 4. **Redeploy.** New sign-ups, subscriptions, feedback and portal edits now
    persist across deploys and across serverless instances.
 

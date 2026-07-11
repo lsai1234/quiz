@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { getSubscription, saveSubscription, listFeedback } from '@/lib/db/hub-data'
+import { getSubscription, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { createMockSubscription } from '@/lib/recharge/mock'
 import type { MemberSubscription } from '@/lib/recharge/types'
@@ -21,14 +21,17 @@ export async function GET() {
   let subscription = await getSubscription(user.id)
   let seeded = false
   if (!subscription) {
+    // No stored bundle (a direct hub sign-up that never subscribed) — seed the
+    // demo bundle so the hub isn't empty. A member who subscribed via checkout
+    // already has their real bundle stored, so this branch is skipped for them.
     const { products } = await getResolvedCatalogue()
-    subscription = createMockSubscription(products, user.email)
+    subscription = createMockSubscription(products, user.email ?? '')
     await saveSubscription(user.id, subscription)
     seeded = true
   }
 
-  const feedback = await listFeedback(user.id)
-  return NextResponse.json({ subscription, feedback, seeded })
+  const [feedback, quiz] = await Promise.all([listFeedback(user.id), getQuiz(user.id)])
+  return NextResponse.json({ subscription, feedback, quiz, seeded })
 }
 
 /**

@@ -8,17 +8,17 @@ import { SubscriptionDashboard } from './SubscriptionDashboard'
 export function HubPage() {
   const session = useHubStore((s) => s.session)
   const hydrated = useHubStore((s) => s.hydrated)
-  const googleEnabled = useHubStore((s) => s.googleEnabled)
+  const providers = useHubStore((s) => s.providers)
   const hydrate = useHubStore((s) => s.hydrate)
   const authenticate = useHubStore((s) => s.authenticate)
 
-  // Restore the cookie session on load (also lands the Google OAuth redirect).
+  // Restore the cookie session on load (also lands the OAuth redirect back).
   useEffect(() => {
     void hydrate()
   }, [hydrate])
 
   if (!session) {
-    return <HubLogin onAuthenticate={authenticate} loading={!hydrated} googleEnabled={googleEnabled} />
+    return <HubLogin onAuthenticate={authenticate} loading={!hydrated} providers={providers} />
   }
 
   return <SubscriptionDashboard />

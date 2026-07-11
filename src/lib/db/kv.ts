@@ -29,3 +29,8 @@ export async function kvHas(key: string): Promise<boolean> {
   const db = await getEngine()
   return !!(await db.get('SELECT 1 AS one FROM kv WHERE key = ?', [key]))
 }
+
+export async function kvDelete(key: string): Promise<void> {
+  const db = await getEngine()
+  await db.run('DELETE FROM kv WHERE key = ?', [key])
+}

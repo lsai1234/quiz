@@ -45,7 +45,38 @@ export const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // v2 — multiple linked sign-in identities per user; quiz answers on the
+  // subscription. `identities` supersedes the single `users.google_sub` column
+  // (kept for back-compat but no longer read); one person can link Google,
+  // Apple, Facebook, X, etc. All DDL is dialect-neutral (runs on both engines).
+  `
+  CREATE TABLE identities (
+    provider         TEXT NOT NULL,
+    provider_user_id TEXT NOT NULL,
+    user_id          TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at       TEXT NOT NULL,
+    PRIMARY KEY (provider, provider_user_id)
+  );
+  CREATE INDEX identities_user_id ON identities(user_id);
+
+  INSERT INTO identities (provider, provider_user_id, user_id, created_at)
+    SELECT 'google', google_sub, id, created_at FROM users WHERE google_sub IS NOT NULL;
+
+  ALTER TABLE subscriptions ADD COLUMN quiz TEXT;
+  `,
 ]
+
+/**
+ * Domain used for the synthetic email of accounts created via a provider that
+ * doesn't return one (X / Twitter). `.invalid` is reserved and non-routable, so
+ * it can never collide with or be mistaken for a real address. `hasRealEmail`
+ * detects it so the UI shows "no email on file" rather than the placeholder.
+ */
+export const PLACEHOLDER_EMAIL_DOMAIN = 'placeholder.invalid'
+
+export function hasRealEmail(email: string | null | undefined): boolean {
+  return !!email && !email.endsWith(`@${PLACEHOLDER_EMAIL_DOMAIN}`)
+}
 
 /** ISO timestamp used for all created_at / updated_at columns. */
 export function now(): string {
