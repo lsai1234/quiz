@@ -1,10 +1,12 @@
 /**
  * Improvements backlog — founder-managed requests for the hub, the portal and the
- * quiz. Durable across restarts via the JSON-file store (see ./persist.ts).
+ * quiz. Durable in the app database (see ./persist.ts); each operation reads the
+ * latest list and writes the result back, so serverless instances stay
+ * consistent.
  *
  * A backlog item has an app it belongs to, a priority, a status (the board
  * columns), and an order within its status column for manual ranking. Impact and
- * effort are optional planning fields. Server-only (touches the fs-backed store).
+ * effort are optional planning fields. Server-only (touches the database).
  */
 import { readJson, writeJson } from './persist'
 import type { BacklogItem, BacklogStatus, NewBacklogItem } from './backlog-types'
@@ -15,22 +17,21 @@ export * from './backlog-types'
 
 const BACKLOG_FILE = 'backlog'
 
-let items: BacklogItem[] = readJson<BacklogItem[]>(BACKLOG_FILE, [])
-
-function save(): void {
-  writeJson(BACKLOG_FILE, items)
+async function load(): Promise<BacklogItem[]> {
+  return readJson<BacklogItem[]>(BACKLOG_FILE, [])
 }
 
-function nextOrder(status: BacklogStatus): number {
+function nextOrder(items: BacklogItem[], status: BacklogStatus): number {
   const inColumn = items.filter((i) => i.status === status)
   return inColumn.length === 0 ? 0 : Math.max(...inColumn.map((i) => i.order)) + 1
 }
 
-export function listItems(): BacklogItem[] {
-  return [...items].sort((a, b) => a.order - b.order)
+export async function listItems(): Promise<BacklogItem[]> {
+  return (await load()).sort((a, b) => a.order - b.order)
 }
 
-export function createItem(input: NewBacklogItem, createdBy: string): BacklogItem {
+export async function createItem(input: NewBacklogItem, createdBy: string): Promise<BacklogItem> {
+  const items = await load()
   const now = new Date().toISOString()
   const status = input.status ?? 'idea'
   const item: BacklogItem = {
@@ -40,7 +41,7 @@ export function createItem(input: NewBacklogItem, createdBy: string): BacklogIte
     app: input.app,
     priority: input.priority ?? 'P2',
     status,
-    order: nextOrder(status),
+    order: nextOrder(items, status),
     impact: input.impact,
     effort: input.effort,
     createdBy,
@@ -48,13 +49,14 @@ export function createItem(input: NewBacklogItem, createdBy: string): BacklogIte
     updatedAt: now,
   }
   items.push(item)
-  save()
+  await writeJson(BACKLOG_FILE, items)
   return item
 }
 
 const EDITABLE = ['title', 'detail', 'app', 'priority', 'status', 'impact', 'effort', 'order'] as const
 
-export function updateItem(id: string, patch: Partial<BacklogItem>): BacklogItem | null {
+export async function updateItem(id: string, patch: Partial<BacklogItem>): Promise<BacklogItem | null> {
+  const items = await load()
   const item = items.find((i) => i.id === id)
   if (!item) return null
   for (const key of EDITABLE) {
@@ -63,27 +65,31 @@ export function updateItem(id: string, patch: Partial<BacklogItem>): BacklogItem
   // Moving to a new column drops it to the bottom of that column unless an
   // explicit order was supplied.
   if (patch.status !== undefined && patch.order === undefined) {
-    item.order = nextOrder(item.status)
+    item.order = nextOrder(
+      items.filter((i) => i.id !== id),
+      item.status,
+    )
   }
   item.updatedAt = new Date().toISOString()
-  save()
+  await writeJson(BACKLOG_FILE, items)
   return item
 }
 
 /** Set an explicit ordering of ids (e.g. after a drag-reorder within a column). */
-export function reorder(orderedIds: string[]): BacklogItem[] {
+export async function reorder(orderedIds: string[]): Promise<BacklogItem[]> {
+  const items = await load()
   orderedIds.forEach((id, idx) => {
     const item = items.find((i) => i.id === id)
     if (item) item.order = idx
   })
-  save()
-  return listItems()
+  await writeJson(BACKLOG_FILE, items)
+  return items.sort((a, b) => a.order - b.order)
 }
 
-export function deleteItem(id: string): boolean {
-  const before = items.length
-  items = items.filter((i) => i.id !== id)
-  if (items.length === before) return false
-  save()
+export async function deleteItem(id: string): Promise<boolean> {
+  const items = await load()
+  const remaining = items.filter((i) => i.id !== id)
+  if (remaining.length === items.length) return false
+  await writeJson(BACKLOG_FILE, remaining)
   return true
 }

@@ -32,7 +32,8 @@ describe('users', () => {
       (e: unknown) => e,
     )
     expect(rejection).not.toBeNull()
-    expect((rejection as { code?: string }).code).toBe('SQLITE_CONSTRAINT_UNIQUE')
+    // SQLite / Postgres unique-violation codes respectively.
+    expect(['SQLITE_CONSTRAINT_UNIQUE', '23505']).toContain((rejection as { code?: string }).code)
   })
 
   it('links a Google identity to an existing account', async () => {
@@ -99,13 +100,13 @@ describe('hub data', () => {
 })
 
 describe('kv', () => {
-  it('stores and retrieves JSON values', () => {
-    expect(kvHas('missing')).toBe(false)
-    expect(kvGet('missing')).toBeUndefined()
-    kvSet('settings', { a: 1, nested: { b: [1, 2] } })
-    expect(kvHas('settings')).toBe(true)
-    expect(kvGet('settings')).toEqual({ a: 1, nested: { b: [1, 2] } })
-    kvSet('settings', { a: 2 })
-    expect(kvGet('settings')).toEqual({ a: 2 })
+  it('stores and retrieves JSON values', async () => {
+    expect(await kvHas('missing')).toBe(false)
+    expect(await kvGet('missing')).toBeUndefined()
+    await kvSet('settings', { a: 1, nested: { b: [1, 2] } })
+    expect(await kvHas('settings')).toBe(true)
+    expect(await kvGet('settings')).toEqual({ a: 1, nested: { b: [1, 2] } })
+    await kvSet('settings', { a: 2 })
+    expect(await kvGet('settings')).toEqual({ a: 2 })
   })
 })

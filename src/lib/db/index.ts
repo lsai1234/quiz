@@ -1,4 +1,4 @@
-export { getDb } from './client'
+export { getEngine, type SqlEngine } from './engine'
 export * from './users'
 export * from './sessions'
 export * from './hub-data'

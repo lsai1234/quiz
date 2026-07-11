@@ -4,6 +4,7 @@ import {
   setProductOverride,
   clearProductOverride,
   applyProductOverrides,
+  getProductOverrides,
   setDataSourceSetting,
   getDataSourceSetting,
 } from '../store'
@@ -43,21 +44,21 @@ describe('pricing config overrides', () => {
 })
 
 describe('product overrides store', () => {
-  it('merges overrides onto a catalogue', () => {
+  it('merges overrides onto a catalogue', async () => {
     const base = [makeProduct({ id: 'a', cost: 10 })]
-    setProductOverride('a', { cost: 99 })
-    expect(applyProductOverrides(base)[0].cost).toBe(99)
-    clearProductOverride('a')
-    expect(applyProductOverrides(base)[0].cost).toBe(10)
+    await setProductOverride('a', { cost: 99 })
+    expect(applyProductOverrides(base, await getProductOverrides())[0].cost).toBe(99)
+    await clearProductOverride('a')
+    expect(applyProductOverrides(base, await getProductOverrides())[0].cost).toBe(10)
   })
 })
 
 describe('data-source setting', () => {
-  it('flips the resolved mode via the portal override', () => {
-    setDataSourceSetting('shopify')
+  it('flips the resolved mode via the portal override', async () => {
+    await setDataSourceSetting('shopify')
     expect(getDataSourceMode()).toBe('shopify')
-    expect(getDataSourceSetting()).toBe('shopify')
-    setDataSourceSetting('mock')
+    expect(await getDataSourceSetting()).toBe('shopify')
+    await setDataSourceSetting('mock')
     expect(getDataSourceMode()).toBe('mock')
   })
 })

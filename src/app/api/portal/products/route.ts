@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { getDataSource } from '@/lib/data-source'
-import { setProductOverride, markProductRemoved } from '@/lib/portal/store'
+import { setProductOverride, markProductRemoved, syncPortalRuntime } from '@/lib/portal/store'
 import { productReadiness } from '@/lib/portal/readiness'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -34,9 +34,10 @@ export async function POST(req: Request) {
   const existing = products.find((p) => p.id === body.id)
 
   // Always record the override (so the app reflects it immediately, in either mode).
-  setProductOverride(body.id, body.patch)
+  await setProductOverride(body.id, body.patch)
 
   // When live, also push the change to Shopify (tags + metafields).
+  await syncPortalRuntime()
   let shopify: { written: boolean; error?: string } = { written: false }
   if (getDataSource() === 'shopify' && existing) {
     try {
@@ -66,6 +67,7 @@ export async function DELETE(req: Request) {
   const existing = products.find((p) => p.id === body.id)
 
   // When live, delete from Shopify first so we don't hide a product we failed to remove.
+  await syncPortalRuntime()
   let shopify: { deleted: boolean; error?: string } = { deleted: false }
   if (getDataSource() === 'shopify' && existing?.shopifyProductId) {
     try {
@@ -81,6 +83,6 @@ export async function DELETE(req: Request) {
   }
 
   // Hide it from the catalogue everywhere (covers mock + imported products too).
-  markProductRemoved(body.id)
+  await markProductRemoved(body.id)
   return NextResponse.json({ ok: true, shopify })
 }

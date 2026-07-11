@@ -45,10 +45,12 @@ Share your Sheet with the service account email.
 ## Accounts & database
 
 Customer accounts (hub sign-in), sessions, subscriptions, feedback and portal
-edits persist in a zero-config SQLite database at `.data/chrgd.db`. Email +
-password works out of the box; add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
-to `.env.local` for "Continue with Google". See `docs/BACKEND.md`.
+edits persist in a database — zero-config SQLite locally, and Postgres
+automatically when `DATABASE_URL` is set (required on serverless / Vercel, where
+SQLite doesn't persist). Email + password works out of the box; add
+`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for "Continue with Google". See
+`docs/BACKEND.md` (includes the Vercel deploy steps).
 
 ## Stack
 
-Next.js 15 · App Router · TypeScript · Tailwind CSS v4 · SQLite (better-sqlite3) · OpenAI API · Google Sheets API
+Next.js 15 · App Router · TypeScript · Tailwind CSS v4 · SQLite / Postgres · OpenAI API · Google Sheets API

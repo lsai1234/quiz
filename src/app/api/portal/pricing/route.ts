@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import { getPortalPricingOverrides, setPortalPricingOverrides, resetPortalPricing } from '@/lib/portal/store'
+import {
+  getPortalPricingOverrides,
+  setPortalPricingOverrides,
+  resetPortalPricing,
+  syncPortalRuntime,
+} from '@/lib/portal/store'
 import { PRICING_CONFIG, getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  await syncPortalRuntime()
   return NextResponse.json({
     defaults: PRICING_CONFIG,
-    overrides: getPortalPricingOverrides(),
+    overrides: await getPortalPricingOverrides(),
     current: getPricingConfig(),
   })
 }
@@ -21,9 +27,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
   if (body.reset) {
-    resetPortalPricing()
+    await resetPortalPricing()
   } else {
-    setPortalPricingOverrides(body.overrides ?? {})
+    await setPortalPricingOverrides(body.overrides ?? {})
   }
-  return NextResponse.json({ overrides: getPortalPricingOverrides(), current: getPricingConfig() })
+  return NextResponse.json({ overrides: await getPortalPricingOverrides(), current: getPricingConfig() })
 }

@@ -1,15 +1,17 @@
 /**
- * Founders Hub settings + product store.
+ * Founders Hub settings + product store — database-backed, serverless-safe.
  *
- * Durable across restarts via JSON files under `.data/` (see ./persist.ts) — the
- * seam to swap for Vercel KV / Postgres lives here. It holds the chosen
- * data-source mode, per-product field overrides, the set of products removed from
- * the catalogue, and products added via bulk import. Pricing overrides are
- * delegated to the pricing module (the single source of the current config).
+ * Founder-managed state (product field overrides, removed/imported products,
+ * the data-source mode, pricing overrides) persists in the app database via
+ * ./persist.ts. Reads go to the database on each call rather than a module
+ * cache, so on serverless every instance sees the latest edits; SQLite makes
+ * the same reads effectively free locally.
  *
- * `dataSourceMode` stays in-memory (it tracks the running process / env), but the
- * founder-managed collections are hydrated from disk on first load and re-saved
- * on every mutation.
+ * Pricing overrides and the data-source mode are *consumed* by synchronous
+ * module state (`stack-blueprint/pricing`, `data-source`) that the rest of the
+ * app reads everywhere. `syncPortalRuntime()` hydrates that module state from
+ * the database — server entry points that depend on either call it first
+ * (see resolve.ts and the API routes).
  */
 
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -26,6 +28,7 @@ import { readJson, writeJson } from './persist'
 export type ProductOverrides = Record<string, Partial<CatalogueProduct>>
 
 const PRODUCTS_FILE = 'products'
+const SETTINGS_FILE = 'settings'
 
 interface PersistedProducts {
   overrides: ProductOverrides
@@ -33,95 +36,137 @@ interface PersistedProducts {
   imported: CatalogueProduct[]
 }
 
-const persisted: PersistedProducts = readJson<PersistedProducts>(PRODUCTS_FILE, {
-  overrides: {},
-  removedIds: [],
-  imported: [],
-})
-
-const state = {
-  // Starts as whatever the environment resolves to (mock by default).
-  dataSourceMode: getDataSourceMode() as DataSourceMode,
-  productOverrides: persisted.overrides ?? {},
-  removedIds: new Set<string>(persisted.removedIds ?? []),
-  imported: persisted.imported ?? [],
+interface PersistedSettings {
+  dataSourceMode?: DataSourceMode
+  pricingOverrides?: Partial<PricingConfig>
 }
 
-function save(): void {
-  writeJson<PersistedProducts>(PRODUCTS_FILE, {
-    overrides: state.productOverrides,
-    removedIds: [...state.removedIds],
-    imported: state.imported,
-  })
+const EMPTY_PRODUCTS: PersistedProducts = { overrides: {}, removedIds: [], imported: [] }
+
+async function loadProducts(): Promise<PersistedProducts> {
+  const stored = await readJson<PersistedProducts>(PRODUCTS_FILE, EMPTY_PRODUCTS)
+  return {
+    overrides: stored.overrides ?? {},
+    removedIds: stored.removedIds ?? [],
+    imported: stored.imported ?? [],
+  }
+}
+
+async function loadSettings(): Promise<PersistedSettings> {
+  return readJson<PersistedSettings>(SETTINGS_FILE, {})
+}
+
+async function saveSettings(patch: Partial<PersistedSettings>): Promise<void> {
+  const current = await loadSettings()
+  await writeJson<PersistedSettings>(SETTINGS_FILE, { ...current, ...patch })
+}
+
+// ── Runtime sync ──
+// Pushes persisted settings into the synchronous module state the app reads
+// (pricing config, data-source override). Cheap enough to call per request;
+// a short TTL keeps hot paths from re-reading the database on every call.
+const SYNC_TTL_MS = 5_000
+let lastSyncedAt = 0
+
+export async function syncPortalRuntime(force = false): Promise<void> {
+  if (!force && Date.now() - lastSyncedAt < SYNC_TTL_MS) return
+  try {
+    const settings = await loadSettings()
+    setPricingOverrides(settings.pricingOverrides ?? {})
+    setDataSourceOverride(settings.dataSourceMode ?? null)
+    lastSyncedAt = Date.now()
+  } catch {
+    /* unreachable database — keep current in-memory state */
+  }
 }
 
 // ── Data source ──
-export function getDataSourceSetting(): DataSourceMode {
-  return state.dataSourceMode
+export async function getDataSourceSetting(): Promise<DataSourceMode> {
+  const settings = await loadSettings()
+  // Persisted portal choice wins; otherwise whatever the environment resolves.
+  return settings.dataSourceMode ?? getDataSourceMode()
 }
-export function setDataSourceSetting(mode: DataSourceMode): void {
-  state.dataSourceMode = mode
+export async function setDataSourceSetting(mode: DataSourceMode): Promise<void> {
+  await saveSettings({ dataSourceMode: mode })
   setDataSourceOverride(mode)
+  lastSyncedAt = Date.now()
 }
 
-// ── Pricing (delegated to the pricing module) ──
-export function getPortalPricingOverrides(): Partial<PricingConfig> {
-  return getPricingOverrides()
+// ── Pricing ──
+export async function getPortalPricingOverrides(): Promise<Partial<PricingConfig>> {
+  const settings = await loadSettings()
+  return settings.pricingOverrides ?? {}
 }
-export function setPortalPricingOverrides(overrides: Partial<PricingConfig>): void {
+export async function setPortalPricingOverrides(overrides: Partial<PricingConfig>): Promise<void> {
+  await saveSettings({ pricingOverrides: overrides })
   setPricingOverrides(overrides)
+  lastSyncedAt = Date.now()
 }
-export function resetPortalPricing(): void {
+export async function resetPortalPricing(): Promise<void> {
+  await saveSettings({ pricingOverrides: {} })
   resetPricingOverrides()
+  lastSyncedAt = Date.now()
 }
+// Re-export for callers that need the currently-hydrated (module) overrides.
+export { getPricingOverrides as getHydratedPricingOverrides }
 
 // ── Product overrides ──
-export function getProductOverrides(): ProductOverrides {
-  return state.productOverrides
+export async function getProductOverrides(): Promise<ProductOverrides> {
+  return (await loadProducts()).overrides
 }
-export function getProductOverride(id: string): Partial<CatalogueProduct> | undefined {
-  return state.productOverrides[id]
+export async function getProductOverride(id: string): Promise<Partial<CatalogueProduct> | undefined> {
+  return (await loadProducts()).overrides[id]
 }
-export function setProductOverride(id: string, patch: Partial<CatalogueProduct>): void {
-  state.productOverrides[id] = { ...state.productOverrides[id], ...patch }
-  save()
+export async function setProductOverride(id: string, patch: Partial<CatalogueProduct>): Promise<void> {
+  const state = await loadProducts()
+  state.overrides[id] = { ...state.overrides[id], ...patch }
+  await writeJson(PRODUCTS_FILE, state)
 }
-export function clearProductOverride(id: string): void {
-  delete state.productOverrides[id]
-  save()
+export async function clearProductOverride(id: string): Promise<void> {
+  const state = await loadProducts()
+  delete state.overrides[id]
+  await writeJson(PRODUCTS_FILE, state)
 }
 
 // ── Removed products (hidden from the catalogue everywhere) ──
-export function getRemovedProductIds(): Set<string> {
-  return state.removedIds
+export async function getRemovedProductIds(): Promise<Set<string>> {
+  return new Set((await loadProducts()).removedIds)
 }
-export function markProductRemoved(id: string): void {
-  state.removedIds.add(id)
+export async function markProductRemoved(id: string): Promise<void> {
+  const state = await loadProducts()
+  if (!state.removedIds.includes(id)) state.removedIds.push(id)
   // Removing supersedes any prior field overrides for that product.
-  delete state.productOverrides[id]
-  save()
+  delete state.overrides[id]
+  await writeJson(PRODUCTS_FILE, state)
 }
-export function restoreProduct(id: string): void {
-  state.removedIds.delete(id)
-  save()
+export async function restoreProduct(id: string): Promise<void> {
+  const state = await loadProducts()
+  state.removedIds = state.removedIds.filter((r) => r !== id)
+  await writeJson(PRODUCTS_FILE, state)
 }
 
 // ── Imported products (added via bulk import) ──
-export function getImportedProducts(): CatalogueProduct[] {
-  return state.imported
+export async function getImportedProducts(): Promise<CatalogueProduct[]> {
+  return (await loadProducts()).imported
 }
-export function addImportedProducts(products: CatalogueProduct[]): void {
+export async function addImportedProducts(products: CatalogueProduct[]): Promise<void> {
+  const state = await loadProducts()
   // De-dupe on id: a re-import of the same handle replaces the prior version.
   const byId = new Map(state.imported.map((p) => [p.id, p]))
   for (const p of products) byId.set(p.id, p)
   state.imported = [...byId.values()]
-  save()
+  await writeJson(PRODUCTS_FILE, state)
 }
 
-/** Merge stored field overrides onto a catalogue (used by the read path). */
+/** The full founder-managed product state in one read (for the read path). */
+export async function getPersistedProducts(): Promise<PersistedProducts> {
+  return loadProducts()
+}
+
+/** Merge stored field overrides onto a catalogue (pure helper). */
 export function applyProductOverrides(
   products: CatalogueProduct[],
-  overrides: ProductOverrides = state.productOverrides,
+  overrides: ProductOverrides,
 ): CatalogueProduct[] {
   if (Object.keys(overrides).length === 0) return products
   return products.map((p) => (overrides[p.id] ? { ...p, ...overrides[p.id] } : p))

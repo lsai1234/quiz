@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getDataSource } from '@/lib/data-source'
-import { addImportedProducts } from '@/lib/portal/store'
+import { addImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
 import { parseImportCsv } from '@/lib/portal/import'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -34,6 +34,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'No valid rows to import', preview }, { status: 400 })
   }
 
+  await syncPortalRuntime()
   const live = getDataSource() === 'shopify'
   const results: { id: string; ok: boolean; error?: string }[] = []
   const toStore: CatalogueProduct[] = []
@@ -60,7 +61,7 @@ export async function POST(req: Request) {
     }
   }
 
-  if (toStore.length > 0) addImportedProducts(toStore)
+  if (toStore.length > 0) await addImportedProducts(toStore)
 
   return NextResponse.json({
     ok: true,

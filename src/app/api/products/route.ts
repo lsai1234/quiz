@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server'
 import { fetchCatalogue } from '@/lib/shopify/catalogue'
 import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const debug = searchParams.has('debug')
+  await syncPortalRuntime()
 
   // Debug mode: expose env var state without leaking full token
   if (debug) {

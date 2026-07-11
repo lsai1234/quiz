@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createCart } from '@/lib/shopify/operations'
 import { getDataSource } from '@/lib/data-source'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 /**
  * POST /api/cart
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
     }
   }
 
+  await syncPortalRuntime()
   if (getDataSource() === 'mock') {
     // Mock mode — return a placeholder URL so the UI can still show success state
     return NextResponse.json({

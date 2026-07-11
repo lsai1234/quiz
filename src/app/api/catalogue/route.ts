@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 // Don't cache — the portal can flip the data source / edit products at runtime.
 export const dynamic = 'force-dynamic'
@@ -10,6 +11,7 @@ export async function GET(request: Request) {
   const debug = searchParams.has('debug')
 
   if (debug) {
+    await syncPortalRuntime()
     const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
     const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
     return NextResponse.json({

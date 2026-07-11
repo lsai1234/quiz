@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   return NextResponse.json({
-    dataSourceMode: getDataSourceSetting(),
-    pricingOverrides: getPortalPricingOverrides(),
+    dataSourceMode: await getDataSourceSetting(),
+    pricingOverrides: await getPortalPricingOverrides(),
   })
 }

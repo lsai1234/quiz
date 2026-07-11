@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createCart } from '@/lib/shopify/operations'
 import { getDataSource } from '@/lib/data-source'
+import { syncPortalRuntime } from '@/lib/portal/store'
 
 /**
  * POST /api/subscribe
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     }
   }
 
+  await syncPortalRuntime()
   if (getDataSource() === 'mock') {
     return NextResponse.json({ ok: true, mock: true, checkoutUrl: '#mock-subscription' })
   }

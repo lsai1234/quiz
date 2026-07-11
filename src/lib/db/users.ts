@@ -6,11 +6,11 @@
  * in with Google using an email that already has a password account links the
  * two rather than duplicating the person.
  *
- * Async signatures even though better-sqlite3 is synchronous — this is the
- * Postgres-swap seam.
+ * Engine-agnostic: statements go through SqlEngine (SQLite locally, Postgres
+ * when DATABASE_URL is set).
  */
 import crypto from 'crypto'
-import { getDb, now } from './client'
+import { getEngine, now } from './engine'
 
 export interface UserRecord {
   id: string
@@ -77,35 +77,39 @@ export async function createUser(input: {
     picture: input.picture ?? null,
     createdAt: now(),
   }
-  getDb()
-    .prepare(
-      `INSERT INTO users (id, email, name, password_hash, google_sub, picture, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(user.id, user.email, user.name, user.passwordHash, user.googleSub, user.picture, user.createdAt)
+  const db = await getEngine()
+  await db.run(
+    `INSERT INTO users (id, email, name, password_hash, google_sub, picture, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [user.id, user.email, user.name, user.passwordHash, user.googleSub, user.picture, user.createdAt],
+  )
   return user
 }
 
 export async function getUserByEmail(email: string): Promise<UserRecord | null> {
-  const row = getDb()
-    .prepare('SELECT * FROM users WHERE email = ?')
-    .get(normaliseEmail(email)) as UserRow | undefined
+  const db = await getEngine()
+  const row = await db.get<UserRow>('SELECT * FROM users WHERE email = ?', [normaliseEmail(email)])
   return row ? fromRow(row) : null
 }
 
 export async function getUserById(id: string): Promise<UserRecord | null> {
-  const row = getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined
+  const db = await getEngine()
+  const row = await db.get<UserRow>('SELECT * FROM users WHERE id = ?', [id])
   return row ? fromRow(row) : null
 }
 
 export async function getUserByGoogleSub(sub: string): Promise<UserRecord | null> {
-  const row = getDb().prepare('SELECT * FROM users WHERE google_sub = ?').get(sub) as UserRow | undefined
+  const db = await getEngine()
+  const row = await db.get<UserRow>('SELECT * FROM users WHERE google_sub = ?', [sub])
   return row ? fromRow(row) : null
 }
 
 /** Attach a Google identity (and optional avatar) to an existing account. */
 export async function linkGoogle(userId: string, sub: string, picture?: string | null): Promise<void> {
-  getDb()
-    .prepare('UPDATE users SET google_sub = ?, picture = COALESCE(?, picture) WHERE id = ?')
-    .run(sub, picture ?? null, userId)
+  const db = await getEngine()
+  await db.run('UPDATE users SET google_sub = ?, picture = COALESCE(?, picture) WHERE id = ?', [
+    sub,
+    picture ?? null,
+    userId,
+  ])
 }

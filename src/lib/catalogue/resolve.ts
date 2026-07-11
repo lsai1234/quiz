@@ -2,8 +2,8 @@ import { getDataSource } from '@/lib/data-source'
 import { MOCK_CATALOGUE } from './mock-catalogue'
 import {
   applyProductOverrides,
-  getImportedProducts,
-  getRemovedProductIds,
+  getPersistedProducts,
+  syncPortalRuntime,
 } from '@/lib/portal/store'
 import type { CatalogueProduct } from './types'
 
@@ -13,9 +13,10 @@ import type { CatalogueProduct } from './types'
  * founders removed filtered out. Applied to both the live and mock branches so
  * removals/imports reflect everywhere (quiz, hub, dashboard).
  */
-function composeCatalogue(base: CatalogueProduct[]): CatalogueProduct[] {
-  const removed = getRemovedProductIds()
-  const withImports = [...applyProductOverrides(base), ...getImportedProducts()]
+async function composeCatalogue(base: CatalogueProduct[]): Promise<CatalogueProduct[]> {
+  const { overrides, removedIds, imported } = await getPersistedProducts()
+  const removed = new Set(removedIds)
+  const withImports = [...applyProductOverrides(base, overrides), ...imported]
   return removed.size === 0 ? withImports : withImports.filter((p) => !removed.has(p.id))
 }
 
@@ -24,18 +25,21 @@ function composeCatalogue(base: CatalogueProduct[]): CatalogueProduct[] {
  * resolved data source, with founder overrides/imports/removals applied.
  */
 export async function getResolvedCatalogue(): Promise<{ products: CatalogueProduct[]; source: 'mock' | 'shopify'; error?: string }> {
+  // Hydrate the data-source override + pricing overrides from the database
+  // first — on serverless this instance may not have seen a portal edit yet.
+  await syncPortalRuntime()
   if (getDataSource() === 'shopify') {
     try {
       const { getProducts } = await import('@/lib/shopify/operations')
       const { mapShopifyToCatalogueProduct } = await import('@/lib/shopify/catalogue')
       const shopifyProducts = await getProducts(50)
       if (shopifyProducts.length === 0) {
-        return { products: composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock', error: 'Shopify returned 0 products. Check the store has products and the Storefront token has read access.' }
+        return { products: await composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock', error: 'Shopify returned 0 products. Check the store has products and the Storefront token has read access.' }
       }
-      return { products: composeCatalogue(shopifyProducts.map(mapShopifyToCatalogueProduct)), source: 'shopify' }
+      return { products: await composeCatalogue(shopifyProducts.map(mapShopifyToCatalogueProduct)), source: 'shopify' }
     } catch (err) {
-      return { products: composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock', error: err instanceof Error ? err.message : String(err) }
+      return { products: await composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock', error: err instanceof Error ? err.message : String(err) }
     }
   }
-  return { products: composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock' }
+  return { products: await composeCatalogue(MOCK_CATALOGUE as CatalogueProduct[]), source: 'mock' }
 }

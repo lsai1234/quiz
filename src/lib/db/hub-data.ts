@@ -10,12 +10,11 @@
 import crypto from 'crypto'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { FeedbackCheckIn } from '@/lib/feedback'
-import { getDb, now } from './client'
+import { getEngine, now } from './engine'
 
 export async function getSubscription(userId: string): Promise<MemberSubscription | null> {
-  const row = getDb().prepare('SELECT data FROM subscriptions WHERE user_id = ?').get(userId) as
-    | { data: string }
-    | undefined
+  const db = await getEngine()
+  const row = await db.get<{ data: string }>('SELECT data FROM subscriptions WHERE user_id = ?', [userId])
   if (!row) return null
   try {
     return JSON.parse(row.data) as MemberSubscription
@@ -25,18 +24,20 @@ export async function getSubscription(userId: string): Promise<MemberSubscriptio
 }
 
 export async function saveSubscription(userId: string, subscription: MemberSubscription): Promise<void> {
-  getDb()
-    .prepare(
-      `INSERT INTO subscriptions (user_id, data, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-    )
-    .run(userId, JSON.stringify(subscription), now())
+  const db = await getEngine()
+  await db.run(
+    `INSERT INTO subscriptions (user_id, data, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(subscription), now()],
+  )
 }
 
 export async function listFeedback(userId: string): Promise<FeedbackCheckIn[]> {
-  const rows = getDb()
-    .prepare('SELECT payload FROM feedback WHERE user_id = ? ORDER BY created_at ASC')
-    .all(userId) as { payload: string }[]
+  const db = await getEngine()
+  const rows = await db.all<{ payload: string }>(
+    'SELECT payload FROM feedback WHERE user_id = ? ORDER BY created_at ASC',
+    [userId],
+  )
   const checkIns: FeedbackCheckIn[] = []
   for (const row of rows) {
     try {
@@ -49,7 +50,11 @@ export async function listFeedback(userId: string): Promise<FeedbackCheckIn[]> {
 }
 
 export async function addFeedback(userId: string, checkIn: FeedbackCheckIn): Promise<void> {
-  getDb()
-    .prepare('INSERT INTO feedback (id, user_id, created_at, payload) VALUES (?, ?, ?, ?)')
-    .run(checkIn.id || crypto.randomUUID(), userId, checkIn.date || now(), JSON.stringify(checkIn))
+  const db = await getEngine()
+  await db.run('INSERT INTO feedback (id, user_id, created_at, payload) VALUES (?, ?, ?, ?)', [
+    checkIn.id || crypto.randomUUID(),
+    userId,
+    checkIn.date || now(),
+    JSON.stringify(checkIn),
+  ])
 }

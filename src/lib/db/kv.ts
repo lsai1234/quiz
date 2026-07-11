@@ -1,15 +1,13 @@
 /**
  * JSON key-value table — the durable backing for the portal's persistence seam
- * (`src/lib/portal/persist.ts`). Synchronous by design: the portal store
- * hydrates at module load. A Postgres swap would make persist.ts hydrate
- * asynchronously behind the same readJson/writeJson call sites.
+ * (`src/lib/portal/persist.ts`): product overrides, imports/removals, backlog,
+ * runtime settings.
  */
-import { getDb, now } from './client'
+import { getEngine, now } from './engine'
 
-export function kvGet<T>(key: string): T | undefined {
-  const row = getDb().prepare('SELECT value FROM kv WHERE key = ?').get(key) as
-    | { value: string }
-    | undefined
+export async function kvGet<T>(key: string): Promise<T | undefined> {
+  const db = await getEngine()
+  const row = await db.get<{ value: string }>('SELECT value FROM kv WHERE key = ?', [key])
   if (!row) return undefined
   try {
     return JSON.parse(row.value) as T
@@ -18,15 +16,16 @@ export function kvGet<T>(key: string): T | undefined {
   }
 }
 
-export function kvSet<T>(key: string, value: T): void {
-  getDb()
-    .prepare(
-      `INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
-    )
-    .run(key, JSON.stringify(value), now())
+export async function kvSet<T>(key: string, value: T): Promise<void> {
+  const db = await getEngine()
+  await db.run(
+    `INSERT INTO kv (key, value, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+    [key, JSON.stringify(value), now()],
+  )
 }
 
-export function kvHas(key: string): boolean {
-  return !!getDb().prepare('SELECT 1 FROM kv WHERE key = ?').get(key)
+export async function kvHas(key: string): Promise<boolean> {
+  const db = await getEngine()
+  return !!(await db.get('SELECT 1 AS one FROM kv WHERE key = ?', [key]))
 }
