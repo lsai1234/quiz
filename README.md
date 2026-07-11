@@ -42,6 +42,13 @@ Share your Sheet with the service account email.
 7. Claim safety — flags risky supplement/health language
 8. TikTok preview + Export review — append to Google Sheets as queued
 
+## Accounts & database
+
+Customer accounts (hub sign-in), sessions, subscriptions, feedback and portal
+edits persist in a zero-config SQLite database at `.data/chrgd.db`. Email +
+password works out of the box; add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`
+to `.env.local` for "Continue with Google". See `docs/BACKEND.md`.
+
 ## Stack
 
-Next.js 15 · App Router · TypeScript · Tailwind CSS v4 · OpenAI API · Google Sheets API
+Next.js 15 · App Router · TypeScript · Tailwind CSS v4 · SQLite (better-sqlite3) · OpenAI API · Google Sheets API

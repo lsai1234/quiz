@@ -1,42 +1,56 @@
 /**
- * Tiny JSON-file persistence for the Founders Hub.
+ * Founders Hub persistence — now backed by the app database.
  *
  * State that founders manage over time (product overrides, removed/imported
- * products, the improvements backlog) is written to JSON files under a `.data/`
- * directory at the project root, so it survives a server restart. This is the
- * single seam to swap for Vercel KV / Postgres later — callers only ever touch
- * `readJson` / `writeJson`.
+ * products, the improvements backlog) lives in the SQLite `kv` table
+ * (`src/lib/db/`), keyed by the same names as the legacy `.data/*.json` files.
+ * A legacy JSON snapshot, if present, is migrated into the database the first
+ * time its key is read, so existing local edits survive the upgrade.
  *
- * Server-only (uses node fs). Reads are synchronous (called rarely, on hydrate);
- * writes are synchronous too so a crash right after a mutation can't lose it.
- * Anything that can't be read/written falls back gracefully to the in-memory
- * value, so a read-only filesystem degrades to the old in-memory behaviour
- * rather than crashing.
+ * Callers only ever touch `readJson` / `writeJson` — this stays the single
+ * seam for the storage engine (SQLite today, Postgres later via `src/lib/db`).
+ *
+ * Server-only. Reads/writes are synchronous (the portal store hydrates at
+ * module load); anything that fails degrades to the in-memory value rather
+ * than crashing, matching the old JSON-file behaviour.
  */
 import fs from 'fs'
 import path from 'path'
+import { kvGet, kvSet, kvHas } from '@/lib/db/kv'
 
-const DATA_DIR = path.join(process.cwd(), '.data')
+const LEGACY_DATA_DIR = path.join(process.cwd(), '.data')
+const KV_PREFIX = 'portal:'
 
-function fileFor(name: string): string {
-  return path.join(DATA_DIR, `${name}.json`)
+/** Migrate a legacy `.data/<name>.json` snapshot into the kv table, once. */
+function migrateLegacyFile<T>(name: string): T | undefined {
+  try {
+    const raw = fs.readFileSync(path.join(LEGACY_DATA_DIR, `${name}.json`), 'utf8')
+    const data = JSON.parse(raw) as T
+    kvSet(KV_PREFIX + name, data)
+    return data
+  } catch {
+    return undefined
+  }
 }
 
-/** Read a JSON file, returning `fallback` when it's missing or unreadable. */
+/** Read a persisted value, returning `fallback` when missing or unreadable. */
 export function readJson<T>(name: string, fallback: T): T {
   try {
-    const raw = fs.readFileSync(fileFor(name), 'utf8')
-    return JSON.parse(raw) as T
+    if (kvHas(KV_PREFIX + name)) {
+      const stored = kvGet<T>(KV_PREFIX + name)
+      if (stored !== undefined) return stored
+    }
+    const migrated = migrateLegacyFile<T>(name)
+    return migrated !== undefined ? migrated : fallback
   } catch {
     return fallback
   }
 }
 
-/** Write a JSON file, creating `.data/` on demand. Best-effort (never throws). */
+/** Persist a value. Best-effort (never throws). */
 export function writeJson<T>(name: string, data: T): void {
   try {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-    fs.writeFileSync(fileFor(name), JSON.stringify(data, null, 2), 'utf8')
+    kvSet(KV_PREFIX + name, data)
   } catch {
     /* read-only fs / sandbox — keep the in-memory value, just don't persist */
   }

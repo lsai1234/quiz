@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ['three'],
+  serverExternalPackages: ['three', 'better-sqlite3'],
   turbopack: undefined,
   // Skip type-checking in the build worker to avoid OOM on constrained machines.
   // Run `npx tsc --noEmit` separately for type safety.

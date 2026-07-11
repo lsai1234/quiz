@@ -6,7 +6,6 @@ import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { FeedbackCheckIn, FeedbackDimension } from '@/lib/feedback'
 import {
-  createMockSubscription,
   setDispatchDay,
   pauseSubscription,
   resumeSubscription,
@@ -34,16 +33,52 @@ import {
 import type { DeliveryItem } from '@/lib/recharge/schedule'
 
 /**
- * Subscriber-hub state. Today it drives a mock subscription; when Recharge is
- * connected, each action calls Recharge's customer API instead of the local
- * mock mutation — the action surface stays the same.
+ * Subscriber-hub state, backed by a real account. Sign-in is a DB session
+ * (email+password or Google — see /api/auth/*); the subscription and check-in
+ * history persist per account in the app database. Mutations stay pure local
+ * functions, and each result is written through to /api/hub/subscription so
+ * the state survives reloads and devices. When Recharge is connected, each
+ * action calls Recharge's customer API instead — the action surface stays
+ * the same.
  */
+
+export interface HubSession {
+  email: string
+  name: string
+}
+
+/** Write the mutated subscription through to the account (fire-and-forget). */
+function persist(subscription: MemberSubscription): MemberSubscription {
+  void fetch('/api/hub/subscription', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ subscription }),
+  }).catch(() => {})
+  return subscription
+}
+
+function persistCheckIn(checkIn: FeedbackCheckIn): FeedbackCheckIn {
+  void fetch('/api/hub/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ checkIn }),
+  }).catch(() => {})
+  return checkIn
+}
+
 interface HubStore {
-  session: { email: string } | null
+  session: HubSession | null
   subscription: MemberSubscription | null
   feedback: FeedbackCheckIn[]
+  /** True once the initial /api/auth/me restore has completed. */
+  hydrated: boolean
+  /** Whether the server has Google OAuth configured (shows the button). */
+  googleEnabled: boolean
 
-  login: (email: string, catalogue: CatalogueProduct[]) => void
+  /** Restore the signed-in state on load (cookie session → account data). */
+  hydrate: () => Promise<void>
+  /** Sign in or create an account. Resolves to an error message, or null on success. */
+  authenticate: (mode: 'login' | 'signup', email: string, password: string) => Promise<string | null>
   logout: () => void
   submitFeedback: (
     ratings: Partial<Record<FeedbackDimension, number>>,
@@ -85,78 +120,149 @@ interface HubStore {
   submitDimension: (dimension: FeedbackDimension, rating: number) => void
 }
 
+/** Fetch the account's subscription + feedback (server seeds on first sign-in). */
+async function loadAccountData(): Promise<{
+  subscription: MemberSubscription | null
+  feedback: FeedbackCheckIn[]
+}> {
+  try {
+    const res = await fetch('/api/hub/subscription')
+    if (!res.ok) return { subscription: null, feedback: [] }
+    const data = (await res.json()) as { subscription?: MemberSubscription; feedback?: FeedbackCheckIn[] }
+    return { subscription: data.subscription ?? null, feedback: data.feedback ?? [] }
+  } catch {
+    return { subscription: null, feedback: [] }
+  }
+}
+
 export const useHubStore = create<HubStore>((set) => ({
   session: null,
   subscription: null,
   feedback: [],
+  hydrated: false,
+  googleEnabled: false,
 
-  login: (email, catalogue) =>
-    set({ session: { email }, subscription: createMockSubscription(catalogue, email), feedback: [] }),
-  logout: () => set({ session: null, subscription: null, feedback: [] }),
+  hydrate: async () => {
+    try {
+      const me = (await (await fetch('/api/auth/me')).json()) as {
+        user?: { email: string; name: string } | null
+        googleEnabled?: boolean
+      }
+      const googleEnabled = !!me.googleEnabled
+      if (!me.user) {
+        set({ hydrated: true, googleEnabled })
+        return
+      }
+      const { subscription, feedback } = await loadAccountData()
+      set({
+        session: { email: me.user.email, name: me.user.name },
+        subscription,
+        feedback,
+        hydrated: true,
+        googleEnabled,
+      })
+    } catch {
+      set({ hydrated: true })
+    }
+  },
+
+  authenticate: async (mode, email, password) => {
+    try {
+      const res = await fetch(`/api/auth/${mode === 'signup' ? 'signup' : 'login'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      const data = (await res.json()) as { user?: { email: string; name: string }; error?: string }
+      if (!res.ok || !data.user) return data.error ?? 'Something went wrong — try again'
+      const { subscription, feedback } = await loadAccountData()
+      set({ session: { email: data.user.email, name: data.user.name }, subscription, feedback })
+      return null
+    } catch {
+      return 'Network error — try again'
+    }
+  },
+
+  logout: () => {
+    void fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    set({ session: null, subscription: null, feedback: [] })
+  },
+
   submitFeedback: (ratings, noticedImprovements, notes) =>
     set((s) => ({
       feedback: [
         ...s.feedback,
-        { id: `fb-${Date.now()}`, date: new Date().toISOString(), ratings, noticedImprovements, notes },
+        persistCheckIn({
+          id: `fb-${Date.now()}`,
+          date: new Date().toISOString(),
+          ratings,
+          noticedImprovements,
+          notes,
+        }),
       ],
     })),
 
   setDispatchDay: (day) =>
-    set((s) => (s.subscription ? { subscription: setDispatchDay(s.subscription, day) } : s)),
-  pause: () => set((s) => (s.subscription ? { subscription: pauseSubscription(s.subscription) } : s)),
-  resume: () => set((s) => (s.subscription ? { subscription: resumeSubscription(s.subscription) } : s)),
-  cancel: () => set((s) => (s.subscription ? { subscription: cancelSubscription(s.subscription) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(setDispatchDay(s.subscription, day)) } : s)),
+  pause: () => set((s) => (s.subscription ? { subscription: persist(pauseSubscription(s.subscription)) } : s)),
+  resume: () => set((s) => (s.subscription ? { subscription: persist(resumeSubscription(s.subscription)) } : s)),
+  cancel: () => set((s) => (s.subscription ? { subscription: persist(cancelSubscription(s.subscription)) } : s)),
   swapLine: (lineId, newProduct) =>
-    set((s) => (s.subscription ? { subscription: swapSubscriptionLine(s.subscription, lineId, newProduct) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(swapSubscriptionLine(s.subscription, lineId, newProduct)) } : s)),
 
   snooze: (months) =>
-    set((s) => (s.subscription ? { subscription: snoozeSubscription(s.subscription, months) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(snoozeSubscription(s.subscription, months)) } : s)),
   applyDownsize: (dropLineIds) =>
     set((s) => {
       if (!s.subscription) return s
       let sub = s.subscription
       for (const id of dropLineIds) sub = removeLineMutation(sub, id).sub
-      return { subscription: sub }
+      return { subscription: persist(sub) }
     }),
   cancelWithReason: (reason) =>
-    set((s) => (s.subscription ? { subscription: cancelSubscription(s.subscription, reason) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(cancelSubscription(s.subscription, reason)) } : s)),
 
   addLine: (product, catalogue) =>
-    set((s) => (s.subscription ? { subscription: addLineMutation(s.subscription, product, catalogue) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(addLineMutation(s.subscription, product, catalogue)) } : s)),
   removeLine: (lineId) =>
-    set((s) => (s.subscription ? { subscription: removeLineMutation(s.subscription, lineId).sub } : s)),
+    set((s) => (s.subscription ? { subscription: persist(removeLineMutation(s.subscription, lineId).sub) } : s)),
   setLineCadence: (lineId, months) =>
-    set((s) => (s.subscription ? { subscription: setLineCadenceMutation(s.subscription, lineId, months) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(setLineCadenceMutation(s.subscription, lineId, months)) } : s)),
   setLineQuantity: (lineId, quantity) =>
-    set((s) => (s.subscription ? { subscription: setLineQuantityMutation(s.subscription, lineId, quantity) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(setLineQuantityMutation(s.subscription, lineId, quantity)) } : s)),
   setLineUsage: (lineId, product, usageLevel) =>
-    set((s) => (s.subscription ? { subscription: setLineUsageMutation(s.subscription, lineId, product, usageLevel) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(setLineUsageMutation(s.subscription, lineId, product, usageLevel)) } : s)),
   skipNext: (lineId) =>
-    set((s) => (s.subscription ? { subscription: skipNextMutation(s.subscription, lineId) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(skipNextMutation(s.subscription, lineId)) } : s)),
   setNextDispatchDate: (date) =>
-    set((s) => (s.subscription ? { subscription: setNextDispatchDateMutation(s.subscription, date) } : s)),
-  sendNow: () => set((s) => (s.subscription ? { subscription: sendNowMutation(s.subscription) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(setNextDispatchDateMutation(s.subscription, date)) } : s)),
+  sendNow: () => set((s) => (s.subscription ? { subscription: persist(sendNowMutation(s.subscription)) } : s)),
   bringForward: (days) =>
-    set((s) => (s.subscription ? { subscription: bringForwardMutation(s.subscription, days) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(bringForwardMutation(s.subscription, days)) } : s)),
   delayDispatch: (days) =>
-    set((s) => (s.subscription ? { subscription: delayDispatchMutation(s.subscription, days) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(delayDispatchMutation(s.subscription, days)) } : s)),
 
   skipDelivery: (deliveryId) =>
-    set((s) => (s.subscription ? { subscription: skipDeliveryMutation(s.subscription, deliveryId) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(skipDeliveryMutation(s.subscription, deliveryId)) } : s)),
   unskipDelivery: (deliveryId) =>
-    set((s) => (s.subscription ? { subscription: unskipDeliveryMutation(s.subscription, deliveryId) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(unskipDeliveryMutation(s.subscription, deliveryId)) } : s)),
   rescheduleDelivery: (deliveryId, date) =>
-    set((s) => (s.subscription ? { subscription: rescheduleDeliveryMutation(s.subscription, deliveryId, date) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(rescheduleDeliveryMutation(s.subscription, deliveryId, date)) } : s)),
   addItemToDelivery: (deliveryId, product) =>
-    set((s) => (s.subscription ? { subscription: addItemToDeliveryMutation(s.subscription, deliveryId, product) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(addItemToDeliveryMutation(s.subscription, deliveryId, product)) } : s)),
   removeItemFromDelivery: (deliveryId, item) =>
-    set((s) => (s.subscription ? { subscription: removeItemFromDeliveryMutation(s.subscription, deliveryId, item) } : s)),
+    set((s) => (s.subscription ? { subscription: persist(removeItemFromDeliveryMutation(s.subscription, deliveryId, item)) } : s)),
 
   submitDimension: (dimension, rating) =>
     set((s) => ({
       feedback: [
         ...s.feedback,
-        { id: `fb-${Date.now()}`, date: new Date().toISOString(), ratings: { [dimension]: rating }, noticedImprovements: rating >= 4 },
+        persistCheckIn({
+          id: `fb-${Date.now()}`,
+          date: new Date().toISOString(),
+          ratings: { [dimension]: rating },
+          noticedImprovements: rating >= 4,
+        }),
       ],
     })),
 }))
