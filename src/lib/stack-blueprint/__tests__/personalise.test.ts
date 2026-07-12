@@ -41,7 +41,8 @@ describe('buildSlotOptions', () => {
     expect(slotOptions.length).toBe(blueprint.slots.length)
     for (const so of slotOptions) {
       expect(so.options.map(o => o.id)).toContain(so.currentProductId)
-      expect(so.options.length).toBeLessThanOrEqual(6)
+      // Bounded by MAX_OPTIONS_PER_SLOT in personalise.ts (keeps the AI prompt small).
+      expect(so.options.length).toBeLessThanOrEqual(8)
     }
   })
 

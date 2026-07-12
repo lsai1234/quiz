@@ -60,6 +60,28 @@ describe('LQD blueprint', () => {
     }
   })
 
+  it('covers vitamins and sleep with the LQD drink products', () => {
+    const blueprint = buildStackBlueprint(
+      lqdAnswers({ track: 'wellbeing', goals: ['health', 'immune', 'sleep-better'] }),
+      MOCK_CATALOGUE,
+    )
+    const picked = blueprint.slots.map((s) => s.selectedProductId)
+    // The drinkable multivitamin now owns the health slot in drinks mode…
+    expect(picked).toContain('chrgd-lqd-daily')
+    // …and sleep territory is drinkable too (Night Pour), not silently dropped.
+    expect(picked).toContain('chrgd-night-pour')
+  })
+
+  it('keeps normal-mode picks unchanged (capsule multivitamin still wins ties)', () => {
+    const blueprint = buildStackBlueprint(
+      lqdAnswers({ drinksMode: false, track: 'wellbeing', goals: ['health', 'immune'] }),
+      MOCK_CATALOGUE,
+    )
+    const picked = blueprint.slots.map((s) => s.selectedProductId)
+    expect(picked).toContain('chrgd-multivitamin')
+    expect(picked).not.toContain('chrgd-lqd-daily')
+  })
+
   it('same answers without drinks mode may include capsules (sanity contrast)', () => {
     const blueprint = buildStackBlueprint(lqdAnswers({ drinksMode: false, goals: ['health'] }), MOCK_CATALOGUE)
     const anyCapsule = blueprint.slots.some((slot) => {

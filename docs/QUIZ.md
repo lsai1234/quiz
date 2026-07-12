@@ -41,10 +41,14 @@ the existing machinery:
   the evening…), rendered by `LqdPourGuide` on the stack review. Pricing,
   checkout, accounts and the hub are unchanged — an LQD bundle is a normal
   bundle whose products all happen to be drinks.
-- **Catalogue note**: vitamins/minerals are capsule-only today, so LQD covers
-  that ground with greens + electrolytes until a drinkable vitamin product
-  (e.g. an effervescent daily) is added — tag its format `powder`/`drink` and
-  it joins LQD automatically.
+- **LQD drink products**: the mock catalogue carries drinkable counterparts to
+  the capsule staples — `chrgd-lqd-daily` (multivitamin drink, health slot),
+  `chrgd-night-pour` (sleep drink), `chrgd-immunity-fizz` (vit C + zinc + D
+  effervescent) and `chrgd-clear-whey` (juice-style protein) — so an LQD
+  package covers vitamins, sleep and immunity entirely in drinks. Their
+  priorities sit at/below the capsule equivalents, so normal-mode picks are
+  unchanged. Live, create the Shopify equivalents and tag their format
+  `powder`/`drink`/`effervescent` — anything so tagged joins LQD automatically.
 
 ## UX in `Act2Quiz`
 
