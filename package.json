@@ -40,6 +40,7 @@
     "@types/react-dom": "^19",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
+    "playwright-core": "^1.61.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -73,6 +73,7 @@ interface QuizStore {
 export const defaultAnswers: QuizAnswers = {
   name: '',
   track: null,
+  drinksMode: false,
   ageBracket: null,
   exactAge: null,
   gender: null,

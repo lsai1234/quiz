@@ -105,6 +105,7 @@ ${firstName ? `- Name: ${firstName}` : ''}
 - Lifestyle factors: ${lifestyle}
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
 - Monthly budget: ${budget}
+${answers.drinksMode ? '- Package type: CHRGD LQD — an all-drinks package. Every option offered is drinkable (powders/mixes); write reasons in drinks language (shakes, pours, mixing), never pills or capsules.' : ''}
 ${deepDive.length ? `\nDEEPER CONTEXT (their answers to tailored follow-up questions — use this to break ties between options and to make the reasons specific)\n${deepDive.join('\n')}\n` : ''}
 BUDGET RULE
 - The combined one-off list price of the products you choose must stay within the top of this person's monthly budget. If a pricier option would push the total over, choose a cheaper option from that slot that still fits. Use the budget well — but never exceed it.

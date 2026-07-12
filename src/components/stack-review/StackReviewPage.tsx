@@ -14,6 +14,7 @@ import { calculatePricing, getSubscriptionProduct, buildSubscriptionPlan } from 
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
+import { drinkableOnly } from '@/lib/catalogue/filters'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
@@ -24,6 +25,7 @@ import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
+import { LqdPourGuide } from './LqdPourGuide'
 import { AccountGate } from '@/components/auth/AccountGate'
 
 export function StackReviewPage() {
@@ -142,13 +144,20 @@ export function StackReviewPage() {
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
 
+  // LQD (drinks mode): boosters and swap alternatives only ever offer drinks,
+  // so the package can't accidentally grow a capsule product.
+  const offerableProducts = useMemo(
+    () => drinkableOnly(products, !!answers.drinksMode),
+    [products, answers.drinksMode],
+  )
+
   // Booster candidates: isBoosterEligible, not already in stack, ordered by
   // goal overlap with blueprint then recommendationPriority
   const primaryGoal = blueprint.primaryGoal
   const allGoals = [primaryGoal, ...blueprint.secondaryGoals]
   const boosters = useMemo(() => {
     const seenSlots = new Set<string>()
-    return products
+    return offerableProducts
       .filter((p) => p.isBoosterEligible && !p.isSubscriptionOnly && !stackProductIds.has(p.id))
       .sort((a, b) => {
         const aGoalHits = a.goals.filter((g) => allGoals.includes(g)).length
@@ -164,14 +173,14 @@ export function StackReviewPage() {
       })
       .slice(0, 4)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, blueprint.slots, primaryGoal, blueprint.secondaryGoals])
+  }, [offerableProducts, blueprint.slots, primaryGoal, blueprint.secondaryGoals])
 
   // Build alternatives list for the open swap modal slot
   const swapCurrentProduct = swapSlot ? products.find((p) => p.id === swapSlot.selectedProductId) : undefined
   const swapAlternatives = swapSlot
     ? [
         ...products.filter((p) => p.id === swapSlot.selectedProductId),
-        ...getSwappableProductsForSlot(swapSlot, products),
+        ...getSwappableProductsForSlot(swapSlot, offerableProducts),
       ].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx)
     : []
 
@@ -201,6 +210,7 @@ export function StackReviewPage() {
           blueprint={blueprint}
           productCount={sortedSlots.length}
           totalPrice={pricing.oneOffTotal}
+          drinksMode={!!answers.drinksMode}
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
@@ -211,7 +221,9 @@ export function StackReviewPage() {
             className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Your personalised stack — {sortedSlots.length} products
+            {answers.drinksMode
+              ? `Your LQD drinks package — ${sortedSlots.length} drinks`
+              : `Your personalised stack — ${sortedSlots.length} products`}
           </p>
           {sortedSlots.map((slot) => {
             const product = products.find((p) => p.id === slot.selectedProductId)
@@ -243,6 +255,9 @@ export function StackReviewPage() {
 
         {/* Price summary + checkout */}
         <div className="px-5 pt-6 max-w-lg mx-auto">
+          {/* LQD: the month-of-drinks tally + pour guide */}
+          {answers.drinksMode && <LqdPourGuide plan={subscriptionPlan} />}
+
           {checkoutState.status === 'error' && (
             <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
               {checkoutState.messages.map((msg, i) => (

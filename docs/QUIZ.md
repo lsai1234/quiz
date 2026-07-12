@@ -18,6 +18,34 @@ in `src/lib/store.tsx`.
 
 The order **leads with the goal** (engaging) and puts personal info second.
 
+## CHRGD LQD — the drinks package
+
+A third choice on the opening screen (`Act1Hero`): tapping **CHRGD LQD** flips
+the two track cards into drinks framing ("Drinks for training" / "Drinks for
+every day"), so choosing drinks costs no extra step — it sets
+`answers.drinksMode` alongside the normal track. Everything downstream rides
+the existing machinery:
+
+- **Same quiz**, minus the formats question (`skipInDrinksMode` in
+  `quiz-flow.ts` — the answer is implied) and with LQD copy overrides
+  (`lqd: { q, hint }`, applied after the track override).
+- **Drinks-only blueprint**: `buildStackBlueprint` filters the candidate
+  catalogue through `isDrinkable` (`src/lib/catalogue/filters.ts` —
+  powder/RTD/liquid/effervescent formats; capsules never qualify). Slots with
+  no drinkable candidate fall away via the existing graceful omission. Swap
+  alternatives and boosters on the review page respect the same filter.
+- **Month-of-drinks framing**: the promise is a monthly pool — drink whatever,
+  whenever — not a daily regimen. `src/lib/lqd.ts` computes the monthly drinks
+  tally (Σ `occasionsPerMonth` over the subscription plan) and a per-drink
+  "pour guide" moment (pre before training, greens with breakfast, collagen in
+  the evening…), rendered by `LqdPourGuide` on the stack review. Pricing,
+  checkout, accounts and the hub are unchanged — an LQD bundle is a normal
+  bundle whose products all happen to be drinks.
+- **Catalogue note**: vitamins/minerals are capsule-only today, so LQD covers
+  that ground with greens + electrolytes until a drinkable vitamin product
+  (e.g. an effervescent daily) is added — tag its format `powder`/`drink` and
+  it joins LQD automatically.
+
 ## UX in `Act2Quiz`
 
 - Real **Step X of Y** counter + a top progress bar; a one-time "N quick

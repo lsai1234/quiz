@@ -61,6 +61,14 @@ export interface QuizAnswers {
   name: string
   /** Which quiz track the user chose on the goal step */
   track: QuizTrack | null
+  /**
+   * CHRGD LQD — the all-drinks package. When true the stack is built only from
+   * drinkable products (powders/RTDs), framed as a monthly pool of drinks to
+   * mix whenever, rather than a daily regimen. Chosen on the opening screen
+   * alongside the track; the track still shapes goals and questions.
+   * Optional so answers saved before the feature existed stay valid.
+   */
+  drinksMode?: boolean
   ageBracket: AgeBracket | null
   exactAge: number | null
   gender: Gender | null

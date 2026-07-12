@@ -7,13 +7,15 @@ interface Props {
   blueprint: StackBlueprint
   productCount: number
   totalPrice: number
+  /** CHRGD LQD (all-drinks package) framing. */
+  drinksMode?: boolean
 }
 
 function prettifyGoal(goal: string) {
   return goal.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function StackHero({ blueprint, productCount, totalPrice }: Props) {
+export function StackHero({ blueprint, productCount, totalPrice, drinksMode }: Props) {
   return (
     <div className="px-5 pt-12 pb-8 max-w-lg mx-auto">
       <div className="flex items-center gap-2 mb-4">
@@ -21,7 +23,7 @@ export function StackHero({ blueprint, productCount, totalPrice }: Props) {
           className="text-[10px] font-bold tracking-[0.25em] uppercase block"
           style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}
         >
-          Your CHRGD Stack
+          {drinksMode ? 'Your CHRGD LQD Package' : 'Your CHRGD Stack'}
         </span>
         {blueprint.personalised && (
           <span

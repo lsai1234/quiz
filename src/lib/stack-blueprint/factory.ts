@@ -4,6 +4,7 @@ import type { QuizAnswers, Goal } from '@/lib/types'
 import { PERFORMANCE_GOALS } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import { drinkableOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } from './pricing'
@@ -501,8 +502,12 @@ export function buildStackBlueprint(
   // that slot is simply omitted (handled gracefully below).
   // Subscription-only refills never enter the quiz recommendation — they only
   // exist as monthly subscription resolution targets.
-  const effectiveCatalogue = (catalogue.length > 0 ? catalogue : MOCK_CATALOGUE)
-    .filter((p) => !p.isSubscriptionOnly)
+  // CHRGD LQD (drinks mode) sees only drinkable products; slots with no
+  // drinkable candidate fall away via the same graceful omission.
+  const effectiveCatalogue = drinkableOnly(
+    (catalogue.length > 0 ? catalogue : MOCK_CATALOGUE).filter((p) => !p.isSubscriptionOnly),
+    answers.drinksMode,
+  )
 
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
   const secondaryGoals = answers.goals.slice(1)

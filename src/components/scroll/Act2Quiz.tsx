@@ -483,11 +483,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const { products: liveCatalogue } = useCatalogueProducts()
 
   // Active step sequence for the chosen track (single source of truth).
-  const seq = useMemo(() => activeSteps(answers.track), [answers.track])
+  const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode), [answers.track, answers.drinksMode])
   const index = Math.min(step, seq.length - 1)
   const current = seq[index]
   const id = current.id
-  const { section, q, hint } = stepCopy(current, answers.track)
+  const { section, q, hint } = stepCopy(current, answers.track, answers.drinksMode)
   const isFirst = index === 0
 
   // Full ranked stack (unlimited budget) so budget cards show real products.
