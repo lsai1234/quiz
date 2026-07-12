@@ -211,7 +211,12 @@ export function scoreProduct(
   // If the user told us they already take this supplement type, recommending it
   // is actively wrong — it erodes trust and wastes their money. Use -Infinity
   // so it never appears regardless of how many goal-affinity boosts it accumulates.
-  const taking = new Set([...answers.currentSupplements, ...answers.currentVitamins])
+  // EXCEPT items the user flagged "include CHRGD's to try" on the supps
+  // follow-up (answers.tryOurs) — those stay recommendable.
+  const tryOurs = new Set(answers.tryOurs ?? [])
+  const taking = new Set(
+    [...answers.currentSupplements, ...answers.currentVitamins].filter((x) => !tryOurs.has(x)),
+  )
   if (taking.has('multivitamin') && product.swapGroup === 'multivitamin') return -Infinity
   if (taking.has('vitamin-d')    && product.swapGroup === 'vitamin-d')    return -Infinity
   if (taking.has('omega-3')      && product.swapGroup === 'omega-3')      return -Infinity

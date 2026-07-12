@@ -484,3 +484,36 @@ describe('buildStackBlueprint — combined performance + wellness track', () => 
     expect(picked.some((g) => g === 'probiotic' || g === 'greens')).toBe(true)
   })
 })
+
+describe('buildStackBlueprint — already-taking with tryOurs override', () => {
+  it('skips an already-taking item by default, includes it when flagged tryOurs', () => {
+    const base = makeAnswers({ goals: ['muscle', 'recovery'], budget: '80-plus' })
+
+    const skipped = buildStackBlueprint({ ...base, currentSupplements: ['protein'] }, MOCK_CATALOGUE)
+    expect(skipped.slots.some((s) => s.slotType === 'protein')).toBe(false)
+
+    const trying = buildStackBlueprint(
+      { ...base, currentSupplements: ['protein'], tryOurs: ['protein'] },
+      MOCK_CATALOGUE,
+    )
+    expect(trying.slots.some((s) => s.slotType === 'protein')).toBe(true)
+  })
+
+  it('tryOurs is per item — other exclusions still hold', () => {
+    const answers = makeAnswers({
+      goals: ['muscle', 'health'],
+      budget: '80-plus',
+      currentSupplements: ['protein', 'creatine'],
+      currentVitamins: ['multivitamin'],
+      tryOurs: ['creatine'],
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    const slotTypes = blueprint.slots.map((s) => s.slotType)
+    const groups = blueprint.slots.map(
+      (s) => MOCK_CATALOGUE.find((p) => p.id === s.selectedProductId)?.swapGroup,
+    )
+    expect(slotTypes).toContain('performance') // creatine included (tryOurs)
+    expect(slotTypes).not.toContain('protein') // protein still skipped
+    expect(groups).not.toContain('multivitamin') // multivitamin still skipped
+  })
+})

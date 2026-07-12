@@ -73,6 +73,13 @@ export interface QuizAnswers {
   exactAge: number | null
   gender: Gender | null
   goals: Goal[]
+  /**
+   * "Already taking" items the user still wants in the stack — the follow-up
+   * on the supps step ("keep my own" vs "include CHRGD's to try"). Items here
+   * bypass the already-taking exclusion in scoreProduct. Optional so answers
+   * saved before the feature existed stay valid (default: skip, as before).
+   */
+  tryOurs?: string[]
   trainingFrequency: TrainingFrequency | null
   /** Training styles — multi-select (Weights, Cardio, HIIT, Sport, Mixed). */
   trainingType: TrainingType[]

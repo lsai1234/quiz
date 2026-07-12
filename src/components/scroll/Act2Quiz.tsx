@@ -238,6 +238,17 @@ const WELLBEING_SUPPS_DATA = [
   { id: 'magnesium',    label: 'Magnesium',        icon: 'hexagon' },
   { id: 'none',         label: 'None of these',    icon: 'minus' },
 ]
+
+// "Already taking" items that actually drive a recommendation exclusion in
+// scoreProduct — the candidates for the keep-yours-or-try-ours follow-up.
+// (Ids like 'b-complex'/'zinc'/'other' don't exclude anything, so no follow-up.)
+const EXCLUDABLE_SUPPS = new Set([
+  'protein', 'creatine', 'pre-workout',
+  'multivitamin', 'vitamin-d', 'omega-3', 'magnesium', 'vitamin-c', 'collagen',
+])
+const SUPP_LABEL_BY_ID: Record<string, string> = Object.fromEntries(
+  [...SUPPS_DATA, ...VITAMIN_OPTIONS, ...WELLBEING_SUPPS_DATA].map(({ id, label }) => [id, label]),
+)
 const TRAINING_TIME_DATA: Array<{ id: string; label: string; sub: string }> = [
   { id: 'morning',   label: 'Morning',   sub: 'Before 11am' },
   { id: 'lunchtime', label: 'Midday',    sub: '11am–2pm' },
@@ -489,6 +500,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const id = current.id
   const { section, q, hint } = stepCopy(current, answers.track, answers.drinksMode)
   const isFirst = index === 0
+
+  // Selected already-taking items eligible for the keep-yours-or-try-ours
+  // follow-up on the supps step (only ids that drive a factory exclusion).
+  const tryOursItems = useMemo(() => {
+    const ids = [...answers.currentSupplements, ...answers.currentVitamins].filter((x) =>
+      EXCLUDABLE_SUPPS.has(x),
+    )
+    return [...new Set(ids)].map((tid) => ({ id: tid, label: SUPP_LABEL_BY_ID[tid] ?? tid }))
+  }, [answers.currentSupplements, answers.currentVitamins])
 
   // Full ranked stack (unlimited budget) so budget cards show real products.
   // Build each bundle's ACTUAL stack at its own budget + preference, so the
@@ -783,6 +803,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       ? labelsOf(WELLBEING_SUPPS_DATA, answers.currentVitamins)
       : [...labelsOf(SUPPS_DATA, answers.currentSupplements), ...labelsOf(VITAMIN_OPTIONS, answers.currentVitamins)]
     rows.push({ label: 'Already taking', value: have.length ? have.join(', ') : 'Starting fresh', edit: 'supps' })
+    // Items they already take but asked us to include anyway (still selected).
+    const trying = (answers.tryOurs ?? [])
+      .filter((x) => answers.currentSupplements.includes(x) || answers.currentVitamins.includes(x))
+      .map((x) => SUPP_LABEL_BY_ID[x] ?? x)
+    if (trying.length) rows.push({ label: 'Trying ours', value: trying.join(', '), edit: 'supps' })
     if (answers.caffeineLevel) rows.push({ label: 'Caffeine', value: labelOf(CAFFEINE_DATA, answers.caffeineLevel), edit: 'caffeine' })
     if (answers.preferredFormats.length) rows.push({ label: 'Formats', value: answers.preferredFormats.includes('any') ? 'No preference' : labelsOf(FORMAT_DATA, answers.preferredFormats).join(', '), edit: 'formats' })
     const b = BUDGET_DATA.find(x => x.id === answers.budget)
@@ -1189,6 +1214,51 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Keep-or-try follow-up: for anything the user already takes we skip
+              it by default — this lets them flip any item to "include CHRGD's
+              to try" (answers.tryOurs bypasses the factory's exclusion). */}
+          {id === 'supps' && tryOursItems.length > 0 && (
+            <div className="mt-6 pt-5 border-t border-white/8"
+              style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-px h-4 bg-[#00D4FF]" />
+                <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]" style={{ fontFamily: 'var(--font-display)' }}>Quick follow-up</span>
+              </div>
+              <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>Keep yours, or try ours?</p>
+              <p className="text-xs text-white/35 mb-3">
+                We&apos;ll leave these out so you don&apos;t double up — unless you&apos;d rather have the CHRGD version in your stack when yours runs out.
+              </p>
+              <div className="flex flex-col gap-2">
+                {tryOursItems.map(({ id: tid, label }) => {
+                  const trying = (answers.tryOurs ?? []).includes(tid)
+                  return (
+                    <div key={`try-${tid}`} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.015]">
+                      <span className="flex-1 text-[13px] font-medium text-white truncate" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
+                      {([
+                        { v: false, chip: 'Keep my own' },
+                        { v: true, chip: 'Include CHRGD’s' },
+                      ]).map(({ v, chip }) => (
+                        <button
+                          key={`try-${tid}-${v}`}
+                          onClick={() => {
+                            const c = (answers.tryOurs ?? []).filter(x => x !== tid)
+                            setAnswer('tryOurs', v ? [...c, tid] : c)
+                          }}
+                          className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
+                          style={trying === v
+                            ? { color: '#0A0A0A', background: '#00D4FF' }
+                            : { color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                        >
+                          {chip}
+                        </button>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
 

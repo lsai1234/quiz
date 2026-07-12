@@ -18,6 +18,13 @@ in `src/lib/store.tsx`.
 
 The order **leads with the goal** (engaging) and puts personal info second.
 
+**Keep-yours-or-try-ours:** the supps step skips anything the user already
+takes, but each excludable selection gets an inline follow-up toggle — "Keep my
+own" (default, unchanged behaviour) or "Include CHRGD's" — stored in
+`answers.tryOurs`, which bypasses that item's already-taking exclusion in
+`scoreProduct`. The review screen shows a "Trying ours" row when any are
+flipped. Only items that actually drive an exclusion offer the toggle.
+
 **Track framing:** the two tracks are presented as **Everyday wellness** (id
 `wellbeing`, listed first) and **Performance + wellness** (id `performance`) —
 the second *adds* training on top of wellness rather than excluding it. On the
