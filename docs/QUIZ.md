@@ -34,37 +34,45 @@ wellness sections), and the wellness follow-up questions appear on either track
 special-casing: required slots and product picks key off the chosen goals, not
 the track.
 
-## CHRGD LQD — the drinks package
+## CHRGD LQD — the pre-made drinks package
 
 A third choice on the opening screen (`Act1Hero`): tapping **CHRGD LQD** flips
-the two track cards into drinks framing ("Drinks for training" / "Drinks for
-every day"), so choosing drinks costs no extra step — it sets
-`answers.drinksMode` alongside the normal track. Everything downstream rides
-the existing machinery:
+the two track cards into drinks framing and shows the zero-prep pitch ("Every
+drink arrives ready-made · No powders, no pills, no mixing · Drink what we
+send — you're covered"). It sets `answers.drinksMode` alongside the normal
+track; everything downstream rides the existing machinery.
+
+**The package promise is convenience**: everything arrives as a real,
+ready-made drink. Easier than a shelf of tubs and pill bottles — the customer
+drinks what we send and their month is covered.
 
 - **Same quiz**, minus the formats question (`skipInDrinksMode` in
   `quiz-flow.ts` — the answer is implied) and with LQD copy overrides
   (`lqd: { q, hint }`, applied after the track override).
-- **Drinks-only blueprint**: `buildStackBlueprint` filters the candidate
-  catalogue through `isDrinkable` (`src/lib/catalogue/filters.ts` —
-  powder/RTD/liquid/effervescent formats; capsules never qualify). Slots with
-  no drinkable candidate fall away via the existing graceful omission. Swap
-  alternatives and boosters on the review page respect the same filter.
-- **Month-of-drinks framing**: the promise is a monthly pool — drink whatever,
-  whenever — not a daily regimen. `src/lib/lqd.ts` computes the monthly drinks
-  tally (Σ `occasionsPerMonth` over the subscription plan) and a per-drink
-  "pour guide" moment (pre before training, greens with breakfast, collagen in
-  the evening…), rendered by `LqdPourGuide` on the stack review. Pricing,
-  checkout, accounts and the hub are unchanged — an LQD bundle is a normal
-  bundle whose products all happen to be drinks.
-- **LQD drink products**: the mock catalogue carries drinkable counterparts to
-  the capsule staples — `chrgd-lqd-daily` (multivitamin drink, health slot),
-  `chrgd-night-pour` (sleep drink), `chrgd-immunity-fizz` (vit C + zinc + D
-  effervescent) and `chrgd-clear-whey` (juice-style protein) — so an LQD
-  package covers vitamins, sleep and immunity entirely in drinks. Their
-  priorities sit at/below the capsule equivalents, so normal-mode picks are
-  unchanged. Live, create the Shopify equivalents and tag their format
-  `powder`/`drink`/`effervescent` — anything so tagged joins LQD automatically.
+- **Pre-made only blueprint**: `buildStackBlueprint` filters candidates
+  through `isReadyToDrink` (`src/lib/catalogue/filters.ts` — `rtd`, `drink`,
+  `shot`, `can`… formats). **Powders and effervescents never qualify** — they
+  need mixing. Slots with no RTD candidate fall away via the existing graceful
+  omission. Swap alternatives and boosters on the review page respect the same
+  filter (`lqdOnly`).
+- **The LQD ready-to-drink range** (mock catalogue): LQD Protein (bottled
+  shakes), Hydrate (electrolyte bottles), Charge / Charge Zero (energy cans),
+  Daily Vits (vitamin drink), Night (wind-down bottle), Immunity Shot, Greens
+  (cold-pressed bottles), Recover (post-session bottles) and Creatine Shot —
+  full slot coverage as drinks. One case ≈ one month at standard usage, so a
+  subscription never needs more than a case per line per month. Priorities and
+  goal sets sit at/below the powder/capsule counterparts, so **normal-mode
+  picks are unchanged** (regression-tested). Live, tag Shopify products
+  `rtd`/`drink`/`shot` and they join LQD automatically.
+- **Month-of-drinks framing**: `src/lib/lqd.ts` computes the monthly drinks
+  tally (Σ `occasionsPerMonth`) and per-drink "pour guide" moments;
+  `LqdPourGuide` renders the convenience story (arrives ready / replaces the
+  shelf / you're covered) + the tally + the moments on the stack review.
+  Pricing, checkout, accounts and the hub are unchanged — an LQD bundle is a
+  normal bundle whose products all happen to be ready-made drinks.
+- The mixable powders added earlier (Daily Fizz, Clear Whey, Night Pour,
+  Immunity Fizz) remain regular-catalogue products for the normal stack
+  builder; they are not LQD-eligible.
 
 ## UX in `Act2Quiz`
 

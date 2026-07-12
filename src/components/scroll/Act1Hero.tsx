@@ -30,10 +30,18 @@ const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
   { id: 'performance', icon: 'dumbbell', label: 'Performance + wellness',  sub: 'Training goals plus the everyday stuff — the full picture' },
 ]
 
-/** Same two tracks, poured: shown after tapping the LQD card. */
+/** Same two tracks, poured: shown after tapping the LQD card. Everything in
+ *  LQD arrives PRE-MADE — real drinks, zero prep. */
 const LQD_TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
-  { id: 'wellbeing',   icon: 'leaf',     label: 'Drinks for every day',         sub: 'Greens, collagen, hydration — feel-good pours' },
-  { id: 'performance', icon: 'dumbbell', label: 'Drinks for training + wellness', sub: 'Shakes, pre, electrolytes — plus the feel-good pours' },
+  { id: 'wellbeing',   icon: 'leaf',     label: 'Drinks for every day',           sub: 'Vitamin drinks, greens, night drinks — ready in the fridge' },
+  { id: 'performance', icon: 'dumbbell', label: 'Drinks for training + wellness', sub: 'Pre-mixed shakes, energy cans, shots — plus the everyday drinks' },
+]
+
+/** The zero-prep pitch, shown under the LQD track cards. */
+const LQD_PITCH = [
+  'Every drink arrives ready-made',
+  'No powders · no pills · no mixing',
+  'Drink what we send — you’re covered',
 ]
 
 const TRUST = ['~90 seconds', 'No sign-up', 'Built around you']
@@ -146,19 +154,34 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
                   CHRGD <span style={{ color: ACCENT }}>LQD</span>
                   <span className="text-[9px] font-bold tracking-[0.18em] uppercase px-1.5 py-0.5 rounded" style={{ color: ACCENT, background: 'rgba(0,212,255,0.12)' }}>New</span>
                 </div>
-                <div className="text-[13px] mt-1 text-white/40 leading-snug">Your month in drinks — shakes, hydration, greens. Mix whatever, whenever.</div>
+                <div className="text-[13px] mt-1 text-white/40 leading-snug">A month of real, ready-made drinks — no powders, no pills, no mixing.</div>
               </div>
               <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="text-white/25 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
                 <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
           ) : (
-            <button
-              onClick={() => setLqdOpen(false)}
-              className="text-[12px] text-white/40 underline underline-offset-2 mt-1 self-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40 rounded"
-            >
-              ← Back to the full stack builder
-            </button>
+            <>
+              <div
+                className="rounded-xl px-4 py-3 flex flex-col gap-1.5"
+                style={{ border: '1px solid rgba(0,212,255,0.18)', background: 'rgba(0,212,255,0.04)' }}
+              >
+                {LQD_PITCH.map((line) => (
+                  <div key={line} className="flex items-center gap-2.5 text-left">
+                    <svg width="11" height="11" viewBox="0 0 20 20" fill="none" aria-hidden="true" className="flex-shrink-0">
+                      <path d="M4 10.5L8.5 15L16 5.5" stroke={ACCENT} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span className="text-[12px] text-white/60 leading-snug">{line}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setLqdOpen(false)}
+                className="text-[12px] text-white/40 underline underline-offset-2 mt-1 self-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40 rounded"
+              >
+                ← Back to the full stack builder
+              </button>
+            </>
           )}
         </div>
 

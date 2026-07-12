@@ -14,7 +14,7 @@ import { calculatePricing, getSubscriptionProduct, buildSubscriptionPlan } from 
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
-import { drinkableOnly } from '@/lib/catalogue/filters'
+import { lqdOnly } from '@/lib/catalogue/filters'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
@@ -147,7 +147,7 @@ export function StackReviewPage() {
   // LQD (drinks mode): boosters and swap alternatives only ever offer drinks,
   // so the package can't accidentally grow a capsule product.
   const offerableProducts = useMemo(
-    () => drinkableOnly(products, !!answers.drinksMode),
+    () => lqdOnly(products, !!answers.drinksMode),
     [products, answers.drinksMode],
   )
 
@@ -222,7 +222,7 @@ export function StackReviewPage() {
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {answers.drinksMode
-              ? `Your LQD drinks package — ${sortedSlots.length} drinks`
+              ? `Your LQD package — ${sortedSlots.length} ready-made drinks`
               : `Your personalised stack — ${sortedSlots.length} products`}
           </p>
           {sortedSlots.map((slot) => {

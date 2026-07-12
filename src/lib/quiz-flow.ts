@@ -44,7 +44,7 @@ export interface QuizStepDef {
 }
 
 export const QUIZ_STEPS: QuizStepDef[] = [
-  { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", advance: 'manual' },
+  { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", lqd: { hint: 'Pick everything that applies — we’ll cover it all with ready-made drinks.' }, advance: 'manual' },
   { id: 'personal', section: 'ABOUT YOU', q: 'A little about you.', hint: 'Helps us tailor the doses and picks to you.', advance: 'manual' },
   { id: 'frequency', section: 'TRAINING', q: 'How often do you train?', hint: 'Your frequency shapes the whole stack.', tracks: ['performance'], lqd: { hint: 'Your frequency shapes the whole package.' }, advance: 'auto' },
   { id: 'type', section: 'TRAINING', q: "What's your training style?", hint: 'Pick everything you do — add as many as apply.', tracks: ['performance'], advance: 'manual' },
@@ -55,7 +55,7 @@ export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'Caffeine timing matters — tells us whether to include stimulants.', wellbeing: { q: 'When do you usually move or exercise?', hint: 'Even light exercise timing affects what we recommend.' }, advance: 'auto' },
   // LQD implies the format — every pick is a drink — so the step is skipped.
   { id: 'formats', section: 'YOUR STYLE', q: 'What formats do you prefer?', hint: "We'll match your stack to products you'll actually use.", skipInDrinksMode: true, advance: 'manual' },
-  { id: 'budget', section: 'BUDGET', q: "What's your stack budget?", hint: 'Sets your stack size — almost there.', lqd: { q: "What's your drinks budget?", hint: 'Sets the size of your monthly package — almost there.' }, advance: 'manual' },
+  { id: 'budget', section: 'BUDGET', q: "What's your stack budget?", hint: 'Sets your stack size — almost there.', lqd: { q: "What's your drinks budget?", hint: 'Sets how many ready-made drinks land each month — almost there.' }, advance: 'manual' },
   { id: 'review', section: 'REVIEW', q: 'Quick check before we build.', hint: 'Tap anything to change it.', lqd: { q: 'Quick check before we pour.', hint: 'Tap anything to change it.' }, advance: 'manual' },
   // Optional bonus step, offered from the review screen — never part of the
   // advertised question count or the linear flow.

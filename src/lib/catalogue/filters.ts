@@ -6,12 +6,10 @@ export function filterBySlot(products: CatalogueProduct[], slot: StackSlot): Cat
 }
 
 /**
- * Formats that can be served as a drink — the CHRGD LQD (drinks package)
- * eligibility test. Powders mix into water/milk/shakes; ready-to-drink and
- * effervescent formats count when the catalogue grows them. Capsules/tablets
- * never qualify.
+ * Anything that can be consumed as a drink (powders mix, RTDs arrive ready).
+ * General-purpose helper — NOT the LQD test; LQD is stricter (see below).
  */
-export const DRINKABLE_FORMATS = ['powder', 'drink', 'rtd', 'liquid', 'effervescent'] as const
+export const DRINKABLE_FORMATS = ['powder', 'drink', 'rtd', 'liquid', 'effervescent', 'shot'] as const
 
 export function isDrinkable(product: CatalogueProduct): boolean {
   return (product.formats ?? []).some((f) =>
@@ -19,12 +17,25 @@ export function isDrinkable(product: CatalogueProduct): boolean {
   )
 }
 
-/** The catalogue restricted to drinkables when LQD mode is on; unchanged otherwise. */
-export function drinkableOnly(
+/**
+ * CHRGD LQD eligibility — PRE-MADE drinks only. The package promise is zero
+ * prep: grab it, drink it, done. Powders and effervescents need mixing, so
+ * they never qualify; only ready-to-drink formats do.
+ */
+export const RTD_FORMATS = ['rtd', 'drink', 'ready-to-drink', 'liquid', 'shot', 'can', 'bottle'] as const
+
+export function isReadyToDrink(product: CatalogueProduct): boolean {
+  return (product.formats ?? []).some((f) =>
+    (RTD_FORMATS as readonly string[]).includes(f.toLowerCase()),
+  )
+}
+
+/** The catalogue restricted to pre-made drinks when LQD mode is on; unchanged otherwise. */
+export function lqdOnly(
   products: CatalogueProduct[],
   drinksMode: boolean | undefined,
 ): CatalogueProduct[] {
-  return drinksMode ? products.filter(isDrinkable) : products
+  return drinksMode ? products.filter(isReadyToDrink) : products
 }
 
 export function filterByGoals(products: CatalogueProduct[], goals: Goal[]): CatalogueProduct[] {

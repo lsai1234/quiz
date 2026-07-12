@@ -1,8 +1,9 @@
 /**
- * CHRGD LQD — drinks mode. Covers the drinkable filter, the drinks-only
- * blueprint, the quiz-flow step skipping/copy, and the pour-guide helpers.
+ * CHRGD LQD — the pre-made drinks package. Covers the ready-to-drink filter,
+ * the RTD-only blueprint, the quiz-flow step skipping/copy, and the pour-guide
+ * helpers.
  */
-import { isDrinkable, drinkableOnly } from '@/lib/catalogue/filters'
+import { isDrinkable, isReadyToDrink, lqdOnly } from '@/lib/catalogue/filters'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { activeSteps, stepCopy, QUIZ_STEPS } from '@/lib/quiz-flow'
@@ -21,74 +22,66 @@ const lqdAnswers = (over: Partial<QuizAnswers> = {}): QuizAnswers => ({
   ...over,
 })
 
-describe('drinkable filter', () => {
-  it('classifies powders as drinkable and capsules as not', () => {
+describe('ready-to-drink filter', () => {
+  it('powders are drinkable but NOT ready-to-drink; RTDs are both', () => {
     const whey = MOCK_CATALOGUE.find((p) => p.id === 'chrgd-whey-protein')!
+    const rtd = MOCK_CATALOGUE.find((p) => p.id === 'chrgd-lqd-protein-rtd')!
     const omega = MOCK_CATALOGUE.find((p) => p.id === 'chrgd-omega-3')!
     expect(isDrinkable(whey)).toBe(true)
-    expect(isDrinkable(omega)).toBe(false)
+    expect(isReadyToDrink(whey)).toBe(false) // powder needs mixing → not LQD
+    expect(isReadyToDrink(rtd)).toBe(true)
+    expect(isReadyToDrink(omega)).toBe(false)
   })
 
-  it('drinkableOnly is a no-op outside drinks mode', () => {
-    expect(drinkableOnly(MOCK_CATALOGUE, false)).toHaveLength(MOCK_CATALOGUE.length)
-    const drinks = drinkableOnly(MOCK_CATALOGUE, true)
-    expect(drinks.length).toBeGreaterThan(0)
-    expect(drinks.every(isDrinkable)).toBe(true)
+  it('lqdOnly keeps pre-made drinks only, and is a no-op outside drinks mode', () => {
+    expect(lqdOnly(MOCK_CATALOGUE, false)).toHaveLength(MOCK_CATALOGUE.length)
+    const rtds = lqdOnly(MOCK_CATALOGUE, true)
+    expect(rtds.length).toBeGreaterThan(0)
+    expect(rtds.every(isReadyToDrink)).toBe(true)
+    expect(rtds.some((p) => (p.formats ?? []).includes('powder') && !isReadyToDrink(p))).toBe(false)
   })
 })
 
-describe('LQD blueprint', () => {
-  it('builds a stack containing only drinkable products', () => {
+describe('LQD blueprint (pre-made drinks only)', () => {
+  it('builds a stack containing only ready-to-drink products — no powders', () => {
     const blueprint = buildStackBlueprint(lqdAnswers(), MOCK_CATALOGUE)
     expect(blueprint.slots.length).toBeGreaterThan(0)
     for (const slot of blueprint.slots) {
       const product = MOCK_CATALOGUE.find((p) => p.id === slot.selectedProductId)!
-      expect(isDrinkable(product)).toBe(true)
+      expect(isReadyToDrink(product)).toBe(true)
     }
   })
 
-  it('omits capsule-only territory instead of failing (e.g. sleep/health slots)', () => {
-    // A wellbeing-ish goal mix whose usual picks are capsules — the blueprint
-    // should still build (drinkable picks only), never throw or include capsules.
-    const blueprint = buildStackBlueprint(
-      lqdAnswers({ track: 'wellbeing', goals: ['health', 'energy', 'recovery'] }),
-      MOCK_CATALOGUE,
-    )
-    for (const slot of blueprint.slots) {
-      const product = MOCK_CATALOGUE.find((p) => p.id === slot.selectedProductId)!
-      expect(isDrinkable(product)).toBe(true)
-    }
-  })
-
-  it('covers vitamins and sleep with the LQD drink products', () => {
+  it('covers vitamins and sleep with the RTD range', () => {
     const blueprint = buildStackBlueprint(
       lqdAnswers({ track: 'wellbeing', goals: ['health', 'immune', 'sleep-better'] }),
       MOCK_CATALOGUE,
     )
     const picked = blueprint.slots.map((s) => s.selectedProductId)
-    // The drinkable multivitamin now owns the health slot in drinks mode…
-    expect(picked).toContain('chrgd-lqd-daily')
-    // …and sleep territory is drinkable too (Night Pour), not silently dropped.
-    expect(picked).toContain('chrgd-night-pour')
+    expect(picked).toContain('chrgd-lqd-vits')  // vitamin drink owns health
+    expect(picked).toContain('chrgd-lqd-night') // sleep is a ready-made drink too
   })
 
-  it('keeps normal-mode picks unchanged (capsule multivitamin still wins ties)', () => {
+  it('a training package gets the RTD shake, can and shot', () => {
+    const blueprint = buildStackBlueprint(lqdAnswers(), MOCK_CATALOGUE)
+    const picked = blueprint.slots.map((s) => s.selectedProductId)
+    expect(picked).toContain('chrgd-lqd-protein-rtd')
+    expect(picked).toContain('chrgd-lqd-charge')
+    expect(picked).toContain('chrgd-lqd-creatine-shot')
+  })
+
+  it('keeps normal-mode picks unchanged (powder/capsule staples still win)', () => {
     const blueprint = buildStackBlueprint(
-      lqdAnswers({ drinksMode: false, track: 'wellbeing', goals: ['health', 'immune'] }),
+      lqdAnswers({ drinksMode: false, goals: ['muscle', 'energy', 'health', 'hydration'] }),
       MOCK_CATALOGUE,
     )
-    const picked = blueprint.slots.map((s) => s.selectedProductId)
-    expect(picked).toContain('chrgd-multivitamin')
-    expect(picked).not.toContain('chrgd-lqd-daily')
-  })
-
-  it('same answers without drinks mode may include capsules (sanity contrast)', () => {
-    const blueprint = buildStackBlueprint(lqdAnswers({ drinksMode: false, goals: ['health'] }), MOCK_CATALOGUE)
-    const anyCapsule = blueprint.slots.some((slot) => {
-      const product = MOCK_CATALOGUE.find((p) => p.id === slot.selectedProductId)!
-      return !isDrinkable(product)
-    })
-    expect(anyCapsule).toBe(true)
+    const products = blueprint.slots.map(
+      (s) => MOCK_CATALOGUE.find((p) => p.id === s.selectedProductId)!,
+    )
+    // The established staples still win their slots…
+    expect(products.map((p) => p.id)).toContain('chrgd-multivitamin')
+    // …and nothing from the RTD range sneaks into a normal stack.
+    expect(products.some(isReadyToDrink)).toBe(false)
   })
 })
 
