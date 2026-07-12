@@ -463,3 +463,24 @@ describe('buildStackBlueprint — eligibility gates', () => {
     expect(probiotic).toBeUndefined()
   })
 })
+
+describe('buildStackBlueprint — combined performance + wellness track', () => {
+  it('a mixed goal selection covers both sides of the stack', () => {
+    const answers = makeAnswers({
+      track: 'performance',
+      goals: ['muscle', 'sleep-better', 'gut-health'],
+      budget: '80-plus',
+      wellbeingAnswers: { sleepQuality: 'wake-night' },
+    })
+    const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
+    const picked = blueprint.slots.map((s) => {
+      const p = MOCK_CATALOGUE.find((x) => x.id === s.selectedProductId)
+      return p?.swapGroup
+    })
+    // Performance side: protein required for a muscle goal…
+    expect(picked.some((g) => g?.startsWith('protein'))).toBe(true)
+    // …and the wellness goals land their products too.
+    expect(picked).toContain('magnesium') // sleepQuality steering still applies
+    expect(picked.some((g) => g === 'probiotic' || g === 'greens')).toBe(true)
+  })
+})

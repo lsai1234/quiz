@@ -18,6 +18,15 @@ in `src/lib/store.tsx`.
 
 The order **leads with the goal** (engaging) and puts personal info second.
 
+**Track framing:** the two tracks are presented as **Everyday wellness** (id
+`wellbeing`, listed first) and **Performance + wellness** (id `performance`) —
+the second *adds* training on top of wellness rather than excluding it. On the
+combined track the goals step shows both goal grids (Performance + Everyday
+wellness sections), and the wellness follow-up questions appear on either track
+(they're a pure function of the wellness goals picked). The engine needs no
+special-casing: required slots and product picks key off the chosen goals, not
+the track.
+
 ## CHRGD LQD — the drinks package
 
 A third choice on the opening screen (`Act1Hero`): tapping **CHRGD LQD** flips

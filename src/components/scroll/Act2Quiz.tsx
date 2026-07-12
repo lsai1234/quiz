@@ -888,8 +888,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {id === 'goals' && !answers.track && (
             <div className="flex flex-col gap-3">
               {([
-                { id: 'performance' as const, icon: 'dumbbell', label: 'Performance & training', sub: 'Build muscle, energy, recovery — for people who train' },
-                { id: 'wellbeing' as const, icon: 'leaf', label: 'Everyday wellbeing', sub: 'Sleep, stress, focus, immunity — how you feel day to day' },
+                { id: 'wellbeing' as const, icon: 'leaf', label: 'Everyday wellness', sub: 'Sleep, stress, focus, immunity — how you feel day to day' },
+                { id: 'performance' as const, icon: 'dumbbell', label: 'Performance + wellness', sub: 'Training goals plus the everyday stuff — the full picture' },
               ]).map(({ id: tid, icon, label, sub }) => (
                 <button
                   key={`track-${tid}`}
@@ -909,8 +909,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
+          {/* Combined track: performance goals AND the wellness goals — the
+              second card is performance + wellness, not performance instead. */}
           {id === 'goals' && answers.track === 'performance' && (
             <div>
+              <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/35 mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
+                Performance
+              </p>
               <div className="grid grid-cols-2 gap-2.5">
                 {GOALS_DATA.map(({ id: gid, label, icon }) => (
                   <AnswerOption
@@ -924,8 +929,24 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   />
                 ))}
               </div>
-              <button onClick={() => { setAnswer('track', null); setGoals([]) }} className="mt-5 text-xs text-white/30 underline underline-offset-2">
-                ← Switch to everyday wellbeing
+              <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/35 mt-6 mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
+                Everyday wellness
+              </p>
+              <div className="grid grid-cols-2 gap-2.5">
+                {WELLBEING_DATA.map(({ id: gid, label, icon }) => (
+                  <AnswerOption
+                    key={`gpw-${gid}`}
+                    icon={icon} label={label} multi
+                    selected={answers.goals.includes(gid)}
+                    onClick={() => {
+                      const c = answers.goals
+                      setGoals(c.includes(gid) ? c.filter(g => g !== gid) : [...c, gid])
+                    }}
+                  />
+                ))}
+              </div>
+              <button onClick={() => { setAnswer('track', null); setGoals([]); setAnswer('wellbeingAnswers', {}) }} className="mt-5 text-xs text-white/30 underline underline-offset-2">
+                ← Switch to everyday wellness only
               </button>
             </div>
           )}
@@ -955,32 +976,34 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 />
               </div>
               <button onClick={() => { setAnswer('track', null); setGoals([]); setAnswer('wellbeingAnswers', {}) }} className="mt-5 text-xs text-white/30 underline underline-offset-2">
-                ← Switch to performance & training
+                ← Switch to performance + wellness
               </button>
-
-              {pickWellbeingQuestions(answers.goals).map((wq) => (
-                <div key={`wqblock-${wq.id}`} className="mt-6 pt-5 border-t border-white/8"
-                  style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}>
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-px h-4 bg-[#00D4FF]" />
-                    <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]" style={{ fontFamily: 'var(--font-display)' }}>Quick follow-up</span>
-                  </div>
-                  <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>{wq.question}</p>
-                  <p className="text-xs text-white/35 mb-3">{wq.hint}</p>
-                  <div className="flex flex-col gap-2">
-                    {wq.options.map(({ id: oid, label, sub }) => (
-                      <AnswerOption
-                        key={`wq-${wq.id}-${oid}`}
-                        label={label} sub={sub}
-                        selected={answers.wellbeingAnswers[wq.id] === oid}
-                        onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: oid })}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
             </div>
           )}
+
+          {/* Wellness follow-ups — a pure function of the wellness goals picked,
+              so they appear on BOTH tracks (the combined track includes wellness). */}
+          {id === 'goals' && answers.track && pickWellbeingQuestions(answers.goals).map((wq) => (
+            <div key={`wqblock-${wq.id}`} className="mt-6 pt-5 border-t border-white/8"
+              style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="w-px h-4 bg-[#00D4FF]" />
+                <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]" style={{ fontFamily: 'var(--font-display)' }}>Quick follow-up</span>
+              </div>
+              <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>{wq.question}</p>
+              <p className="text-xs text-white/35 mb-3">{wq.hint}</p>
+              <div className="flex flex-col gap-2">
+                {wq.options.map(({ id: oid, label, sub }) => (
+                  <AnswerOption
+                    key={`wq-${wq.id}-${oid}`}
+                    label={label} sub={sub}
+                    selected={answers.wellbeingAnswers[wq.id] === oid}
+                    onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: oid })}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
 
           {/* ── Personal ── */}
           {id === 'personal' && (

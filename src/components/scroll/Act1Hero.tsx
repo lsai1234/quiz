@@ -23,15 +23,17 @@ interface Props {
 
 const ACCENT = '#00D4FF'
 
+// Wellness leads; the second option ADDS performance on top of wellness rather
+// than excluding it — the combined track covers both goal sets.
 const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
-  { id: 'performance', icon: 'dumbbell', label: 'Performance & training', sub: 'Muscle, energy, recovery — for people who train' },
-  { id: 'wellbeing',   icon: 'leaf',     label: 'Everyday wellbeing',     sub: 'Sleep, stress, focus, immunity — how you feel' },
+  { id: 'wellbeing',   icon: 'leaf',     label: 'Everyday wellness',       sub: 'Sleep, stress, focus, immunity — how you feel' },
+  { id: 'performance', icon: 'dumbbell', label: 'Performance + wellness',  sub: 'Training goals plus the everyday stuff — the full picture' },
 ]
 
 /** Same two tracks, poured: shown after tapping the LQD card. */
 const LQD_TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
-  { id: 'performance', icon: 'dumbbell', label: 'Drinks for training',  sub: 'Shakes, pre, electrolytes — fuel the work' },
-  { id: 'wellbeing',   icon: 'leaf',     label: 'Drinks for every day', sub: 'Greens, collagen, hydration — feel-good pours' },
+  { id: 'wellbeing',   icon: 'leaf',     label: 'Drinks for every day',         sub: 'Greens, collagen, hydration — feel-good pours' },
+  { id: 'performance', icon: 'dumbbell', label: 'Drinks for training + wellness', sub: 'Shakes, pre, electrolytes — plus the feel-good pours' },
 ]
 
 const TRUST = ['~90 seconds', 'No sign-up', 'Built around you']
