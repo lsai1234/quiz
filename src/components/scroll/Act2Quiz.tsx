@@ -14,7 +14,7 @@ import { QuizIcon } from '@/components/quiz/QuizIcon'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
-  TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
+  TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity, DrinksPerDay,
 } from '@/lib/types'
 
 // Client-side fallback identity so the reveal is never empty if the identity
@@ -283,6 +283,16 @@ const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
   '80-plus': 'Best value',
 }
 
+// LQD pace — how many drinks a day the customer wants to sip. Not a dose: it
+// tunes the "your box lasts ~X days" story, never the amounts. `fills` drives
+// the little liquid-level graphic on each option.
+const DRINKS_PER_DAY_DATA: Array<{ id: DrinksPerDay; label: string; sub: string; fills: number }> = [
+  { id: 1, label: 'One a day',    sub: 'A single go-to drink — easy does it',        fills: 1 },
+  { id: 2, label: 'A couple',     sub: 'Two-ish through the day — the sweet spot',   fills: 2 },
+  { id: 3, label: 'Three',        sub: 'A drink with most meals',                    fills: 3 },
+  { id: 4, label: 'Four or more', sub: 'All day — swap drinks in for the usual',     fills: 4 },
+]
+
 const FORMAT_DATA = [
   { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: 'shaker' },
   { id: 'capsules', label: 'Capsules / Tabs', sub: 'Easy to take anywhere',          icon: 'capsule' },
@@ -387,6 +397,31 @@ function AnswerOption({
       </div>
       <CheckMark selected={selected} />
     </button>
+  )
+}
+
+// A little liquid glass for the LQD pace step: fills to `level` (0–1) with a
+// drifting meniscus wave. Selected → accent fill; otherwise a calm ghost.
+function PaceGlass({ level, selected, reduced }: { level: number; selected: boolean; reduced?: boolean }) {
+  const fillPct = Math.max(10, Math.min(100, Math.round(level * 100)))
+  const liquid = selected ? '#00D4FF' : 'rgba(255,255,255,0.22)'
+  return (
+    <div
+      className="relative w-9 h-11 rounded-b-[10px] rounded-t-[4px] overflow-hidden shrink-0 border transition-colors duration-200"
+      style={{ borderColor: selected ? 'rgba(0,212,255,0.5)' : 'rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.02)' }}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-x-0 bottom-0 transition-[height] duration-500" style={{ height: `${fillPct}%`, background: liquid, opacity: selected ? 0.9 : 0.55 }}>
+        {/* meniscus wave riding the surface */}
+        <div
+          className="absolute -top-1 left-0 h-2 w-[200%] rounded-[50%]"
+          style={{
+            background: liquid,
+            animation: reduced ? undefined : 'lqd-wave-x 2.6s ease-in-out infinite',
+          }}
+        />
+      </div>
+    </div>
   )
 }
 
@@ -808,6 +843,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   function reviewRows(): Array<{ label: string; value: string; edit: StepId }> {
     const rows: Array<{ label: string; value: string; edit: StepId }> = []
     rows.push({ label: 'Goals', value: answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || '—', edit: 'goals' })
+    if (answers.drinksMode && answers.drinksPerDay) {
+      const pace = DRINKS_PER_DAY_DATA.find((d) => d.id === answers.drinksPerDay)
+      if (pace) rows.push({ label: 'Your pace', value: `${pace.label} · ${pace.id === 4 ? '4+' : pace.id}/day`, edit: 'drinksPerDay' })
+    }
     if (localAge) rows.push({ label: 'You', value: [localName.trim(), localExactAge ? `${localExactAge}` : localAge].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
       const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
@@ -1064,6 +1103,42 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               </div>
             </div>
           ))}
+
+          {/* ── LQD pace — how many drinks a day (drinks mode only) ── */}
+          {id === 'drinksPerDay' && (
+            <div className="flex flex-col gap-2.5">
+              {DRINKS_PER_DAY_DATA.map(({ id: did, label, sub, fills }) => {
+                const active = answers.drinksPerDay === did
+                return (
+                  <button
+                    key={`dpd-${did}`}
+                    onClick={() => {
+                      setAnswer('drinksPerDay', did)
+                      clearPending()
+                      pendingTimerRef.current = setTimeout(() => advance(), 340)
+                    }}
+                    aria-pressed={active}
+                    className={[
+                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
+                      'transition-all duration-200 active:scale-[0.99]',
+                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
+                      active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
+                    ].join(' ')}
+                  >
+                    <PaceGlass level={fills / 4} selected={active} reduced={reducedMotion} />
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[15px] font-medium leading-snug ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
+                    </div>
+                    <CheckMark selected={active} />
+                  </button>
+                )
+              })}
+              <p className="text-[12px] text-white/30 leading-snug mt-1 px-1">
+                No pressure to hit a number — LQD is a month of drinks you sip at your own rate. This just helps us show how your box will flow.
+              </p>
+            </div>
+          )}
 
           {/* ── Personal ── */}
           {id === 'personal' && (

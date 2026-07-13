@@ -256,7 +256,7 @@ export function StackReviewPage() {
         {/* Price summary + checkout */}
         <div className="px-5 pt-6 max-w-lg mx-auto">
           {/* LQD: the month-of-drinks tally + pour guide */}
-          {answers.drinksMode && <LqdPourGuide plan={subscriptionPlan} />}
+          {answers.drinksMode && <LqdPourGuide plan={subscriptionPlan} answers={answers} />}
 
           {checkoutState.status === 'error' && (
             <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">

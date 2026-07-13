@@ -43,6 +43,14 @@ export type StimPreference = 'yes' | 'no'
 
 export type QuizTrack = 'performance' | 'wellbeing'
 
+/**
+ * CHRGD LQD — how many drinks a day the customer wants to sip. Not a dose or a
+ * schedule: it's the pace they'll get through the month's box at, which the LQD
+ * logic reconciles against a fixed monthly pool (see `buildLqdPlan`). '4' means
+ * "4 or more". Only asked in drinks mode.
+ */
+export type DrinksPerDay = 1 | 2 | 3 | 4
+
 /** One answered AI deep-dive follow-up. Stores the display text alongside the
  *  engine signals so the Q&A can travel with the answers object into the AI
  *  prompts (personalise-stack / generate-identity) and the review screen. */
@@ -69,6 +77,12 @@ export interface QuizAnswers {
    * Optional so answers saved before the feature existed stay valid.
    */
   drinksMode?: boolean
+  /**
+   * CHRGD LQD — the pace the customer wants to drink at (drinks/day). Feeds the
+   * "month of drinks, sipped at your rate" logic on the review, not the dose.
+   * Optional so answers saved before the feature existed stay valid.
+   */
+  drinksPerDay?: DrinksPerDay | null
   ageBracket: AgeBracket | null
   exactAge: number | null
   gender: Gender | null

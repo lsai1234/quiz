@@ -7,7 +7,7 @@ import { isDrinkable, isReadyToDrink, lqdOnly } from '@/lib/catalogue/filters'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { activeSteps, stepCopy, QUIZ_STEPS } from '@/lib/quiz-flow'
-import { monthlyDrinksOf, pourMomentFor } from '@/lib/lqd'
+import { monthlyDrinksOf, pourMomentFor, buildLqdPlan, pacingFor, DEFAULT_DRINKS_PER_DAY } from '@/lib/lqd'
 import { defaultAnswers } from '@/lib/store'
 import type { QuizAnswers } from '@/lib/types'
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
@@ -86,13 +86,17 @@ describe('LQD blueprint (pre-made drinks only)', () => {
 })
 
 describe('LQD quiz flow', () => {
-  it('skips the formats step in drinks mode only', () => {
+  it('swaps the formats step for the drinks/day pace step in drinks mode', () => {
     const normal = activeSteps('performance').map((s) => s.id)
     const lqd = activeSteps('performance', true).map((s) => s.id)
+    // Formats is dropped (implied) and the pace step is added, both only in LQD.
     expect(normal).toContain('formats')
+    expect(normal).not.toContain('drinksPerDay')
     expect(lqd).not.toContain('formats')
-    // Everything else survives.
-    expect(lqd).toEqual(normal.filter((id) => id !== 'formats'))
+    expect(lqd).toContain('drinksPerDay')
+    // Nothing else moves: normal minus formats, plus drinksPerDay after goals.
+    expect(lqd.filter((id) => id !== 'drinksPerDay')).toEqual(normal.filter((id) => id !== 'formats'))
+    expect(lqd[lqd.indexOf('drinksPerDay') - 1]).toBe('goals')
   })
 
   it('applies LQD copy overrides on top of the track', () => {
@@ -118,5 +122,47 @@ describe('pour guide', () => {
     expect(pourMomentFor('hydration', false).moment).toContain('During training')
     expect(pourMomentFor('gut', false).moment).toBe('With breakfast')
     expect(pourMomentFor(undefined, false).moment).toBe('Whenever suits you')
+  })
+})
+
+// A minimal SubscriptionLine stand-in — buildLqdPlan only reads the product's
+// primary slot + stimulant flag and the line's occasionsPerMonth.
+const line = (slot: string, occasionsPerMonth: number, hasStimulants = false): SubscriptionLine =>
+  ({
+    product: { id: `p-${slot}`, title: `Drink ${slot}`, stackSlots: [slot], hasStimulants },
+    occasionsPerMonth,
+  } as unknown as SubscriptionLine)
+
+describe('buildLqdPlan — month of drinks at your pace', () => {
+  it('only the pre-workout is timed; everything else is a sip-anytime pool', () => {
+    expect(pacingFor('energy')).toBe('timed')
+    expect(pacingFor('health')).toBe('anytime')
+    expect(pacingFor('protein')).toBe('anytime')
+    expect(pacingFor(undefined)).toBe('anytime')
+
+    const plan = buildLqdPlan(
+      [line('energy', 15, true), line('health', 30), line('protein', 20)],
+      { drinksPerDay: 2 },
+    )
+    expect(plan.timedDrinks).toBe(15)
+    expect(plan.anytimeDrinks).toBe(50)
+    expect(plan.totalDrinks).toBe(65)
+    // Anytime lines carry the "covered over the month" framing, not a moment.
+    const vits = plan.lines.find((l) => l.slot === 'health')!
+    expect(vits.pacing).toBe('anytime')
+    expect(vits.coverageNote).toContain('most days')
+  })
+
+  it('reconciles the chosen pace against the fixed pool (days of cover + fit)', () => {
+    const drinks = [line('health', 30), line('protein', 30)] // 60-drink pool
+    expect(buildLqdPlan(drinks, { drinksPerDay: 1 }).fit).toBe('stretches') // ~60 days
+    expect(buildLqdPlan(drinks, { drinksPerDay: 2 }).fit).toBe('balanced')  // ~30 days
+    expect(buildLqdPlan(drinks, { drinksPerDay: 3 }).fit).toBe('brisk')     // ~20 days
+    expect(buildLqdPlan(drinks, { drinksPerDay: 2 }).daysOfCover).toBe(30)
+  })
+
+  it('falls back to a sensible pace when the customer never picked one', () => {
+    const plan = buildLqdPlan([line('health', 30)], null)
+    expect(plan.drinksPerDay).toBe(DEFAULT_DRINKS_PER_DAY)
   })
 })

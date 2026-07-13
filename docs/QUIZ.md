@@ -47,8 +47,11 @@ ready-made drink. Easier than a shelf of tubs and pill bottles — the customer
 drinks what we send and their month is covered.
 
 - **Same quiz**, minus the formats question (`skipInDrinksMode` in
-  `quiz-flow.ts` — the answer is implied) and with LQD copy overrides
-  (`lqd: { q, hint }`, applied after the track override).
+  `quiz-flow.ts` — the answer is implied), plus one LQD-only step — **"How many
+  drinks a day?"** (`drinksPerDay`, `onlyInDrinksMode`, sits right after goals)
+  — and with LQD copy overrides (`lqd: { q, hint }`, applied after the track
+  override). `drinksPerDay` is a *pace*, not a dose: it never changes the
+  amounts or pricing, only how the month-of-drinks story is framed.
 - **Pre-made only blueprint**: `buildStackBlueprint` filters candidates
   through `isReadyToDrink` (`src/lib/catalogue/filters.ts` — `rtd`, `drink`,
   `shot`, `can`… formats). **Powders and effervescents never qualify** — they
@@ -64,12 +67,27 @@ drinks what we send and their month is covered.
   goal sets sit at/below the powder/capsule counterparts, so **normal-mode
   picks are unchanged** (regression-tested). Live, tag Shopify products
   `rtd`/`drink`/`shot` and they join LQD automatically.
-- **Month-of-drinks framing**: `src/lib/lqd.ts` computes the monthly drinks
-  tally (Σ `occasionsPerMonth`) and per-drink "pour guide" moments;
-  `LqdPourGuide` renders the convenience story (arrives ready / replaces the
-  shelf / you're covered) + the tally + the moments on the stack review.
-  Pricing, checkout, accounts and the hub are unchanged — an LQD bundle is a
-  normal bundle whose products all happen to be ready-made drinks.
+- **Month-of-drinks logic** (`src/lib/lqd.ts`, `buildLqdPlan`): the LQD promise
+  is that you *don't* need a drink of everything every day. The whole month's
+  drinks land in one box and you sip them at your own pace — it's the **monthly
+  total** that keeps you covered, not a daily schedule. So each line is
+  classified as:
+  - **timed** — the pre-workout / `energy` slot only: one per session, a real
+    moment (keeps its `pourMomentFor` note).
+  - **anytime** — vitamins, protein, greens, hydration, recovery, sleep, gut:
+    a pool with no daily obligation (gets a `coverageNoteFor` line: "N for the
+    month — have them most days and you're covered").
+
+  `buildLqdPlan` totals the pool, splits timed vs anytime, and **reconciles the
+  chosen `drinksPerDay` pace against the fixed pool**: `daysOfCover` +
+  a `fit` (`brisk` runs it down early → suggest boosters · `balanced` lands on a
+  month · `stretches` lasts past 30 days). This is a presentation layer over the
+  already-sized subscription plan — quantities, pricing, checkout, accounts and
+  the hub are all unchanged. `LqdPourGuide` renders it as a **liquid**
+  experience (filling month gauge with a drifting meniscus, drinks as little
+  liquid levels; `.lqd-*` classes in `globals.css`, held still under
+  `prefers-reduced-motion`). The quiz's pace step uses the same liquid-glass
+  motif.
 - The mixable powders added earlier (Daily Fizz, Clear Whey, Night Pour,
   Immunity Fizz) remain regular-catalogue products for the normal stack
   builder; they are not LQD-eligible.

@@ -13,6 +13,7 @@ import type { QuizTrack } from '@/lib/types'
  */
 export type StepId =
   | 'goals'
+  | 'drinksPerDay'
   | 'personal'
   | 'frequency'
   | 'type'
@@ -51,6 +52,8 @@ export interface QuizStepDef {
   tracks?: QuizTrack[]
   /** Skip this step entirely in LQD drinks mode. */
   skipInDrinksMode?: boolean
+  /** Show this step ONLY in LQD drinks mode (e.g. the drinks/day pace). */
+  onlyInDrinksMode?: boolean
   /** Single-choice steps auto-advance; multi/compound steps need Continue. */
   advance: 'auto' | 'manual'
 }
@@ -67,6 +70,8 @@ export function selectHint(mode: SelectMode): string | null {
 
 export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", select: 'multi', lqd: { hint: 'Pick everything that applies — we’ll cover it all with ready-made drinks.' }, advance: 'manual' },
+  // LQD only — the pace, not a dose. We reconcile it against the month's pool.
+  { id: 'drinksPerDay', section: 'YOUR PACE', q: 'How many drinks a day?', hint: "Just a feel for your rhythm — you don't have to hit it. We'll pour a month either way.", select: 'one', onlyInDrinksMode: true, advance: 'auto' },
   { id: 'personal', section: 'ABOUT YOU', q: 'A little about you.', hint: 'Helps us tailor the doses and picks to you.', select: 'form', advance: 'manual' },
   { id: 'frequency', section: 'TRAINING', q: 'How often do you train?', hint: 'Your frequency shapes the whole stack.', select: 'one', tracks: ['performance'], lqd: { hint: 'Your frequency shapes the whole package.' }, advance: 'auto' },
   { id: 'type', section: 'TRAINING', q: "What's your training style?", hint: 'Pick everything you do — add as many as apply.', select: 'multi', tracks: ['performance'], advance: 'manual' },
@@ -88,7 +93,12 @@ export const QUIZ_STEPS: QuizStepDef[] = [
  *  performance sequence so the step count is stable on the first screen. */
 export function activeSteps(track: QuizTrack | null, drinksMode = false): QuizStepDef[] {
   const t = track ?? 'performance'
-  return QUIZ_STEPS.filter((s) => (!s.tracks || s.tracks.includes(t)) && !(drinksMode && s.skipInDrinksMode))
+  return QUIZ_STEPS.filter(
+    (s) =>
+      (!s.tracks || s.tracks.includes(t)) &&
+      !(drinksMode && s.skipInDrinksMode) &&
+      (drinksMode || !s.onlyInDrinksMode),
+  )
 }
 
 /** Resolved question copy for a step on a given track (+ LQD overrides). */

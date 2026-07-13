@@ -74,6 +74,7 @@ export const defaultAnswers: QuizAnswers = {
   name: '',
   track: null,
   drinksMode: false,
+  drinksPerDay: null,
   ageBracket: null,
   exactAge: null,
   gender: null,

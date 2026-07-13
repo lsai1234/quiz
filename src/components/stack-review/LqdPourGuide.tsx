@@ -2,50 +2,107 @@
 
 /**
  * CHRGD LQD — "Your month, poured." Shown on the stack review only in drinks
- * mode: the convenience story (why one box of ready-made drinks beats a shelf
- * of tubs and pill bottles), the monthly drinks tally, and a per-drink pour
- * guide. Suggestions, not a schedule — the package promise is drink what we
- * send, whenever you want.
+ * mode. It tells the LQD story: your whole month lands as one box of ready-made
+ * drinks and you sip them at your own pace — the monthly total keeps you
+ * covered, not a rigid daily schedule. Only the pre-workout is tied to a moment;
+ * everything else is a pool you dip into whenever.
+ *
+ * The whole thing is built to feel liquid — a filling month gauge with a
+ * drifting meniscus, drinks shown as little liquid levels. Animations are
+ * disabled under prefers-reduced-motion (see globals.css).
  */
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
-import { monthlyDrinksOf, pourMomentFor } from '@/lib/lqd'
+import type { QuizAnswers } from '@/lib/types'
+import { buildLqdPlan, type LqdDrinkLine } from '@/lib/lqd'
 
 const ACCENT = '#00D4FF'
 
 const CONVENIENCE = [
   { title: 'Arrives ready', note: 'Every drink is pre-made. Nothing to mix, measure or remember.' },
-  { title: 'Replaces the shelf', note: 'One box instead of tubs, shakers and pill bottles.' },
-  { title: 'You’re covered', note: 'Drink what we send and your month is handled.' },
+  { title: 'No daily quota', note: "Sip at your pace — it's the month's total that keeps you covered." },
+  { title: 'You’re covered', note: 'Everything you need for the month is already in the box.' },
 ]
 
-export function LqdPourGuide({ plan }: { plan: SubscriptionLine[] }) {
+/** A drink shown as a little liquid level — fills toward a full month. */
+function DrinkRow({ line }: { line: LqdDrinkLine }) {
+  const isTimed = line.pacing === 'timed'
+  // Anytime drinks show the monthly-cover line; timed drinks show the moment.
+  const detail = isTimed ? `${line.moment.moment.toLowerCase()} — ${line.moment.note}` : line.coverageNote
+  const level = Math.max(12, Math.min(100, Math.round((line.monthlyCount / 30) * 100)))
+  return (
+    <div className="flex items-start gap-3">
+      {/* liquid vial */}
+      <div
+        className="relative w-6 h-9 rounded-b-[7px] rounded-t-[3px] overflow-hidden shrink-0 mt-0.5 border"
+        style={{ borderColor: 'color-mix(in srgb, var(--color-text) 14%, transparent)', background: 'color-mix(in srgb, var(--color-text) 3%, transparent)' }}
+        aria-hidden="true"
+      >
+        <div className="lqd-fill absolute inset-x-0 bottom-0" style={{ height: `${level}%`, background: ACCENT, opacity: 0.85 }}>
+          <div className="lqd-meniscus absolute -top-[3px] left-0 h-1.5 w-[200%] rounded-[50%]" style={{ background: ACCENT }} />
+        </div>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[13px] leading-snug">
+          <span className="font-bold" style={{ color: 'var(--color-text)' }}>{line.product.title}</span>
+          <span className="text-[var(--color-muted)]"> · {line.monthlyCount} for the month</span>
+        </p>
+        <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-0.5">{detail}</p>
+      </div>
+    </div>
+  )
+}
+
+export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answers: QuizAnswers }) {
   if (plan.length === 0) return null
-  const monthlyDrinks = monthlyDrinksOf(plan)
+  const lqd = buildLqdPlan(plan, answers)
+  const anytime = lqd.lines.filter((l) => l.pacing === 'anytime')
+  const timed = lqd.lines.filter((l) => l.pacing === 'timed')
+  // The month gauge fills toward "a full month"; capped so a big box still reads.
+  const gaugePct = Math.max(8, Math.min(100, Math.round((lqd.daysOfCover / 30) * 100)))
 
   return (
     <div
-      className="rounded-2xl p-5 mb-4"
+      className="relative rounded-2xl p-5 mb-4 overflow-hidden"
       style={{
         border: `1px solid color-mix(in srgb, ${ACCENT} 22%, transparent)`,
-        background: `linear-gradient(135deg, color-mix(in srgb, ${ACCENT} 7%, transparent), transparent 60%)`,
+        background: `linear-gradient(135deg, color-mix(in srgb, ${ACCENT} 8%, transparent), transparent 62%)`,
       }}
     >
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
           CHRGD LQD · Your month, poured
         </p>
-        {monthlyDrinks > 0 && (
-          <p className="text-sm font-black whitespace-nowrap" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-            ~{monthlyDrinks} <span className="font-semibold text-[var(--color-muted)] text-xs">drinks/mo</span>
-          </p>
-        )}
+        <p className="text-sm font-black whitespace-nowrap" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          ~{lqd.totalDrinks} <span className="font-semibold text-[var(--color-muted)] text-xs">drinks</span>
+        </p>
       </div>
       <p className="text-xs text-[var(--color-muted)] leading-relaxed mb-4">
-        No powders. No pills. No mixing. Everything below turns up as a real,
-        ready-made drink — open whichever you fancy, whenever you fancy it.
+        You don’t need a drink of everything, every day. Your whole month turns
+        up as one box of ready-made drinks — sip them at your pace and the
+        monthly total keeps you covered.
       </p>
 
-      {/* Why this beats the shelf of tubs and pill bottles */}
+      {/* Liquid month gauge — how the box flows at your chosen pace */}
+      <div className="rounded-xl p-3.5 mb-4" style={{ background: 'color-mix(in srgb, var(--color-text) 4%, transparent)', border: '1px solid var(--color-border)' }}>
+        <div className="flex items-center justify-between gap-3 mb-2">
+          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            {lqd.drinksPerDay}{lqd.drinksPerDay >= 4 ? '+' : ''}/day · ~{lqd.daysOfCover} days of drinks
+          </span>
+          <span className="text-[10px] font-semibold" style={{ color: ACCENT }}>
+            {lqd.fit === 'stretches' ? 'Stretches past a month' : lqd.fit === 'brisk' ? 'A brisk month' : 'A month, sorted'}
+          </span>
+        </div>
+        <div className="relative h-6 rounded-full overflow-hidden" style={{ background: 'color-mix(in srgb, var(--color-text) 6%, transparent)' }} aria-hidden="true">
+          <div className="lqd-fill absolute inset-y-0 left-0 rounded-full" style={{ width: `${gaugePct}%`, background: `linear-gradient(90deg, color-mix(in srgb, ${ACCENT} 65%, transparent), ${ACCENT})` }}>
+            <div className="lqd-meniscus-v absolute inset-y-0 -right-1 w-2 rounded-full" style={{ background: ACCENT }} />
+          </div>
+          {/* the 30-day mark */}
+          <div className="absolute inset-y-0" style={{ left: '100%', transform: 'translateX(-1px)' }} />
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-2">{lqd.fitNote}</p>
+      </div>
+
+      {/* Why one box beats a shelf of tubs and pill bottles */}
       <div className="grid grid-cols-3 gap-2 mb-5">
         {CONVENIENCE.map(({ title, note }) => (
           <div
@@ -61,27 +118,29 @@ export function LqdPourGuide({ plan }: { plan: SubscriptionLine[] }) {
         ))}
       </div>
 
-      <div className="space-y-3">
-        {plan.map((line) => {
-          const { moment, note } = pourMomentFor(line.product.stackSlots[0], line.product.hasStimulants)
-          return (
-            <div key={line.product.id} className="flex items-start gap-3">
-              <span
-                className="mt-1 w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ background: ACCENT }}
-                aria-hidden="true"
-              />
-              <div className="min-w-0">
-                <p className="text-[13px] leading-snug">
-                  <span className="font-bold" style={{ color: 'var(--color-text)' }}>{line.product.title}</span>
-                  <span className="text-[var(--color-muted)]"> — {moment.toLowerCase()}</span>
-                </p>
-                <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-0.5">{note}</p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      {/* Sip anytime — the free-pace pool */}
+      {anytime.length > 0 && (
+        <div className="mb-4">
+          <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
+            Sip anytime · {lqd.anytimeDrinks} drinks
+          </p>
+          <div className="space-y-3">
+            {anytime.map((line) => <DrinkRow key={line.product.id} line={line} />)}
+          </div>
+        </div>
+      )}
+
+      {/* One per session — the only timed drink */}
+      {timed.length > 0 && (
+        <div>
+          <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
+            One per session · {lqd.timedDrinks} drinks
+          </p>
+          <div className="space-y-3">
+            {timed.map((line) => <DrinkRow key={line.product.id} line={line} />)}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
