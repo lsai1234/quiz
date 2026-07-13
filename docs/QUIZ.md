@@ -116,6 +116,29 @@ drinks what we send and their month is covered.
   `handleFinish`/`generateStack` (engine, `Act3`, `Act4` untouched —
   `QuizAnswers` is unchanged).
 
+## Selling as you answer (all quizzes)
+
+The quiz does the merchandising while it's being filled in. `src/lib/quiz-sell.ts`
+(`sellingCueFor`) maps the just-made pick to a short, claim-safe, benefit-led
+line; `Act2Quiz` shows it as a non-blocking chip (`SellingCueChip`) that springs
+up on each answer and drifts away on its own. There are two copy sets: the
+normal stack keeps the stack-benefit voice; **drinks mode makes every cue about
+drinks and convenience** ("A pre-workout you just crack open", "one box instead
+of a shelf of tubs"). Cues are keyed to the chosen value so re-picking re-shows.
+
+## Liquid brand chrome (LQD)
+
+In drinks mode the whole run *feels* like liquid, not just the copy:
+- the signature right-edge rail becomes a **`LiquidRail`** — a glass tube that
+  fills with liquid as you answer (wavy meniscus, rising bubbles, droplet cap,
+  a quiet "% poured"), swapped in for the `ChargeRail`;
+- the floor becomes a **rising liquid pool** that grows with progress, with a
+  drifting surface and bubbles;
+- the pace step's options use a **liquid-glass** motif (each glass fills to its
+  level); and the generating overlay pours ("Topped up · Pouring your month…").
+All liquid motion is held still under `prefers-reduced-motion`
+(`.lqd-*` / `cue-*` rules in `globals.css`).
+
 ## Retention-style UX roadmap (north-star: quiz-taking experience)
 
 **Done (this round):** questionnaire flow overhaul (sequence backbone, progress +

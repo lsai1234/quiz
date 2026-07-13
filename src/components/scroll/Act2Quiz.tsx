@@ -10,7 +10,9 @@ import { activeSteps, stepCopy, selectHint, type StepId } from '@/lib/quiz-flow'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from '@/lib/deep-dive'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
+import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { sellingCueFor, type SellingCue } from '@/lib/quiz-sell'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -425,6 +427,38 @@ function PaceGlass({ level, selected, reduced }: { level: number; selected: bool
   )
 }
 
+// The "selling as you answer" chip — a non-blocking benefit that slides up when
+// you pick something and drifts away on its own. Drinks mode makes it a droplet.
+function SellingCueChip({ cue, reduced, drinksMode }: { cue: SellingCue; reduced: boolean; drinksMode: boolean }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-5" style={{ bottom: 104 }}>
+      <div
+        key={cue.id}
+        className="pointer-events-auto flex items-center gap-2.5 max-w-md rounded-full pl-3 pr-4 py-2 border backdrop-blur-md"
+        style={{
+          background: 'linear-gradient(100deg, rgba(0,212,255,0.16), rgba(0,212,255,0.06))',
+          borderColor: 'rgba(0,212,255,0.35)',
+          boxShadow: '0 8px 30px -10px rgba(0,212,255,0.5)',
+          animation: reduced ? undefined : 'cue-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
+        }}
+      >
+        <span
+          className="relative shrink-0 flex items-center justify-center w-6 h-6 rounded-full"
+          style={{ background: 'rgba(0,212,255,0.18)' }}
+        >
+          <QuizIcon name={cue.icon} size={14} className="text-[#00D4FF]" />
+          {drinksMode && !reduced && (
+            <span className="absolute w-6 h-6 rounded-full" style={{ boxShadow: '0 0 0 0 rgba(0,212,255,0.5)', animation: 'cue-ripple 1.8s ease-out infinite' }} />
+          )}
+        </span>
+        <span className="text-[12.5px] leading-snug text-white/90 font-medium" style={{ fontFamily: 'var(--font-display)' }}>
+          {cue.text}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Deep-dive loading — the AI writing your questions ───────────────────────
 // A charged "thinking" moment in the house language: the bolt breathes inside
 // a glass orb with an orbiting spark, status copy cycles, and two ghost
@@ -601,6 +635,27 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (charge > prevChargeRef.current) setSurgeKey((k) => k + 1)
     prevChargeRef.current = charge
   }, [charge])
+
+  // CHRGD LQD — the whole run is drinks & convenience: the rail becomes a
+  // filling liquid tube and the floor a rising pool.
+  const drinksMode = !!answers.drinksMode
+
+  // ── Selling as you answer ── a benefit chip that reacts to each pick, doing
+  // the selling work while the quiz is filled in (drinks-forward in LQD mode).
+  const [cue, setCue] = useState<SellingCue | null>(null)
+  const cueIdRef = useRef<string | null>(null)
+  const cueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const next = sellingCueFor(id, answers, drinksMode)
+    if (!next) { setCue(null); cueIdRef.current = null; return }
+    if (next.id === cueIdRef.current) return
+    cueIdRef.current = next.id
+    setCue(next)
+    if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
+    cueTimerRef.current = setTimeout(() => setCue(null), 4200)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, id, drinksMode])
+  useEffect(() => () => { if (cueTimerRef.current) clearTimeout(cueTimerRef.current) }, [])
 
   // Personal-info local state (written to the store on advance).
   const [localName, setLocalName] = useState(answers.name || '')
@@ -878,15 +933,55 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   return (
     <div className="fixed top-0 left-0 right-0 h-[100dvh] bg-[#0A0A0A] text-white flex flex-col overflow-hidden">
 
-      {/* Charge rail — the getCHRGD signature, always in frame */}
-      <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
+      {/* The signature rail — a filling liquid tube in LQD, the charge rail
+          otherwise. Always in frame, climbing as you answer. */}
+      {drinksMode
+        ? <LiquidRail level={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
+        : <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />}
 
-      {/* A whisper of charge at the floor — calm, never competes with the question */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-x-0 bottom-0 z-0"
-        style={{ height: 180, background: 'radial-gradient(120% 100% at 50% 135%, rgba(0,212,255,0.06), transparent 70%)' }}
-      />
+      {/* Floor. LQD: a real liquid pool that RISES with progress, with a wavy
+          surface — the screen visibly fills with drink. Otherwise: a calm
+          charge whisper. Never competes with the question. */}
+      {drinksMode ? (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-0 overflow-hidden"
+          style={{ height: `${Math.round(70 + charge * 1.1)}px` }}
+        >
+          {/* wavy meniscus at the pool surface */}
+          <div
+            className="absolute inset-x-0 top-0 h-4"
+            style={{
+              marginLeft: '-50%', width: '200%',
+              background: 'radial-gradient(60% 130% at 20% 0%, rgba(0,212,255,0.28), transparent 60%), radial-gradient(60% 130% at 70% 0%, rgba(0,212,255,0.22), transparent 60%)',
+              animation: reducedMotion ? undefined : 'wave-drift 7s linear infinite',
+            }}
+          />
+          <div className="absolute inset-0 top-2" style={{ background: 'linear-gradient(to top, rgba(0,212,255,0.16), rgba(0,212,255,0.05) 55%, transparent)' }} />
+          {/* a few bubbles drifting up through the pool */}
+          {!reducedMotion && charge > 20 && [0, 1, 2, 3].map((i) => (
+            <span
+              key={`floor-bub-${i}`}
+              className="absolute rounded-full"
+              style={{
+                left: `${12 + i * 24}%`, bottom: 4, width: 4, height: 4,
+                background: 'rgba(0,212,255,0.5)',
+                ['--sway' as string]: `${i % 2 ? 5 : -5}px`,
+                animation: `bubble-rise ${4 + i}s ease-in ${i * 1.1}s infinite`,
+              }}
+            />
+          ))}
+        </div>
+      ) : (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-0"
+          style={{ height: 180, background: 'radial-gradient(120% 100% at 50% 135%, rgba(0,212,255,0.06), transparent 70%)' }}
+        />
+      )}
+
+      {/* Selling-as-you-answer chip */}
+      {cue && !isGenerating && <SellingCueChip cue={cue} reduced={reducedMotion} drinksMode={drinksMode} />}
 
       {/* Generating overlay */}
       {isGenerating && (
@@ -899,9 +994,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           </div>
           <div className="text-center">
             <p className="text-xl font-semibold text-white mb-1.5 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-              Fully charged
+              {drinksMode ? 'Topped up' : 'Fully charged'}
             </p>
-            <p className="text-sm text-white/35">Powering on your personalised stack…</p>
+            <p className="text-sm text-white/35">{drinksMode ? 'Pouring your month of drinks…' : 'Powering on your personalised stack…'}</p>
           </div>
           <div className="flex gap-1.5 mt-2">
             {Array.from({ length: 5 }).map((_, i) => (
