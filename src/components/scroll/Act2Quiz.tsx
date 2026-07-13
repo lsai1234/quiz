@@ -12,7 +12,7 @@ import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from 
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
-import { sellingCueFor, type SellingCue } from '@/lib/quiz-sell'
+import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -427,34 +427,36 @@ function PaceGlass({ level, selected, reduced }: { level: number; selected: bool
   )
 }
 
-// The "selling as you answer" chip — a non-blocking benefit that slides up when
-// you pick something and drifts away on its own. Drinks mode makes it a droplet.
-function SellingCueChip({ cue, reduced, drinksMode }: { cue: SellingCue; reduced: boolean; drinksMode: boolean }) {
+// The odd "did you know?" — a calm, non-blocking aside that fades in on a few
+// steps and drifts away on its own. Tappable to dismiss early.
+function DidYouKnowChip({ cue, reduced, onDismiss }: { cue: QuizFact; reduced: boolean; onDismiss: () => void }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-5" style={{ bottom: 104 }}>
-      <div
+      <button
         key={cue.id}
-        className="pointer-events-auto flex items-center gap-2.5 max-w-md rounded-full pl-3 pr-4 py-2 border backdrop-blur-md"
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="pointer-events-auto flex items-start gap-2.5 max-w-md text-left rounded-2xl pl-3 pr-4 py-2.5 border backdrop-blur-md"
         style={{
-          background: 'linear-gradient(100deg, rgba(0,212,255,0.16), rgba(0,212,255,0.06))',
-          borderColor: 'rgba(0,212,255,0.35)',
-          boxShadow: '0 8px 30px -10px rgba(0,212,255,0.5)',
-          animation: reduced ? undefined : 'cue-pop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
+          background: 'linear-gradient(100deg, rgba(0,212,255,0.14), rgba(0,212,255,0.05))',
+          borderColor: 'rgba(0,212,255,0.3)',
+          boxShadow: '0 8px 30px -12px rgba(0,212,255,0.45)',
+          animation: reduced ? undefined : 'cue-pop 0.45s cubic-bezier(0.22,1,0.36,1) both',
         }}
       >
         <span
-          className="relative shrink-0 flex items-center justify-center w-6 h-6 rounded-full"
-          style={{ background: 'rgba(0,212,255,0.18)' }}
+          className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full"
+          style={{ background: 'rgba(0,212,255,0.16)' }}
         >
           <QuizIcon name={cue.icon} size={14} className="text-[#00D4FF]" />
-          {drinksMode && !reduced && (
-            <span className="absolute w-6 h-6 rounded-full" style={{ boxShadow: '0 0 0 0 rgba(0,212,255,0.5)', animation: 'cue-ripple 1.8s ease-out infinite' }} />
-          )}
         </span>
-        <span className="text-[12.5px] leading-snug text-white/90 font-medium" style={{ fontFamily: 'var(--font-display)' }}>
-          {cue.text}
+        <span className="min-w-0">
+          <span className="block text-[9px] font-bold tracking-[0.2em] uppercase text-[#00D4FF]/80 mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>
+            Did you know?
+          </span>
+          <span className="block text-[12.5px] leading-snug text-white/85">{cue.text}</span>
         </span>
-      </div>
+      </button>
     </div>
   )
 }
@@ -640,22 +642,31 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // filling liquid tube and the floor a rising pool.
   const drinksMode = !!answers.drinksMode
 
-  // ── Selling as you answer ── a benefit chip that reacts to each pick, doing
-  // the selling work while the quiz is filled in (drinks-forward in LQD mode).
-  const [cue, setCue] = useState<SellingCue | null>(null)
-  const cueIdRef = useRef<string | null>(null)
+  // ── The odd "did you know?" ── a light brand tidbit on a few steps only,
+  // each shown at most once, so it's an occasional aside — never per-tap.
+  const [cue, setCue] = useState<QuizFact | null>(null)
+  const shownFactsRef = useRef<Set<string>>(new Set())
   const cueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cueDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    const next = sellingCueFor(id, answers, drinksMode)
-    if (!next) { setCue(null); cueIdRef.current = null; return }
-    if (next.id === cueIdRef.current) return
-    cueIdRef.current = next.id
-    setCue(next)
+    const fact = quizFactFor(id, drinksMode)
+    // Clear anything showing when we land on a new step.
+    setCue(null)
     if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
-    cueTimerRef.current = setTimeout(() => setCue(null), 4200)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [answers, id, drinksMode])
-  useEffect(() => () => { if (cueTimerRef.current) clearTimeout(cueTimerRef.current) }, [])
+    if (cueDelayRef.current) clearTimeout(cueDelayRef.current)
+    if (!fact || shownFactsRef.current.has(fact.id)) return
+    // Surface it a beat after the step settles (so it doesn't fight the
+    // question), then let it drift away on its own.
+    cueDelayRef.current = setTimeout(() => {
+      shownFactsRef.current.add(fact.id)
+      setCue(fact)
+      cueTimerRef.current = setTimeout(() => setCue(null), 5200)
+    }, 1100)
+  }, [id, drinksMode])
+  useEffect(() => () => {
+    if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
+    if (cueDelayRef.current) clearTimeout(cueDelayRef.current)
+  }, [])
 
   // Personal-info local state (written to the store on advance).
   const [localName, setLocalName] = useState(answers.name || '')
@@ -980,8 +991,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
         />
       )}
 
-      {/* Selling-as-you-answer chip */}
-      {cue && !isGenerating && <SellingCueChip cue={cue} reduced={reducedMotion} drinksMode={drinksMode} />}
+      {/* The odd "did you know?" aside */}
+      {cue && !isGenerating && <DidYouKnowChip cue={cue} reduced={reducedMotion} onDismiss={() => setCue(null)} />}
 
       {/* Generating overlay */}
       {isGenerating && (

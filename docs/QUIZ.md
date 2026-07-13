@@ -116,15 +116,16 @@ drinks what we send and their month is covered.
   `handleFinish`/`generateStack` (engine, `Act3`, `Act4` untouched —
   `QuizAnswers` is unchanged).
 
-## Selling as you answer (all quizzes)
+## The odd "did you know?" (all quizzes)
 
-The quiz does the merchandising while it's being filled in. `src/lib/quiz-sell.ts`
-(`sellingCueFor`) maps the just-made pick to a short, claim-safe, benefit-led
-line; `Act2Quiz` shows it as a non-blocking chip (`SellingCueChip`) that springs
-up on each answer and drifts away on its own. There are two copy sets: the
-normal stack keeps the stack-benefit voice; **drinks mode makes every cue about
-drinks and convenience** ("A pre-workout you just crack open", "one box instead
-of a shelf of tubs"). Cues are keyed to the chosen value so re-picking re-shows.
+A light-touch brand aside, not a per-tap sell. `src/lib/quiz-sell.ts`
+(`quizFactFor`) carries a claim-safe tidbit for only a **handful of steps**;
+`Act2Quiz` fades it in as a labelled "Did you know?" chip (`DidYouKnowChip`) a
+beat after the step settles and shows each fact **at most once per session**
+(tracked in `shownFactsRef`), so it stays an occasional surprise. Two copy sets:
+the normal stack gets the stack version; **drinks mode leans into drinks &
+convenience** ("one box in the fridge — no tubs, no pills, no scoops"). Tapping
+the chip dismisses it.
 
 ## Liquid brand chrome (LQD)
 

@@ -252,16 +252,10 @@
   .lqd-fill, .lqd-meniscus, .lqd-meniscus-v { animation: none !important; }
 }
 
-/* Selling-as-you-answer chip — springs up when you pick, with a soft ripple
-   around the icon in drinks mode. */
+/* The odd "did you know?" chip — fades gently up, no jump. */
 @keyframes cue-pop {
-  0%   { opacity: 0; transform: translateY(14px) scale(0.94); }
-  100% { opacity: 1; transform: translateY(0) scale(1); }
-}
-@keyframes cue-ripple {
-  0%   { box-shadow: 0 0 0 0 rgba(0,212,255,0.5); }
-  70%  { box-shadow: 0 0 0 9px rgba(0,212,255,0); }
-  100% { box-shadow: 0 0 0 0 rgba(0,212,255,0); }
+  0%   { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
 
 /* Hover styles guarded so they don't stick on touch devices */

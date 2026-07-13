@@ -1,41 +1,40 @@
 /**
- * Selling-as-you-answer cues — the quiz doing the selling work as it's filled
- * in, drinks-forward in LQD mode.
+ * The odd "did you know?" tidbits — sparse brand asides, drinks-forward in LQD
+ * mode, shown on a few steps only (not per tap).
  */
-import { sellingCueFor } from '@/lib/quiz-sell'
-import { defaultAnswers } from '@/lib/store'
-import type { QuizAnswers } from '@/lib/types'
+import { quizFactFor } from '@/lib/quiz-sell'
+import { QUIZ_STEPS, type StepId } from '@/lib/quiz-flow'
 
-const a = (over: Partial<QuizAnswers> = {}): QuizAnswers => ({ ...defaultAnswers, ...over })
-
-describe('sellingCueFor', () => {
-  it('reacts to the goal just picked, drinks-first in LQD mode', () => {
-    const stack = sellingCueFor('goals', a({ goals: ['muscle'] }), false)
-    const lqd = sellingCueFor('goals', a({ goals: ['muscle'] }), true)
-    expect(stack?.text).toMatch(/protein|creatine/i)
-    expect(lqd?.text).toMatch(/shake|drink|no scooping/i)
-    // The two modes are distinct cues (different ids), so switching re-shows.
-    expect(lqd?.id).not.toBe(stack?.id)
+describe('quizFactFor', () => {
+  it('only a few steps carry a fact — most say nothing', () => {
+    const withFact = QUIZ_STEPS.map((s) => s.id).filter((id) => quizFactFor(id, true) || quizFactFor(id, false))
+    // Sparse on purpose: an occasional aside, never every step.
+    expect(withFact.length).toBeLessThanOrEqual(4)
+    expect(quizFactFor('personal', true)).toBeNull()
+    expect(quizFactFor('goals', true)).toBeNull()
+    expect(quizFactFor('review', false)).toBeNull()
   })
 
-  it('keys the cue to the latest goal so each pick re-shows', () => {
-    expect(sellingCueFor('goals', a({ goals: ['muscle', 'energy'] }), true)?.id).toContain('energy')
-    expect(sellingCueFor('goals', a({ goals: ['muscle'] }), true)?.id).toContain('muscle')
+  it('drinks mode leans into drinks & convenience; normal mode into the stack', () => {
+    expect(quizFactFor('budget', true)?.text).toMatch(/box|month|pause|skip/i)
+    expect(quizFactFor('budget', false)?.text).toMatch(/subscribe|bundle|rate/i)
+    // The two modes are distinct facts (different ids) for the same step.
+    expect(quizFactFor('budget', true)?.id).not.toBe(quizFactFor('budget', false)?.id)
   })
 
-  it('says nothing until a value exists', () => {
-    expect(sellingCueFor('goals', a({ goals: [] }), true)).toBeNull()
-    expect(sellingCueFor('budget', a({ budget: null }), true)).toBeNull()
-    expect(sellingCueFor('budget', a({ budget: '50-80' }), true)?.text).toMatch(/month|cancel|delivered/i)
+  it('the LQD pace step gets the one-box-in-the-fridge tidbit', () => {
+    expect(quizFactFor('drinksPerDay', true)?.text).toMatch(/box|fridge|no tubs|no pills/i)
+    // …and that step carries nothing in the normal stack quiz.
+    expect(quizFactFor('drinksPerDay', false)).toBeNull()
   })
 
-  it('the LQD pace step sells the no-daily-admin promise', () => {
-    const cue = sellingCueFor('drinksPerDay', a({ drinksPerDay: 2, drinksMode: true }), true)
-    expect(cue?.text).toMatch(/no daily admin|covered/i)
-  })
-
-  it('personal/review/type steps stay quiet (no cue defined)', () => {
-    expect(sellingCueFor('personal', a(), true)).toBeNull()
-    expect(sellingCueFor('review', a(), true)).toBeNull()
+  it('a fact id is stable for a given step + mode (so it shows at most once)', () => {
+    const a = quizFactFor('diet', true)
+    const b = quizFactFor('diet', true)
+    expect(a?.id).toBe(b?.id)
   })
 })
+
+// Type-only guard: every fact key is a real StepId.
+const _stepIds: StepId[] = QUIZ_STEPS.map((s) => s.id)
+void _stepIds
