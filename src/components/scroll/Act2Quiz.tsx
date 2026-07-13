@@ -6,7 +6,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { calculatePricing, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
-import { activeSteps, stepCopy, type StepId } from '@/lib/quiz-flow'
+import { activeSteps, stepCopy, selectHint, type StepId } from '@/lib/quiz-flow'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from '@/lib/deep-dive'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
@@ -302,11 +302,14 @@ const labelsOf = (data: Array<{ id: string; label: string }>, ids: string[]) => 
 // ─── Single option component ──────────────────────────────────────────────────
 
 // Editorial-minimal selection mark — a small precise check, accent on select.
-function CheckMark({ selected, reduced }: { selected: boolean; reduced?: boolean }) {
+function CheckMark({ selected, reduced, multi }: { selected: boolean; reduced?: boolean; multi?: boolean }) {
   return (
     <div
       className={[
-        'shrink-0 w-[18px] h-[18px] rounded-full flex items-center justify-center border transition-all duration-200',
+        // Square (checkbox) for multi-select, circle (radio) for single — a
+        // second, at-a-glance cue for "add more" vs "pick one".
+        'shrink-0 w-[18px] h-[18px] flex items-center justify-center border transition-all duration-200',
+        multi ? 'rounded-[6px]' : 'rounded-full',
         selected ? 'border-[#00D4FF] bg-[#00D4FF]' : 'border-white/15 bg-transparent',
       ].join(' ')}
       style={selected && !reduced ? { animation: 'check-pop 0.22s cubic-bezier(0.34,1.56,0.64,1) both' } : undefined}
@@ -355,7 +358,7 @@ function AnswerOption({
           {label}
         </span>
         <div className="absolute top-1/2 right-3 -translate-y-1/2">
-          <CheckMark selected={selected} />
+          <CheckMark selected={selected} multi />
         </div>
       </button>
     )
@@ -773,6 +776,22 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     }
   })()
 
+  // The "how to answer" pill (single source: the step's select mode).
+  const selectPill = selectHint(current.select)
+
+  // When Continue is disabled, say exactly what's missing rather than leaving a
+  // dead grey button the user has to puzzle over.
+  const continueNeeds = (() => {
+    if (canContinue) return null
+    switch (id) {
+      case 'goals': return 'Pick at least one goal'
+      case 'personal': return 'Add your age to continue'
+      case 'type': return 'Pick at least one style'
+      case 'budget': return 'Choose a bundle'
+      default: return null
+    }
+  })()
+
   // Style follow-up shown only when exactly one training style is chosen.
   const typeFollowUp = answers.trainingType.length === 1
     ? getSubQuestion('type', answers.trainingType[0])
@@ -896,6 +915,22 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             {q}
           </h2>
           <p className="text-sm text-white/40 mt-2.5 leading-snug">{hint}</p>
+          {/* How-to-answer pill — removes the guesswork of one-tap vs pick-many */}
+          {selectPill && (
+            <span
+              className="inline-flex items-center gap-1.5 mt-3 pl-2 pr-2.5 py-1 rounded-full text-[11px] font-semibold text-[#00D4FF]/90"
+              style={{ background: 'rgba(0,212,255,0.09)', border: '1px solid rgba(0,212,255,0.2)', fontFamily: 'var(--font-display)' }}
+            >
+              <span aria-hidden="true">
+                {current.select === 'one' ? (
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="2" /><circle cx="10" cy="10" r="3" fill="currentColor" /></svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="none"><rect x="3" y="3" width="14" height="14" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M6.5 10L9 12.5L13.5 7.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                )}
+              </span>
+              {selectPill}
+            </span>
+          )}
           {isFirst && (
             <p className="text-[11px] text-white/25 mt-2">
               {seq.length - 2} quick questions · about a minute
@@ -1504,7 +1539,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               }`}
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              {id === 'review' ? 'Build my stack'
+              {continueNeeds ? continueNeeds
+                : id === 'review' ? 'Build my stack'
                 : id === 'deepDive' ? 'Build my stack'
                 : id === 'budget' ? 'Review my answers'
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`

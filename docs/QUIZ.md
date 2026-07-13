@@ -76,6 +76,17 @@ drinks what we send and their month is covered.
 
 ## UX in `Act2Quiz`
 
+- **Answer-guidance pill.** Each step declares a `select` mode in
+  `quiz-flow.ts` (`one` / `multi` / `optional` / `form`); the header renders a
+  matching pill — "Pick one" (radio icon), "Pick all that apply" or "Pick any
+  — or skip" (checkbox icon) — so the user never has to discover whether one
+  tap advances or they choose several. Option marks reinforce it: single-choice
+  options show a **circle** (radio), multi-select a **rounded square**
+  (checkbox). `form` steps (personal, review) show no pill.
+- **Self-explaining Continue.** When a manual step's requirement isn't met the
+  button isn't a dead grey control — it names what's missing ("Pick at least
+  one goal", "Add your age to continue", "Choose a bundle") and enables once
+  satisfied.
 - Real **Step X of Y** counter + a top progress bar; a one-time "N quick
   questions · about a minute" cue on the first step.
 - Consistent **Back** (every step past the first) + **Continue** (every manual
