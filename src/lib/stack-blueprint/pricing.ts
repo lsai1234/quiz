@@ -89,9 +89,33 @@ export const PRICING_CONFIG = {
 
   /** First-cycle intro offer. */
   introOffer: {
-    /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it. */
+    /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it.
+     *  Used as the fallback when the scratch-to-reveal card is disabled. */
     firstMonthDiscount: 0.5,
+    /**
+     * Scratch-to-reveal intro: instead of one fixed first-month discount, the
+     * member scratches a card to reveal theirs, drawn at random from these
+     * weighted outcomes. Probability of an outcome = its weight ÷ the sum of all
+     * weights. Default: 25% off two thirds of the time, 50% off one third of the
+     * time (weights 2 and 1). Set `enabled: false` to fall back to the flat
+     * `firstMonthDiscount` above.
+     */
+    scratchReveal: {
+      enabled: true,
+      outcomes: [
+        { discount: 0.25, weight: 2 },
+        { discount: 0.5, weight: 1 },
+      ] as ScratchOutcome[],
+    },
   },
+}
+
+/** One possible scratch-to-reveal first-month discount and its relative weight. */
+export interface ScratchOutcome {
+  /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). */
+  discount: number
+  /** Relative likelihood — probability is weight ÷ sum of all weights. */
+  weight: number
 }
 
 // ─── Runtime config resolution (portal-overridable) ──────────────────────────
@@ -101,7 +125,16 @@ export const PRICING_CONFIG = {
 
 export type PricingConfig = typeof PRICING_CONFIG
 
-let _overrides: Partial<PricingConfig> = {}
+/**
+ * Portal overrides: any subset of the pricing config. `introOffer` may itself be
+ * partial (e.g. change just the flat discount, or just the scratch outcomes) —
+ * recomputeConfig shallow-merges it onto the defaults.
+ */
+export type PricingOverrides = Partial<Omit<PricingConfig, 'introOffer'>> & {
+  introOffer?: Partial<PricingConfig['introOffer']>
+}
+
+let _overrides: PricingOverrides = {}
 let _current: PricingConfig = PRICING_CONFIG
 
 function recomputeConfig() {
@@ -120,12 +153,12 @@ function recomputeConfig() {
 }
 
 /** Replace the current pricing overrides (portal save / client sync). */
-export function setPricingOverrides(overrides: Partial<PricingConfig>): void {
+export function setPricingOverrides(overrides: PricingOverrides): void {
   _overrides = overrides ?? {}
   recomputeConfig()
 }
 
-export function getPricingOverrides(): Partial<PricingConfig> {
+export function getPricingOverrides(): PricingOverrides {
   return _overrides
 }
 
@@ -138,6 +171,58 @@ export function getPricingConfig(): PricingConfig {
 export function resetPricingOverrides(): void {
   _overrides = {}
   _current = PRICING_CONFIG
+}
+
+// ─── First-month intro / scratch-to-reveal ───────────────────────────────────
+// The first-month discount is either a flat rate (`firstMonthDiscount`) or,
+// when scratch-to-reveal is enabled, one the member reveals by scratching a
+// card — drawn at random from `scratchReveal.outcomes` weighted by `weight`.
+
+/** Whether the scratch-to-reveal intro is enabled and has at least one outcome. */
+export function scratchRevealEnabled(config = getPricingConfig()): boolean {
+  const sr = config.introOffer.scratchReveal
+  return !!sr?.enabled && sr.outcomes.length > 0
+}
+
+/** The configured scratch outcomes (empty when scratch-to-reveal is off). */
+export function scratchOutcomes(config = getPricingConfig()): ScratchOutcome[] {
+  return scratchRevealEnabled(config) ? config.introOffer.scratchReveal.outcomes : []
+}
+
+/**
+ * Draw one first-month discount from the weighted scratch outcomes. `rng` is
+ * injectable (defaults to Math.random) so the draw is deterministic in tests.
+ * Falls back to the flat `firstMonthDiscount` when scratch-to-reveal is off.
+ */
+export function rollScratchDiscount(config = getPricingConfig(), rng: () => number = Math.random): number {
+  const outcomes = scratchOutcomes(config)
+  if (outcomes.length === 0) return config.introOffer.firstMonthDiscount
+  const totalWeight = outcomes.reduce((s, o) => s + Math.max(0, o.weight), 0)
+  if (totalWeight <= 0) return outcomes[0].discount
+  let roll = rng() * totalWeight
+  for (const o of outcomes) {
+    roll -= Math.max(0, o.weight)
+    if (roll < 0) return o.discount
+  }
+  return outcomes[outcomes.length - 1].discount
+}
+
+/** Whether `rate` is one of the configured scratch outcomes (guards against tampering). */
+export function isValidScratchDiscount(rate: number, config = getPricingConfig()): boolean {
+  return scratchOutcomes(config).some((o) => o.discount === rate)
+}
+
+/**
+ * The first-month discount to actually apply. A member-revealed `override` is
+ * honoured only when it's a valid scratch outcome; anything else falls back to
+ * the flat `firstMonthDiscount`. Pass `override: 0` to explicitly apply no intro
+ * (e.g. before the member has scratched their card).
+ */
+export function resolveIntroDiscount(override: number | null | undefined, config = getPricingConfig()): number {
+  if (override == null) return scratchRevealEnabled(config) ? 0 : config.introOffer.firstMonthDiscount
+  if (override === 0) return 0
+  if (scratchRevealEnabled(config)) return isValidScratchDiscount(override, config) ? override : 0
+  return config.introOffer.firstMonthDiscount
 }
 
 // ─── Discount tiers & margin helpers ─────────────────────────────────────────
@@ -401,6 +486,13 @@ export interface SubscriptionPlanOptions {
   usageByProductId?: Record<string, UsageLevel>
   /** The bundle/stack level, for the fixed subscribe-&-save rate. */
   level?: StackLevel
+  /**
+   * The first-month intro discount the member revealed by scratching their card
+   * (0–1). Honoured only when it's a valid scratch outcome. Omit (or null) to
+   * apply no intro discount while scratch-to-reveal is enabled — the member
+   * hasn't scratched yet, so nothing is auto-applied. See `resolveIntroDiscount`.
+   */
+  introDiscountOverride?: number | null
 }
 
 /**
@@ -680,7 +772,9 @@ export function calculatePricing(
   )
 
   // Intro offer: a discount on the first month; the rest bill at the flat total.
-  const introDiscount = subPlan.length > 0 ? config.introOffer.firstMonthDiscount : 0
+  // With scratch-to-reveal enabled nothing is applied until the member reveals a
+  // rate (opts.introDiscountOverride); resolveIntroDiscount validates it.
+  const introDiscount = subPlan.length > 0 ? resolveIntroDiscount(opts.introDiscountOverride, config) : 0
   const subscriptionFirstMonth = round(subscriptionTotal * (1 - introDiscount))
   const subscriptionMinTermTotal = round(
     subscriptionFirstMonth + Math.max(0, subscriptionMinMonths - 1) * subscriptionTotal,

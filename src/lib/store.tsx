@@ -24,6 +24,9 @@ interface QuizStore {
   subscriptionUsage: Record<string, UsageLevel>
   // True once the member has been through the subscription customisation journey.
   subscriptionCustomised: boolean
+  // The first-month intro discount (0–1) the member revealed by scratching their
+  // card. null until scratched — no intro discount is applied before then.
+  revealedIntroDiscount: number | null
   // AI personalisation metadata for the current stack
   aiReasons: Record<string, string>
   stackPersonalised: boolean
@@ -62,6 +65,7 @@ interface QuizStore {
   setPlanType: (plan: PlanType) => void
   setSubscriptionUsage: (usage: Record<string, UsageLevel>) => void
   setSubscriptionCustomised: (done: boolean) => void
+  setRevealedIntroDiscount: (rate: number) => void
   setAiStackMeta: (reasons: Record<string, string>, personalised: boolean) => void
   setStackReady: (ready: boolean) => void
   toggleProduct: (product: Product) => void
@@ -107,6 +111,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   planType: 'oneoff',
   subscriptionUsage: {},
   subscriptionCustomised: false,
+  revealedIntroDiscount: null,
   aiReasons: {},
   stackPersonalised: false,
   stackReady: false,
@@ -141,6 +146,7 @@ export const useQuizStore = create<QuizStore>((set) => ({
   setPlanType: (plan) => set({ planType: plan }),
   setSubscriptionUsage: (usage) => set({ subscriptionUsage: usage }),
   setSubscriptionCustomised: (done) => set({ subscriptionCustomised: done }),
+  setRevealedIntroDiscount: (rate) => set({ revealedIntroDiscount: rate }),
   setAiStackMeta: (reasons, personalised) => set({ aiReasons: reasons, stackPersonalised: personalised }),
   setStackReady: (ready) => set({ stackReady: ready }),
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
@@ -157,5 +163,5 @@ export const useQuizStore = create<QuizStore>((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
+  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
 }))

@@ -12,14 +12,39 @@ When the stack is revealed the customer chooses between:
   in `PRICING_CONFIG`, default 0).
 - **Subscribe monthly** — a recurring plan. Every product is included; nothing
   is ever "unavailable". It bills **one flat amount every month** (the long-run
-  average), with an **intro discount on the first month** and a **minimum term**.
-  Defaults (all in `PRICING_CONFIG`): flat monthly, 50% off the first month,
-  4-month minimum. Example for a 3–4×/week stack: **£60.05/mo, first month
-  £30.03, 4-month minimum (£210.18 commitment), cancel anytime after.**
+  average), with a **scratch-to-reveal intro discount on the first month** and a
+  **minimum term**. Defaults (all in `PRICING_CONFIG`): flat monthly, a first-
+  month discount the member reveals by scratching a card (25% off two-thirds of
+  the time, 50% off one-third — see below), 4-month minimum. Example for a
+  3–4×/week stack: **£60.05/mo, first month £45.04 (25% off) or £30.03 (50%
+  off), 4-month minimum, cancel anytime after.**
 
   The minimum term is what makes flat monthly billing safe: because the flat
   amount is the smoothed average, a customer can't cancel after one month having
   received a long-lasting item they haven't finished paying for.
+
+### Scratch-to-reveal first-month discount
+
+Instead of a fixed 50% off, the first-month discount is a **scratch-to-reveal**
+reward. On the stack review page the member scratches a card
+(`src/components/stack-review/ScratchToReveal.tsx`) to reveal their discount,
+drawn at random from **weighted outcomes** in
+`PRICING_CONFIG.introOffer.scratchReveal`. Defaults: **25% off with weight 2,
+50% off with weight 1** — i.e. 25% two-thirds of the time, 50% one-third
+(probability = weight ÷ total weight).
+
+- **Nothing is auto-applied.** Until the member scratches, no intro discount is
+  applied (`resolveIntroDiscount(null)` → 0). The revealed rate is held in the
+  quiz store (`revealedIntroDiscount`) and threaded through pricing and checkout
+  via `SubscriptionPlanOptions.introDiscountOverride`.
+- **Tamper-proof.** A revealed override is honoured only when it's one of the
+  configured outcomes (`isValidScratchDiscount`); anything else falls back to no
+  discount, so a client can't invent a bigger reward.
+- **Deterministic in tests.** `rollScratchDiscount(config, rng)` takes an
+  injectable RNG. The draw and validation are fully unit tested.
+- **Portal-tunable / disable-able.** Edit the outcomes/weights in the config, or
+  set `scratchReveal.enabled: false` to fall back to the flat
+  `introOffer.firstMonthDiscount`.
 
 The **subscribe-&-save discount is fixed per bundle** (stack level): Essentials
 10%, Performance 15%, Complete 20% (`PRICING_CONFIG.levelSubscriptionDiscount`,
@@ -154,7 +179,8 @@ The plan is a **flat-price monthly membership**, not lumpy per-delivery charges:
   recurring price (the smoothed average of all items). In Recharge this is one
   subscription billed monthly at a fixed price.
 - **First-month intro** = `subscriptionFirstMonth` — a Recharge **first-order
-  discount** (`introOffer.firstMonthDiscount`, default 50%).
+  discount** at the member's **scratch-revealed** rate (25% or 50%, see the
+  scratch-to-reveal section above), or 0 if they never scratched.
 - **Minimum term** = `subscriptionMinMonths` — Recharge **minimum cycles**
   before cancellation (default 4). This is enforced by Recharge refusing early
   cancellation (clearly disclosed at checkout), NOT by charging an exit fee.

@@ -106,8 +106,9 @@ Editable, grouped, with inline help and validation. All map to `PRICING_CONFIG`:
 - **Bundle tiers** (one-off): add/edit/remove tiers `{ label, minSubtotal,
   minItems, discountPct }`; best-qualifying wins.
 - **Subscription:** base `subscriptionDiscount`, per-bundle `levelSubscriptionDiscount`,
-  optional `subscriptionTiers`, `introOffer.firstMonthDiscount`, `minSubscriptionMonths`,
-  `minSubscriptionMonthly`.
+  optional `subscriptionTiers`, `introOffer.firstMonthDiscount` (flat fallback),
+  `introOffer.scratchReveal` (scratch-to-reveal outcomes + weights, or disable),
+  `minSubscriptionMonths`, `minSubscriptionMonthly`.
 - **Cadence:** `maxDeliveryMonths`, `maxSubscriptionServings`.
 - **Guardrails:** `marginFloorPct`, `defaultCostRatio`.
 - **Live profit preview:** pick a representative stack (or the demo blueprint)

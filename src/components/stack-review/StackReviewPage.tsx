@@ -21,6 +21,7 @@ import { StackHero } from './StackHero'
 import { StackProductCard } from './StackProductCard'
 import { StackPriceSummary } from './StackPriceSummary'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
+import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
@@ -32,6 +33,7 @@ export function StackReviewPage() {
   const {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
     stackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
+    revealedIntroDiscount, setRevealedIntroDiscount,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const stackRef = useRef<HTMLDivElement>(null)
@@ -124,8 +126,8 @@ export function StackReviewPage() {
   const { state: checkoutState, checkout, resume: resumeCheckout, reset: resetCheckout } = useStackCheckout()
 
   const subOpts = useMemo(
-    () => ({ usageByProductId: subscriptionUsage, level: stackLevel }),
-    [subscriptionUsage, stackLevel],
+    () => ({ usageByProductId: subscriptionUsage, level: stackLevel, introDiscountOverride: revealedIntroDiscount }),
+    [subscriptionUsage, stackLevel, revealedIntroDiscount],
   )
 
   const handleCheckout = useCallback(
@@ -273,6 +275,13 @@ export function StackReviewPage() {
           )}
           {planType === 'subscription' && (
             <>
+              {scratchRevealAvailable() && subscriptionPlan.length > 0 && (
+                <ScratchToReveal
+                  monthlyTotal={pricing.subscriptionTotal}
+                  revealed={revealedIntroDiscount}
+                  onReveal={setRevealedIntroDiscount}
+                />
+              )}
               <SubscriptionProtocol
                 plan={subscriptionPlan}
                 answers={answers}

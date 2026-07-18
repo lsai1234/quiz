@@ -69,7 +69,7 @@ export function useStackCheckout() {
       catalogue: CatalogueProduct[],
       planType: PlanType = 'oneoff',
       answers?: QuizAnswers | null,
-      subOpts: { usageByProductId?: Record<string, UsageLevel>; level?: StackLevel } = {},
+      subOpts: { usageByProductId?: Record<string, UsageLevel>; level?: StackLevel; introDiscountOverride?: number | null } = {},
     ) => {
       setState({ status: 'loading' })
       const live = isShopifyLive()
@@ -81,6 +81,7 @@ export function useStackCheckout() {
           requireSellingPlans: live,
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
+          introDiscountOverride: subOpts.introDiscountOverride,
         })
         if (!result.ok) {
           setState({ status: 'error', messages: result.errors.map(validationErrorMessage) })
@@ -89,6 +90,7 @@ export function useStackCheckout() {
         const memberSubscription = buildMemberSubscription(blueprint, catalogue, '', answers, {
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
+          introDiscountOverride: subOpts.introDiscountOverride,
           id: `sub-${Date.now()}`,
         })
         const payload: CheckoutPayload = {

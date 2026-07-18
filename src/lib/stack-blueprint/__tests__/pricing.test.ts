@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, qualifiesForFreeDelivery, PRICING_CONFIG } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, qualifiesForFreeDelivery, PRICING_CONFIG, rollScratchDiscount, resolveIntroDiscount, isValidScratchDiscount, scratchOutcomes, scratchRevealEnabled } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -348,14 +348,25 @@ describe('consumption protocol & monthly quantities', () => {
     expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a' }]), [a]).subscriptionMinMonths).toBe(PRICING_CONFIG.minSubscriptionMonths)
   })
 
-  it('applies the first-month intro discount and reports the commitment total', () => {
+  it('applies no intro discount by default (scratch-to-reveal not yet scratched)', () => {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a])
     const monthly = Math.round(30 * 0.8 * 100) / 100   // daily, 1/month
     expect(p.subscriptionTotal).toBe(monthly)
-    expect(p.subscriptionIntroDiscountPct).toBe(Math.round(PRICING_CONFIG.introOffer.firstMonthDiscount * 100))
-    expect(p.subscriptionFirstMonth).toBe(Math.round(monthly * (1 - PRICING_CONFIG.introOffer.firstMonthDiscount) * 100) / 100)
+    // Scratch-to-reveal is enabled by default → nothing applied until revealed.
+    expect(p.subscriptionIntroDiscountPct).toBe(0)
+    expect(p.subscriptionFirstMonth).toBe(monthly)
+    expect(p.subscriptionMinTermTotal).toBe(Math.round(monthly * p.subscriptionMinMonths * 100) / 100)
+  })
+
+  it('applies a revealed scratch discount to the first month and commitment total', () => {
+    const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
+    const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
+    const p = calculatePricing(bp, [a], null, undefined, { introDiscountOverride: 0.5 })
+    const monthly = Math.round(30 * 0.8 * 100) / 100
+    expect(p.subscriptionIntroDiscountPct).toBe(50)
+    expect(p.subscriptionFirstMonth).toBe(Math.round(monthly * 0.5 * 100) / 100)
     // Commitment = discounted first month + the remaining months at the flat rate.
     const expectedTerm = Math.round((p.subscriptionFirstMonth + (p.subscriptionMinMonths - 1) * monthly) * 100) / 100
     expect(p.subscriptionMinTermTotal).toBe(expectedTerm)
@@ -490,7 +501,7 @@ describe('pricing rules — subscription profit guardrails', () => {
 
   it('flags a config that loses money if cancelled early', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
-    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9 } }
+    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } } }
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, badConfig)
     expect(p.subscriptionProfitableOnCancel).toBe(false)
   })
@@ -498,5 +509,67 @@ describe('pricing rules — subscription profit guardrails', () => {
   it('gates subscription on the minimum monthly order value', () => {
     const cheap = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 10, compareAtPrice: null, variants: oneVariant(10) })
     expect(calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [cheap]).subscriptionMinOrderMet).toBe(false)
+  })
+})
+
+// ─── Scratch-to-reveal first-month discount ───────────────────────────────────
+
+describe('scratch-to-reveal intro discount', () => {
+  const scratchOff = {
+    ...PRICING_CONFIG,
+    introOffer: { firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
+  }
+
+  it('is enabled by default with 25%/50% weighted outcomes', () => {
+    expect(scratchRevealEnabled()).toBe(true)
+    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([0.25, 0.5])
+  })
+
+  it('rollScratchDiscount only ever returns a configured outcome', () => {
+    const valid = new Set(scratchOutcomes().map((o) => o.discount))
+    for (let i = 0; i < 500; i++) {
+      expect(valid.has(rollScratchDiscount())).toBe(true)
+    }
+  })
+
+  it('rollScratchDiscount respects the weights (25% two thirds, 50% one third)', () => {
+    // Weights are 2:1, so the boundary between outcomes is at 2/3.
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(0.25)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.66)).toBe(0.25)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.67)).toBe(0.5)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(0.5)
+
+    // Sweep a uniform grid — ~2/3 should land on 25%.
+    let fifties = 0
+    const N = 3000
+    for (let i = 0; i < N; i++) {
+      if (rollScratchDiscount(PRICING_CONFIG, () => (i + 0.5) / N) === 0.5) fifties += 1
+    }
+    expect(fifties / N).toBeCloseTo(1 / 3, 2)
+  })
+
+  it('rollScratchDiscount falls back to the flat rate when scratch is disabled', () => {
+    expect(rollScratchDiscount(scratchOff)).toBe(0.5)
+  })
+
+  it('isValidScratchDiscount accepts only configured outcomes', () => {
+    expect(isValidScratchDiscount(0.25)).toBe(true)
+    expect(isValidScratchDiscount(0.5)).toBe(true)
+    expect(isValidScratchDiscount(0.9)).toBe(false)
+    expect(isValidScratchDiscount(0)).toBe(false)
+  })
+
+  it('resolveIntroDiscount honours a valid reveal and rejects anything else', () => {
+    expect(resolveIntroDiscount(null)).toBe(0)        // not scratched yet → nothing applied
+    expect(resolveIntroDiscount(undefined)).toBe(0)
+    expect(resolveIntroDiscount(0)).toBe(0)
+    expect(resolveIntroDiscount(0.25)).toBe(0.25)
+    expect(resolveIntroDiscount(0.5)).toBe(0.5)
+    expect(resolveIntroDiscount(0.9)).toBe(0)          // not a valid outcome → ignored
+  })
+
+  it('resolveIntroDiscount applies the flat rate when scratch is disabled', () => {
+    expect(resolveIntroDiscount(null, scratchOff)).toBe(0.5)
+    expect(resolveIntroDiscount(undefined, scratchOff)).toBe(0.5)
   })
 })

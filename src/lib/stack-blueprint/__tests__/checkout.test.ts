@@ -226,10 +226,34 @@ describe('buildSubscriptionCheckout', () => {
       expect.arrayContaining([{ key: 'plan', value: 'subscription' }]),
     )
     expect(flatMonthly).toBe(24)
-    expect(introDiscountPct).toBe(50)
-    expect(firstMonth).toBe(Math.round(24 * 0.5 * 100) / 100)  // 12.00
+    // Scratch-to-reveal: no intro discount is applied until the member reveals one.
+    expect(introDiscountPct).toBe(0)
+    expect(firstMonth).toBe(24)
     expect(minMonths).toBe(4)
     expect(minTermTotal).toBe(Math.round((firstMonth + 3 * flatMonthly) * 100) / 100)
+  })
+
+  it('applies a revealed scratch discount to the first month', () => {
+    const product = makeProduct()
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
+    const result = buildSubscriptionCheckout(blueprint, [product], null, { introDiscountOverride: 0.25 })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    const { flatMonthly, firstMonth, introDiscountPct } = result.checkout
+    expect(flatMonthly).toBe(24)
+    expect(introDiscountPct).toBe(25)
+    expect(firstMonth).toBe(Math.round(24 * 0.75 * 100) / 100)  // 18.00
+  })
+
+  it('ignores an invalid (non-outcome) revealed discount', () => {
+    const product = makeProduct()
+    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
+    const result = buildSubscriptionCheckout(blueprint, [product], null, { introDiscountOverride: 0.9 })
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    // 0.9 isn't one of the configured scratch outcomes → treated as no discount.
+    expect(result.checkout.introDiscountPct).toBe(0)
+    expect(result.checkout.firstMonth).toBe(24)
   })
 
   it('rejects when Shopify IDs are required but missing (mock variant)', () => {
