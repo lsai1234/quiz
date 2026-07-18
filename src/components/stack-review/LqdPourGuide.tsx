@@ -11,6 +11,7 @@
  * drifting meniscus, drinks shown as little liquid levels. Animations are
  * disabled under prefers-reduced-motion (see globals.css).
  */
+import { useState } from 'react'
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import type { QuizAnswers } from '@/lib/types'
 import { buildLqdPlan, type LqdDrinkLine } from '@/lib/lqd'
@@ -53,6 +54,7 @@ function DrinkRow({ line }: { line: LqdDrinkLine }) {
 }
 
 export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answers: QuizAnswers }) {
+  const [open, setOpen] = useState(false)
   if (plan.length === 0) return null
   const lqd = buildLqdPlan(plan, answers)
   const anytime = lqd.lines.filter((l) => l.pacing === 'anytime')
@@ -103,7 +105,7 @@ export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answ
       </div>
 
       {/* Why one box beats a shelf of tubs and pill bottles */}
-      <div className="grid grid-cols-3 gap-2 mb-5">
+      <div className="grid grid-cols-3 gap-2 mb-4">
         {CONVENIENCE.map(({ title, note }) => (
           <div
             key={title}
@@ -118,6 +120,30 @@ export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answ
         ))}
       </div>
 
+      {/* Drink-by-drink detail — collapsed by default so the block leads with
+          the gauge and the payoff, not a full list. */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 py-2 text-left active:opacity-70 transition-opacity"
+      >
+        <span className="text-xs font-semibold" style={{ color: 'var(--color-text-2)' }}>
+          {open ? 'Hide the drinks' : `See every drink · ~${lqd.totalDrinks}`}
+        </span>
+        <span
+          className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+          style={{
+            color: 'var(--color-muted)',
+            border: '1px solid var(--color-border)',
+            transform: open ? 'rotate(180deg)' : 'none',
+            transition: 'transform 0.2s ease',
+          }}
+        >
+          ▾
+        </span>
+      </button>
+
+      {open && (
+      <div className="mt-3">
       {/* Sip anytime — the free-pace pool */}
       {anytime.length > 0 && (
         <div className="mb-4">
@@ -140,6 +166,8 @@ export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answ
             {timed.map((line) => <DrinkRow key={line.product.id} line={line} />)}
           </div>
         </div>
+      )}
+      </div>
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { QuizAnswers } from '@/lib/types'
@@ -43,10 +44,12 @@ interface Props {
 }
 
 export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths = 1, monthlyTotal, firstMonth, introPct = 0 }: Props) {
+  const [open, setOpen] = useState(false)
   if (plan.length === 0) return null
 
   const freq = answers?.trainingFrequency ? FREQ_LABEL[answers.trainingFrequency] : null
   const hasIntro = introPct > 0 && firstMonth != null && firstMonth < monthlyTotal
+  const itemCount = plan.length
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
@@ -63,7 +66,30 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths =
             : 'One flat payment a month. Each item arrives on its own schedule.'}
         </p>
 
-        <div className="space-y-3.5">
+        {/* Per-item schedule — collapsed by default so the block leads with the
+            price, not a wall of delivery detail. */}
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="w-full flex items-center justify-between gap-2 py-2 text-left active:opacity-70 transition-opacity"
+        >
+          <span className="text-xs font-semibold" style={{ color: 'var(--color-text-2)' }}>
+            {open ? 'Hide monthly schedule' : `See what arrives each month · ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+          </span>
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+            style={{
+              color: 'var(--color-muted)',
+              border: '1px solid var(--color-border-2)',
+              transform: open ? 'rotate(180deg)' : 'none',
+              transition: 'transform 0.2s ease',
+            }}
+          >
+            ▾
+          </span>
+        </button>
+
+        {open && (
+        <div className="space-y-3.5 mt-3">
           {plan.map((line) => {
             const covers = line.coversSlotIds
               .map((id) => slotTitleById[id])
@@ -102,6 +128,7 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths =
             )
           })}
         </div>
+        )}
 
         {/* Footer: flat fee + intro + commitment */}
         <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-1.5">

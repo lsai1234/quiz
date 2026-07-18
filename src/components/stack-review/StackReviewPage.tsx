@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useQuizStore } from '@/lib/store'
 import { MOCK_BLUEPRINT } from '@/lib/stack-blueprint'
 import {
@@ -10,7 +11,7 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, getSubscriptionProduct, buildSubscriptionPlan } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, getSubscriptionProduct, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -37,6 +38,11 @@ export function StackReviewPage() {
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const stackRef = useRef<HTMLDivElement>(null)
+  // Portal the sticky checkout bar to document.body: this page renders inside an
+  // animated (transformed) wrapper, which would otherwise anchor `position: fixed`
+  // to that wrapper instead of the viewport.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -143,6 +149,14 @@ export function StackReviewPage() {
   )
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
 
+  // Sticky bar: the active plan's headline total + a one-tap path to checkout,
+  // so the sale is always reachable without scrolling to the bottom.
+  const stickyIsSub = planType === 'subscription'
+    && pricing.subscriptionItemCount > 0
+    && pricing.subscriptionMinOrderMet
+  const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
+  const showStickyBar = !swapSlot && !journeyOpen && checkoutState.status !== 'needs-account'
+
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
 
@@ -207,7 +221,7 @@ export function StackReviewPage() {
 
   return (
     <>
-      <div className="pb-10">
+      <div className="pb-28">
         <StackHero
           blueprint={blueprint}
           productCount={sortedSlots.length}
@@ -317,6 +331,47 @@ export function StackReviewPage() {
           </p>
         </div>
       </div>
+
+      {mounted && showStickyBar && createPortal(
+        <div
+          className="fixed inset-x-0 bottom-0 z-30 px-4 pt-6 pb-[max(0.9rem,env(safe-area-inset-bottom))] pointer-events-none"
+          style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}
+        >
+          <div
+            className="max-w-lg mx-auto flex items-center gap-3 rounded-2xl pl-4 pr-2 py-2 pointer-events-auto"
+            style={{
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border-2)',
+              boxShadow: '0 10px 34px -10px rgba(0,0,0,0.7)',
+            }}
+          >
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
+                {stickyIsSub ? 'Monthly' : 'One-off total'}
+              </p>
+              <p className="text-xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(stickyTotal)}
+                {stickyIsSub && <span className="text-xs font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
+              </p>
+            </div>
+            <button
+              onClick={handleCheckout}
+              disabled={checkoutState.status === 'loading'}
+              className="flex-1 py-3.5 rounded-xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+            >
+              {checkoutState.status === 'loading'
+                ? 'Building…'
+                : stickyIsSub
+                  ? 'Start subscription →'
+                  : answers.drinksMode
+                    ? 'Get my drinks →'
+                    : 'Checkout →'}
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {swapSlot && (
         <ProductSwapModal

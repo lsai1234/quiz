@@ -45,7 +45,7 @@ export function StackHero({ blueprint, productCount, totalPrice, drinksMode }: P
       >
         {blueprint.stackName}
       </h2>
-      <p className="text-sm mt-3 leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
+      <p className="text-sm mt-3 leading-relaxed line-clamp-2" style={{ color: 'var(--color-text-2)' }}>
         {blueprint.summary}
       </p>
 

@@ -79,10 +79,10 @@ export function StackProductCard({ slot, product, planType = 'oneoff', subscript
         </div>
 
         {/* Product body */}
-        <div className="flex gap-3">
-          {/* Image */}
+        <div className="flex gap-3.5">
+          {/* Image — the visual anchor of the card */}
           <div
-            className="w-20 h-20 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center"
+            className="w-24 h-24 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center"
             style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
           >
             {product?.imageUrl ? (
@@ -90,7 +90,7 @@ export function StackProductCard({ slot, product, planType = 'oneoff', subscript
               <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" loading="lazy" />
             ) : (
               <span
-                className="text-2xl font-black opacity-40"
+                className="text-3xl font-black opacity-40"
                 style={{ fontFamily: 'var(--font-display)', color: ACCENT }}
               >
                 {slot.title.charAt(0)}
@@ -111,19 +111,21 @@ export function StackProductCard({ slot, product, planType = 'oneoff', subscript
                 {variantLabel(selectedVariant)}
               </p>
             )}
+            {/* Personalised reason — one line by default, kept quiet so the card
+                scans as a product first and reads as prose only on demand. */}
             <p
-              className={`text-xs mt-1.5 leading-relaxed ${reasonExpanded ? '' : 'line-clamp-2'}`}
+              className={`text-xs mt-1.5 leading-relaxed ${reasonExpanded ? '' : 'line-clamp-1'}`}
               style={{ color: 'var(--color-text-2)' }}
             >
               {slot.reason}
             </p>
-            {slot.reason.length > 80 && (
+            {slot.reason.length > 46 && (
               <button
                 onClick={() => setReasonExpanded((o) => !o)}
                 className="text-[10px] font-bold mt-1 active:opacity-60 transition-opacity"
                 style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
               >
-                {reasonExpanded ? 'Less' : 'More'}
+                {reasonExpanded ? 'Less' : 'Why this?'}
               </button>
             )}
           </div>
@@ -131,12 +133,6 @@ export function StackProductCard({ slot, product, planType = 'oneoff', subscript
 
         {/* Tags row */}
         <div className="flex flex-wrap gap-1.5 mt-3">
-          <span
-            className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
-            style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
-          >
-            Recommended
-          </span>
           <span
             className="px-2 py-0.5 rounded-full text-[9px] font-semibold"
             style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-muted)' }}
