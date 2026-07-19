@@ -32,6 +32,7 @@ const GLYPHS: Record<string, ReactNode> = {
   monitor: <><rect x="2.5" y="3.5" width="19" height="13" rx="2" /><path d="M8.5 21h7M12 16.5V21" /></>,
   brain: <><path d="M12 5a3 3 0 0 0-5 2.2A3 3 0 0 0 5 12a3 3 0 0 0 2 5 3 3 0 0 0 5 .5z" /><path d="M12 5a3 3 0 0 1 5 2.2A3 3 0 0 1 19 12a3 3 0 0 1-2 5 3 3 0 0 1-5 .5z" /><path d="M12 5v13" /></>,
   bone: <path d="M17 10c.7-.7 1.7 0 2.5 0a2.5 2.5 0 1 0 0-5 .5.5 0 0 1-.5-.5 2.5 2.5 0 1 0-5 0c0 .8.7 1.8 0 2.5l-7 7c-.7.7-1.7 0-2.5 0a2.5 2.5 0 0 0 0 5c.3 0 .5.2.5.5a2.5 2.5 0 1 0 5 0c0-.8-.7-1.8 0-2.5z" />,
+  bloom: <><circle cx="12" cy="7" r="2.4" /><circle cx="12" cy="17" r="2.4" /><circle cx="7" cy="12" r="2.4" /><circle cx="17" cy="12" r="2.4" /><circle cx="12" cy="12" r="2.4" /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   'trending-down': <><path d="M3 7 9 13l4-4 8 8" /><path d="M16 17h5v-5" /></>,
   activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
