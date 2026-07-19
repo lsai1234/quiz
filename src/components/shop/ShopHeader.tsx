@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+
 interface Props {
   count: number
   onOpenBasket: () => void
@@ -7,6 +9,11 @@ interface Props {
 
 /** Shop top bar: the CHRGD wordmark and a live basket button. */
 export function ShopHeader({ count, onOpenBasket }: Props) {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  }, [])
+
   return (
     <header className="px-5 pt-6 pb-2 max-w-lg mx-auto flex items-center justify-between">
       <span className="text-lg font-black tracking-[0.2em]" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
@@ -24,8 +31,14 @@ export function ShopHeader({ count, onOpenBasket }: Props) {
         </svg>
         {count > 0 && (
           <span
+            // Remounting on count change re-triggers the pop — a little "it
+            // landed in the basket" bump each time you add something.
+            key={reduced ? 'static' : count}
             className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-black"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+            style={{
+              background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)',
+              animation: reduced ? undefined : 'check-pop 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
+            }}
           >
             {count}
           </span>
