@@ -522,8 +522,14 @@ export function buildStackBlueprint(
   const stackName = getStackName(archetype, answers.trainingFrequency)
   const summary = ARCHETYPE_SUMMARIES[archetype]
 
-  // Cap total slots to match the selected budget / stack size
+  // Cap total slots to match the selected budget / stack size.
+  // LQD (drinks mode) never asks for a budget — the drinks/day pace IS the
+  // package size: a faster pace needs more distinct drinks in the box.
   const maxSlots = (() => {
+    if (answers.drinksMode) {
+      const pace = answers.drinksPerDay && answers.drinksPerDay > 0 ? answers.drinksPerDay : 2
+      return Math.min(2 + pace, 7) // 1/day → 3 drinks … 4+/day → 6 drinks
+    }
     switch (answers.budget) {
       case 'under-30': return 2
       case '30-50':    return 3
@@ -553,7 +559,9 @@ export function buildStackBlueprint(
   // product that fits, so we get as close to the ceiling as possible without
   // ever going over. null cap (top tier) means no upper limit.
   const pricingConfig = getPricingConfig()
-  const budgetCap = budgetCapFor(answers.budget, pricingConfig)
+  // Drinks mode has no budget question, so no price ceiling — the pace-derived
+  // slot cap above is the only sizing control.
+  const budgetCap = answers.drinksMode ? null : budgetCapFor(answers.budget, pricingConfig)
   const selectedLines: { price: number; cost: number }[] = []
 
   function lineFor(product: CatalogueProduct): { price: number; cost: number } {

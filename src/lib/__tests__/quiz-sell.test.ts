@@ -7,19 +7,21 @@ import { QUIZ_STEPS, type StepId } from '@/lib/quiz-flow'
 
 describe('quizFactFor', () => {
   it('only a few steps carry a fact — most say nothing', () => {
-    const withFact = QUIZ_STEPS.map((s) => s.id).filter((id) => quizFactFor(id, true) || quizFactFor(id, false))
-    // Sparse on purpose: an occasional aside, never every step.
-    expect(withFact.length).toBeLessThanOrEqual(4)
+    const ids = QUIZ_STEPS.map((s) => s.id)
+    // Sparse on purpose, per mode: an occasional aside, never every step.
+    expect(ids.filter((id) => quizFactFor(id, true)).length).toBeLessThanOrEqual(3)
+    expect(ids.filter((id) => quizFactFor(id, false)).length).toBeLessThanOrEqual(3)
     expect(quizFactFor('personal', true)).toBeNull()
     expect(quizFactFor('goals', true)).toBeNull()
     expect(quizFactFor('review', false)).toBeNull()
   })
 
   it('drinks mode leans into drinks & convenience; normal mode into the stack', () => {
-    expect(quizFactFor('budget', true)?.text).toMatch(/box|month|pause|skip/i)
+    // LQD skips the budget step, so its ships-monthly fact lives on trainingTime.
+    expect(quizFactFor('trainingTime', true)?.text).toMatch(/box|month|pause|skip/i)
     expect(quizFactFor('budget', false)?.text).toMatch(/subscribe|bundle|rate/i)
-    // The two modes are distinct facts (different ids) for the same step.
-    expect(quizFactFor('budget', true)?.id).not.toBe(quizFactFor('budget', false)?.id)
+    // The budget fact is stack-mode only now.
+    expect(quizFactFor('budget', true)).toBeNull()
   })
 
   it('the LQD pace step gets the one-box-in-the-fridge tidbit', () => {

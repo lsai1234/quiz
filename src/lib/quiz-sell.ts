@@ -24,7 +24,8 @@ export interface QuizFact {
 const LQD_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {
   drinksPerDay: { icon: 'droplet', text: 'A whole month of LQD is one box in the fridge — no tubs, no pills, no scoops.' },
   diet: { icon: 'leaf', text: 'One Daily Vits bottle carries 24 vitamins & minerals — the gaps, handled.' },
-  budget: { icon: 'bundle3', text: 'Your box ships monthly, and you can pause or skip whenever you like.' },
+  // Was on the budget step; LQD skips that step now (pace sizes the box).
+  trainingTime: { icon: 'bundle3', text: 'Your box ships monthly, and you can pause or skip whenever you like.' },
 }
 
 const STACK_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {

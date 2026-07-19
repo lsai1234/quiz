@@ -49,9 +49,12 @@ describe('activeSteps', () => {
     expect(well).not.toContain('type')
   })
 
-  it('LQD drops the formats step on either track', () => {
-    expect(activeSteps('performance', true).map((s) => s.id)).not.toContain('formats')
-    expect(activeSteps('wellbeing', true).map((s) => s.id)).not.toContain('formats')
+  it('LQD drops the formats and budget steps on either track', () => {
+    for (const track of ['performance', 'wellbeing'] as const) {
+      const ids = activeSteps(track, true).map((s) => s.id)
+      expect(ids).not.toContain('formats')
+      expect(ids).not.toContain('budget') // pace sizes the package instead
+    }
   })
 })
 
@@ -60,7 +63,7 @@ describe('stepCopy precedence', () => {
     const supps = QUIZ_STEPS.find((s) => s.id === 'supps')!
     expect(stepCopy(supps, 'performance', false).q).toBe('Already using any of these?')
     expect(stepCopy(supps, 'wellbeing', false).q).toBe('Already taking any of these?')
-    const budget = QUIZ_STEPS.find((s) => s.id === 'budget')!
-    expect(stepCopy(budget, 'wellbeing', true).q).toBe("What's your drinks budget?")
+    const review = QUIZ_STEPS.find((s) => s.id === 'review')!
+    expect(stepCopy(review, 'wellbeing', true).q).toBe('Quick check before we pour.')
   })
 })

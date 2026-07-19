@@ -86,7 +86,7 @@ describe('LQD blueprint (pre-made drinks only)', () => {
 })
 
 describe('LQD quiz flow', () => {
-  it('swaps the formats step for the drinks/day pace step in drinks mode', () => {
+  it('swaps formats for the drinks/day pace step and drops the bundle step in drinks mode', () => {
     const normal = activeSteps('performance').map((s) => s.id)
     const lqd = activeSteps('performance', true).map((s) => s.id)
     // Formats is dropped (implied) and the pace step is added, both only in LQD.
@@ -94,15 +94,35 @@ describe('LQD quiz flow', () => {
     expect(normal).not.toContain('drinksPerDay')
     expect(lqd).not.toContain('formats')
     expect(lqd).toContain('drinksPerDay')
-    // Nothing else moves: normal minus formats, plus drinksPerDay after goals.
-    expect(lqd.filter((id) => id !== 'drinksPerDay')).toEqual(normal.filter((id) => id !== 'formats'))
+    // The bundle chooser is gone too — the pace already sizes the package.
+    expect(normal).toContain('budget')
+    expect(lqd).not.toContain('budget')
+    // Nothing else moves.
+    expect(lqd.filter((id) => id !== 'drinksPerDay')).toEqual(
+      normal.filter((id) => id !== 'formats' && id !== 'budget'),
+    )
     expect(lqd[lqd.indexOf('drinksPerDay') - 1]).toBe('goals')
   })
 
   it('applies LQD copy overrides on top of the track', () => {
-    const budget = QUIZ_STEPS.find((s) => s.id === 'budget')!
-    expect(stepCopy(budget, 'performance', true).q).toBe("What's your drinks budget?")
-    expect(stepCopy(budget, 'performance', false).q).toBe("What's your stack budget?")
+    const review = QUIZ_STEPS.find((s) => s.id === 'review')!
+    expect(stepCopy(review, 'performance', true).q).toBe('Quick check before we pour.')
+    expect(stepCopy(review, 'performance', false).q).toBe('Quick check before we build.')
+  })
+})
+
+describe('LQD package sizing (pace, not budget)', () => {
+  it('a faster pace yields at least as many drinks in the box', () => {
+    const slow = buildStackBlueprint(lqdAnswers({ drinksPerDay: 1, budget: null }), MOCK_CATALOGUE)
+    const fast = buildStackBlueprint(lqdAnswers({ drinksPerDay: 4, budget: null }), MOCK_CATALOGUE)
+    expect(slow.slots.length).toBeLessThanOrEqual(3) // 1/day caps at 3 drinks
+    expect(fast.slots.length).toBeGreaterThanOrEqual(slow.slots.length)
+  })
+
+  it('ignores any budget answer in drinks mode — pace alone sizes the package', () => {
+    const cheap = buildStackBlueprint(lqdAnswers({ drinksPerDay: 3, budget: 'under-30' }), MOCK_CATALOGUE)
+    const dear = buildStackBlueprint(lqdAnswers({ drinksPerDay: 3, budget: '80-plus' }), MOCK_CATALOGUE)
+    expect(cheap.slots.map((s) => s.selectedProductId)).toEqual(dear.slots.map((s) => s.selectedProductId))
   })
 })
 
