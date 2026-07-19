@@ -6,7 +6,8 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
 import { resolveBasket, basketSubtotal, basketItemCount } from '@/lib/basket/helpers'
-import { groupByCategory } from '@/lib/shop/categories'
+import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
+import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ShopCategoryNav } from './ShopCategoryNav'
 import { ShopSection } from './ShopSection'
@@ -26,6 +27,15 @@ export function ShopShell() {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   const sections = useMemo(() => groupByCategory(products), [products])
+  // Deals rail — cross-category, biggest saving first — sits above the sections.
+  const dealsSection = useMemo<ShopCategory | null>(() => {
+    const deals = dealsProducts(products)
+    return deals.length > 0 ? { category: 'Deals', slug: 'deals', products: deals } : null
+  }, [products])
+  const navCategories = useMemo(
+    () => (dealsSection ? [dealsSection, ...sections] : sections),
+    [dealsSection, sections],
+  )
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
   const count = basketItemCount(lines)
@@ -58,8 +68,16 @@ export function ShopShell() {
         <p className="px-5 max-w-lg mx-auto text-sm" style={{ color: 'var(--color-muted)' }}>Loading products…</p>
       ) : (
         <>
-          <ShopCategoryNav categories={sections} />
+          <ShopCategoryNav categories={navCategories} />
           <div className="pb-4">
+            {dealsSection && (
+              <ShopSection
+                section={dealsSection}
+                tone="deal"
+                subtitle={`Save up to ${maxDealPct(dealsSection.products)}%`}
+                onExpand={setExpanded}
+              />
+            )}
             {sections.map((section) => (
               <ShopSection key={section.slug} section={section} onExpand={setExpanded} />
             ))}

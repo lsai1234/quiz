@@ -5,6 +5,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { productBars, type StatAxis } from '@/lib/stack-stats'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { dealInfo, productBadge } from '@/lib/shop/merchandising'
 import { useBasket } from '@/lib/basket/store'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
@@ -32,10 +33,8 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
 
   const hue = slotVisual(product.stackSlots[0]).hue
   const variant = product.variants.find((v) => v.available) ?? product.variants[0]
-  const price = variant?.price ?? product.basePrice
-  const rrp = variant?.compareAtPrice ?? product.compareAtPrice
-  const onDeal = rrp != null && rrp > price
-  const discountPct = onDeal ? Math.round((1 - price / rrp!) * 100) : 0
+  const { price, rrp, onDeal, pct: discountPct } = dealInfo(product)
+  const badge = productBadge(product)
   const soldOut = !variant?.available
   const bars = productBars(product, axes)
 
@@ -71,17 +70,32 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <span
-              className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase mb-1"
-              style={{
-                color: hue,
-                background: `color-mix(in srgb, ${hue} 12%, transparent)`,
-                border: `1px solid color-mix(in srgb, ${hue} 24%, transparent)`,
-                fontFamily: 'var(--font-display)',
-              }}
-            >
-              {product.category}
-            </span>
+            <div className="flex items-center gap-1.5 mb-1">
+              <span
+                className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
+                style={{
+                  color: hue,
+                  background: `color-mix(in srgb, ${hue} 12%, transparent)`,
+                  border: `1px solid color-mix(in srgb, ${hue} 24%, transparent)`,
+                  fontFamily: 'var(--font-display)',
+                }}
+              >
+                {product.category}
+              </span>
+              {badge && (
+                <span
+                  className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
+                  style={{
+                    color: 'var(--color-accent)',
+                    background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--color-accent) 24%, transparent)',
+                    fontFamily: 'var(--font-display)',
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
+            </div>
             <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
               {product.title}
             </p>

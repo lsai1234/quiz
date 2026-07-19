@@ -9,6 +9,10 @@ import { ShopProductCard } from './ShopProductCard'
 interface Props {
   section: ShopCategory
   onExpand?: (product: CatalogueProduct) => void
+  /** 'deal' gives the header the accent treatment (the top Deals rail). */
+  tone?: 'default' | 'deal'
+  /** Optional line under the section title (e.g. "Save up to 25%"). */
+  subtitle?: string
 }
 
 /**
@@ -16,7 +20,7 @@ interface Props {
  * share a set of stat axes (derived from the section's own products) so
  * swiping compares them like top-trumps within the category.
  */
-export function ShopSection({ section, onExpand }: Props) {
+export function ShopSection({ section, onExpand, tone = 'default', subtitle }: Props) {
   const [reduced, setReduced] = useState(false)
   useEffect(() => {
     setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
@@ -27,9 +31,18 @@ export function ShopSection({ section, onExpand }: Props) {
   return (
     <section id={`shop-cat-${section.slug}`} className="scroll-mt-24 pt-8">
       <div className="px-5 max-w-lg mx-auto mb-3 flex items-baseline justify-between gap-3">
-        <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
-          {section.category}
-        </h2>
+        <div className="min-w-0">
+          <h2
+            className="text-2xl font-black tracking-tight flex items-center gap-1.5"
+            style={{ fontFamily: 'var(--font-display)', color: tone === 'deal' ? 'var(--color-accent)' : 'var(--color-text)' }}
+          >
+            {tone === 'deal' && <span aria-hidden>⚡</span>}
+            {section.category}
+          </h2>
+          {subtitle && (
+            <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--color-accent)' }}>{subtitle}</p>
+          )}
+        </div>
         <span className="text-[11px] font-semibold flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
           {section.products.length} product{section.products.length !== 1 ? 's' : ''}
         </span>
