@@ -36,10 +36,9 @@ export function CHRGDMark({
       <rect x="37" y="0" width="26" height="12" rx="6" fill={tone} />
       {/* battery cell */}
       <rect x="7" y="11" width="86" height="101" rx="30" fill="none" stroke={tone} strokeWidth="8" />
-      {/* charge bars — the stacked motif joined on the right */}
-      <rect x="22" y="29" width="45" height="12" rx="4" fill={tone} />
-      <rect x="22" y="49" width="45" height="12" rx="4" fill={tone} />
-      <rect x="55" y="29" width="12" height="32" rx="4" fill={tone} />
+      {/* charge bars — spanning the full width of the cell */}
+      <rect x="19" y="29" width="62" height="12" rx="4" fill={tone} />
+      <rect x="19" y="49" width="62" height="12" rx="4" fill={tone} />
       {/* signature bolt, keylined off the bars so it never muddies */}
       <path
         d="M58 22L32 62H51L40 97L76 52H57L58 22Z"
