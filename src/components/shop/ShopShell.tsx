@@ -1,6 +1,7 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
@@ -9,6 +10,7 @@ import { groupByCategory } from '@/lib/shop/categories'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ShopCategoryNav } from './ShopCategoryNav'
 import { ShopSection } from './ShopSection'
+import { ShopProductSheet } from './ShopProductSheet'
 
 /**
  * The shop browse experience: catalogue grouped into category swipe decks with
@@ -19,11 +21,18 @@ export function ShopShell() {
   const { products, isLoading } = useCatalogueProducts()
   const { lines, setQty, remove, clear } = useBasket()
   const { state, checkout } = useShopCheckout()
+  const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
 
   const sections = useMemo(() => groupByCategory(products), [products])
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
   const count = basketItemCount(lines)
+
+  // Buy now: the sheet has already added the item; check out the whole basket.
+  const handleBuyNow = () => {
+    setExpanded(null)
+    checkout(resolveBasket(useBasket.getState().lines, products))
+  }
 
   return (
     <div className="min-h-[100dvh] bg-[var(--color-bg)] text-[var(--color-text)] pb-40">
@@ -46,10 +55,14 @@ export function ShopShell() {
           <ShopCategoryNav categories={sections} />
           <div className="pb-4">
             {sections.map((section) => (
-              <ShopSection key={section.slug} section={section} />
+              <ShopSection key={section.slug} section={section} onExpand={setExpanded} />
             ))}
           </div>
         </>
+      )}
+
+      {expanded && (
+        <ShopProductSheet product={expanded} onBuyNow={handleBuyNow} onClose={() => setExpanded(null)} />
       )}
 
       {/* S1 sticky basket bar — S5 replaces with the real drawer */}
