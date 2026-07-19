@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
-import { productStatScore, MAX_STAT, type StatAxis } from '@/lib/stack-stats'
+import { productBars, type StatAxis } from '@/lib/stack-stats'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { ProductTile } from './ProductTile'
+import { StatBars } from './StatBars'
 import { ProductDetailSheet } from './ProductDetailSheet'
 
 interface Props {
@@ -23,8 +24,6 @@ interface Props {
   onRemove?: (slotId: string) => void
 }
 
-const ACCENT = '#00D4FF'
-
 /**
  * A top-trumps card for one stack product: the product up top, then a bar per
  * shared stat axis. Bars on the goals this product targets light up (its
@@ -33,16 +32,7 @@ const ACCENT = '#00D4FF'
  */
 export function StatCard({ slot, product, planType, subscriptionProduct, axes, animate = true, onChangeProduct, onChangeVariant, onRemove }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false)
-  // Bars fill from empty once mounted (or render full immediately when not animating).
-  const [filled, setFilled] = useState(!animate)
   const hue = slotVisual(slot.slotType).hue
-
-  useEffect(() => {
-    if (!animate) { setFilled(true); return }
-    // Let the deck's deal-in settle first, then sweep the bars.
-    const id = setTimeout(() => setFilled(true), 280)
-    return () => clearTimeout(id)
-  }, [animate])
 
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)
     ?? product?.variants.find((v) => v.available)
@@ -50,13 +40,7 @@ export function StatCard({ slot, product, planType, subscriptionProduct, axes, a
   const price = selectedVariant?.price ?? product?.basePrice ?? 0
   const roleLine = slot.description || slot.title
 
-  const bars = product
-    ? axes.map((a) => ({
-        ...a,
-        score: productStatScore(product, a.goal),
-        targeted: product.goals.includes(a.goal),
-      }))
-    : []
+  const bars = product ? productBars(product, axes) : []
 
   return (
     <>
@@ -98,39 +82,12 @@ export function StatCard({ slot, product, planType, subscriptionProduct, axes, a
         </div>
 
         {/* Stat bars */}
-        <div className="px-4 pt-3.5 pb-3 mt-2 flex-1 flex flex-col gap-2" style={{ borderTop: '1px solid var(--color-border)' }}>
-          <p className="text-[9px] font-bold tracking-widest uppercase mb-0.5" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-            What it supports
-          </p>
-          {bars.map((b) => (
-            <div key={b.goal} className="flex items-center gap-2.5">
-              <span
-                className="text-[10px] font-semibold w-[68px] flex-shrink-0 truncate"
-                style={{ color: b.targeted ? 'var(--color-text)' : 'var(--color-muted)' }}
-              >
-                {b.label}
-              </span>
-              <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: 'var(--color-surface-2)' }}>
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: filled ? `${(b.score / MAX_STAT) * 100}%` : '0%',
-                    background: b.targeted
-                      ? `linear-gradient(to right, color-mix(in srgb, ${ACCENT} 55%, transparent), ${ACCENT})`
-                      : 'var(--color-border-2)',
-                    boxShadow: b.targeted ? `0 0 8px -1px color-mix(in srgb, ${ACCENT} 60%, transparent)` : 'none',
-                    transition: animate ? 'width 0.7s cubic-bezier(0.22,1,0.36,1)' : 'none',
-                  }}
-                />
-              </div>
-              {b.targeted && (
-                <span className="text-[9px] font-black flex-shrink-0" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                  ✦
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
+        <StatBars
+          bars={bars}
+          animate={animate}
+          className="px-4 pt-3.5 pb-3 mt-2 flex-1"
+          style={{ borderTop: '1px solid var(--color-border)' }}
+        />
 
         {/* Footer affordance */}
         <div className="px-4 py-2.5" style={{ borderTop: '1px solid var(--color-border)' }}>

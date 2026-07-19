@@ -50,6 +50,11 @@ function axisLabel(goal: Goal): string {
   return GOAL_LABELS[goal] ?? goal.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
+/** A goal as a labelled stat axis. */
+export function goalAxis(goal: Goal): StatAxis {
+  return { goal, label: axisLabel(goal) }
+}
+
 /**
  * The stat axes shared by every card in the deck: the user's primary goal
  * (always first), then their secondary goals, padded to `count` by the goals
@@ -77,7 +82,21 @@ export function selectStatAxes(blueprint: StackBlueprint, products: CataloguePro
 
   DEFAULT_PAD_GOALS.forEach((g) => { if (chosen.length < count) add(g) })
 
-  return chosen.slice(0, count).map((goal) => ({ goal, label: axisLabel(goal) }))
+  return chosen.slice(0, count).map(goalAxis)
+}
+
+/**
+ * The shared stat axes for a set of products with no quiz context (a shop
+ * category section): the goals those products most cover, so swiping the
+ * section's cards compares them on the same footing — the shop analogue of
+ * `selectStatAxes`. Padded with defaults when a section is small.
+ */
+export function selectShopAxes(products: CatalogueProduct[], count = 4): StatAxis[] {
+  const freq = new Map<Goal, number>()
+  for (const p of products) for (const g of p.goals) freq.set(g, (freq.get(g) ?? 0) + 1)
+  const chosen: Goal[] = [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g)
+  for (const g of DEFAULT_PAD_GOALS) if (!chosen.includes(g)) chosen.push(g)
+  return chosen.slice(0, count).map(goalAxis)
 }
 
 /**
@@ -92,6 +111,25 @@ export function productStatScore(product: CatalogueProduct, goal: Goal): number 
   const base = idx === 0 ? 9 : idx === 1 ? 7 : 6
   const score = base + (product.recommendationPriority - 7) * 0.3
   return Math.max(5, Math.min(MAX_STAT, Math.round(score * 10) / 10))
+}
+
+/** One rendered stat bar: an axis plus this product's score and whether it's a targeted (lit) goal. */
+export interface StatBar extends StatAxis {
+  score: number
+  targeted: boolean
+}
+
+/**
+ * Score a product against a shared axis set — the data a top-trumps card
+ * renders. Bars on goals the product targets are `targeted` (lit); the rest
+ * sit as faint context. Shared by the quiz stack cards and the shop cards.
+ */
+export function productBars(product: CatalogueProduct, axes: StatAxis[]): StatBar[] {
+  return axes.map((a) => ({
+    ...a,
+    score: productStatScore(product, a.goal),
+    targeted: product.goals.includes(a.goal),
+  }))
 }
 
 /**
