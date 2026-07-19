@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import { useQuizStore } from '@/lib/store'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { CHRGDMark } from '@/components/brand/CHRGDLogo'
 import type { QuizTrack } from '@/lib/types'
 
 interface Props {
@@ -46,18 +47,6 @@ const LQD_PITCH = [
 
 const TRUST = ['~90 seconds', 'No sign-up', 'Built around you']
 
-function CHRGDIcon({ size = 26 }: { size?: number }) {
-  return (
-    <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
-      <rect x="36" y="1" width="28" height="13" rx="6" fill="white" />
-      <rect x="6" y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
-      <rect x="19" y="28" width="62" height="13" rx="4" fill="white" />
-      <rect x="19" y="48" width="62" height="13" rx="4" fill="white" />
-      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill={ACCENT} />
-    </svg>
-  )
-}
-
 export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   const setAnswer = useQuizStore((s) => s.setAnswer)
   const setGoals = useQuizStore((s) => s.setGoals)
@@ -84,8 +73,11 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
 
       {/* Logo */}
       <header className="relative z-10 flex items-center justify-center gap-2.5 pt-7">
-        <CHRGDIcon />
-        <span className="font-black text-lg tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>getCHRGD</span>
+        <CHRGDMark size={26} />
+        <span className="text-lg tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
+          <span className="font-semibold text-white/45">get</span>
+          <span className="font-black text-white">CHRGD</span>
+        </span>
       </header>
 
       <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-md mx-auto w-full text-center">

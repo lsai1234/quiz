@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
+import { CHRGDMark } from '@/components/brand/CHRGDLogo'
 
 interface Props {
   onComplete: () => void
@@ -10,18 +11,6 @@ interface Props {
 }
 
 const ACCENT = '#00D4FF'
-
-function CHRGDIcon({ size = 34 }: { size?: number }) {
-  return (
-    <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
-      <rect x="36" y="1" width="28" height="13" rx="6" fill="white" />
-      <rect x="6" y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
-      <rect x="19" y="28" width="62" height="13" rx="4" fill="white" />
-      <rect x="19" y="48" width="62" height="13" rx="4" fill="white" />
-      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill={ACCENT} />
-    </svg>
-  )
-}
 
 // Etched into the glass — an outline, not a filled sticker.
 function Bolt() {
@@ -386,7 +375,7 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
             </svg>
           </div>
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ animation: reducedMotion ? undefined : 'glow-pulse 2.5s ease-in-out infinite', filter: 'drop-shadow(0 0 8px rgba(0,212,255,0.6))' }}>
-            <CHRGDIcon size={32} />
+            <CHRGDMark size={32} />
           </div>
           {DATA_POINTS.map((pt, i) => (
             <div key={i} className="absolute rounded-full bg-[#00D4FF]"

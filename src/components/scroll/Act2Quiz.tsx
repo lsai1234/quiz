@@ -13,6 +13,7 @@ import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { BundleDeck } from '@/components/quiz/BundleDeck'
+import { CHRGDMark, CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
@@ -543,18 +544,6 @@ function DeepDiveLoading({ reducedMotion }: { reducedMotion: boolean }) {
   )
 }
 
-function CHRGDIcon({ size = 18 }: { size?: number }) {
-  return (
-    <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
-      <rect x="36" y="1" width="28" height="13" rx="6" fill="white" />
-      <rect x="6" y="12" width="88" height="101" rx="28" fill="none" stroke="white" strokeWidth="7" />
-      <rect x="19" y="28" width="62" height="13" rx="4" fill="white" />
-      <rect x="19" y="48" width="62" height="13" rx="4" fill="white" />
-      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill="#00D4FF" />
-    </svg>
-  )
-}
-
 // ─── Main component ────────────────────────────────────────────────────────────
 
 interface Props { onComplete: () => void; reducedMotion: boolean }
@@ -1003,7 +992,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           <div className="relative w-16 h-16">
             <div className="absolute inset-0 rounded-full border-2 border-[#00D4FF]/20 border-t-[#00D4FF] animate-spin" />
             <div className="absolute inset-0 flex items-center justify-center">
-              <CHRGDIcon size={24} />
+              <CHRGDMark size={24} />
             </div>
           </div>
           <div className="text-center">
@@ -1035,10 +1024,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               </svg>
             </button>
           )}
-          <CHRGDIcon size={16} />
-          <span className="text-white/40 text-[11px] font-semibold tracking-[0.18em]" style={{ fontFamily: 'var(--font-display)' }}>
-            getCHRGD
-          </span>
+          <CHRGDLogo markSize={18} wordClassName="text-[13px]" />
         </div>
         <span className="text-[10px] font-medium tracking-[0.12em] text-white/25 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
           {id === 'review' ? 'FINAL STEP' : id === 'deepDive' ? 'OPTIONAL' : `${index + 1} / ${seq.length - 2}`}
