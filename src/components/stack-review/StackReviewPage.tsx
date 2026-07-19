@@ -276,7 +276,7 @@ export function StackReviewPage() {
         <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
 
         {/* Price summary + checkout */}
-        <div className="px-5 pt-6 max-w-lg mx-auto">
+        <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-20">
           {/* LQD: the month-of-drinks tally + pour guide */}
           {answers.drinksMode && <LqdPourGuide plan={subscriptionPlan} answers={answers} />}
 

@@ -5,6 +5,7 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useQuizStore } from '@/lib/store'
 import { StackReviewPage } from '@/components/stack-review/StackReviewPage'
+import { SceneRail } from '@/components/stack-review/SceneRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { focusAreaGlyph } from '@/lib/identity-visuals'
 
@@ -84,8 +85,11 @@ export function Act4Reveal({ reducedMotion }: Props) {
 
   return (
     <div className="bg-[#F5F5F0] min-h-screen pb-10">
-      {/* Identity header — a poster-style reveal card */}
-      <div className="px-5 pt-14 pb-10 max-w-lg mx-auto">
+      {/* Pinned wayfinding: You · Stack · Plan */}
+      <SceneRail />
+
+      {/* Scene 1 — Identity header, a poster-style reveal card */}
+      <div id="scene-you" className="px-5 pt-14 pb-10 max-w-lg mx-auto scroll-mt-20">
         <div
           ref={headlineRef}
           className="rounded-3xl p-6"
@@ -169,11 +173,16 @@ export function Act4Reveal({ reducedMotion }: Props) {
         </div>
       </div>
 
-      {/* Stack review — dark-background section */}
+      {/* Scene 2/3 — the stack, on a dark panel that lifts over the identity as
+          a deliberate scene cut (rounded lip + drawn shadow + grab handle). */}
       <div
-        className="mt-6 rounded-t-3xl overflow-hidden"
-        style={{ background: 'var(--color-bg)' }}
+        id="scene-stack"
+        className="mt-8 rounded-t-[2rem] scroll-mt-20"
+        style={{ background: 'var(--color-bg)', boxShadow: '0 -18px 44px -22px rgba(10,10,10,0.55)' }}
       >
+        <div className="flex justify-center pt-3.5 pb-0.5">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--color-border-2)' }} />
+        </div>
         <StackReviewPage />
       </div>
 
