@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
-import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
-import { effectOnsetForProduct, onsetWindowLabel } from '@/lib/feedback'
+import { productFacts, productDietary } from '@/lib/product-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { ProductTile } from './ProductTile'
 
@@ -27,32 +27,9 @@ interface Props {
 
 const ACCENT = '#00D4FF'
 
-const DIETARY_LABEL: Record<DietaryTag, string> = {
-  vegan: 'Vegan',
-  vegetarian: 'Vegetarian',
-  'gluten-free': 'Gluten-free',
-  'dairy-free': 'Dairy-free',
-  'nut-free': 'Nut-free',
-  halal: 'Halal',
-  'keto-friendly': 'Keto-friendly',
-}
-
 function variantLabel(v: { title: string; flavour: string | null; size: string | null }): string {
   const parts = [v.flavour, v.size].filter(Boolean)
   return parts.length > 0 ? parts.join(' · ') : v.title
-}
-
-/** A physical format → glyph + label for the facts grid. */
-function formatFact(formats: string[]): { glyph: string; label: string } {
-  const f = (formats[0] ?? '').toLowerCase()
-  if (f.includes('powder')) return { glyph: 'shaker', label: 'Powder' }
-  if (f.includes('capsule')) return { glyph: 'capsule', label: 'Capsules' }
-  if (f.includes('tablet')) return { glyph: 'hexagon', label: 'Tablets' }
-  if (f.includes('liquid') || f.includes('drink')) return { glyph: 'droplet', label: 'Liquid' }
-  if (f.includes('gummy') || f.includes('chew')) return { glyph: 'diamond', label: 'Gummies' }
-  if (f.includes('bar')) return { glyph: 'bar', label: 'Bar' }
-  const label = formats[0] ? formats[0][0].toUpperCase() + formats[0].slice(1) : 'Mixed'
-  return { glyph: 'capsule', label }
 }
 
 function Fact({ glyph, label, value, hue }: { glyph: string; label: string; value: string; hue: string }) {
@@ -115,13 +92,8 @@ export function ProductDetailSheet({
   const price = selectedVariant?.price ?? product?.basePrice ?? 0
   const showVariantPicker = product && product.variants.length > 1
 
-  const dietary = product?.dietaryTags.filter((t) => t in DIETARY_LABEL) ?? []
-  const format = product ? formatFact(product.formats) : null
-  const facts = product && format ? [
-    { key: 'format', glyph: format.glyph, label: 'Format', value: format.label },
-    { key: 'servings', glyph: 'bar', label: 'Per unit', value: `${product.servings} servings` },
-    { key: 'onset', glyph: 'clock', label: "You'll feel it", value: onsetWindowLabel(effectOnsetForProduct(product)) },
-  ] : []
+  const dietary = product ? productDietary(product) : []
+  const facts = product ? productFacts(product) : []
 
   if (!mounted) return null
 
@@ -236,13 +208,13 @@ export function ProductDetailSheet({
               </div>
               {dietary.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mt-3">
-                  {dietary.map((t) => (
+                  {dietary.map((label) => (
                     <span
-                      key={t}
+                      key={label}
                       className="px-2.5 py-1 rounded-full text-[10px] font-semibold"
                       style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)' }}
                     >
-                      {DIETARY_LABEL[t]}
+                      {label}
                     </span>
                   ))}
                 </div>

@@ -1,4 +1,4 @@
-import { selectStatAxes, productStatScore, stackStatScore, MAX_STAT } from '../stack-stats'
+import { selectStatAxes, selectShopAxes, productBars, productStatScore, stackStatScore, goalAxis, MAX_STAT } from '../stack-stats'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { Goal } from '@/lib/types'
@@ -142,6 +142,43 @@ describe('productStatScore', () => {
   it('is deterministic', () => {
     const p = makeProduct({ goals: ['muscle', 'energy'], recommendationPriority: 8 })
     expect(productStatScore(p, 'energy')).toBe(productStatScore(p, 'energy'))
+  })
+})
+
+describe('selectShopAxes (no quiz context)', () => {
+  it('orders axes by how much the product set covers each goal', () => {
+    const products = [
+      makeProduct({ id: 'a', goals: ['muscle', 'recovery'] }),
+      makeProduct({ id: 'b', goals: ['muscle', 'energy'] }),
+      makeProduct({ id: 'c', goals: ['muscle'] }),
+    ]
+    const goals = selectShopAxes(products, 4).map((a) => a.goal)
+    expect(goals[0]).toBe('muscle') // covered by all three
+    expect(goals).toHaveLength(4)
+  })
+
+  it('pads to count with defaults for a thin section', () => {
+    const goals = selectShopAxes([makeProduct({ id: 'a', goals: ['sleep-better'] })], 4).map((a) => a.goal)
+    expect(goals[0]).toBe('sleep-better')
+    expect(goals).toHaveLength(4)
+    expect(new Set(goals).size).toBe(4) // no dupes
+  })
+
+  it('is deterministic for the same product set', () => {
+    const products = [makeProduct({ id: 'a', goals: ['muscle', 'energy'] })]
+    expect(selectShopAxes(products)).toEqual(selectShopAxes(products))
+  })
+})
+
+describe('productBars', () => {
+  it('marks the product’s own goals as targeted and others as context', () => {
+    const p = makeProduct({ goals: ['muscle', 'recovery'] })
+    const axes = [goalAxis('muscle'), goalAxis('sleep-better')]
+    const bars = productBars(p, axes)
+    expect(bars.find((b) => b.goal === 'muscle')?.targeted).toBe(true)
+    expect(bars.find((b) => b.goal === 'sleep-better')?.targeted).toBe(false)
+    // Scores line up with productStatScore for the same axis.
+    expect(bars[0].score).toBe(productStatScore(p, 'muscle'))
   })
 })
 
