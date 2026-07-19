@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import confetti from 'canvas-confetti'
 import {
   formatGBP,
   getPricingConfig,
@@ -9,10 +10,16 @@ import {
 } from '@/lib/stack-blueprint/pricing'
 
 const ACCENT = '#00D4FF'
-/** Fraction of the coating that must be scratched off before it auto-reveals. */
-const REVEAL_THRESHOLD = 0.55
+/**
+ * Fraction of the coating that must be cleared before it auto-reveals. Kept
+ * deliberately low: a card that LOOKS scratched must reveal. The remainder is
+ * dissolved away for the user rather than making them chase the corners.
+ */
+const REVEAL_THRESHOLD = 0.38
 /** Radius (px) of the brush that erases the coating as you drag. */
-const BRUSH_RADIUS = 22
+const BRUSH_RADIUS = 24
+/** How long the leftover foil takes to dissolve once the reveal triggers. */
+const DISSOLVE_MS = 550
 
 interface Props {
   /** The flat monthly total the first-month discount is applied to. */
@@ -41,9 +48,16 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
   // Roll the prize once, up front, so the surface underneath is stable while the
   // member scratches. It's only committed (via onReveal) once enough is cleared.
   const [prize] = useState(() => rollScratchDiscount())
-  const [done, setDone] = useState(false)
+  // 'scratching' → 'dissolving' (foil melts away) → 'done' (settled).
+  const [phase, setPhase] = useState<'scratching' | 'dissolving' | 'done'>('scratching')
+  // Arrived with the prize already claimed (a previous visit) → compact summary.
+  const [claimedOnMount] = useState(revealed != null)
+  const [reduced, setReduced] = useState(false)
 
-  const isRevealed = revealed != null || done
+  useEffect(() => {
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  }, [])
+
   const shownRate = revealed ?? prize
   const firstMonth = Math.round(monthlyTotal * (1 - shownRate) * 100) / 100
   const pctOff = Math.round(shownRate * 100)
@@ -51,13 +65,25 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
   const finish = useCallback(() => {
     if (doneRef.current) return
     doneRef.current = true
-    setDone(true)
-    onReveal(prize)
-  }, [onReveal, prize])
+    setPhase('dissolving')
+    if (!reduced) {
+      confetti({
+        particleCount: 70,
+        spread: 70,
+        startVelocity: 28,
+        origin: { y: 0.55 },
+        colors: [ACCENT, '#ffffff'],
+        disableForReducedMotion: true,
+      })
+    }
+    // Commit to the store once the foil has melted, so the compact state never
+    // snaps in mid-dissolve.
+    setTimeout(() => { setPhase('done'); onReveal(prize) }, reduced ? 0 : DISSOLVE_MS)
+  }, [onReveal, prize, reduced])
 
-  // Paint the scratch coating once the canvas is on screen (and sized to it).
+  // Paint the foil once the canvas is on screen (and sized to it).
   useEffect(() => {
-    if (isRevealed) return
+    if (claimedOnMount) return
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -71,23 +97,58 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
 
     const w = rect.width
     const h = rect.height
+
+    // Brushed-metal foil: a deep diagonal gradient…
     const grad = ctx.createLinearGradient(0, 0, w, h)
-    grad.addColorStop(0, '#2b2b31')
-    grad.addColorStop(0.5, '#3a3a42')
-    grad.addColorStop(1, '#26262b')
+    grad.addColorStop(0, '#26262c')
+    grad.addColorStop(0.35, '#3d3d46')
+    grad.addColorStop(0.5, '#4a4a54')
+    grad.addColorStop(0.65, '#3d3d46')
+    grad.addColorStop(1, '#222227')
     ctx.fillStyle = grad
     ctx.fillRect(0, 0, w, h)
 
-    // Canvas font strings don't support CSS var(), so use a concrete stack.
-    ctx.fillStyle = 'rgba(0, 212, 255, 0.85)'
+    // …with fine diagonal sheen streaks…
+    ctx.save()
+    ctx.globalAlpha = 0.05
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 1
+    for (let x = -h; x < w; x += 7) {
+      ctx.beginPath()
+      ctx.moveTo(x, 0)
+      ctx.lineTo(x + h, h)
+      ctx.stroke()
+    }
+    ctx.restore()
+
+    // …a soft accent glint sweeping the top edge…
+    const glint = ctx.createLinearGradient(0, 0, w, 0)
+    glint.addColorStop(0, 'rgba(0,212,255,0)')
+    glint.addColorStop(0.5, 'rgba(0,212,255,0.14)')
+    glint.addColorStop(1, 'rgba(0,212,255,0)')
+    ctx.fillStyle = glint
+    ctx.fillRect(0, 0, w, 14)
+
+    // …and a few scattered sparkles.
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'
+    const sparkles: Array<[number, number]> = [
+      [w * 0.14, h * 0.3], [w * 0.82, h * 0.22], [w * 0.68, h * 0.74], [w * 0.28, h * 0.78], [w * 0.9, h * 0.6],
+    ]
+    for (const [sx, sy] of sparkles) {
+      ctx.beginPath()
+      ctx.arc(sx, sy, 1.1, 0, Math.PI * 2)
+      ctx.fill()
+    }
+
+    ctx.fillStyle = 'rgba(0, 212, 255, 0.9)'
     ctx.font = '700 13px system-ui, -apple-system, sans-serif'
     ctx.textAlign = 'center'
     ctx.textBaseline = 'middle'
-    ctx.fillText('✦  SCRATCH TO REVEAL  ✦', w / 2, h / 2 - 8)
+    ctx.fillText('✦   S C R A T C H   T O   R E V E A L   ✦', w / 2, h / 2 - 8)
     ctx.fillStyle = 'rgba(255, 255, 255, 0.55)'
     ctx.font = '600 10px system-ui, -apple-system, sans-serif'
     ctx.fillText('your first-month discount', w / 2, h / 2 + 10)
-  }, [isRevealed])
+  }, [claimedOnMount])
 
   const scratchedFraction = useCallback((ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
     const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height)
@@ -99,6 +160,14 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
     const sampled = Math.ceil(data.length / (32 * 4))
     return sampled > 0 ? clear / sampled : 0
   }, [])
+
+  /** Reveal if enough is cleared. Cheap enough to run on every stroke end. */
+  const maybeFinish = useCallback(() => {
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext('2d')
+    if (!canvas || !ctx || doneRef.current) return
+    if (scratchedFraction(ctx, canvas) >= REVEAL_THRESHOLD) finish()
+  }, [finish, scratchedFraction])
 
   const eraseAt = useCallback(
     (clientX: number, clientY: number) => {
@@ -114,16 +183,16 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
       ctx.arc(x, y, BRUSH_RADIUS, 0, Math.PI * 2)
       ctx.fill()
 
-      // Throttle the (relatively pricey) fraction check to every few moves.
+      // Throttle the (relatively pricey) fraction check while dragging; the
+      // pointer-up check below is the guarantee it can't get stuck near-done.
       moveCountRef.current += 1
-      if (moveCountRef.current % 6 === 0 && scratchedFraction(ctx, canvas) >= REVEAL_THRESHOLD) {
-        finish()
-      }
+      if (moveCountRef.current % 4 === 0) maybeFinish()
     },
-    [finish, scratchedFraction],
+    [maybeFinish],
   )
 
-  if (isRevealed) {
+  // A previous visit already claimed it — the settled summary card.
+  if (claimedOnMount) {
     return (
       <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
         <div
@@ -162,6 +231,7 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
   }
 
   const hint = outcomesHint()
+  const isSettled = phase !== 'scratching'
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
@@ -170,25 +240,35 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
           className="text-[10px] font-bold tracking-widest uppercase mb-1"
           style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
         >
-          Your first-month reward
+          {isSettled ? 'You revealed' : 'Your first-month reward'}
         </p>
         <p className="text-xs text-[var(--color-muted)] mb-4 leading-relaxed">
-          {hint
-            ? `Scratch the card to reveal your discount — ${hint}. It's applied to your first month.`
-            : 'Scratch the card to reveal your first-month discount.'}
+          {isSettled
+            ? 'Applied to your first month automatically.'
+            : hint
+              ? `Scratch the card to reveal your discount — ${hint}. It's applied to your first month.`
+              : 'Scratch the card to reveal your first-month discount.'}
         </p>
 
         <div className="relative rounded-xl overflow-hidden select-none" style={{ height: 96 }}>
-          {/* Prize sits underneath the scratch coating. */}
+          {/* Prize sits underneath the foil; pops as the foil dissolves. */}
           <div
             className="absolute inset-0 flex items-center justify-center gap-3"
-            style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, var(--color-surface))' }}
-            aria-hidden={!done}
+            style={{
+              background: `radial-gradient(90% 120% at 50% 0%, color-mix(in srgb, ${ACCENT} 16%, transparent), transparent 70%), color-mix(in srgb, var(--color-accent) 8%, var(--color-surface))`,
+              transform: isSettled ? 'scale(1)' : 'scale(0.96)',
+              transition: reduced ? 'none' : `transform ${DISSOLVE_MS}ms cubic-bezier(0.22,1,0.36,1)`,
+            }}
+            aria-hidden={!isSettled}
           >
             <div className="text-center">
               <p
                 className="text-3xl font-black leading-none"
-                style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
+                style={{
+                  color: ACCENT,
+                  fontFamily: 'var(--font-display)',
+                  textShadow: isSettled ? `0 0 22px color-mix(in srgb, ${ACCENT} 55%, transparent)` : 'none',
+                }}
               >
                 {pctOff}% OFF
               </p>
@@ -198,11 +278,18 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
             </div>
           </div>
 
-          {/* The scratch coating. */}
+          {/* The foil. Fades away as one piece the moment enough is cleared —
+              the user is never left chasing the last corners. */}
           <canvas
             ref={canvasRef}
             className="absolute inset-0 w-full h-full touch-none cursor-grab active:cursor-grabbing"
-            style={{ width: '100%', height: '100%' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              opacity: isSettled ? 0 : 1,
+              pointerEvents: isSettled ? 'none' : 'auto',
+              transition: reduced ? 'none' : `opacity ${DISSOLVE_MS}ms ease`,
+            }}
             onPointerDown={(e) => {
               e.currentTarget.setPointerCapture(e.pointerId)
               scratchingRef.current = true
@@ -213,21 +300,25 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
             }}
             onPointerUp={() => {
               scratchingRef.current = false
+              maybeFinish()
             }}
             onPointerCancel={() => {
               scratchingRef.current = false
+              maybeFinish()
             }}
           />
         </div>
 
-        {/* Accessible / no-scratch fallback. */}
-        <button
-          onClick={finish}
-          className="w-full mt-3 py-2 rounded-xl text-[11px] font-semibold active:scale-[0.99] transition-transform"
-          style={{ color: 'var(--color-muted)', background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-        >
-          Or tap here to reveal
-        </button>
+        {/* Accessible / no-scratch fallback — quiet, not a competing button. */}
+        {!isSettled && (
+          <button
+            onClick={finish}
+            className="w-full mt-3 text-[11px] font-semibold text-center underline underline-offset-2 active:opacity-60 transition-opacity"
+            style={{ color: 'var(--color-muted)' }}
+          >
+            Prefer a tap? Reveal it
+          </button>
+        )}
       </div>
     </div>
   )
