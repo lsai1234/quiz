@@ -21,7 +21,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
 import { StackDeck } from './StackDeck'
-import { StackPriceSummary } from './StackPriceSummary'
+import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { SubscriptionJourney } from './SubscriptionJourney'
@@ -278,34 +278,20 @@ export function StackReviewPage() {
               </button>
             </div>
           )}
-          {planType === 'subscription' && (
-            <>
-              {scratchRevealAvailable() && subscriptionPlan.length > 0 && (
-                <ScratchToReveal
-                  monthlyTotal={pricing.subscriptionTotal}
-                  revealed={revealedIntroDiscount}
-                  onReveal={setRevealedIntroDiscount}
-                />
-              )}
-              <SubscriptionProtocol
-                plan={subscriptionPlan}
-                answers={answers}
-                slotTitleById={slotTitleById}
-                minMonths={pricing.subscriptionMinMonths}
-                monthlyTotal={pricing.subscriptionTotal}
-                firstMonth={pricing.subscriptionFirstMonth}
-                introPct={pricing.subscriptionIntroDiscountPct}
-              />
-              <button
-                onClick={() => setJourneyOpen(true)}
-                className="w-full -mt-2 mb-4 py-2.5 rounded-xl text-xs font-bold active:scale-[0.99] transition-all"
-                style={{ color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}
-              >
-                {subscriptionCustomised ? 'Adjust how much you need →' : 'Customise your subscription →'}
-              </button>
-            </>
+          {planType === 'subscription' && scratchRevealAvailable() && subscriptionPlan.length > 0 && (
+            <ScratchToReveal
+              monthlyTotal={pricing.subscriptionTotal}
+              revealed={revealedIntroDiscount}
+              onReveal={setRevealedIntroDiscount}
+            />
           )}
-          <StackPriceSummary
+
+          {/* The high-level receipt — what you're buying, discounts, total */}
+          <PlanReceipt
+            slots={sortedSlots}
+            products={products}
+            subscriptionPlan={subscriptionPlan}
+            slotTitleById={slotTitleById}
             pricing={pricing}
             planType={planType}
             onPlanChange={setPlanType}
@@ -313,6 +299,39 @@ export function StackReviewPage() {
             onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             isLoading={checkoutState.status === 'loading'}
           />
+
+          {/* Delivery detail — tucked behind a disclosure so the plan stays high-level */}
+          {planType === 'subscription' && subscriptionPlan.length > 0 && (
+            <>
+              <details className="mt-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden group">
+                <summary
+                  className="flex items-center justify-between px-5 py-3.5 cursor-pointer list-none text-xs font-bold"
+                  style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
+                >
+                  Delivery details — what lands each month
+                  <span className="text-[10px] text-[var(--color-muted)] transition-transform group-open:rotate-180">▾</span>
+                </summary>
+                <div className="px-3 pb-3">
+                  <SubscriptionProtocol
+                    plan={subscriptionPlan}
+                    answers={answers}
+                    slotTitleById={slotTitleById}
+                    minMonths={pricing.subscriptionMinMonths}
+                    monthlyTotal={pricing.subscriptionTotal}
+                    firstMonth={pricing.subscriptionFirstMonth}
+                    introPct={pricing.subscriptionIntroDiscountPct}
+                  />
+                </div>
+              </details>
+              <button
+                onClick={() => setJourneyOpen(true)}
+                className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold active:scale-[0.99] transition-all"
+                style={{ color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}
+              >
+                {subscriptionCustomised ? 'Adjust how much you need →' : 'Customise your subscription →'}
+              </button>
+            </>
+          )}
 
           {/* Safety fine print */}
           <p className="text-[10px] leading-relaxed mt-4 text-center" style={{ color: 'var(--color-muted)' }}>
