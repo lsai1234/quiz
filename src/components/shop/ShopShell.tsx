@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
+import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
 import { resolveBasket, basketSubtotal, basketItemCount } from '@/lib/basket/helpers'
@@ -16,6 +17,7 @@ import { ShopHeader } from './ShopHeader'
 import { ShopFilterBar } from './ShopFilterBar'
 import { ShopCategoryNav } from './ShopCategoryNav'
 import { ShopSection } from './ShopSection'
+import { ShopBundlesRow } from './ShopBundlesRow'
 import { ShopProductSheet } from './ShopProductSheet'
 import { BasketDrawer } from './BasketDrawer'
 
@@ -46,6 +48,7 @@ function LoadingSkeleton() {
  */
 export function ShopShell() {
   const { products, isLoading } = useCatalogueProducts()
+  const { bundles } = useShopBundles()
   const { lines } = useBasket()
   const { state, checkout, reset } = useShopCheckout()
   const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
@@ -80,7 +83,29 @@ export function ShopShell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealsAll, filters])
 
-  const navCategories = dealsSection ? [dealsSection, ...filteredSections] : filteredSections
+  // Bundles are visible when their whole curated stack passes the active dietary
+  // filters — buying a bundle means buying every core product, so one excluded
+  // product hides the bundle (a vegan filter hides a whey-led bundle).
+  const productsById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products])
+  const filteredBundles = useMemo(
+    () =>
+      bundles.filter((v) =>
+        v.bundle.blueprint.slots.every((slot) => {
+          const p = productsById.get(slot.selectedProductId)
+          return p ? filters.every((f) => p.dietaryTags.includes(f)) : filters.length === 0
+        }),
+      ),
+    [bundles, productsById, filters],
+  )
+
+  const bundlesNav: ShopCategory | null =
+    filteredBundles.length > 0 ? { category: 'Bundles', slug: 'bundles', products: [] } : null
+
+  const navCategories = [
+    ...(bundlesNav ? [bundlesNav] : []),
+    ...(dealsSection ? [dealsSection] : []),
+    ...filteredSections,
+  ]
   const noResults = !isLoading && navCategories.length === 0
 
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
@@ -152,6 +177,9 @@ export function ShopShell() {
           )}
           <ShopCategoryNav categories={navCategories} />
           <div className="pb-4">
+            {filteredBundles.length > 0 && (
+              <ShopBundlesRow bundles={filteredBundles} products={products} />
+            )}
             {dealsSection && (
               <ShopSection
                 section={dealsSection}
