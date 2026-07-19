@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 
 interface Props {
   count: number
@@ -16,9 +18,9 @@ export function ShopHeader({ count, onOpenBasket }: Props) {
 
   return (
     <header className="px-5 pt-6 pb-2 max-w-lg mx-auto flex items-center justify-between">
-      <span className="text-lg font-black tracking-[0.2em]" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
-        CHRGD
-      </span>
+      <Link href="/" aria-label="getCHRGD home" className="active:scale-95 transition-transform">
+        <CHRGDLogo markSize={22} wordClassName="text-lg" />
+      </Link>
       <button
         onClick={onOpenBasket}
         className="relative w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform"

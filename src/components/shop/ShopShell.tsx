@@ -11,6 +11,7 @@ import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { DIETARY_LABEL } from '@/lib/product-facts'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
 import { ShopHeader } from './ShopHeader'
 import { ShopFilterBar } from './ShopFilterBar'
 import { ShopCategoryNav } from './ShopCategoryNav'
@@ -118,7 +119,13 @@ export function ShopShell() {
           className="mt-4 flex items-center gap-3 rounded-2xl px-4 py-3 active:scale-[0.99] transition-transform"
           style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 22%, transparent)' }}
         >
-          <span className="text-lg" aria-hidden>⚡</span>
+          <span
+            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
+            style={{ background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)' }}
+            aria-hidden
+          >
+            <CHRGDBolt size={16} />
+          </span>
           <span className="flex-1 text-xs font-semibold leading-snug" style={{ color: 'var(--color-text-2)' }}>
             Not sure where to start? <span style={{ color: 'var(--color-accent)' }}>Take the 2-minute quiz</span> for a stack built around your goals.
           </span>

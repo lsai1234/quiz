@@ -6,6 +6,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ShopCategory } from '@/lib/shop/categories'
 import { selectShopAxes } from '@/lib/stack-stats'
+import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
 import { ShopProductCard } from './ShopProductCard'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -68,7 +69,7 @@ export function ShopSection({ section, onExpand, tone = 'default', subtitle }: P
             className="text-2xl font-black tracking-tight flex items-center gap-1.5"
             style={{ fontFamily: 'var(--font-display)', color: tone === 'deal' ? 'var(--color-accent)' : 'var(--color-text)' }}
           >
-            {tone === 'deal' && <span aria-hidden>⚡</span>}
+            {tone === 'deal' && <CHRGDBolt size={22} color="currentColor" className="shrink-0" />}
             {section.category}
           </h2>
           {subtitle && (
