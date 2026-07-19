@@ -12,6 +12,7 @@ import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from 
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { BundleDeck } from '@/components/quiz/BundleDeck'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
@@ -591,7 +592,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // BUDGET_DATA order. Mirrors what generateStack builds when the bundle is picked
   // (AI personalisation only swaps products within slots, never the slot titles).
   const bundlePreviews = useMemo<Array<{ titles: string[]; freeDelivery: boolean }>>(() => {
-    if (answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], freeDelivery: false }))
+    // Drinks mode never shows the bundle step (pace sizes the package), so
+    // don't build four preview stacks that can never be seen.
+    if (answers.drinksMode || answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], freeDelivery: false }))
     const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
     return BUDGET_DATA.map((b) => {
       try {
@@ -1543,94 +1546,21 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Budget ── */}
+          {/* ── Budget — swipeable bundle deck, one tier per card ── */}
           {id === 'budget' && (
-            <div className="flex flex-col gap-4">
-              {BUDGET_DATA.map(({ id: bid, name, budget, sub, pref, icon }, i) => {
-                const active = answers.budget === bid
-                const preview = bundlePreviews[i] ?? { titles: [], freeDelivery: false }
-                const contents = preview.titles
-                const actualCount = contents.length
-                const badge = BUNDLE_BADGE[bid]
-                const featured = bid === '50-80' // the hero of the ladder
-                return (
-                  <button
-                    key={`b-${bid}`}
-                    onClick={() => { setAnswer('budget', bid); setAnswer('stackPreference', pref) }}
-                    className={['relative w-full flex flex-col px-5 pt-4 pb-4 rounded-2xl border text-left transition-all duration-200 active:scale-[0.99]',
-                      active
-                        ? 'border-[#00D4FF] bg-[#00D4FF]/[0.08] text-white shadow-[0_0_30px_-12px_#00D4FF]'
-                        : featured
-                          ? 'border-[#00D4FF]/35 bg-white/[0.03] text-white/85'
-                          : 'border-white/[0.08] bg-white/[0.015] text-white/75 hover:border-white/25 hover:bg-white/[0.04]'].join(' ')}
-                  >
-                    {/* Merchandising badge — good / better / best */}
-                    {badge && (
-                      <span
-                        className={['absolute -top-2.5 left-4 px-2.5 py-0.5 rounded-full text-[9px] font-bold tracking-[0.14em] uppercase',
-                          active || featured ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white/15 text-white/80'].join(' ')}
-                        style={{ fontFamily: 'var(--font-display)' }}
-                      >
-                        {badge}
-                      </span>
-                    )}
-
-                    {/* Header: name + price */}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <QuizIcon name={icon} size={20} className={`shrink-0 transition-colors duration-200 ${active ? 'text-[#00D4FF]' : 'text-white/45'}`} />
-                        <span className="text-[17px] font-semibold" style={{ fontFamily: 'var(--font-display)' }}>{name}</span>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className={`text-[16px] font-bold leading-none ${active ? 'text-white' : 'text-white/85'}`} style={{ fontFamily: 'var(--font-display)' }}>{budget}</div>
-                        <div className={`text-[10px] font-medium mt-1 ${active ? 'text-white/55' : 'text-white/35'}`}>one-off price</div>
-                      </div>
-                    </div>
-
-                    {/* Punchy one-liner */}
-                    <p className={`text-[13px] leading-snug mt-2 ${active ? 'text-white/65' : 'text-white/40'}`}>{sub}</p>
-
-                    {/* What you get — the sales tick-list */}
-                    {contents.length > 0 && (
-                      <div className="mt-3.5 flex flex-col gap-1.5">
-                        {contents.map((title, ci) => (
-                          <div key={`${bid}-c-${ci}`} className="flex items-center gap-2">
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" className="shrink-0">
-                              <circle cx="7" cy="7" r="7" fill={active ? '#00D4FF' : 'rgba(0,212,255,0.18)'} />
-                              <path d="M4 7.1l1.9 1.9L10 5" stroke={active ? '#0A0A0A' : '#00D4FF'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                            <span className={`text-[13px] ${active ? 'text-white/90' : 'text-white/65'}`}>{title}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Free delivery perk (order over the free-delivery threshold) */}
-                    {preview.freeDelivery && (
-                      <div className="mt-3 flex items-center gap-2">
-                        <svg width="15" height="15" viewBox="0 0 20 20" fill="none" className="shrink-0">
-                          <path d="M1.5 5.5h9v7h-9v-7Z" stroke={active ? '#00D4FF' : '#00D4FF'} strokeWidth="1.3" strokeLinejoin="round" />
-                          <path d="M10.5 8h4l3 3v1.5h-7V8Z" stroke="#00D4FF" strokeWidth="1.3" strokeLinejoin="round" />
-                          <circle cx="5" cy="14.5" r="1.6" stroke="#00D4FF" strokeWidth="1.3" />
-                          <circle cx="14.5" cy="14.5" r="1.6" stroke="#00D4FF" strokeWidth="1.3" />
-                        </svg>
-                        <span className={`text-[12px] font-semibold ${active ? 'text-[#00D4FF]' : 'text-[#00D4FF]/85'}`}>Free delivery included</span>
-                      </div>
-                    )}
-
-                    {/* Footer count */}
-                    <div className={`mt-3.5 pt-3 border-t flex items-center justify-between ${active ? 'border-[#00D4FF]/20' : 'border-white/[0.06]'}`}>
-                      <span className={`text-[11px] font-semibold ${active ? 'text-white/70' : 'text-white/35'}`}>
-                        {actualCount > 0 ? `${actualCount} product${actualCount !== 1 ? 's' : ''} in this bundle` : 'Tailored to your goals'}
-                      </span>
-                      <span className={`text-[11px] font-bold tracking-wide ${active ? 'text-[#00D4FF]' : 'text-white/30'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                        {active ? 'Selected ✓' : 'Choose'}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
+            <BundleDeck
+              options={BUDGET_DATA}
+              previews={bundlePreviews}
+              selectedId={answers.budget}
+              badges={BUNDLE_BADGE}
+              featuredId="50-80"
+              onSelect={(bid) => {
+                const b = BUDGET_DATA.find((x) => x.id === bid)
+                if (!b) return
+                setAnswer('budget', b.id)
+                setAnswer('stackPreference', b.pref)
+              }}
+            />
           )}
 
           {/* ── Review ── */}
