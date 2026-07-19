@@ -142,6 +142,11 @@ export function StackReviewPage() {
   )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
+  // Lightweight tile data for the hero lineup shelf, in display order.
+  const heroTiles = sortedSlots.map((slot) => {
+    const product = products.find((p) => p.id === slot.selectedProductId)
+    return { slotType: slot.slotType, imageUrl: product?.imageUrl ?? null, title: product?.title ?? slot.title }
+  })
   const pricing = calculatePricing(blueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
     () => buildSubscriptionPlan(blueprint, products, answers, undefined, subOpts),
@@ -226,6 +231,7 @@ export function StackReviewPage() {
           blueprint={blueprint}
           productCount={sortedSlots.length}
           totalPrice={pricing.oneOffTotal}
+          tiles={heroTiles}
           drinksMode={!!answers.drinksMode}
         />
 
