@@ -11,6 +11,7 @@ import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ShopCategoryNav } from './ShopCategoryNav'
 import { ShopSection } from './ShopSection'
 import { ShopProductSheet } from './ShopProductSheet'
+import { BasketDrawer } from './BasketDrawer'
 
 /**
  * The shop browse experience: catalogue grouped into category swipe decks with
@@ -19,18 +20,23 @@ import { ShopProductSheet } from './ShopProductSheet'
  */
 export function ShopShell() {
   const { products, isLoading } = useCatalogueProducts()
-  const { lines, setQty, remove, clear } = useBasket()
-  const { state, checkout } = useShopCheckout()
+  const { lines } = useBasket()
+  const { state, checkout, reset } = useShopCheckout()
   const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const sections = useMemo(() => groupByCategory(products), [products])
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
   const count = basketItemCount(lines)
 
-  // Buy now: the sheet has already added the item; check out the whole basket.
+  const openDrawer = () => { reset(); setDrawerOpen(true) }
+  const closeDrawer = () => { setDrawerOpen(false); reset() }
+
+  // Buy now: the sheet already added the item; check out and show it in the drawer.
   const handleBuyNow = () => {
     setExpanded(null)
+    setDrawerOpen(true)
     checkout(resolveBasket(useBasket.getState().lines, products))
   }
 
@@ -65,36 +71,29 @@ export function ShopShell() {
         <ShopProductSheet product={expanded} onBuyNow={handleBuyNow} onClose={() => setExpanded(null)} />
       )}
 
-      {/* S1 sticky basket bar — S5 replaces with the real drawer */}
-      {count > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
-          <div className="max-w-lg mx-auto rounded-2xl p-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)', boxShadow: '0 10px 34px -10px rgba(0,0,0,0.7)' }}>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold" style={{ fontFamily: 'var(--font-display)' }}>{count} item{count !== 1 ? 's' : ''} · {formatGBP(subtotal)}</span>
-              <button onClick={clear} className="text-[11px] underline" style={{ color: 'var(--color-muted)' }}>Clear</button>
-            </div>
-            <div className="space-y-1.5 mb-2 max-h-40 overflow-y-auto">
-              {resolved.map((l) => (
-                <div key={`${l.product.id}:${l.variant.id}`} className="flex items-center gap-2 text-xs">
-                  <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--color-text-2)' }}>{l.product.title}</span>
-                  <button onClick={() => setQty(l.product.id, l.variant.id, l.quantity - 1)} className="w-6 h-6 rounded-md" style={{ border: '1px solid var(--color-border-2)' }}>–</button>
-                  <span className="w-5 text-center">{l.quantity}</span>
-                  <button onClick={() => setQty(l.product.id, l.variant.id, l.quantity + 1)} className="w-6 h-6 rounded-md" style={{ border: '1px solid var(--color-border-2)' }}>+</button>
-                  <button onClick={() => remove(l.product.id, l.variant.id)} className="text-[11px]" style={{ color: 'var(--color-muted)' }}>✕</button>
-                </div>
-              ))}
-            </div>
-            <button
-              onClick={() => checkout(resolved)}
-              disabled={state.status === 'loading'}
-              className="w-full py-3.5 rounded-xl text-sm font-bold active:scale-95 transition-transform disabled:opacity-60"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-            >
-              {state.status === 'loading' ? 'Building cart…' : state.status === 'success' && state.mock ? 'Mock checkout ✓' : 'Checkout →'}
-            </button>
-            {state.status === 'error' && <p className="text-[11px] mt-2 text-center" style={{ color: 'var(--color-red)' }}>{state.message}</p>}
-          </div>
+      {/* Slim basket opener — the full drawer opens on tap */}
+      {count > 0 && !drawerOpen && (
+        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6 pointer-events-none" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
+          <button
+            onClick={openDrawer}
+            className="max-w-lg mx-auto w-full flex items-center gap-3 rounded-2xl pl-4 pr-3 py-3 pointer-events-auto active:scale-[0.99] transition-transform"
+            style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', boxShadow: '0 10px 34px -10px rgba(0,0,0,0.7)' }}
+          >
+            <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0" style={{ background: 'var(--color-bg)', color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>{count}</span>
+            <span className="flex-1 text-left text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>View basket</span>
+            <span className="text-sm font-black" style={{ fontFamily: 'var(--font-display)' }}>{formatGBP(subtotal)} →</span>
+          </button>
         </div>
+      )}
+
+      {drawerOpen && (
+        <BasketDrawer
+          resolved={resolved}
+          subtotal={subtotal}
+          checkoutState={state}
+          onCheckout={() => checkout(resolved)}
+          onClose={closeDrawer}
+        />
       )}
     </div>
   )
