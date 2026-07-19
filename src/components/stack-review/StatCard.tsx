@@ -39,8 +39,9 @@ export function StatCard({ slot, product, planType, subscriptionProduct, axes, a
 
   useEffect(() => {
     if (!animate) { setFilled(true); return }
-    const id = requestAnimationFrame(() => setFilled(true))
-    return () => cancelAnimationFrame(id)
+    // Let the deck's deal-in settle first, then sweep the bars.
+    const id = setTimeout(() => setFilled(true), 280)
+    return () => clearTimeout(id)
   }, [animate])
 
   const selectedVariant = product?.variants.find((v) => v.id === slot.selectedVariantId)

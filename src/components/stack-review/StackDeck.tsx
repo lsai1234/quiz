@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import type { StatAxis } from '@/lib/stack-stats'
 import { getSubscriptionProduct } from '@/lib/stack-blueprint/pricing'
 import { StatCard } from './StatCard'
+
+gsap.registerPlugin(ScrollTrigger)
 
 const ACCENT = '#00D4FF'
 
@@ -37,6 +41,31 @@ export function StackDeck({ slots, products, planType, axes, onChangeProduct, on
   }, [])
 
   const total = slots.length + (trailing ? 1 : 0)
+
+  // Deal-in: the cards stagger up into place as the deck scrolls into view,
+  // like a hand being dealt. Runs once; cards added later (a booster) just
+  // appear. Reduced-motion leaves them in place.
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const root = scrollRef.current
+    if (!root) return
+    const cards = root.querySelectorAll('[data-card]')
+    if (cards.length === 0) return
+    // Scale-up only (no translate): scaling down stays inside the box, so it
+    // can't trip the horizontal scroller's vertical overflow.
+    const anim = gsap.fromTo(
+      cards,
+      { opacity: 0, scale: 0.9 },
+      {
+        opacity: 1, scale: 1,
+        duration: 0.5, ease: 'power3.out', stagger: 0.07,
+        scrollTrigger: { trigger: root, start: 'top 85%', once: true },
+      },
+    )
+    return () => { anim.scrollTrigger?.kill(); anim.kill() }
+    // Intentionally mount-only — re-running would re-hide already-dealt cards.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Track the centred card for the position dots.
   useEffect(() => {
