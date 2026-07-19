@@ -11,7 +11,8 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, getSubscriptionProduct, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
+import { selectStatAxes } from '@/lib/stack-stats'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -19,7 +20,7 @@ import { lqdOnly } from '@/lib/catalogue/filters'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
-import { StackProductCard } from './StackProductCard'
+import { StackDeck } from './StackDeck'
 import { StackPriceSummary } from './StackPriceSummary'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
@@ -27,7 +28,6 @@ import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
-import { RevealOnScroll } from './RevealOnScroll'
 import { LqdPourGuide } from './LqdPourGuide'
 import { AccountGate } from '@/components/auth/AccountGate'
 
@@ -143,11 +143,9 @@ export function StackReviewPage() {
   )
 
   const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
-  // Lightweight tile data for the hero lineup shelf, in display order.
-  const heroTiles = sortedSlots.map((slot) => {
-    const product = products.find((p) => p.id === slot.selectedProductId)
-    return { slotType: slot.slotType, imageUrl: product?.imageUrl ?? null, title: product?.title ?? slot.title }
-  })
+  // Shared top-trumps axes for the deck — the user's own goals, so every card
+  // compares on the same footing.
+  const statAxes = useMemo(() => selectStatAxes(blueprint, products), [blueprint, products])
   const pricing = calculatePricing(blueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
     () => buildSubscriptionPlan(blueprint, products, answers, undefined, subOpts),
@@ -232,39 +230,30 @@ export function StackReviewPage() {
           blueprint={blueprint}
           productCount={sortedSlots.length}
           totalPrice={pricing.oneOffTotal}
-          tiles={heroTiles}
           drinksMode={!!answers.drinksMode}
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
 
-        {/* Core + added booster product cards */}
-        <div ref={stackRef} className="px-5 pt-7 max-w-lg mx-auto space-y-3" style={{ scrollMarginTop: 16 }}>
+        {/* Core + added booster product cards — a swipeable top-trumps deck */}
+        <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
           <p
-            className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
+            className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {answers.drinksMode
-              ? `Your LQD package — ${sortedSlots.length} ready-made drinks`
-              : `Your personalised stack — ${sortedSlots.length} products`}
+              ? `Your LQD package — ${sortedSlots.length} ready-made drinks · swipe to compare`
+              : `Your personalised stack — ${sortedSlots.length} products · swipe to compare`}
           </p>
-          {sortedSlots.map((slot, i) => {
-            const product = products.find((p) => p.id === slot.selectedProductId)
-            const subscriptionProduct = product ? getSubscriptionProduct(product, products) : undefined
-            return (
-              <RevealOnScroll key={slot.slotId} delay={Math.min(i, 5) * 60}>
-                <StackProductCard
-                  slot={slot}
-                  product={product}
-                  planType={planType}
-                  subscriptionProduct={subscriptionProduct}
-                  onChangeProduct={handleOpenSwap}
-                  onChangeVariant={handleChangeVariant}
-                  onRemove={handleRemove}
-                />
-              </RevealOnScroll>
-            )
-          })}
+          <StackDeck
+            slots={sortedSlots}
+            products={products}
+            planType={planType}
+            axes={statAxes}
+            onChangeProduct={handleOpenSwap}
+            onChangeVariant={handleChangeVariant}
+            onRemove={handleRemove}
+          />
         </div>
 
         {/* Optional booster suggestions — only show products not yet in stack */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { useQuizStore } from '@/lib/store'
@@ -72,7 +72,6 @@ export function Act4Reveal({ reducedMotion }: Props) {
   const { identity, answers } = useQuizStore()
   const firstName = answers.name?.split(' ')[0]?.trim() || null
   const headlineRef = useRef<HTMLDivElement>(null)
-  const [descExpanded, setDescExpanded] = useState(false)
 
   // Headline — spring-loaded reveal
   useEffect(() => {
@@ -139,21 +138,10 @@ export function Act4Reveal({ reducedMotion }: Props) {
             {identity.archetype}
           </p>
 
-          {/* Description — one line by default, expandable */}
-          <div data-word className="mt-4">
-            <p className={`text-sm text-[#0A0A0A]/55 leading-relaxed ${descExpanded ? '' : 'line-clamp-1'}`}>
-              {identity.description}
-            </p>
-            {identity.description.length > 60 && (
-              <button
-                onClick={() => setDescExpanded((o) => !o)}
-                className="text-[11px] font-bold text-[#00D4FF] mt-1 active:opacity-60 transition-opacity"
-                style={{ fontFamily: 'var(--font-display)' }}
-              >
-                {descExpanded ? 'Less' : 'Read more'}
-              </button>
-            )}
-          </div>
+          {/* Description — shown in full; this card is the reveal, not a teaser */}
+          <p data-word className="text-sm text-[#0A0A0A]/55 leading-relaxed mt-4">
+            {identity.description}
+          </p>
 
           {/* Focus areas — icon chips */}
           <div className="mt-5 pt-5" style={{ borderTop: '1px solid rgba(10,10,10,0.07)' }}>

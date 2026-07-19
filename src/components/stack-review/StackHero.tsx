@@ -1,27 +1,12 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { ProductTile } from './ProductTile'
-
-gsap.registerPlugin(ScrollTrigger)
-
-/** One product on the lineup shelf. */
-export interface HeroTile {
-  slotType: string
-  imageUrl: string | null
-  title: string
-}
 
 interface Props {
   blueprint: StackBlueprint
   productCount: number
   totalPrice: number
-  /** The stack's products, in display order — the lineup shown on the shelf. */
-  tiles: HeroTile[]
   /** CHRGD LQD (all-drinks package) framing. */
   drinksMode?: boolean
 }
@@ -30,35 +15,14 @@ function prettifyGoal(goal: string) {
   return goal.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-export function StackHero({ blueprint, productCount, totalPrice, tiles, drinksMode }: Props) {
-  const shelfRef = useRef<HTMLDivElement>(null)
-  const [reduced, setReduced] = useState(false)
-
-  useEffect(() => {
-    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
-  }, [])
-
-  // The lineup reveal: product tiles stagger onto the shelf as it scrolls into
-  // view — the payoff beat of the whole quiz. Honours reduced-motion by simply
-  // leaving the tiles in place.
-  useEffect(() => {
-    if (reduced || !shelfRef.current) return
-    const els = shelfRef.current.querySelectorAll('[data-tile]')
-    if (els.length === 0) return
-    const anim = gsap.fromTo(
-      els,
-      { y: 22, opacity: 0, scale: 0.8 },
-      {
-        y: 0, opacity: 1, scale: 1,
-        duration: 0.55, ease: 'back.out(1.5)', stagger: 0.08,
-        scrollTrigger: { trigger: shelfRef.current, start: 'top 85%', once: true },
-      },
-    )
-    return () => { anim.scrollTrigger?.kill(); anim.kill() }
-  }, [reduced])
-
+/**
+ * The stack headline. The product lineup itself now lives in the swipeable deck
+ * below, so this is deliberately compact — name, one supporting line, and the
+ * key stats as chips.
+ */
+export function StackHero({ blueprint, productCount, totalPrice, drinksMode }: Props) {
   return (
-    <div className="px-5 pt-12 pb-8 max-w-lg mx-auto">
+    <div className="px-5 pt-12 pb-7 max-w-lg mx-auto">
       <div className="flex items-center gap-2 mb-3">
         <span
           className="text-[10px] font-bold tracking-[0.25em] uppercase block"
@@ -86,44 +50,15 @@ export function StackHero({ blueprint, productCount, totalPrice, tiles, drinksMo
       >
         {blueprint.stackName}
       </h2>
-      <p className="text-sm mt-2.5 leading-relaxed line-clamp-1" style={{ color: 'var(--color-text-2)' }}>
+      <p className="text-sm mt-2.5 leading-relaxed line-clamp-2" style={{ color: 'var(--color-text-2)' }}>
         {blueprint.summary}
       </p>
 
-      {/* The lineup shelf — the hero visual */}
-      {tiles.length > 0 && (
-        <div
-          className="mt-5 rounded-2xl px-4 pt-5 pb-6 relative overflow-hidden"
-          style={{
-            background: 'radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--color-accent) 10%, transparent), transparent 70%), var(--color-surface-2)',
-            border: '1px solid var(--color-border)',
-          }}
-        >
-          <div ref={shelfRef} className="flex flex-wrap justify-center items-end gap-3">
-            {tiles.map((t, i) => (
-              <div key={i} data-tile>
-                <ProductTile imageUrl={t.imageUrl} slot={t.slotType} title={t.title} size={68} />
-              </div>
-            ))}
-          </div>
-          {/* Shelf line the tiles stand on */}
-          <div
-            className="absolute left-6 right-6 bottom-4 h-px"
-            style={{ background: 'linear-gradient(to right, transparent, var(--color-border-2), transparent)' }}
-          />
-        </div>
-      )}
-
       {/* Stats row */}
       <div className="flex items-center gap-2 mt-4 flex-wrap">
-        {/* Product count */}
         <div
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-          style={{
-            background: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border-2)',
-            color: 'var(--color-text)',
-          }}
+          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)', color: 'var(--color-text)' }}
         >
           <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
             <circle cx="6" cy="6" r="5" stroke="currentColor" strokeWidth="1.5" />
@@ -132,7 +67,6 @@ export function StackHero({ blueprint, productCount, totalPrice, tiles, drinksMo
           {productCount} products
         </div>
 
-        {/* Price */}
         <div
           className="px-3 py-1.5 rounded-full text-xs font-black"
           style={{
@@ -144,14 +78,9 @@ export function StackHero({ blueprint, productCount, totalPrice, tiles, drinksMo
           {formatGBP(totalPrice)}/mo
         </div>
 
-        {/* Primary goal */}
         <div
           className="px-3 py-1.5 rounded-full text-xs font-semibold"
-          style={{
-            background: 'var(--color-surface-2)',
-            border: '1px solid var(--color-border-2)',
-            color: 'var(--color-text-2)',
-          }}
+          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)' }}
         >
           {prettifyGoal(blueprint.primaryGoal)}
         </div>
