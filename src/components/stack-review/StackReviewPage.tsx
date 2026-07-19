@@ -27,7 +27,7 @@ import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
-import { StackBoosters } from './StackBoosters'
+import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
 import { AccountGate } from '@/components/auth/AccountGate'
 
@@ -253,15 +253,9 @@ export function StackReviewPage() {
             onChangeProduct={handleOpenSwap}
             onChangeVariant={handleChangeVariant}
             onRemove={handleRemove}
+            trailing={<UpgradesCard boosters={boosters} axes={statAxes} onAdd={handleAddBooster} />}
           />
         </div>
-
-        {/* Optional booster suggestions — only show products not yet in stack */}
-        <StackBoosters
-          boosters={boosters}
-          addedIds={stackProductIds}
-          onAdd={handleAddBooster}
-        />
 
         {/* Divider before pricing */}
         <div className="h-px bg-[var(--color-border)] mx-5 mt-8" />
