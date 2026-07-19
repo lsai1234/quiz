@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { QuizAnswers } from '@/lib/types'
+import { ProductTile } from './ProductTile'
 
 const ACCENT = '#00D4FF'
 
@@ -14,23 +14,13 @@ const FREQ_LABEL: Record<string, string> = {
   daily: 'every day',
 }
 
-function unitNoun(formats: string[]): string {
-  const f = (formats[0] ?? '').toLowerCase()
-  if (f.includes('powder')) return 'tub'
-  return 'pack'
-}
+/** How many months of the delivery schedule to visualise. */
+const HORIZON = 3
 
-function deliveryLabel(line: SubscriptionLine): string {
-  const noun = unitNoun(line.product.formats)
-  if (line.shipEveryMonths > 1) return `1 ${noun} every ${line.shipEveryMonths} months`
-  if (line.unitsPerShipment > 1) return `${line.unitsPerShipment} ${noun}s a month`
-  return `1 ${noun} a month`
-}
-
-function cadenceLabel(line: SubscriptionLine): string {
-  return line.cadence === 'daily'
-    ? 'Every day'
-    : `On training days (~${line.occasionsPerMonth}/mo)`
+/** Whether a line delivers in month `m` (1-indexed), given its ship cadence. */
+function shipsInMonth(line: SubscriptionLine, m: number): boolean {
+  const every = Math.max(1, line.shipEveryMonths)
+  return (m - 1) % every === 0
 }
 
 interface Props {
@@ -43,13 +33,16 @@ interface Props {
   introPct?: number
 }
 
-export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths = 1, monthlyTotal, firstMonth, introPct = 0 }: Props) {
-  const [open, setOpen] = useState(false)
+export function SubscriptionProtocol({ plan, answers, minMonths = 1, monthlyTotal, firstMonth, introPct = 0 }: Props) {
   if (plan.length === 0) return null
 
   const freq = answers?.trainingFrequency ? FREQ_LABEL[answers.trainingFrequency] : null
   const hasIntro = introPct > 0 && firstMonth != null && firstMonth < monthlyTotal
-  const itemCount = plan.length
+
+  const months = Array.from({ length: HORIZON }, (_, i) => {
+    const m = i + 1
+    return { m, lines: plan.filter((l) => shipsInMonth(l, m)) }
+  })
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
@@ -62,73 +55,54 @@ export function SubscriptionProtocol({ plan, answers, slotTitleById, minMonths =
         </p>
         <p className="text-xs text-[var(--color-muted)] mb-4 leading-relaxed">
           {freq
-            ? `One flat payment a month, sized to how you train — ${freq}. Each item arrives on its own schedule.`
-            : 'One flat payment a month. Each item arrives on its own schedule.'}
+            ? `One flat monthly payment, sized to how you train — ${freq}. Here's what lands each month:`
+            : "One flat monthly payment. Here's what lands each month:"}
         </p>
 
-        {/* Per-item schedule — collapsed by default so the block leads with the
-            price, not a wall of delivery detail. */}
-        <button
-          onClick={() => setOpen((o) => !o)}
-          className="w-full flex items-center justify-between gap-2 py-2 text-left active:opacity-70 transition-opacity"
-        >
-          <span className="text-xs font-semibold" style={{ color: 'var(--color-text-2)' }}>
-            {open ? 'Hide monthly schedule' : `See what arrives each month · ${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
-          </span>
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
-            style={{
-              color: 'var(--color-muted)',
-              border: '1px solid var(--color-border-2)',
-              transform: open ? 'rotate(180deg)' : 'none',
-              transition: 'transform 0.2s ease',
-            }}
-          >
-            ▾
-          </span>
-        </button>
-
-        {open && (
-        <div className="space-y-3.5 mt-3">
-          {plan.map((line) => {
-            const covers = line.coversSlotIds
-              .map((id) => slotTitleById[id])
-              .filter(Boolean)
-              .join(' + ')
-            return (
-              <div key={line.product.id} className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p
-                    className="text-sm font-bold leading-snug"
-                    style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
-                  >
-                    {covers || line.product.title}
+        {/* Delivery timeline — what arrives in each of the next three months */}
+        <div className="flex items-stretch gap-2">
+          {months.map(({ m, lines }) => (
+            <div
+              key={m}
+              className="flex-1 rounded-xl p-2.5 flex flex-col"
+              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+            >
+              <p
+                className="text-[9px] font-bold tracking-widest uppercase mb-2"
+                style={{ color: m === 1 ? ACCENT : 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+              >
+                Month {m}
+              </p>
+              {lines.length > 0 ? (
+                <>
+                  <div className="flex flex-wrap gap-1.5 flex-1 content-start">
+                    {lines.map((line) => (
+                      <ProductTile
+                        key={line.product.id}
+                        imageUrl={line.product.imageUrl}
+                        slot={line.product.stackSlots[0]}
+                        title={line.product.title}
+                        size={34}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-[9px] font-semibold mt-2" style={{ color: 'var(--color-text-2)' }}>
+                    {lines.length} {lines.length === 1 ? 'item' : 'items'}
                   </p>
-                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5 truncate">
-                    {line.product.title}
-                  </p>
-                  <p className="text-[11px] mt-1 leading-snug" style={{ color: 'var(--color-text-2)' }}>
-                    {cadenceLabel(line)} · {deliveryLabel(line)}
+                </>
+              ) : (
+                <div className="flex-1 flex items-center">
+                  <p className="text-[9px] leading-snug" style={{ color: 'var(--color-muted)' }}>
+                    Still stocked — no delivery
                   </p>
                 </div>
-                <div className="flex-shrink-0 text-right">
-                  <p
-                    className="text-sm font-black"
-                    style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}
-                  >
-                    {formatGBP(line.monthlyPrice)}/mo
-                  </p>
-                  {line.shipEveryMonths > 1 && (
-                    <p className="text-[10px] text-[var(--color-muted)] mt-0.5">
-                      {formatGBP(line.pricePerDelivery)} every {line.shipEveryMonths} mo
-                    </p>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+              )}
+            </div>
+          ))}
         </div>
-        )}
+        <p className="text-[10px] mt-2.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          Most items refill every month; longer-lasting ones ship less often, so you never over-stock.
+        </p>
 
         {/* Footer: flat fee + intro + commitment */}
         <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-1.5">

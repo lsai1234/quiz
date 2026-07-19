@@ -1,6 +1,7 @@
 'use client'
 
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { ProductTile } from './ProductTile'
 
 interface Props {
   boosters: CatalogueProduct[]
@@ -91,17 +92,13 @@ export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
                 </p>
 
                 <div className="flex gap-3 items-start">
-                  {/* Image */}
-                  <div className="w-16 h-16 rounded-xl flex-shrink-0 overflow-hidden bg-[var(--color-surface-2)] border border-[var(--color-border)] flex items-center justify-center">
-                    {product.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" loading="lazy" />
-                    ) : (
-                      <span className="text-xl font-black opacity-40" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                        {product.category.charAt(0)}
-                      </span>
-                    )}
-                  </div>
+                  {/* Image — F1 tile, so image-less boosters get a slot-hued glyph */}
+                  <ProductTile
+                    imageUrl={product.imageUrl}
+                    slot={product.stackSlots[0]}
+                    title={product.title}
+                    size={64}
+                  />
 
                   {/* Info + CTA */}
                   <div className="flex-1 min-w-0">
