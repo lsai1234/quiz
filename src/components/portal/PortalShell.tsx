@@ -10,6 +10,7 @@ const NAV = [
   { href: '/portal', label: 'Home' },
   { href: '/portal/dashboard', label: 'Dashboard' },
   { href: '/portal/products', label: 'Products' },
+  { href: '/portal/bundles', label: 'Bundles' },
   { href: '/portal/backlog', label: 'Backlog' },
   { href: '/portal/import', label: 'Import' },
   { href: '/portal/pricing', label: 'Pricing' },
