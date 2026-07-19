@@ -5,25 +5,25 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
 import { resolveBasket, basketSubtotal, basketItemCount } from '@/lib/basket/helpers'
+import { groupByCategory } from '@/lib/shop/categories'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { ProductTile } from '@/components/stack-review/ProductTile'
+import { ShopCategoryNav } from './ShopCategoryNav'
+import { ShopSection } from './ShopSection'
 
 /**
- * S1 scaffold — proves the shop pipe end to end: catalogue load → basket
- * (persisted) → checkout via /api/cart. The real browse UI (category swipe
- * decks, product cards, detail sheet, basket drawer) replaces this from S3.
+ * The shop browse experience: catalogue grouped into category swipe decks with
+ * a sticky jump-nav. The detail sheet (card expand) lands in S4 and the real
+ * basket drawer in S5 — for now the S1 sticky basket bar stays.
  */
 export function ShopShell() {
   const { products, isLoading } = useCatalogueProducts()
-  const { lines, add, setQty, remove, clear } = useBasket()
+  const { lines, setQty, remove, clear } = useBasket()
   const { state, checkout } = useShopCheckout()
 
+  const sections = useMemo(() => groupByCategory(products), [products])
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
   const count = basketItemCount(lines)
-
-  const firstAvailableVariant = (p: (typeof products)[number]) =>
-    p.variants.find((v) => v.available) ?? p.variants[0]
 
   return (
     <div className="min-h-[100dvh] bg-[var(--color-bg)] text-[var(--color-text)] pb-40">
@@ -35,38 +35,26 @@ export function ShopShell() {
           Everything, à la carte
         </h1>
         <p className="text-sm mt-2" style={{ color: 'var(--color-text-2)' }}>
-          {isLoading ? 'Loading products…' : `${products.length} products`} · scaffold
+          The full range — swipe each shelf, add what you fancy.
         </p>
       </header>
 
-      {/* Temporary flat list — replaced by category swipe decks in S3 */}
-      <div className="px-5 max-w-lg mx-auto space-y-2">
-        {products.map((p) => {
-          const v = firstAvailableVariant(p)
-          if (!v) return null
-          return (
-            <div key={p.id} className="flex items-center gap-3 rounded-xl p-2.5" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-              <ProductTile imageUrl={p.imageUrl} slot={p.stackSlots[0]} title={p.title} size={44} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold truncate" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
-                <p className="text-xs" style={{ color: 'var(--color-muted)' }}>{formatGBP(v.price)}</p>
-              </div>
-              <button
-                onClick={() => add(p.id, v.id, 1)}
-                disabled={!v.available}
-                className="text-xs font-bold px-3 py-2 rounded-lg active:scale-95 transition-transform disabled:opacity-40"
-                style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-              >
-                Add
-              </button>
-            </div>
-          )
-        })}
-      </div>
+      {isLoading ? (
+        <p className="px-5 max-w-lg mx-auto text-sm" style={{ color: 'var(--color-muted)' }}>Loading products…</p>
+      ) : (
+        <>
+          <ShopCategoryNav categories={sections} />
+          <div className="pb-4">
+            {sections.map((section) => (
+              <ShopSection key={section.slug} section={section} />
+            ))}
+          </div>
+        </>
+      )}
 
-      {/* Sticky basket bar — S5 replaces this with the real basket drawer */}
+      {/* S1 sticky basket bar — S5 replaces with the real drawer */}
       {count > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
+        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
           <div className="max-w-lg mx-auto rounded-2xl p-3" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)', boxShadow: '0 10px 34px -10px rgba(0,0,0,0.7)' }}>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-bold" style={{ fontFamily: 'var(--font-display)' }}>{count} item{count !== 1 ? 's' : ''} · {formatGBP(subtotal)}</span>
