@@ -15,13 +15,17 @@ interface Props {
   reducedMotion: boolean
 }
 
-function ScoreRing({ score }: { score: number }) {
+function ScoreRing({ score, reducedMotion }: { score: number; reducedMotion?: boolean }) {
   const numRef = useRef<HTMLSpanElement>(null)
   const r = 36
   const circ = 2 * Math.PI * r
   const dash = (score / 100) * circ
 
   useEffect(() => {
+    if (reducedMotion) {
+      if (numRef.current) numRef.current.textContent = String(score)
+      return
+    }
     const counter = { val: 0 }
     const t = setTimeout(() => {
       gsap.to(counter, {
@@ -34,7 +38,7 @@ function ScoreRing({ score }: { score: number }) {
       })
     }, 600)
     return () => clearTimeout(t)
-  }, [score])
+  }, [score, reducedMotion])
 
   return (
     <div className="relative w-20 h-20 flex items-center justify-center">
@@ -43,10 +47,10 @@ function ScoreRing({ score }: { score: number }) {
         <circle cx="40" cy="40" r={r} fill="none" stroke="#00D4FF" strokeWidth="4"
           strokeLinecap="round"
           strokeDasharray={circ}
-          strokeDashoffset={circ}
+          strokeDashoffset={reducedMotion ? circ - dash : circ}
           style={{ filter: 'drop-shadow(0 0 4px rgba(0,212,255,0.5))' }}
           ref={(el) => {
-            if (!el) return
+            if (!el || reducedMotion) return
             setTimeout(() => {
               el.style.transition = 'stroke-dashoffset 1.3s cubic-bezier(0.22,1,0.36,1)'
               el.style.strokeDashoffset = String(circ - dash)
@@ -117,7 +121,7 @@ export function Act4Reveal({ reducedMotion }: Props) {
               </span>
             </div>
             <div className="flex flex-col items-center gap-1 flex-shrink-0">
-              <ScoreRing score={identity.routineFitScore} />
+              <ScoreRing score={identity.routineFitScore} reducedMotion={reducedMotion} />
               <p className="text-[9px] font-semibold text-[#0A0A0A]/35 text-center max-w-[72px] leading-tight">
                 Routine fit
               </p>

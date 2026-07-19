@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { ProductTile } from './ProductTile'
 
@@ -35,6 +36,24 @@ function boosterTags(product: CatalogueProduct): string[] {
 }
 
 export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
+  // Brief pop on the just-added card — confirmation the tap landed.
+  const [justAdded, setJustAdded] = useState<string | null>(null)
+  const [reduced, setReduced] = useState(false)
+  const popTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    return () => { if (popTimer.current) clearTimeout(popTimer.current) }
+  }, [])
+
+  const handleAdd = (product: CatalogueProduct) => {
+    onAdd(product)
+    if (reduced) return
+    setJustAdded(product.id)
+    if (popTimer.current) clearTimeout(popTimer.current)
+    popTimer.current = setTimeout(() => setJustAdded(null), 420)
+  }
+
   if (boosters.length === 0) return null
 
   return (
@@ -79,6 +98,7 @@ export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
                   ? `1px solid color-mix(in srgb, ${ACCENT} 40%, transparent)`
                   : '1px solid var(--color-border)',
                 background: 'var(--color-surface)',
+                transform: justAdded === product.id ? 'scale(1.04)' : 'scale(1)',
                 ...(isAdded ? { boxShadow: `0 0 20px -8px ${ACCENT}` } : {}),
               }}
             >
@@ -139,7 +159,7 @@ export function StackBoosters({ boosters, addedIds, onAdd }: Props) {
 
                 {/* Add button */}
                 <button
-                  onClick={() => !isAdded && onAdd(product)}
+                  onClick={() => !isAdded && handleAdd(product)}
                   disabled={isAdded}
                   className={`mt-3 w-full py-2.5 rounded-xl text-xs font-bold tracking-wide transition-all active:scale-95 ${
                     isAdded

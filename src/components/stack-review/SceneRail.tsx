@@ -24,8 +24,15 @@ const SCENES = [
 export function SceneRail() {
   const [mounted, setMounted] = useState(false)
   const [active, setActive] = useState(0)
+  // Hidden on terminal screens (e.g. checkout success) where the plan scene no
+  // longer exists — detected by the #scene-plan anchor leaving the DOM.
+  const [visible, setVisible] = useState(true)
+  const [reduced, setReduced] = useState(false)
 
-  useEffect(() => setMounted(true), [])
+  useEffect(() => {
+    setMounted(true)
+    setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  }, [])
 
   useEffect(() => {
     let frame = 0
@@ -37,21 +44,28 @@ export function SceneRail() {
         if (el && el.getBoundingClientRect().top <= 90) current = i
       })
       setActive(current)
+      setVisible(!!document.getElementById('scene-plan'))
     }
-    const onScroll = () => { if (!frame) frame = requestAnimationFrame(compute) }
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(compute) }
     compute()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    window.addEventListener('resize', onScroll)
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    // Structural changes only (childList) so the success screen swapping in/out
+    // re-runs the check; attribute mutations from GSAP tweens are ignored.
+    const mo = new MutationObserver(schedule)
+    mo.observe(document.body, { childList: true, subtree: true })
     return () => {
       if (frame) cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', onScroll)
-      window.removeEventListener('resize', onScroll)
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      mo.disconnect()
     }
   }, [])
 
-  const go = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  const go = (id: string) =>
+    document.getElementById(id)?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' })
 
-  if (!mounted) return null
+  if (!mounted || !visible) return null
 
   return createPortal(
     <div className="fixed top-3 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">

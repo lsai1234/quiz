@@ -27,6 +27,7 @@ import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { StackBoosters } from './StackBoosters'
+import { RevealOnScroll } from './RevealOnScroll'
 import { LqdPourGuide } from './LqdPourGuide'
 import { AccountGate } from '@/components/auth/AccountGate'
 
@@ -247,20 +248,21 @@ export function StackReviewPage() {
               ? `Your LQD package — ${sortedSlots.length} ready-made drinks`
               : `Your personalised stack — ${sortedSlots.length} products`}
           </p>
-          {sortedSlots.map((slot) => {
+          {sortedSlots.map((slot, i) => {
             const product = products.find((p) => p.id === slot.selectedProductId)
             const subscriptionProduct = product ? getSubscriptionProduct(product, products) : undefined
             return (
-              <StackProductCard
-                key={slot.slotId}
-                slot={slot}
-                product={product}
-                planType={planType}
-                subscriptionProduct={subscriptionProduct}
-                onChangeProduct={handleOpenSwap}
-                onChangeVariant={handleChangeVariant}
-                onRemove={handleRemove}
-              />
+              <RevealOnScroll key={slot.slotId} delay={Math.min(i, 5) * 60}>
+                <StackProductCard
+                  slot={slot}
+                  product={product}
+                  planType={planType}
+                  subscriptionProduct={subscriptionProduct}
+                  onChangeProduct={handleOpenSwap}
+                  onChangeVariant={handleChangeVariant}
+                  onRemove={handleRemove}
+                />
+              </RevealOnScroll>
             )
           })}
         </div>
