@@ -1,25 +1,25 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { getBundleBySlug, SEED_BUNDLES } from '@/lib/bundles'
+import { getResolvedBundle, getPublicBundle } from '@/lib/bundles/store'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
+
+// Bundles are database-backed (founders can add/edit/unpublish them) and priced
+// from the live catalogue, so this route resolves per-request.
+export const dynamic = 'force-dynamic'
 
 interface PageProps {
   params: Promise<{ slug: string }>
 }
 
-export function generateStaticParams() {
-  return SEED_BUNDLES.map((b) => ({ slug: b.slug }))
-}
-
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
-  const bundle = getBundleBySlug(slug)
+  const bundle = await getResolvedBundle(slug)
   if (!bundle) return { title: 'Bundle — CHRGD' }
   return {
-    title: bundle.metaTitle,
+    title: bundle.metaTitle || `${bundle.name} | CHRGD`,
     description: bundle.metaDescription,
     openGraph: {
-      title: bundle.metaTitle,
+      title: bundle.metaTitle || `${bundle.name} | CHRGD`,
       description: bundle.metaDescription,
       type: 'website',
     },
@@ -28,7 +28,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function BundlePage({ params }: PageProps) {
   const { slug } = await params
-  const bundle = getBundleBySlug(slug)
-  if (!bundle) notFound()
-  return <BundleLandingPage bundle={bundle} />
+  const resolved = await getPublicBundle(slug)
+  if (!resolved) notFound()
+  return <BundleLandingPage bundle={resolved.bundle} />
 }
