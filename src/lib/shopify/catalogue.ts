@@ -1,6 +1,6 @@
 import type { ShopifyProduct } from './types'
 import type { Product, ProductVariant, Goal, StackLevel } from '@/lib/types'
-import type { CatalogueProduct, CatalogueVariant, StackSlot, DietaryTag, SwapGroup, ProductConsumption } from '@/lib/catalogue/types'
+import type { CatalogueProduct, CatalogueVariant, StackSlot, DietaryTag, SwapGroup, ProductConsumption, ProductRating } from '@/lib/catalogue/types'
 import { getProducts } from './operations'
 import { getDataSource } from '@/lib/data-source'
 import { MOCK_PRODUCTS } from '@/lib/mock-products'
@@ -438,6 +438,16 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
   const rawFormats = metaValue(p.metafields, 'formats')
   const formats = rawFormats ? rawFormats.split(',').map((f) => f.trim()) : ['powder']
 
+  // Aggregate customer rating, synced into chrgd.rating_average / rating_count from
+  // whatever review app the store uses. Left undefined (no stars) when either is
+  // missing or a product genuinely has no reviews — never faked.
+  const ratingAverage = parseFloat(metaValue(p.metafields, 'rating_average') ?? '')
+  const ratingCount = parseInt(metaValue(p.metafields, 'rating_count') ?? '', 10)
+  const rating: ProductRating | undefined =
+    Number.isFinite(ratingAverage) && ratingAverage > 0 && Number.isFinite(ratingCount) && ratingCount > 0
+      ? { average: Math.round(ratingAverage * 10) / 10, count: ratingCount }
+      : undefined
+
   return {
     id: p.handle,
     title: p.title,
@@ -469,6 +479,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     hasStimulants,
     shortReason,
     warnings: [],
+    rating,
     shopifyProductId: p.id,
   }
 }

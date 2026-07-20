@@ -7,8 +7,10 @@ import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { dealInfo, productBadge } from '@/lib/shop/merchandising'
 import { useBasket } from '@/lib/basket/store'
+import { hasRating } from '@/lib/shop/ratings'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
+import { StarRating } from './StarRating'
 
 interface Props {
   product: CatalogueProduct
@@ -99,6 +101,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
             <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
               {product.title}
             </p>
+            {hasRating(product.rating) && <StarRating rating={product.rating} size={11} className="mt-1.5" />}
           </div>
         </div>
 

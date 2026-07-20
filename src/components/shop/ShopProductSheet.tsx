@@ -9,9 +9,11 @@ import { productFacts, productDietary } from '@/lib/product-facts'
 import { productBars, goalAxis } from '@/lib/stack-stats'
 import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
+import { hasRating } from '@/lib/shop/ratings'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
+import { StarRating } from './StarRating'
 
 const ACCENT = '#00D4FF'
 
@@ -118,6 +120,9 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
               {onDeal && <span className="text-xs line-through" style={{ color: 'var(--color-muted)' }}>{formatGBP(rrp!)}</span>}
               {variant && <span className="text-xs truncate" style={{ color: 'var(--color-muted)' }}>· {variantLabel(variant)}</span>}
             </div>
+            {hasRating(product.rating) && (
+              <StarRating rating={product.rating} size={13} showAverage showCount className="mt-2" />
+            )}
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 transition-all flex-shrink-0" aria-label="Close">✕</button>
         </div>

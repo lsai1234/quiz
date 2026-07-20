@@ -10,8 +10,9 @@ import { useShopCheckout } from '@/hooks/useShopCheckout'
 import { resolveBasket, basketSubtotal, basketItemCount } from '@/lib/basket/helpers'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
+import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { DIETARY_LABEL } from '@/lib/product-facts'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
 import { ShopHeader } from './ShopHeader'
 import { ShopFilterBar } from './ShopFilterBar'
@@ -37,6 +38,47 @@ function LoadingSkeleton() {
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+function TrustChip({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] font-semibold whitespace-nowrap" style={{ color: 'var(--color-text-2)' }}>
+      {children}
+    </span>
+  )
+}
+
+/**
+ * A short, honest trust strip: only facts we can stand behind — the real free
+ * delivery threshold, Shopify's secure checkout, and (when the catalogue carries
+ * real ratings) the aggregate customer rating. No invented numbers.
+ */
+function TrustStrip({ products }: { products: CatalogueProduct[] }) {
+  const threshold = getPricingConfig().freeDeliveryThreshold
+  const summary = catalogueRatingSummary(products)
+  const accent = 'var(--color-accent)'
+  return (
+    <div className="px-5 pb-1 max-w-lg mx-auto">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2.5 px-3.5 rounded-xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+        {summary && (
+          <TrustChip>
+            <span style={{ color: accent }} aria-hidden>★</span>
+            <span><span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{summary.average.toFixed(1)}</span> from {summary.count.toLocaleString()} reviews</span>
+          </TrustChip>
+        )}
+        {threshold > 0 && (
+          <TrustChip>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z" /><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="18.5" r="2" /></svg>
+            <span>Free delivery over {formatGBP(threshold)}</span>
+          </TrustChip>
+        )}
+        <TrustChip>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+          <span>Secure checkout</span>
+        </TrustChip>
+      </div>
     </div>
   )
 }
@@ -157,6 +199,8 @@ export function ShopShell() {
           <span style={{ color: 'var(--color-accent)' }} aria-hidden>→</span>
         </Link>
       </div>
+
+      <TrustStrip products={products} />
 
       {isLoading ? (
         <LoadingSkeleton />

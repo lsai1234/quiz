@@ -119,7 +119,9 @@ const GET_PRODUCTS = `
             {namespace: "chrgd", key: "cost"},
             {namespace: "chrgd", key: "recommendation_basis"},
             {namespace: "chrgd", key: "effect_onset"},
-            {namespace: "chrgd", key: "formats"}
+            {namespace: "chrgd", key: "formats"},
+            {namespace: "chrgd", key: "rating_average"},
+            {namespace: "chrgd", key: "rating_count"}
           ]) { key value type }
         }
       }

@@ -130,6 +130,20 @@ export type EffectOnset =
   | 'long'       // ~6–12 weeks, subtle/preventative — omega-3, vitamin D/C, collagen, multivitamin
   | 'none'       // never consciously felt — protein, creatine
 
+// ─── Social proof ───────────────────────────────────────────────────────────────
+// Aggregate customer rating shown on shop cards and the product sheet. Only ever
+// derived from real review data — the live Shopify mapper reads it from a review
+// app's rating metafields, and it stays absent when a product has no reviews (the
+// UI then shows no stars). The mock catalogue attaches representative demo ratings
+// so the feature is visible in local/dev.
+
+export interface ProductRating {
+  /** Mean star rating, 0–5. */
+  average: number
+  /** Number of reviews the average is based on. Never shown when 0. */
+  count: number
+}
+
 // ─── Product ──────────────────────────────────────────────────────────────────
 
 export interface CatalogueProduct {
@@ -236,6 +250,12 @@ export interface CatalogueProduct {
   shortReason: string
   /** Warnings shown in fine print, e.g. "Contains caffeine", "Not for under 18s" */
   warnings: string[]
+  /**
+   * Aggregate customer rating for social proof. Optional: only ever set from real
+   * review data (live: review-app metafields; mock: representative demo ratings).
+   * Absent when a product has no reviews — the shop then renders no stars for it.
+   */
+  rating?: ProductRating
 
   // ── Shopify connection ────────────────────────────────────────────────────────
   /**
