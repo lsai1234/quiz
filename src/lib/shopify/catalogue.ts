@@ -366,6 +366,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     price: parseFloat(node.priceV2.amount),
     compareAtPrice: node.compareAtPriceV2 ? parseFloat(node.compareAtPriceV2.amount) : null,
     available: node.availableForSale,
+    inventory: node.quantityAvailable ?? null,
     shopifyVariantId: node.id,
     sellingPlanId: node.sellingPlanAllocations?.edges?.[0]?.node?.sellingPlan?.id ?? null,
   }))
@@ -448,6 +449,14 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
       ? { average: Math.round(ratingAverage * 10) / 10, count: ratingCount }
       : undefined
 
+  // A genuine restock signal: the merchant flagged it, or a variant is out of stock
+  // but still selling (continue-selling / backorder). Lets a sold-out product read
+  // "Back in stock soon" instead of a dead "Sold out".
+  const restockingSoon =
+    metaValue(p.metafields, 'restocking') === 'true' ||
+    p.variants.edges.some(({ node }) => node.currentlyNotInStock === true) ||
+    undefined
+
   return {
     id: p.handle,
     title: p.title,
@@ -480,6 +489,7 @@ export function mapShopifyToCatalogueProduct(p: ShopifyProduct): CatalogueProduc
     shortReason,
     warnings: [],
     rating,
+    restockingSoon,
     shopifyProductId: p.id,
   }
 }

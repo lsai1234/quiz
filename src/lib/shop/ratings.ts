@@ -49,8 +49,8 @@ export function catalogueRatingSummary(products: CatalogueProduct[]): CatalogueR
 
 // ─── Demo ratings (mock catalogue only) ─────────────────────────────────────────
 
-/** FNV-1a: a tiny stable string hash so a product's demo rating never changes. */
-function hashString(s: string): number {
+/** FNV-1a: a tiny stable string hash for seeding deterministic demo data. */
+export function hashString(s: string): number {
   let h = 0x811c9dc5
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i)

@@ -97,6 +97,8 @@ const GET_PRODUCTS = `
             id
             title
             availableForSale
+            quantityAvailable
+            currentlyNotInStock
             priceV2 { amount currencyCode }
             compareAtPriceV2 { amount currencyCode }
             image { url altText width height }
@@ -121,7 +123,8 @@ const GET_PRODUCTS = `
             {namespace: "chrgd", key: "effect_onset"},
             {namespace: "chrgd", key: "formats"},
             {namespace: "chrgd", key: "rating_average"},
-            {namespace: "chrgd", key: "rating_count"}
+            {namespace: "chrgd", key: "rating_count"},
+            {namespace: "chrgd", key: "restocking"}
           ]) { key value type }
         }
       }

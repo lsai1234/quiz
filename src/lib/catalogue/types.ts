@@ -88,6 +88,12 @@ export interface CatalogueVariant {
   price: number
   compareAtPrice: number | null
   available: boolean
+  /**
+   * Real remaining units when the store tracks inventory (Shopify
+   * `quantityAvailable`). Null/undefined when untracked or unknown — the shop then
+   * shows no count. Drives the honest "Only N left" low-stock chip; never invented.
+   */
+  inventory?: number | null
   /** Supplier/Shopify SKU for this variant. Null when not tracked. */
   sku?: string | null
   /**
@@ -256,6 +262,13 @@ export interface CatalogueProduct {
    * Absent when a product has no reviews — the shop then renders no stars for it.
    */
   rating?: ProductRating
+  /**
+   * True when a sold-out product is genuinely being restocked, so the shop shows
+   * "Back in stock soon" instead of a dead "Sold out". Set from real signals only
+   * (live: a `chrgd.restocking` metafield, or a continue-selling variant). Absent
+   * means unknown — the shop keeps the plain "Sold out".
+   */
+  restockingSoon?: boolean
 
   // ── Shopify connection ────────────────────────────────────────────────────────
   /**

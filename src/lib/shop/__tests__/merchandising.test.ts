@@ -1,4 +1,4 @@
-import { dealInfo, dealsProducts, maxDealPct, productBadge, defaultVariant } from '../merchandising'
+import { dealInfo, dealsProducts, maxDealPct, productBadge, defaultVariant, variantStock, demoInventory, LOW_STOCK_THRESHOLD } from '../merchandising'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
@@ -65,5 +65,37 @@ describe('productBadge', () => {
   })
   it('returns null for an unremarkable product', () => {
     expect(productBadge(makeProduct({ recommendationPriority: 5, marginPriority: 5 }))).toBeNull()
+  })
+})
+
+describe('variantStock', () => {
+  it('flags low stock only for a real, positive count at/below the threshold', () => {
+    expect(variantStock(variant({ available: true, inventory: 3 }))).toEqual({ count: 3, low: true })
+    expect(variantStock(variant({ available: true, inventory: LOW_STOCK_THRESHOLD }))).toEqual({ count: LOW_STOCK_THRESHOLD, low: true })
+  })
+  it('is not low when comfortably stocked', () => {
+    expect(variantStock(variant({ available: true, inventory: 50 }))).toEqual({ count: 50, low: false })
+  })
+  it('never fabricates a count when inventory is untracked', () => {
+    expect(variantStock(variant({ available: true }))).toEqual({ count: null, low: false })
+    expect(variantStock(variant({ available: true, inventory: null }))).toEqual({ count: null, low: false })
+  })
+  it('is not low for a sold-out or zero-count variant', () => {
+    expect(variantStock(variant({ available: false, inventory: 4 })).low).toBe(false)
+    expect(variantStock(variant({ available: true, inventory: 0 })).low).toBe(false)
+  })
+})
+
+describe('demoInventory', () => {
+  it('is deterministic and always positive', () => {
+    expect(demoInventory('v-1')).toBe(demoInventory('v-1'))
+    for (const id of ['a', 'b', 'chrgd-whey-choc-1kg', 'x-y', 'z']) {
+      expect(demoInventory(id)).toBeGreaterThan(0)
+    }
+  })
+  it('produces some low and some healthy variants across a set', () => {
+    const counts = Array.from({ length: 40 }, (_, i) => demoInventory(`variant-${i}`))
+    expect(counts.some((c) => c <= LOW_STOCK_THRESHOLD)).toBe(true)
+    expect(counts.some((c) => c > LOW_STOCK_THRESHOLD)).toBe(true)
   })
 })

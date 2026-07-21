@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { variantStock } from '@/lib/shop/merchandising'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productFacts, productDietary } from '@/lib/product-facts'
 import { productBars, goalAxis } from '@/lib/stack-stats'
@@ -11,9 +13,11 @@ import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { hasRating } from '@/lib/shop/ratings'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { StarRating } from './StarRating'
+import { StockChip } from './StockChip'
 
 const ACCENT = '#00D4FF'
 
@@ -73,7 +77,13 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
   const rrp = variant?.compareAtPrice ?? product.compareAtPrice
   const onDeal = rrp != null && rrp > price
   const soldOut = !variant?.available
+  const stock = variant ? variantStock(variant) : { count: null, low: false }
   const showVariantPicker = product.variants.length > 1
+
+  // Honest subscribe-&-save figure for this variant — the same discount the basket
+  // nudge quotes, shown as a concrete monthly price.
+  const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
+  const monthlyPrice = price * (1 - PRICING_CONFIG.subscriptionDiscount)
 
   const facts = productFacts(product)
   const dietary = productDietary(product)
@@ -123,6 +133,10 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
             {hasRating(product.rating) && (
               <StarRating rating={product.rating} size={13} showAverage showCount className="mt-2" />
             )}
+            {stock.low && stock.count != null && <StockChip count={stock.count} className="mt-2" />}
+            {soldOut && product.restockingSoon && (
+              <p className="text-[11px] font-semibold mt-2" style={{ color: 'var(--color-amber)' }}>Back in stock soon</p>
+            )}
           </div>
           <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 transition-all flex-shrink-0" aria-label="Close">✕</button>
         </div>
@@ -133,6 +147,26 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
             <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: hue, fontFamily: 'var(--font-display)' }}>What it is</p>
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>{product.description}</p>
           </section>
+
+          {product.subscriptionEligible && (
+            <Link
+              href="/"
+              className="flex items-center gap-3 rounded-2xl px-4 py-3 active:scale-[0.99] transition-transform"
+              style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 22%, transparent)' }}
+            >
+              <span className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)' }} aria-hidden>
+                <CHRGDBolt size={15} />
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Subscribe &amp; save {subscribePct}%</p>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-text-2)' }}>on a personalised monthly plan</p>
+              </div>
+              <span className="text-sm font-black whitespace-nowrap" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(monthlyPrice)}<span className="text-[10px] font-semibold">/mo</span>
+              </span>
+              <span style={{ color: 'var(--color-accent)' }} aria-hidden>→</span>
+            </Link>
+          )}
 
           {bars.length > 0 && (
             <StatBars bars={bars} animate={false} label="Best for" />
@@ -160,6 +194,7 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
               <div className="flex flex-col gap-1.5">
                 {product.variants.map((v) => {
                   const isSelected = v.id === variant?.id
+                  const vStock = variantStock(v)
                   return (
                     <button
                       key={v.id}
@@ -179,7 +214,13 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
                         <span className="text-sm font-medium" style={{ color: isSelected ? 'var(--color-text)' : 'var(--color-text-2)' }}>{variantLabel(v)}</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!v.available && <span className="text-[9px]" style={{ color: 'var(--color-muted)' }}>Sold out</span>}
+                        {!v.available ? (
+                          <span className="text-[9px]" style={{ color: product.restockingSoon ? 'var(--color-amber)' : 'var(--color-muted)' }}>
+                            {product.restockingSoon ? 'Back in stock soon' : 'Sold out'}
+                          </span>
+                        ) : vStock.low && vStock.count != null ? (
+                          <span className="text-[9px] font-bold" style={{ color: 'var(--color-amber)' }}>{vStock.count} left</span>
+                        ) : null}
                         <span className="text-sm font-bold" style={{ color: isSelected ? ACCENT : 'var(--color-muted)' }}>{formatGBP(v.price)}</span>
                       </div>
                     </button>
@@ -212,7 +253,7 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
               border: justAdded ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
             }}
           >
-            {soldOut ? 'Sold out' : justAdded ? 'Added ✓' : 'Add to basket'}
+            {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added ✓' : 'Add to basket'}
           </button>
           <button
             onClick={handleBuyNow}

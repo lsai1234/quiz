@@ -17,6 +17,10 @@ export interface ShopifyVariant {
   compareAtPriceV2: ShopifyMoneyV2 | null
   image: ShopifyImage | null
   availableForSale: boolean
+  /** Real remaining units when inventory is tracked; null otherwise. */
+  quantityAvailable?: number | null
+  /** Out of stock but still purchasable (continue-selling / backorder) — a real restock signal. */
+  currentlyNotInStock?: boolean
   product: { title: string; handle: string; images: { edges: { node: ShopifyImage }[] } }
   /** Subscription selling-plan allocations — present once selling plans/Recharge are configured. */
   sellingPlanAllocations?: { edges: { node: { sellingPlan: { id: string } } }[] }

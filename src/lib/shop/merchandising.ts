@@ -1,4 +1,5 @@
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
+import { hashString } from './ratings'
 
 /**
  * Shop merchandising: deal detection (RRP vs price) and the good/better/best
@@ -9,6 +10,37 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 /** The variant a card/section prices against — first available, else the first. */
 export function defaultVariant(product: CatalogueProduct): CatalogueVariant | undefined {
   return product.variants.find((v) => v.available) ?? product.variants[0]
+}
+
+// ─── Availability & low stock ───────────────────────────────────────────────────
+
+/** At or below this many units left, a variant reads as "Only N left". */
+export const LOW_STOCK_THRESHOLD = 10
+
+export interface StockState {
+  /** Real remaining units, or null when inventory isn't tracked. */
+  count: number | null
+  /** In stock but at/below the threshold (a real, positive count) — show the urgency chip. */
+  low: boolean
+}
+
+/** Honest stock state for a variant. Only "low" when a real, positive count is known. */
+export function variantStock(v: Pick<CatalogueVariant, 'available' | 'inventory'>): StockState {
+  const count = v.inventory ?? null
+  const low = v.available && count != null && count > 0 && count <= LOW_STOCK_THRESHOLD
+  return { count, low }
+}
+
+/**
+ * A stable, representative inventory count for a mock variant, seeded by its id.
+ * Roughly one variant in four runs low (1–9 left, triggering "Only N left"); the
+ * rest are comfortably stocked. Demo data only — live variants use the real
+ * Shopify `quantityAvailable`.
+ */
+export function demoInventory(variantId: string): number {
+  const h = hashString(`${variantId}:stock`)
+  if (h % 4 === 0) return 1 + (h % 9) // 1 … 9 — low stock
+  return 24 + (h % 160) // 24 … 183 — healthy
 }
 
 export interface DealInfo {

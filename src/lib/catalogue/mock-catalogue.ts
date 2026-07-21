@@ -15,6 +15,7 @@
 
 import type { CatalogueProduct } from './types'
 import { demoRating } from '@/lib/shop/ratings'
+import { demoInventory } from '@/lib/shop/merchandising'
 
 const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
   // ─── PROTEIN SLOT ────────────────────────────────────────────────────────────
@@ -1149,12 +1150,14 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
 ]
 
 /**
- * The mock catalogue, with representative demo ratings attached (seeded by id, so
- * stable across reloads). Ratings are demo data — the same character as the mock
- * prices above — present only so the shop's social-proof UI is visible without a
- * live reviews source. Live Shopify products get real ratings from review metafields.
+ * The mock catalogue, with representative demo ratings and inventory attached
+ * (seeded by id, so stable across reloads). Both are demo data — the same character
+ * as the mock prices above — present only so the shop's social-proof and low-stock
+ * UI are visible without a live source. Live Shopify products get real ratings from
+ * review metafields and real stock from `quantityAvailable`.
  */
 export const MOCK_CATALOGUE: CatalogueProduct[] = RAW_MOCK_CATALOGUE.map((p) => ({
   ...p,
   rating: demoRating(p.id),
+  variants: p.variants.map((v) => ({ ...v, inventory: demoInventory(v.id) })),
 }))

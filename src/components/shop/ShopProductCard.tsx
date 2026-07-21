@@ -5,12 +5,13 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { productBars, type StatAxis } from '@/lib/stack-stats'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { dealInfo, productBadge } from '@/lib/shop/merchandising'
+import { dealInfo, productBadge, variantStock } from '@/lib/shop/merchandising'
 import { useBasket } from '@/lib/basket/store'
 import { hasRating } from '@/lib/shop/ratings'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { StarRating } from './StarRating'
+import { StockChip } from './StockChip'
 
 interface Props {
   product: CatalogueProduct
@@ -38,6 +39,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
   const { price, rrp, onDeal, pct: discountPct } = dealInfo(product)
   const badge = productBadge(product)
   const soldOut = !variant?.available
+  const stock = variant ? variantStock(variant) : { count: null, low: false }
   const bars = productBars(product, axes)
 
   const handleAdd = () => {
@@ -72,7 +74,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 mb-1">
+            <div className="flex flex-wrap items-center gap-1.5 mb-1">
               <span
                 className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
                 style={{
@@ -84,6 +86,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
               >
                 {product.category}
               </span>
+              {stock.low && stock.count != null && <StockChip count={stock.count} />}
               {badge && (
                 <span
                   className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
@@ -143,7 +146,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
             border: justAdded ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
           }}
         >
-          {soldOut ? 'Sold out' : justAdded ? 'Added ✓' : 'Add to basket'}
+          {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added ✓' : 'Add to basket'}
         </button>
       </div>
     </div>
