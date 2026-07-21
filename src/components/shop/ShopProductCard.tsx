@@ -8,6 +8,7 @@ import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { dealInfo, productBadge, variantStock } from '@/lib/shop/merchandising'
 import { useBasket } from '@/lib/basket/store'
 import { hasRating } from '@/lib/shop/ratings'
+import { track } from '@/lib/analytics/events'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { StarRating } from './StarRating'
@@ -45,6 +46,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
   const handleAdd = () => {
     if (!variant || soldOut) return
     add(product.id, variant.id, 1)
+    track('add_to_basket', { id: product.id, source: 'card', price })
     if (reduced) return
     setJustAdded(true)
     if (addTimer.current) clearTimeout(addTimer.current)

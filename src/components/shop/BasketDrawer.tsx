@@ -158,8 +158,15 @@ export function BasketDrawer({ resolved, subtotal, checkoutState, onCheckout, on
                 className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
                 style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
               >
-                {checkoutState.status === 'loading' ? 'Building cart…' : mockDone ? 'Demo checkout ✓' : 'Checkout →'}
+                {checkoutState.status === 'loading' ? 'Taking you to secure checkout…' : mockDone ? 'Demo checkout ✓' : 'Checkout →'}
               </button>
+
+              {/* Secure-checkout reassurance — honest cues, no surprise steps. */}
+              <div className="flex items-center justify-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+                <span className="text-[10px] font-semibold">Secure checkout · card &amp; wallet payments, encrypted</span>
+              </div>
+
               {mockDone && (
                 <p className="text-[10px] text-center" style={{ color: 'var(--color-muted)' }}>
                   Shopify isn’t connected — this is a demo checkout.

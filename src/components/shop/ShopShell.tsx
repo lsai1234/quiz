@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
@@ -11,6 +11,7 @@ import { resolveBasket, basketSubtotal, basketItemCount } from '@/lib/basket/hel
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
+import { track } from '@/lib/analytics/events'
 import { DIETARY_LABEL } from '@/lib/product-facts'
 import { formatGBP, getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
@@ -181,15 +182,28 @@ export function ShopShell() {
   const subtotal = basketSubtotal(resolved)
   const count = basketItemCount(lines)
 
-  const openDrawer = () => { reset(); setDrawerOpen(true) }
+  // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
+  const viewed = useRef(false)
+  useEffect(() => {
+    if (viewed.current) return
+    viewed.current = true
+    track('shop_view')
+  }, [])
+
+  const openDrawer = () => { reset(); track('basket_open', { items: count }); setDrawerOpen(true) }
   const closeDrawer = () => { setDrawerOpen(false); reset() }
-  const toggleFilter = (tag: DietaryTag) =>
-    setFilters((f) => (f.includes(tag) ? f.filter((t) => t !== tag) : [...f, tag]))
+  const openProduct = (p: CatalogueProduct) => { track('product_open', { id: p.id, category: p.category }); setExpanded(p) }
+  const toggleFilter = (tag: DietaryTag) => {
+    const on = !filters.includes(tag)
+    const next = on ? [...filters, tag] : filters.filter((t) => t !== tag)
+    track('shop_filter_toggle', { tag, on, active: next.length })
+    setFilters(next)
+  }
 
   const handleBuyNow = () => {
     setExpanded(null)
     setDrawerOpen(true)
-    checkout(resolveBasket(useBasket.getState().lines, products))
+    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now')
   }
 
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
@@ -281,11 +295,11 @@ export function ShopShell() {
                 section={dealsSection}
                 tone="deal"
                 subtitle={`Save up to ${maxDealPct(dealsSection.products)}%`}
-                onExpand={setExpanded}
+                onExpand={openProduct}
               />
             )}
             {filteredSections.map((section) => (
-              <ShopSection key={section.slug} section={section} onExpand={setExpanded} />
+              <ShopSection key={section.slug} section={section} onExpand={openProduct} />
             ))}
           </div>
         </>

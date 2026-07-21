@@ -6,6 +6,7 @@ import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
+import { track } from '@/lib/analytics/events'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productFacts, productDietary } from '@/lib/product-facts'
 import { productBars, goalAxis } from '@/lib/stack-stats'
@@ -89,17 +90,18 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
   const dietary = productDietary(product)
   const bars = productBars(product, product.goals.slice(0, 4).map(goalAxis))
 
-  const doAdd = () => {
+  const doAdd = (source: 'sheet' | 'buy_now') => {
     if (!variant || soldOut) return false
     add(product.id, variant.id, qty)
+    track('add_to_basket', { id: product.id, source, price, qty })
     return true
   }
   const handleAdd = () => {
-    if (!doAdd()) return
+    if (!doAdd('sheet')) return
     setJustAdded(true)
     setTimeout(() => setJustAdded(false), 1300)
   }
-  const handleBuyNow = () => { if (doAdd()) onBuyNow?.() }
+  const handleBuyNow = () => { if (doAdd('buy_now')) onBuyNow?.() }
 
   if (!mounted) return null
 
