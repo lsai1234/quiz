@@ -66,8 +66,8 @@ export function ShopSection({ section, onExpand, tone = 'default', subtitle }: P
       <div className="px-5 max-w-lg mx-auto mb-3 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
           <h2
-            className="text-2xl font-black tracking-tight flex items-center gap-1.5"
-            style={{ fontFamily: 'var(--font-display)', color: tone === 'deal' ? 'var(--color-accent)' : 'var(--color-text)' }}
+            className="font-black tracking-tight leading-[1.05] flex items-center gap-1.5"
+            style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-fluid-h2)', color: tone === 'deal' ? 'var(--color-accent)' : 'var(--color-text)' }}
           >
             {tone === 'deal' && <CHRGDBolt size={22} color="currentColor" className="shrink-0" />}
             {section.category}

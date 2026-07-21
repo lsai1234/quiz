@@ -209,7 +209,7 @@ export function ShopShell() {
         <p className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
           The Shop
         </p>
-        <h1 className="text-4xl font-black tracking-tight mt-1" style={{ fontFamily: 'var(--font-display)' }}>
+        <h1 className="font-black tracking-tight leading-[1.03] mt-1" style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-fluid-h1)' }}>
           Everything, à la carte
         </h1>
         <p className="text-sm mt-2" style={{ color: 'var(--color-text-2)' }}>

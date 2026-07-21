@@ -18,6 +18,11 @@
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
 
+  /* Fluid heading sizes — scale smoothly between a 360px phone and desktop
+     instead of jumping at breakpoints. Used by the shop hero + section titles. */
+  --text-fluid-h1: clamp(2rem, 4vw + 1.2rem, 2.75rem);
+  --text-fluid-h2: clamp(1.4rem, 2.2vw + 0.95rem, 1.9rem);
+
   --animate-fade-up: fade-up 0.4s ease both;
   --animate-fade-in: fade-in 0.3s ease both;
   --animate-scale-in: scale-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;

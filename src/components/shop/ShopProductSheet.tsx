@@ -145,6 +145,9 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
         <div className="overflow-y-auto flex-1 px-5 py-5 space-y-6">
           <section>
             <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: hue, fontFamily: 'var(--font-display)' }}>What it is</p>
+            {product.shortReason && product.shortReason !== product.description && (
+              <p className="text-sm font-semibold leading-snug mb-1.5" style={{ color: 'var(--color-text)' }}>{product.shortReason}</p>
+            )}
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>{product.description}</p>
           </section>
 

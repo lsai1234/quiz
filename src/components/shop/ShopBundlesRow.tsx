@@ -57,7 +57,7 @@ export function ShopBundlesRow({ bundles, products }: Props) {
     <section id="shop-cat-bundles" className="scroll-mt-24 pt-8">
       <div className="px-5 max-w-lg mx-auto mb-3 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}>
+          <h2 className="font-black tracking-tight leading-[1.05]" style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-fluid-h2)', color: 'var(--color-accent)' }}>
             Bundles
           </h2>
           <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'var(--color-accent)' }}>
