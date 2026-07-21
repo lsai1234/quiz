@@ -40,7 +40,7 @@ export function ProductTile({ imageUrl, slot, title, size = 96, className }: Pro
     >
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt={title ?? ''} className="w-full h-full object-cover" loading="lazy" />
+        <img src={imageUrl} alt={title ?? ''} width={size} height={size} className="w-full h-full object-cover" loading="lazy" />
       ) : (
         <span style={{ color: hue, opacity: 0.92 }}>
           <QuizIcon name={glyph} size={Math.round(size * 0.42)} />

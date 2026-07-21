@@ -45,7 +45,8 @@ export function ShopCategoryNav({ categories }: Props) {
   if (categories.length === 0) return null
 
   return (
-    <div
+    <nav
+      aria-label="Shop categories"
       className="sticky top-0 z-30"
       style={{ background: 'color-mix(in srgb, var(--color-bg) 82%, transparent)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--color-border)' }}
     >
@@ -69,6 +70,6 @@ export function ShopCategoryNav({ categories }: Props) {
           )
         })}
       </div>
-    </div>
+    </nav>
   )
 }

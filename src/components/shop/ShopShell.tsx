@@ -25,15 +25,38 @@ import { BasketDrawer } from './BasketDrawer'
 // Canonical dietary-chip order (matches the sheet's labels).
 const DIETARY_ORDER = Object.keys(DIETARY_LABEL) as DietaryTag[]
 
+/**
+ * Placeholder that mirrors the loaded layout — dietary filter bar, category nav,
+ * then category decks — at matching heights, so the swap from loading to content
+ * lands the shelves in roughly the same place and doesn't shift the page (S3/CLS).
+ */
 function LoadingSkeleton() {
+  const box = { background: 'var(--color-surface)' } as const
   return (
-    <div className="px-5 max-w-lg mx-auto space-y-8 pt-6" aria-hidden>
+    <div aria-hidden>
+      {/* Dietary filter bar */}
+      <div className="flex gap-2 px-5 py-1 max-w-lg mx-auto overflow-hidden">
+        {[64, 82, 72, 90].map((w, i) => (
+          <div key={i} className="h-7 rounded-full flex-shrink-0" style={{ width: w, ...box }} />
+        ))}
+      </div>
+      {/* Category jump-nav */}
+      <div className="px-5 py-3 mt-1" style={{ borderBottom: '1px solid var(--color-border)' }}>
+        <div className="flex gap-2 overflow-hidden">
+          {[74, 62, 84, 68, 78].map((w, i) => (
+            <div key={i} className="h-7 rounded-full flex-shrink-0" style={{ width: w, ...box }} />
+          ))}
+        </div>
+      </div>
+      {/* Category decks */}
       {[0, 1].map((i) => (
-        <div key={i}>
-          <div className="h-6 w-40 rounded-lg mb-4" style={{ background: 'var(--color-surface)' }} />
-          <div className="flex gap-3">
+        <div key={i} className="pt-8">
+          <div className="px-5 max-w-lg mx-auto mb-3">
+            <div className="h-7 w-40 rounded-lg" style={box} />
+          </div>
+          <div className="flex gap-3 px-5 overflow-hidden">
             {[0, 1].map((j) => (
-              <div key={j} className="w-[80vw] max-w-[300px] h-64 rounded-2xl flex-shrink-0" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} />
+              <div key={j} className="w-[80vw] max-w-[300px] h-[21rem] rounded-2xl flex-shrink-0" style={{ ...box, border: '1px solid var(--color-border)' }} />
             ))}
           </div>
         </div>
@@ -89,8 +112,12 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
  * detail and the basket are bottom/side sheets.
  */
 export function ShopShell() {
-  const { products, isLoading } = useCatalogueProducts()
-  const { bundles } = useShopBundles()
+  const { products, isLoading: productsLoading } = useCatalogueProducts()
+  const { bundles, isLoading: bundlesLoading } = useShopBundles()
+  // Hold the skeleton until BOTH the catalogue and the bundles rail are ready, so
+  // everything swaps in together — the bundles rail can't pop in late and shove the
+  // shelves down (the main source of shop CLS). See LoadingSkeleton.
+  const isLoading = productsLoading || bundlesLoading
   const { lines } = useBasket()
   const { state, checkout, reset } = useShopCheckout()
   const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
@@ -165,10 +192,19 @@ export function ShopShell() {
     checkout(resolveBasket(useBasket.getState().lines, products))
   }
 
+  // Second "start here" path: jump to the Deals rail (or the first shelf if there
+  // are no deals). Kept content-agnostic so the hero never depends on load timing.
+  const dealsPct = dealsSection ? maxDealPct(dealsSection.products) : 0
+  const goToDeals = () => {
+    const el = document.getElementById('shop-cat-deals') ?? document.querySelector('section[id^="shop-cat-"]')
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <div className="min-h-[100dvh] bg-[var(--color-bg)] text-[var(--color-text)] pb-40">
       <ShopHeader count={count} onOpenBasket={openDrawer} />
 
+      <main>
       <div className="px-5 pt-2 pb-4 max-w-lg mx-auto">
         <p className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
           The Shop
@@ -177,27 +213,43 @@ export function ShopShell() {
           Everything, à la carte
         </h1>
         <p className="text-sm mt-2" style={{ color: 'var(--color-text-2)' }}>
-          The full range — swipe each shelf, add what you fancy.
+          Protein, performance, hydration and everyday health — the full CHRGD range, priced à la carte.
         </p>
 
-        {/* Quiz cross-sell */}
-        <Link
-          href="/"
-          className="mt-4 flex items-center gap-3 rounded-2xl px-4 py-3 active:scale-[0.99] transition-transform"
-          style={{ background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 22%, transparent)' }}
-        >
-          <span
-            className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center"
-            style={{ background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)' }}
-            aria-hidden
+        {/* Two clear "start here" paths: the personalised quiz and the deals rail. */}
+        <div className="grid grid-cols-2 gap-2.5 mt-4">
+          <Link
+            href="/"
+            className="flex flex-col justify-between rounded-2xl px-4 py-3.5 min-h-[92px] active:scale-[0.99] transition-transform"
+            style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 26%, transparent)' }}
           >
-            <CHRGDBolt size={16} />
-          </span>
-          <span className="flex-1 text-xs font-semibold leading-snug" style={{ color: 'var(--color-text-2)' }}>
-            Not sure where to start? <span style={{ color: 'var(--color-accent)' }}>Take the 2-minute quiz</span> for a stack built around your goals.
-          </span>
-          <span style={{ color: 'var(--color-accent)' }} aria-hidden>→</span>
-        </Link>
+            <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }} aria-hidden>
+              <CHRGDBolt size={15} />
+            </span>
+            <span>
+              <span className="block text-sm font-black leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Take the 2-min quiz</span>
+              <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-text-2)' }}>A stack built around your goals</span>
+            </span>
+          </Link>
+
+          <button
+            onClick={goToDeals}
+            className="flex flex-col justify-between text-left rounded-2xl px-4 py-3.5 min-h-[92px] active:scale-[0.99] transition-transform"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)' }}
+          >
+            <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }} aria-hidden>
+              <CHRGDBolt size={15} color="var(--color-accent)" />
+            </span>
+            <span>
+              <span className="block text-sm font-black leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {dealsSection ? "Today’s deals" : 'Browse the range'}
+              </span>
+              <span className="block text-[11px] mt-0.5" style={{ color: dealsSection ? 'var(--color-accent)' : 'var(--color-text-2)' }}>
+                {dealsSection ? `Save up to ${dealsPct}%` : 'Jump to the shelves'}
+              </span>
+            </span>
+          </button>
+        </div>
       </div>
 
       <TrustStrip products={products} />
@@ -238,6 +290,7 @@ export function ShopShell() {
           </div>
         </>
       )}
+      </main>
 
       {expanded && (
         <ShopProductSheet product={expanded} onBuyNow={handleBuyNow} onClose={() => setExpanded(null)} />
