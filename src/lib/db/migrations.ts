@@ -64,6 +64,49 @@ export const MIGRATIONS: string[] = [
 
   ALTER TABLE subscriptions ADD COLUMN quiz TEXT;
   `,
+  // v3 — commerce scaffolding for the PowerBody + Stripe integration:
+  //   `orders`           — one row per order (shop / quiz / subscription), the
+  //                        full order document in `data` plus indexed columns
+  //                        for the Founders Hub order list and webhook lookups.
+  //   `stock_exceptions` — an active-subscription line whose product has gone
+  //                        out of stock at the supplier, awaiting founder
+  //                        resolution (substitute / skip / notify).
+  // Both are written in the dialect intersection so they run unchanged on
+  // SQLite and Postgres. Nothing reads these yet — the order/stock domains land
+  // in later phases; this migration only creates the schema.
+  `
+  CREATE TABLE orders (
+    id                TEXT PRIMARY KEY,
+    user_id           TEXT REFERENCES users(id) ON DELETE SET NULL,
+    email             TEXT,
+    channel           TEXT NOT NULL,
+    status            TEXT NOT NULL,
+    data              TEXT NOT NULL,
+    stripe_session_id TEXT,
+    stripe_payment_id TEXT,
+    supplier_order_id TEXT,
+    created_at        TEXT NOT NULL,
+    updated_at        TEXT NOT NULL
+  );
+  CREATE INDEX orders_status ON orders(status);
+  CREATE INDEX orders_email ON orders(email);
+  CREATE INDEX orders_channel ON orders(channel);
+  CREATE INDEX orders_created_at ON orders(created_at);
+
+  CREATE TABLE stock_exceptions (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT REFERENCES users(id) ON DELETE CASCADE,
+    subscription_id TEXT,
+    line_id         TEXT,
+    product_id      TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    data            TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    resolved_at     TEXT
+  );
+  CREATE INDEX stock_exceptions_status ON stock_exceptions(status);
+  CREATE INDEX stock_exceptions_user_id ON stock_exceptions(user_id);
+  `,
 ]
 
 /**

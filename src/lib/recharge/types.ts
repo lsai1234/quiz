@@ -42,6 +42,14 @@ export interface MemberSubscriptionLine {
    * delivery). Stored on the line so it travels with it. Optional/0 = none.
    */
   pendingCredit?: number
+  /**
+   * Whether the member allows a same-category substitution for this line if the
+   * product goes out of stock at the supplier. `true` → we swap in the closest
+   * in-stock product from the same `swapGroup`; `false` → we hold/skip and
+   * contact them. Defaults to allowed (see the stock-alerts journey). Optional
+   * so existing stored subscriptions read back unchanged.
+   */
+  allowSubstitution?: boolean
 }
 
 export interface MemberSubscription {

@@ -1,12 +1,54 @@
 import { DataSourceToggle } from '@/components/portal/DataSourceToggle'
+import { IntegrationToggle } from '@/components/portal/IntegrationToggle'
+
+const SUPPLIER_OPTIONS = [
+  { mode: 'mock', label: 'Mock supplier', desc: 'Use the built-in PowerBody sample feed. Best while building.' },
+  { mode: 'auto', label: 'Auto', desc: 'Use PowerBody when credentials exist, otherwise mock.' },
+  { mode: 'powerbody', label: 'Live PowerBody', desc: 'Always use the PowerBody API. Falls back to mock if no credentials.' },
+]
+
+const PAYMENT_OPTIONS = [
+  { mode: 'mock', label: 'Mock payments', desc: 'Checkout returns a placeholder — no charge. Best while building.' },
+  { mode: 'auto', label: 'Auto', desc: 'Use Stripe when credentials exist, otherwise mock.' },
+  { mode: 'stripe', label: 'Live Stripe', desc: 'Always use Stripe. Falls back to mock if no credentials.' },
+]
+
+const heading = { color: 'var(--color-text)', fontFamily: 'var(--font-display)' } as const
 
 export default function SettingsPage() {
   return (
-    <div>
-      <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Settings</h1>
-      <p className="text-sm text-[var(--color-muted)] mb-5">Choose where the app reads its catalogue from.</p>
-      <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Data source</h2>
-      <DataSourceToggle />
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-2xl font-black mb-1" style={heading}>Settings</h1>
+        <p className="text-sm text-[var(--color-muted)]">Choose where the app reads products, stock and payments from. Each defaults to mock while we build.</p>
+      </div>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Data source</h2>
+        <DataSourceToggle />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Supplier (PowerBody)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-2">Where the catalogue, live stock/prices and dropship orders come from.</p>
+        <IntegrationToggle
+          endpoint="/api/portal/supplier-source"
+          options={SUPPLIER_OPTIONS}
+          liveLabel="Live PowerBody"
+          credentialsHint={<><strong>Can’t switch to PowerBody yet.</strong> No API credentials are set — add <code>POWERBODY_API_URL</code> and <code>POWERBODY_API_KEY</code>, then switch. Still serving the mock feed.</>}
+        />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Payments (Stripe)</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-2">How the shop, quiz and subscriptions take payment.</p>
+        <IntegrationToggle
+          endpoint="/api/portal/payment-source"
+          options={PAYMENT_OPTIONS}
+          liveLabel="Live Stripe"
+          credentialsHint={<><strong>Can’t switch to Stripe yet.</strong> No secret key is set — add <code>STRIPE_SECRET_KEY</code> (and <code>NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY</code>), then switch. Still using mock payments.</>}
+        />
+      </section>
     </div>
   )
 }

@@ -17,6 +17,10 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { DataSourceMode } from '@/lib/data-source'
 import { getDataSourceMode, setDataSourceOverride } from '@/lib/data-source'
+import type { SupplierMode } from '@/lib/supplier'
+import { getSupplierMode, setSupplierOverride } from '@/lib/supplier'
+import type { PaymentMode } from '@/lib/payments'
+import { getPaymentMode, setPaymentOverride } from '@/lib/payments'
 import {
   setPricingOverrides,
   getPricingOverrides,
@@ -38,6 +42,8 @@ interface PersistedProducts {
 
 interface PersistedSettings {
   dataSourceMode?: DataSourceMode
+  supplierMode?: SupplierMode
+  paymentMode?: PaymentMode
   pricingOverrides?: Partial<PricingConfig>
 }
 
@@ -74,6 +80,8 @@ export async function syncPortalRuntime(force = false): Promise<void> {
     const settings = await loadSettings()
     setPricingOverrides(settings.pricingOverrides ?? {})
     setDataSourceOverride(settings.dataSourceMode ?? null)
+    setSupplierOverride(settings.supplierMode ?? null)
+    setPaymentOverride(settings.paymentMode ?? null)
     lastSyncedAt = Date.now()
   } catch {
     /* unreachable database — keep current in-memory state */
@@ -89,6 +97,28 @@ export async function getDataSourceSetting(): Promise<DataSourceMode> {
 export async function setDataSourceSetting(mode: DataSourceMode): Promise<void> {
   await saveSettings({ dataSourceMode: mode })
   setDataSourceOverride(mode)
+  lastSyncedAt = Date.now()
+}
+
+// ── Supplier (PowerBody) ──
+export async function getSupplierSetting(): Promise<SupplierMode> {
+  const settings = await loadSettings()
+  return settings.supplierMode ?? getSupplierMode()
+}
+export async function setSupplierSetting(mode: SupplierMode): Promise<void> {
+  await saveSettings({ supplierMode: mode })
+  setSupplierOverride(mode)
+  lastSyncedAt = Date.now()
+}
+
+// ── Payments (Stripe) ──
+export async function getPaymentSetting(): Promise<PaymentMode> {
+  const settings = await loadSettings()
+  return settings.paymentMode ?? getPaymentMode()
+}
+export async function setPaymentSetting(mode: PaymentMode): Promise<void> {
+  await saveSettings({ paymentMode: mode })
+  setPaymentOverride(mode)
   lastSyncedAt = Date.now()
 }
 
