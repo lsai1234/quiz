@@ -194,6 +194,82 @@ they can be deleted in a later cleanup).
 
 ---
 
+### F. Catalogue attribute gap — AI autopopulate
+
+PowerBody only gives us commerce basics (name, description, brand, category, price, stock,
+barcode, ingredients, images). Our `CatalogueProduct` needs a lot more that PowerBody will
+never send: `stackSlots`, `swapGroup`, `goalTags`, dietary tags, `hasStimulants`,
+`isReadyToDrink` / drinkable flags, consumption cadence, effect onset, beginner-friendly,
+claim-safe `safeWording`, accent colour, ratings. These have to be **populated by us** as part
+of adding a product.
+
+The app already has the pieces: an `AiSuggestPanel` + `/api/portal/ai-classify` route and the
+`openai` dependency. Plan:
+
+- **`src/lib/supplier/autopopulate.ts`** — takes a mapped supplier product and returns the
+  missing CHRGD attributes. Two modes, same interface (mirrors mock-first everywhere else):
+  - **mock** — deterministic keyword rules (e.g. "whey"/"isolate" → `protein` slot +
+    `muscle`/`recovery` goals; "pre-workout"/"caffeine" → `energy` slot + `hasStimulants`;
+    "RTD"/"ready to drink"/"can" → `isReadyToDrink`). Works with no API key.
+  - **live** — OpenAI, prompted with the supplier name/description/ingredients, returning the
+    same typed shape.
+- **Claim safety is hard-gated:** any AI-suggested wording is constrained to
+  `stack-blueprint/approved-claims` — the model may only *select/paraphrase within* approved
+  claims, never invent health claims. Anything unmatched is dropped and flagged.
+- **Founder review, not blind trust:** the `/portal/supplier` "Add to catalogue" flow shows the
+  autopopulated fields pre-filled for the founder to confirm/edit before saving; edits persist
+  as overrides via `portal/store`. Products already in the catalogue can be re-run ("AI fill
+  gaps") from the Products editor.
+- Runs on add and is re-runnable in bulk, so a fresh PowerBody sync of hundreds of products can
+  be triaged quickly rather than hand-typed.
+
+### G. CHRGD LQD (drinks) journey redesign
+
+Three problems to fix, all in the drinks (`drinksMode`) path:
+
+**G1 — A better intake model than a single "drinks a day".**
+Today drinks mode asks only `drinksPerDay: 1|2|3|4` and sizes one monthly pool. That conflates
+three genuinely different rhythms. Replace it with three clear signals:
+
+1. **Per-workout drinks are sized from training, not a daily number.** Pre-workout / recovery
+   are *timed* — one per session — so they're derived from the existing training-frequency
+   answer, not asked again. (The `lqd.ts` model already separates `timed` vs `anytime`; we lean
+   on that.)
+2. **Daily rhythm** — "On a normal day, how many drinks do you reach for?" with concrete
+   examples per option (1 = a single anchor like morning greens; 2 = morning + post-training;
+   3 = morning / training / evening). New answer `dailyDrinks`.
+3. **Consistency vs variety** — "Same go-to drinks every day, or a mix across the month?" Two
+   cards: **My staples** (the same 1–2 drinks daily — simple habit, fewer SKUs × higher count)
+   vs **A monthly mix** (a rotating variety that covers more bases over the month — more SKUs ×
+   lower count each). New answer `drinkVariety: 'staples' | 'variety'`.
+
+The box maths then becomes explicit: `daily anchors (dailyDrinks × ~30, narrowed to staples or
+spread across a variety pool)` + `timed per-session drinks (sessions/month)` + `goal-driven
+anytime pool`. This replaces the single `drinksPerDay` number (kept as a derived value for
+back-compat during the migration).
+
+**G2 — Make the outcome tangible + pick one-off or subscription.**
+End the drinks journey on a concrete **"Your month of drinks"** panel with three labelled
+buckets — **Every day**, **Training days** (one per session), **Across the month** — each
+listing the actual drinks and counts, a total and days-of-cover, then a clear choice:
+**one-off box** or **subscribe monthly** (subscription carries the per-line substitution consent
+from section E). Right now the customer can't tell what they'll actually receive; this shows it
+before they pay.
+
+**G3 — Entry options + copy.**
+- The two LQD doors ("Drinks for every day" / "Drinks for training + wellness") are abstract and
+  don't say what you get. Recommended: a **single goal-led door** — tapping LQD goes straight to
+  drink-outcome goals (Energy, Protein, Greens/gut, Hydration, Sleep, Immunity, Focus) with a
+  **live "what's in your box" preview** as they pick, removing the confusing performance/wellbeing
+  split for drinks entirely. (Fallback if we keep two doors: reframe them by role with an outcome
+  preview — "Feel-good daily" vs "Train + recover", each previewing the resulting box.)
+- The LQD closing CTA must not say **"Build my stack"** (it's drinks, not a stack). Proposed:
+  **"Build my drinks box"** (parallels the stack CTA) or the punchier **"Pour my month"**. The
+  non-LQD stack flow keeps "Build my stack".
+
+These are proposals to refine — the plan is the structure; exact option labels/copy get finalised
+when we build the phase.
+
 ## Config (all default to mock)
 
 Add to `.env.example`:
@@ -220,7 +296,8 @@ toggle is retired from the shipping path.
 ## Phased rollout
 
 Each phase is shippable on its own and, until the final phase, changes **no live behaviour**
-(everything stays on mock by default).
+(everything stays on mock by default). The drinks-journey phases (3a/3b) are independent of the
+supplier/payments work and can be built in parallel or resequenced.
 
 - **Phase 0 — Decouple + scaffold.**
   Add the `supplier` and `payments` resolvers, env keys and portal toggles; retire the Shopify
@@ -233,12 +310,28 @@ Each phase is shippable on its own and, until the final phase, changes **no live
   products, see stock / wholesale / RRP / margin, **Add to catalogue**. Shop + quiz read the
   curated subset with supplier-backed stock/price.
 
+- **Phase 1b — AI attribute autopopulate.**
+  `supplier/autopopulate.ts` (mock rules + live OpenAI) fills the CHRGD-only attributes PowerBody
+  doesn't send, claim-safe and founder-reviewed, wired into the "Add to catalogue" flow and a
+  bulk "AI fill gaps" action. Makes Phase 1 usable at scale.
+
 - **Phase 2 — Stripe one-off checkout (shop + quiz), guest allowed.**
   Swap the shop and quiz one-off checkout to Stripe sessions (server-side); add the Stripe
   webhook; `checkout.session.completed` → create an Order. Payments still mock by default.
 
 - **Phase 3 — Orders + fulfilment.**
   Orders domain + `/portal/orders`; submit-to-PowerBody (mock) and supplier status sync.
+
+- **Phase 3a — Drinks intake model redesign (LQD).**
+  Replace `drinksPerDay` with `dailyDrinks` + `drinkVariety` and derive per-workout drinks from
+  training frequency; update the `lqd.ts` plan builder to size the three buckets. Fix the entry
+  options (single goal-led door with a live box preview) and the CTA copy ("Build my stack" →
+  "Build my drinks box"). Front-of-funnel only; no payment dependency.
+
+- **Phase 3b — "Your month of drinks" outcome + one-off/subscribe.**
+  The tangible three-bucket outcome panel (Every day / Training days / Across the month) with a
+  clear one-off-box vs subscribe-monthly choice, feeding the existing checkout hooks (Stripe once
+  Phase 2/4 land).
 
 - **Phase 4 — Stripe subscriptions + substitution consent.**
   Subscription checkout via Stripe (single monthly price) + billing portal; add the per-line
@@ -251,18 +344,21 @@ Each phase is shippable on its own and, until the final phase, changes **no live
 
 - **Phase 6 — Go live.**
   Implement `powerbody/live.ts` against the real API, add real Stripe keys, flip
-  `SUPPLIER_SOURCE=powerbody` / `PAYMENTS_SOURCE=stripe` per environment, and move the daily
-  check onto a real schedule. No other app-code changes.
+  `SUPPLIER_SOURCE=powerbody` / `PAYMENTS_SOURCE=stripe` per environment, move the daily check and
+  AI autopopulate onto live services. No other app-code changes.
 
 ---
 
 ## Testing (Jest, following the existing `__tests__/` layout)
 
 Supplier mock provider + mapping; the supplier/payments resolvers (mirroring
-`data-source.test.ts`); Stripe session builder (mock); webhook handler (signature +
-idempotency); order lifecycle transitions + orders repo; substitution — consent gating,
-same-`swapGroup` suggestion selection, and the `deliveryOverrides` applied to future boxes;
-the daily stock check producing the right exception set.
+`data-source.test.ts`); AI autopopulate (mock rules produce the right slots/flags, and the
+claim-safety gate rejects any unapproved wording); Stripe session builder (mock); webhook handler
+(signature + idempotency); order lifecycle transitions + orders repo; substitution — consent
+gating, same-`swapGroup` suggestion selection, and the `deliveryOverrides` applied to future
+boxes; the daily stock check producing the right exception set; and the redesigned drinks model —
+`dailyDrinks` + `drinkVariety` sizing the three buckets, per-workout drinks scaling with training
+frequency, and the staples-vs-variety split (extending the existing `lqd.test.ts`).
 
 ---
 
