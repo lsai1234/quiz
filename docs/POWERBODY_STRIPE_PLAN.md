@@ -225,44 +225,62 @@ The app already has the pieces: an `AiSuggestPanel` + `/api/portal/ai-classify` 
 
 ### G. CHRGD LQD (drinks) journey redesign
 
-Three problems to fix, all in the drinks (`drinksMode`) path:
+The drinks (`drinksMode`) box is modelled as **two layers**:
 
-**G1 — A better intake model than a single "drinks a day".**
-Today drinks mode asks only `drinksPerDay: 1|2|3|4` and sizes one monthly pool. That conflates
-three genuinely different rhythms. Replace it with three clear signals:
+```
+  ┌─────────────────────────────────────────────────────────────┐
+  │  FOUNDATION  — the everyday daily drinks (always present)     │
+  │     • how many a day        (dailyDrinks)                     │
+  │     • staples or a mix      (drinkVariety)                    │
+  ├─────────────────────────────────────────────────────────────┤
+  │  + WORKOUT ADD-ONS  — only on the training route             │
+  │     • pre-workout / protein / recovery, each an add-on you    │
+  │       toggle on; sized one-per-session from training freq     │
+  └─────────────────────────────────────────────────────────────┘
+```
 
-1. **Per-workout drinks are sized from training, not a daily number.** Pre-workout / recovery
-   are *timed* — one per session — so they're derived from the existing training-frequency
-   answer, not asked again. (The `lqd.ts` model already separates `timed` vs `anytime`; we lean
-   on that.)
-2. **Daily rhythm** — "On a normal day, how many drinks do you reach for?" with concrete
-   examples per option (1 = a single anchor like morning greens; 2 = morning + post-training;
-   3 = morning / training / evening). New answer `dailyDrinks`.
-3. **Consistency vs variety** — "Same go-to drinks every day, or a mix across the month?" Two
-   cards: **My staples** (the same 1–2 drinks daily — simple habit, fewer SKUs × higher count)
-   vs **A monthly mix** (a rotating variety that covers more bases over the month — more SKUs ×
+**G1 — The foundation: daily drinks (always).**
+Everyone building a drinks box configures the foundation first — the everyday base. Two
+questions, no workout language:
+1. **How many a day** — "On a normal day, how many drinks do you reach for?" with concrete
+   examples (1 = a single anchor like morning greens; 2 = morning + evening; 3 = morning /
+   midday / evening). New answer `dailyDrinks`.
+2. **Staples or a mix** — "Same go-to drinks every day, or a mix across the month?" Two cards:
+   **My staples** (the same 1–2 drinks daily — simple habit, fewer SKUs × higher count) vs
+   **A monthly mix** (a rotating variety that covers more bases over the month — more SKUs ×
    lower count each). New answer `drinkVariety: 'staples' | 'variety'`.
 
-The box maths then becomes explicit: `daily anchors (dailyDrinks × ~30, narrowed to staples or
-spread across a variety pool)` + `timed per-session drinks (sessions/month)` + `goal-driven
-anytime pool`. This replaces the single `drinksPerDay` number (kept as a derived value for
-back-compat during the migration).
+This foundation stands entirely on its own — a non-training customer answers only these two and
+gets a foundational box. No workout section is shown.
+
+**G1b — Workout add-ons (training route only).**
+If the customer is on the training route, an extra **"Add workout drinks?"** section appears,
+where pre-workout / protein / recovery are offered as **separate add-ons you toggle on**, on top
+of the foundation. Each add-on is *timed* — one per session — so it's **sized from the existing
+training-frequency answer**, not a daily count (the `lqd.ts` model already splits `timed` vs
+`anytime`, so this is a presentation layer over sizing we already do). New answer
+`workoutAddOns: string[]` (which timed drinks are on). Off the training route this section is
+skipped entirely and the answer is empty.
+
+The box maths: `foundation = dailyDrinks × ~30, arranged as staples (few SKUs) or a variety
+pool` **+** `workout add-ons = one per session × sessions/month`. The single legacy
+`drinksPerDay` is retired (kept as a derived value during migration only).
 
 **G2 — Make the outcome tangible + pick one-off or subscription.**
-End the drinks journey on a concrete **"Your month of drinks"** panel with three labelled
-buckets — **Every day**, **Training days** (one per session), **Across the month** — each
-listing the actual drinks and counts, a total and days-of-cover, then a clear choice:
-**one-off box** or **subscribe monthly** (subscription carries the per-line substitution consent
-from section E). Right now the customer can't tell what they'll actually receive; this shows it
-before they pay.
+End the journey on a concrete **"Your month of drinks"** panel with the two layers shown
+separately — a **Foundation / every day** block and (when present) a **Workout add-ons /
+training days** block — each listing the actual drinks and counts, plus a total, days-of-cover,
+and a clear **one-off box vs subscribe monthly** choice (subscription carries the per-line
+substitution consent from section E). Right now the customer can't tell what they'll receive;
+this shows it before they pay.
 
-**G3 — Entry options + copy.**
-- The two LQD doors ("Drinks for every day" / "Drinks for training + wellness") are abstract and
-  don't say what you get. Recommended: a **single goal-led door** — tapping LQD goes straight to
-  drink-outcome goals (Energy, Protein, Greens/gut, Hydration, Sleep, Immunity, Focus) with a
-  **live "what's in your box" preview** as they pick, removing the confusing performance/wellbeing
-  split for drinks entirely. (Fallback if we keep two doors: reframe them by role with an outcome
-  preview — "Feel-good daily" vs "Train + recover", each previewing the resulting box.)
+**G3 — Entry + copy.**
+- The route choice still matters because it gates the workout add-on layer, but it's reframed
+  around the **outcome**, not the abstract "everyday vs training + wellness". Recommended: a
+  goal-led entry where the drink outcomes the customer picks (Energy, Protein, Greens/gut,
+  Hydration, Sleep, Immunity, Focus) determine whether the workout layer is offered, with a
+  **live "what's in your box" preview**. The training route simply unlocks the workout add-on
+  step; everyone gets the foundation.
 - The LQD closing CTA must not say **"Build my stack"** (it's drinks, not a stack). Proposed:
   **"Build my drinks box"** (parallels the stack CTA) or the punchier **"Pour my month"**. The
   non-LQD stack flow keeps "Build my stack".
@@ -295,57 +313,114 @@ toggle is retired from the shipping path.
 
 ## Phased rollout
 
-Each phase is shippable on its own and, until the final phase, changes **no live behaviour**
-(everything stays on mock by default). The drinks-journey phases (3a/3b) are independent of the
-supplier/payments work and can be built in parallel or resequenced.
+Each phase is shippable on its own and, until Phase 6, changes **no live behaviour** (everything
+defaults to mock). The drinks phases (3a/3b) have no PowerBody/Stripe dependency and can run in
+parallel with the supplier/payments track. Dependencies are noted per phase.
 
-- **Phase 0 — Decouple + scaffold.**
-  Add the `supplier` and `payments` resolvers, env keys and portal toggles; retire the Shopify
-  data-source from the shipping path (flag off). Add the `orders` migration, the
-  `allowSubstitution` field on subscription lines, and stock-exception storage. All mock; zero
-  live-behaviour change.
+---
 
-- **Phase 1 — PowerBody catalogue + "scan & add".**
-  Mock supplier provider + `mapping.ts`. New `/portal/supplier` page: browse all PowerBody
-  products, see stock / wholesale / RRP / margin, **Add to catalogue**. Shop + quiz read the
-  curated subset with supplier-backed stock/price.
+### Phase 0 — Decouple + scaffold
+*Depends on: nothing. Live impact: none.*
+- Retire the Shopify data-source from the shipping path (flag off; `shopify/*` stays in-tree,
+  unread).
+- `src/lib/supplier/index.ts` + `src/lib/payments/index.ts` resolvers (env → portal override →
+  `mock`), mirroring `data-source.ts`.
+- `.env.example` keys (`SUPPLIER_SOURCE`, `POWERBODY_*`, `PAYMENTS_SOURCE`, `STRIPE_*`) + two
+  Founders-Hub Settings toggles persisted via `portal/store`.
+- DB migration: `orders` table; add `allowSubstitution` to `MemberSubscriptionLine`; add
+  stock-exception storage.
+- **Done when:** app runs unchanged on mock; toggles exist; migration applies clean; resolver
+  tests pass.
 
-- **Phase 1b — AI attribute autopopulate.**
-  `supplier/autopopulate.ts` (mock rules + live OpenAI) fills the CHRGD-only attributes PowerBody
-  doesn't send, claim-safe and founder-reviewed, wired into the "Add to catalogue" flow and a
-  bulk "AI fill gaps" action. Makes Phase 1 usable at scale.
+### Phase 1 — PowerBody catalogue + "scan & add"
+*Depends on: 0. Live impact: none (mock supplier).*
+- `supplier/types.ts` (`SupplierProvider`), `powerbody/fixtures.ts`, `powerbody/mock.ts`,
+  `powerbody/live.ts` (stub), `mapping.ts` (supplier → `CatalogueProduct`).
+- New `/portal/supplier` page: browse all PowerBody products; search/filter by category / brand /
+  in-stock; show stock, wholesale, RRP, **margin**, and "already in catalogue"; **Add to
+  catalogue** (single + bulk) upserting into `portal/store`.
+- Shop + quiz read the **curated subset** with supplier-backed stock/price; on-demand stock
+  re-check at add-to-basket / checkout.
+- **Done when:** a founder can scan the mock PowerBody feed and add products that then appear in
+  shop + quiz with live-ish stock/price.
 
-- **Phase 2 — Stripe one-off checkout (shop + quiz), guest allowed.**
-  Swap the shop and quiz one-off checkout to Stripe sessions (server-side); add the Stripe
-  webhook; `checkout.session.completed` → create an Order. Payments still mock by default.
+### Phase 1b — AI attribute autopopulate
+*Depends on: 1. Live impact: none.*
+- `supplier/autopopulate.ts` — mock keyword rules + live OpenAI, returning the CHRGD-only
+  attributes (`stackSlots`, `swapGroup`, `goalTags`, dietary, `hasStimulants`, `isReadyToDrink`,
+  cadence, onset, etc.).
+- Claim-safety gate against `approved-claims`; unmatched wording dropped + flagged.
+- Wired into "Add to catalogue" (pre-filled, founder-editable) + a bulk **"AI fill gaps"** action
+  in the Products editor.
+- **Done when:** adding a mock PowerBody product yields sensible pre-filled CHRGD attributes with
+  no hand-typing, and no unapproved claim can be saved.
 
-- **Phase 3 — Orders + fulfilment.**
-  Orders domain + `/portal/orders`; submit-to-PowerBody (mock) and supplier status sync.
+### Phase 2 — Stripe one-off checkout (shop + quiz), guest allowed
+*Depends on: 0 (1 for real prices). Live impact: none (payments mock).*
+- Deps `stripe` + `@stripe/stripe-js`; `payments/stripe.ts` `createCheckoutSession` (prices
+  resolved server-side from the catalogue; **guest allowed**).
+- Swap `/api/cart` (+ quiz one-off) from Shopify `createCart` to the Stripe session, gated on
+  `getPaymentMode()`; mock still returns `#mock-checkout`.
+- `POST /api/webhooks/stripe` (raw-body signature, idempotent); `checkout.session.completed` →
+  create an Order.
+- **Done when:** a guest can check out a shop basket via Stripe test mode and an Order row lands
+  from the webhook.
 
-- **Phase 3a — Drinks intake model redesign (LQD).**
-  Replace `drinksPerDay` with `dailyDrinks` + `drinkVariety` and derive per-workout drinks from
-  training frequency; update the `lqd.ts` plan builder to size the three buckets. Fix the entry
-  options (single goal-led door with a live box preview) and the CTA copy ("Build my stack" →
-  "Build my drinks box"). Front-of-funnel only; no payment dependency.
+### Phase 3 — Orders + fulfilment
+*Depends on: 1, 2. Live impact: none (mock supplier orders).*
+- `src/lib/orders/*`: order doc + repo, `createOrderFromCheckout()`, `submitOrderToSupplier()` →
+  `getSupplier().placeOrder()`, `syncSupplierStatus()`.
+- `/portal/orders` list + `/portal/orders/[id]` detail with Submit-to-PowerBody / retry, Sync
+  status, Refund (Stripe), Cancel, tracking.
+- **Done when:** a paid Order can be submitted to the mock supplier and walked through
+  paid → submitted → shipped → delivered from the hub.
 
-- **Phase 3b — "Your month of drinks" outcome + one-off/subscribe.**
-  The tangible three-bucket outcome panel (Every day / Training days / Across the month) with a
-  clear one-off-box vs subscribe-monthly choice, feeding the existing checkout hooks (Stripe once
-  Phase 2/4 land).
+### Phase 3a — Drinks intake redesign: foundation + workout add-ons (LQD)
+*Depends on: nothing (front-of-funnel). Live impact: changes the drinks quiz UX.*
+- Replace `drinksPerDay` with `dailyDrinks` + `drinkVariety` (foundation) and add
+  `workoutAddOns: string[]` (training route only).
+- Quiz-flow: foundation steps always shown; the **"Add workout drinks?"** step gated to the
+  training route; update `lqd.ts` to size foundation (staples vs variety) + timed add-ons
+  (per-session from training frequency).
+- Copy: LQD CTA "Build my stack" → **"Build my drinks box"**; entry reframed to outcome-led /
+  route unlocks the workout layer.
+- **Done when:** non-training customers answer only "how many a day" + "staples/mix"; training
+  customers additionally toggle workout add-ons; `lqd.test.ts` covers both.
 
-- **Phase 4 — Stripe subscriptions + substitution consent.**
-  Subscription checkout via Stripe (single monthly price) + billing portal; add the per-line
-  **allow-substitution** preferences at checkout and in `/hub`; recurring `invoice.paid` →
-  renewal Orders.
+### Phase 3b — "Your month of drinks" outcome + one-off/subscribe
+*Depends on: 3a (Stripe from 2/4 for live pay). Live impact: new drinks summary screen.*
+- Two-layer outcome panel — **Foundation / every day** and (when present) **Workout add-ons /
+  training days** — with counts, total, days-of-cover.
+- Clear **one-off box vs subscribe monthly** choice feeding the existing checkout hooks.
+- **Done when:** the customer sees exactly what's in their box, split by layer, and can pick
+  one-off or subscription.
 
-- **Phase 5 — Daily stock check + stock-alerts journey.**
-  Daily supplier stock scan over active subscriptions; the `/portal/stock-alerts` queue;
-  same-category substitution applied to future deliveries, or hold/skip/notify for no-sub lines.
+### Phase 4 — Stripe subscriptions + substitution consent
+*Depends on: 2, 3. Live impact: none (payments mock).*
+- `payments/stripe.ts` `createSubscriptionSession` (single monthly price = bundle total) +
+  `createBillingPortalSession`; wire into `/api/subscribe` + `finalizeCheckout()`.
+- Per-line **allow-substitution** consent at subscription checkout and in `/hub`; store on the
+  `MemberSubscriptionLine`.
+- Webhook: `invoice.paid` → renewal Order; `payment_failed` / `subscription.updated|deleted` →
+  status sync.
+- **Done when:** a subscription checks out via Stripe test mode, each line carries a substitution
+  choice, and a renewal invoice creates a fulfilment Order.
 
-- **Phase 6 — Go live.**
-  Implement `powerbody/live.ts` against the real API, add real Stripe keys, flip
-  `SUPPLIER_SOURCE=powerbody` / `PAYMENTS_SOURCE=stripe` per environment, move the daily check and
-  AI autopopulate onto live services. No other app-code changes.
+### Phase 5 — Daily stock check + stock-alerts journey
+*Depends on: 1, 4. Live impact: none (mock).*
+- Daily scan of `getSupplier().getStockLevels()` over active-subscription SKUs (mock = portal
+  "Run stock check" button) recording stock exceptions.
+- `/portal/stock-alerts` queue: allows-substitution → suggested same-`swapGroup` replacement
+  applied to future deliveries via `deliveryOverrides`; no-substitution → skip / pause / notify.
+- **Done when:** forcing a mock SKU out of stock surfaces the affected live subscriptions and a
+  founder can resolve each per the customer's consent.
+
+### Phase 6 — Go live
+*Depends on: all. Live impact: this is the switch.*
+- Implement `powerbody/live.ts` against the real API + `mapping.ts` finalised; add real Stripe
+  keys; move the daily check and AI autopopulate onto live services.
+- Flip `SUPPLIER_SOURCE=powerbody` / `PAYMENTS_SOURCE=stripe` per environment.
+- **Done when:** production runs on real PowerBody + Stripe with no other app-code changes.
 
 ---
 
@@ -357,8 +432,9 @@ claim-safety gate rejects any unapproved wording); Stripe session builder (mock)
 (signature + idempotency); order lifecycle transitions + orders repo; substitution — consent
 gating, same-`swapGroup` suggestion selection, and the `deliveryOverrides` applied to future
 boxes; the daily stock check producing the right exception set; and the redesigned drinks model —
-`dailyDrinks` + `drinkVariety` sizing the three buckets, per-workout drinks scaling with training
-frequency, and the staples-vs-variety split (extending the existing `lqd.test.ts`).
+`dailyDrinks` + `drinkVariety` sizing the foundation, `workoutAddOns` appearing only on the
+training route and scaling one-per-session with training frequency, and the staples-vs-variety
+split (extending the existing `lqd.test.ts`).
 
 ---
 
