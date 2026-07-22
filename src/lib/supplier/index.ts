@@ -84,3 +84,18 @@ export function getSupplierSource(): SupplierSource {
 export function isPowerBodyLive(): boolean {
   return getSupplierSource() === 'powerbody'
 }
+
+/**
+ * The supplier provider to use right now — mock or live PowerBody per
+ * `getSupplierSource()`. Dynamic imports keep the two implementations out of
+ * each other's bundle. Every caller goes through this; nobody imports the
+ * concrete providers directly.
+ */
+export async function getSupplier() {
+  if (getSupplierSource() === 'powerbody') {
+    const { createPowerBodyProvider } = await import('./powerbody/live')
+    return createPowerBodyProvider()
+  }
+  const { createMockSupplier } = await import('./powerbody/mock')
+  return createMockSupplier()
+}

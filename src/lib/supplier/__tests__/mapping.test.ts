@@ -1,0 +1,57 @@
+import { supplierProductToCatalogue, classifySupplierProduct } from '@/lib/supplier/mapping'
+import { POWERBODY_FIXTURES } from '@/lib/supplier/powerbody/fixtures'
+import type { SupplierProduct } from '@/lib/supplier/types'
+
+const bySku = (sku: string): SupplierProduct => POWERBODY_FIXTURES.find((p) => p.sku === sku)!
+
+describe('supplier → catalogue mapping', () => {
+  it('maps commerce fields: RRP is the sell price, wholesale is the cost', () => {
+    const sp = bySku('ON-GOLD-WHEY-2270')
+    const cp = supplierProductToCatalogue(sp)
+    expect(cp.basePrice).toBe(sp.rrp)
+    expect(cp.cost).toBe(sp.wholesalePrice)
+    expect(cp.title).toBe(sp.name)
+    expect(cp.shopifyProductId).toBeNull()
+  })
+
+  it('creates one variant per flavour, each carrying the supplier SKU + stock', () => {
+    const sp = bySku('ON-GOLD-WHEY-2270') // 3 flavours
+    const cp = supplierProductToCatalogue(sp)
+    expect(cp.variants).toHaveLength(3)
+    expect(cp.variants.every((v) => v.sku === sp.sku)).toBe(true)
+    expect(cp.variants.every((v) => v.inventory === sp.stock)).toBe(true)
+    expect(cp.variants.every((v) => v.price === sp.rrp)).toBe(true)
+  })
+
+  it('makes a single variant for products without flavours', () => {
+    const cp = supplierProductToCatalogue(bySku('ON-CREA-634'))
+    expect(cp.variants).toHaveLength(1)
+    expect(cp.variants[0].flavour).toBeNull()
+  })
+
+  it('classifies by category/keyword into the right slot + swap group', () => {
+    expect(supplierProductToCatalogue(bySku('ON-CREA-634')).swapGroup).toBe('creatine')
+    expect(supplierProductToCatalogue(bySku('ON-CREA-634')).stackSlots).toContain('performance')
+    expect(supplierProductToCatalogue(bySku('NOW-OMEGA-200')).swapGroup).toBe('omega-3')
+    expect(supplierProductToCatalogue(bySku('VEG-PLANT-1000')).stackSlots).toContain('vegan-support')
+    expect(supplierProductToCatalogue(bySku('WAR-CLEAR-500')).swapGroup).toBe('protein-clear')
+  })
+
+  it('flags stimulant pre-workouts and not the stim-free ones', () => {
+    expect(classifySupplierProduct(bySku('APP-ABE-315')).hasStimulants).toBe(true)
+    expect(classifySupplierProduct(bySku('PBD-PUMP-400')).hasStimulants).toBe(false)
+    expect(supplierProductToCatalogue(bySku('APP-ABE-315')).warnings).toContain('Contains caffeine')
+  })
+
+  it('marks ready-to-drink products as liquids', () => {
+    const cp = supplierProductToCatalogue(bySku('GRE-CARB-KILLA-12'))
+    expect(cp.formats).toEqual(['liquid'])
+    expect(classifySupplierProduct(bySku('GRE-CARB-KILLA-12')).isReadyToDrink).toBe(true)
+  })
+
+  it('produces a stable, slugified id from the product name', () => {
+    const cp = supplierProductToCatalogue(bySku('APP-ISO-XP-1000'))
+    expect(cp.id).toBe('iso-xp-whey-isolate-1kg')
+    expect(cp.handle).toBe(cp.id)
+  })
+})
