@@ -35,6 +35,7 @@ export function SupplierBrowser() {
   const [hideAdded, setHideAdded] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
+  const [notice, setNotice] = useState<string | null>(null)
 
   const load = useCallback(() => {
     setError(null)
@@ -85,8 +86,11 @@ export function SupplierBrowser() {
       body: JSON.stringify({ skus }),
     })
     if (res.ok) {
+      const d = await res.json().catch(() => ({}))
       setSelected(new Set())
       invalidateCatalogue() // shop/quiz pick up the new products on next mount
+      const how = d.aiUsed ? 'AI-classified' : 'auto-classified'
+      setNotice(`Added ${d.added} product${d.added === 1 ? '' : 's'} — ${how}. Review and tweak them in Products before launch.`)
       load()
     } else {
       const d = await res.json().catch(() => ({}))
@@ -119,6 +123,12 @@ export function SupplierBrowser() {
           </button>
         </div>
       </div>
+
+      {notice && (
+        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, color: 'var(--color-text-2)', border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)` }}>
+          {notice}
+        </p>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
