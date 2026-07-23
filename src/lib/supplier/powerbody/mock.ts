@@ -27,10 +27,27 @@ function dailyDrift(sku: string): number {
   return (h % 21) - 10
 }
 
+// Demo affordance: SKUs a founder has forced out of stock from the stock-alerts
+// page, so the daily-check journey can be exercised on demand. Process-local.
+const forcedOutOfStock = new Set<string>()
+
+/** Force (or clear) a SKU out of stock for demos/tests. */
+export function forceOutOfStock(sku: string, on = true): void {
+  if (on) forcedOutOfStock.add(sku)
+  else forcedOutOfStock.delete(sku)
+}
+export function getForcedOutOfStock(): string[] {
+  return [...forcedOutOfStock]
+}
+export function __resetForcedOutOfStock(): void {
+  forcedOutOfStock.clear()
+}
+
 /** Current stock for a SKU: the fixture level nudged by the daily drift, floored
- *  at 0. A genuinely out-of-stock fixture (0) stays out of stock. */
+ *  at 0. A genuinely out-of-stock fixture (0), or one force-flagged for a demo,
+ *  stays out of stock. */
 function currentStock(sku: string, baseStock: number): number {
-  if (baseStock <= 0) return 0
+  if (baseStock <= 0 || forcedOutOfStock.has(sku)) return 0
   return Math.max(0, baseStock + dailyDrift(sku))
 }
 
