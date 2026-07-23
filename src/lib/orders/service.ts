@@ -13,7 +13,7 @@
  */
 import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
-import type { SupplierOrderStatus } from '@/lib/supplier/types'
+import type { SupplierOrderStatus, SupplierAddress } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
@@ -110,7 +110,12 @@ export async function createSubscriptionOrder(input: {
 /** Mark a pending order paid (webhook path when the order was pre-created). */
 export async function markOrderPaid(
   id: string,
-  payment: { stripeSessionId?: string; stripePaymentIntentId?: string; email?: string | null },
+  payment: {
+    stripeSessionId?: string
+    stripePaymentIntentId?: string
+    email?: string | null
+    shippingAddress?: SupplierAddress | null
+  },
 ): Promise<Order | null> {
   return updateOrder(id, (o) => {
     if (o.status !== 'pending_payment') return // idempotent — already progressed
@@ -118,6 +123,7 @@ export async function markOrderPaid(
     if (payment.stripeSessionId) o.stripeSessionId = payment.stripeSessionId
     if (payment.stripePaymentIntentId) o.stripePaymentIntentId = payment.stripePaymentIntentId
     if (payment.email && !o.email) o.email = payment.email
+    if (payment.shippingAddress && !o.shippingAddress) o.shippingAddress = payment.shippingAddress
     o.events.push(event('paid'))
   })
 }

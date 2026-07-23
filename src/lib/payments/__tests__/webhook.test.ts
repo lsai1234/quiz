@@ -22,7 +22,11 @@ function completedEvent(orderId: string, over: Partial<Stripe.Checkout.Session> 
 describe('stripe webhook handler', () => {
   it('marks the pending order paid on checkout.session.completed', async () => {
     const order = await createOrderFromCheckout({ channel: 'shop', lines: [{ sku: 'X', productId: 'x', title: 'X', quantity: 1, unitPrice: 10 }], status: 'pending_payment' })
-    const outcome = await handleStripeEvent(completedEvent(order.id))
+    const outcome = await handleStripeEvent(
+      completedEvent(order.id, {
+        shipping_details: { name: 'Sam Guest', address: { line1: '1 High St', city: 'London', postal_code: 'E1 6AN', country: 'GB' } },
+      } as unknown as Partial<Stripe.Checkout.Session>),
+    )
     expect(outcome).toEqual({ handled: true, type: 'checkout.session.completed', orderId: order.id })
 
     const paid = await getOrder(order.id)
@@ -30,6 +34,8 @@ describe('stripe webhook handler', () => {
     expect(paid?.stripeSessionId).toBe('cs_test_123')
     expect(paid?.stripePaymentIntentId).toBe('pi_test_123')
     expect(paid?.email).toBe('guest@example.com')
+    expect(paid?.shippingAddress?.postcode).toBe('E1 6AN')
+    expect(paid?.shippingAddress?.line1).toBe('1 High St')
   })
 
   it('is idempotent on redelivery', async () => {

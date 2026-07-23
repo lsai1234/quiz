@@ -52,6 +52,9 @@ export async function createCheckoutSession(opts: CreateSessionOptions): Promise
     })),
     client_reference_id: opts.clientReferenceId,
     customer_email: opts.customerEmail ?? undefined,
+    // Collect a delivery address so the order can be dropshipped by the supplier.
+    shipping_address_collection: { allowed_countries: ['GB'] },
+    phone_number_collection: { enabled: true },
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     metadata: opts.metadata,

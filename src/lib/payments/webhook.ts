@@ -17,6 +17,30 @@ import type Stripe from 'stripe'
 import { markOrderPaid, createSubscriptionOrder } from '@/lib/orders/service'
 import { getSubscription, saveSubscription } from '@/lib/db/hub-data'
 import { linkStripeSubscription, userIdForStripeSubscription } from './subscription-link'
+import type { SupplierAddress } from '@/lib/supplier/types'
+
+/** Pull the delivery address out of a completed Checkout Session, tolerant of
+ *  Stripe API-version differences in where it lives. */
+function addressFromSession(session: Stripe.Checkout.Session): SupplierAddress | null {
+  // `shipping_details` (older) or `collected_information.shipping_details` (newer);
+  // fall back to the billing address on customer_details.
+  const s = session as unknown as {
+    shipping_details?: { name?: string | null; address?: Record<string, string | null> | null }
+    collected_information?: { shipping_details?: { name?: string | null; address?: Record<string, string | null> | null } }
+  }
+  const shipping = s.shipping_details ?? s.collected_information?.shipping_details
+  const address = shipping?.address ?? session.customer_details?.address ?? null
+  if (!address) return null
+  return {
+    name: shipping?.name ?? session.customer_details?.name ?? 'Customer',
+    line1: address.line1 ?? '',
+    line2: address.line2 ?? null,
+    city: address.city ?? '',
+    postcode: address.postal_code ?? '',
+    country: address.country ?? 'GB',
+    phone: session.customer_details?.phone ?? null,
+  }
+}
 
 export interface WebhookOutcome {
   handled: boolean
@@ -61,6 +85,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         stripeSessionId: session.id,
         stripePaymentIntentId: paymentIntentId,
         email,
+        shippingAddress: addressFromSession(session),
       })
       return { handled: true, type: event.type, orderId }
     }
