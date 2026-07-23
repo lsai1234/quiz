@@ -1,0 +1,98 @@
+/**
+ * Orders repository — the `orders` table (migration v3).
+ *
+ * The full `Order` document is stored as JSON in `data`; the indexed columns
+ * (status, email, channel, stripe ids, supplier_order_id, timestamps) exist for
+ * the hub's list/filter and for webhook lookups. `data` is the source of truth;
+ * the columns are always written from it so they never drift.
+ *
+ * Server-only. Mirrors the dialect-neutral `?`-placeholder style of the other
+ * repositories so it runs on SQLite and Postgres unchanged.
+ */
+import { getEngine, now } from '@/lib/db/engine'
+import type { Order, OrderChannel, OrderStatus } from './types'
+
+interface Row { data: string }
+
+function parse(row: Row | undefined): Order | null {
+  if (!row) return null
+  try {
+    return JSON.parse(row.data) as Order
+  } catch {
+    return null
+  }
+}
+
+/** Insert or replace an order, keeping the indexed columns in sync with `data`. */
+export async function saveOrder(order: Order): Promise<void> {
+  const db = await getEngine()
+  await db.run(
+    `INSERT INTO orders
+       (id, user_id, email, channel, status, data, stripe_session_id, stripe_payment_id, supplier_order_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       user_id = excluded.user_id,
+       email = excluded.email,
+       channel = excluded.channel,
+       status = excluded.status,
+       data = excluded.data,
+       stripe_session_id = excluded.stripe_session_id,
+       stripe_payment_id = excluded.stripe_payment_id,
+       supplier_order_id = excluded.supplier_order_id,
+       updated_at = excluded.updated_at`,
+    [
+      order.id,
+      order.userId,
+      order.email,
+      order.channel,
+      order.status,
+      JSON.stringify(order),
+      order.stripeSessionId,
+      order.stripePaymentIntentId,
+      order.supplierOrderId,
+      order.createdAt,
+      order.updatedAt,
+    ],
+  )
+}
+
+export async function getOrder(id: string): Promise<Order | null> {
+  const db = await getEngine()
+  return parse(await db.get<Row>('SELECT data FROM orders WHERE id = ?', [id]))
+}
+
+export async function getOrderByStripeSession(sessionId: string): Promise<Order | null> {
+  const db = await getEngine()
+  return parse(await db.get<Row>('SELECT data FROM orders WHERE stripe_session_id = ?', [sessionId]))
+}
+
+export interface OrderFilter {
+  status?: OrderStatus
+  channel?: OrderChannel
+  limit?: number
+}
+
+export async function listOrders(filter: OrderFilter = {}): Promise<Order[]> {
+  const db = await getEngine()
+  const where: string[] = []
+  const params: unknown[] = []
+  if (filter.status) { where.push('status = ?'); params.push(filter.status) }
+  if (filter.channel) { where.push('channel = ?'); params.push(filter.channel) }
+  const clause = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const limit = filter.limit && filter.limit > 0 ? Math.min(filter.limit, 500) : 200
+  const rows = await db.all<Row>(
+    `SELECT data FROM orders ${clause} ORDER BY created_at DESC LIMIT ${limit}`,
+    params,
+  )
+  return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
+}
+
+/** Load → mutate → save in one call. Returns the updated order (or null if gone). */
+export async function updateOrder(id: string, mutate: (o: Order) => void): Promise<Order | null> {
+  const order = await getOrder(id)
+  if (!order) return null
+  mutate(order)
+  order.updatedAt = now()
+  await saveOrder(order)
+  return order
+}
