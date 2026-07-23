@@ -17,6 +17,7 @@ import {
   setLineCadence as setLineCadenceMutation,
   setLineQuantity as setLineQuantityMutation,
   setLineUsage as setLineUsageMutation,
+  setLineSubstitution as setLineSubstitutionMutation,
   skipNextDelivery as skipNextMutation,
   setNextDispatchDate as setNextDispatchDateMutation,
   sendNow as sendNowMutation,
@@ -103,6 +104,8 @@ interface HubStore {
   setLineCadence: (lineId: string, months: number) => void
   setLineQuantity: (lineId: string, quantity: number) => void
   setLineUsage: (lineId: string, product: CatalogueProduct, usageLevel: UsageLevel) => void
+  /** Allow / disallow a same-category substitution for a line if it goes out of stock. */
+  setLineSubstitution: (lineId: string, allow: boolean) => void
   skipNext: (lineId: string) => void
   setNextDispatchDate: (date: Date) => void
   sendNow: () => void
@@ -232,6 +235,8 @@ export const useHubStore = create<HubStore>((set) => ({
     set((s) => (s.subscription ? { subscription: persist(setLineQuantityMutation(s.subscription, lineId, quantity)) } : s)),
   setLineUsage: (lineId, product, usageLevel) =>
     set((s) => (s.subscription ? { subscription: persist(setLineUsageMutation(s.subscription, lineId, product, usageLevel)) } : s)),
+  setLineSubstitution: (lineId, allow) =>
+    set((s) => (s.subscription ? { subscription: persist(setLineSubstitutionMutation(s.subscription, lineId, allow)) } : s)),
   skipNext: (lineId) =>
     set((s) => (s.subscription ? { subscription: persist(skipNextMutation(s.subscription, lineId)) } : s)),
   setNextDispatchDate: (date) =>

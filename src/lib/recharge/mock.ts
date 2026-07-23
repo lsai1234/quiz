@@ -54,7 +54,13 @@ export function buildMemberSubscription(
   catalogue: CatalogueProduct[],
   email: string,
   answers?: QuizAnswers | null,
-  opts: SubscriptionPlanOptions & { id?: string; monthsActive?: number; dispatchDayOfMonth?: number } = {},
+  opts: SubscriptionPlanOptions & {
+    id?: string
+    monthsActive?: number
+    dispatchDayOfMonth?: number
+    /** Per-product substitution consent captured at checkout. Missing = allowed. */
+    substitutionByProductId?: Record<string, boolean>
+  } = {},
 ): MemberSubscription {
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
   const plan = buildSubscriptionPlan(blueprint, catalogue, answers, getPricingConfig(), opts)
@@ -80,6 +86,9 @@ export function buildMemberSubscription(
       swapGroup: l.product.swapGroup,
       addedAt: startedAt.toISOString(),
       deliveriesMade: deliveriesInMonths(monthsActive, l.shipEveryMonths),
+      // Default to allowing a same-category substitution if the product goes out
+      // of stock; the member can opt any line out at checkout or in the hub.
+      allowSubstitution: opts.substitutionByProductId?.[l.product.id] ?? true,
     }
   })
 
@@ -420,6 +429,16 @@ export function setLineQuantity(sub: MemberSubscription, lineId: string, quantit
 export function computeQuantityImpact(sub: MemberSubscription, lineId: string, quantity: number): PlanChangeImpact {
   const next = setLineQuantity(sub, lineId, quantity)
   return { ...blankImpact(sub), newMonthly: next.flatMonthly, monthlyDelta: round(next.flatMonthly - sub.flatMonthly) }
+}
+
+/**
+ * Set whether a line may be substituted with a same-category product if it goes
+ * out of stock at the supplier. Pure — pricing is unaffected (a substitute is
+ * always same category / price band).
+ */
+export function setLineSubstitution(sub: MemberSubscription, lineId: string, allow: boolean): MemberSubscription {
+  const lines = sub.lines.map((l) => (l.id === lineId ? { ...l, allowSubstitution: allow } : l))
+  return { ...sub, lines }
 }
 
 /**

@@ -33,7 +33,7 @@ export function SubscriptionDashboard() {
   const {
     subscription: sub, feedback, logout,
     setDispatchDay, resume,
-    swapLine, addLine, removeLine, setLineUsage, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineUsage, setLineSubstitution, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
     snooze, applyDownsize, cancelWithReason,
   } = useHubStore()
@@ -333,6 +333,7 @@ export function SubscriptionDashboard() {
             })
           }}
           onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}
+          onSetSubstitution={(allow) => setLineSubstitution(manageLine.id, allow)}
           onClose={() => setManageLineId(null)}
         />
       )}

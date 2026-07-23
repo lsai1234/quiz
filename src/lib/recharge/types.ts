@@ -92,6 +92,10 @@ export interface MemberSubscription {
    * one-offs — so this only changes WHAT ships WHEN, never the recurring price.
    */
   deliveryOverrides?: Record<string, DeliveryOverride>
+  /** Stripe subscription id, set once the member checks out via Stripe. */
+  stripeSubscriptionId?: string
+  /** Stripe customer id — used to open the billing portal. */
+  stripeCustomerId?: string
 }
 
 /** A member's edit to a single scheduled delivery (from the calendar). */

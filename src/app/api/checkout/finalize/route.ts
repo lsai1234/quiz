@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'subscription is required' }, { status: 400 })
   }
 
-  const result = await finalizeCheckout(user.id, user.email, body)
+  const origin = process.env.APP_URL || req.headers.get('origin') || new URL(req.url).origin
+  const result = await finalizeCheckout(user.id, user.email, body, origin)
   return NextResponse.json({ ok: true, ...result })
 }

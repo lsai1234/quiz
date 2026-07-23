@@ -15,8 +15,10 @@ import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
 import type { SupplierOrderStatus } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { MemberSubscription } from '@/lib/recharge/types'
 import { getOrder, saveOrder, updateOrder } from './repo'
-import type { CreateOrderInput, Order, OrderEvent, OrderStatus } from './types'
+import type { CreateOrderInput, Order, OrderLine, OrderStatus, OrderEvent } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -57,6 +59,52 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
   }
   await saveOrder(order)
   return order
+}
+
+/** Turn a member's subscription bundle into order lines, resolving supplier SKUs
+ *  and per-unit price from the catalogue. */
+export function subscriptionOrderLines(sub: MemberSubscription, catalogue: CatalogueProduct[]): OrderLine[] {
+  return sub.lines.map((line) => {
+    const product = catalogue.find((p) => p.id === line.productId)
+    const variant =
+      product?.variants.find((v) => (v.flavour || v.size || v.title) === line.variantTitle) ??
+      product?.variants.find((v) => v.available) ??
+      product?.variants[0]
+    return {
+      sku: variant?.sku ?? null,
+      productId: line.productId,
+      title: line.productTitle,
+      variantTitle: line.variantTitle || null,
+      quantity: line.quantity,
+      unitPrice: round(line.pricePerDelivery / Math.max(1, line.quantity)),
+      supplierCost: product?.cost ?? null,
+    }
+  })
+}
+
+/** Raise a paid subscription order (first box or a renewal). Idempotent when a
+ *  stable id is passed (e.g. `ord_inv_<stripeInvoiceId>`). */
+export async function createSubscriptionOrder(input: {
+  id?: string
+  userId?: string | null
+  email?: string | null
+  sub: MemberSubscription
+  catalogue: CatalogueProduct[]
+  stripeSubscriptionId?: string | null
+}): Promise<Order> {
+  // Idempotency: if this invoice already produced an order, return it unchanged.
+  if (input.id) {
+    const existing = await getOrder(input.id)
+    if (existing) return existing
+  }
+  return createOrderFromCheckout({
+    id: input.id,
+    channel: 'subscription',
+    userId: input.userId ?? null,
+    email: input.email ?? input.sub.customerEmail ?? null,
+    lines: subscriptionOrderLines(input.sub, input.catalogue),
+    status: 'paid',
+  })
 }
 
 /** Mark a pending order paid (webhook path when the order was pre-created). */

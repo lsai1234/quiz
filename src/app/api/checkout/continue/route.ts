@@ -28,7 +28,7 @@ export async function GET(req: Request) {
   if (!stored?.payload) return NextResponse.redirect(`${origin}/hub`)
 
   try {
-    const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, stored.payload)
+    const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, stored.payload, origin)
     if (!mock && checkoutUrl && !checkoutUrl.startsWith('#')) {
       return NextResponse.redirect(checkoutUrl)
     }
