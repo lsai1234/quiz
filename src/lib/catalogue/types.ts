@@ -114,13 +114,38 @@ export interface CatalogueVariant {
 // How a product is taken — drives how much you need per month on subscription.
 
 export type ConsumptionCadence =
-  | 'daily'        // taken every day (protein, creatine, multivitamin…)
-  | 'per-workout'  // taken on training days (pre-workout, electrolytes…)
+  | 'daily'        // taken ~every day, an anchor (protein, creatine, multivitamin…)
+  | 'per-workout'  // tied to training sessions (pre-workout, intra/EAA…)
+  | 'as-needed'    // when a trigger hits — just need enough for the month (electrolytes, sleep…)
+
+/**
+ * The life signal that drives how often an `as-needed` drink is used, so the
+ * Pour Plan can size a right-sized monthly allowance for it (see the Pour Plan
+ * spec). Inferred/tagged per product; the quiz asks about the strongest driver
+ * (sweat) and infers the rest from goals + lifestyle.
+ */
+export type AsNeededTrigger = 'sweat' | 'sleep' | 'stress' | 'immunity' | 'digestion'
+
+/** When a drink is best taken — drives the Pour Plan protocol copy (guidance,
+ *  not a rigid schedule). */
+export type PourAnchor =
+  | 'morning' | 'midday' | 'evening'        // daily anchors
+  | 'pre-workout' | 'post-workout'          // per-workout
+  | 'hot-days' | 'wind-down' | 'run-down'   // as-needed moments
 
 export interface ProductConsumption {
   cadence: ConsumptionCadence
   /** Number of servings in one (default) container. */
   servingsPerUnit: number
+  /**
+   * For `daily` cadence: how many days a week it's taken (7 = every day, 3–4 =
+   * "most days" like greens). Defaults to 7 when omitted.
+   */
+  daysPerWeek?: number
+  /** For `as-needed` cadence: which life signal sets its monthly allowance. */
+  asNeededTrigger?: AsNeededTrigger
+  /** When to drink it — feeds the Pour Plan protocol note. */
+  anchor?: PourAnchor
 }
 
 // ─── Effect onset ──────────────────────────────────────────────────────────────
@@ -178,6 +203,13 @@ export interface CatalogueProduct {
   // ── Pricing & variants ───────────────────────────────────────────────────────
   /** All available flavour/size combinations */
   variants: CatalogueVariant[]
+  /**
+   * The flavour picked by default on the Pour Plan (the "crowd favourite").
+   * Portal-settable; when unset the Pour Plan falls back to the first available
+   * variant (and unflavoured for functional drinks). The customer changes flavour
+   * on the Pour Plan — it is never asked in the quiz.
+   */
+  defaultVariantId?: string | null
   /** Price of the default (first available) variant */
   basePrice: number
   compareAtPrice: number | null

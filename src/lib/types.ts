@@ -1,3 +1,5 @@
+import type { AsNeededTrigger } from '@/lib/catalogue/types'
+
 export type AgeBracket = '16-24' | '25-34' | '35-44' | '45+'
 export type Gender = 'male' | 'female' | 'nonbinary' | 'not-specified'
 
@@ -67,6 +69,13 @@ export type DrinkVariety = 'staples' | 'variety'
  */
 export type WorkoutAddOn = 'pre-workout' | 'protein' | 'recovery'
 
+/**
+ * How often an as-needed trigger applies to the customer — sets the monthly
+ * allowance for as-needed drinks in the Pour Plan (often ≈ 4/wk, sometimes ≈ 2,
+ * rarely ≈ 1). See docs/POUR_PLAN_SPEC.md.
+ */
+export type AsNeededFrequency = 'often' | 'sometimes' | 'rarely'
+
 /** One answered AI deep-dive follow-up. Stores the display text alongside the
  *  engine signals so the Q&A can travel with the answers object into the AI
  *  prompts (personalise-stack / generate-identity) and the review screen. */
@@ -106,6 +115,18 @@ export interface QuizAnswers {
   drinkVariety?: DrinkVariety | null
   /** CHRGD LQD — opt-in workout drinks (training route only). */
   workoutAddOns?: WorkoutAddOn[]
+  /**
+   * The goal that matters MOST — a single pick on the goals step. Leans the Pour
+   * Plan toward this goal's drinks (protected in sizing). Optional so older saved
+   * answers stay valid; falls back to the first of `goals` when unset.
+   */
+  primaryGoal?: Goal | null
+  /**
+   * How often as-needed triggers apply (sweat, sleep, run-down…), used to size
+   * the as-needed pool in the Pour Plan. Only `sweat` is asked directly; the rest
+   * are inferred from goals + lifestyle. Optional/partial.
+   */
+  asNeeded?: Partial<Record<AsNeededTrigger, AsNeededFrequency>>
   ageBracket: AgeBracket | null
   exactAge: number | null
   gender: Gender | null
