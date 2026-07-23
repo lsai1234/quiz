@@ -140,27 +140,49 @@ export interface LqdPlan {
   /** Whether that pace runs the box down early, lands on a month, or stretches past it. */
   fit: LqdFit
   fitNote: string
+  /** The foundation variety choice, for framing the outcome. */
+  variety: 'staples' | 'variety'
 }
 
-/** The pace the customer picked, or the sensible default when they didn't. */
-export function resolveDrinksPerDay(answers?: Pick<QuizAnswers, 'drinksPerDay'> | null): number {
-  const v = answers?.drinksPerDay
+type LqdAnswers = Partial<Pick<QuizAnswers, 'drinksPerDay' | 'dailyDrinks' | 'drinkVariety' | 'workoutAddOns' | 'track'>>
+
+/** The daily pace: the new `dailyDrinks` foundation answer, falling back to the
+ *  legacy `drinksPerDay`, then a sensible default. */
+export function resolveDrinksPerDay(answers?: LqdAnswers | null): number {
+  const v = answers?.dailyDrinks ?? answers?.drinksPerDay
   return v && v > 0 ? v : DEFAULT_DRINKS_PER_DAY
+}
+
+/** Map a timed drink's slot to the workout add-on it represents. */
+function workoutAddOnForSlot(slot: StackSlot | undefined): 'pre-workout' | null {
+  return slot === 'energy' ? 'pre-workout' : null
 }
 
 /**
  * Build the month-of-drinks plan from a sized subscription plan: classify each
- * line as timed vs anytime, total the pool, and reconcile it with the chosen
- * pace. This is a presentation layer over the existing (already sized) plan — it
- * changes the *story*, not the quantities or pricing.
+ * line as FOUNDATION (anytime — the everyday base) vs WORKOUT ADD-ON (timed —
+ * one per session), total the pool, and reconcile it with the daily pace. On the
+ * training route, timed lines the member didn't opt into are dropped. This is a
+ * presentation layer over the already-sized plan — it changes the *story*, not
+ * the pricing.
  */
 export function buildLqdPlan(
   plan: SubscriptionLine[],
-  answers?: Pick<QuizAnswers, 'drinksPerDay'> | null,
+  answers?: LqdAnswers | null,
 ): LqdPlan {
   const drinksPerDay = resolveDrinksPerDay(answers)
+  const variety = answers?.drinkVariety ?? 'staples'
+  // Workout add-ons are only a filter on the training route once a selection has
+  // been made; elsewhere (or pre-migration) every timed line is kept.
+  const addOns = answers?.track === 'performance' ? answers?.workoutAddOns : undefined
 
-  const lines: LqdDrinkLine[] = plan.map((line) => {
+  const kept = plan.filter((line) => {
+    const addOn = workoutAddOnForSlot(line.product.stackSlots[0])
+    if (!addOn || !addOns) return true // foundation, or no explicit add-on choice
+    return addOns.includes(addOn)
+  })
+
+  const lines: LqdDrinkLine[] = kept.map((line) => {
     const slot = line.product.stackSlots[0]
     const pacing = pacingFor(slot)
     const monthlyCount = Math.max(1, Math.round(line.occasionsPerMonth || 0))
@@ -192,5 +214,5 @@ export function buildLqdPlan(
     fitNote = `At ${drinksPerDay}/day the box lasts about ${daysOfCover} days — lined up with your month, zero daily admin.`
   }
 
-  return { lines, totalDrinks, timedDrinks, anytimeDrinks, drinksPerDay, daysOfCover, fit, fitNote }
+  return { lines, totalDrinks, timedDrinks, anytimeDrinks, drinksPerDay, daysOfCover, fit, fitNote, variety }
 }

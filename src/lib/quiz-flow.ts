@@ -13,7 +13,9 @@ import type { QuizTrack } from '@/lib/types'
  */
 export type StepId =
   | 'goals'
-  | 'drinksPerDay'
+  | 'dailyDrinks'
+  | 'drinkVariety'
+  | 'workoutAddOns'
   | 'personal'
   | 'frequency'
   | 'type'
@@ -70,8 +72,11 @@ export function selectHint(mode: SelectMode): string | null {
 
 export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", select: 'multi', lqd: { hint: 'Pick everything that applies — we’ll cover it all with ready-made drinks.' }, advance: 'manual' },
-  // LQD only — the pace, not a dose. We reconcile it against the month's pool.
-  { id: 'drinksPerDay', section: 'YOUR PACE', q: 'How many drinks a day?', hint: "Just a feel for your rhythm — you don't have to hit it. We'll pour a month either way.", select: 'one', onlyInDrinksMode: true, advance: 'auto' },
+  // LQD FOUNDATION — the everyday base, shown to everyone in drinks mode.
+  { id: 'dailyDrinks', section: 'YOUR DAILY DRINKS', q: 'How many drinks on a normal day?', hint: "Your everyday base — no need to hit it exactly. We'll pour a month to match.", select: 'one', onlyInDrinksMode: true, advance: 'auto' },
+  { id: 'drinkVariety', section: 'YOUR DAILY DRINKS', q: 'Same drinks daily, or a mix?', hint: 'Do you want your go-to staples every day, or a rotating mix across the month?', select: 'one', onlyInDrinksMode: true, advance: 'auto' },
+  // LQD WORKOUT ADD-ONS — training route only; opt-in drinks around sessions.
+  { id: 'workoutAddOns', section: 'WORKOUT DRINKS', q: 'Add workout drinks?', hint: 'Optional extras around your training — sized to how often you train.', select: 'optional', tracks: ['performance'], onlyInDrinksMode: true, advance: 'manual' },
   { id: 'personal', section: 'ABOUT YOU', q: 'A little about you.', hint: 'Helps us tailor the doses and picks to you.', select: 'form', advance: 'manual' },
   { id: 'frequency', section: 'TRAINING', q: 'How often do you train?', hint: 'Your frequency shapes the whole stack.', select: 'one', tracks: ['performance'], lqd: { hint: 'Your frequency shapes the whole package.' }, advance: 'auto' },
   { id: 'type', section: 'TRAINING', q: "What's your training style?", hint: 'Pick everything you do — add as many as apply.', select: 'multi', tracks: ['performance'], advance: 'manual' },

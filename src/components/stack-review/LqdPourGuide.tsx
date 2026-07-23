@@ -144,11 +144,11 @@ export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answ
 
       {open && (
       <div className="mt-3">
-      {/* Sip anytime — the free-pace pool */}
+      {/* Foundation — the everyday base you sip at your own pace */}
       {anytime.length > 0 && (
         <div className="mb-4">
           <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
-            Sip anytime · {lqd.anytimeDrinks} drinks
+            Foundation · every day · {lqd.anytimeDrinks} drinks{lqd.variety === 'variety' ? ' · a monthly mix' : ' · your staples'}
           </p>
           <div className="space-y-3">
             {anytime.map((line) => <DrinkRow key={line.product.id} line={line} />)}
@@ -156,11 +156,11 @@ export function LqdPourGuide({ plan, answers }: { plan: SubscriptionLine[]; answ
         </div>
       )}
 
-      {/* One per session — the only timed drink */}
+      {/* Workout add-ons — timed, one per session */}
       {timed.length > 0 && (
         <div>
           <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
-            One per session · {lqd.timedDrinks} drinks
+            Workout add-ons · training days · {lqd.timedDrinks} drinks
           </p>
           <div className="space-y-3">
             {timed.map((line) => <DrinkRow key={line.product.id} line={line} />)}

@@ -17,7 +17,8 @@ import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
-  TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity, DrinksPerDay,
+  TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
+  DailyDrinks, DrinkVariety, WorkoutAddOn,
 } from '@/lib/types'
 
 // Client-side fallback identity so the reveal is never empty if the identity
@@ -286,14 +287,27 @@ const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
   '80-plus': 'Best value',
 }
 
-// LQD pace — how many drinks a day the customer wants to sip. Not a dose: it
-// tunes the "your box lasts ~X days" story, never the amounts. `fills` drives
-// the little liquid-level graphic on each option.
-const DRINKS_PER_DAY_DATA: Array<{ id: DrinksPerDay; label: string; sub: string; fills: number }> = [
-  { id: 1, label: 'One a day',    sub: 'A single go-to drink — easy does it',        fills: 1 },
-  { id: 2, label: 'A couple',     sub: 'Two-ish through the day — the sweet spot',   fills: 2 },
-  { id: 3, label: 'Three',        sub: 'A drink with most meals',                    fills: 3 },
-  { id: 4, label: 'Four or more', sub: 'All day — swap drinks in for the usual',     fills: 4 },
+// LQD FOUNDATION — how many drinks on a normal day. Not a dose: it tunes the
+// "your box lasts ~X days" story, never the amounts. `fills` drives the little
+// liquid-level graphic on each option.
+const DAILY_DRINKS_DATA: Array<{ id: DailyDrinks; label: string; sub: string; fills: number }> = [
+  { id: 1, label: 'One a day',  sub: 'A single go-to drink — easy does it',      fills: 1 },
+  { id: 2, label: 'A couple',   sub: 'Morning and later — the sweet spot',       fills: 2 },
+  { id: 3, label: 'Three+',     sub: 'A drink with most meals',                  fills: 3 },
+]
+
+// LQD FOUNDATION — staples vs a monthly mix. Shapes the box's variety, not size.
+const DRINK_VARIETY_DATA: Array<{ id: DrinkVariety; label: string; sub: string; fills: number }> = [
+  { id: 'staples', label: 'My staples', sub: 'The same go-to drinks every day — simple, no thinking', fills: 2 },
+  { id: 'variety', label: 'A monthly mix', sub: 'A rotating mix that covers more bases across the month', fills: 4 },
+]
+
+// LQD WORKOUT ADD-ONS — opt-in drinks around training (performance route only),
+// sized from training frequency rather than the daily pace.
+const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }> = [
+  { id: 'pre-workout', label: 'Pre-workout', sub: 'A hit of energy & focus before you train' },
+  { id: 'protein',     label: 'Protein shake', sub: 'A ready-made protein drink after sessions' },
+  { id: 'recovery',    label: 'Recovery', sub: 'Refuel and repair after the hard ones' },
 ]
 
 const FORMAT_DATA = [
@@ -874,6 +888,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
       case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
+      // Workout add-ons are optional — always allowed to continue (with or without picks).
+      case 'workoutAddOns': return true
       case 'type': return answers.trainingType.length > 0
       case 'budget': return !!answers.budget
       default: return false
@@ -912,9 +928,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   function reviewRows(): Array<{ label: string; value: string; edit: StepId }> {
     const rows: Array<{ label: string; value: string; edit: StepId }> = []
     rows.push({ label: 'Goals', value: answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || '—', edit: 'goals' })
-    if (answers.drinksMode && answers.drinksPerDay) {
-      const pace = DRINKS_PER_DAY_DATA.find((d) => d.id === answers.drinksPerDay)
-      if (pace) rows.push({ label: 'Your pace', value: `${pace.label} · ${pace.id === 4 ? '4+' : pace.id}/day`, edit: 'drinksPerDay' })
+    if (answers.drinksMode && answers.dailyDrinks) {
+      const pace = DAILY_DRINKS_DATA.find((d) => d.id === answers.dailyDrinks)
+      const variety = DRINK_VARIETY_DATA.find((v) => v.id === answers.drinkVariety)
+      const parts = [pace ? `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day` : '', variety?.label].filter(Boolean)
+      if (parts.length) rows.push({ label: 'Daily drinks', value: parts.join(' · '), edit: 'dailyDrinks' })
+    }
+    if (answers.drinksMode && answers.track === 'performance' && (answers.workoutAddOns ?? []).length > 0) {
+      const labels = WORKOUT_ADDON_DATA.filter((w) => (answers.workoutAddOns ?? []).includes(w.id)).map((w) => w.label)
+      rows.push({ label: 'Workout drinks', value: labels.join(', '), edit: 'workoutAddOns' })
     }
     if (localAge) rows.push({ label: 'You', value: [localName.trim(), localExactAge ? `${localExactAge}` : localAge].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
@@ -1214,15 +1236,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           ))}
 
           {/* ── LQD pace — how many drinks a day (drinks mode only) ── */}
-          {id === 'drinksPerDay' && (
+          {/* ── LQD foundation — how many drinks a day (mirrors into drinksPerDay
+                so the box-sizing engine is unchanged) ── */}
+          {id === 'dailyDrinks' && (
             <div className="flex flex-col gap-2.5">
-              {DRINKS_PER_DAY_DATA.map(({ id: did, label, sub, fills }) => {
-                const active = answers.drinksPerDay === did
+              {DAILY_DRINKS_DATA.map(({ id: did, label, sub, fills }) => {
+                const active = answers.dailyDrinks === did
                 return (
                   <button
-                    key={`dpd-${did}`}
+                    key={`daily-${did}`}
                     onClick={() => {
-                      setAnswer('drinksPerDay', did)
+                      setAnswer('dailyDrinks', did)
+                      setAnswer('drinksPerDay', did) // keep the engine's pace signal in sync
                       clearPending()
                       pendingTimerRef.current = setTimeout(() => advance(), 340)
                     }}
@@ -1244,7 +1269,74 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                 )
               })}
               <p className="text-[12px] text-white/30 leading-snug mt-1 px-1">
-                No pressure to hit a number — LQD is a month of drinks you sip at your own rate. This just helps us show how your box will flow.
+                Your everyday base. No pressure to hit a number — it just helps us size and show how your box will flow.
+              </p>
+            </div>
+          )}
+
+          {/* ── LQD foundation — staples vs a monthly mix ── */}
+          {id === 'drinkVariety' && (
+            <div className="flex flex-col gap-2.5">
+              {DRINK_VARIETY_DATA.map(({ id: vid, label, sub, fills }) => {
+                const active = answers.drinkVariety === vid
+                return (
+                  <button
+                    key={`variety-${vid}`}
+                    onClick={() => {
+                      setAnswer('drinkVariety', vid)
+                      clearPending()
+                      pendingTimerRef.current = setTimeout(() => advance(), 340)
+                    }}
+                    aria-pressed={active}
+                    className={[
+                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
+                      'transition-all duration-200 active:scale-[0.99]',
+                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
+                      active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
+                    ].join(' ')}
+                  >
+                    <PaceGlass level={fills / 4} selected={active} reduced={reducedMotion} />
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[15px] font-medium leading-snug ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
+                    </div>
+                    <CheckMark selected={active} />
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* ── LQD workout add-ons — opt-in, training route only ── */}
+          {id === 'workoutAddOns' && (
+            <div className="flex flex-col gap-2.5">
+              {WORKOUT_ADDON_DATA.map(({ id: wid, label, sub }) => {
+                const selected = (answers.workoutAddOns ?? []).includes(wid)
+                return (
+                  <button
+                    key={`wa-${wid}`}
+                    onClick={() => {
+                      const cur = answers.workoutAddOns ?? []
+                      setAnswer('workoutAddOns', cur.includes(wid) ? cur.filter((x) => x !== wid) : [...cur, wid])
+                    }}
+                    aria-pressed={selected}
+                    className={[
+                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
+                      'transition-all duration-200 active:scale-[0.99]',
+                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
+                      selected ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
+                    ].join(' ')}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className={`text-[15px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
+                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
+                    </div>
+                    <CheckMark selected={selected} />
+                  </button>
+                )
+              })}
+              <p className="text-[12px] text-white/30 leading-snug mt-1 px-1">
+                Optional — these ride on top of your everyday drinks and are sized to how often you train. Skip if you just want the daily base.
               </p>
             </div>
           )}
@@ -1651,8 +1743,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               style={{ fontFamily: 'var(--font-display)' }}
             >
               {continueNeeds ? continueNeeds
-                : id === 'review' ? 'Build my stack'
-                : id === 'deepDive' ? 'Build my stack'
+                : id === 'review' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
+                : id === 'deepDive' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
                 : id === 'budget' ? 'Review my answers'
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`
                 : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()}`

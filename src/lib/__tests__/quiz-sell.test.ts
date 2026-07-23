@@ -24,10 +24,10 @@ describe('quizFactFor', () => {
     expect(quizFactFor('budget', true)).toBeNull()
   })
 
-  it('the LQD pace step gets the one-box-in-the-fridge tidbit', () => {
-    expect(quizFactFor('drinksPerDay', true)?.text).toMatch(/box|fridge|no tubs|no pills/i)
+  it('the LQD daily-drinks step gets the one-box-in-the-fridge tidbit', () => {
+    expect(quizFactFor('dailyDrinks', true)?.text).toMatch(/box|fridge|no tubs|no pills/i)
     // …and that step carries nothing in the normal stack quiz.
-    expect(quizFactFor('drinksPerDay', false)).toBeNull()
+    expect(quizFactFor('dailyDrinks', false)).toBeNull()
   })
 
   it('a fact id is stable for a given step + mode (so it shows at most once)', () => {

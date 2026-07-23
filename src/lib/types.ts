@@ -51,6 +51,22 @@ export type QuizTrack = 'performance' | 'wellbeing'
  */
 export type DrinksPerDay = 1 | 2 | 3 | 4
 
+/**
+ * CHRGD LQD — the FOUNDATION intake. Two signals shape the everyday base of the
+ * drinks box (shown to everyone in drinks mode):
+ *   • dailyDrinks  — how many drinks on a normal day (the pace).
+ *   • drinkVariety — the same go-to drinks each day ('staples'), or a rotating
+ *                    mix across the month ('variety').
+ */
+export type DailyDrinks = 1 | 2 | 3
+export type DrinkVariety = 'staples' | 'variety'
+
+/**
+ * CHRGD LQD — WORKOUT ADD-ONS. Only offered on the training route: opt-in
+ * drinks tied to sessions (sized from training frequency, not the daily pace).
+ */
+export type WorkoutAddOn = 'pre-workout' | 'protein' | 'recovery'
+
 /** One answered AI deep-dive follow-up. Stores the display text alongside the
  *  engine signals so the Q&A can travel with the answers object into the AI
  *  prompts (personalise-stack / generate-identity) and the review screen. */
@@ -78,11 +94,18 @@ export interface QuizAnswers {
    */
   drinksMode?: boolean
   /**
-   * CHRGD LQD — the pace the customer wants to drink at (drinks/day). Feeds the
-   * "month of drinks, sipped at your rate" logic on the review, not the dose.
+   * CHRGD LQD — the pace the customer wants to drink at (drinks/day). Kept as
+   * the engine's pace signal (see factory) and mirrored from `dailyDrinks`.
    * Optional so answers saved before the feature existed stay valid.
    */
   drinksPerDay?: DrinksPerDay | null
+  /** CHRGD LQD foundation — how many drinks on a normal day. Mirrors into
+   *  `drinksPerDay` so the sizing engine is unchanged. */
+  dailyDrinks?: DailyDrinks | null
+  /** CHRGD LQD foundation — same staples daily vs a monthly mix. */
+  drinkVariety?: DrinkVariety | null
+  /** CHRGD LQD — opt-in workout drinks (training route only). */
+  workoutAddOns?: WorkoutAddOn[]
   ageBracket: AgeBracket | null
   exactAge: number | null
   gender: Gender | null

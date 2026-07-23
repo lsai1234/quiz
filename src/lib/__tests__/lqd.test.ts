@@ -86,22 +86,31 @@ describe('LQD blueprint (pre-made drinks only)', () => {
 })
 
 describe('LQD quiz flow', () => {
-  it('swaps formats for the drinks/day pace step and drops the bundle step in drinks mode', () => {
+  it('swaps formats for the foundation + workout-addon steps and drops the bundle step in drinks mode', () => {
     const normal = activeSteps('performance').map((s) => s.id)
     const lqd = activeSteps('performance', true).map((s) => s.id)
-    // Formats is dropped (implied) and the pace step is added, both only in LQD.
+    // Formats is dropped (implied); the LQD-only steps are added.
     expect(normal).toContain('formats')
-    expect(normal).not.toContain('drinksPerDay')
+    expect(normal).not.toContain('dailyDrinks')
     expect(lqd).not.toContain('formats')
-    expect(lqd).toContain('drinksPerDay')
-    // The bundle chooser is gone too — the pace already sizes the package.
+    expect(lqd).toContain('dailyDrinks')
+    expect(lqd).toContain('drinkVariety')
+    expect(lqd).toContain('workoutAddOns')
+    // The bundle chooser is gone too — the foundation already sizes the package.
     expect(normal).toContain('budget')
     expect(lqd).not.toContain('budget')
-    // Nothing else moves.
-    expect(lqd.filter((id) => id !== 'drinksPerDay')).toEqual(
+    // Nothing else moves — the foundation steps follow the goal question.
+    expect(lqd.filter((id) => !['dailyDrinks', 'drinkVariety', 'workoutAddOns'].includes(id))).toEqual(
       normal.filter((id) => id !== 'formats' && id !== 'budget'),
     )
-    expect(lqd[lqd.indexOf('drinksPerDay') - 1]).toBe('goals')
+    expect(lqd[lqd.indexOf('dailyDrinks') - 1]).toBe('goals')
+  })
+
+  it('hides workout add-ons on the wellbeing (non-training) route', () => {
+    const well = activeSteps('wellbeing', true).map((s) => s.id)
+    expect(well).toContain('dailyDrinks')
+    expect(well).toContain('drinkVariety')
+    expect(well).not.toContain('workoutAddOns') // no workout section off the training route
   })
 
   it('applies LQD copy overrides on top of the track', () => {
@@ -184,5 +193,29 @@ describe('buildLqdPlan — month of drinks at your pace', () => {
   it('falls back to a sensible pace when the customer never picked one', () => {
     const plan = buildLqdPlan([line('health', 30)], null)
     expect(plan.drinksPerDay).toBe(DEFAULT_DRINKS_PER_DAY)
+  })
+
+  it('drives the pace from the new dailyDrinks answer, falling back to legacy drinksPerDay', () => {
+    expect(buildLqdPlan([line('health', 30)], { dailyDrinks: 3 }).drinksPerDay).toBe(3)
+    // legacy answers still resolve
+    expect(buildLqdPlan([line('health', 30)], { drinksPerDay: 1 }).drinksPerDay).toBe(1)
+  })
+
+  it('carries the foundation variety choice through for framing', () => {
+    expect(buildLqdPlan([line('health', 30)], { drinkVariety: 'variety' }).variety).toBe('variety')
+    expect(buildLqdPlan([line('health', 30)], {}).variety).toBe('staples')
+  })
+
+  it('drops workout-add-on (timed) drinks the member did not opt into on the training route', () => {
+    const plan = [line('energy', 12, true), line('health', 30)] // 1 workout add-on + foundation
+    // Opted in → the pre-workout stays.
+    const withAddon = buildLqdPlan(plan, { track: 'performance', workoutAddOns: ['pre-workout'] })
+    expect(withAddon.timedDrinks).toBe(12)
+    // Opted out (empty selection on the training route) → only the foundation remains.
+    const withoutAddon = buildLqdPlan(plan, { track: 'performance', workoutAddOns: [] })
+    expect(withoutAddon.timedDrinks).toBe(0)
+    expect(withoutAddon.anytimeDrinks).toBe(30)
+    // No explicit choice (e.g. legacy answers) → nothing is filtered.
+    expect(buildLqdPlan(plan, { track: 'performance' }).timedDrinks).toBe(12)
   })
 })

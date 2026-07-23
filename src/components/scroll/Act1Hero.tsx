@@ -33,8 +33,8 @@ const TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
 /** Same two tracks, poured: shown after tapping the LQD card. Everything in
  *  LQD arrives PRE-MADE — real drinks, zero prep. */
 const LQD_TRACKS: { id: QuizTrack; icon: string; label: string; sub: string }[] = [
-  { id: 'wellbeing',   icon: 'leaf',     label: 'Drinks for every day',           sub: 'Vitamin drinks, greens, night drinks — ready in the fridge' },
-  { id: 'performance', icon: 'dumbbell', label: 'Drinks for training + wellness', sub: 'Pre-mixed shakes, energy cans, shots — plus the everyday drinks' },
+  { id: 'wellbeing',   icon: 'leaf',     label: 'Everyday drinks',          sub: 'Your daily base — greens, vitamins, hydration, night drinks' },
+  { id: 'performance', icon: 'dumbbell', label: 'Everyday + workout drinks', sub: 'The daily base, plus pre-workout, protein & recovery around training' },
 ]
 
 /** The zero-prep pitch, shown under the LQD track cards. */
