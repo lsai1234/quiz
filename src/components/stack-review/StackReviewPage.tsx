@@ -29,6 +29,7 @@ import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
+import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
 
 export function StackReviewPage() {
@@ -59,11 +60,21 @@ export function StackReviewPage() {
     for (const slot of rawBlueprint.slots) {
       if (slot.selectedVariantId) continue
       const product = products.find((p) => p.id === slot.selectedProductId)
-      const defaultVariant = product?.variants.find((v) => v.available)
-      if (defaultVariant) result = updateStackSlotVariant(result, slot.slotId, defaultVariant.id)
+      if (!product) continue
+      // Use the Pour Plan's default flavour (product default → first available) so
+      // what the Pour Plan shows is exactly what the receipt + cart use.
+      const dvId = defaultVariantId(product)
+      if (product.variants.some((v) => v.id === dvId)) result = updateStackSlotVariant(result, slot.slotId, dvId)
     }
     return result
   }, [rawBlueprint, products])
+
+  // productId → currently selected flavour variant, for the Pour Plan flavour picker.
+  const selectedVariantByProductId = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const s of blueprint.slots) if (s.selectedProductId && s.selectedVariantId) m[s.selectedProductId] = s.selectedVariantId
+    return m
+  }, [blueprint])
 
   // Swap modal state
   const [swapSlot, setSwapSlot] = useState<StackSlotEntry | null>(null)
@@ -270,9 +281,14 @@ export function StackReviewPage() {
               catalogue={offerableProducts}
               planType={planType}
               onPlanChange={setPlanType}
+              selectedVariantByProductId={selectedVariantByProductId}
               onSwapProduct={(productId) => {
                 const slot = blueprint.slots.find((s) => s.selectedProductId === productId)
                 if (slot) handleOpenSwap(slot.slotId)
+              }}
+              onSelectFlavour={(productId, variantId) => {
+                const slot = blueprint.slots.find((s) => s.selectedProductId === productId)
+                if (slot) handleChangeVariant(slot.slotId, variantId)
               }}
             />
           )}

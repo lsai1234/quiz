@@ -10,7 +10,7 @@
  * packs) reflects the shared chooser. Product swaps reuse the review's existing
  * swap modal; flavour selection lands with the checkout wiring (P4).
  */
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -26,11 +26,16 @@ interface Props {
   catalogue: CatalogueProduct[]
   planType: PlanType
   onPlanChange: (p: PlanType) => void
+  /** productId → currently selected flavour variant (from the blueprint). */
+  selectedVariantByProductId?: Record<string, string>
   /** Opens the existing swap flow for a product (maps back to its stack slot). */
   onSwapProduct?: (productId: string) => void
+  /** Persists a flavour choice for a product (maps back to its stack slot). */
+  onSelectFlavour?: (productId: string, variantId: string) => void
 }
 
-export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange, onSwapProduct }: Props) {
+export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange, selectedVariantByProductId, onSwapProduct, onSelectFlavour }: Props) {
+  const [openFlavour, setOpenFlavour] = useState<string | null>(null)
   const products = useMemo(() => {
     const byId = new Map<string, CatalogueProduct>()
     for (const l of plan) if (!byId.has(l.product.id)) byId.set(l.product.id, l.product)
@@ -48,9 +53,16 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
   const swapCount = (line: PourLine) =>
     catalogue.filter((c) => c.swapGroup === line.swapGroup && c.id !== line.productId).length
 
+  /** The variant actually selected (blueprint) if known, else the plan's default. */
+  const currentVariantId = (line: PourLine): string => selectedVariantByProductId?.[line.productId] ?? line.variantId
+
+  const variantsFor = (line: PourLine) => (productById.get(line.productId)?.variants ?? []).filter((v) => v.available)
+
+  const variantLabel = (v: { flavour: string | null; size: string | null; title: string }): string => v.flavour || v.size || v.title
+
   const flavourLabel = (line: PourLine): string | null => {
-    const v = productById.get(line.productId)?.variants.find((x) => x.id === line.variantId)
-    return v?.flavour || v?.size || null
+    const v = productById.get(line.productId)?.variants.find((x) => x.id === currentVariantId(line))
+    return v ? variantLabel(v) : null
   }
 
   if (pour.buckets.length === 0) return null
@@ -153,10 +165,43 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
                         {line.isPrimary && <span className="ml-1.5 text-[9px] font-bold uppercase align-middle" style={{ color: ACCENT }}>your focus</span>}
                       </p>
                       <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-0.5">{line.protocolNote}</p>
-                      {canSwap && (
-                        <button onClick={() => onSwapProduct!(line.productId)} className="text-[11px] font-semibold mt-1 underline" style={{ color: ACCENT }}>
-                          Swap
-                        </button>
+                      <div className="flex items-center gap-3 mt-1">
+                        {onSelectFlavour && variantsFor(line).length > 1 && (
+                          <button
+                            onClick={() => setOpenFlavour((cur) => (cur === line.productId ? null : line.productId))}
+                            className="text-[11px] font-semibold"
+                            style={{ color: ACCENT }}
+                            aria-expanded={openFlavour === line.productId}
+                          >
+                            {flavour ? 'Change flavour' : 'Pick flavour'}
+                          </button>
+                        )}
+                        {canSwap && (
+                          <button onClick={() => onSwapProduct!(line.productId)} className="text-[11px] font-semibold underline" style={{ color: 'var(--color-muted)' }}>
+                            Swap
+                          </button>
+                        )}
+                      </div>
+                      {openFlavour === line.productId && onSelectFlavour && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {variantsFor(line).map((v) => {
+                            const active = v.id === currentVariantId(line)
+                            return (
+                              <button
+                                key={v.id}
+                                onClick={() => { onSelectFlavour(line.productId, v.id); setOpenFlavour(null) }}
+                                className="text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors"
+                                style={{
+                                  color: active ? '#04121a' : 'var(--color-text-2)',
+                                  background: active ? ACCENT : 'var(--color-surface-2)',
+                                  border: `1px solid ${active ? ACCENT : 'var(--color-border)'}`,
+                                }}
+                              >
+                                {variantLabel(v)}
+                              </button>
+                            )
+                          })}
+                        </div>
                       )}
                     </div>
                     <span className="text-sm font-black tnum whitespace-nowrap" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums' }}>
