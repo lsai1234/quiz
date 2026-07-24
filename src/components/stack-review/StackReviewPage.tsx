@@ -262,8 +262,20 @@ export function StackReviewPage() {
 
         {/* Price summary + checkout */}
         <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-20">
-          {/* LQD: the month-of-drinks tally + pour guide */}
-          {answers.drinksMode && <LqdPourGuide plan={subscriptionPlan} answers={answers} />}
+          {/* LQD: the Pour Plan reveal */}
+          {answers.drinksMode && (
+            <LqdPourGuide
+              plan={subscriptionPlan}
+              answers={answers}
+              catalogue={offerableProducts}
+              planType={planType}
+              onPlanChange={setPlanType}
+              onSwapProduct={(productId) => {
+                const slot = blueprint.slots.find((s) => s.selectedProductId === productId)
+                if (slot) handleOpenSwap(slot.slotId)
+              }}
+            />
+          )}
 
           {checkoutState.status === 'error' && (
             <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
