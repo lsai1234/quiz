@@ -13,12 +13,10 @@
  */
 import type { CatalogueProduct, ConsumptionCadence, PourAnchor } from '@/lib/catalogue/types'
 import type { QuizAnswers, DrinkVariety, Goal } from '@/lib/types'
-import { workoutsPerMonth, resolveConsumption } from '@/lib/stack-blueprint/pricing'
+import { resolveConsumption, occasionsPerMonthFor } from '@/lib/stack-blueprint/pricing'
 
 const WEEKS_PER_MONTH = 4.345
 const DAYS_PER_MONTH = 30
-const AS_NEEDED_FLOOR = 4
-const AS_NEEDED_CAP = 20
 const DEFAULT_PACE = 2
 const MIN_KINDS = 3
 
@@ -90,24 +88,12 @@ export function resolvePace(answers?: Pick<QuizAnswers, 'dailyDrinks' | 'drinksP
   return v && v > 0 ? v : DEFAULT_PACE
 }
 
-function triggerWeekly(freq: 'often' | 'sometimes' | 'rarely'): number {
-  return freq === 'often' ? 4 : freq === 'rarely' ? 1 : 2
-}
-
-const round = (n: number) => Math.round(n)
-
-/** Monthly occasions for a product from its rhythm + the customer's context. */
+/**
+ * Monthly occasions for a product — the SAME rhythm sizing the priced box uses
+ * (`occasionsPerMonthFor` in pricing), so the Pour Plan and the receipt agree.
+ */
 export function occasionsFor(product: CatalogueProduct, answers?: QuizAnswers | null): number {
-  const cadence: ConsumptionCadence = product.consumption?.cadence ?? resolveConsumption(product).cadence
-  if (cadence === 'per-workout') return Math.max(1, workoutsPerMonth(answers))
-  if (cadence === 'as-needed') {
-    const trigger = product.consumption?.asNeededTrigger
-    const freq = (trigger && answers?.asNeeded?.[trigger]) || 'sometimes'
-    return Math.min(AS_NEEDED_CAP, Math.max(AS_NEEDED_FLOOR, round(triggerWeekly(freq) * WEEKS_PER_MONTH)))
-  }
-  // daily — every day, or "most days" via daysPerWeek
-  const daysPerWeek = product.consumption?.daysPerWeek ?? 7
-  return daysPerWeek >= 7 ? DAYS_PER_MONTH : round(daysPerWeek * WEEKS_PER_MONTH)
+  return occasionsPerMonthFor(product, answers)
 }
 
 function whenFor(cadence: ConsumptionCadence): PourWhen {
@@ -169,7 +155,11 @@ function sizeProduct(product: CatalogueProduct, answers: QuizAnswers | null | un
  * `products` is the already-selected set (the blueprint does selection); this
  * sizes, tunes and buckets it.
  */
-export function buildPourPlan(products: CatalogueProduct[], answers?: QuizAnswers | null): PourPlan {
+export function buildPourPlan(
+  products: CatalogueProduct[],
+  answers?: QuizAnswers | null,
+  opts: { reconcile?: boolean } = {},
+): PourPlan {
   const pace = resolvePace(answers)
   const variety: DrinkVariety = answers?.drinkVariety ?? 'staples'
   const primaryGoal = answers?.primaryGoal ?? answers?.goals?.[0] ?? null
@@ -179,7 +169,9 @@ export function buildPourPlan(products: CatalogueProduct[], answers?: QuizAnswer
   // Breadth vs depth. Counts are rhythm-fixed, so the lever is how many KINDS:
   //   staples → concentrate on the go-tos, trim the marginal extras toward pace;
   //   variety → keep the fuller spread of kinds.
-  if (variety === 'staples') {
+  // Opt-in: only when reconciling a candidate pool (not when rendering an
+  // already-selected plan, where the box + receipt must match exactly).
+  if (opts.reconcile && variety === 'staples') {
     const target = pace * DAYS_PER_MONTH
     let total = sized.reduce((s, x) => s + x.line.monthlyCount, 0)
     // Trim lowest-scoring, non-primary lines first until we're near the target

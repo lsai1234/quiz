@@ -345,6 +345,33 @@ export function resolveConsumption(product: CatalogueProduct): { cadence: Consum
   }
 }
 
+// ─── Rhythm sizing — the single source of truth for monthly occasions ─────────
+// Each drink is sized to HOW IT'S CONSUMED, so the Pour Plan and the priced
+// box always agree (see docs/POUR_PLAN_SPEC.md). Untagged products resolve to
+// the previous behaviour (daily → 30, else training sessions/month).
+
+const WEEKS_PER_MONTH = 4.345
+const AS_NEEDED_FLOOR = 4
+const AS_NEEDED_CAP = 20
+
+function asNeededWeekly(freq: 'often' | 'sometimes' | 'rarely'): number {
+  return freq === 'often' ? 4 : freq === 'rarely' ? 1 : 2
+}
+
+/** Monthly occasions for a product from its consumption rhythm + the answers. */
+export function occasionsPerMonthFor(product: CatalogueProduct, answers?: QuizAnswers | null): number {
+  const c = product.consumption
+  const cadence: ConsumptionCadence = c?.cadence ?? resolveConsumption(product).cadence
+  if (cadence === 'per-workout') return Math.max(1, workoutsPerMonth(answers))
+  if (cadence === 'as-needed') {
+    const trigger = c?.asNeededTrigger
+    const freq = (trigger && answers?.asNeeded?.[trigger]) || 'sometimes'
+    return Math.min(AS_NEEDED_CAP, Math.max(AS_NEEDED_FLOOR, Math.round(asNeededWeekly(freq) * WEEKS_PER_MONTH)))
+  }
+  const daysPerWeek = c?.daysPerWeek ?? 7
+  return daysPerWeek >= 7 ? DAYS_PER_MONTH : Math.round(daysPerWeek * WEEKS_PER_MONTH)
+}
+
 // ─── Usage levels (the customisation journey's sliders) ──────────────────────
 // A member dials in how much they get through on a friendly, no-maths scale.
 // Each level is a multiplier on servings-per-occasion: 'light' = fewer servings
@@ -395,9 +422,8 @@ export function sizeConsumption(
   config = getPricingConfig(),
   usageLevel: UsageLevel = DEFAULT_USAGE_LEVEL,
 ): LineSizing {
-  const woPerMonth = workoutsPerMonth(answers)
   const { cadence, servingsPerUnit } = resolveConsumption(product)
-  const occasionsPerMonth = cadence === 'daily' ? DAYS_PER_MONTH : Math.max(woPerMonth, 1)
+  const occasionsPerMonth = occasionsPerMonthFor(product, answers)
   const servingsPerOccasion = USAGE_SERVINGS_PER_OCCASION[usageLevel] ?? 1
   const servingsPerMonth = occasionsPerMonth * servingsPerOccasion
   const monthsOneUnitLasts = servingsPerMonth > 0 ? servingsPerUnit / servingsPerMonth : config.maxDeliveryMonths

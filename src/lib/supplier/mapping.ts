@@ -8,7 +8,7 @@
  * attributes — claim-safe copy, dietary nuance, effect onset, etc. — are filled
  * by the AI autopopulate step in Phase 1b, which layers on top of this.
  */
-import type { CatalogueProduct, CatalogueVariant, ConsumptionCadence, DietaryTag, StackSlot, SwapGroup } from '@/lib/catalogue/types'
+import type { AsNeededTrigger, CatalogueProduct, CatalogueVariant, ConsumptionCadence, DietaryTag, PourAnchor, StackSlot, SwapGroup } from '@/lib/catalogue/types'
 import type { Goal } from '@/lib/types'
 import type { SupplierProduct } from './types'
 
@@ -69,6 +69,33 @@ function formatsFor(text: string, isRtd: boolean): string[] {
   return ['powder']
 }
 
+// Rhythm tags seeded from the swap group (Pour Plan — cadence/anchor/trigger).
+const ANCHOR_BY_SWAP: Partial<Record<SwapGroup, PourAnchor>> = {
+  multivitamin: 'morning', 'vitamin-d': 'morning', 'vitamin-c': 'morning', 'omega-3': 'morning',
+  greens: 'midday', probiotic: 'morning', adaptogen: 'morning', fibre: 'morning',
+  collagen: 'evening', magnesium: 'wind-down', 'sleep-support': 'wind-down',
+  'pre-workout-stim': 'pre-workout', 'pre-workout-stim-free': 'pre-workout', aminos: 'pre-workout',
+  electrolytes: 'hot-days', creatine: 'morning',
+  'protein-whey': 'post-workout', 'protein-plant': 'post-workout', 'protein-clear': 'post-workout', 'protein-mass': 'post-workout',
+}
+const AS_NEEDED_BY_SWAP: Partial<Record<SwapGroup, AsNeededTrigger>> = {
+  electrolytes: 'sweat', 'sleep-support': 'sleep', magnesium: 'sleep', 'vitamin-c': 'immunity',
+}
+const MOST_DAYS_SWAP = new Set<SwapGroup>(['greens', 'probiotic'])
+
+/** Seed the Pour Plan rhythm from the swap group: as-needed triggers, "most
+ *  days" cadence, and the anchor moment. */
+export function rhythmForSwap(
+  swap: SwapGroup,
+  baseCadence: ConsumptionCadence,
+): { cadence: ConsumptionCadence; daysPerWeek?: number; asNeededTrigger?: AsNeededTrigger; anchor?: PourAnchor } {
+  const anchor = ANCHOR_BY_SWAP[swap]
+  const asNeededTrigger = AS_NEEDED_BY_SWAP[swap]
+  if (asNeededTrigger) return { cadence: 'as-needed', asNeededTrigger, anchor }
+  const daysPerWeek = MOST_DAYS_SWAP.has(swap) ? 4 : undefined
+  return { cadence: baseCadence, daysPerWeek, anchor }
+}
+
 /** Best-effort classification for an added product. Phase 1b's AI supersedes it. */
 export function classifySupplierProduct(sp: SupplierProduct): Classification {
   // Classify from the authoritative category + name only — the marketing
@@ -122,6 +149,9 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           shopifyVariantId: null,
         }]
 
+  const servingsPerUnit = sp.servings ?? 30
+  const rhythm = rhythmForSwap(c.swapGroup, c.cadence)
+
   return {
     id,
     title: sp.name,
@@ -134,14 +164,21 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     dietaryTags: c.dietaryTags,
     formats,
     variants,
+    defaultVariantId: variants.find((v) => v.available)?.id ?? variants[0]?.id ?? null,
     basePrice: sp.rrp,
     compareAtPrice: null,
     cost: sp.wholesalePrice,
     subscriptionEligible: true,
     subscriptionProductId: null,
     isSubscriptionOnly: false,
-    servings: sp.servings ?? 30,
-    consumption: { cadence: c.cadence, servingsPerUnit: sp.servings ?? 30 },
+    servings: servingsPerUnit,
+    consumption: {
+      cadence: rhythm.cadence,
+      servingsPerUnit,
+      ...(rhythm.daysPerWeek ? { daysPerWeek: rhythm.daysPerWeek } : {}),
+      ...(rhythm.asNeededTrigger ? { asNeededTrigger: rhythm.asNeededTrigger } : {}),
+      ...(rhythm.anchor ? { anchor: rhythm.anchor } : {}),
+    },
     swapGroup: c.swapGroup,
     recommendationPriority: 5,
     marginPriority: 5,

@@ -54,4 +54,22 @@ describe('supplier → catalogue mapping', () => {
     expect(cp.id).toBe('iso-xp-whey-isolate-1kg')
     expect(cp.handle).toBe(cp.id)
   })
+
+  it('seeds Pour Plan rhythm tags + a default flavour (autopopulate)', () => {
+    // Electrolytes → an as-needed drink driven by the sweat trigger.
+    const elec = supplierProductToCatalogue(bySku('SIS-HYDRO-20'))
+    expect(elec.consumption?.cadence).toBe('as-needed')
+    expect(elec.consumption?.asNeededTrigger).toBe('sweat')
+    expect(elec.consumption?.anchor).toBe('hot-days')
+    expect(elec.defaultVariantId).toBe(elec.variants[0].id)
+
+    // A daily anchor keeps its cadence + gets a morning anchor.
+    const omega = supplierProductToCatalogue(bySku('NOW-OMEGA-200'))
+    expect(omega.consumption?.cadence).toBe('daily')
+    expect(omega.consumption?.anchor).toBe('morning')
+
+    // Greens are a "most days" daily drink.
+    const greens = supplierProductToCatalogue(bySku('BUL-GREENS-500'))
+    expect(greens.consumption?.daysPerWeek).toBe(4)
+  })
 })

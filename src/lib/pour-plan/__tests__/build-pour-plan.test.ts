@@ -86,23 +86,30 @@ describe('buildPourPlan — buckets + one-off maths', () => {
 describe('buildPourPlan — breadth vs depth', () => {
   const all = [vits, greens, pre, hydration, sleep] // 30+13+15+9+4 = 71 at pace 2 (target 60)
 
-  it('variety keeps the fuller spread of kinds', () => {
-    const plan = buildPourPlan(all, answers({ drinkVariety: 'variety', asNeeded: { sleep: 'rarely' } }))
-    expect(plan.kinds).toBe(5)
-    expect(plan.totalDrinks).toBe(71)
-    expect(plan.buckets.find((b) => b.when === 'asNeeded')!.lines).toHaveLength(2)
+  it('by default renders the whole selected plan (so box + receipt match) — no trimming', () => {
+    const staples = buildPourPlan(all, answers({ drinkVariety: 'staples', asNeeded: { sleep: 'rarely' } }))
+    const variety = buildPourPlan(all, answers({ drinkVariety: 'variety', asNeeded: { sleep: 'rarely' } }))
+    expect(staples.kinds).toBe(5)
+    expect(variety.kinds).toBe(5)
+    expect(staples.totalDrinks).toBe(71)
   })
 
-  it('staples trims marginal kinds toward the pace target', () => {
-    const plan = buildPourPlan(all, answers({ drinkVariety: 'staples', asNeeded: { sleep: 'rarely' } }))
+  it('with reconcile, staples trims marginal kinds toward the pace target', () => {
+    const plan = buildPourPlan(all, answers({ drinkVariety: 'staples', asNeeded: { sleep: 'rarely' } }), { reconcile: true })
     // drops the two as-needed extras; keeps the everyday base + training
     expect(plan.kinds).toBe(3)
     expect(plan.totalDrinks).toBe(58)
     expect(plan.buckets.some((b) => b.when === 'asNeeded')).toBe(false)
   })
 
-  it('never trims the #1-goal drink, even when it is the lowest-scoring line', () => {
-    const plan = buildPourPlan(all, answers({ drinkVariety: 'staples', primaryGoal: 'sleep-better', asNeeded: { sleep: 'rarely' } }))
+  it('with reconcile, variety keeps the fuller spread of kinds', () => {
+    const plan = buildPourPlan(all, answers({ drinkVariety: 'variety', asNeeded: { sleep: 'rarely' } }), { reconcile: true })
+    expect(plan.kinds).toBe(5)
+    expect(plan.buckets.find((b) => b.when === 'asNeeded')!.lines).toHaveLength(2)
+  })
+
+  it('with reconcile, never trims the #1-goal drink even when lowest-scoring', () => {
+    const plan = buildPourPlan(all, answers({ drinkVariety: 'staples', primaryGoal: 'sleep-better', asNeeded: { sleep: 'rarely' } }), { reconcile: true })
     const keptIds = plan.buckets.flatMap((b) => b.lines.map((l) => l.productId))
     expect(keptIds).toContain('sleep') // protected
   })
