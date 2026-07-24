@@ -99,7 +99,7 @@ export function PlanReceipt({
         key: line.product.id,
         slotType: line.product.stackSlots[0] ?? '',
         imageUrl: line.product.imageUrl,
-        title: line.coversSlotIds.map((id) => slotTitleById[id]).filter(Boolean).join(' + ') || line.product.title,
+        title: line.product.title,
         price: line.monthlyPrice,
         suffix: '/mo',
       }))

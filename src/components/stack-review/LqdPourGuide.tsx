@@ -19,6 +19,11 @@ import { buildPourPlan, type PourLine, type PourWhen } from '@/lib/pour-plan'
 
 const ACCENT = '#00D4FF'
 const WHEN_COLOR: Record<PourWhen, string> = { everyday: ACCENT, training: '#8b93ff', asNeeded: '#4fb3e6' }
+const BUCKET_PURPOSE: Record<PourWhen, string> = {
+  everyday: 'your everyday base, have them as and when you like',
+  training: 'around your training sessions',
+  asNeeded: 'for the days you need them — run-down or heavy sweat',
+}
 
 interface Props {
   plan: SubscriptionLine[]
@@ -56,22 +61,25 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
   /** The variant actually selected (blueprint) if known, else the plan's default. */
   const currentVariantId = (line: PourLine): string => selectedVariantByProductId?.[line.productId] ?? line.variantId
 
-  const variantsFor = (line: PourLine) => (productById.get(line.productId)?.variants ?? []).filter((v) => v.available)
-
-  const variantLabel = (v: { flavour: string | null; size: string | null; title: string }): string => v.flavour || v.size || v.title
-
-  const flavourLabel = (line: PourLine): string | null => {
-    const v = productById.get(line.productId)?.variants.find((x) => x.id === currentVariantId(line))
-    return v ? variantLabel(v) : null
+  /** Distinct FLAVOURS available for a product (never size-only variants like
+   *  "30 caps" / "60 caps"), one representative variant each. */
+  const flavourOptions = (line: PourLine): { flavour: string; variantId: string }[] => {
+    const seen = new Set<string>()
+    const out: { flavour: string; variantId: string }[] = []
+    for (const v of productById.get(line.productId)?.variants ?? []) {
+      if (!v.available || !v.flavour || seen.has(v.flavour)) continue
+      seen.add(v.flavour)
+      out.push({ flavour: v.flavour, variantId: v.id })
+    }
+    return out
   }
 
-  if (pour.buckets.length === 0) return null
+  /** The current flavour name (null when the product has no flavours — e.g. a
+   *  caps/tabs product that only varies by size). */
+  const flavourLabel = (line: PourLine): string | null =>
+    productById.get(line.productId)?.variants.find((x) => x.id === currentVariantId(line))?.flavour ?? null
 
-  // Build the pool: one dot per drink, coloured by when. Capped so the panel
-  // stays tidy on very large boxes.
-  const dots: string[] = []
-  for (const b of pour.buckets) for (const l of b.lines) for (let i = 0; i < l.monthlyCount; i++) dots.push(b.when)
-  const shownDots = dots.slice(0, 72)
+  if (pour.buckets.length === 0) return null
 
   const isSub = planType === 'subscription'
 
@@ -99,14 +107,29 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
         No timetable — about {pour.dailyPace} a day, and you pick what you feel like. Over the month it all adds up to keep you covered.
       </p>
 
-      {/* The pool */}
-      <div className="rounded-xl p-3.5 mb-4" style={{ background: 'color-mix(in srgb, var(--color-text) 4%, transparent)', border: '1px solid var(--color-border)' }}>
-        <div className="flex flex-wrap gap-[6px] justify-center">
-          {shownDots.map((w, i) => (
-            <span key={i} className="w-[13px] h-[13px] rounded-full" style={{ background: WHEN_COLOR[w as PourWhen], boxShadow: `0 0 6px -1px ${WHEN_COLOR[w as PourWhen]}` }} aria-hidden="true" />
+      {/* Summary — the groups, and what each is for */}
+      <div className="rounded-xl p-4 mb-4" style={{ background: 'color-mix(in srgb, var(--color-text) 4%, transparent)', border: '1px solid var(--color-border)' }}>
+        {/* Proportion bar */}
+        <div className="flex gap-1 h-2.5 rounded-full overflow-hidden mb-3.5" aria-hidden="true">
+          {pour.buckets.map((b) => (
+            <span key={b.when} style={{ flexGrow: Math.max(1, b.total), background: WHEN_COLOR[b.when], minWidth: 10 }} />
           ))}
         </div>
-        <p className="text-[11px] text-[var(--color-muted)] text-center mt-3">One box, {isSub ? 'delivered monthly' : 'yours to keep'} — dip in whenever you fancy one.</p>
+        <div className="space-y-2.5">
+          {pour.buckets.map((b) => (
+            <div key={b.when} className="flex items-baseline gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full shrink-0 translate-y-0.5" style={{ background: WHEN_COLOR[b.when] }} aria-hidden="true" />
+              <p className="text-xs leading-snug text-[var(--color-muted)]">
+                <span className="font-bold" style={{ color: 'var(--color-text)' }}>{b.label}</span>
+                <span className="text-[var(--color-text-2)]"> · {b.total} {b.total === 1 ? 'drink' : 'drinks'}</span>
+                {' — '}{BUCKET_PURPOSE[b.when]}
+              </p>
+            </div>
+          ))}
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mt-3.5 pt-3 border-t border-[var(--color-border)]">
+          One box, {isSub ? 'delivered monthly' : 'yours to keep'} — no schedule, just dip in when you fancy one.
+        </p>
       </div>
 
       {/* Plan-type framing */}
@@ -166,14 +189,14 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
                       </p>
                       <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-0.5">{line.protocolNote}</p>
                       <div className="flex items-center gap-3 mt-1">
-                        {onSelectFlavour && variantsFor(line).length > 1 && (
+                        {onSelectFlavour && flavourOptions(line).length > 1 && (
                           <button
                             onClick={() => setOpenFlavour((cur) => (cur === line.productId ? null : line.productId))}
                             className="text-[11px] font-semibold"
                             style={{ color: ACCENT }}
                             aria-expanded={openFlavour === line.productId}
                           >
-                            {flavour ? 'Change flavour' : 'Pick flavour'}
+                            Change flavour
                           </button>
                         )}
                         {canSwap && (
@@ -184,12 +207,12 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
                       </div>
                       {openFlavour === line.productId && onSelectFlavour && (
                         <div className="flex flex-wrap gap-1.5 mt-2">
-                          {variantsFor(line).map((v) => {
-                            const active = v.id === currentVariantId(line)
+                          {flavourOptions(line).map((opt) => {
+                            const active = opt.variantId === currentVariantId(line) || opt.flavour === flavour
                             return (
                               <button
-                                key={v.id}
-                                onClick={() => { onSelectFlavour(line.productId, v.id); setOpenFlavour(null) }}
+                                key={opt.variantId}
+                                onClick={() => { onSelectFlavour(line.productId, opt.variantId); setOpenFlavour(null) }}
                                 className="text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors"
                                 style={{
                                   color: active ? '#04121a' : 'var(--color-text-2)',
@@ -197,7 +220,7 @@ export function LqdPourGuide({ plan, answers, catalogue, planType, onPlanChange,
                                   border: `1px solid ${active ? ACCENT : 'var(--color-border)'}`,
                                 }}
                               >
-                                {variantLabel(v)}
+                                {opt.flavour}
                               </button>
                             )
                           })}

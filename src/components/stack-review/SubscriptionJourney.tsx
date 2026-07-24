@@ -39,7 +39,12 @@ function cadenceLine(line: SubscriptionLine): string {
       : line.unitsPerShipment > 1
         ? `${line.unitsPerShipment} ${noun}s a month`
         : `1 ${noun} a month`
-  const taken = line.cadence === 'daily' ? 'every day' : `on training days (~${line.occasionsPerMonth}/mo)`
+  const taken =
+    line.cadence === 'daily'
+      ? 'every day'
+      : line.cadence === 'as-needed'
+        ? `when you need it (~${line.occasionsPerMonth}/mo)`
+        : `on training days (~${line.occasionsPerMonth}/mo)`
   return `Taken ${taken} · ${ship}`
 }
 
