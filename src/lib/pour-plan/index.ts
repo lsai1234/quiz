@@ -13,7 +13,7 @@
  */
 import type { CatalogueProduct, ConsumptionCadence, PourAnchor } from '@/lib/catalogue/types'
 import type { QuizAnswers, DrinkVariety, Goal } from '@/lib/types'
-import { resolveConsumption, occasionsPerMonthFor } from '@/lib/stack-blueprint/pricing'
+import { resolveConsumption, occasionsPerMonthFor, paceDailyFactor, PACE_DAILY_FLOOR } from '@/lib/stack-blueprint/pricing'
 
 const WEEKS_PER_MONTH = 4.345
 const DAYS_PER_MONTH = 30
@@ -165,6 +165,23 @@ export function buildPourPlan(
   const primaryGoal = answers?.primaryGoal ?? answers?.goals?.[0] ?? null
 
   let sized = products.map((p) => sizeProduct(p, answers, primaryGoal))
+
+  // Drinks-mode pace scaling — the everyday base totals ~pace × 30 across the
+  // daily kinds (mirrors the box in pricing, so counts match the receipt).
+  if (answers?.drinksMode) {
+    const daily = sized.filter((x) => x.line.cadence === 'daily')
+    const dailySum = daily.reduce((s, x) => s + x.line.monthlyCount, 0)
+    const factor = paceDailyFactor(dailySum, answers)
+    if (factor < 1) {
+      for (const x of daily) {
+        const scaled = Math.max(PACE_DAILY_FLOOR, Math.round(x.line.monthlyCount * factor))
+        if (scaled >= x.line.monthlyCount) continue
+        x.line.monthlyCount = scaled
+        const perWeek = scaled / WEEKS_PER_MONTH
+        x.line.oneOffLastsWeeks = perWeek > 0 ? Math.max(1, Math.round(x.line.servingsPerUnit / perWeek)) : 0
+      }
+    }
+  }
 
   // Breadth vs depth. Counts are rhythm-fixed, so the lever is how many KINDS:
   //   staples → concentrate on the go-tos, trim the marginal extras toward pace;

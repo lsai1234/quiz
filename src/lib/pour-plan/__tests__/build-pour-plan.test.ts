@@ -115,6 +115,23 @@ describe('buildPourPlan — breadth vs depth', () => {
   })
 })
 
+describe('drinks-mode pace scaling', () => {
+  const daily = (id: string, goal: string) => p({ id, goals: [goal as never], consumption: { cadence: 'daily', servingsPerUnit: 30 } })
+
+  it('scales the everyday base to ~pace × 30 across the daily kinds (not ×30 each)', () => {
+    const plan = buildPourPlan([daily('d1', 'health'), daily('d2', 'health'), daily('d3', 'gut-health')], answers({ drinksMode: true, dailyDrinks: 2 }))
+    const everyday = plan.buckets.find((b) => b.when === 'everyday')!
+    // 3 kinds × 30 = 90 would be 3/day — scaled to ~60 (2/day), 20 each.
+    expect(everyday.total).toBe(60)
+    expect(everyday.lines.every((l) => l.monthlyCount === 20)).toBe(true)
+  })
+
+  it('leaves daily counts alone outside drinks mode', () => {
+    const plan = buildPourPlan([daily('d1', 'health'), daily('d2', 'health'), daily('d3', 'gut-health')], answers({ drinksMode: false }))
+    expect(plan.buckets.find((b) => b.when === 'everyday')!.total).toBe(90)
+  })
+})
+
 describe('defaultVariantId', () => {
   it('honours the product default, else the first available variant', () => {
     const withDefault = p({ id: 'x', defaultVariantId: 'x-berry', variants: [
