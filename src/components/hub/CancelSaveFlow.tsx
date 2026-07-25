@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { downsizePreview, monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
+import { downsizePreview, monthsRemainingOnTerm, canCancel, cancelSettlement, shippedValueOf, paidToDateOf } from '@/lib/recharge/mock'
 import { BillingImpact } from './BillingImpact'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -57,6 +57,9 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
 
   const remaining = monthsRemainingOnTerm(sub)
   const cancellable = canCancel(sub)
+  // Pay-for-what-shipped buy-out: value delivered minus paid, because the flat
+  // monthly spreads multi-month items. Keeps "cancel anytime" honest + margin-safe.
+  const settlement = cancelSettlement(sub)
   const downsize = downsizePreview(sub, catalogue)
   const reviewItems = recommendations.filter((r) => r.phase === 'review')
   const reasonLabel = REASONS.find((r) => r.id === reason)?.label ?? ''
@@ -207,9 +210,29 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
               <button onClick={() => setStep(reason ? 'save' : 'reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
               {cancellable ? (
                 <>
-                  <p className="text-sm text-[var(--color-text-2)] leading-relaxed">You can cancel now and you won’t be charged again. We’d love to know why{reasonLabel ? ` — you said “${reasonLabel.toLowerCase()}”` : ''}.</p>
+                  {settlement > 0.5 ? (
+                    <>
+                      <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
+                        You can cancel anytime. Because your monthly payment spreads the cost of items that last a few months, you’ve had more product than you’ve paid for so far — so cancelling now settles up for what we’ve already sent, then you’re done.
+                      </p>
+                      <div className="mt-2 rounded-2xl border px-4 py-3" style={{ borderColor: 'var(--color-border-2)', background: 'var(--color-surface)' }}>
+                        <div className="flex items-center justify-between text-xs" style={{ color: 'var(--color-muted)' }}>
+                          <span>Products sent</span><span>{formatGBP(shippedValueOf(sub))}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-xs mt-1" style={{ color: 'var(--color-muted)' }}>
+                          <span>Paid so far</span><span>−{formatGBP(paidToDateOf(sub))}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm font-bold mt-1.5 pt-1.5" style={{ color: 'var(--color-text)', borderTop: '1px solid var(--color-border)' }}>
+                          <span>Final settlement</span><span>{formatGBP(settlement)}</span>
+                        </div>
+                        <p className="text-[11px] mt-1.5 leading-snug" style={{ color: 'var(--color-muted)' }}>A one-off charge for goods already delivered. Nothing further after this.</p>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-sm text-[var(--color-text-2)] leading-relaxed">You can cancel now and you won’t be charged again — you’re all square for what’s been sent. We’d love to know why{reasonLabel ? ` — you said “${reasonLabel.toLowerCase()}”` : ''}.</p>
+                  )}
                   <button onClick={() => { onCancel(reasonLabel || 'unspecified'); onClose() }} className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all" style={{ background: AMBER, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
-                    Confirm cancellation
+                    {settlement > 0.5 ? `Settle ${formatGBP(settlement)} & cancel` : 'Confirm cancellation'}
                   </button>
                   <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
                     Keep my subscription

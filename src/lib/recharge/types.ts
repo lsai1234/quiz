@@ -75,6 +75,13 @@ export interface MemberSubscription {
   nextDispatchOverride?: string
   /** Minimum commitment in months. */
   minMonths: number
+  /**
+   * The first-month intro discount actually applied at signup (0–1). The first
+   * month was billed at `flatMonthly × (1 − this)`. Recorded so the cancel
+   * settlement (pay-for-what-shipped) credits what was truly paid, not the full
+   * flat rate. Optional/0 = no intro.
+   */
+  firstMonthDiscountRate?: number
   /** Months the subscription has been active (drives the min-term guard). */
   monthsActive: number
   startedAt: string

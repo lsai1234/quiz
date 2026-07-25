@@ -100,6 +100,7 @@ export function buildMemberSubscription(
     subscriptionDiscountRate: pricing.subscriptionDiscountPct / 100,
     dispatchDayOfMonth: opts.dispatchDayOfMonth ?? 15,
     minMonths: pricing.subscriptionMinMonths,
+    firstMonthDiscountRate: pricing.subscriptionIntroDiscountPct / 100,
     monthsActive,
     startedAt: startedAt.toISOString(),
     paymentMethod: { brand: 'Visa', last4: '4242' },
@@ -346,6 +347,34 @@ export function paidToDate(line: MemberSubscriptionLine, sub: MemberSubscription
  */
 export function lineSettlement(line: MemberSubscriptionLine, sub: MemberSubscription): number {
   return round(Math.max(0, shippedValueToDate(line) - paidToDate(line, sub)))
+}
+
+/** Total retail value of everything the subscription has shipped so far. */
+export function shippedValueOf(sub: MemberSubscription): number {
+  return round(sub.lines.reduce((s, l) => s + shippedValueToDate(l), 0))
+}
+
+/**
+ * What the member has actually paid so far: the discounted first month, plus the
+ * flat rate for each further active month. The flat monthly SPREADS the cost of
+ * multi-month items, so a fresh subscription has shipped more value than it's
+ * billed — that gap is the settlement below.
+ */
+export function paidToDateOf(sub: MemberSubscription): number {
+  const firstMonth = sub.flatMonthly * (1 - (sub.firstMonthDiscountRate ?? 0))
+  return round(firstMonth + Math.max(0, sub.monthsActive) * sub.flatMonthly)
+}
+
+/**
+ * The cancel BUY-OUT: because the flat monthly spreads the cost of items that
+ * last several months, someone who cancels early has received more product than
+ * they've paid for (e.g. 3 tubs in month one, only one due in month two). This
+ * is the value of goods already dispatched minus everything actually paid — so
+ * "cancel anytime" stays honest AND margin-safe: you settle for what we've sent,
+ * nothing more. 0 once they've paid off what shipped.
+ */
+export function cancelSettlement(sub: MemberSubscription): number {
+  return round(Math.max(0, shippedValueOf(sub) - paidToDateOf(sub)))
 }
 
 /** Add a product as a new subscription line (sized & priced at the sub rate, no intro). */
