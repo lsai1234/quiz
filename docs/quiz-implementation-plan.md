@@ -19,14 +19,14 @@ Ranked by **impact ÷ effort**. Impact = expected lift on the two goals (genuine
 | Phase | Impact | Effort (h) | Impact÷Effort | Risk | Do-order |
 |---|---|---|---|---|---|
 | **0 — Instrumentation** | Enabling (everything else is unmeasurable without it) | 10–14 | **∞ (gate)** | Low | **1st — mandatory** |
-| **1 — Friction cull** | High (shorter flow, wires `primaryGoal`) | 12–16 | **High** | Low | **2nd** |
-| **2 — Value-first pricing** | Highest single conversion lever | 20–28 | **High** | Med | **3rd** |
+| **1 — Friction cull** | High (shorter flow, wires `primaryGoal`, persist/resume, reframing) | 16–20 | **High** | Low | **2nd** |
+| **2 — Value-first pricing** | Highest single conversion lever (+ results-page reasoning) | 24–32 | **High** | Med | **3rd** |
 | **3 — Safety gate + bodyweight** | Compliance/safety must-have + dosing | 16–22 | Med-High | Med | 4th |
 | **4 — Decision-matrix engine** | Maintainability + enables §5 | 30–40 | Med | Med-High | 5th |
 | **5 — Bundle construction rules** | Fixes the quality defects (dup/overdose/filler) | 20–26 | High (depends on 4) | Med | 6th |
 | **6 — Cadence + cross-sell + compliance copy** | Margin + legal safety + AOV | 18–24 | Med | Med | 7th |
 
-**Total: ~126–170h (~4–6 weeks).** **Start with Phase 0** — it is the only phase that blocks the rest, because none of the flow/engine changes can be judged without a baseline funnel. Phases 1 and 2 are next because they're the cheapest large conversion wins and don't depend on the engine refactor. The engine work (4–5) is deliberately late: it's behaviour-preserving refactor first (locked by snapshot tests from Phase 0/1), with the quality improvements riding on top, so recommendation logic can't silently regress.
+**Total: ~134–178h (~4–6 weeks).** **Start with Phase 0** — it is the only phase that blocks the rest, because none of the flow/engine changes can be judged without a baseline funnel. Phases 1 and 2 are next because they're the cheapest large conversion wins and don't depend on the engine refactor. The engine work (4–5) is deliberately late: it's behaviour-preserving refactor first (locked by snapshot tests from Phase 0/1), with the quality improvements riding on top, so recommendation logic can't silently regress.
 
 ---
 
@@ -59,23 +59,24 @@ Ranked by **impact ÷ effort**. Impact = expected lift on the two goals (genuine
 
 ## Phase 1 — Friction cull **(2nd)**
 
-**Objective.** Remove/repair the inert questions (audit §2) and wire `primaryGoal`, hitting the §2 target flow sizes (6 wellbeing / 8 performance). No engine behaviour change beyond `primaryGoal`.
+**Objective.** Remove/repair the inert questions (audit §2), apply the redesign §3 reframing copy, wire `primaryGoal`, and add answer persistence — hitting the §2 target flow sizes (6 wellbeing / 8 performance). No engine behaviour change beyond `primaryGoal`.
 
 **Files/modules.**
-- `src/lib/quiz-flow.ts` — delete `drinkVariety`; collapse `workoutAddOns` to a single pre-workout toggle; make `caffeine`/`trainingTime` conditional (new `showWhen` predicate); merge `type`+`trainingFocus` copy.
-- `src/components/scroll/Act2Quiz.tsx` — remove the `exactAge` slider (`~1378-1391`), the `active` lifestyle chip (`~222`), move `name` to the results/email step; set `primaryGoal` on first goal tap.
-- `src/lib/store.tsx` — `setGoals` writes `primaryGoal = goals[0]` when unset (`store.tsx:142`).
+- `src/lib/quiz-flow.ts` — delete `drinkVariety`; delete `immuneBaseline` (copy-only, audit §2); collapse `workoutAddOns` to a single pre-workout toggle; make `caffeine`/`trainingTime` conditional (new `showWhen` predicate); merge `type`+`trainingFocus` **and** `frequency`+`experience` into single steps with inline follow-ups.
+- `src/components/scroll/Act2Quiz.tsx` — remove the `exactAge` slider (`~1378-1391`), the `active` lifestyle chip (`~222`), move `name` to the results/email step; set `primaryGoal` on first goal tap; **apply the redesign §3 reframed wording** (diet "how do most of your meals happen?", focus "what are you training for?", caffeine "I run on it", `dailyDrinks` de-hedged).
+- `src/lib/store.tsx` — `setGoals` writes `primaryGoal = goals[0]` when unset (`store.tsx:142`); **add `zustand/persist` + a "resume where you left off" prompt** so a refresh no longer wipes all answers (audit §5.3 / drop-off risk #3 — the store is in-memory today, `store.tsx:110`).
 
 **Dependencies.** Phase 0 (to measure the win). Snapshot tests (below) should exist first.
 
-**Effort.** 12–16h.
+**Effort.** 16–20h (includes persist/resume + the §3 reframing copy).
 
 **Risk.** Low-Med — flow-sequencing regressions. Mitigated: the flow is one config array (`quiz-flow.ts`), so changes are localised and reversible.
 
 **Acceptance criteria.**
 - Step counts match redesign §2 per path; deleted questions gone from all paths.
 - `answers.primaryGoal` is populated on every completion; persona snapshot bundles **unchanged** except where `primaryGoal` intentionally reorders (documented).
-- No dead options remain (`active`, protein/recovery add-ons).
+- No dead options remain (`active`, protein/recovery add-ons, `immuneBaseline`).
+- A mid-quiz refresh restores answers + offers resume.
 
 **Proof metric.** **Completion rate ↑ and median time-to-complete ↓** vs. Phase 0 baseline, with **quiz→checkout not down** (guardrail). Run as an A/B (below).
 
@@ -85,17 +86,17 @@ Ranked by **impact ÷ effort**. Impact = expected lift on the two goals (genuine
 
 ## Phase 2 — Value-first pricing **(3rd — headline conversion lever)**
 
-**Objective.** Remove `budget` as a quiz question; present the bundle first, then three depths (Essentials/Balanced/Complete) as prefixes of one ideal bundle on the reveal.
+**Objective.** Remove `budget` as a quiz question; present the bundle first on the built-bundle screen, then three depths (Essentials/Balanced/Complete) as prefixes of one ideal bundle. Also land the results-page **per-product reasoning tied to the user's actual answers** and **effect-onset expectation-setting** (redesign §8.1–8.2), since the reveal is being rebuilt here anyway.
 
 **Files/modules.**
 - `src/lib/quiz-flow.ts` — remove the `budget` step (skip in all paths).
 - `src/components/scroll/Act2Quiz.tsx` — remove `BundleDeck`/`BUDGET_DATA` from the flow; keep it as a results-page component.
-- `src/components/stack-review/StackReviewPage.tsx` (+ `StackDeck`, `UpgradesCard`) — build the tier selector; each tier is a ranked prefix of the `complete` bundle.
+- `src/components/stack-review/StackReviewPage.tsx` (+ `StackDeck`, `UpgradesCard`, `ProductTile`) — build the tier selector (each tier a ranked prefix of the `complete` bundle); surface a **"why this for you"** line per product grounded in the specific answer (goal/frequency), and an **effect-onset timeline** ("you'll feel this the first session" / "give it 1–3 weeks" / "works quietly, 6–12 weeks") from `effectOnset` (`catalogue/types.ts:158-162`). Reasoning deepens with the new signals (bodyweight etc.) once Phases 3–4 land.
 - `src/lib/stack-blueprint/pricing.ts` — reuse `tiers`/`levelForStackPreference`; ensure tier→price is presentational only.
 
 **Dependencies.** Phase 0. Independent of the engine refactor (works on today's factory).
 
-**Effort.** 20–28h.
+**Effort.** 24–32h (includes the results-page reasoning + effect-onset work).
 
 **Risk.** Med — touches the reveal + pricing presentation; must keep prices consistent with checkout (the shared cap maths in `personalise.ts:95-109` helps).
 
@@ -103,6 +104,7 @@ Ranked by **impact ÷ effort**. Impact = expected lift on the two goals (genuine
 - No budget question in any path; reveal shows 3 tiers, each a visible prefix of the next.
 - Selected tier drives the same price the checkout charges (parity test).
 - Subscribe-&-save rate rises with depth as configured (`pricing.ts:34-38`).
+- Every product line shows an answer-grounded reason **and** an effect-onset timeline.
 
 **Proof metric.** **Quiz→checkout conversion ↑** (primary) with **AOV not down and refund/cancel not up** (guardrails). Headline A/B.
 
