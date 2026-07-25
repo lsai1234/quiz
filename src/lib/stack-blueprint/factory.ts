@@ -11,7 +11,7 @@ import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } from './pricing'
 import {
   SLOT_ORDER, GOAL_SLOT_RELEVANCE, WELLBEING_GOAL_SLOTS, GOAL_AFFINITY,
-  SCORING, FOUNDATIONAL_SWAP_GROUPS, type SlotType,
+  SCORING, FOUNDATIONAL_SWAP_GROUPS, applyBundleRules, type SlotType,
 } from '@/lib/quiz-core'
 
 export type { SlotType } from '@/lib/quiz-core'
@@ -756,6 +756,13 @@ export function buildStackBlueprint(
     }
   }
 
+  // ── Bundle construction rules (Phase 5) ──────────────────────────────────
+  // Post-selection pass: drop low-relevance filler, remove active-ingredient
+  // duplicates (no double-magnesium / double-ashwagandha), and enforce total
+  // dose caps. Required slots are never dropped. Re-sequence display order after.
+  const finalSlots = applyBundleRules(slots, effectiveCatalogue)
+  finalSlots.forEach((s, i) => { s.displayOrder = i })
+
   const userProfileSummary = [
     answers.ageBracket,
     answers.trainingType?.length ? `${answers.trainingType.join(' & ')} training` : null,
@@ -763,10 +770,10 @@ export function buildStackBlueprint(
   ].filter(Boolean).join(', ')
 
   // Goals the final stack doesn't cover — because a hard gate (safety, dietary)
-  // removed the only candidates. Surfaced honestly on the reveal instead of a
-  // silent gap. A goal is "covered" when any selected product is tagged with it.
+  // removed the only candidates, or the rules pass dropped the last product for
+  // it. Surfaced honestly on the reveal instead of a silent gap.
   const coveredGoals = new Set<Goal>(
-    slots.flatMap((s) => effectiveCatalogue.find((p) => p.id === s.selectedProductId)?.goals ?? []),
+    finalSlots.flatMap((s) => effectiveCatalogue.find((p) => p.id === s.selectedProductId)?.goals ?? []),
   )
   const unmetGoals = answers.goals.filter((g) => !coveredGoals.has(g))
 
@@ -778,7 +785,7 @@ export function buildStackBlueprint(
     primaryGoal,
     secondaryGoals,
     userProfileSummary,
-    slots,
+    slots: finalSlots,
     unmetGoals,
     estimatedOneOffPrice: 0,
     estimatedSubscriptionPrice: 0,
