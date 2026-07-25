@@ -6,7 +6,12 @@ import { formatGBP } from '@/lib/stack-blueprint/pricing'
 interface Props {
   blueprint: StackBlueprint
   productCount: number
+  /** One-off bundle price. */
   totalPrice: number
+  /** Monthly subscription price — shown as the headline (with /mo) when the
+   *  stack can subscribe; otherwise the one-off price is shown without /mo. */
+  monthlyPrice?: number
+  canSubscribe?: boolean
   /** CHRGD LQD (all-drinks package) framing. */
   drinksMode?: boolean
 }
@@ -20,7 +25,8 @@ function prettifyGoal(goal: string) {
  * below, so this is deliberately compact — name, one supporting line, and the
  * key stats as chips.
  */
-export function StackHero({ blueprint, productCount, totalPrice, drinksMode }: Props) {
+export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, canSubscribe, drinksMode }: Props) {
+  const showMonthly = !!canSubscribe && monthlyPrice != null && monthlyPrice > 0
   return (
     <div className="px-5 pt-12 pb-7 max-w-lg mx-auto">
       <div className="flex items-center gap-2 mb-3">
@@ -75,7 +81,9 @@ export function StackHero({ blueprint, productCount, totalPrice, drinksMode }: P
             color: 'var(--color-accent)',
           }}
         >
-          {formatGBP(totalPrice)}/mo
+          {showMonthly
+            ? <>{formatGBP(monthlyPrice!)}<span className="font-semibold">/mo</span></>
+            : <>{formatGBP(totalPrice)}<span className="font-semibold"> one-off</span></>}
         </div>
 
         <div

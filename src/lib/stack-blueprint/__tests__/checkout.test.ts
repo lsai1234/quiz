@@ -226,11 +226,12 @@ describe('buildSubscriptionCheckout', () => {
       expect.arrayContaining([{ key: 'plan', value: 'subscription' }]),
     )
     expect(flatMonthly).toBe(24)
-    // Scratch-to-reveal: no intro discount is applied until the member reveals one.
+    // No intro discount is applied until the member's offer loads (ladder).
     expect(introDiscountPct).toBe(0)
     expect(firstMonth).toBe(24)
-    expect(minMonths).toBe(4)
-    expect(minTermTotal).toBe(Math.round((firstMonth + 3 * flatMonthly) * 100) / 100)
+    // No minimum term now → the commitment is just the first month.
+    expect(minMonths).toBe(1)
+    expect(minTermTotal).toBe(firstMonth)
   })
 
   it('applies a revealed scratch discount to the first month', () => {

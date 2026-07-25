@@ -43,6 +43,15 @@ export async function finalizeCheckout(
 
   await syncPortalRuntime()
 
+  // Advance the global intro-offer ladder — this checkout consumed the current
+  // offer, stepping everyone toward the next (smaller) discount. Never blocks.
+  try {
+    const { recordIntroCheckout } = await import('@/lib/payments/intro-offer')
+    await recordIntroCheckout()
+  } catch (err) {
+    console.error('[finalizeCheckout] intro-offer advance failed:', err)
+  }
+
   // 2. Start payment.
   if (getPaymentSource() === 'stripe') {
     const base = origin || process.env.APP_URL || ''

@@ -23,7 +23,6 @@ import { StackHero } from './StackHero'
 import { StackDeck } from './StackDeck'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
-import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { SubscriptionJourney } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
@@ -92,10 +91,23 @@ function StackTierSelector({
               <div className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
                 {size} product{size === 1 ? '' : 's'}
               </div>
-              <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                {formatGBP(isSub ? monthly : oneOff)}
-                {isSub && <span className="text-[9px] font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
-              </div>
+              {/* Both prices: whichever plan is active is emphasised, the other
+                  shown small — so the value is clear before the plan is chosen. */}
+              {isSub && monthly > 0 ? (
+                <>
+                  <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(monthly)}<span className="text-[9px] font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>
+                  </div>
+                  <div className="text-[9px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{formatGBP(oneOff)} one-off</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(oneOff)}
+                  </div>
+                  {monthly > 0 && <div className="text-[9px] mt-0.5" style={{ color: 'var(--color-accent)' }}>{formatGBP(monthly)}/mo subscribed</div>}
+                </>
+              )}
             </button>
           )
         })}
@@ -117,6 +129,24 @@ export function StackReviewPage() {
   // to that wrapper instead of the viewport.
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+
+  // The current global first-month intro offer (the live ladder rung). Fetched
+  // once and locked in as the member's discount, so what they're shown is what
+  // they're charged even if the global offer steps down before they check out.
+  const [introOffer, setIntroOffer] = useState<{ pct: number; headlinePct: number } | null>(null)
+  useEffect(() => {
+    let live = true
+    fetch('/api/intro-offer')
+      .then((r) => r.json())
+      .then((o: { discount?: number; pct?: number; headlinePct?: number }) => {
+        if (!live || !o || !o.discount) return
+        setIntroOffer({ pct: o.pct ?? 0, headlinePct: o.headlinePct ?? 0 })
+        setRevealedIntroDiscount(o.discount)
+      })
+      .catch(() => {})
+    return () => { live = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -367,6 +397,8 @@ export function StackReviewPage() {
           blueprint={activeBlueprint}
           productCount={activeSlots.length}
           totalPrice={pricing.oneOffTotal}
+          monthlyPrice={pricing.subscriptionTotal}
+          canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
           drinksMode={!!answers.drinksMode}
         />
 
@@ -463,12 +495,25 @@ export function StackReviewPage() {
               </button>
             </div>
           )}
-          {planType === 'subscription' && scratchRevealAvailable() && subscriptionPlan.length > 0 && (
-            <ScratchToReveal
-              monthlyTotal={pricing.subscriptionTotal}
-              revealed={revealedIntroDiscount}
-              onReveal={setRevealedIntroDiscount}
-            />
+          {planType === 'subscription' && introOffer && introOffer.pct > 0 && subscriptionPlan.length > 0 && (
+            <div
+              className="mb-4 rounded-2xl border px-4 py-3"
+              style={{ borderColor: 'color-mix(in srgb, var(--color-accent) 35%, transparent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)' }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-black" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+                    {introOffer.pct}% off your first month
+                  </p>
+                  <p className="text-[11px] mt-0.5 leading-snug" style={{ color: 'var(--color-muted)' }}>
+                    Limited launch offer — up to {introOffer.headlinePct}% off the first order. Cancel anytime.
+                  </p>
+                </div>
+                <span className="text-lg font-black flex-shrink-0" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+                  {formatGBP(pricing.subscriptionFirstMonth)}
+                </span>
+              </div>
+            </div>
           )}
 
           {/* The high-level receipt — what you're buying, discounts, total */}

@@ -1,6 +1,7 @@
 import type { StackBlueprint } from './types'
 import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
 import type { QuizAnswers, Budget, StackLevel, StackPreference } from '@/lib/types'
+import { isLadderDiscount, type IntroStage } from '@/lib/payments/intro-ladder'
 
 const DAYS_PER_MONTH = 30
 
@@ -77,10 +78,12 @@ export const PRICING_CONFIG = {
   maxSubscriptionServings: 35,
   /** Never schedule a delivery more than this many months apart. */
   maxDeliveryMonths: 3,
-  /** Bill one flat amount every month (smoothed average); minimum term protects it. */
+  /** Bill one flat amount every month (smoothed average). */
   subscriptionFlatMonthly: true,
-  /** Minimum subscription commitment in months (per-product can override up). */
-  minSubscriptionMonths: 4,
+  /** Minimum subscription commitment in months. 1 = cancel-anytime after the
+   *  first billing (per-product can still override up). The intro-offer ladder
+   *  keeps month one profitable-on-cancel for the 25%/10% stages. */
+  minSubscriptionMonths: 1,
 
   // ── Fulfilment ──
   /** Order total (£) at or above which delivery is free. Advertised on the
@@ -90,18 +93,27 @@ export const PRICING_CONFIG = {
   /** First-cycle intro offer. */
   introOffer: {
     /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it.
-     *  Used as the fallback when the scratch-to-reveal card is disabled. */
+     *  Used as the fallback when neither the ladder nor scratch is enabled. */
     firstMonthDiscount: 0.5,
     /**
-     * Scratch-to-reveal intro: instead of one fixed first-month discount, the
-     * member scratches a card to reveal theirs, drawn at random from these
-     * weighted outcomes. Probability of an outcome = its weight ÷ the sum of all
-     * weights. Default: 25% off two thirds of the time, 50% off one third of the
-     * time (weights 2 and 1). Set `enabled: false` to fall back to the flat
-     * `firstMonthDiscount` above.
+     * The GLOBAL, sequential intro ladder (the live mechanism). One discount is
+     * shown to everyone and steps down as orders arrive: the odd 50% (rare
+     * loss-leader) → 25% → 10% → cycles back. `quota` is checkouts at that rung
+     * before it drops. Chosen so 25%/10% stay profitable even with no minimum
+     * term; the 50% is deliberate leverage ("up to 50% off your first order").
+     * State lives in the KV store (src/lib/payments/intro-offer.ts).
      */
-    scratchReveal: {
+    ladder: {
       enabled: true,
+      stages: [
+        { discount: 0.5, quota: 1 },
+        { discount: 0.25, quota: 20 },
+        { discount: 0.1, quota: 30 },
+      ] as IntroStage[],
+    },
+    /** Legacy scratch-to-reveal — superseded by the ladder (kept for rollback). */
+    scratchReveal: {
+      enabled: false,
       outcomes: [
         { discount: 0.25, weight: 2 },
         { discount: 0.5, weight: 1 },
@@ -212,15 +224,29 @@ export function isValidScratchDiscount(rate: number, config = getPricingConfig()
   return scratchOutcomes(config).some((o) => o.discount === rate)
 }
 
+/** Whether the global intro-offer ladder is enabled and has at least one rung. */
+export function ladderEnabled(config = getPricingConfig()): boolean {
+  const l = config.introOffer.ladder
+  return !!l?.enabled && l.stages.length > 0
+}
+
+/** The ladder rungs, or [] when the ladder is off. */
+export function ladderStages(config = getPricingConfig()): IntroStage[] {
+  return ladderEnabled(config) ? config.introOffer.ladder.stages : []
+}
+
 /**
- * The first-month discount to actually apply. A member-revealed `override` is
- * honoured only when it's a valid scratch outcome; anything else falls back to
- * the flat `firstMonthDiscount`. Pass `override: 0` to explicitly apply no intro
- * (e.g. before the member has scratched their card).
+ * The first-month discount to actually apply. The `override` is the discount the
+ * member was shown (the current global ladder rung — see intro-offer.ts), or a
+ * scratch outcome when the legacy card is on. It's honoured only when it's a
+ * valid configured discount; anything else applies nothing. Pass `override: 0`
+ * to explicitly apply no intro (e.g. before the offer has loaded).
  */
 export function resolveIntroDiscount(override: number | null | undefined, config = getPricingConfig()): number {
-  if (override == null) return scratchRevealEnabled(config) ? 0 : config.introOffer.firstMonthDiscount
+  // Nothing revealed/loaded yet → apply nothing when a reveal mechanism is on.
+  if (override == null) return (ladderEnabled(config) || scratchRevealEnabled(config)) ? 0 : config.introOffer.firstMonthDiscount
   if (override === 0) return 0
+  if (ladderEnabled(config)) return isLadderDiscount(override, ladderStages(config)) ? override : 0
   if (scratchRevealEnabled(config)) return isValidScratchDiscount(override, config) ? override : 0
   return config.introOffer.firstMonthDiscount
 }

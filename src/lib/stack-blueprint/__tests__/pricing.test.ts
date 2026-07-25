@@ -1,4 +1,4 @@
-import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, qualifiesForFreeDelivery, PRICING_CONFIG, rollScratchDiscount, resolveIntroDiscount, isValidScratchDiscount, scratchOutcomes, scratchRevealEnabled } from '../pricing'
+import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, qualifiesForFreeDelivery, PRICING_CONFIG, rollScratchDiscount, resolveIntroDiscount, isValidScratchDiscount, scratchOutcomes, scratchRevealEnabled, ladderEnabled } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -496,12 +496,13 @@ describe('pricing rules — subscription profit guardrails', () => {
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
     expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.8 - 10))  // 32 - 10 = 22
     expect(p.subscriptionProfitableOnCancel).toBe(true)
-    expect(p.subscriptionCommittedMargin).toBe(round2(p.subscriptionMinTermTotal - 4 * 10)) // monthly delivery → 4 deliveries
+    // No minimum term now (1 month) → committed margin is just the first month.
+    expect(p.subscriptionCommittedMargin).toBe(round2(p.subscriptionMinTermTotal - 1 * 10)) // 1 delivery
   })
 
   it('flags a config that loses money if cancelled early', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
-    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } } }
+    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9, ladder: { enabled: false, stages: [] }, scratchReveal: { enabled: false, outcomes: [] } } }
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, badConfig)
     expect(p.subscriptionProfitableOnCancel).toBe(false)
   })
@@ -514,62 +515,43 @@ describe('pricing rules — subscription profit guardrails', () => {
 
 // ─── Scratch-to-reveal first-month discount ───────────────────────────────────
 
-describe('scratch-to-reveal intro discount', () => {
-  const scratchOff = {
+describe('intro discount resolution (ladder is the live mechanism)', () => {
+  const noReveal = {
     ...PRICING_CONFIG,
-    introOffer: { firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
+    introOffer: { firstMonthDiscount: 0.5, ladder: { enabled: false, stages: [] }, scratchReveal: { enabled: false, outcomes: [] } },
+  }
+  const scratchOn = {
+    ...PRICING_CONFIG,
+    introOffer: { firstMonthDiscount: 0.5, ladder: { enabled: false, stages: [] }, scratchReveal: { enabled: true, outcomes: [{ discount: 0.25, weight: 2 }, { discount: 0.5, weight: 1 }] } },
   }
 
-  it('is enabled by default with 25%/50% weighted outcomes', () => {
-    expect(scratchRevealEnabled()).toBe(true)
-    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([0.25, 0.5])
+  it('the ladder is on by default; the legacy scratch card is off', () => {
+    expect(ladderEnabled()).toBe(true)
+    expect(scratchRevealEnabled()).toBe(false)
   })
 
-  it('rollScratchDiscount only ever returns a configured outcome', () => {
-    const valid = new Set(scratchOutcomes().map((o) => o.discount))
-    for (let i = 0; i < 500; i++) {
-      expect(valid.has(rollScratchDiscount())).toBe(true)
-    }
-  })
-
-  it('rollScratchDiscount respects the weights (25% two thirds, 50% one third)', () => {
-    // Weights are 2:1, so the boundary between outcomes is at 2/3.
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(0.25)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.66)).toBe(0.25)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.67)).toBe(0.5)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(0.5)
-
-    // Sweep a uniform grid — ~2/3 should land on 25%.
-    let fifties = 0
-    const N = 3000
-    for (let i = 0; i < N; i++) {
-      if (rollScratchDiscount(PRICING_CONFIG, () => (i + 0.5) / N) === 0.5) fifties += 1
-    }
-    expect(fifties / N).toBeCloseTo(1 / 3, 2)
-  })
-
-  it('rollScratchDiscount falls back to the flat rate when scratch is disabled', () => {
-    expect(rollScratchDiscount(scratchOff)).toBe(0.5)
-  })
-
-  it('isValidScratchDiscount accepts only configured outcomes', () => {
-    expect(isValidScratchDiscount(0.25)).toBe(true)
-    expect(isValidScratchDiscount(0.5)).toBe(true)
-    expect(isValidScratchDiscount(0.9)).toBe(false)
-    expect(isValidScratchDiscount(0)).toBe(false)
-  })
-
-  it('resolveIntroDiscount honours a valid reveal and rejects anything else', () => {
-    expect(resolveIntroDiscount(null)).toBe(0)        // not scratched yet → nothing applied
+  it('resolveIntroDiscount (default = ladder) honours the ladder rungs and rejects anything else', () => {
+    expect(resolveIntroDiscount(null)).toBe(0)        // offer not loaded yet → nothing applied
     expect(resolveIntroDiscount(undefined)).toBe(0)
     expect(resolveIntroDiscount(0)).toBe(0)
+    expect(resolveIntroDiscount(0.5)).toBe(0.5)       // a valid rung
     expect(resolveIntroDiscount(0.25)).toBe(0.25)
-    expect(resolveIntroDiscount(0.5)).toBe(0.5)
-    expect(resolveIntroDiscount(0.9)).toBe(0)          // not a valid outcome → ignored
+    expect(resolveIntroDiscount(0.1)).toBe(0.1)
+    expect(resolveIntroDiscount(0.9)).toBe(0)          // not a rung → ignored
   })
 
-  it('resolveIntroDiscount applies the flat rate when scratch is disabled', () => {
-    expect(resolveIntroDiscount(null, scratchOff)).toBe(0.5)
-    expect(resolveIntroDiscount(undefined, scratchOff)).toBe(0.5)
+  it('resolveIntroDiscount applies the flat rate when no reveal mechanism is on', () => {
+    expect(resolveIntroDiscount(null, noReveal)).toBe(0.5)
+    expect(resolveIntroDiscount(undefined, noReveal)).toBe(0.5)
+  })
+
+  // The legacy scratch mechanic still works when explicitly enabled (rollback).
+  it('scratch (when enabled) only ever returns a configured outcome, weighted', () => {
+    const valid = new Set(scratchOutcomes(scratchOn).map((o) => o.discount))
+    for (let i = 0; i < 200; i++) expect(valid.has(rollScratchDiscount(scratchOn))).toBe(true)
+    expect(rollScratchDiscount(scratchOn, () => 0)).toBe(0.25)
+    expect(rollScratchDiscount(scratchOn, () => 0.67)).toBe(0.5)
+    expect(isValidScratchDiscount(0.25, scratchOn)).toBe(true)
+    expect(isValidScratchDiscount(0.9, scratchOn)).toBe(false)
   })
 })
