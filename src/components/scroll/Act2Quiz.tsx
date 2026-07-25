@@ -19,7 +19,7 @@ import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
   TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
-  DailyDrinks, DrinkVariety, WorkoutAddOn,
+  DailyDrinks, WorkoutAddOn,
 } from '@/lib/types'
 
 // Client-side fallback identity so the reveal is never empty if the identity
@@ -151,18 +151,6 @@ const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
     ],
   },
   {
-    id: 'immuneBaseline',
-    triggers: ['immune'],
-    serves: ['immune', 'health'],
-    question: 'How often do you get run down?',
-    hint: 'Sets how much immune support to include',
-    options: [
-      { id: 'often',     label: 'Catch everything going round' },
-      { id: 'sometimes', label: 'A couple of times a year' },
-      { id: 'rarely',    label: 'Rarely ill — just want insurance' },
-    ],
-  },
-  {
     id: 'collagenOk',
     triggers: ['skin-hair-nails'],
     serves: ['skin-hair-nails'],
@@ -220,14 +208,13 @@ const WELLBEING_LIFESTYLE_DATA = [
   { id: 'desk-job',     label: 'Desk job / mostly indoors',  icon: 'monitor' },
   { id: 'shift-work',   label: 'Shift work / irregular hours', icon: 'clock' },
   { id: 'run-down',     label: 'Get run down easily',        icon: 'trending-down' },
-  { id: 'active',       label: 'Train or exercise regularly', icon: 'activity' },
   { id: 'joint-issues', label: 'Joint or old injuries',      icon: 'bone' },
 ]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
-  { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
-  { id: 'mostly-good',  label: 'Pretty good',            sub: 'Healthy most of the time' },
-  { id: 'inconsistent', label: 'Hit and miss',           sub: 'Good days and bad days' },
-  { id: 'poor',         label: 'Room for improvement',   sub: 'Convenience-first right now' },
+  { id: 'clean',        label: 'Cooked from scratch',   sub: 'Mostly home-cooked and planned' },
+  { id: 'mostly-good',  label: 'Decent but rushed',     sub: 'Healthy-ish, not much time' },
+  { id: 'inconsistent', label: "Grab whatever's easy",  sub: 'Convenience-led — good and bad days' },
+  { id: 'poor',         label: 'All over the place',    sub: 'No real routine right now' },
 ]
 const SUPPS_DATA = [
   { id: 'protein',     label: 'Protein',        icon: 'shaker' },
@@ -264,7 +251,7 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
   { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
   { id: 'low',    label: 'Occasionally',    sub: 'One coffee here and there' },
   { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
-  { id: 'high',   label: 'High tolerance',  sub: '3+ coffees, used to pre-workout' },
+  { id: 'high',   label: 'I run on it',     sub: '3+ coffees, used to pre-workout' },
 ]
 const BUDGET_DATA: Array<{
   id: Budget; name: string; budget: string; sub: string
@@ -297,18 +284,11 @@ const DAILY_DRINKS_DATA: Array<{ id: DailyDrinks; label: string; sub: string; fi
   { id: 3, label: 'Three+',     sub: 'A drink with most meals',                  fills: 3 },
 ]
 
-// LQD FOUNDATION — staples vs a monthly mix. Shapes the box's variety, not size.
-const DRINK_VARIETY_DATA: Array<{ id: DrinkVariety; label: string; sub: string; fills: number }> = [
-  { id: 'staples', label: 'My staples', sub: 'The same go-to drinks every day — simple, no thinking', fills: 2 },
-  { id: 'variety', label: 'A monthly mix', sub: 'A rotating mix that covers more bases across the month', fills: 4 },
-]
-
-// LQD WORKOUT ADD-ONS — opt-in drinks around training (performance route only),
-// sized from training frequency rather than the daily pace.
+// LQD WORKOUT ADD-ONS — a single opt-in pre-workout drink (performance route
+// only). The protein/recovery options were inert (the daily base already covers
+// those slots), so it's now one toggle that adds/keeps the pre-workout line.
 const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }> = [
-  { id: 'pre-workout', label: 'Pre-workout', sub: 'A hit of energy & focus before you train' },
-  { id: 'protein',     label: 'Protein shake', sub: 'A ready-made protein drink after sessions' },
-  { id: 'recovery',    label: 'Recovery', sub: 'Refuel and repair after the hard ones' },
+  { id: 'pre-workout', label: 'Yes — add a pre-workout drink', sub: 'A hit of energy & focus before you train' },
 ]
 
 const FORMAT_DATA = [
@@ -584,7 +564,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const { products: liveCatalogue } = useCatalogueProducts()
 
   // Active step sequence for the chosen track (single source of truth).
-  const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode), [answers.track, answers.drinksMode])
+  const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode, { track: answers.track }), [answers.track, answers.drinksMode])
   const index = Math.min(step, seq.length - 1)
   const current = seq[index]
   const id = current.id
@@ -700,7 +680,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [localName, setLocalName] = useState(answers.name || '')
   const [localAge, setLocalAge] = useState<AgeBracket | ''>(answers.ageBracket || '')
   const [localGender, setLocalGender] = useState<Gender | ''>(answers.gender || '')
-  const [localExactAge, setLocalExactAge] = useState<number | null>(answers.exactAge ?? null)
 
   // Move focus to the question on every step change (orientation + a11y).
   useEffect(() => {
@@ -815,7 +794,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setAnswer('name', localName.trim())
     if (localAge) setAnswer('ageBracket', localAge as AgeBracket)
     setAnswer('gender', (localGender || null) as Gender)
-    if (localExactAge !== null) setAnswer('exactAge', localExactAge)
   }
 
   function advance() {
@@ -865,14 +843,14 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setStep(i)
   }
 
-  // Training styles are multi-select — toggle in the array, no auto-advance.
-  function handleMultiType(tid: TrainingType) {
-    const cur = answers.trainingType
-    const next = cur.includes(tid) ? cur.filter((x) => x !== tid) : [...cur, tid]
-    setAnswer('trainingType', next)
-    // The style follow-up (strength focus / sport type) only makes sense for a
-    // single chosen style — clear the focus answer whenever it no longer applies.
-    const followUp = next.length === 1 ? getSubQuestion('type', next[0]) : null
+  // Main training style — single-select (the old multi-select never reached the
+  // engine unless exactly one was chosen; picking one always drives the focus
+  // follow-up that actually shapes the stack).
+  function handleSelectType(tid: TrainingType) {
+    setAnswer('trainingType', [tid])
+    // Clear any focus carried over from a previously-chosen style that no longer
+    // applies (only strength/sport reveal a focus follow-up).
+    const followUp = getSubQuestion('type', tid)
     if (!followUp) setAnswer('trainingFocus', null)
   }
 
@@ -991,15 +969,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     rows.push({ label: 'Goals', value: answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || '—', edit: 'goals' })
     if (answers.drinksMode && answers.dailyDrinks) {
       const pace = DAILY_DRINKS_DATA.find((d) => d.id === answers.dailyDrinks)
-      const variety = DRINK_VARIETY_DATA.find((v) => v.id === answers.drinkVariety)
-      const parts = [pace ? `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day` : '', variety?.label].filter(Boolean)
-      if (parts.length) rows.push({ label: 'Daily drinks', value: parts.join(' · '), edit: 'dailyDrinks' })
+      if (pace) rows.push({ label: 'Daily drinks', value: `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day`, edit: 'dailyDrinks' })
     }
     if (answers.drinksMode && answers.track === 'performance' && (answers.workoutAddOns ?? []).length > 0) {
       const labels = WORKOUT_ADDON_DATA.filter((w) => (answers.workoutAddOns ?? []).includes(w.id)).map((w) => w.label)
       rows.push({ label: 'Workout drinks', value: labels.join(', '), edit: 'workoutAddOns' })
     }
-    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localExactAge ? `${localExactAge}` : localAge].filter(Boolean).join(' · '), edit: 'personal' })
+    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localAge].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
       const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
       if (t) rows.push({ label: 'Training', value: t, edit: 'frequency' })
@@ -1335,39 +1311,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── LQD foundation — staples vs a monthly mix ── */}
-          {id === 'drinkVariety' && (
-            <div className="flex flex-col gap-2.5">
-              {DRINK_VARIETY_DATA.map(({ id: vid, label, sub, fills }) => {
-                const active = answers.drinkVariety === vid
-                return (
-                  <button
-                    key={`variety-${vid}`}
-                    onClick={() => {
-                      setAnswer('drinkVariety', vid)
-                      clearPending()
-                      pendingTimerRef.current = setTimeout(() => advance(), 340)
-                    }}
-                    aria-pressed={active}
-                    className={[
-                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
-                      'transition-all duration-200 active:scale-[0.99]',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
-                      active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
-                    ].join(' ')}
-                  >
-                    <PaceGlass level={fills / 4} selected={active} reduced={reducedMotion} />
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[15px] font-medium leading-snug ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
-                    </div>
-                    <CheckMark selected={active} />
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
           {/* ── LQD workout add-ons — opt-in, training route only ── */}
           {id === 'workoutAddOns' && (
             <div className="flex flex-col gap-2.5">
@@ -1431,30 +1374,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     <AnswerOption key={`age-${aid}`} label={label} multi selected={localAge === aid} onClick={() => setLocalAge(aid)} />
                   ))}
                 </div>
-                <div className="mt-4 px-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] text-white/30">For more accurate results, set your exact age</p>
-                    {localExactAge !== null && <span className="text-xs font-bold text-[#00D4FF]">{localExactAge}</span>}
-                  </div>
-                  <input
-                    type="range" min={16} max={70} step={1} value={localExactAge ?? 25}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10)
-                      setLocalExactAge(v)
-                      if (v < 25) setLocalAge('16-24')
-                      else if (v < 35) setLocalAge('25-34')
-                      else if (v < 45) setLocalAge('35-44')
-                      else setLocalAge('45+')
-                    }}
-                    onFocus={() => { if (localExactAge === null) setLocalExactAge(25) }}
-                    className="w-full h-1 rounded-full appearance-none cursor-pointer"
-                    style={{ background: localExactAge !== null ? `linear-gradient(to right, #00D4FF ${(((localExactAge - 16) / 54) * 100).toFixed(1)}%, rgba(255,255,255,0.12) 0%)` : 'rgba(255,255,255,0.12)' }}
-                  />
-                  <div className="flex justify-between mt-1">
-                    <span className="text-[10px] text-white/20">16</span>
-                    <span className="text-[10px] text-white/20">70+</span>
-                  </div>
-                </div>
               </div>
 
               <div>
@@ -1488,9 +1407,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {id === 'type' && (
             <div className="flex flex-col gap-2.5">
               {TYPE_DATA.map(({ id: tid, label, sub }) => (
-                <AnswerOption key={`t-${tid}`} label={label} sub={sub} multi
-                  selected={answers.trainingType.includes(tid)}
-                  onClick={() => handleMultiType(tid)} />
+                <AnswerOption key={`t-${tid}`} label={label} sub={sub}
+                  selected={answers.trainingType[0] === tid}
+                  onClick={() => handleSelectType(tid)} />
               ))}
 
               {/* Inline refinement when a single style is chosen */}

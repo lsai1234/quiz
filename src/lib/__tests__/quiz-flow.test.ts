@@ -29,10 +29,11 @@ describe('step guidance metadata', () => {
   it('the key multi/optional steps are labelled so users know they can pick several', () => {
     const mode = (id: string) => QUIZ_STEPS.find((s) => s.id === id)!.select
     expect(mode('goals')).toBe('multi')
-    expect(mode('type')).toBe('multi')
     expect(mode('formats')).toBe('multi')
     expect(mode('lifestyle')).toBe('optional')
     expect(mode('supps')).toBe('optional')
+    // Main training style is single-select now (the old multi-select was inert).
+    expect(mode('type')).toBe('one')
     // Free-entry / summary steps show no pill.
     expect(mode('personal')).toBe('form')
     expect(mode('review')).toBe('form')
@@ -55,6 +56,37 @@ describe('activeSteps', () => {
       expect(ids).not.toContain('formats')
       expect(ids).not.toContain('budget') // pace sizes the package instead
     }
+  })
+
+  it('drinkVariety is gone (near-inert question removed)', () => {
+    expect(QUIZ_STEPS.some((s) => (s.id as string) === 'drinkVariety')).toBe(false)
+    expect(activeSteps('wellbeing', true).map((s) => s.id)).not.toContain('drinkVariety')
+  })
+
+  it('caffeine + training-time are performance-only when answers are supplied', () => {
+    const wellIds = activeSteps('wellbeing', false, { track: 'wellbeing' }).map((s) => s.id)
+    const perfIds = activeSteps('performance', false, { track: 'performance' }).map((s) => s.id)
+    expect(wellIds).not.toContain('caffeine')
+    expect(wellIds).not.toContain('trainingTime')
+    expect(perfIds).toContain('caffeine')
+    expect(perfIds).toContain('trainingTime')
+  })
+
+  it('without answers the conditional steps stay in (stable first-screen count)', () => {
+    const ids = activeSteps('wellbeing', false).map((s) => s.id)
+    expect(ids).toContain('caffeine')
+    expect(ids).toContain('trainingTime')
+  })
+
+  it('advertised question counts per path (review + deepDive excluded)', () => {
+    const count = (track: 'performance' | 'wellbeing', drinks: boolean) =>
+      activeSteps(track, drinks, { track }).filter((s) => s.id !== 'review' && s.id !== 'deepDive').length
+    // Post-cull counts. Budget leaves the flow in Phase 2; safety/bodyweight
+    // arrive in Phase 3 — so these are the interim Phase-1 numbers.
+    expect(count('wellbeing', false)).toBe(7)    // goals, personal, lifestyle, diet, supps, formats, budget
+    expect(count('performance', false)).toBe(11) // + frequency, type, caffeine, trainingTime
+    expect(count('wellbeing', true)).toBe(6)     // goals, dailyDrinks, personal, lifestyle, diet, supps
+    expect(count('performance', true)).toBe(11)  // + workoutAddOns, frequency, type, caffeine, trainingTime
   })
 })
 

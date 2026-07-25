@@ -1,6 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
 import type { DynamicQuestion } from '@/lib/ai-questions'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
@@ -107,7 +108,7 @@ export const defaultAnswers: QuizAnswers = {
   trainingTime: null,
 }
 
-export const useQuizStore = create<QuizStore>((set) => ({
+export const useQuizStore = create<QuizStore>()(persist((set) => ({
   step: 0,
   answers: defaultAnswers,
   identity: null,
@@ -139,8 +140,11 @@ export const useQuizStore = create<QuizStore>((set) => ({
   nextStep: () => set((s) => ({ step: s.step + 1 })),
   prevStep: () => set((s) => ({ step: Math.max(0, s.step - 1) })),
 
+  // The first-tapped goal is the one that matters most (wires up the previously
+  // unset `primaryGoal` signal). Kept in sync as goals are toggled: it's always
+  // the current first goal, or null when none remain.
   setGoals: (goals) =>
-    set((s) => ({ answers: { ...s.answers, goals } })),
+    set((s) => ({ answers: { ...s.answers, goals, primaryGoal: goals[0] ?? null } })),
 
   setAnswer: (key, value) =>
     set((s) => ({ answers: { ...s.answers, [key]: value } })),
@@ -169,4 +173,24 @@ export const useQuizStore = create<QuizStore>((set) => ({
     }),
 
   reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
+}), {
+  // Persist just the in-progress answers + step so a refresh no longer wipes the
+  // quiz (audit §5.3 / drop-off risk #3). Heavy/transient state (catalogue,
+  // blueprint, identity) is deliberately excluded via `partialize`.
+  name: 'chrgd-quiz',
+  version: 1,
+  partialize: (s) => ({ answers: s.answers, step: s.step }),
+  // Rehydrate manually after mount (ScrollExperience) so server and client both
+  // start from defaults — no hydration mismatch from persisted answers.
+  skipHydration: true,
 }))
+
+/**
+ * Whether there's a resumable in-progress quiz in the persisted store — the user
+ * had chosen a track/goal and moved past the first screen, but hasn't been shown
+ * results this session. Drives the "resume where you left off?" prompt.
+ */
+export function hasQuizProgress(): boolean {
+  const { step, answers } = useQuizStore.getState()
+  return step > 0 && (answers.goals.length > 0 || answers.track !== null)
+}
