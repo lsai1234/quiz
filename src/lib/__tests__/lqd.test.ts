@@ -100,7 +100,8 @@ describe('LQD quiz flow', () => {
     expect(lqd.filter((id) => !['dailyDrinks', 'workoutAddOns'].includes(id))).toEqual(
       normal.filter((id) => id !== 'formats'),
     )
-    expect(lqd[lqd.indexOf('dailyDrinks') - 1]).toBe('goals')
+    // Safety follows the goal, then the LQD foundation steps.
+    expect(lqd[lqd.indexOf('dailyDrinks') - 1]).toBe('safety')
   })
 
   it('hides workout add-ons on the wellbeing (non-training) route', () => {

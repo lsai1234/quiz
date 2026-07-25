@@ -15,7 +15,7 @@ import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel,
   TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
-  DailyDrinks, WorkoutAddOn,
+  DailyDrinks, WorkoutAddOn, SafetyFlag, WeightBand,
 } from '@/lib/types'
 
 // Client-side fallback identity so the reveal is never empty if the identity
@@ -178,6 +178,23 @@ function pickWellbeingQuestions(goals: Goal[]): WellbeingQuestion[] {
   }
   return selected
 }
+
+// Safety screen — a private, remove-only filter. Ticking a flag drops
+// contraindicated products from the recommendation (never adds anything).
+const SAFETY_DATA: Array<{ id: SafetyFlag; label: string }> = [
+  { id: 'pregnancy',  label: 'Pregnant or breastfeeding' },
+  { id: 'medication', label: 'On prescription medication' },
+]
+
+// Bodyweight bands (optional) — scale weight-sensitive dosing (protein). Bands,
+// never an exact figure.
+const WEIGHT_DATA: Array<{ id: WeightBand; label: string }> = [
+  { id: 'under-60', label: 'Under 60kg' },
+  { id: '60-75',    label: '60–75kg' },
+  { id: '75-90',    label: '75–90kg' },
+  { id: '90-105',   label: '90–105kg' },
+  { id: '105-plus', label: '105kg+' },
+]
 
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
   { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
@@ -624,6 +641,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [localName, setLocalName] = useState(answers.name || '')
   const [localAge, setLocalAge] = useState<AgeBracket | ''>(answers.ageBracket || '')
   const [localGender, setLocalGender] = useState<Gender | ''>(answers.gender || '')
+  const [localWeight, setLocalWeight] = useState<WeightBand | ''>(answers.weightBand ?? '')
 
   // Move focus to the question on every step change (orientation + a11y).
   useEffect(() => {
@@ -738,6 +756,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setAnswer('name', localName.trim())
     if (localAge) setAnswer('ageBracket', localAge as AgeBracket)
     setAnswer('gender', (localGender || null) as Gender)
+    setAnswer('weightBand', (localWeight || null) as WeightBand | null)
   }
 
   function advance() {
@@ -870,7 +889,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     switch (id) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
-      case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
+      case 'safety': case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
       // Workout add-ons are optional — always allowed to continue (with or without picks).
       case 'workoutAddOns': return true
       case 'type': return answers.trainingType.length > 0
@@ -909,6 +928,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   function reviewRows(): Array<{ label: string; value: string; edit: StepId }> {
     const rows: Array<{ label: string; value: string; edit: StepId }> = []
     rows.push({ label: 'Goals', value: answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || '—', edit: 'goals' })
+    if ((answers.safetyFlags ?? []).length) {
+      rows.push({ label: 'To factor in', value: labelsOf(SAFETY_DATA, answers.safetyFlags ?? []).join(', '), edit: 'safety' })
+    }
     if (answers.drinksMode && answers.dailyDrinks) {
       const pace = DAILY_DRINKS_DATA.find((d) => d.id === answers.dailyDrinks)
       if (pace) rows.push({ label: 'Daily drinks', value: `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day`, edit: 'dailyDrinks' })
@@ -917,7 +939,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       const labels = WORKOUT_ADDON_DATA.filter((w) => (answers.workoutAddOns ?? []).includes(w.id)).map((w) => w.label)
       rows.push({ label: 'Workout drinks', value: labels.join(', '), edit: 'workoutAddOns' })
     }
-    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localAge].filter(Boolean).join(' · '), edit: 'personal' })
+    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localAge, labelOf(WEIGHT_DATA, localWeight || null)].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
       const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
       if (t) rows.push({ label: 'Training', value: t, edit: 'frequency' })
@@ -1212,6 +1234,32 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           ))}
 
+          {/* ── Safety screen — private, remove-only filter ── */}
+          {id === 'safety' && (
+            <div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {SAFETY_DATA.map(({ id: sid, label }) => (
+                  <AnswerOption
+                    key={`safety-${sid}`} label={label} multi
+                    selected={(answers.safetyFlags ?? []).includes(sid)}
+                    onClick={() => {
+                      const c = answers.safetyFlags ?? []
+                      setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
+                    }}
+                  />
+                ))}
+                <AnswerOption
+                  key="safety-none" label="None of these" multi
+                  selected={(answers.safetyFlags ?? []).length === 0}
+                  onClick={() => setAnswer('safetyFlags', [])}
+                />
+              </div>
+              <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
+                Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.
+              </p>
+            </div>
+          )}
+
           {/* ── LQD pace — how many drinks a day (drinks mode only) ── */}
           {/* ── LQD foundation — how many drinks a day (mirrors into drinksPerDay
                 so the box-sizing engine is unchanged) ── */}
@@ -1330,6 +1378,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     <AnswerOption key={`gender-${gid}`} label={label} multi selected={localGender === gid} onClick={() => setLocalGender(prev => prev === gid ? '' : gid)} />
                   ))}
                 </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block" style={{ fontFamily: 'var(--font-display)' }}>
+                  Weight <span className="normal-case font-normal tracking-normal text-white/15">· optional</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {WEIGHT_DATA.map(({ id: wid, label }) => (
+                    <AnswerOption key={`weight-${wid}`} label={label} multi selected={localWeight === wid} onClick={() => setLocalWeight(prev => prev === wid ? '' : wid)} />
+                  ))}
+                </div>
+                <p className="text-[11px] text-white/20 mt-2">Makes your protein &amp; creatine doses accurate</p>
               </div>
             </div>
           )}

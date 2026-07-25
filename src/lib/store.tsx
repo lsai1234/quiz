@@ -88,6 +88,8 @@ export const defaultAnswers: QuizAnswers = {
   ageBracket: null,
   exactAge: null,
   gender: null,
+  safetyFlags: [],
+  weightBand: null,
   goals: [],
   trainingFrequency: null,
   trainingType: [],

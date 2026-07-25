@@ -126,6 +126,15 @@ export type ConsumptionCadence =
  */
 export type AsNeededTrigger = 'sweat' | 'sleep' | 'stress' | 'immunity' | 'digestion'
 
+/**
+ * Safety flags the quiz screens for, and that a product can be contraindicated
+ * against. A product carrying a flag in `contraindications` is HARD-REMOVED from
+ * the recommendation for anyone who ticked that flag (see scoreProduct).
+ *   • pregnancy  — pregnant or breastfeeding (avoid certain botanicals/stimulants)
+ *   • medication — on prescription medication (avoid interaction-prone blends)
+ */
+export type SafetyFlag = 'pregnancy' | 'medication'
+
 /** When a drink is best taken — drives the Pour Plan protocol copy (guidance,
  *  not a rigid schedule). */
 export type PourAnchor =
@@ -282,6 +291,19 @@ export interface CatalogueProduct {
   isBoosterEligible: boolean
   /** Contains stimulants (caffeine, synephrine, etc.) */
   hasStimulants: boolean
+  /**
+   * Safety flags this product is contraindicated against. Anyone who ticked a
+   * matching flag on the safety screen has it removed from their recommendation
+   * (hard gate in scoreProduct). Absent/empty = no contraindications.
+   */
+  contraindications?: SafetyFlag[]
+  /**
+   * Key active ingredients per serving — the dose/ingredient data the supplier
+   * feed can't provide, maintained for the curated quiz-core. Reserved for the
+   * active-ingredient dedup + total dose caps (Phase 5); optional until then.
+   */
+  actives?: Array<{ name: string; mg?: number }>
+
 
   // ── UX copy ───────────────────────────────────────────────────────────────────
   /** Short legal/claim-safe reason shown on the product card */

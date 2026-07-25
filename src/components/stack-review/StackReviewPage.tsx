@@ -32,7 +32,15 @@ import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { funnel } from '@/lib/analytics/quiz'
-import type { StackLevel } from '@/lib/types'
+import type { StackLevel, Goal } from '@/lib/types'
+
+// Compact goal labels for the honest "no strong match" note.
+const GOAL_LABEL: Partial<Record<Goal, string>> = {
+  'sleep-better': 'sleep', 'less-stress': 'stress', focus: 'focus', immune: 'immunity',
+  'skin-hair-nails': 'skin, hair & nails', 'gut-health': 'gut health', menopause: 'menopause support',
+  muscle: 'muscle', energy: 'energy', performance: 'performance', hydration: 'hydration',
+  recovery: 'recovery', health: 'general health', cutting: 'getting lean', bulking: 'gaining mass',
+}
 
 // ── Value-first depth tiers (shown on the results screen, not asked in the quiz).
 // Each tier is a ranked prefix of the full ("complete") stack, so more depth
@@ -373,6 +381,24 @@ export function StackReviewPage() {
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
+
+        {/* Honest "no strong match" note — a chosen goal whose only products were
+            removed by a hard gate (safety / dietary). Surfaced, never silently dropped. */}
+        {(activeBlueprint.unmetGoals?.length ?? 0) > 0 && (
+          <div
+            className="mx-5 max-w-lg lg:mx-auto mt-5 rounded-2xl border px-4 py-3"
+            style={{ borderColor: 'var(--color-border-2)', background: 'var(--color-surface)' }}
+          >
+            <p className="text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              One thing we couldn’t match
+            </p>
+            <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              We didn’t find a suitable product for{' '}
+              {(activeBlueprint.unmetGoals ?? []).map((g) => GOAL_LABEL[g] ?? g).join(', ')}{' '}
+              given your answers, so we’ve left it out rather than suggest something that isn’t right for you. It’s worth a chat with your GP or pharmacist.
+            </p>
+          </div>
+        )}
 
         {/* Value-first depth selector — choose Essentials / Balanced / Complete,
             each a ranked prefix of the full stack, priced so value comes first. */}

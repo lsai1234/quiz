@@ -81,12 +81,12 @@ describe('activeSteps', () => {
   it('advertised question counts per path (review + deepDive excluded)', () => {
     const count = (track: 'performance' | 'wellbeing', drinks: boolean) =>
       activeSteps(track, drinks, { track }).filter((s) => s.id !== 'review' && s.id !== 'deepDive').length
-    // Post-Phase-2 counts (budget removed → depth chosen on the results screen).
-    // Safety + bodyweight arrive in Phase 3.
-    expect(count('wellbeing', false)).toBe(6)    // goals, personal, lifestyle, diet, supps, formats
-    expect(count('performance', false)).toBe(10) // + frequency, type, caffeine, trainingTime
-    expect(count('wellbeing', true)).toBe(6)     // goals, dailyDrinks, personal, lifestyle, diet, supps
-    expect(count('performance', true)).toBe(11)  // + workoutAddOns, frequency, type, caffeine, trainingTime
+    // Post-Phase-3 counts (budget removed; safety screen added; weight folded
+    // into the personal step, so no extra step for it).
+    expect(count('wellbeing', false)).toBe(7)    // goals, safety, personal, lifestyle, diet, supps, formats
+    expect(count('performance', false)).toBe(11) // + frequency, type, caffeine, trainingTime
+    expect(count('wellbeing', true)).toBe(7)     // goals, safety, dailyDrinks, personal, lifestyle, diet, supps
+    expect(count('performance', true)).toBe(12)  // + workoutAddOns, frequency, type, caffeine, trainingTime
   })
 })
 

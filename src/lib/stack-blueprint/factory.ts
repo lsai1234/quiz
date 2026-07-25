@@ -168,6 +168,12 @@ export function scoreProduct(
   // Fat burners: thermogenics and cutting products have no benefit for someone
   // who hasn't selected a weight-loss / cutting goal. Recommending them to a
   // sleep or immune-support user is actively wrong.
+  // Safety screen: a product contraindicated against anything the user flagged
+  // (pregnancy / medication) is removed entirely — safety comes before fit.
+  const safetyFlags = answers.safetyFlags ?? []
+  if (safetyFlags.length > 0 && (product.contraindications ?? []).some((c) => safetyFlags.includes(c))) {
+    return -Infinity
+  }
   if (product.swapGroup === 'fat-burner' && !answers.goals.includes('cutting')) return -Infinity
   // Mass gainers: a 600kcal shake is counterproductive outside a bulk phase
   if (product.swapGroup === 'protein-mass' && !answers.goals.includes('bulking')) return -Infinity
@@ -802,6 +808,14 @@ export function buildStackBlueprint(
     answers.trainingFrequency ? `${answers.trainingFrequency}/week` : null,
   ].filter(Boolean).join(', ')
 
+  // Goals the final stack doesn't cover — because a hard gate (safety, dietary)
+  // removed the only candidates. Surfaced honestly on the reveal instead of a
+  // silent gap. A goal is "covered" when any selected product is tagged with it.
+  const coveredGoals = new Set<Goal>(
+    slots.flatMap((s) => effectiveCatalogue.find((p) => p.id === s.selectedProductId)?.goals ?? []),
+  )
+  const unmetGoals = answers.goals.filter((g) => !coveredGoals.has(g))
+
   // Build partial blueprint to calculate prices
   const partialBlueprint: StackBlueprint = {
     id: Date.now().toString(36),
@@ -811,6 +825,7 @@ export function buildStackBlueprint(
     secondaryGoals,
     userProfileSummary,
     slots,
+    unmetGoals,
     estimatedOneOffPrice: 0,
     estimatedSubscriptionPrice: 0,
     savingsSummary: '',

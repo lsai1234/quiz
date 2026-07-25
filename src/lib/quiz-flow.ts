@@ -13,6 +13,7 @@ import type { QuizTrack, QuizAnswers } from '@/lib/types'
  */
 export type StepId =
   | 'goals'
+  | 'safety'
   | 'dailyDrinks'
   | 'workoutAddOns'
   | 'personal'
@@ -77,6 +78,9 @@ export function selectHint(mode: SelectMode): string | null {
 
 export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", select: 'multi', lqd: { hint: 'Pick everything that applies — we’ll cover it all with ready-made drinks.' }, advance: 'manual' },
+  // Safety screen — front-loaded so it filters everything downstream. Ticking a
+  // flag removes contraindicated products from the recommendation entirely.
+  { id: 'safety', section: 'ABOUT YOU', q: 'Anything we should factor in?', hint: 'So we only ever suggest things that are right for you.', select: 'optional', advance: 'manual' },
   // LQD FOUNDATION — the everyday base, shown to everyone in drinks mode.
   { id: 'dailyDrinks', section: 'YOUR DAILY DRINKS', q: 'How many drinks on a normal day?', hint: "Your everyday base — it just helps us size the box.", select: 'one', onlyInDrinksMode: true, advance: 'auto' },
   // LQD WORKOUT ADD-ONS — training route only; a single opt-in pre-workout toggle.

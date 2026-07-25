@@ -185,6 +185,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     isCoreEligible: true,
     isBoosterEligible: false,
     hasStimulants: true,
+    contraindications: ['pregnancy'], // 200mg caffeine — limit stimulants in pregnancy
     shortReason: 'Boosts energy, focus and blood flow before training.',
     warnings: ['Contains 200mg caffeine per serving. Not suitable for under 18s or those sensitive to caffeine.', 'Do not exceed one serving in 24 hours.'],
     shopifyProductId: null,
@@ -481,6 +482,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     isCoreEligible: false,
     isBoosterEligible: true,
     hasStimulants: false,
+    contraindications: ['pregnancy'], // contains ashwagandha
     shortReason: 'A blend to support deeper sleep and overnight recovery — take 30 mins before bed.',
     warnings: [],
     shopifyProductId: null,
@@ -512,6 +514,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     isCoreEligible: false,
     isBoosterEligible: true,
     hasStimulants: false,
+    contraindications: ['pregnancy'], // ashwagandha not advised in pregnancy/breastfeeding
     shortReason: 'An adaptogen that helps your body handle stress and wind down in the evening.',
     warnings: ['Not suitable during pregnancy or breastfeeding.'],
     shopifyProductId: null,
@@ -643,6 +646,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     isCoreEligible: true,
     isBoosterEligible: false,
     hasStimulants: false,
+    contraindications: ['pregnancy', 'medication'], // hormone-active botanicals (sage, red clover)
     shortReason: 'Botanicals and key nutrients to help with hormonal balance, hot flushes and energy through menopause.',
     warnings: ['Consult your GP before use if you are on hormone-related medication.'],
     shopifyProductId: null,
@@ -926,6 +930,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     isCoreEligible: true,
     isBoosterEligible: false,
     hasStimulants: true,
+    contraindications: ['pregnancy'], // 150mg caffeine per can
     shortReason: 'Pre-workout you can hold — cold, carbonated and ready before training.',
     warnings: ['Contains caffeine (150mg per can). Not recommended after mid-afternoon.'],
     shopifyProductId: null,
