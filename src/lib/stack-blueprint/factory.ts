@@ -1,4 +1,5 @@
-// MVP scoring rules — replace with ML-based scoring in v2
+// Engine scoring + goal map now live as editable data in @/lib/quiz-core — this
+// file reads those tables rather than hard-coding weights and relationships.
 
 import type { QuizAnswers, Goal } from '@/lib/types'
 import { PERFORMANCE_GOALS } from '@/lib/types'
@@ -8,24 +9,12 @@ import { lqdOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } from './pricing'
+import {
+  SLOT_ORDER, GOAL_SLOT_RELEVANCE, WELLBEING_GOAL_SLOTS, GOAL_AFFINITY,
+  SCORING, FOUNDATIONAL_SWAP_GROUPS, type SlotType,
+} from '@/lib/quiz-core'
 
-const SLOT_ORDER = ['protein', 'performance', 'energy', 'hydration', 'recovery', 'health', 'sleep'] as const
-export type SlotType = typeof SLOT_ORDER[number]
-
-// Wellbeing stacks are built goal-first: each selected wellbeing goal gets its
-// own named slot, filled by the best product tagged with that goal. This means
-// the final stack mirrors exactly what the user asked for instead of generic
-// slot types.
-const WELLBEING_GOAL_SLOTS: Array<{ goal: Goal; slotType: SlotType; title: string; description: string }> = [
-  { goal: 'sleep-better',    slotType: 'sleep',    title: 'Sleep',               description: 'Improves sleep quality and overnight recovery' },
-  { goal: 'less-stress',     slotType: 'sleep',    title: 'Stress',              description: 'Helps you stay calm and wind down' },
-  { goal: 'focus',           slotType: 'health',   title: 'Focus',               description: 'Supports brain health and steady concentration' },
-  { goal: 'immune',          slotType: 'health',   title: 'Immunity',            description: 'Strengthens everyday immune resilience' },
-  { goal: 'skin-hair-nails', slotType: 'recovery', title: 'Skin, Hair & Nails',  description: 'Collagen and nutrients for skin, hair and nail health' },
-  { goal: 'gut-health',      slotType: 'health',   title: 'Gut Health',          description: 'Probiotics and fibre for digestion and gut balance' },
-  { goal: 'menopause',       slotType: 'health',   title: 'Menopause Support',   description: 'Botanicals and nutrients for hormonal balance' },
-  { goal: 'health',          slotType: 'health',   title: 'Daily Health',        description: 'Covers everyday vitamin and mineral gaps' },
-]
+export type { SlotType } from '@/lib/quiz-core'
 
 // Friendly slot titles for budget-driven "extra" wellbeing picks, derived from
 // the product's swap group so each added product reads clearly in the stack.
@@ -76,20 +65,6 @@ const SLOT_DEFAULT_REASONS: Record<SlotType, string> = {
   recovery: 'Supports muscle recovery between sessions',
   health: 'Covers everyday vitamin and mineral gaps',
   sleep: 'Helps you wind down and sleep deeper',
-}
-
-// Goal → slot relevance: which slot types does each goal suggest?
-// Intentionally does NOT map energy → performance (creatine is not an energy product)
-// and does NOT map health/cutting → protein (protein shouldn't dominate non-muscle stacks).
-const GOAL_SLOT_RELEVANCE: Partial<Record<Goal, SlotType[]>> = {
-  muscle:      ['protein', 'performance', 'recovery'],
-  bulking:     ['protein', 'performance', 'recovery'],
-  cutting:     ['energy', 'health'],
-  energy:      ['energy', 'health'],
-  performance: ['performance', 'energy', 'protein'],
-  hydration:   ['hydration', 'recovery'],
-  recovery:    ['recovery', 'health'],
-  health:      ['health', 'recovery'],
 }
 
 /** Returns required slot types based on which goals the user actually chose. */
@@ -154,11 +129,11 @@ export function scoreProduct(
   answers: QuizAnswers,
   archetype: Archetype,
 ): number {
-  let score = product.recommendationPriority * 10
+  let score = product.recommendationPriority * SCORING.priorityBase
 
   // Goal overlap
   const goalOverlap = answers.goals.filter(g => product.goals.includes(g)).length
-  score += goalOverlap * 15
+  score += goalOverlap * SCORING.goalOverlap
 
   // ── Hard eligibility gates ─────────────────────────────────────────────────
   // These products have a specific, narrow use case. Recommending them without
@@ -193,9 +168,8 @@ export function scoreProduct(
   // supplement (omega-3, vitamin-d, multivitamin have broad evidence for all
   // active people), it needs a meaningful score penalty to prevent priority
   // number alone from pushing irrelevant products into the stack.
-  const foundationalSwapGroups = ['omega-3', 'vitamin-d', 'multivitamin', 'vitamin-c', 'magnesium']
-  const isFoundational = foundationalSwapGroups.includes(product.swapGroup)
-  if (goalOverlap === 0 && !isFoundational) score -= 30
+  const isFoundational = (FOUNDATIONAL_SWAP_GROUPS as readonly string[]).includes(product.swapGroup)
+  if (goalOverlap === 0 && !isFoundational) score += SCORING.noGoalFloor
 
   // Stimulant skip
   if (product.hasStimulants && (answers.stimPreference === 'no' || answers.caffeineLevel === 'none')) {
@@ -234,84 +208,65 @@ export function scoreProduct(
   if (taking.has('pre-workout')  && slotType === 'energy')                return -Infinity
 
   // Archetype boosts
-  if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += 20
-  if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) score += 15
-  if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) score += 15
-  if (archetype === 'wellbeing' && (slotType === 'sleep' || slotType === 'health')) score += 15
+  if (archetype === 'muscle' && (slotType === 'protein' || slotType === 'performance')) score += SCORING.archetype.muscleProteinOrPerformance
+  if (archetype === 'fat-loss' && (slotType === 'energy' || slotType === 'health')) score += SCORING.archetype.fatLossEnergyOrHealth
+  if (archetype === 'health' && (slotType === 'health' || slotType === 'sleep' || slotType === 'recovery')) score += SCORING.archetype.healthTriad
+  if (archetype === 'wellbeing' && (slotType === 'sleep' || slotType === 'health')) score += SCORING.archetype.wellbeingSleepOrHealth
 
   // Wellbeing follow-up refinements
   const wb = answers.wellbeingAnswers ?? {}
   if (slotType === 'sleep') {
     // "Hard to switch off" / "wired in the evening" → the theanine/ashwagandha blend
     if (wb.sleepQuality === 'switch-off' || wb.stressPattern === 'evening-wired') {
-      if (product.swapGroup === 'sleep-support') score += 15
+      if (product.swapGroup === 'sleep-support') score += SCORING.wellbeing.switchOffSleepSupport
     }
     // "Wake during the night" / "wake tired" → magnesium glycinate
     if (wb.sleepQuality === 'wake-night' || wb.sleepQuality === 'wake-tired') {
-      if (product.swapGroup === 'magnesium') score += 15
+      if (product.swapGroup === 'magnesium') score += SCORING.wellbeing.wakeMagnesium
     }
     // Sleep is fine → deprioritise the whole slot
-    if (wb.sleepQuality === 'fine' && !answers.goals.includes('sleep-better')) score -= 20
+    if (wb.sleepQuality === 'fine' && !answers.goals.includes('sleep-better')) score += SCORING.wellbeing.sleepFinePenalty
   }
   // Vegetarian/vegan answer on the collagen follow-up excludes bovine collagen
   if (wb.collagenOk === 'veggie' && product.swapGroup === 'collagen') return -Infinity
 
   // Wellbeing lifestyle context
-  if (answers.lifestyle.includes('run-down') && product.goals.includes('immune')) score += 10
-  if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') score += 8
-  if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) score += 8
+  if (answers.lifestyle.includes('run-down') && product.goals.includes('immune')) score += SCORING.lifestyle.runDownImmune
+  if (answers.lifestyle.includes('desk-job') && product.swapGroup === 'vitamin-d') score += SCORING.lifestyle.deskVitaminD
+  if (answers.lifestyle.includes('shift-work') && (product.goals.includes('sleep-better'))) score += SCORING.lifestyle.shiftSleep
 
-  // Goal-specific product affinity boosts — ensures the most clinically targeted
-  // product wins when multiple products cover the same goal.
-  //
-  // immune → Vitamin D3 is most evidence-based; multivitamin is solid secondary
-  if (answers.goals.includes('immune') && product.swapGroup === 'vitamin-d') score += 18
-  if (answers.goals.includes('immune') && product.swapGroup === 'multivitamin') score += 10
-  // focus → Omega-3 (EPA/DHA) is the primary brain-health pick; multivitamin B-vitamins are secondary
-  if (answers.goals.includes('focus') && product.swapGroup === 'omega-3') score += 18
-  if (answers.goals.includes('focus') && product.swapGroup === 'multivitamin') score += 8
-  // skin-hair-nails → collagen is the direct pick (already excluded for vegans elsewhere)
-  if (answers.goals.includes('skin-hair-nails') && product.swapGroup === 'collagen') score += 25
-  // less-stress → ashwagandha/theanine blend is primary; magnesium is good secondary
-  if (answers.goals.includes('less-stress') && product.swapGroup === 'sleep-support') score += 18
-  if (answers.goals.includes('less-stress') && product.swapGroup === 'magnesium') score += 10
-  // sleep-better → magnesium glycinate is primary (unless follow-up says switch-off)
-  if (answers.goals.includes('sleep-better') && product.swapGroup === 'magnesium' && !wb.sleepQuality) score += 12
-  // recovery → BCAA/aminos are primary; collagen for joint/tendon support is secondary
-  if (answers.goals.includes('recovery') && product.swapGroup === 'aminos') score += 15
-  if (answers.goals.includes('recovery') && product.swapGroup === 'collagen') score += 8
-  // health → multivitamin is the anchor; omega-3 is an excellent second pick
-  if (answers.goals.includes('health') && product.swapGroup === 'multivitamin') score += 15
-  if (answers.goals.includes('health') && product.swapGroup === 'omega-3') score += 10
-  // gut-health → probiotic is primary; greens/fibre are good secondary picks
-  if (answers.goals.includes('gut-health') && product.swapGroup === 'probiotic') score += 20
-  if (answers.goals.includes('gut-health') && (product.swapGroup === 'greens' || product.swapGroup === 'fibre')) score += 12
-  // menopause → dedicated menopause blend is primary; adaptogen helps with symptoms
-  if (answers.goals.includes('menopause') && product.swapGroup === 'menopause') score += 22
-  if (answers.goals.includes('menopause') && product.swapGroup === 'adaptogen') score += 10
+  // Goal-specific product affinity boosts (data-driven — see GOAL_AFFINITY). Sums
+  // across the user's goals so a product serving two of them earns both. Ensures
+  // the most clinically targeted product wins when several cover the same goal.
+  for (const goal of answers.goals) {
+    score += GOAL_AFFINITY[goal]?.[product.swapGroup] ?? 0
+  }
+  // sleep-better → magnesium is primary, but only when no sleep follow-up steered
+  // us elsewhere (kept in code as it's conditional on the follow-up answer).
+  if (answers.goals.includes('sleep-better') && product.swapGroup === 'magnesium' && !wb.sleepQuality) score += SCORING.sleepBetterMagnesium
 
   // Deprioritise performance (creatine) and protein slots when the user's
   // goals don't call for them — prevents creatine appearing for energy/health users
   const muscleGoals: Goal[] = ['muscle', 'bulking', 'performance']
-  if (slotType === 'performance' && !answers.goals.some(g => muscleGoals.includes(g))) score -= 60
-  if (slotType === 'protein' && !answers.goals.some(g => ['muscle', 'bulking', 'recovery'].includes(g))) score -= 50
+  if (slotType === 'performance' && !answers.goals.some(g => muscleGoals.includes(g))) score += SCORING.deprioritise.performanceNonMuscle
+  if (slotType === 'protein' && !answers.goals.some(g => ['muscle', 'bulking', 'recovery'].includes(g))) score += SCORING.deprioritise.proteinNonMuscle
 
   // Mass gainer is the primary pick for bulking — it provides calories AND protein.
   // Regular whey is inadequate for someone trying to gain mass who struggles to eat.
-  if (answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score += 25
+  if (answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score += SCORING.mass.bulkingBonus
   // Conversely, regular whey is the better default for muscle/recovery without bulking
-  if (!answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score -= 20
+  if (!answers.goals.includes('bulking') && product.swapGroup === 'protein-mass') score += SCORING.mass.nonBulkingPenalty
 
   // Budget sensitivity
-  if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > 30) score -= 15
+  if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > SCORING.budgetThresholdPrice) score += SCORING.budgetOverThreshold
 
   // ── Diet quality → protein and micronutrient necessity ────────────────────
   // A clean, high-protein diet already covers protein needs — the powder adds
   // less marginal value. A poor diet means a multivitamin is more critical.
-  if (answers.diet === 'clean' && slotType === 'protein') score -= 20
-  if (answers.diet === 'poor' && product.swapGroup === 'multivitamin') score += 12
-  if (answers.diet === 'poor' && product.swapGroup === 'omega-3') score += 8
-  if (answers.diet === 'inconsistent' && product.swapGroup === 'multivitamin') score += 6
+  if (answers.diet === 'clean' && slotType === 'protein') score += SCORING.diet.cleanProtein
+  if (answers.diet === 'poor' && product.swapGroup === 'multivitamin') score += SCORING.diet.poorMultivitamin
+  if (answers.diet === 'poor' && product.swapGroup === 'omega-3') score += SCORING.diet.poorOmega
+  if (answers.diet === 'inconsistent' && product.swapGroup === 'multivitamin') score += SCORING.diet.inconsistentMultivitamin
 
   // ── Format preference → filter by product format ──────────────────────────
   // If the user has a preference and hasn't said "any", penalise products in
@@ -321,42 +276,42 @@ export function scoreProduct(
   if (formats.length > 0 && !formats.includes('any')) {
     const productFormats = product.formats ?? []
     const formatMatch = productFormats.some(f => formats.includes(f))
-    if (!formatMatch) score -= 18
+    if (!formatMatch) score += SCORING.formatMismatch
   }
 
   // ── Training focus (strength sub-question) → creatine + protein priority ─
   if (answers.trainingFocus === 'hypertrophy') {
-    if (slotType === 'performance') score += 20  // creatine is most evidence-based for hypertrophy
-    if (slotType === 'protein') score += 10
+    if (slotType === 'performance') score += SCORING.focus.hypertrophyPerformance  // creatine is most evidence-based for hypertrophy
+    if (slotType === 'protein') score += SCORING.focus.hypertrophyProtein
   }
   if (answers.trainingFocus === 'powerlifting') {
-    if (slotType === 'performance') score += 25  // creatine even more critical for max-strength
-    if (product.swapGroup === 'collagen') score += 10  // joint/tendon load is extreme in powerlifting
+    if (slotType === 'performance') score += SCORING.focus.powerliftingPerformance  // creatine even more critical for max-strength
+    if (product.swapGroup === 'collagen') score += SCORING.focus.powerliftingCollagen  // joint/tendon load is extreme in powerlifting
   }
   if (answers.trainingFocus === 'general') {
-    if (slotType === 'performance') score -= 8  // creatine is nice-to-have, not essential
+    if (slotType === 'performance') score += SCORING.focus.generalPerformance  // creatine is nice-to-have, not essential
   }
 
   // ── Sport type → endurance vs power profile ───────────────────────────────
   if (answers.trainingFocus === 'football' || answers.trainingFocus === 'rugby' || answers.trainingFocus === 'basketball') {
-    if (slotType === 'energy') score += 10     // sport athletes benefit from pre-workout
-    if (slotType === 'hydration') score += 12  // high sweat-rate sports need electrolytes
+    if (slotType === 'energy') score += SCORING.focus.sportEnergy     // sport athletes benefit from pre-workout
+    if (slotType === 'hydration') score += SCORING.focus.sportHydration  // high sweat-rate sports need electrolytes
   }
 
   // ── Gender + age → supplement priorities ─────────────────────────────────
   // Female users have higher iron/B-vitamin needs; both genders 45+ need more
   // vitamin D and bone-support nutrients.
   if (answers.gender === 'female') {
-    if (product.swapGroup === 'multivitamin') score += 8  // women's multis cover iron/B9/B12
+    if (product.swapGroup === 'multivitamin') score += SCORING.gender.femaleMultivitamin  // women's multis cover iron/B9/B12
   }
   if (answers.ageBracket === '45+') {
-    if (product.swapGroup === 'vitamin-d') score += 12   // absorption declines with age
-    if (product.swapGroup === 'collagen') score += 12   // bone + joint health post-45
-    if (product.swapGroup === 'omega-3') score += 8     // cardiovascular + joint
+    if (product.swapGroup === 'vitamin-d') score += SCORING.age.over45VitaminD   // absorption declines with age
+    if (product.swapGroup === 'collagen') score += SCORING.age.over45Collagen   // bone + joint health post-45
+    if (product.swapGroup === 'omega-3') score += SCORING.age.over45Omega     // cardiovascular + joint
   }
   if (answers.ageBracket === '35-44') {
-    if (product.swapGroup === 'vitamin-d') score += 6
-    if (product.swapGroup === 'omega-3') score += 5
+    if (product.swapGroup === 'vitamin-d') score += SCORING.age.midVitaminD
+    if (product.swapGroup === 'omega-3') score += SCORING.age.midOmega
   }
 
   // ── Training time → stimulant timing ─────────────────────────────────────
@@ -368,40 +323,39 @@ export function scoreProduct(
   if (product.hasStimulants) {
     const eveningTrainer = answers.trainingTime === 'evening'
     const wantsSleep = answers.goals.includes('sleep-better') || answers.goals.includes('less-stress')
-    if (eveningTrainer && wantsSleep) score -= 40
-    if (eveningTrainer && answers.caffeineLevel === 'low') score -= 20
+    if (eveningTrainer && wantsSleep) score += SCORING.trainingTime.eveningWantsSleep
+    if (eveningTrainer && answers.caffeineLevel === 'low') score += SCORING.trainingTime.eveningLowCaffeine
   }
 
   // ── Caffeine level nuance (4-level, not binary) ───────────────────────────
   // Currently only 'none'/'high' are scored. Add nuance for 'low'/'medium'.
   if (product.hasStimulants) {
-    if (answers.caffeineLevel === 'low') score -= 15   // one occasional coffee — avoid stimulants
-    if (answers.caffeineLevel === 'medium') score -= 5 // daily coffee — mild penalty
-    // 'high' was already handled by the existing +0 neutral logic (no change)
-    // 'none' is already -Infinity from existing logic
+    if (answers.caffeineLevel === 'low') score += SCORING.caffeine.low   // one occasional coffee — avoid stimulants
+    if (answers.caffeineLevel === 'medium') score += SCORING.caffeine.medium // daily coffee — mild penalty
+    // 'high' is neutral; 'none' is already -Infinity from the stimulant gate.
   }
 
   // ── Lifestyle: joint/injury flag → collagen + omega-3 ────────────────────
   // When the user flags joint issues (captured in lifestyle step), these two
   // products move to the top — they have direct mechanistic support.
   if (answers.lifestyle.includes('joint-issues')) {
-    if (product.swapGroup === 'collagen') score += 22
-    if (product.swapGroup === 'omega-3') score += 15
+    if (product.swapGroup === 'collagen') score += SCORING.lifestyle.jointCollagen
+    if (product.swapGroup === 'omega-3') score += SCORING.lifestyle.jointOmega
   }
 
   // ── Training experience → stack complexity ────────────────────────────────
   if (answers.trainingExperience === 'new') {
     // New athletes benefit most from protein and creatine — the basics
-    if (slotType === 'protein') score += 8
-    if (slotType === 'performance') score += 5
+    if (slotType === 'protein') score += SCORING.experience.newProtein
+    if (slotType === 'performance') score += SCORING.experience.newPerformance
     // New athletes don't yet need complex multi-supplement stacks
-    if (slotType === 'energy' && answers.trainingFrequency !== '5-6x' && answers.trainingFrequency !== 'daily') score -= 10
+    if (slotType === 'energy' && answers.trainingFrequency !== '5-6x' && answers.trainingFrequency !== 'daily') score += SCORING.experience.newEnergyPenalty
   }
   if (answers.trainingExperience === 'experienced') {
     // Experienced athletes need marginal gains — creatine, recovery, hydration
-    if (slotType === 'performance') score += 10
-    if (slotType === 'recovery') score += 8
-    if (slotType === 'hydration') score += 5
+    if (slotType === 'performance') score += SCORING.experience.expPerformance
+    if (slotType === 'recovery') score += SCORING.experience.expRecovery
+    if (slotType === 'hydration') score += SCORING.experience.expHydration
   }
 
   return score

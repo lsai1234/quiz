@@ -33,6 +33,7 @@ import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { funnel } from '@/lib/analytics/quiz'
 import type { StackLevel, Goal } from '@/lib/types'
+import { TIER_ORDER, TIER_SIZES, TIER_META } from '@/lib/quiz-core'
 
 // Compact goal labels for the honest "no strong match" note.
 const GOAL_LABEL: Partial<Record<Goal, string>> = {
@@ -40,17 +41,6 @@ const GOAL_LABEL: Partial<Record<Goal, string>> = {
   'skin-hair-nails': 'skin, hair & nails', 'gut-health': 'gut health', menopause: 'menopause support',
   muscle: 'muscle', energy: 'energy', performance: 'performance', hydration: 'hydration',
   recovery: 'recovery', health: 'general health', cutting: 'getting lean', bulking: 'gaining mass',
-}
-
-// ── Value-first depth tiers (shown on the results screen, not asked in the quiz).
-// Each tier is a ranked prefix of the full ("complete") stack, so more depth
-// visibly adds products — and the subscribe-&-save rate rises with it.
-const TIER_ORDER: StackLevel[] = ['essentials', 'performance', 'complete']
-const TIER_SIZES: Record<StackLevel, number> = { essentials: 3, performance: 5, complete: 7 }
-const TIER_META: Record<StackLevel, { label: string; blurb: string; badge?: string }> = {
-  essentials: { label: 'Essentials', blurb: 'The core that moves the needle most' },
-  performance: { label: 'Balanced', blurb: 'A well-rounded daily stack', badge: 'Recommended' },
-  complete: { label: 'Complete', blurb: 'Every angle covered' },
 }
 
 interface TierInfo { level: StackLevel; size: number; oneOff: number; monthly: number }
