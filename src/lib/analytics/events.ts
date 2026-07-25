@@ -1,11 +1,12 @@
 /**
- * Lightweight, provider-agnostic funnel analytics for the shop.
+ * Lightweight, provider-agnostic funnel analytics for the shop AND the quiz.
  *
  * `track()` fires an anonymous event at POST /api/analytics (via sendBeacon so it
  * survives the checkout redirect/unload). There's no third-party script, no
- * cookie and no PII — just an in-memory per-page-load session id so funnel steps
- * can be grouped. It honours Do Not Track / Global Privacy Control, and never
- * throws: analytics must not be able to break the shop.
+ * cookie and no PII — just an anonymous session id (kept in `sessionStorage` so
+ * it survives a reload and can group a whole quiz → reveal → checkout journey).
+ * It honours Do Not Track / Global Privacy Control, and never throws: analytics
+ * must not be able to break the app.
  *
  * Point /api/analytics at a real provider when you have one (see that route).
  */
@@ -23,17 +24,62 @@ export const SHOP_EVENTS = [
 
 export type ShopEvent = (typeof SHOP_EVENTS)[number]
 
+/**
+ * The quiz funnel (Phase 0 instrumentation). These make per-question drop-off,
+ * time-on-question and quiz→checkout conversion measurable — none of which the
+ * shop-only events above could capture. `checkout_start`/`checkout_success` are
+ * reused from the shop set (tagged `source: 'quiz'`).
+ */
+export const QUIZ_EVENTS = [
+  'quiz_start',
+  'quiz_step_view',
+  'quiz_step_complete',
+  'quiz_step_back',
+  'quiz_subquestion_view',
+  'quiz_subquestion_answer',
+  'quiz_deepdive_offer',
+  'quiz_deepdive_accept',
+  'quiz_complete',
+  'quiz_abandon',
+  'stack_reveal_view',
+  'stack_swap',
+  'stack_add',
+  'stack_remove',
+] as const
+
+export type QuizEvent = (typeof QUIZ_EVENTS)[number]
+
+/** Every event the client may emit. */
+export type AnalyticsEvent = ShopEvent | QuizEvent
+
 export type EventProps = Record<string, string | number | boolean | undefined>
 
-// Anonymous, in-memory, regenerated every page load — groups a visit's funnel
-// steps without any persistent identifier.
+// Anonymous session id, persisted in sessionStorage so a single visit's funnel
+// steps stay grouped across an in-quiz reload and the quiz → reveal → checkout
+// hops — without any cross-session/persistent identifier.
+const SESSION_KEY = 'chrgd_analytics_sid'
 let sessionId: string | null = null
+
+function newId(): string {
+  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2)
+}
+
 function getSessionId(): string {
   if (sessionId) return sessionId
-  sessionId =
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : Math.random().toString(36).slice(2)
+  try {
+    const stored = window.sessionStorage.getItem(SESSION_KEY)
+    if (stored) return (sessionId = stored)
+  } catch {
+    /* sessionStorage unavailable (private mode / SSR) — fall back to in-memory */
+  }
+  sessionId = newId()
+  try {
+    window.sessionStorage.setItem(SESSION_KEY, sessionId)
+  } catch {
+    /* ignore — the in-memory id still groups this page-load */
+  }
   return sessionId
 }
 
@@ -43,7 +89,7 @@ function privacyOptedOut(): boolean {
 }
 
 /** Record a funnel event. No-ops on the server, or when the visitor opts out. */
-export function track(event: ShopEvent, props: EventProps = {}): void {
+export function track(event: AnalyticsEvent, props: EventProps = {}): void {
   if (typeof window === 'undefined') return
   try {
     if (privacyOptedOut()) return

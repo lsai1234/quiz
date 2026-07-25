@@ -14,6 +14,7 @@ import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { BundleDeck } from '@/components/quiz/BundleDeck'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
+import { funnel } from '@/lib/analytics/quiz'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel, Budget, StackPreference,
@@ -643,6 +644,16 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // Whether the options region has content below the fold (drives the scroll cue).
   const [moreBelow, setMoreBelow] = useState(false)
 
+  // ── Funnel instrumentation (Phase 0) ──────────────────────────────────────
+  // Timing + guards for the analytics events. `stepEnterRef` clocks time-on-step,
+  // `startTsRef` the whole run; `currentStepRef` lets the unload handler report the
+  // step the user abandoned on. `completedRef` suppresses an abandon after a build.
+  const startTsRef = useRef(0)
+  const stepEnterRef = useRef(0)
+  const currentStepRef = useRef<{ id: StepId; index: number }>({ id, index })
+  const startedRef = useRef(false)
+  const completedRef = useRef(false)
+
   // ── Charge rail (the getCHRGD signature) — climbs as you answer ──
   // Tops out at ~92% in the quiz; Act 3 finishes the charge and "powers on".
   // The optional deepDive step sits after review, so review is full charge
@@ -697,6 +708,42 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     const t = setTimeout(() => headingRef.current?.focus(), 60)
     return () => clearTimeout(t)
   }, [index, reducedMotion])
+
+  // Funnel: quiz_start (once) + an abandon beacon on tab-close/navigation, fired
+  // only if the run wasn't completed. `pagehide` is the reliable mobile signal.
+  useEffect(() => {
+    startTsRef.current = performance.now()
+    if (!startedRef.current) {
+      startedRef.current = true
+      funnel.start({ track: answers.track, drinksMode: !!answers.drinksMode })
+    }
+    const onLeave = () => {
+      if (completedRef.current) return
+      funnel.abandon({
+        lastStepId: currentStepRef.current.id,
+        index: currentStepRef.current.index,
+        msTotal: Math.round(performance.now() - startTsRef.current),
+      })
+    }
+    window.addEventListener('pagehide', onLeave)
+    return () => window.removeEventListener('pagehide', onLeave)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Funnel: a step became active — quiz_step_view (+ the deep-dive offer when the
+  // review screen first shows it). Also clocks time-on-step for quiz_step_complete.
+  useEffect(() => {
+    currentStepRef.current = { id, index }
+    stepEnterRef.current = performance.now()
+    funnel.stepView({
+      stepId: id, index, total: Math.max(1, seq.length - 2),
+      track: answers.track, drinksMode: !!answers.drinksMode,
+    })
+    if (id === 'review' && Object.keys(answers.dynamicAnswers ?? {}).length === 0) {
+      funnel.deepDiveOffer()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, index])
 
   // Track whether there's hidden content below in the options region so we can
   // show a "more below" cue — the fix for sub-questions/answers being off-screen.
@@ -773,6 +820,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   function advance() {
     clearPending()
+    funnel.stepComplete({ stepId: id, index, msOnStep: Math.round(performance.now() - stepEnterRef.current) })
     setSubQuestion(null)
     setSubAnswerId(null)
     if (id === 'personal') commitPersonal()
@@ -789,6 +837,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     const i = seq.findIndex((s) => s.id === 'deepDive')
     if (i < 0) return
+    funnel.deepDiveAccept()
     setDirection('forward')
     setAnimKey((k) => k + 1)
     setStep(i)
@@ -796,6 +845,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   function goBack() {
     clearPending()
+    funnel.stepBack({ from: id, to: seq[Math.max(index - 1, 0)]?.id, via: 'back' })
     setSubQuestion(null)
     setSubAnswerId(null)
     setDirection('back')
@@ -807,6 +857,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     const i = seq.findIndex((s) => s.id === target)
     if (i < 0) return
+    funnel.stepBack({ from: id, to: target, via: 'edit' })
     setSubQuestion(null)
     setSubAnswerId(null)
     setDirection('back')
@@ -831,7 +882,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     const sub = getSubQuestion(id, value)
     if (sub) {
-      pendingTimerRef.current = setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub) }, 200)
+      pendingTimerRef.current = setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub); funnel.subView({ subId: sub.id, parentStepId: id }) }, 200)
       return
     }
     pendingTimerRef.current = setTimeout(() => advance(), 340)
@@ -839,6 +890,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   function handleSubAnswer(subId: string, optId: string) {
     setSubAnswerId(optId)
+    funnel.subAnswer({ subId, parentStepId: id, optionId: optId })
     if (subId === 'experience') setAnswer('trainingExperience', optId as TrainingExperience)
     else if (subId === 'strengthFocus' || subId === 'sportType') setAnswer('trainingFocus', optId)
     else if (subId === 'stim') setAnswer('stimPreference', optId as StimPreference)
@@ -847,6 +899,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   }
 
   function handleFinish() {
+    completedRef.current = true
+    funnel.complete({
+      track: answers.track,
+      drinksMode: !!answers.drinksMode,
+      goalCount: answers.goals.length,
+      primaryGoal: answers.primaryGoal ?? answers.goals[0],
+      budget: answers.budget,
+      msTotal: Math.round(performance.now() - startTsRef.current),
+    })
     setStackReady(false)
     setIsGenerating(true)
     void generateStack()
@@ -1228,7 +1289,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     key={`wq-${wq.id}-${oid}`}
                     label={label} sub={sub}
                     selected={answers.wellbeingAnswers[wq.id] === oid}
-                    onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: oid })}
+                    onClick={() => { funnel.subAnswer({ subId: wq.id, parentStepId: 'goals', optionId: oid }); setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: oid }) }}
                   />
                 ))}
               </div>

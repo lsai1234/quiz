@@ -31,6 +31,7 @@ import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
+import { funnel } from '@/lib/analytics/quiz'
 
 export function StackReviewPage() {
   const {
@@ -97,6 +98,8 @@ export function StackReviewPage() {
   const handleSelectSwap = useCallback(
     (slotId: string, newProductId: string) => {
       const product = products.find((p) => p.id === newProductId)
+      const from = blueprint.slots.find((sl) => sl.slotId === slotId)?.selectedProductId
+      funnel.stackSwap({ slotId, from, to: newProductId })
       const defaultVariant = product?.variants.find((v) => v.available)
       let updated = updateStackSlotProduct(blueprint, slotId, newProductId)
       if (defaultVariant) updated = updateStackSlotVariant(updated, slotId, defaultVariant.id)
@@ -110,6 +113,7 @@ export function StackReviewPage() {
     (slotId: string) => {
       try {
         setStackBlueprint(removeOptionalSlot(blueprint, slotId))
+        funnel.stackRemove({ slotId })
       } catch {
         // required slot — silently ignore (button shouldn't appear for these)
       }
@@ -122,6 +126,7 @@ export function StackReviewPage() {
       const firstVariant = product.variants.find((v) => v.available) ?? product.variants[0]
       const slotType = product.stackSlots[0]
       const slotId = `booster-${product.id}`
+      funnel.stackAdd({ productId: product.id, slotType })
       const updated = addBoosterSlot(blueprint, {
         slotId,
         slotType,
@@ -171,6 +176,30 @@ export function StackReviewPage() {
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
   const showStickyBar = !swapSlot && !journeyOpen && checkoutState.status !== 'needs-account'
+
+  // Funnel: the built-bundle screen was reached (once), and the checkout
+  // start/success transitions — closing the quiz → checkout conversion loop.
+  const revealedRef = useRef(false)
+  useEffect(() => {
+    if (revealedRef.current) return
+    revealedRef.current = true
+    funnel.revealView({
+      slotCount: blueprint.slots.length,
+      oneOff: pricing.oneOffTotal,
+      sub: pricing.subscriptionTotal,
+      plan: planType,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const prevCheckoutStatus = useRef(checkoutState.status)
+  useEffect(() => {
+    const prev = prevCheckoutStatus.current
+    prevCheckoutStatus.current = checkoutState.status
+    if (checkoutState.status === prev) return
+    if (checkoutState.status === 'loading') funnel.checkoutStart({ plan: planType, total: stickyTotal })
+    else if (checkoutState.status === 'success') funnel.checkoutSuccess({ plan: checkoutState.plan, total: stickyTotal })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutState.status])
 
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
