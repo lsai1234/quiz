@@ -7,6 +7,8 @@ import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
+import { effectOnsetForProduct } from '@/lib/feedback'
+import type { EffectOnset } from '@/lib/catalogue/types'
 import { productFacts, productDietary } from '@/lib/product-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { ProductTile } from './ProductTile'
@@ -26,6 +28,15 @@ interface Props {
 }
 
 const ACCENT = '#00D4FF'
+
+// Honest expectation-setting per product so nobody judges a slow-build product
+// too early (or expects a quiet one to be "felt" at all).
+const ONSET_EXPECTATION: Record<EffectOnset, string> = {
+  immediate: "You'll feel this from the first day.",
+  short: 'Give it 1–3 weeks to notice the difference.',
+  long: 'Works quietly — expect to notice over 6–12 weeks.',
+  none: "You won't feel it day to day — it's doing the work regardless.",
+}
 
 function variantLabel(v: { title: string; flavour: string | null; size: string | null }): string {
   const parts = [v.flavour, v.size].filter(Boolean)
@@ -162,6 +173,12 @@ export function ProductDetailSheet({
             <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
               {slot.reason}
             </p>
+            {product && (
+              <p className="text-xs leading-relaxed mt-2 flex items-start gap-1.5" style={{ color: 'var(--color-muted)' }}>
+                <QuizIcon name="clock" size={13} className="mt-0.5 flex-shrink-0" />
+                <span>{ONSET_EXPECTATION[effectOnsetForProduct(product)]}</span>
+              </p>
+            )}
             <div className="flex flex-wrap gap-1.5 mt-3">
               <span
                 className="px-2 py-0.5 rounded-full text-[9px] font-semibold"

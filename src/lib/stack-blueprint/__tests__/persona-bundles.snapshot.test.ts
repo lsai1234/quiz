@@ -44,6 +44,10 @@ const PERSONAS: Array<{ n: string; a: QuizAnswers }> = [
   { n: 'well-health-under30', a: A({ track: 'wellbeing', goals: ['health'], budget: 'under-30', stackPreference: 'simple' }) },
   { n: 'drinks-perf-muscle-energy', a: A({ drinksMode: true, goals: ['muscle', 'energy'], dailyDrinks: 2, drinksPerDay: 2, drinkVariety: 'staples', workoutAddOns: ['pre-workout', 'protein'], trainingFrequency: '3-4x', budget: null, stackPreference: null }) },
   { n: 'drinks-well-sleep-immune-gut', a: A({ track: 'wellbeing', drinksMode: true, goals: ['sleep-better', 'immune', 'gut-health'], dailyDrinks: 3, drinksPerDay: 3, drinkVariety: 'variety', trainingFrequency: null, budget: null, stackPreference: null }) },
+  // Value-first (Phase 2): no budget is asked, so the flow builds the full stack
+  // and tiers it on the reveal. These lock the complete (budget: null) build.
+  { n: 'valuefirst-perf-muscle-energy', a: A({ goals: ['muscle', 'energy'], trainingFrequency: '5-6x', trainingType: ['strength'], trainingFocus: 'hypertrophy', budget: null, stackPreference: null }) },
+  { n: 'valuefirst-well-sleep-stress-immune', a: A({ track: 'wellbeing', goals: ['sleep-better', 'less-stress', 'immune'], trainingFrequency: null, budget: null, stackPreference: null }) },
 ]
 
 function summarise(a: QuizAnswers) {

@@ -81,10 +81,10 @@ describe('activeSteps', () => {
   it('advertised question counts per path (review + deepDive excluded)', () => {
     const count = (track: 'performance' | 'wellbeing', drinks: boolean) =>
       activeSteps(track, drinks, { track }).filter((s) => s.id !== 'review' && s.id !== 'deepDive').length
-    // Post-cull counts. Budget leaves the flow in Phase 2; safety/bodyweight
-    // arrive in Phase 3 — so these are the interim Phase-1 numbers.
-    expect(count('wellbeing', false)).toBe(7)    // goals, personal, lifestyle, diet, supps, formats, budget
-    expect(count('performance', false)).toBe(11) // + frequency, type, caffeine, trainingTime
+    // Post-Phase-2 counts (budget removed → depth chosen on the results screen).
+    // Safety + bodyweight arrive in Phase 3.
+    expect(count('wellbeing', false)).toBe(6)    // goals, personal, lifestyle, diet, supps, formats
+    expect(count('performance', false)).toBe(10) // + frequency, type, caffeine, trainingTime
     expect(count('wellbeing', true)).toBe(6)     // goals, dailyDrinks, personal, lifestyle, diet, supps
     expect(count('performance', true)).toBe(11)  // + workoutAddOns, frequency, type, caffeine, trainingTime
   })

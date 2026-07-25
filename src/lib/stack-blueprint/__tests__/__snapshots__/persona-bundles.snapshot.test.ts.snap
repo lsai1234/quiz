@@ -333,6 +333,112 @@ exports[`persona → bundle regression perf-recovery-45-joints 1`] = `
 }
 `;
 
+exports[`persona → bundle regression valuefirst-perf-muscle-energy 1`] = `
+{
+  "oneOffTotal": 123.94,
+  "slots": [
+    {
+      "productId": "chrgd-whey-protein",
+      "required": true,
+      "swapGroup": "protein-whey",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-creatine",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-pre-workout",
+      "required": false,
+      "swapGroup": "pre-workout-stim",
+      "title": "Energy / Pre-Workout",
+    },
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Health",
+    },
+    {
+      "productId": "chrgd-electrolytes",
+      "required": false,
+      "swapGroup": "electrolytes",
+      "title": "Hydration",
+    },
+    {
+      "productId": "chrgd-sleep-support",
+      "required": false,
+      "swapGroup": "sleep-support",
+      "title": "Sleep",
+    },
+  ],
+  "stackName": "Performance Core Stack",
+  "subscriptionItemCount": 7,
+  "subscriptionTotal": 113.27,
+}
+`;
+
+exports[`persona → bundle regression valuefirst-well-sleep-stress-immune 1`] = `
+{
+  "oneOffTotal": 96.74,
+  "slots": [
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Sleep",
+    },
+    {
+      "productId": "chrgd-sleep-support",
+      "required": false,
+      "swapGroup": "sleep-support",
+      "title": "Stress",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Immunity",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Daily Multivitamin",
+    },
+    {
+      "productId": "chrgd-ashwagandha",
+      "required": false,
+      "swapGroup": "adaptogen",
+      "title": "Stress Support",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Omega-3",
+    },
+    {
+      "productId": "chrgd-daily-probiotic",
+      "required": false,
+      "swapGroup": "probiotic",
+      "title": "Gut Health",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 7,
+  "subscriptionTotal": 83.55,
+}
+`;
+
 exports[`persona → bundle regression well-health-under30 1`] = `
 {
   "oneOffTotal": 27.98,

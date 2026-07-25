@@ -25,7 +25,6 @@ export type StepId =
   | 'caffeine'
   | 'trainingTime'
   | 'formats'
-  | 'budget'
   | 'review'
 
 /**
@@ -94,10 +93,9 @@ export const QUIZ_STEPS: QuizStepDef[] = [
   { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'Caffeine timing matters — tells us whether to include stimulants.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
   // LQD implies the format — every pick is a drink — so the step is skipped.
   { id: 'formats', section: 'YOUR STYLE', q: 'What formats do you prefer?', hint: "We'll match your stack to products you'll actually use.", select: 'multi', skipInDrinksMode: true, advance: 'manual' },
-  // LQD skips the bundle chooser entirely — the drinks/day pace already sizes
-  // the package, so asking for a budget would be a second answer to the same
-  // question.
-  { id: 'budget', section: 'BUDGET', q: "What's your stack budget?", hint: 'Sets your stack size — almost there.', select: 'one', skipInDrinksMode: true, advance: 'manual' },
+  // No budget question: we build the full stack and let the customer choose a
+  // depth (Essentials / Balanced / Complete) on the results screen, where they
+  // can see the value before the price (value-first — see StackReviewPage tiers).
   { id: 'review', section: 'REVIEW', q: 'Quick check before we build.', hint: 'Tap anything to change it.', select: 'form', lqd: { q: 'Quick check before we pour.', hint: 'Tap anything to change it.' }, advance: 'manual' },
   // Optional bonus step, offered from the review screen — never part of the
   // advertised question count or the linear flow.

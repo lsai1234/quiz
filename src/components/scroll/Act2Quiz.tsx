@@ -2,22 +2,18 @@
 
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
-import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
-import { calculatePricing, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
-import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import { levelForStackPreference } from '@/lib/stack-blueprint/pricing'
 import { activeSteps, stepCopy, selectHint, type StepId } from '@/lib/quiz-flow'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from '@/lib/deep-dive'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
-import { BundleDeck } from '@/components/quiz/BundleDeck'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import { funnel } from '@/lib/analytics/quiz'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
-  CaffeineLevel, Budget, StackPreference,
+  CaffeineLevel,
   TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
   DailyDrinks, WorkoutAddOn,
 } from '@/lib/types'
@@ -253,27 +249,9 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
   { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
   { id: 'high',   label: 'I run on it',     sub: '3+ coffees, used to pre-workout' },
 ]
-const BUDGET_DATA: Array<{
-  id: Budget; name: string; budget: string; sub: string
-  pref: StackPreference; slots: number; icon: string
-}> = [
-  { id: 'under-30', name: 'Starter Bundle',   budget: 'Up to £30', sub: 'The essentials that move the needle most', pref: 'simple', slots: 2, icon: 'bundle1' },
-  { id: '30-50',    name: 'Saver Bundle',      budget: '£30–£50',    sub: 'Core supplements to cover your main goal', pref: 'simple', slots: 3, icon: 'bundle2' },
-  { id: '50-80',    name: 'Performance Bundle', budget: '£50–£80',   sub: 'A well-rounded daily stack', pref: 'balanced', slots: 5, icon: 'bundle3' },
-  { id: '80-plus',  name: 'Complete Bundle',   budget: '£80+',      sub: 'Every angle covered — nothing left out', pref: 'complete', slots: 7, icon: 'bundle4' },
-]
-
-// ─── Bundle sales framing (the budget step) ───────────────────────────────────
-// Good / better / best. Each bundle is a prefix of the previewed "complete"
-// stack, so we can show exactly what's in each one as a tick-list — the higher
-// bundles visibly carry more. Static merchandising badges drive the classic
-// pricing-ladder nudge; the subscribe-&-save rate rewards going bigger.
-
-/** Merchandising badge per bundle — the good/better/best sales ladder. */
-const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
-  '50-80': 'Recommended',
-  '80-plus': 'Best value',
-}
+// Budget is no longer asked in the quiz — the full stack is built and the
+// customer chooses a depth (Essentials / Balanced / Complete) on the results
+// screen, value before price (see StackReviewPage tiers).
 
 // LQD FOUNDATION — how many drinks on a normal day. Not a dose: it tunes the
 // "your box lasts ~X days" story, never the amounts. `fills` drives the little
@@ -561,8 +539,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     deepDiveQuestions, deepDiveStatus,
   } = useQuizStore()
 
-  const { products: liveCatalogue } = useCatalogueProducts()
-
   // Active step sequence for the chosen track (single source of truth).
   const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode, { track: answers.track }), [answers.track, answers.drinksMode])
   const index = Math.min(step, seq.length - 1)
@@ -579,38 +555,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     )
     return [...new Set(ids)].map((tid) => ({ id: tid, label: SUPP_LABEL_BY_ID[tid] ?? tid }))
   }, [answers.currentSupplements, answers.currentVitamins])
-
-  // Full ranked stack (unlimited budget) so budget cards show real products.
-  // Build each bundle's ACTUAL stack at its own budget + preference, so the
-  // "what you get" tick-list shows exactly what that bundle would contain — never
-  // a product that the bundle's price cap would actually exclude. Aligned to
-  // BUDGET_DATA order. Mirrors what generateStack builds when the bundle is picked
-  // (AI personalisation only swaps products within slots, never the slot titles).
-  const bundlePreviews = useMemo<Array<{ titles: string[]; freeDelivery: boolean }>>(() => {
-    // Drinks mode never shows the bundle step (pace sizes the package), so
-    // don't build four preview stacks that can never be seen.
-    if (answers.drinksMode || answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], freeDelivery: false }))
-    const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
-    return BUDGET_DATA.map((b) => {
-      try {
-        const a = { ...withDeepDiveSignals(answers), budget: b.id, stackPreference: b.pref }
-        const bp = buildStackBlueprint(a, catalogue)
-        // One-off total decides the free-delivery perk (not shown as a price —
-        // the card advertises the one-off budget range instead).
-        const { oneOffTotal } = calculatePricing(bp, catalogue, a, undefined, { level: levelForStackPreference(b.pref) })
-        return { titles: bp.slots.map((s) => s.title), freeDelivery: qualifiesForFreeDelivery(oneOffTotal) }
-      } catch {
-        return { titles: [], freeDelivery: false }
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    answers.goals, answers.lifestyle, answers.currentSupplements, answers.currentVitamins,
-    answers.stimPreference, answers.caffeineLevel, answers.wellbeingAnswers, answers.diet,
-    answers.dynamicAnswers,
-    answers.preferredFormats, answers.trainingFocus, answers.gender, answers.ageBracket,
-    answers.trainingTime, answers.trainingExperience, liveCatalogue,
-  ])
 
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
@@ -930,7 +874,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       // Workout add-ons are optional — always allowed to continue (with or without picks).
       case 'workoutAddOns': return true
       case 'type': return answers.trainingType.length > 0
-      case 'budget': return !!answers.budget
       default: return false
     }
   })()
@@ -945,8 +888,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     switch (id) {
       case 'goals': return 'Pick at least one goal'
       case 'personal': return 'Add your age to continue'
-      case 'type': return 'Pick at least one style'
-      case 'budget': return 'Choose a bundle'
+      case 'type': return 'Pick your main style'
       default: return null
     }
   })()
@@ -996,8 +938,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (trying.length) rows.push({ label: 'Trying ours', value: trying.join(', '), edit: 'supps' })
     if (answers.caffeineLevel) rows.push({ label: 'Caffeine', value: labelOf(CAFFEINE_DATA, answers.caffeineLevel), edit: 'caffeine' })
     if (answers.preferredFormats.length) rows.push({ label: 'Formats', value: answers.preferredFormats.includes('any') ? 'No preference' : labelsOf(FORMAT_DATA, answers.preferredFormats).join(', '), edit: 'formats' })
-    const b = BUDGET_DATA.find(x => x.id === answers.budget)
-    if (b) rows.push({ label: 'Budget', value: `${b.name} · ${b.budget}`, edit: 'budget' })
     return rows
   }
 
@@ -1618,23 +1558,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Budget — swipeable bundle deck, one tier per card ── */}
-          {id === 'budget' && (
-            <BundleDeck
-              options={BUDGET_DATA}
-              previews={bundlePreviews}
-              selectedId={answers.budget}
-              badges={BUNDLE_BADGE}
-              featuredId="50-80"
-              onSelect={(bid) => {
-                const b = BUDGET_DATA.find((x) => x.id === bid)
-                if (!b) return
-                setAnswer('budget', b.id)
-                setAnswer('stackPreference', b.pref)
-              }}
-            />
-          )}
-
           {/* ── Review ── */}
           {id === 'review' && (
             <div className="flex flex-col gap-2">
@@ -1717,7 +1640,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               disabled={!canContinue}
               className={`w-full py-4 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 active:scale-[0.99] ${
                 canContinue
-                  ? (id === 'review' || id === 'deepDive' || id === 'budget') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
+                  ? (id === 'review' || id === 'deepDive') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
                   : 'bg-white/[0.06] text-white/25 cursor-not-allowed'
               }`}
               style={{ fontFamily: 'var(--font-display)' }}
@@ -1725,7 +1648,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               {continueNeeds ? continueNeeds
                 : id === 'review' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
                 : id === 'deepDive' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
-                : id === 'budget' ? 'Review my answers'
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`
                 : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()}`
                 : 'Continue'}

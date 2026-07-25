@@ -32,11 +32,84 @@ import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { funnel } from '@/lib/analytics/quiz'
+import type { StackLevel } from '@/lib/types'
+
+// ── Value-first depth tiers (shown on the results screen, not asked in the quiz).
+// Each tier is a ranked prefix of the full ("complete") stack, so more depth
+// visibly adds products — and the subscribe-&-save rate rises with it.
+const TIER_ORDER: StackLevel[] = ['essentials', 'performance', 'complete']
+const TIER_SIZES: Record<StackLevel, number> = { essentials: 3, performance: 5, complete: 7 }
+const TIER_META: Record<StackLevel, { label: string; blurb: string; badge?: string }> = {
+  essentials: { label: 'Essentials', blurb: 'The core that moves the needle most' },
+  performance: { label: 'Balanced', blurb: 'A well-rounded daily stack', badge: 'Recommended' },
+  complete: { label: 'Complete', blurb: 'Every angle covered' },
+}
+
+interface TierInfo { level: StackLevel; size: number; oneOff: number; monthly: number }
+
+/**
+ * The value-first depth selector: build the full stack, let the customer choose
+ * how deep to go. Shows what each depth contains (count) and its price, so the
+ * value is visible before the price — and picking a depth reprices instantly.
+ */
+function StackTierSelector({
+  tiers, current, isSub, onChange,
+}: {
+  tiers: TierInfo[]
+  current: StackLevel
+  isSub: boolean
+  onChange: (level: StackLevel) => void
+}) {
+  return (
+    <div className="px-5 max-w-lg mx-auto">
+      <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>
+        Choose your depth
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {tiers.map(({ level, size, oneOff, monthly }) => {
+          const meta = TIER_META[level]
+          const active = current === level
+          return (
+            <button
+              key={level}
+              onClick={() => onChange(level)}
+              aria-pressed={active}
+              className="relative text-left rounded-2xl border p-3 transition-all active:scale-[0.98]"
+              style={{
+                borderColor: active ? 'var(--color-accent)' : 'var(--color-border)',
+                background: active ? 'color-mix(in srgb, var(--color-accent) 8%, transparent)' : 'var(--color-surface)',
+              }}
+            >
+              {meta.badge && (
+                <span
+                  className="absolute -top-2 left-2 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wide"
+                  style={{ background: 'var(--color-accent)', color: 'var(--color-bg)' }}
+                >
+                  {meta.badge}
+                </span>
+              )}
+              <div className="text-xs font-bold" style={{ color: active ? 'var(--color-accent)' : 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {meta.label}
+              </div>
+              <div className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
+                {size} product{size === 1 ? '' : 's'}
+              </div>
+              <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(isSub ? monthly : oneOff)}
+                {isSub && <span className="text-[9px] font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>}
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export function StackReviewPage() {
   const {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
-    stackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
+    stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
     revealedIntroDiscount, setRevealedIntroDiscount,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
@@ -153,21 +226,47 @@ export function StackReviewPage() {
     [subscriptionUsage, stackLevel, revealedIntroDiscount],
   )
 
-  const handleCheckout = useCallback(
-    () => checkout(blueprint, products, planType, answers, subOpts),
-    [checkout, blueprint, products, planType, answers, subOpts],
+  const sortedSlots = useMemo(
+    () => [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder),
+    [blueprint.slots],
   )
 
-  const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
+  // ── Value-first tiers ──────────────────────────────────────────────────────
+  // The engine builds the full stack; the customer chooses a depth here, seeing
+  // the value before the price. Each tier is a ranked prefix of the complete
+  // bundle. Drinks mode is pace-sized (not tiered), so it shows the whole box.
+  const isDrinks = !!answers.drinksMode
+  const tierSize = isDrinks ? sortedSlots.length : Math.min(TIER_SIZES[stackLevel], sortedSlots.length)
+  const activeSlots = useMemo(() => sortedSlots.slice(0, tierSize), [sortedSlots, tierSize])
+  const activeBlueprint = useMemo(() => ({ ...blueprint, slots: activeSlots }), [blueprint, activeSlots])
+  const showTiers = !isDrinks && sortedSlots.length > 3
+
+  const handleCheckout = useCallback(
+    () => checkout(activeBlueprint, products, planType, answers, subOpts),
+    [checkout, activeBlueprint, products, planType, answers, subOpts],
+  )
+
   // Shared top-trumps axes for the deck — the user's own goals, so every card
   // compares on the same footing.
-  const statAxes = useMemo(() => selectStatAxes(blueprint, products), [blueprint, products])
-  const pricing = calculatePricing(blueprint, products, answers, undefined, subOpts)
+  const statAxes = useMemo(() => selectStatAxes(activeBlueprint, products), [activeBlueprint, products])
+  const pricing = calculatePricing(activeBlueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
-    () => buildSubscriptionPlan(blueprint, products, answers, undefined, subOpts),
-    [blueprint, products, answers, subOpts],
+    () => buildSubscriptionPlan(activeBlueprint, products, answers, undefined, subOpts),
+    [activeBlueprint, products, answers, subOpts],
   )
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
+
+  // Per-tier price summary for the selector (one-off + monthly at each depth), so
+  // the price follows the depth the customer picks.
+  const tierInfos = useMemo(
+    () => TIER_ORDER.map((level) => {
+      const size = Math.min(TIER_SIZES[level], sortedSlots.length)
+      const bp = { ...blueprint, slots: sortedSlots.slice(0, size) }
+      const pr = calculatePricing(bp, products, answers, undefined, { ...subOpts, level })
+      return { level, size, oneOff: pr.oneOffTotal, monthly: pr.subscriptionTotal }
+    }),
+    [blueprint, sortedSlots, products, answers, subOpts],
+  )
 
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
   // so the sale is always reachable without scrolling to the bottom.
@@ -184,7 +283,7 @@ export function StackReviewPage() {
     if (revealedRef.current) return
     revealedRef.current = true
     funnel.revealView({
-      slotCount: blueprint.slots.length,
+      slotCount: activeSlots.length,
       oneOff: pricing.oneOffTotal,
       sub: pricing.subscriptionTotal,
       plan: planType,
@@ -267,13 +366,26 @@ export function StackReviewPage() {
     <>
       <div className="pb-28">
         <StackHero
-          blueprint={blueprint}
-          productCount={sortedSlots.length}
+          blueprint={activeBlueprint}
+          productCount={activeSlots.length}
           totalPrice={pricing.oneOffTotal}
           drinksMode={!!answers.drinksMode}
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
+
+        {/* Value-first depth selector — choose Essentials / Balanced / Complete,
+            each a ranked prefix of the full stack, priced so value comes first. */}
+        {showTiers && (
+          <div className="pt-6">
+            <StackTierSelector
+              tiers={tierInfos}
+              current={stackLevel}
+              isSub={planType === 'subscription'}
+              onChange={setStackLevel}
+            />
+          </div>
+        )}
 
         {/* Core + added booster product cards — a swipeable top-trumps deck */}
         <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
@@ -282,11 +394,11 @@ export function StackReviewPage() {
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {answers.drinksMode
-              ? `Your LQD package — ${sortedSlots.length} ready-made drinks · swipe to compare`
-              : `Your personalised stack — ${sortedSlots.length} products · swipe to compare`}
+              ? `Your LQD package — ${activeSlots.length} ready-made drinks · swipe to compare`
+              : `Your personalised stack — ${activeSlots.length} products · swipe to compare`}
           </p>
           <StackDeck
-            slots={sortedSlots}
+            slots={activeSlots}
             products={products}
             planType={planType}
             axes={statAxes}
@@ -345,7 +457,7 @@ export function StackReviewPage() {
 
           {/* The high-level receipt — what you're buying, discounts, total */}
           <PlanReceipt
-            slots={sortedSlots}
+            slots={activeSlots}
             products={products}
             subscriptionPlan={subscriptionPlan}
             slotTitleById={slotTitleById}
