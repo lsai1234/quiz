@@ -3,7 +3,7 @@
  * returns a payment URL (mock mode returns a placeholder). Runs against the
  * in-memory DB.
  */
-import { finalizeCheckout } from '../finalize'
+import { finalizeCheckout, claimIntroDiscount } from '../finalize'
 import type { CheckoutPayload } from '../types'
 import { createUser } from '@/lib/db/users'
 import { getSubscription, getQuiz } from '@/lib/db/hub-data'
@@ -16,7 +16,7 @@ const subscription = {
   customerEmail: '',
   flatMonthly: 42,
   dispatchDayOfMonth: 15,
-  minMonths: 4,
+  minMonths: 1,
   monthsActive: 0,
   startedAt: new Date().toISOString(),
   paymentMethod: null,
@@ -43,5 +43,56 @@ describe('finalizeCheckout', () => {
 
     const quiz = await getQuiz<{ answers: { name: string } }>(user.id)
     expect(quiz?.answers.name).toBe('Sam')
+  })
+
+  it('banks the revealed scratch discount onto the stored subscription', async () => {
+    const user = await createUser({ email: 'lucky@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription: { ...subscription, introDiscountRate: 0.5 },
+      lines: [],
+    })
+
+    const stored = await getSubscription(user.id)
+    expect(stored?.introDiscountRate).toBe(0.5)
+    expect(stored?.firstMonth).toBe(21) // 42 × 0.5
+  })
+
+  it('refuses a discount the client made up, without failing the checkout', async () => {
+    const user = await createUser({ email: 'chancer@example.com', passwordHash: 'h' })
+    const result = await finalizeCheckout(user.id, user.email, {
+      subscription: { ...subscription, introDiscountRate: 0.9 },
+      lines: [],
+    })
+
+    expect(result.checkoutUrl).toBe('#mock-subscription')
+    const stored = await getSubscription(user.id)
+    expect(stored?.introDiscountRate).toBe(0)
+    expect(stored?.firstMonth).toBe(42) // billed in full
+  })
+})
+
+describe('claimIntroDiscount', () => {
+  const sub = { ...subscription, flatMonthly: 40 } as MemberSubscription
+
+  it.each([0.5, 0.25, 0.1])('honours the configured outcome %s', (rate) => {
+    const claimed = claimIntroDiscount({ ...sub, introDiscountRate: rate })
+    expect(claimed.introDiscountRate).toBe(rate)
+    expect(claimed.firstMonth).toBe(Math.round(40 * (1 - rate) * 100) / 100)
+  })
+
+  it('claims nothing when no card was scratched', () => {
+    const claimed = claimIntroDiscount(sub)
+    expect(claimed.introDiscountRate).toBe(0)
+    expect(claimed.firstMonth).toBe(40)
+  })
+
+  it('recomputes firstMonth from our own total, ignoring the one sent', () => {
+    const claimed = claimIntroDiscount({ ...sub, introDiscountRate: 0.25, firstMonth: 1 })
+    expect(claimed.firstMonth).toBe(30)
+  })
+
+  it('leaves a per-product minimum term alone', () => {
+    const claimed = claimIntroDiscount({ ...sub, minMonths: 6 })
+    expect(claimed.minMonths).toBe(6)
   })
 })

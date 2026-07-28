@@ -496,7 +496,9 @@ describe('pricing rules — subscription profit guardrails', () => {
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
     expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.8 - 10))  // 32 - 10 = 22
     expect(p.subscriptionProfitableOnCancel).toBe(true)
-    expect(p.subscriptionCommittedMargin).toBe(round2(p.subscriptionMinTermTotal - 4 * 10)) // monthly delivery → 4 deliveries
+    // Monthly delivery, so one delivery per committed month — derived from the
+    // configured term rather than hardcoded, since we sell no minimum term.
+    expect(p.subscriptionCommittedMargin).toBe(round2(p.subscriptionMinTermTotal - p.subscriptionMinMonths * 10))
   })
 
   it('flags a config that loses money if cancelled early', () => {
@@ -520,9 +522,9 @@ describe('scratch-to-reveal intro discount', () => {
     introOffer: { firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
   }
 
-  it('is enabled by default with 25%/50% weighted outcomes', () => {
+  it('is enabled by default with 10%/25%/50% weighted outcomes', () => {
     expect(scratchRevealEnabled()).toBe(true)
-    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([0.25, 0.5])
+    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([0.1, 0.25, 0.5])
   })
 
   it('rollScratchDiscount only ever returns a configured outcome', () => {
@@ -532,20 +534,25 @@ describe('scratch-to-reveal intro discount', () => {
     }
   })
 
-  it('rollScratchDiscount respects the weights (25% two thirds, 50% one third)', () => {
-    // Weights are 2:1, so the boundary between outcomes is at 2/3.
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(0.25)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.66)).toBe(0.25)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.67)).toBe(0.5)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(0.5)
+  it('rollScratchDiscount makes 50% the rare prize (weights 1 : 10 : 10)', () => {
+    // Outcomes are declared [0.5, 0.25, 0.1] with weights 1, 10, 10 (total 21),
+    // so the boundaries sit at 1/21 and 11/21.
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(0.5)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 1 / 21 - 0.001)).toBe(0.5)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 1 / 21 + 0.001)).toBe(0.25)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 11 / 21 - 0.001)).toBe(0.25)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 11 / 21 + 0.001)).toBe(0.1)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(0.1)
+  })
 
-    // Sweep a uniform grid — ~2/3 should land on 25%.
+  it('rollScratchDiscount hands out 25%-or-10% about 20x as often as 50%', () => {
     let fifties = 0
-    const N = 3000
+    const N = 4200
     for (let i = 0; i < N; i++) {
       if (rollScratchDiscount(PRICING_CONFIG, () => (i + 0.5) / N) === 0.5) fifties += 1
     }
-    expect(fifties / N).toBeCloseTo(1 / 3, 2)
+    expect(fifties / N).toBeCloseTo(1 / 21, 2)
+    expect((N - fifties) / fifties).toBeCloseTo(20, 0)
   })
 
   it('rollScratchDiscount falls back to the flat rate when scratch is disabled', () => {
@@ -553,6 +560,7 @@ describe('scratch-to-reveal intro discount', () => {
   })
 
   it('isValidScratchDiscount accepts only configured outcomes', () => {
+    expect(isValidScratchDiscount(0.1)).toBe(true)
     expect(isValidScratchDiscount(0.25)).toBe(true)
     expect(isValidScratchDiscount(0.5)).toBe(true)
     expect(isValidScratchDiscount(0.9)).toBe(false)

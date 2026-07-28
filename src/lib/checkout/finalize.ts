@@ -15,9 +15,11 @@
  * Server-only.
  */
 import type { CheckoutPayload } from './types'
+import type { MemberSubscription } from '@/lib/recharge/types'
 import { saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
+import { getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
 
 export const PENDING_COOKIE = 'pending_checkout'
 export const PENDING_KEY_PREFIX = 'pending:'
@@ -27,23 +29,54 @@ export interface FinalizeResult {
   mock: boolean
 }
 
+/**
+ * Commit the member's first-month discount at the point of purchase.
+ *
+ * The scratch card is revealed in the browser, so the rate reaches us on a
+ * payload the client controls. Nothing is claimed while someone is only
+ * scratching and browsing — the rate is banked here, once, when the checkout is
+ * actually finalized, and re-validated against the live configured outcomes on
+ * the way in. A rate we don't recognise (a card revealed before the odds were
+ * retuned, or a tampered payload) claims nothing rather than failing the
+ * checkout, and `firstMonth` is always recomputed from our own `flatMonthly`
+ * rather than trusted.
+ *
+ * `minMonths` is deliberately left alone: a per-product override can legitimately
+ * raise it above the config floor, and re-deriving that needs the blueprint and
+ * catalogue, which this payload doesn't carry.
+ */
+export function claimIntroDiscount(
+  sub: MemberSubscription,
+  config = getPricingConfig(),
+): MemberSubscription {
+  const rate = resolveIntroDiscount(sub.introDiscountRate ?? null, config)
+  return {
+    ...sub,
+    introDiscountRate: rate,
+    firstMonth: Math.round(sub.flatMonthly * (1 - rate) * 100) / 100,
+  }
+}
+
 export async function finalizeCheckout(
   userId: string,
   email: string | null,
   payload: CheckoutPayload,
   origin?: string,
 ): Promise<FinalizeResult> {
-  // 1. Store the member's bundle + quiz answers on their account.
-  const subscription = {
+  // 1. Hydrate the portal's pricing config FIRST — the intro-discount claim
+  //    below is validated against it, so it has to be the live one.
+  await syncPortalRuntime()
+
+  // 2. Store the member's bundle + quiz answers on their account, banking the
+  //    first-month discount they revealed as we go.
+  const subscription = claimIntroDiscount({
     ...payload.subscription,
     customerEmail: email || payload.subscription.customerEmail,
-  }
+  })
   await saveSubscription(userId, subscription)
   if (payload.quiz) await saveQuiz(userId, payload.quiz)
 
-  await syncPortalRuntime()
-
-  // 2. Start payment.
+  // 3. Start payment.
   if (getPaymentSource() === 'stripe') {
     const base = origin || process.env.APP_URL || ''
     const { createSubscriptionSession } = await import('@/lib/payments/stripe')
@@ -59,7 +92,7 @@ export async function finalizeCheckout(
     // No URL back — fall through to the mock confirmation rather than dead-ending.
   }
 
-  // 3. Mock mode: raise the first subscription order now so the hub + fulfilment
+  // 4. Mock mode: raise the first subscription order now so the hub + fulfilment
   //    flow can be exercised without Stripe, then show the confirmation.
   try {
     const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')

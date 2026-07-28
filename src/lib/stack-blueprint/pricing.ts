@@ -77,10 +77,16 @@ export const PRICING_CONFIG = {
   maxSubscriptionServings: 35,
   /** Never schedule a delivery more than this many months apart. */
   maxDeliveryMonths: 3,
-  /** Bill one flat amount every month (smoothed average); minimum term protects it. */
+  /** Bill one flat amount every month (smoothed average). */
   subscriptionFlatMonthly: true,
-  /** Minimum subscription commitment in months (per-product can override up). */
-  minSubscriptionMonths: 4,
+  /**
+   * Minimum subscription commitment in months (per-product can override up).
+   * 1 = no commitment — cancel or pause any time, which is what we sell on.
+   * Raising this re-arms the hub's cancel/pause guard (`monthsRemainingOnTerm`)
+   * AND the "N-month minimum" copy on the receipt, so only change it if the
+   * offer really does bind the member.
+   */
+  minSubscriptionMonths: 1,
 
   // ── Fulfilment ──
   /** Order total (£) at or above which delivery is free. Advertised on the
@@ -96,15 +102,20 @@ export const PRICING_CONFIG = {
      * Scratch-to-reveal intro: instead of one fixed first-month discount, the
      * member scratches a card to reveal theirs, drawn at random from these
      * weighted outcomes. Probability of an outcome = its weight ÷ the sum of all
-     * weights. Default: 25% off two thirds of the time, 50% off one third of the
-     * time (weights 2 and 1). Set `enabled: false` to fall back to the flat
+     * weights. Set `enabled: false` to fall back to the flat
      * `firstMonthDiscount` above.
+     *
+     * 50% is the rare top prize — the everyday outcomes (25% / 10%) are ~20×
+     * more likely between them (weights 10 + 10 against 1, so 50% lands about
+     * 1 draw in 21). Keep that ratio in mind when editing: the weights are
+     * relative, so raising one lowers everything else's odds.
      */
     scratchReveal: {
       enabled: true,
       outcomes: [
-        { discount: 0.25, weight: 2 },
         { discount: 0.5, weight: 1 },
+        { discount: 0.25, weight: 10 },
+        { discount: 0.1, weight: 10 },
       ] as ScratchOutcome[],
     },
   },

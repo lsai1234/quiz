@@ -100,6 +100,8 @@ export function buildMemberSubscription(
     subscriptionDiscountRate: pricing.subscriptionDiscountPct / 100,
     dispatchDayOfMonth: opts.dispatchDayOfMonth ?? 15,
     minMonths: pricing.subscriptionMinMonths,
+    introDiscountRate: pricing.subscriptionIntroDiscountPct / 100,
+    firstMonth: pricing.subscriptionFirstMonth,
     monthsActive,
     startedAt: startedAt.toISOString(),
     paymentMethod: { brand: 'Visa', last4: '4242' },

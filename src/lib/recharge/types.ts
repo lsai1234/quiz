@@ -73,8 +73,17 @@ export interface MemberSubscription {
    * back to the day-of-month cadence after that delivery ships.
    */
   nextDispatchOverride?: string
-  /** Minimum commitment in months. */
+  /** Minimum commitment in months. 1 = none, cancel or pause any time. */
   minMonths: number
+  /**
+   * The first-month intro discount (0–1) the member claimed at checkout — the
+   * rate they revealed on their scratch card. Re-validated server-side when the
+   * checkout is finalized (see `claimIntroDiscount`), so this is the granted
+   * rate, not the one the browser asked for. 0 = none claimed.
+   */
+  introDiscountRate?: number
+  /** Amount actually billed for the first month, after `introDiscountRate`. */
+  firstMonth?: number
   /** Months the subscription has been active (drives the min-term guard). */
   monthsActive: number
   startedAt: string
