@@ -44,6 +44,7 @@ export function SubscriptionDashboard() {
   const [manageLineId, setManageLineId] = useState<string | null>(null)
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
   const [showAdd, setShowAdd] = useState(false)
+  const [addFocusGroup, setAddFocusGroup] = useState<string | null>(null)
   const [pending, setPending] = useState<PendingChange | null>(null)
   const [showJourney, setShowJourney] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -74,6 +75,47 @@ export function SubscriptionDashboard() {
     [sub, products],
   )
   const next = nextDelivery(deliveries)
+
+  /**
+   * Deep links from member emails.
+   *
+   *   /hub?change=<lineId>   → open the swap flow on that line
+   *   /hub?add=<swapGroup>   → open the add sheet, that category first
+   *
+   * These are load-bearing, not a nicety: no product-change email asks the
+   * member to do anything, so "you can change this in your hub" is the only way
+   * they take control back — and it only works if the link lands on the thing
+   * that can act, already pointed at the right product.
+   *
+   * Read from `window.location` rather than `useSearchParams` so the statically
+   * rendered /hub route doesn't need a Suspense boundary, and cleared afterwards
+   * so a refresh doesn't reopen a sheet the member already dismissed.
+   */
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (deepLinkHandled.current || !sub) return
+    const params = new URLSearchParams(window.location.search)
+    const changeLineId = params.get('change')
+    const addGroup = params.get('add')
+    if (!changeLineId && !addGroup) return
+    deepLinkHandled.current = true
+
+    if (changeLineId) {
+      // The line may have gone since the email — a later removal, or a second
+      // click. Landing on the add sheet beats landing on nothing.
+      if (sub.lines.some((l) => l.id === changeLineId)) setChangeLineId(changeLineId)
+      else setShowAdd(true)
+    }
+    if (addGroup) {
+      setAddFocusGroup(addGroup)
+      setShowAdd(true)
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.delete('change')
+    url.searchParams.delete('add')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+  }, [sub])
 
   // Subtle premium entrance.
   useEffect(() => {
@@ -416,7 +458,8 @@ export function SubscriptionDashboard() {
               onConfirm: () => addLine(product, products),
             })
           }}
-          onClose={() => setShowAdd(false)}
+          focusSwapGroup={addFocusGroup}
+          onClose={() => { setShowAdd(false); setAddFocusGroup(null) }}
         />
       )}
 

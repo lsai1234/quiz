@@ -64,6 +64,8 @@ export interface ChangeDetectionResult {
   cancelled: ChangeEvent[]
   /** Events whose intended action was applied by this run. */
   applied: ChangeEvent[]
+  /** Member emails actually sent by this run. */
+  notified: number
   /** True when this run only established a baseline. */
   baselineOnly: boolean
   dryRun: boolean
@@ -92,6 +94,7 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
     events: [],
     cancelled: [],
     applied: [],
+    notified: 0,
     baselineOnly,
     dryRun: opts.dryRun ?? false,
   }
@@ -154,6 +157,9 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
   if (!opts.dryRun) {
     result.cancelled.push(...(await cancelRecovered(diff.recovered, catalogue)))
     result.applied = await applyDueChanges({ now, config, catalogue })
+    // Send what applying just queued, so a run leaves nobody wondering why
+    // their box changed.
+    result.notified = (await flushChangeNotifications()).sent
   }
 
   return result
@@ -276,6 +282,12 @@ export async function applyChangeEvent(
     await saveSubscription(event.userId, outcome.subscription)
   }
 
+  // Queue the member's email against the plan as it now stands. Queueing is
+  // deliberately separate from sending: the change is done and must not be
+  // undone by a mail provider having a bad afternoon, so a failure here leaves
+  // a retryable row rather than an inconsistent subscription. Never throws.
+  await queueMemberNotification(event, effective, outcome.subscription, catalogue)
+
   return updateChange(event.id, (e) => {
     e.status = 'applied'
     e.resolution = effective
@@ -288,6 +300,53 @@ export async function applyChangeEvent(
     // (P5) picks applied-but-unnotified events up.
     e.notifiedAt = e.notifiedAt ?? null
   })
+}
+
+/**
+ * Render and queue the member's email for a change we just applied.
+ *
+ * Swallows its own errors on purpose. An applied change is a fact about
+ * someone's plan and their bill; a notification that couldn't be queued is a
+ * problem with our mail plumbing. Letting the second undo the first would be
+ * the wrong trade every time — the event stays visible with `notifiedAt: null`,
+ * which is exactly what the outbox sweep looks for.
+ */
+async function queueMemberNotification(
+  event: ChangeEvent,
+  resolution: ChangeResolution,
+  subscription: MemberSubscription,
+  catalogue: CatalogueProduct[],
+): Promise<void> {
+  try {
+    const { notificationForEvent } = await import('@/lib/notify/from-change')
+    const { queueNotification } = await import('@/lib/notify/outbox')
+    const { appBaseUrl } = await import('@/lib/notify')
+
+    const input = notificationForEvent(
+      { ...event, resolution },
+      { baseUrl: appBaseUrl(), subscription, catalogue },
+    )
+    if (input) await queueNotification(input)
+  } catch (err) {
+    console.error('[changes] queueing the member notification failed:', err)
+  }
+}
+
+/**
+ * Send what's queued, and record on each change that its member has actually
+ * been told. Called at the end of a detection run and by the daily job.
+ */
+export async function flushChangeNotifications(): Promise<{ sent: number; failed: number }> {
+  const { flushOutbox } = await import('@/lib/notify/outbox')
+  const result = await flushOutbox({
+    onSent: async (notification) => {
+      if (!notification.changeEventId) return
+      await updateChange(notification.changeEventId, (e) => {
+        e.notifiedAt = notification.sentAt ?? new Date().toISOString()
+      })
+    },
+  })
+  return { sent: result.sent.length, failed: result.failed.length }
 }
 
 function describeResolution(

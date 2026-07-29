@@ -171,6 +171,33 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX supplier_snapshots_updated_at ON supplier_snapshots(updated_at);
   `,
+  // v7 — `notifications`: the outbox. Every member email is queued here first
+  // and sent from here, so the Founders Hub can show what went out, a failure
+  // is visible and retryable rather than lost, and mock mode is a real working
+  // flow rather than a stub.
+  //
+  // `dedupe_key` is UNIQUE and that is the whole idempotency guarantee: it is
+  // `<changeEventId>:<template>`, so re-running the daily job — or two workers
+  // racing — cannot email the same person about the same change twice. Enforced
+  // by the database rather than by a check-then-insert, which would still race.
+  `
+  CREATE TABLE notifications (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT REFERENCES users(id) ON DELETE SET NULL,
+    email      TEXT,
+    template   TEXT NOT NULL,
+    dedupe_key TEXT NOT NULL UNIQUE,
+    status     TEXT NOT NULL,
+    attempts   TEXT NOT NULL,
+    data       TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    sent_at    TEXT
+  );
+  CREATE INDEX notifications_status ON notifications(status);
+  CREATE INDEX notifications_user_id ON notifications(user_id);
+  CREATE INDEX notifications_created_at ON notifications(created_at);
+  `,
 ]
 
 /**

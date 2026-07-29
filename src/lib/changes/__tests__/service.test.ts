@@ -104,8 +104,10 @@ describe('a routine outage resolves itself', () => {
 
     const event = await getChange(changeEventId(member.userId, 'l1', 'out-of-stock'))
     expect(event).toMatchObject({ status: 'applied', resolutionSource: 'system' })
-    // Applied but not yet announced — the outbox sweep picks this up.
-    expect(event!.notifiedAt).toBeNull()
+    // A run doesn't finish until the member has been told — an applied change
+    // nobody was told about is the one outcome this domain must not produce.
+    expect(event!.notifiedAt).not.toBeNull()
+    expect(result.notified).toBe(1)
   })
 
   it('removes and lowers the bill for a member who asked for that', async () => {
