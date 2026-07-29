@@ -24,7 +24,7 @@ import {
   type SubscriptionPlanOptions,
 } from '@/lib/stack-blueprint/pricing'
 import { basisForProduct } from '@/lib/feedback'
-import type { MemberSubscription, MemberSubscriptionLine } from './types'
+import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine, SafetyConstraints } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -58,10 +58,36 @@ export function buildMemberSubscription(
     id?: string
     monthsActive?: number
     dispatchDayOfMonth?: number
-    /** Per-product substitution consent captured at checkout. Missing = allowed. */
+    /**
+     * @deprecated Superseded by `changePolicyByProductId`. Kept so older callers
+     * keep working; `true` maps to `auto-swap`, `false` to `remove`.
+     */
     substitutionByProductId?: Record<string, boolean>
+    /** The member's plan-wide answer to "what if this becomes unavailable?". */
+    defaultChangePolicy?: ChangePolicy
+    /** Per-product overrides of that answer, captured at checkout. */
+    changePolicyByProductId?: Record<string, ChangePolicy>
+    /** Hard dietary/stimulant exclusions, snapshotted at the point of sale. */
+    safetyConstraints?: SafetyConstraints
   } = {},
 ): MemberSubscription {
+  const defaultPolicy: ChangePolicy = opts.defaultChangePolicy ?? 'auto-swap'
+  /**
+   * A line's OWN policy, or undefined when it just follows the plan default.
+   *
+   * The distinction matters: `setDefaultChangePolicy` deliberately leaves lines
+   * with an explicit choice alone, so stamping every line at checkout would
+   * quietly make the hub's plan-wide control a no-op. Only a genuine per-product
+   * override is recorded on the line.
+   */
+  const explicitPolicyFor = (productId: string): ChangePolicy | undefined => {
+    const explicit = opts.changePolicyByProductId?.[productId]
+    if (explicit) return explicit
+    const legacy = opts.substitutionByProductId?.[productId]
+    if (legacy !== undefined) return legacy ? 'auto-swap' : 'remove'
+    return undefined
+  }
+  const effectivePolicyFor = (productId: string): ChangePolicy => explicitPolicyFor(productId) ?? defaultPolicy
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
   const plan = buildSubscriptionPlan(blueprint, catalogue, answers, getPricingConfig(), opts)
   const pricing = calculatePricing(blueprint, catalogue, answers, getPricingConfig(), opts)
@@ -86,9 +112,12 @@ export function buildMemberSubscription(
       swapGroup: l.product.swapGroup,
       addedAt: startedAt.toISOString(),
       deliveriesMade: deliveriesInMonths(monthsActive, l.shipEveryMonths),
-      // Default to allowing a same-category substitution if the product goes out
-      // of stock; the member can opt any line out at checkout or in the hub.
-      allowSubstitution: opts.substitutionByProductId?.[l.product.id] ?? true,
+      // What to do if this product becomes unavailable. Set only where the
+      // member chose something different for this product; otherwise the line
+      // follows `defaultChangePolicy`. `allowSubstitution` carries the EFFECTIVE
+      // value either way, for older readers that only understand the boolean.
+      changePolicy: explicitPolicyFor(l.product.id),
+      allowSubstitution: effectivePolicyFor(l.product.id) === 'auto-swap',
     }
   })
 
@@ -105,6 +134,8 @@ export function buildMemberSubscription(
     monthsActive,
     startedAt: startedAt.toISOString(),
     paymentMethod: { brand: 'Visa', last4: '4242' },
+    defaultChangePolicy: defaultPolicy,
+    safetyConstraints: opts.safetyConstraints,
     lines,
   }
 }

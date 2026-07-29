@@ -1,53 +1,32 @@
 'use client'
 
-import { useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { SubscriptionCheckout } from '@/lib/stack-blueprint/checkout'
+import type { ChangePolicy } from '@/lib/recharge/types'
 
 const ACCENT = '#00D4FF'
 
-/** Post-checkout out-of-stock consent: per-line "allow a same-category swap?".
- *  Defaults to allow; opting a line out persists via /api/hub/substitution. */
-function SubstitutionConsent({ lines }: { lines: SubscriptionCheckout['lines'] }) {
-  const [allow, setAllow] = useState<Record<string, boolean>>(() => Object.fromEntries(lines.map((l) => [l.productId, true])))
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
-
-  async function toggle(productId: string) {
-    const next = { ...allow, [productId]: !allow[productId] }
-    setAllow(next)
-    setSaving(true)
-    setSaved(false)
-    const res = await fetch('/api/hub/substitution', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ substitutions: next }),
-    }).catch(() => null)
-    setSaving(false)
-    if (res && res.ok) setSaved(true)
-  }
-
+/**
+ * Confirms the unavailability choice the member already made in the subscription
+ * journey — it is not asked for here.
+ *
+ * It used to be: this screen carried per-line toggles, which meant the decision
+ * was taken after payment, by someone halfway out the door. Making it part of
+ * the plan they're buying is both better consent and better data, so all this
+ * has to do now is tell them what's on file and where to change it.
+ */
+function ChangePolicySummary({ policy }: { policy: ChangePolicy }) {
   return (
     <div className="border-t border-[var(--color-border)] pt-3 mt-3">
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>If something&apos;s out of stock</p>
-      <p className="text-[11px] text-[var(--color-muted)] mb-2">We&apos;ll only swap in the closest same-type product for the items you allow. Toggle any off to have us hold &amp; contact you instead.</p>
-      <div className="space-y-1.5">
-        {lines.map((line) => (
-          <div key={line.productId} className="flex items-center justify-between gap-3">
-            <span className="text-xs truncate" style={{ color: 'var(--color-text-2)' }}>{line.productTitle}</span>
-            <button
-              role="switch"
-              aria-checked={allow[line.productId]}
-              onClick={() => toggle(line.productId)}
-              className="relative w-10 h-5.5 rounded-full flex-shrink-0 transition-colors"
-              style={{ width: 40, height: 22, background: allow[line.productId] ? ACCENT : 'var(--color-border)' }}
-            >
-              <span className="absolute top-0.5 w-[18px] h-[18px] rounded-full bg-white transition-all" style={{ left: allow[line.productId] ? 20 : 2 }} />
-            </button>
-          </div>
-        ))}
-      </div>
-      <p className="text-[10px] text-[var(--color-muted)] mt-2 h-3">{saving ? 'Saving…' : saved ? 'Saved — you can change these anytime in your hub.' : ''}</p>
+      <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+        If something&apos;s out of stock
+      </p>
+      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
+        {policy === 'remove'
+          ? 'We’ll take it off your plan and lower your monthly from the next payment — no action needed from you.'
+          : 'We’ll swap in the closest match at the same or lower price, so your monthly doesn’t change.'}{' '}
+        Either way we’ll email you, and you can change this any time in your hub.
+      </p>
     </div>
   )
 }
@@ -56,6 +35,8 @@ interface Props {
   plan: 'oneoff' | 'subscription'
   mock: boolean
   subscription?: SubscriptionCheckout
+  /** What the member chose in the journey, echoed back for confirmation. */
+  changePolicy?: ChangePolicy
   onBack?: () => void
 }
 
@@ -64,7 +45,7 @@ function deliveryLabel(months: number): string {
   return `every ${months} months`
 }
 
-export function CheckoutSuccess({ plan, mock, subscription, onBack }: Props) {
+export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto-swap', onBack }: Props) {
   const isSub = plan === 'subscription' && subscription
 
   return (
@@ -119,8 +100,8 @@ export function CheckoutSuccess({ plan, mock, subscription, onBack }: Props) {
             </div>
           </div>
 
-          {/* Out-of-stock substitution consent (persists to the member's hub) */}
-          <SubstitutionConsent lines={subscription.lines} />
+          {/* What we'll do if something's unavailable — chosen in the journey. */}
+          <ChangePolicySummary policy={changePolicy} />
         </div>
       )}
 

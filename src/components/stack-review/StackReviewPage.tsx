@@ -24,7 +24,7 @@ import { StackDeck } from './StackDeck'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
-import { SubscriptionJourney } from './SubscriptionJourney'
+import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
 import { UpgradesCard } from './UpgradesCard'
@@ -39,6 +39,13 @@ export function StackReviewPage() {
     revealedIntroDiscount, setRevealedIntroDiscount,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
+  // What to do if a product becomes unavailable — chosen in the subscription
+  // journey, carried to checkout so it's stored with the plan rather than asked
+  // for afterwards. Defaults to keeping the plan whole.
+  const [changePolicy, setChangePolicy] = useState<ChangePolicySelection>({
+    default: 'auto-swap',
+    byProductId: {},
+  })
   const stackRef = useRef<HTMLDivElement>(null)
   // Portal the sticky checkout bar to document.body: this page renders inside an
   // animated (transformed) wrapper, which would otherwise anchor `position: fixed`
@@ -144,8 +151,14 @@ export function StackReviewPage() {
   const { state: checkoutState, checkout, resume: resumeCheckout, reset: resetCheckout } = useStackCheckout()
 
   const subOpts = useMemo(
-    () => ({ usageByProductId: subscriptionUsage, level: stackLevel, introDiscountOverride: revealedIntroDiscount }),
-    [subscriptionUsage, stackLevel, revealedIntroDiscount],
+    () => ({
+      usageByProductId: subscriptionUsage,
+      level: stackLevel,
+      introDiscountOverride: revealedIntroDiscount,
+      defaultChangePolicy: changePolicy.default,
+      changePolicyByProductId: changePolicy.byProductId,
+    }),
+    [subscriptionUsage, stackLevel, revealedIntroDiscount, changePolicy],
   )
 
   const handleCheckout = useCallback(
@@ -229,6 +242,7 @@ export function StackReviewPage() {
         plan={checkoutState.plan}
         mock={checkoutState.mock}
         subscription={checkoutState.subscription}
+        changePolicy={changePolicy.default}
         onBack={resetCheckout}
       />
     )
@@ -430,6 +444,8 @@ export function StackReviewPage() {
           usage={subscriptionUsage}
           onUsageChange={setSubscriptionUsage}
           onTrainingFrequencyChange={(freq) => setAnswer('trainingFrequency', freq)}
+          changePolicy={changePolicy}
+          onChangePolicyChange={setChangePolicy}
           onConfirm={() => { setSubscriptionCustomised(true); setPlanType('subscription'); setJourneyOpen(false) }}
           onClose={() => setJourneyOpen(false)}
         />

@@ -14,6 +14,9 @@ import {
   type UsageLevel,
   type SubscriptionLine,
 } from '@/lib/stack-blueprint/pricing'
+import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
+import { describeConstraints, safetyConstraintsFrom } from '@/lib/changes/safety'
+import type { ChangePolicy } from '@/lib/recharge/types'
 
 const ACCENT = '#00D4FF'
 
@@ -48,6 +51,14 @@ function cadenceLine(line: SubscriptionLine): string {
   return `Taken ${taken} · ${ship}`
 }
 
+/** The member's answer to "what if something becomes unavailable?", plan-wide
+ *  with optional per-product overrides. Held by the page so it survives closing
+ *  the journey and reaches checkout. */
+export interface ChangePolicySelection {
+  default: ChangePolicy
+  byProductId: Record<string, ChangePolicy>
+}
+
 interface Props {
   blueprint: StackBlueprint
   products: CatalogueProduct[]
@@ -56,13 +67,17 @@ interface Props {
   usage: Record<string, UsageLevel>
   onUsageChange: (usage: Record<string, UsageLevel>) => void
   onTrainingFrequencyChange: (freq: NonNullable<QuizAnswers['trainingFrequency']>) => void
+  changePolicy: ChangePolicySelection
+  onChangePolicyChange: (selection: ChangePolicySelection) => void
   onConfirm: () => void
   onClose: () => void
 }
 
 export function SubscriptionJourney({
-  blueprint, products, answers, level, usage, onUsageChange, onTrainingFrequencyChange, onConfirm, onClose,
+  blueprint, products, answers, level, usage, onUsageChange, onTrainingFrequencyChange,
+  changePolicy, onChangePolicyChange, onConfirm, onClose,
 }: Props) {
+  const [showPerProduct, setShowPerProduct] = useState(false)
   // Render through a portal to document.body: StackReviewPage sits inside an
   // animated (transformed) wrapper, which would otherwise make `position: fixed`
   // positioned relative to that wrapper instead of the viewport.
@@ -91,9 +106,29 @@ export function SubscriptionJourney({
 
   const hasPerWorkout = plan.some((l) => l.cadence === 'per-workout')
 
+  // Their hard exclusions, so the swap option can promise what it will actually
+  // do for them rather than a generic "closest match".
+  const constraintsLabel = useMemo(() => describeConstraints(safetyConstraintsFrom(answers)), [answers])
+
   function setUsage(productId: string, levelChoice: UsageLevel) {
     onUsageChange({ ...usage, [productId]: levelChoice })
   }
+
+  /** Plan-wide choice. Clears per-product overrides so the answer stays honest —
+   *  someone who just picked "take it off my plan" shouldn't still have swaps
+   *  set on three products they can't see. */
+  function setDefaultPolicy(policy: ChangePolicy) {
+    onChangePolicyChange({ default: policy, byProductId: {} })
+  }
+
+  function setProductPolicy(productId: string, policy: ChangePolicy) {
+    onChangePolicyChange({ ...changePolicy, byProductId: { ...changePolicy.byProductId, [productId]: policy } })
+  }
+
+  const policyFor = (productId: string): ChangePolicy =>
+    changePolicy.byProductId[productId] ?? changePolicy.default
+
+  const overriddenCount = plan.filter((l) => policyFor(l.product.id) !== changePolicy.default).length
 
   if (!mounted) return null
 
@@ -183,6 +218,56 @@ export function SubscriptionJourney({
               </div>
             )
           })}
+        </div>
+
+        {/* If something becomes unavailable — decided here, before paying, not
+            after. Two options, both of which resolve without them having to do
+            anything when it happens. */}
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
+          <p className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            If something goes out of stock
+          </p>
+          <p className="text-[11px] text-[var(--color-muted)] mb-3">
+            It happens occasionally. Tell us what you&apos;d rather we did, and we&apos;ll handle it
+            without holding up your delivery.
+          </p>
+
+          <ChangePolicyChoice
+            policy={changePolicy.default}
+            onChange={setDefaultPolicy}
+            monthly={pricing.subscriptionTotal}
+            constraintsLabel={constraintsLabel}
+          />
+
+          <button
+            type="button"
+            onClick={() => setShowPerProduct((v) => !v)}
+            className="text-[11px] font-semibold underline mt-3"
+            style={{ color: ACCENT }}
+            aria-expanded={showPerProduct}
+          >
+            {showPerProduct ? 'Hide per-product choices' : 'Set this per product instead'}
+            {overriddenCount > 0 && !showPerProduct ? ` (${overriddenCount} set)` : ''}
+          </button>
+
+          {showPerProduct && (
+            <div className="mt-3 space-y-3">
+              {plan.map((line) => (
+                <div key={line.product.id} className="rounded-xl border border-[var(--color-border)] p-3" style={{ background: 'var(--color-surface)' }}>
+                  <p className="text-xs font-bold mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {line.product.title}
+                  </p>
+                  <ChangePolicyChoice
+                    policy={policyFor(line.product.id)}
+                    onChange={(p) => setProductPolicy(line.product.id, p)}
+                    monthly={pricing.subscriptionTotal}
+                    removesMonthly={line.monthlyPrice}
+                    variant="compact"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

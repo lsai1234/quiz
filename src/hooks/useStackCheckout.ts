@@ -14,6 +14,8 @@ import type { QuizAnswers, StackLevel } from '@/lib/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 import { buildMemberSubscription } from '@/lib/recharge/mock'
+import { safetyConstraintsFrom } from '@/lib/changes/safety'
+import type { ChangePolicy } from '@/lib/recharge/types'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 import type { ConsentSubmission } from '@/lib/legal/consent'
 
@@ -70,7 +72,14 @@ export function useStackCheckout() {
       catalogue: CatalogueProduct[],
       planType: PlanType = 'oneoff',
       answers?: QuizAnswers | null,
-      subOpts: { usageByProductId?: Record<string, UsageLevel>; level?: StackLevel; introDiscountOverride?: number | null } = {},
+      subOpts: {
+        usageByProductId?: Record<string, UsageLevel>
+        level?: StackLevel
+        introDiscountOverride?: number | null
+        /** The member's "what if this becomes unavailable?" answer from the journey. */
+        defaultChangePolicy?: ChangePolicy
+        changePolicyByProductId?: Record<string, ChangePolicy>
+      } = {},
     ) => {
       setState({ status: 'loading' })
       const live = isShopifyLive()
@@ -92,6 +101,12 @@ export function useStackCheckout() {
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
           introDiscountOverride: subOpts.introDiscountOverride,
+          defaultChangePolicy: subOpts.defaultChangePolicy,
+          changePolicyByProductId: subOpts.changePolicyByProductId,
+          // Snapshot the member's hard exclusions with the plan. The server
+          // re-derives this too (finalize.ts) — belt and braces on the one thing
+          // that must not be wrong when we swap a product for them later.
+          safetyConstraints: safetyConstraintsFrom(answers),
           id: `sub-${Date.now()}`,
         })
         const payload: CheckoutPayload = {

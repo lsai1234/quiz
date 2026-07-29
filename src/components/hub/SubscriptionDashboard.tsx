@@ -18,6 +18,8 @@ import { DeliveryDetailSheet } from './DeliveryDetailSheet'
 import { BillingSummary } from './BillingSummary'
 import { CancelSaveFlow } from './CancelSaveFlow'
 import { ChangeSummary, type PendingChange } from './ChangeSummary'
+import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
+import { constraintsFor, describeConstraints } from '@/lib/changes/safety'
 
 const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
@@ -33,7 +35,7 @@ export function SubscriptionDashboard() {
   const {
     subscription: sub, feedback, logout,
     setDispatchDay, resume,
-    swapLine, addLine, removeLine, setLineUsage, setLineSubstitution, skipNext, submitFeedback, submitDimension,
+    swapLine, addLine, removeLine, setLineUsage, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
     snooze, applyDownsize, cancelWithReason,
   } = useHubStore()
@@ -55,6 +57,17 @@ export function SubscriptionDashboard() {
   const checkInPlan = useMemo(
     () => (sub ? buildCheckInQuestions(sub, products) : { questions: [], expectations: [] }),
     [sub, products],
+  )
+  const planConstraintsLabel = useMemo(
+    () => (sub ? describeConstraints(constraintsFor(sub)) : null),
+    [sub],
+  )
+  // Lines with a policy of their own, so the plan-wide control can say so rather
+  // than implying it governs everything — changing the default deliberately
+  // leaves these alone.
+  const overriddenPolicyCount = useMemo(
+    () => (sub ? sub.lines.filter((l) => l.changePolicy !== undefined).length : 0),
+    [sub],
   )
   const deliveries = useMemo(
     () => (sub ? buildDeliverySchedule(sub, products, 6) : []),
@@ -252,6 +265,23 @@ export function SubscriptionDashboard() {
                   </div>
                 </div>
 
+                {/* If a product becomes unavailable — the plan-wide default.
+                    Per-product overrides live in each line's manage sheet. */}
+                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5">
+                  <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>If something goes out of stock</p>
+                  <p className="text-xs text-[var(--color-muted)] mb-3">
+                    What we do by default. {overriddenPolicyCount > 0
+                      ? `${overriddenPolicyCount} product${overriddenPolicyCount === 1 ? ' has' : 's have'} their own setting — change those on the product itself.`
+                      : 'Set it per product from any product’s manage sheet.'}
+                  </p>
+                  <ChangePolicyChoice
+                    policy={sub.defaultChangePolicy ?? 'auto-swap'}
+                    onChange={setDefaultChangePolicy}
+                    monthly={sub.flatMonthly}
+                    constraintsLabel={planConstraintsLabel}
+                  />
+                </div>
+
                 {/* Billing */}
                 <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5">
                   <p className="text-sm font-bold text-[var(--color-text)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Billing & payment</p>
@@ -333,7 +363,7 @@ export function SubscriptionDashboard() {
             })
           }}
           onRemove={() => { removeLine(manageLine.id); setManageLineId(null) }}
-          onSetSubstitution={(allow) => setLineSubstitution(manageLine.id, allow)}
+          onSetChangePolicy={(policy) => setLineChangePolicy(manageLine.id, policy)}
           onClose={() => setManageLineId(null)}
         />
       )}

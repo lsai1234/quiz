@@ -5,13 +5,17 @@ import { createPortal } from 'react-dom'
 import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import {
   computeRemoveImpact,
+  lineMonthly,
   oneOffCharge,
   setLineUsage,
   formatDispatchDate,
   effectiveNextDispatch,
 } from '@/lib/recharge/mock'
+import { policyForLine } from '@/lib/changes/policy'
+import { constraintsFor, describeConstraints } from '@/lib/changes/safety'
+import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
 import { BillingImpact } from './BillingImpact'
-import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
+import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const ACCENT = '#00D4FF'
@@ -25,7 +29,8 @@ interface Props {
   onSkip: () => void
   onExpedite: (qty: number) => void
   onRemove: () => void
-  onSetSubstitution?: (allow: boolean) => void
+  /** What to do with this line if its product becomes unavailable. */
+  onSetChangePolicy?: (policy: ChangePolicy) => void
   onClose: () => void
 }
 
@@ -37,7 +42,7 @@ function shipSummary(units: number, months: number, noun: string): string {
   return `1 ${noun} a month`
 }
 
-export function LineManageSheet({ subscription, line, product, onSetUsage, onSkip, onExpedite, onRemove, onSetSubstitution, onClose }: Props) {
+export function LineManageSheet({ subscription, line, product, onSetUsage, onSkip, onExpedite, onRemove, onSetChangePolicy, onClose }: Props) {
   const [mounted, setMounted] = useState(false)
   const [usage, setUsage] = useState<UsageLevel>(line.usageLevel ?? 'standard')
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -65,6 +70,7 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
   const oneOff = oneOffCharge(line, 1)
   const nextBox = formatDispatchDate(effectiveNextDispatch(subscription))
   const noun = (product?.formats[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
+  const constraintsLabel = describeConstraints(constraintsFor(subscription))
 
   return createPortal(
     <div
@@ -130,28 +136,23 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
           </div>
           <p className="text-[11px] text-[var(--color-muted)] -mt-3">Next box: {nextBox}.</p>
 
-          {/* Out-of-stock substitution consent */}
-          {onSetSubstitution && (
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>If it&apos;s out of stock</p>
-                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
-                    {line.allowSubstitution === false
-                      ? "We'll hold it and contact you — no swap."
-                      : `We'll swap in the closest ${line.slotTitle.toLowerCase()} in stock.`}
-                  </p>
-                </div>
-                <button
-                  role="switch"
-                  aria-checked={line.allowSubstitution !== false}
-                  onClick={() => onSetSubstitution(line.allowSubstitution === false)}
-                  className="relative w-11 h-6 rounded-full flex-shrink-0 transition-colors"
-                  style={{ background: line.allowSubstitution === false ? 'var(--color-border)' : ACCENT }}
-                >
-                  <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: line.allowSubstitution === false ? '2px' : '22px' }} />
-                </button>
-              </div>
+          {/* What happens if this product becomes unavailable */}
+          {onSetChangePolicy && (
+            <div>
+              <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+                If it&apos;s out of stock
+              </p>
+              <p className="text-xs text-[var(--color-muted)] mb-3">
+                We&apos;ll sort it without holding up your box, and email you either way.
+              </p>
+              <ChangePolicyChoice
+                policy={policyForLine(subscription, line)}
+                onChange={onSetChangePolicy}
+                monthly={subscription.flatMonthly}
+                removesMonthly={lineMonthly(line)}
+                constraintsLabel={constraintsLabel}
+                variant="compact"
+              />
             </div>
           )}
 

@@ -94,6 +94,20 @@ export function constraintsFor(
   return sub.safetyConstraints ?? safetyConstraintsFrom(answers)
 }
 
+/**
+ * The member's exclusions in their own words, e.g. "vegan and stimulant-free".
+ * Null when they have none. Used to tell someone at checkout exactly what a swap
+ * will and won't do for them — a vegan seeing "we'll only ever swap to another
+ * vegan option" is what makes auto-swap a reasonable thing to opt into.
+ */
+export function describeConstraints(constraints: SafetyConstraints): string | null {
+  const parts = [...constraints.dietaryTags.map((t) => String(t))]
+  if (constraints.noStimulants) parts.push('stimulant-free')
+  if (parts.length === 0) return null
+  if (parts.length === 1) return parts[0]
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+}
+
 /** Every constraint `product` fails, for founder-facing "why is this blocked?" copy. */
 export function failedConstraints(product: CatalogueProduct, constraints: SafetyConstraints): string[] {
   const failures: string[] = []

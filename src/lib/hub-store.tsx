@@ -3,7 +3,11 @@
 import { create } from 'zustand'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
-import type { MemberSubscription } from '@/lib/recharge/types'
+import type { ChangePolicy, MemberSubscription } from '@/lib/recharge/types'
+import {
+  setLineChangePolicy as setLineChangePolicyMutation,
+  setDefaultChangePolicy as setDefaultChangePolicyMutation,
+} from '@/lib/changes/policy'
 import type { FeedbackCheckIn, FeedbackDimension } from '@/lib/feedback'
 import {
   setDispatchDay,
@@ -104,8 +108,15 @@ interface HubStore {
   setLineCadence: (lineId: string, months: number) => void
   setLineQuantity: (lineId: string, quantity: number) => void
   setLineUsage: (lineId: string, product: CatalogueProduct, usageLevel: UsageLevel) => void
-  /** Allow / disallow a same-category substitution for a line if it goes out of stock. */
+  /**
+   * Allow / disallow a same-category substitution for a line if it goes out of stock.
+   * @deprecated Use `setLineChangePolicy` — this only speaks the old boolean.
+   */
   setLineSubstitution: (lineId: string, allow: boolean) => void
+  /** What to do with one line if its product becomes unavailable. */
+  setLineChangePolicy: (lineId: string, policy: ChangePolicy) => void
+  /** The plan-wide default, applied to lines the member hasn't set individually. */
+  setDefaultChangePolicy: (policy: ChangePolicy) => void
   skipNext: (lineId: string) => void
   setNextDispatchDate: (date: Date) => void
   sendNow: () => void
@@ -237,6 +248,10 @@ export const useHubStore = create<HubStore>((set) => ({
     set((s) => (s.subscription ? { subscription: persist(setLineUsageMutation(s.subscription, lineId, product, usageLevel)) } : s)),
   setLineSubstitution: (lineId, allow) =>
     set((s) => (s.subscription ? { subscription: persist(setLineSubstitutionMutation(s.subscription, lineId, allow)) } : s)),
+  setLineChangePolicy: (lineId, policy) =>
+    set((s) => (s.subscription ? { subscription: persist(setLineChangePolicyMutation(s.subscription, lineId, policy)) } : s)),
+  setDefaultChangePolicy: (policy) =>
+    set((s) => (s.subscription ? { subscription: persist(setDefaultChangePolicyMutation(s.subscription, policy)) } : s)),
   skipNext: (lineId) =>
     set((s) => (s.subscription ? { subscription: persist(skipNextMutation(s.subscription, lineId)) } : s)),
   setNextDispatchDate: (date) =>
