@@ -35,6 +35,7 @@ import {
   paidToDate,
   removeLine,
   shippedValueToDate,
+  skipNextDelivery,
   subRateOf,
   swapSubscriptionLine,
 } from '@/lib/recharge/mock'
@@ -294,10 +295,27 @@ export function applyResolution(
     case 'pass-on':
       return applyPassOn(sub, lineId, resolution.newUnitPrice, opts)
     case 'hold':
+      return applyHold(sub, lineId)
     case 'absorb':
     case 'dismiss':
       return { subscription: sub, billingChange: null, rejected: 'no-subscription-change' }
   }
+}
+
+/**
+ * Keep the line but skip its next box — the honest answer to a temporary outage
+ * a founder expects to clear before the following delivery.
+ *
+ * The recurring price doesn't move, so there's no `BillingChange`: skipping
+ * banks a credit against the next payment via the existing skip helper, which
+ * is the same mechanism a member gets when they skip a box themselves. Nobody
+ * pays for a box they didn't receive.
+ */
+export function applyHold(sub: MemberSubscription, lineId: string): ApplyResult {
+  if (!sub.lines.some((l) => l.id === lineId)) {
+    return { subscription: sub, billingChange: null, rejected: 'line-not-found' }
+  }
+  return { subscription: skipNextDelivery(sub, lineId), billingChange: null }
 }
 
 // ─── Guards the caller needs before deciding ─────────────────────────────────

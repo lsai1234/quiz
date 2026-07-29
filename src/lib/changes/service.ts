@@ -289,7 +289,9 @@ export async function applyChangeEvent(
   await queueMemberNotification(event, effective, outcome.subscription, catalogue)
 
   return updateChange(event.id, (e) => {
-    e.status = 'applied'
+    // `dismiss` closes an event without anything having happened; everything
+    // else genuinely changed (or deliberately left alone) the member's plan.
+    e.status = effective.type === 'dismiss' ? 'cancelled' : 'applied'
     e.resolution = effective
     e.resolutionSource = source
     e.resolutionDetail = describeResolution(effective, outcome.subscription, resolution)
@@ -300,6 +302,77 @@ export async function applyChangeEvent(
     // (P5) picks applied-but-unnotified events up.
     e.notifiedAt = e.notifiedAt ?? null
   })
+}
+
+/**
+ * A founder resolving an event from the hub.
+ *
+ * Goes through exactly the same billing maths and audit trail as the automatic
+ * sweep — the only difference is `source`, so a founder's call and the system's
+ * are equally reconstructable afterwards. `dismiss` is the one that isn't an
+ * "apply": it closes the event as cancelled, because nothing happened.
+ */
+export async function resolveChangeEvent(
+  id: string,
+  resolution: ChangeResolution,
+  opts: { now?: Date; config?: PricingConfig; catalogue?: CatalogueProduct[] } = {},
+): Promise<ChangeEvent | null> {
+  const event = await getChange(id)
+  if (!event) return null
+  if (!OPEN_STATUSES.includes(event.status)) return event // already settled — don't redo it
+
+  if (resolution.type === 'dismiss') {
+    return updateChange(id, (e) => {
+      e.status = 'cancelled'
+      e.resolution = resolution
+      e.resolutionSource = 'founder'
+      e.resolutionDetail = 'Dismissed by a founder — no change made'
+      e.resolvedAt = (opts.now ?? new Date()).toISOString()
+    })
+  }
+
+  return applyChangeEvent(event, resolution, 'founder', opts)
+}
+
+export interface BulkResolveResult {
+  resolved: ChangeEvent[]
+  /** Events that couldn't be resolved, with why. */
+  skipped: { id: string; reason: string }[]
+}
+
+/**
+ * Resolve every open event for one product in a single action.
+ *
+ * When a popular SKU dies this is the difference between usable and unusable:
+ * the alternative is the same decision made forty times. Each member still goes
+ * through the full per-member path — their own policy, their own billing maths,
+ * their own email — so "bulk" is about the founder's effort, never about
+ * treating people as a batch.
+ */
+export async function bulkResolveByProduct(
+  productId: string,
+  resolution: ChangeResolution,
+  opts: { now?: Date; config?: PricingConfig; catalogue?: CatalogueProduct[] } = {},
+): Promise<BulkResolveResult> {
+  const open = (await listChanges({ status: OPEN_STATUSES })).filter((e) => e.productId === productId)
+  const catalogue = opts.catalogue ?? (await loadCatalogue())
+
+  const result: BulkResolveResult = { resolved: [], skipped: [] }
+  for (const event of open) {
+    // A member who asked us to take things off never gets a swap applied to
+    // them just because a founder chose one for the group.
+    if (resolution.type === 'substitute' && event.policy === 'remove') {
+      const removed = await applyChangeEvent(event, { type: 'remove' }, 'founder', { ...opts, catalogue })
+      if (removed) result.resolved.push(removed)
+      continue
+    }
+    const resolved = await resolveChangeEvent(event.id, resolution, { ...opts, catalogue })
+    if (resolved) result.resolved.push(resolved)
+    else result.skipped.push({ id: event.id, reason: 'Not found' })
+  }
+
+  await flushChangeNotifications()
+  return result
 }
 
 /**

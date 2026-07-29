@@ -12,6 +12,7 @@ import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pric
 import { effectiveNextDispatch } from '@/lib/recharge/mock'
 import { autoApplyAt, policyForLine, resolveIntendedAction } from './policy'
 import { applyResolution, removalWouldBreakPlan, type ApplyResult } from './apply'
+import { constraintsFor } from './safety'
 import type {
   BillingPreview,
   ChangeEvent,
@@ -126,6 +127,7 @@ export function createChangeEvent(input: CreateChangeEventInput): ChangeEvent {
     swapGroup: line.swapGroup,
 
     policy,
+    constraints: constraintsFor(sub),
     intendedAction: action,
     autoApplyAt: autoApplyAt(action, now, config),
 

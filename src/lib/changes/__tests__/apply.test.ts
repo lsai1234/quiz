@@ -156,12 +156,27 @@ describe('applyResolution dispatch', () => {
     ).toBe('whey-b')
   })
 
-  it('leaves the plan alone for hold / absorb / dismiss', () => {
-    for (const type of ['hold', 'absorb', 'dismiss'] as const) {
+  it('leaves the plan and the price alone for absorb / dismiss', () => {
+    for (const type of ['absorb', 'dismiss'] as const) {
       const result = applyResolution(sub, 'l1', { type }, opts)
       expect(result.rejected).toBe('no-subscription-change')
       expect(result.subscription).toBe(sub)
     }
+  })
+
+  it('skips the next box on a hold, banking the credit, without moving the monthly', () => {
+    // The honest answer to a temporary outage a founder expects to clear: keep
+    // the line, don't send this one, don't charge for what wasn't sent.
+    const result = applyResolution(sub, 'l1', { type: 'hold' }, opts)
+
+    expect(result.rejected).toBeUndefined()
+    expect(result.billingChange).toBeNull() // recurring price is untouched
+    expect(result.subscription.flatMonthly).toBe(sub.flatMonthly)
+    expect(result.subscription.lines.find((l) => l.id === 'l1')!.pendingCredit).toBe(30)
+  })
+
+  it('reports a hold on a line that has already gone', () => {
+    expect(applyResolution(sub, 'ghost', { type: 'hold' }, opts).rejected).toBe('line-not-found')
   })
 
   it('reports a missing replacement instead of silently doing nothing', () => {

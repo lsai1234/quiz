@@ -17,7 +17,7 @@
  * See docs/PRODUCT_CHANGES_SPEC.md.
  */
 import type { SwapGroup } from '@/lib/catalogue/types'
-import type { ChangePolicy } from '@/lib/recharge/types'
+import type { ChangePolicy, SafetyConstraints } from '@/lib/recharge/types'
 import type { PlanChangeImpact } from '@/lib/recharge/mock'
 
 export type { ChangePolicy }
@@ -158,6 +158,13 @@ export interface ChangeEvent {
 
   /** The member's policy for this line when the event was raised. */
   policy: ChangePolicy
+  /**
+   * The member's hard dietary/stimulant exclusions. Carried on the event so the
+   * founder queue can warn before someone overrides a suggestion with something
+   * that doesn't suit them — a founder may know better than us, but never by
+   * accident.
+   */
+  constraints?: SafetyConstraints
   /** What happens if nobody intervenes. */
   intendedAction: IntendedAction
   /** ISO — when `intendedAction` applies without founder input. */
