@@ -1,9 +1,75 @@
-import type { SwapGroup, StackSlot } from '@/lib/catalogue/types'
+import type { SwapGroup, StackSlot, DietaryTag } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 
 /** Subscription as the customer manages it — shaped like a Recharge subscription contract. */
 
 export type SubscriptionStatus = 'active' | 'paused' | 'cancelled'
+
+/**
+ * What the member wants done when a product on their plan becomes unavailable at
+ * the supplier. Deliberately TWO options, both of which resolve on their own:
+ *
+ *   • `auto-swap` — put the closest equivalent in its place and keep the plan
+ *     (and the flat monthly) whole.
+ *   • `remove`    — take it off the plan and lower the monthly from the next
+ *     billing cycle.
+ *
+ * There is no "ask me first". A third option that waits on a reply would park
+ * the subscription behind someone's inbox and hold up a delivery, so instead the
+ * member is always TOLD what happened and invited — never required — to change
+ * it in the hub, where they can already swap and add products.
+ *
+ * `remove` is also the universal safe fallback: whenever `auto-swap` can't be
+ * honoured (nothing in stock in the category, or nothing compatible with a
+ * declared allergy or diet) the line comes off rather than being held. Removing
+ * costs the member money they get back; shipping the wrong thing might not be
+ * undoable.
+ */
+export type ChangePolicy = 'auto-swap' | 'remove'
+
+/**
+ * The member's hard dietary/stimulant exclusions, snapshotted from their quiz
+ * answers at checkout. Held on the subscription so a replacement product can be
+ * safety-checked against the SAME rules that picked the original — without
+ * needing their quiz answers to still be readable or unchanged.
+ *
+ * Optional: subscriptions stored before this existed fall back to deriving the
+ * constraints from saved quiz answers (see `lib/changes/safety.ts`).
+ */
+export interface SafetyConstraints {
+  /** Tags a product must carry to be eligible, e.g. ['vegan', 'gluten-free']. */
+  dietaryTags: DietaryTag[]
+  /** True when the member excluded stimulants (caffeine). */
+  noStimulants: boolean
+}
+
+/**
+ * An audited change to what the member is billed. Appended to
+ * `MemberSubscription.billingHistory` every time the recurring amount moves, so
+ * the hub can show a plain history and nothing about a member's price can change
+ * without a record of what, why and when.
+ */
+export interface BillingChange {
+  id: string
+  /** Why the money moved — a supplier-driven change, or the member's own edit. */
+  reason: 'out-of-stock' | 'discontinued' | 'price-increase' | 'price-decrease' | 'member-edit'
+  /** The line this concerned; null for plan-wide changes. */
+  lineId: string | null
+  previousMonthly: number
+  newMonthly: number
+  /**
+   * A one-off credit (positive) banked against the next payment — e.g. the value
+   * of a removed line the member had already paid towards but not received.
+   */
+  oneOffCredit?: number
+  /** The billing cycle this takes effect from (ISO). Never retroactive. */
+  effectiveFrom: string
+  /** When the member was given notice, for changes that require it (ISO). */
+  noticeSentAt?: string
+  /** The `ChangeEvent` that caused this, when it wasn't a member edit. */
+  changeEventId?: string
+  createdAt: string
+}
 
 export interface MemberSubscriptionLine {
   /** Stable line id (Recharge subscription line id when live). */
@@ -48,8 +114,20 @@ export interface MemberSubscriptionLine {
    * in-stock product from the same `swapGroup`; `false` → we hold/skip and
    * contact them. Defaults to allowed (see the stock-alerts journey). Optional
    * so existing stored subscriptions read back unchanged.
+   *
+   * @deprecated Superseded by `changePolicy`, which replaces the "hold and
+   * contact them" branch with "take it off and lower the bill". Kept in sync by
+   * the policy writers so older readers and `PATCH /api/hub/substitution` keep
+   * working; read it through `policyForLine()` rather than directly.
    */
   allowSubstitution?: boolean
+  /**
+   * What to do with this line if its product becomes unavailable. Falls back to
+   * `allowSubstitution`, then the plan's `defaultChangePolicy`, then `auto-swap`
+   * — see `policyForLine()` in `lib/changes/policy.ts`, which is the only place
+   * that precedence is encoded.
+   */
+  changePolicy?: ChangePolicy
 }
 
 export interface MemberSubscription {
@@ -101,6 +179,16 @@ export interface MemberSubscription {
    * one-offs — so this only changes WHAT ships WHEN, never the recurring price.
    */
   deliveryOverrides?: Record<string, DeliveryOverride>
+  /**
+   * The member's choice at checkout for what happens when a product becomes
+   * unavailable. Applied to lines added later, and the fallback for any line
+   * without its own `changePolicy`.
+   */
+  defaultChangePolicy?: ChangePolicy
+  /** Hard dietary/stimulant exclusions, snapshotted at checkout. */
+  safetyConstraints?: SafetyConstraints
+  /** Audit trail of every move in the recurring amount, newest last. */
+  billingHistory?: BillingChange[]
   /** Stripe subscription id, set once the member checks out via Stripe. */
   stripeSubscriptionId?: string
   /** Stripe customer id — used to open the billing portal. */

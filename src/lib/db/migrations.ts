@@ -107,6 +107,38 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX stock_exceptions_status ON stock_exceptions(status);
   CREATE INDEX stock_exceptions_user_id ON stock_exceptions(user_id);
   `,
+  // v4 — `subscription_changes`: the unified product-change queue that
+  // supersedes `stock_exceptions`. One row per affected subscription line,
+  // covering unavailability (out of stock / discontinued) AND supplier price
+  // moves, each carrying the action the system will take and when it lands
+  // without founder input (`auto_apply_at`). See docs/PRODUCT_CHANGES_SPEC.md.
+  //
+  // Deliberately NOT back-filled from `stock_exceptions`. Change detection is
+  // idempotent on a derived id, so any still-open exception is simply re-raised
+  // — richer than anything a cross-dialect JSON back-fill could reconstruct,
+  // and without the migration-time SQL that would need. v3's table is left in
+  // place, unread.
+  `
+  CREATE TABLE subscription_changes (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT REFERENCES users(id) ON DELETE CASCADE,
+    subscription_id TEXT,
+    line_id         TEXT,
+    product_id      TEXT NOT NULL,
+    sku             TEXT,
+    kind            TEXT NOT NULL,
+    status          TEXT NOT NULL,
+    data            TEXT NOT NULL,
+    auto_apply_at   TEXT,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    resolved_at     TEXT
+  );
+  CREATE INDEX subscription_changes_status ON subscription_changes(status);
+  CREATE INDEX subscription_changes_user_id ON subscription_changes(user_id);
+  CREATE INDEX subscription_changes_kind ON subscription_changes(kind);
+  CREATE INDEX subscription_changes_auto_apply ON subscription_changes(auto_apply_at);
+  `,
 ]
 
 /**

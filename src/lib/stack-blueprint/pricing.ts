@@ -93,6 +93,35 @@ export const PRICING_CONFIG = {
    *  bundle selector; 0 disables the free-delivery messaging entirely. */
   freeDeliveryThreshold: 50,
 
+  // ── Product changes (unavailability + supplier price moves) ──
+  // See docs/PRODUCT_CHANGES_SPEC.md. Consumed by lib/changes/*.
+  /** What happens by default when a product becomes unavailable. The member
+   *  chooses at checkout; this is the option pre-selected for them. */
+  defaultChangePolicy: 'auto-swap' as 'auto-swap' | 'remove',
+  /**
+   * How far a replacement's unit price may sit from the original's before it
+   * stops counting as "the closest equivalent" (0–1). A swap never RAISES the
+   * member's monthly (the price is capped at what they already pay), so this
+   * bounds what we might absorb on their behalf.
+   */
+  substitutionPriceTolerancePct: 0.15,
+  /** A supplier price move beyond this (0–1) raises a price-change event. */
+  priceChangeThresholdPct: 0.02,
+  /**
+   * Days of notice before an increased price may bill. UK subscription rules
+   * require clear advance notice and a free exit — see docs/PRODUCT_CHANGES_SPEC.md.
+   */
+  priceChangeNoticeDays: 30,
+  /** Consecutive supplier syncs a SKU must be absent for before it counts as
+   *  discontinued rather than temporarily out of stock. */
+  discontinuedAfterMissedSyncs: 3,
+  /**
+   * How long a founder gets to override a change before the system applies the
+   * member's own policy anyway. This is a review window, never a blocking gate:
+   * an untouched event still resolves. 0 = apply immediately.
+   */
+  founderReviewHours: 24,
+
   /** First-cycle intro offer. */
   introOffer: {
     /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it.
