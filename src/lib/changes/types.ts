@@ -180,6 +180,13 @@ export interface ChangeEvent {
   /** Set when applying failed (e.g. Stripe rejected the new amount). Keeps the
    *  event visible rather than silently half-applied. */
   error?: string | null
+  /**
+   * When the member was told (ISO). An applied change with no `notifiedAt` is
+   * something we did to someone's plan without saying so — the outbox sweep
+   * (P5) treats that as work outstanding, and a failed send leaves it null
+   * rather than silently marking the job done.
+   */
+  notifiedAt?: string | null
 
   createdAt: string
   updatedAt: string

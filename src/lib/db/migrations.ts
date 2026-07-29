@@ -157,6 +157,20 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX consents_user_id ON consents(user_id);
   CREATE INDEX consents_terms_version ON consents(terms_version);
   `,
+  // v6 — `supplier_snapshots`: what the supplier's feed said about each SKU on
+  // the last sync. This is the memory that makes change DETECTION possible at
+  // all: without a previous state you can see that a SKU is missing today but
+  // not that it has been missing for three syncs, and you can see today's price
+  // but not that it moved. One row per SKU, overwritten each sync.
+  `
+  CREATE TABLE supplier_snapshots (
+    sku          TEXT PRIMARY KEY,
+    missed_syncs TEXT NOT NULL,
+    data         TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );
+  CREATE INDEX supplier_snapshots_updated_at ON supplier_snapshots(updated_at);
+  `,
 ]
 
 /**

@@ -13,4 +13,6 @@ export * from './safety'
 export * from './policy'
 export * from './apply'
 export * from './event'
-// `repo.ts` is server-only (touches the database) — import it directly.
+export * from './detect'
+// `repo.ts`, `snapshots.ts` and `service.ts` touch the database or the supplier
+// — server-only, so import those directly rather than through this barrel.
