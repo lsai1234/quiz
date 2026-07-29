@@ -64,8 +64,10 @@ export interface ChangeDetectionResult {
   cancelled: ChangeEvent[]
   /** Events whose intended action was applied by this run. */
   applied: ChangeEvent[]
-  /** Member emails actually sent by this run. */
+  /** Member emails actually sent by this run (0 when sending is manual). */
   notified: number
+  /** Emails written and waiting for a person to send them. */
+  awaitingSend: number
   /** True when this run only established a baseline. */
   baselineOnly: boolean
   dryRun: boolean
@@ -95,6 +97,7 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
     cancelled: [],
     applied: [],
     notified: 0,
+    awaitingSend: 0,
     baselineOnly,
     dryRun: opts.dryRun ?? false,
   }
@@ -182,8 +185,11 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
     result.cancelled.push(...(await cancelRecovered(diff.recovered, catalogue)))
     result.applied = await applyDueChanges({ now, config, catalogue })
     // Send what applying just queued, so a run leaves nobody wondering why
-    // their box changed.
-    result.notified = (await flushChangeNotifications()).sent
+    // their box changed. Manual mode sends nothing and reports the backlog
+    // instead — the founder is the delivery mechanism there.
+    const outbox = await flushChangeNotifications()
+    result.notified = outbox.sent
+    result.awaitingSend = outbox.awaitingSend
   }
 
   return result
@@ -393,7 +399,7 @@ export async function schedulePassOn(
   productId: string,
   passOnPct: number,
   opts: { now?: Date; config?: PricingConfig; catalogue?: CatalogueProduct[] } = {},
-): Promise<{ scheduled: ChangeEvent[]; notified: number }> {
+): Promise<{ scheduled: ChangeEvent[]; notified: number; awaitingSend: number }> {
   const config = opts.config ?? getPricingConfig()
   const now = opts.now ?? new Date()
   const catalogue = opts.catalogue ?? (await loadCatalogue())
@@ -402,7 +408,7 @@ export async function schedulePassOn(
   const events = (await listChanges({ status: OPEN_STATUSES, kind: PRICE_KINDS })).filter(
     (e) => e.productId === productId && e.price && isUndecided(e),
   )
-  if (!product || events.length === 0) return { scheduled: [], notified: 0 }
+  if (!product || events.length === 0) return { scheduled: [], notified: 0, awaitingSend: 0 }
 
   const subscriptions = new Map<string, MemberSubscription>()
   for (const event of events) {
@@ -434,8 +440,8 @@ export async function schedulePassOn(
     await queuePriceNotice(updated, member, effectiveFrom, config)
   }
 
-  const { sent } = await flushChangeNotifications()
-  return { scheduled, notified: sent }
+  const { sent, awaitingSend } = await flushChangeNotifications()
+  return { scheduled, notified: sent, awaitingSend }
 }
 
 /**
@@ -616,9 +622,17 @@ async function queueMemberNotification(
 /**
  * Send what's queued, and record on each change that its member has actually
  * been told. Called at the end of a detection run and by the daily job.
+ *
+ * In manual mode (the default) this sends nothing — the emails wait in the hub
+ * for a person. `awaitingSend` is what the founder needs to see: how many
+ * members are owed a message right now.
  */
-export async function flushChangeNotifications(): Promise<{ sent: number; failed: number }> {
-  const { flushOutbox } = await import('@/lib/notify/outbox')
+export async function flushChangeNotifications(): Promise<{
+  sent: number
+  failed: number
+  awaitingSend: number
+}> {
+  const { flushOutbox, listNotifications } = await import('@/lib/notify/outbox')
   const result = await flushOutbox({
     onSent: async (notification) => {
       if (!notification.changeEventId) return
@@ -627,7 +641,29 @@ export async function flushChangeNotifications(): Promise<{ sent: number; failed
       })
     },
   })
-  return { sent: result.sent.length, failed: result.failed.length }
+
+  const waiting = await listNotifications({ status: 'queued', limit: 200 })
+  return { sent: result.sent.length, failed: result.failed.length, awaitingSend: waiting.length }
+}
+
+/**
+ * A founder ticking an email off as sent by hand.
+ *
+ * Marks the outbox row AND stamps `notifiedAt` on the change it concerns, so the
+ * two never disagree — a member's record shouldn't say "we haven't told them"
+ * once someone has.
+ */
+export async function markNotificationSentManually(notificationId: string) {
+  const { markSentManually } = await import('@/lib/notify/outbox')
+  const sent = await markSentManually(notificationId)
+  if (!sent) return null
+
+  if (sent.changeEventId) {
+    await updateChange(sent.changeEventId, (e) => {
+      e.notifiedAt = sent.sentAt ?? new Date().toISOString()
+    })
+  }
+  return sent
 }
 
 function describeResolution(

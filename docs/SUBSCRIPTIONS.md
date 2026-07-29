@@ -493,9 +493,16 @@ opens the swap flow on that line, `/hub?add=<swapGroup>` opens the add sheet
 with an "in place of what you lost" section. Those links are the mechanism by
 which a member takes control back, since nothing asks them to.
 
-**Mock is the default and is not a stub**: emails are rendered and recorded
-without sending, so the whole journey is demoable with no API key and
-`/portal/emails` shows exactly what members are being told.
+**Sending is manual by default, and that is a real workflow rather than a stub.**
+Every email is written in full and listed in `/portal/emails` for a founder to
+copy into their own mail client and tick off. No provider, no API key, no domain
+verification — and the promise that a member is told still holds. A change that
+has been applied but not yet sent shows `notifiedAt: null` and appears in the
+member's record as outstanding, so the debt is visible rather than assumed away.
+
+`NOTIFY_SOURCE=resend` plus a key switches to automatic sending of the same
+emails, with nothing else to change. A forced `resend` without a key falls back
+to **manual**, never to silently dropping the message.
 
 ### The Founders Hub
 
@@ -507,7 +514,11 @@ without sending, so the whole journey is demoable with no API key and
   The detail view answers "why did my plan change and why didn't anyone tell me"
   without a database console: lines and policies, billing history, every email
   sent, and their consent record.
-- `/portal/emails` — the outbox, with a retry for anything that failed.
+- `/portal/emails` — **To send** and **Sent**. Each waiting email shows its full
+  body with copy buttons for the address, subject and message, a "copy all" for
+  the whole batch, and a Mark as sent tick that also closes the loop on the
+  member's change record. `sentManually` keeps the audit honest: "a person says
+  they sent this" and "a provider confirmed delivery" are different claims.
 
 Supersedes the old `/portal/stock-alerts` and `lib/stock`, both removed.
 

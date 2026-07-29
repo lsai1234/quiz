@@ -23,6 +23,8 @@ export interface DailyRunResult {
   applied?: number
   notified?: number
   notifyFailed?: number
+  /** Emails written and waiting for a person to send (manual mode). */
+  awaitingSend?: number
   note?: string
 }
 
@@ -71,6 +73,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     applied: detection.applied.length + dueNow.length,
     notified: detection.notified + outbox.sent,
     notifyFailed: outbox.failed,
+    awaitingSend: outbox.awaitingSend,
   }
 }
 

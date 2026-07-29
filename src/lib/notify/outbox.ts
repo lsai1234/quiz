@@ -16,7 +16,7 @@
  */
 import { randomUUID } from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
-import { getNotifier } from './index'
+import { getNotifier, isManualMode } from './index'
 import type { Notification, NotificationStatus, QueueInput, TemplateId } from './types'
 
 interface Row {
@@ -147,15 +147,22 @@ export interface FlushResult {
 /**
  * Send everything queued.
  *
- * A failure marks the row `failed` with the reason and stops there — it does
- * NOT roll anything back. The member's plan has already changed; an email that
- * didn't go out is a delivery problem to retry, not a reason to undo a billing
- * decision. `onSent` lets the caller record that the member has actually been
- * told (the change domain sets `notifiedAt` from it).
+ * **In manual mode this deliberately does nothing.** The queue IS the workflow:
+ * emails wait in the Founders Hub for a person to copy out and tick off, so
+ * "flushing" them would quietly mark unsent messages as delivered — the one
+ * thing that would make the audit trail a lie.
+ *
+ * With a provider configured, a failure marks the row `failed` with the reason
+ * and stops there — it does NOT roll anything back. The member's plan has
+ * already changed; an email that didn't go out is a delivery problem to retry,
+ * not a reason to undo a billing decision. `onSent` lets the caller record that
+ * the member has actually been told (the change domain sets `notifiedAt`).
  */
 export async function flushOutbox(
   opts: { limit?: number; onSent?: (notification: Notification) => Promise<void> } = {},
 ): Promise<FlushResult> {
+  if (isManualMode()) return { sent: [], failed: [] }
+
   const queued = await listNotifications({ status: 'queued', limit: opts.limit ?? 100 })
   if (queued.length === 0) return { sent: [], failed: [] }
 
@@ -189,6 +196,35 @@ export async function flushOutbox(
   }
 
   return result
+}
+
+/**
+ * Tick an email off as sent by hand.
+ *
+ * The founder has copied it into their own mail client and sent it; this records
+ * that so it leaves the to-send list and the member's change shows as notified.
+ * `sentManually` keeps it honest — nobody can later mistake "a person said they
+ * sent this" for "a provider confirmed delivery".
+ *
+ * Already-sent notifications are returned unchanged rather than re-stamped, so
+ * a double-click can't rewrite when someone was told.
+ */
+export async function markSentManually(id: string): Promise<Notification | null> {
+  const notification = await getNotification(id)
+  if (!notification) return null
+  if (notification.status === 'sent') return notification
+
+  const sent: Notification = {
+    ...notification,
+    status: 'sent',
+    sentManually: true,
+    providerId: null,
+    error: null,
+    sentAt: now(),
+    updatedAt: now(),
+  }
+  await write(sent)
+  return sent
 }
 
 /** Put a failed notification back in the queue (the hub's resend button). */

@@ -72,7 +72,11 @@ export function ActionsPage() {
       })
       if (res.ok) {
         const d = await res.json()
-        setSummary(d.notified > 0 ? 'Done — the member has been emailed.' : 'Done.')
+        setSummary(
+          d.notified > 0
+            ? 'Done — the member has been emailed.'
+            : 'Done — their email is written and waiting in Emails for you to send.',
+        )
         load()
       }
       setBusyId(null)
@@ -90,7 +94,9 @@ export function ActionsPage() {
       })
       if (res.ok) {
         const d = await res.json()
-        setSummary(`Resolved for ${d.resolved} member${d.resolved === 1 ? '' : 's'} — all emailed.`)
+        setSummary(
+          `Resolved for ${d.resolved} member${d.resolved === 1 ? '' : 's'} — their emails are waiting in Emails.`,
+        )
         load()
       }
       setBusyId(null)

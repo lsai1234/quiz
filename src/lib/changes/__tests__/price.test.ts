@@ -216,7 +216,7 @@ describe('passing it on', () => {
     const member = await seedMember('passon@example.com')
     await run([member])
 
-    const { scheduled, notified } = await schedulePassOn('whey-a', 1, {
+    const { scheduled, notified, awaitingSend } = await schedulePassOn('whey-a', 1, {
       now: NOW, config: getPricingConfig(), catalogue: CATALOGUE,
     })
 
@@ -227,23 +227,25 @@ describe('passing it on', () => {
     noticeEnds.setDate(noticeEnds.getDate() + 30)
     expect(new Date(scheduled[0].autoApplyAt).getTime()).toBeGreaterThanOrEqual(noticeEnds.getTime())
 
-    // Told now; charged later. That gap is the entire point.
-    expect(notified).toBe(1)
+    // The notice is written now and charged later — that gap is the entire
+    // point. Sending is manual by default, so it's waiting rather than gone.
+    expect(notified).toBe(0)
+    expect(awaitingSend).toBe(1)
     expect((await getSubscription(member.userId))!.flatMonthly).toBe(60)
   })
 
-  it('sends a notice that states old, new, when, and the free way out', async () => {
+  it('writes a notice that states old, new, when, and the free way out', async () => {
     setPricingOverrides({ priceChangeNoticeDays: 30 })
     const member = await seedMember('passon-notice@example.com')
     await run([member])
     await schedulePassOn('whey-a', 1, { now: NOW, config: getPricingConfig(), catalogue: CATALOGUE })
 
-    const sent = await listNotifications({ userId: member.userId })
-    expect(sent[0].template).toBe('price-change-notice')
-    expect(sent[0].rendered.text).toContain('£60.00')
-    expect(sent[0].rendered.text).toContain('£66.00') // +20% on the £30 line
-    expect(sent[0].rendered.text).toMatch(/cancel free of charge/i)
-    expect(sent[0].rendered.text).toMatch(/inside a minimum term/i)
+    const notices = await listNotifications({ userId: member.userId })
+    expect(notices[0].template).toBe('price-change-notice')
+    expect(notices[0].rendered.text).toContain('£60.00')
+    expect(notices[0].rendered.text).toContain('£66.00') // +20% on the £30 line
+    expect(notices[0].rendered.text).toMatch(/cancel free of charge/i)
+    expect(notices[0].rendered.text).toMatch(/inside a minimum term/i)
   })
 
   it('applies at the effective date, through the same path as everything else', async () => {
@@ -279,7 +281,8 @@ describe('passing it on', () => {
   })
 
   it('does nothing for a product with no open price events', async () => {
-    expect(await schedulePassOn('nothing-here', 1, { catalogue: CATALOGUE })).toEqual({ scheduled: [], notified: 0 })
+    expect(await schedulePassOn('nothing-here', 1, { catalogue: CATALOGUE }))
+      .toEqual({ scheduled: [], notified: 0, awaitingSend: 0 })
   })
 })
 
@@ -346,7 +349,7 @@ describe('a decision already made', () => {
 
     // A second pass-on, or an absorb, finds nothing left to decide.
     expect(await schedulePassOn('whey-a', 1, { now: NOW, config: getPricingConfig(), catalogue: CATALOGUE }))
-      .toEqual({ scheduled: [], notified: 0 })
+      .toEqual({ scheduled: [], notified: 0, awaitingSend: 0 })
     expect(await absorbPriceChange('whey-a', { now: NOW })).toEqual([])
   })
 })

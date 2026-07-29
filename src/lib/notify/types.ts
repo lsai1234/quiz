@@ -45,8 +45,14 @@ export interface Notification {
   status: NotificationStatus
   attempts: number
   rendered: RenderedEmail
-  /** Provider message id, once sent. */
+  /** Provider message id, once sent. Null when a person sent it themselves. */
   providerId?: string | null
+  /**
+   * Ticked off by a founder who sent it from their own mail client, rather than
+   * delivered by a provider. Worth distinguishing: "we know this was delivered"
+   * and "someone said they sent it" are different claims.
+   */
+  sentManually?: boolean
   /** Last failure, kept so the hub can show why rather than just "failed". */
   error?: string | null
   /** The change this concerns, for cross-referencing the audit trail. */

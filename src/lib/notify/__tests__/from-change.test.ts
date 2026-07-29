@@ -67,28 +67,39 @@ const run = (feed: FeedEntry[], subs: { userId: string; subscription: MemberSubs
   })
 
 describe('a swap reaches the member', () => {
-  it('sends a substitution email naming both products, with the allergen line', async () => {
+  it('writes a substitution email naming both products, with the allergen line', async () => {
     const member = await seedMember('swap-notify@example.com', { defaultChangePolicy: 'auto-swap' })
     const result = await run(OUTAGE, [member])
 
-    expect(result.notified).toBeGreaterThan(0)
+    // Sending is a person's job by default, so the run leaves it waiting.
+    expect(result.notified).toBe(0)
+    expect(result.awaitingSend).toBeGreaterThan(0)
 
     const id = changeEventId(member.userId, 'l1', 'out-of-stock')
-    const sent = await getByDedupeKey(dedupeKeyFor(id, 'product-substituted'))
+    const queued = await getByDedupeKey(dedupeKeyFor(id, 'product-substituted'))
 
-    expect(sent).toMatchObject({ status: 'sent', email: 'swap-notify@example.com' })
-    expect(sent!.rendered.text).toContain('Gold Standard Whey')
-    expect(sent!.rendered.text).toContain('Impact Whey Isolate')
-    expect(sent!.rendered.text).toContain(ALLERGEN_CHECK_SENTENCE)
+    expect(queued).toMatchObject({ status: 'queued', email: 'swap-notify@example.com' })
+    expect(queued!.rendered.text).toContain('Gold Standard Whey')
+    expect(queued!.rendered.text).toContain('Impact Whey Isolate')
+    expect(queued!.rendered.text).toContain(ALLERGEN_CHECK_SENTENCE)
   })
 
-  it('marks the change as notified, closing the loop', async () => {
+  it('shows the member as not-yet-told until someone actually sends it', async () => {
     const member = await seedMember('notified@example.com', { defaultChangePolicy: 'auto-swap' })
     await run(OUTAGE, [member])
 
-    const event = await getChange(changeEventId(member.userId, 'l1', 'out-of-stock'))
-    expect(event!.status).toBe('applied')
-    expect(event!.notifiedAt).not.toBeNull()
+    const id = changeEventId(member.userId, 'l1', 'out-of-stock')
+    const before = await getChange(id)
+    expect(before!.status).toBe('applied')
+    // The honest state: we changed their plan and haven't told them yet.
+    expect(before!.notifiedAt).toBeNull()
+
+    const { markNotificationSentManually } = await import('@/lib/changes/service')
+    const queued = await getByDedupeKey(dedupeKeyFor(id, 'product-substituted'))
+    await markNotificationSentManually(queued!.id)
+
+    const after = await getChange(id)
+    expect(after!.notifiedAt).not.toBeNull()
   })
 })
 
@@ -98,11 +109,11 @@ describe('a removal reaches the member', () => {
     await run(OUTAGE, [member])
 
     const id = changeEventId(member.userId, 'l1', 'out-of-stock')
-    const sent = await getByDedupeKey(dedupeKeyFor(id, 'product-removed'))
+    const queued = await getByDedupeKey(dedupeKeyFor(id, 'product-removed'))
 
-    expect(sent!.status).toBe('sent')
-    expect(sent!.rendered.text).toContain('£30.00') // what they now pay
-    expect(sent!.rendered.text).toContain('/hub?add=protein-whey')
+    expect(queued!.status).toBe('queued')
+    expect(queued!.rendered.text).toContain('£30.00') // what they now pay
+    expect(queued!.rendered.text).toContain('/hub?add=protein-whey')
   })
 
   it('tells a member with dietary needs the honest reason a swap did not happen', async () => {
@@ -118,9 +129,9 @@ describe('a removal reaches the member', () => {
     await flushChangeNotifications()
 
     const id = changeEventId(member.userId, 'l1', 'out-of-stock')
-    const sent = await getByDedupeKey(dedupeKeyFor(id, 'product-removed'))
+    const queued = await getByDedupeKey(dedupeKeyFor(id, 'product-removed'))
 
-    expect(sent!.rendered.text).toMatch(/dietary requirements you told us about/i)
+    expect(queued!.rendered.text).toMatch(/dietary requirements you told us about/i)
   })
 })
 
@@ -148,7 +159,7 @@ describe('what does not get an email', () => {
     expect(notificationForEvent(event, { baseUrl: 'https://x.dev', subscription: sub })).toBeNull()
   })
 
-  it('never emails twice about one change, however often detection runs', async () => {
+  it('never writes two emails about one change, however often detection runs', async () => {
     const member = await seedMember('once@example.com', { defaultChangePolicy: 'remove' })
     await run(OUTAGE, [member])
     await run(OUTAGE, [{ userId: member.userId, subscription: (await getSubscription(member.userId))! }])

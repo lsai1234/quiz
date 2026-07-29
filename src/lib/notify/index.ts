@@ -1,48 +1,67 @@
 /**
  * Notification resolver
  * ─────────────────────
- * Single decision point for whether member emails go out through a real
- * provider or stay in the outbox. Deliberately the same shape as the supplier
- * and payments resolvers, so there is one obvious pattern for "mock vs live".
+ * Single decision point for how member emails leave the building. Deliberately
+ * the same shape as the supplier and payments resolvers, so there is one obvious
+ * pattern for "manual vs live".
  *
  * Resolution order (highest priority first):
- *   1. Explicit env — NOTIFY_SOURCE = mock | resend | auto
- *   2. Default      — MOCK
+ *   1. Explicit env — NOTIFY_SOURCE = manual | mock | resend | auto
+ *   2. Default      — MANUAL
  *
- * Mock is the default ON PURPOSE, and mock here is not a stub: the email is
- * still rendered and still recorded in the outbox, it just isn't handed to a
- * mail provider. The whole journey — detect, apply, queue, render, show what
- * went out — is exercisable with no API key, and going live is one env var.
+ * **Manual is the default, and it is a real workflow rather than a stub.** The
+ * email is written and stored exactly as it would be sent; it simply waits in
+ * the Founders Hub for a human to copy it into their own mail client and tick
+ * it off. No mail provider, no API key, no domain verification — and the
+ * business still keeps its promise that a member is told when their plan
+ * changes.
+ *
+ * That matters for a small operation: a handful of changes a week is a two
+ * minute job, and doing it by hand means you read what your customers read.
+ * When the volume stops being sensible, `NOTIFY_SOURCE=resend` plus a key sends
+ * the same emails automatically with nothing else to change.
+ *
+ * `mock` is the third mode: send-and-forget, used by tests that need the
+ * delivered path without a provider.
  *
  * Server-only.
  */
 import type { NotificationProvider } from './types'
 
-export type NotificationSource = 'mock' | 'resend'
-export type NotificationMode = 'auto' | 'mock' | 'resend'
+export type NotificationSource = 'manual' | 'mock' | 'resend'
+export type NotificationMode = 'auto' | 'manual' | 'mock' | 'resend'
 
 export function hasResendCredentials(): boolean {
   return Boolean(process.env.RESEND_API_KEY)
 }
 
 export function getNotificationMode(): NotificationMode {
-  const raw = (process.env.NOTIFY_SOURCE ?? 'mock').toString().trim().toLowerCase()
+  const raw = (process.env.NOTIFY_SOURCE ?? 'manual').toString().trim().toLowerCase()
   if (raw === 'resend') return 'resend'
   if (raw === 'auto') return 'auto'
-  return 'mock'
+  if (raw === 'mock') return 'mock'
+  return 'manual'
 }
 
 /**
- * The provider to use right now. A forced `resend` without an API key still
- * falls back to mock — a missing key must never mean a member's plan changed
- * and the send threw; the email stays queued and visible instead.
+ * How email leaves right now. A forced `resend` without an API key falls back to
+ * MANUAL rather than silently dropping anything — a missing key must never mean
+ * a member's plan changed and nobody told them. The email stays in the queue
+ * where a human can see it and send it.
  */
 export function getNotificationSource(): NotificationSource {
   const mode = getNotificationMode()
+  if (mode === 'manual') return 'manual'
   if (mode === 'mock') return 'mock'
-  return hasResendCredentials() ? 'resend' : 'mock'
+  return hasResendCredentials() ? 'resend' : 'manual'
 }
 
+/** True when emails wait for a person rather than a provider. */
+export function isManualMode(): boolean {
+  return getNotificationSource() === 'manual'
+}
+
+/** Throws in manual mode — nothing should be asking for a provider there. */
 export async function getNotifier(): Promise<NotificationProvider> {
   if (getNotificationSource() === 'resend') {
     const { createResendProvider } = await import('./providers/resend')

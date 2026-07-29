@@ -104,10 +104,11 @@ describe('a routine outage resolves itself', () => {
 
     const event = await getChange(changeEventId(member.userId, 'l1', 'out-of-stock'))
     expect(event).toMatchObject({ status: 'applied', resolutionSource: 'system' })
-    // A run doesn't finish until the member has been told — an applied change
-    // nobody was told about is the one outcome this domain must not produce.
-    expect(event!.notifiedAt).not.toBeNull()
-    expect(result.notified).toBe(1)
+    // Their email is written and waiting for a founder to send. Until it goes,
+    // the record says so — an applied change nobody has been told about is a
+    // debt, and the hub shows it as one.
+    expect(event!.notifiedAt).toBeNull()
+    expect(result.awaitingSend).toBe(1)
   })
 
   it('removes and lowers the bill for a member who asked for that', async () => {
@@ -280,5 +281,38 @@ describe('dry run', () => {
     expect(result.applied).toEqual([])
     expect(await getChange(changeEventId(member.userId, 'l1', 'out-of-stock'))).toBeNull()
     expect((await getSubscription(member.userId))!.lines).toHaveLength(2)
+  })
+})
+
+describe('telling the member by hand (the default)', () => {
+  it('writes the email, leaves it waiting, and closes the loop when ticked off', async () => {
+    // No mail provider: the founder is the delivery mechanism. What matters is
+    // that the debt is visible until someone actually sends it.
+    const member = await seedMember('byhand@example.com', { defaultChangePolicy: 'auto-swap' })
+    const result = await run([entry('SKU-A', { inStock: false, stock: 0 }), entry('SKU-B'), entry('SKU-OTHER')], [member])
+
+    expect(result.notified).toBe(0)
+    expect(result.awaitingSend).toBeGreaterThan(0)
+
+    const { listNotifications } = await import('@/lib/notify/outbox')
+    const { markNotificationSentManually } = await import('@/lib/changes/service')
+    const waiting = (await listNotifications({ userId: member.userId })).filter((n) => n.status === 'queued')
+    expect(waiting).toHaveLength(1)
+
+    const eventId = changeEventId(member.userId, 'l1', 'out-of-stock')
+    expect((await getChange(eventId))!.notifiedAt).toBeNull()
+
+    await markNotificationSentManually(waiting[0].id)
+
+    // Both records move together — a member's page must never claim they
+    // haven't been told once someone has.
+    expect((await getChange(eventId))!.notifiedAt).not.toBeNull()
+    const after = await listNotifications({ userId: member.userId })
+    expect(after[0]).toMatchObject({ status: 'sent', sentManually: true })
+  })
+
+  it('reports nothing for an id that is not there', async () => {
+    const { markNotificationSentManually } = await import('@/lib/changes/service')
+    expect(await markNotificationSentManually('ntf_missing')).toBeNull()
   })
 })

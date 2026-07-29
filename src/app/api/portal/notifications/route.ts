@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { listNotifications, retryNotification } from '@/lib/notify/outbox'
-import { flushChangeNotifications } from '@/lib/changes/service'
+import { flushChangeNotifications, markNotificationSentManually } from '@/lib/changes/service'
 import { getNotificationSource } from '@/lib/notify'
 import type { NotificationStatus } from '@/lib/notify/types'
 
@@ -10,12 +10,16 @@ export const dynamic = 'force-dynamic'
 /**
  * The member-email outbox.
  *
- * In mock mode nothing leaves the building, but the rows are real and carry the
- * actual subject and body — so this is how a founder checks what members are
- * being told, with or without a mail provider configured.
+ * By default nothing is sent automatically: emails are written here and wait for
+ * a founder to copy them into their own mail client and tick them off. This
+ * endpoint serves that list and takes the tick.
  *
  * GET  — recent notifications; `?status=queued|sent|failed` narrows it.
- * POST — `{ retry: id }` requeues a failure, otherwise flushes the queue.
+ * POST — `{ markSent: id }` ticks one off as sent by hand.
+ *        `{ retry: id }`    requeues a failure (provider mode).
+ *        `{}`               flushes the queue (provider mode only; a no-op when
+ *                           sending is manual, so it can't mark unsent email as
+ *                           delivered).
  */
 export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -26,6 +30,7 @@ export async function GET(req: Request) {
   return NextResponse.json({
     provider: getNotificationSource(),
     count: notifications.length,
+    awaitingSend: notifications.filter((n) => n.status === 'queued').length,
     failed: notifications.filter((n) => n.status === 'failed').length,
     notifications,
   })
@@ -34,11 +39,17 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { retry?: string } = {}
+  let body: { markSent?: string; retry?: string } = {}
   try {
     body = await req.json()
   } catch {
     /* no body — just flush */
+  }
+
+  if (body.markSent) {
+    const sent = await markNotificationSentManually(body.markSent)
+    if (!sent) return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
+    return NextResponse.json({ ok: true, notification: sent })
   }
 
   if (body.retry) {
@@ -46,6 +57,6 @@ export async function POST(req: Request) {
     if (!requeued) return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
   }
 
-  const { sent, failed } = await flushChangeNotifications()
-  return NextResponse.json({ ok: true, sent, failed })
+  const { sent, failed, awaitingSend } = await flushChangeNotifications()
+  return NextResponse.json({ ok: true, sent, failed, awaitingSend })
 }
