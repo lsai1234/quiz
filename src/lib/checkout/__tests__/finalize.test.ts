@@ -7,6 +7,7 @@ import { finalizeCheckout, claimIntroDiscount } from '../finalize'
 import type { CheckoutPayload } from '../types'
 import { createUser } from '@/lib/db/users'
 import { getSubscription, getQuiz } from '@/lib/db/hub-data'
+import { readIntroLedger, ledgerTotals } from '@/lib/stack-blueprint/intro-allocation'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
 
@@ -68,6 +69,27 @@ describe('finalizeCheckout', () => {
     const stored = await getSubscription(user.id)
     expect(stored?.introDiscountRate).toBe(0)
     expect(stored?.firstMonth).toBe(42) // billed in full
+  })
+
+  it('banks the claim against the allocation ledger', async () => {
+    const before = ledgerTotals(await readIntroLedger())
+    const user = await createUser({ email: 'ledger@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription: { ...subscription, introDiscountRate: 0.25 },
+      lines: [],
+    })
+
+    const after = ledgerTotals(await readIntroLedger())
+    expect(after.count).toBe(before.count + 1)
+    expect(after.sum).toBeCloseTo(before.sum + 0.25, 10)
+  })
+
+  it('spends nothing from the ledger when no discount was claimed', async () => {
+    const before = ledgerTotals(await readIntroLedger())
+    const user = await createUser({ email: 'nodiscount@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, { subscription, lines: [] })
+
+    expect(ledgerTotals(await readIntroLedger()).count).toBe(before.count)
   })
 })
 

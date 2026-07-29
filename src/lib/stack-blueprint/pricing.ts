@@ -99,6 +99,21 @@ export const PRICING_CONFIG = {
      *  Used as the fallback when the scratch-to-reveal card is disabled. */
     firstMonthDiscount: 0.5,
     /**
+     * The blended first-month discount we're willing to give away, 0–1 — the
+     * single number the business actually controls.
+     *
+     * Scratch cards are allocated to land the average discount ACROSS MEMBERS
+     * WHO ACTUALLY CHECK OUT on this figure: set 0.18 and the mix of 50/25/10%
+     * cards granted will average ~18%, whatever the split ends up being. It
+     * governs claims, not reveals — cards revealed by people who never buy cost
+     * nothing and don't count. See `lib/stack-blueprint/intro-allocation.ts`.
+     *
+     * Raise it to hand out more of the headline 50% cards; lower it and 50%
+     * becomes vanishingly rare. Setting it at or above the top outcome grants
+     * that outcome to everyone; at or below the bottom one, likewise.
+     */
+    effectiveFirstMonthDiscount: 0.18,
+    /**
      * Scratch-to-reveal intro: instead of one fixed first-month discount, the
      * member scratches a card to reveal theirs, drawn at random from these
      * weighted outcomes. Probability of an outcome = its weight ÷ the sum of all

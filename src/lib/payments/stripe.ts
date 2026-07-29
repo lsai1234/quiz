@@ -72,6 +72,47 @@ export interface CreateSubscriptionSessionOptions {
   successUrl: string
   cancelUrl: string
   metadata?: Record<string, string>
+  /**
+   * First-month intro discount (0–1) the member claimed at checkout. Applied as
+   * a one-cycle Stripe coupon, so month one is discounted and every month after
+   * bills at `monthlyTotal`. Omit or 0 for no intro.
+   */
+  introDiscountRate?: number
+}
+
+/**
+ * Get (or lazily create) the one-cycle coupon for a whole-percent discount.
+ *
+ * Coupons are reused by deterministic id — `duration: 'once'` means Stripe
+ * applies them to the first invoice of a subscription only, which is exactly
+ * the intro-offer shape, and one coupon per rate serves every member who lands
+ * on that rate. Rates are rounded to whole percents because that's the
+ * granularity `percent_off` accepts.
+ */
+async function getOrCreateFirstMonthCoupon(rate: number): Promise<string | null> {
+  const percent = Math.round(rate * 100)
+  if (percent <= 0 || percent > 100) return null
+  const stripe = getStripeClient()
+  const id = `chrgd-first-month-${percent}`
+  try {
+    await stripe.coupons.retrieve(id)
+    return id
+  } catch {
+    // Not there yet (or not readable) — create it. A concurrent create losing
+    // the race throws "already exists", which means the coupon is there anyway.
+    try {
+      await stripe.coupons.create({
+        id,
+        percent_off: percent,
+        duration: 'once',
+        name: `First month ${percent}% off`,
+      })
+      return id
+    } catch (err) {
+      console.error(`[stripe] could not create coupon ${id}:`, err)
+      return null
+    }
+  }
 }
 
 /**
@@ -79,10 +120,20 @@ export interface CreateSubscriptionSessionOptions {
  * price equal to the bundle's flat monthly total. The bundle's contents live in
  * our `MemberSubscription` document (the source of truth); Stripe only holds the
  * billing schedule + payment method.
+ *
+ * A claimed first-month discount rides along as a one-cycle coupon. If the
+ * coupon can't be resolved the session is still created at full price rather
+ * than dead-ending the member — they'd be owed the difference, so this logs
+ * loudly.
  */
 export async function createSubscriptionSession(opts: CreateSubscriptionSessionOptions): Promise<{ id: string; url: string | null }> {
   const stripe = getStripeClient()
   const currency = (opts.currency ?? 'gbp').toLowerCase()
+  const rate = opts.introDiscountRate ?? 0
+  const coupon = rate > 0 ? await getOrCreateFirstMonthCoupon(rate) : null
+  if (rate > 0 && !coupon) {
+    console.error(`[stripe] intro discount of ${Math.round(rate * 100)}% could not be applied — billing at full price.`)
+  }
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
     line_items: [
@@ -98,6 +149,7 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
     ],
     client_reference_id: opts.clientReferenceId,
     customer_email: opts.customerEmail ?? undefined,
+    discounts: coupon ? [{ coupon }] : undefined,
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     metadata: opts.metadata,

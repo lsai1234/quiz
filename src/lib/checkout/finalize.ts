@@ -20,6 +20,7 @@ import { saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
+import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
 
 export const PENDING_COOKIE = 'pending_checkout'
 export const PENDING_KEY_PREFIX = 'pending:'
@@ -76,12 +77,24 @@ export async function finalizeCheckout(
   await saveSubscription(userId, subscription)
   if (payload.quiz) await saveQuiz(userId, payload.quiz)
 
+  // Bank the granted rate against the allocation ledger. This is the only place
+  // the giveaway budget is spent — cards revealed by people who never got here
+  // cost nothing, which is what lets the effective discount govern the average
+  // across BUYERS rather than across browsers. Never fail a checkout over it.
+  try {
+    await recordIntroClaim(subscription.introDiscountRate ?? 0)
+  } catch (err) {
+    console.error('[finalizeCheckout] intro-discount ledger write failed:', err)
+  }
+
   // 3. Start payment.
   if (getPaymentSource() === 'stripe') {
     const base = origin || process.env.APP_URL || ''
     const { createSubscriptionSession } = await import('@/lib/payments/stripe')
     const { url } = await createSubscriptionSession({
       monthlyTotal: subscription.flatMonthly,
+      // The rate validated above, not the one the browser sent.
+      introDiscountRate: subscription.introDiscountRate,
       clientReferenceId: userId,
       customerEmail: subscription.customerEmail || email,
       successUrl: `${base}/hub?welcome=subscribed`,

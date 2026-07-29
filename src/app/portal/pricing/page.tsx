@@ -132,7 +132,8 @@ export default function PricingPage() {
       {/* Subscription offer */}
       <Section title="Subscription offer" desc="What customers get for subscribing.">
         <Num label="Subscribe & save" value={pct(draft.subscriptionDiscount)} suffix="%" help="Ongoing discount vs buying once-off, for being on a plan." onChange={(n) => set({ subscriptionDiscount: n / 100 })} />
-        <Num label="First-month offer" value={pct(draft.introOffer.firstMonthDiscount)} suffix="%" help="Extra discount on the first month only, to get people to start." onChange={(n) => set({ introOffer: { ...draft.introOffer, firstMonthDiscount: n / 100 } })} />
+        <Num label="First-month offer" value={pct(draft.introOffer.firstMonthDiscount)} suffix="%" help="Extra discount on the first month only, to get people to start. Used when the scratch card is switched off." onChange={(n) => set({ introOffer: { ...draft.introOffer, firstMonthDiscount: n / 100 } })} />
+        <Num label="Effective first-month discount" value={pct(draft.introOffer.effectiveFirstMonthDiscount)} suffix="%" help="What the first month costs you on average, across people who actually subscribe. Scratch cards are rationed to hit this: raise it and more members win 50%, lower it and 50% gets rare. Cards revealed by people who don't check out are free and don't count." onChange={(n) => set({ introOffer: { ...draft.introOffer, effectiveFirstMonthDiscount: n / 100 } })} />
         <Num label="Minimum commitment" value={draft.minSubscriptionMonths} suffix="mo" help="Months a customer must stay before they can cancel or pause." onChange={(n) => set({ minSubscriptionMonths: n })} />
         <Num label="Minimum to subscribe" value={draft.minSubscriptionMonthly} suffix="£/mo" help="Smallest monthly value we’ll start a subscription for." onChange={(n) => set({ minSubscriptionMonthly: n })} />
       </Section>

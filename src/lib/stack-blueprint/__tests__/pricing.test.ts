@@ -503,7 +503,7 @@ describe('pricing rules — subscription profit guardrails', () => {
 
   it('flags a config that loses money if cancelled early', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
-    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } } }
+    const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } } }
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, badConfig)
     expect(p.subscriptionProfitableOnCancel).toBe(false)
   })
@@ -519,7 +519,7 @@ describe('pricing rules — subscription profit guardrails', () => {
 describe('scratch-to-reveal intro discount', () => {
   const scratchOff = {
     ...PRICING_CONFIG,
-    introOffer: { firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
+    introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
   }
 
   it('is enabled by default with 10%/25%/50% weighted outcomes', () => {

@@ -45,9 +45,11 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
   const scratchingRef = useRef(false)
   const moveCountRef = useRef(0)
   const doneRef = useRef(false)
-  // Roll the prize once, up front, so the surface underneath is stable while the
-  // member scratches. It's only committed (via onReveal) once enough is cleared.
-  const [prize] = useState(() => rollScratchDiscount())
+  // The prize is allocated by the server so the giveaway budget stays on target
+  // across real checkouts (see /api/intro-offer). Asking for it costs nothing —
+  // only a finalized checkout spends it — so we settle it once, up front, and
+  // the surface underneath stays stable while the member scratches.
+  const [prize, setPrize] = useState<number | null>(null)
   // 'scratching' → 'dissolving' (foil melts away) → 'done' (settled).
   const [phase, setPhase] = useState<'scratching' | 'dissolving' | 'done'>('scratching')
   // Arrived with the prize already claimed (a previous visit) → compact summary.
@@ -58,12 +60,32 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
     setReduced(window.matchMedia('(prefers-reduced-motion: reduce)').matches)
   }, [])
 
-  const shownRate = revealed ?? prize
+  // Fetch the allocated prize. If the server can't be reached we fall back to a
+  // local weighted roll rather than blocking the member out of their offer —
+  // an offline card is worth more than a dead one, and the budget self-corrects
+  // once claims start landing again.
+  useEffect(() => {
+    if (claimedOnMount) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/intro-offer')
+        const data: { rate?: number } = await res.json()
+        if (!cancelled) setPrize(typeof data.rate === 'number' ? data.rate : rollScratchDiscount())
+      } catch {
+        if (!cancelled) setPrize(rollScratchDiscount())
+      }
+    })()
+    return () => { cancelled = true }
+  }, [claimedOnMount])
+
+  const shownRate = revealed ?? prize ?? 0
   const firstMonth = Math.round(monthlyTotal * (1 - shownRate) * 100) / 100
   const pctOff = Math.round(shownRate * 100)
 
   const finish = useCallback(() => {
-    if (doneRef.current) return
+    // Nothing to reveal until the allocated prize has landed.
+    if (doneRef.current || prize == null) return
     doneRef.current = true
     setPhase('dissolving')
     if (!reduced) {
@@ -78,7 +100,8 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
     }
     // Commit to the store once the foil has melted, so the compact state never
     // snaps in mid-dissolve.
-    setTimeout(() => { setPhase('done'); onReveal(prize) }, reduced ? 0 : DISSOLVE_MS)
+    const won = prize
+    setTimeout(() => { setPhase('done'); onReveal(won) }, reduced ? 0 : DISSOLVE_MS)
   }, [onReveal, prize, reduced])
 
   // Paint the foil once the canvas is on screen (and sized to it).
@@ -232,6 +255,9 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
 
   const hint = outcomesHint()
   const isSettled = phase !== 'scratching'
+  // Until the prize lands there's nothing under the foil — let the foil paint,
+  // but don't let anyone scratch through to an empty card.
+  const ready = prize != null
 
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden mb-4">
@@ -287,7 +313,7 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
               width: '100%',
               height: '100%',
               opacity: isSettled ? 0 : 1,
-              pointerEvents: isSettled ? 'none' : 'auto',
+              pointerEvents: isSettled || !ready ? 'none' : 'auto',
               transition: reduced ? 'none' : `opacity ${DISSOLVE_MS}ms ease`,
             }}
             onPointerDown={(e) => {
@@ -313,10 +339,11 @@ export function ScratchToReveal({ monthlyTotal, revealed, onReveal }: Props) {
         {!isSettled && (
           <button
             onClick={finish}
-            className="w-full mt-3 text-[11px] font-semibold text-center underline underline-offset-2 active:opacity-60 transition-opacity"
+            disabled={!ready}
+            className="w-full mt-3 text-[11px] font-semibold text-center underline underline-offset-2 active:opacity-60 transition-opacity disabled:no-underline disabled:opacity-40"
             style={{ color: 'var(--color-muted)' }}
           >
-            Prefer a tap? Reveal it
+            {ready ? 'Prefer a tap? Reveal it' : 'Loading your reward…'}
           </button>
         )}
       </div>
