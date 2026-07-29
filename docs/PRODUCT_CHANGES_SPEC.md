@@ -1,5 +1,11 @@
 # Product changes on subscriptions — requirements & build spec
 
+> **Status: delivered.** All eight phases are built, tested and on
+> `claude/subscription-product-changes-eybf25`. This document is kept as the
+> design rationale; `docs/SUBSCRIPTIONS.md` describes how the system actually
+> behaves. Where the build departed from this spec, it's recorded in
+> "What changed during the build" at the end.
+
 How the platform handles a subscribed product **going away** (out of stock,
 delisted) or **changing price** at the supplier, on both sides of the business:
 
@@ -418,14 +424,14 @@ Each phase is shippable, tested, and leaves the app working.
 
 | Phase | Scope | Key files |
 |---|---|---|
-| **P1** | Change-event domain + migration v4 + the **two-option** policy model, `intendedAction`/`autoApplyAt` on the event, back-compat mapping (`allowSubstitution: false → remove`) | `lib/changes/*`, `db/migrations.ts`, `recharge/types.ts` |
-| **P2** | Legal content, consent capture, checkout disclaimer + T&Cs (terms describe the two options and the "we'll tell you, change it in your hub" promise) | `lib/legal/*`, `AccountGate`, `/legal/*` |
-| **P3** | Checkout two-option step (F1) + hub editing of policy, plan-level and per-line | `SubscriptionJourney`, `LineManageSheet`, `SubscriptionDashboard`, `checkout/finalize` |
-| **P4** | Detection (snapshots, out-of-stock vs discontinued) + auto-resolution with **remove as the universal safe fallback**, incl. the allergen gate | `changes/detect.ts`, `changes/policy.ts`, `changes/service.ts` |
-| **P5** | Notification domain + templates + outbox, wired to P4. **Includes the hub deep links** (`?change=`, `?add=`) the emails point at — an invitation with a dead link is not a feature | `lib/notify/*`, `HubPage`, `ChangeProductFlow`, `AddProductSheet` |
-| **P6** | Founders Hub subscriptions list + action queue with countdown-to-auto-apply + override + bulk resolve | `/portal/subscriptions`, `/portal/actions` |
-| **P7** | Price-change detection, absorb / pass-on / partial, scheduled billing + Stripe amount updates | `changes/price.ts`, `payments/stripe.ts` |
-| **P8** | Daily cron (detect → auto-resolve → **promote expired review windows** → apply due scheduled changes → flush outbox), dry-run, audit surfaces, docs update | `/api/cron/daily`, `docs/SUBSCRIPTIONS.md` |
+| ✅ **P1** | Change-event domain + migration v4 + the **two-option** policy model, `intendedAction`/`autoApplyAt` on the event, back-compat mapping (`allowSubstitution: false → remove`) | `lib/changes/*`, `db/migrations.ts`, `recharge/types.ts` |
+| ✅ **P2** | Legal content, consent capture, checkout disclaimer + T&Cs (terms describe the two options and the "we'll tell you, change it in your hub" promise) | `lib/legal/*`, `AccountGate`, `/legal/*` |
+| ✅ **P3** | Checkout two-option step (F1) + hub editing of policy, plan-level and per-line | `SubscriptionJourney`, `LineManageSheet`, `SubscriptionDashboard`, `checkout/finalize` |
+| ✅ **P4** | Detection (snapshots, out-of-stock vs discontinued) + auto-resolution with **remove as the universal safe fallback**, incl. the allergen gate | `changes/detect.ts`, `changes/policy.ts`, `changes/service.ts` |
+| ✅ **P5** | Notification domain + templates + outbox, wired to P4. **Includes the hub deep links** (`?change=`, `?add=`) the emails point at — an invitation with a dead link is not a feature | `lib/notify/*`, `HubPage`, `ChangeProductFlow`, `AddProductSheet` |
+| ✅ **P6** | Founders Hub subscriptions list + action queue with countdown-to-auto-apply + override + bulk resolve | `/portal/subscriptions`, `/portal/actions` |
+| ✅ **P7** | Price-change detection, absorb / pass-on / partial, scheduled billing + Stripe amount updates | `changes/price.ts`, `payments/stripe.ts` |
+| ✅ **P8** | Daily cron (detect → auto-resolve → **promote expired review windows** → apply due scheduled changes → flush outbox), dry-run, audit surfaces, docs update | `/api/cron/daily`, `docs/SUBSCRIPTIONS.md` |
 
 The shape of the change from the first draft: P4 gained the fallback chain, P5
 gained the hub deep links (previously the emails could have got away with a bare
@@ -467,3 +473,71 @@ Jest, alongside the existing `__tests__/` layout. Non-negotiable coverage:
    and plan-shape changes; out-of-stock events on a healthy plan apply straight
    away. Set `founderReviewHours: 0` to have everything apply immediately.
 5. **Price decreases** — absorbed by default, with a one-click pass-down.
+
+
+---
+
+## 9. What changed during the build
+
+Recorded because the reasoning matters more than the plan did.
+
+**Removal became the universal safe fallback (P1).** Dropping "ask me first"
+left `remove` as the only always-available outcome, which turned out to be the
+right one anyway: taking a product off costs the member money they get back,
+whereas shipping the wrong thing to someone with an allergy may not be undoable.
+
+**A substitution never raises the bill (P1).** Not in the original spec. A swap
+the member didn't ask for must not cost them more, so a dearer replacement is
+capped at their current price and the difference absorbed — bounded by
+`substitutionPriceTolerancePct`, and refused outright below the margin floor.
+
+**Involuntary removals waive the settlement (P1).** The pay-for-what-shipped
+charge is aimed at a member gaming the smoothed monthly. When the supplier kills
+a product that reasoning evaporates, so it's waived and any overpayment is
+credited back instead.
+
+**`reason` and `breaksPlan` were split (P1).** One enum was serving two
+audiences — the member's email template and the founder's escalation — so a
+member who chose "remove" would have been emailed about something else.
+
+**The founder's preview is the real apply path, dry-run (P1).** Computing it
+separately let a preview drift from the outcome; running the actual apply means
+they can't.
+
+**No v3 → v4 back-fill (P1).** Detection is idempotent on a derived id, so any
+open stock exception simply re-raises — richer than a fragile cross-dialect JSON
+back-fill could reconstruct.
+
+**Price moves are detected in P4, not P7.** Same snapshot loop, and P7 needs the
+history to exist from the start. Only the absorb/pass-on resolution waited.
+
+**A pass-on doesn't touch the plan when scheduled (P7).** Parking the event as
+`scheduled` with `autoApplyAt` set to the effective date reuses the existing
+sweep, which keeps exactly one code path that changes a member's price.
+
+**`applyDueChanges` was applying the intended action, not the recorded one
+(P7).** Every scheduled pass-on would have silently reverted to `absorb` on the
+day it was due — the member gets 30 days' notice of a rise that never happens.
+
+**A scheduled price event was still offering itself as an open choice (P7).**
+It's open (it hasn't billed) but decided; a founder could have absorbed
+something a member already had notice of. `isUndecided` now separates the two.
+
+**Stripe goes before the local write (P7).** It's what takes the money, so a
+rejected amount must not leave a stored plan that disagrees with the card.
+
+**The mock supplier gained a wholesale-price force (P7).** Mirrors the existing
+out-of-stock one; fixture prices never move, so the price journey couldn't
+otherwise be exercised.
+
+**The daily job's logic lives in `lib/changes/daily.ts` (P8).** Routes here stay
+thin, and it makes the job testable without Next's server helpers.
+
+### Still open
+
+- The legal copy needs a solicitor, and the `NEXT_PUBLIC_LEGAL_*` details need
+  filling in. Both `/legal` pages warn until they are.
+- Live email needs `NOTIFY_SOURCE=resend` and a key. Mock renders and records
+  everything, so nothing else changes.
+- Hub mutations still run against the local subscription document rather than a
+  Recharge customer API — unchanged from before this work, and orthogonal to it.

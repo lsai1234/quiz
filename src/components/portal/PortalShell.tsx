@@ -12,6 +12,7 @@ const NAV = [
   { href: '/portal/orders', label: 'Orders' },
   { href: '/portal/actions', label: 'Requires action' },
   { href: '/portal/subscriptions', label: 'Subscriptions' },
+  { href: '/portal/emails', label: 'Emails' },
   { href: '/portal/products', label: 'Products' },
   { href: '/portal/supplier', label: 'PowerBody' },
   { href: '/portal/bundles', label: 'Bundles' },

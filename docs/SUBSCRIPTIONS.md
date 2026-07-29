@@ -405,3 +405,141 @@ Minimum terms and intro discounts are standard and fine, but disclose clearly
 at checkout: the intro price, the ongoing price, the minimum term + total
 commitment, and that cancellation is easy after the term (UK DMCC subscription
 rules + Consumer Contracts Regs).
+
+---
+
+## Phase 8 — product changes: unavailability & supplier price moves (built)
+
+What happens when a subscribed product goes out of stock, is discontinued, or
+moves price at the supplier. Full design in `docs/PRODUCT_CHANGES_SPEC.md`; this
+is how it actually behaves.
+
+### The member's choice — two options, never three
+
+At checkout (in the subscription journey, before paying) the member picks what
+we should do if something becomes unavailable, plan-wide or per product:
+
+- **Keep my plan whole** (`auto-swap`) — closest equivalent, monthly unchanged.
+- **Take it off my plan** (`remove`) — line dropped, monthly falls next cycle.
+
+There is deliberately no "ask me first". A third option that waits on a reply
+parks the subscription behind someone's inbox and holds up a delivery, so
+instead every change resolves on its own and the member is **told afterwards**
+and invited to adjust it in the hub. `ChangePolicyChoice` renders the choice at
+checkout and again in the hub, so the wording has one definition.
+
+Stored as `MemberSubscriptionLine.changePolicy` (set only where the member
+overrode that product) plus `MemberSubscription.defaultChangePolicy`. The legacy
+`allowSubstitution` boolean is kept in step and read as `remove` when false.
+
+### Detection — out of stock vs discontinued
+
+`supplier_snapshots` (migration v6) records what the feed said last time, which
+is what makes the distinction possible: a SKU that's present but unbuyable is
+out of stock; one absent for `discontinuedAfterMissedSyncs` runs is gone for
+good. An absence streak resets the moment a SKU reappears, so a flickering feed
+can't accumulate its way to permanently reshaping a plan. The first run only
+establishes a baseline.
+
+### Resolution — always concrete, never blocking
+
+`resolveIntendedAction` turns the member's policy into an action, and there is
+no input for which it answers "wait and ask someone" (there's a property test).
+**Removal is the universal fallback**: whenever a swap can't be honoured — no
+in-stock product in the category, or none compatible with a declared allergy or
+diet — the line comes off and the bill drops, rather than shipping something
+that might not suit them.
+
+Every event carries `autoApplyAt`. A founder can override inside that window
+(`founderReviewHours`, default 24, applied to discontinuations and plan-shape
+changes); if nobody does, it lands anyway. A quiet queue delays a change, it
+never stalls one.
+
+### The money rules (`lib/changes/apply.ts`)
+
+1. **A substitution never raises the bill.** A dearer replacement is capped at
+   what the member already pays and the difference absorbed — unless that would
+   breach the margin floor, in which case it isn't a viable swap and we remove.
+2. **No settlement on a removal we caused.** The pay-for-what-shipped charge
+   exists to stop a member gaming the smoothed monthly; when the supplier
+   discontinues something that reasoning doesn't apply, so it's waived and any
+   overpayment is credited back.
+3. **Reductions start next cycle; increases wait out their notice.**
+4. **The member's subscribe-&-save rate carries through** any re-price.
+
+### Supplier price moves
+
+Detected from the same snapshot diff, raised per affected member and grouped by
+product for the founder. The intended action is **absorb**, so an unattended
+queue can never put a price up. `/portal/actions` shows both sides: the margin
+if you swallow it, each member's new monthly if you don't, and the smallest
+pass-on that clears the margin floor. Partial pass-on is a slider.
+
+A pass-on does **not** touch the plan when scheduled. The event parks as
+`scheduled` with `autoApplyAt` set to the effective date, the notice email goes
+out immediately, and the ordinary due-changes sweep applies the re-price on the
+day — so there is exactly one code path that changes a member's price. Stripe is
+updated before the local write, because it's what actually takes the money.
+
+### Telling the member
+
+`lib/notify` renders the email when the change happens and stores it in the
+outbox (migration v7), then sends it. Idempotency is a UNIQUE constraint on
+`<eventId>:<template>`. Queueing is separate from sending on purpose: a failed
+email is a delivery problem to retry, never a reason to undo a billing decision.
+
+Every email deep-links into the flow that can act on it — `/hub?change=<lineId>`
+opens the swap flow on that line, `/hub?add=<swapGroup>` opens the add sheet
+with an "in place of what you lost" section. Those links are the mechanism by
+which a member takes control back, since nothing asks them to.
+
+**Mock is the default and is not a stub**: emails are rendered and recorded
+without sending, so the whole journey is demoable with no API key and
+`/portal/emails` shows exactly what members are being told.
+
+### The Founders Hub
+
+- `/portal/actions` — the queue. Each row says what will happen and when
+  ("Removing from plan · applies in 23h") with the real money beside it.
+  Grouped by product with bulk resolve, because one dead SKU is the same
+  decision many times — though each member still goes through their own policy.
+- `/portal/subscriptions` — every member, sorted by who needs attention soonest.
+  The detail view answers "why did my plan change and why didn't anyone tell me"
+  without a database console: lines and policies, billing history, every email
+  sent, and their consent record.
+- `/portal/emails` — the outbox, with a retry for anything that failed.
+
+Supersedes the old `/portal/stock-alerts` and `lib/stock`, both removed.
+
+### Terms, consent and the health disclaimer
+
+`/legal/terms` and `/legal/disclaimer`, built from versioned data in `lib/legal`
+so the terms quote the **live** notice period — change `priceChangeNoticeDays`
+and the promise changes with it. Consent is captured in the account gate and
+recorded server-side with a SHA-256 of the exact text served; `finalizeCheckout`
+refuses to store a plan or start a payment without it.
+
+> ⚠️ The legal copy has **not** been reviewed by a solicitor, and the company
+> details are placeholders until the `NEXT_PUBLIC_LEGAL_*` env vars are set —
+> both pages show a "not ready to publish" banner until they are. Do both before
+> taking real money.
+
+### The daily job
+
+`/api/cron/daily` (GET, scheduled in `vercel.json`; POST to trigger by hand) —
+detect, auto-resolve, apply anything whose clock came due, flush the outbox.
+Guarded by `CRON_SECRET`, compared in constant time; with no secret set it's
+open in development and **closed in production**, so a missed env var fails
+safe. `?dryRun=1` computes and reports without writing or emailing. Every step
+is idempotent, so running it more often than daily is harmless.
+
+### Config (all portal-editable, in `PRICING_CONFIG`)
+
+| Key | Default | Meaning |
+|---|---|---|
+| `defaultChangePolicy` | `auto-swap` | Pre-selected at checkout |
+| `substitutionPriceTolerancePct` | 0.15 | How far a replacement's price may sit from the original |
+| `priceChangeThresholdPct` | 0.02 | Supplier move that raises an event |
+| `priceChangeNoticeDays` | 30 | Notice before an increase may bill |
+| `discontinuedAfterMissedSyncs` | 3 | Syncs absent before "discontinued" |
+| `founderReviewHours` | 24 | Override window before a change auto-applies (0 = immediate) |
