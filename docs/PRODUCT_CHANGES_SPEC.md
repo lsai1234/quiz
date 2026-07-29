@@ -78,8 +78,8 @@ export type ChangeKind =
   | 'price-decrease'    // supplier price down (optional pass-down)
 
 export type ChangeStatus =
+  | 'requires-action'   // in the founder's queue, with an intended action + a deadline
   | 'auto-resolved'     // the member's policy decided it; no founder needed
-  | 'requires-action'   // waiting on a founder in the hub
   | 'scheduled'         // resolved, but takes effect at a future billing date
   | 'applied'           // subscription + billing updated
   | 'cancelled'         // supplier recovered / founder dismissed
@@ -87,11 +87,18 @@ export type ChangeStatus =
 export type ChangeResolution =
   | { type: 'substitute'; replacementProductId: string }
   | { type: 'remove' }                       // drop the line, reduce forward billing
-  | { type: 'hold' }                         // skip this line's next box, keep it
+  | { type: 'hold' }                         // founder-only: skip this line's next box
   | { type: 'absorb' }                       // price rise: we eat it
   | { type: 'pass-on'; newUnitPrice: number } // price rise: member pays, after notice
   | { type: 'dismiss' }
 ```
+
+**Nothing ever waits on a member.** Every event carries an `intendedAction`
+(derived from the member's policy) and an `autoApplyAt` deadline from the moment
+it's detected. A founder can override inside that window; if nobody does, the
+system applies the intended action and emails the member. `requires-action` is
+therefore a *review* state, never a blocked one — a founder on holiday delays
+nothing.
 
 Each event carries the member (`userId`, `email`), the line, the detected facts
 (old/new wholesale + RRP, stock, supplier status), the **member's policy at
@@ -105,16 +112,31 @@ the founder sees `£X/mo → £Y/mo` before doing anything.
 export type ChangePolicy =
   | 'auto-swap'   // swap to the closest equivalent, keep my plan whole
   | 'remove'      // drop it and lower my monthly
-  | 'ask-me'      // hold it and contact me first
 ```
+
+**Two options only, both of which resolve without the member doing anything.**
+There is deliberately no "ask me first": it would leave a subscription in limbo
+behind someone's inbox, hold up a delivery, and put the awkward decision on the
+member at the worst moment. Instead the member is told *after* the fact and
+invited — never required — to adjust it in the hub, where they can already swap
+(`ChangeProductFlow`) and add (`AddProductSheet`) products. Control without a
+blocking action.
 
 - Lives on `MemberSubscriptionLine.changePolicy`, with
   `MemberSubscription.defaultChangePolicy` as the plan-level default applied to
   lines added later.
 - **Back-compat:** readers fall back to `allowSubstitution` (`true → auto-swap`,
-  `false → ask-me`) when `changePolicy` is absent, and writers keep
+  `false → remove`) when `changePolicy` is absent, and writers keep
   `allowSubstitution` in sync, so stored subscriptions and
-  `PATCH /api/hub/substitution` keep working unchanged.
+  `PATCH /api/hub/substitution` keep working unchanged. Note the semantic shift
+  for the `false` case: it used to mean "hold and contact me", it now means
+  "take it off and lower my bill" — strictly better for the member than a stalled
+  box, and consistent with what they'll be offered at checkout from now on.
+- **Removal is always the safe fallback.** Any time `auto-swap` can't be
+  satisfied — no in-stock same-category product, or none that's compatible with a
+  declared allergy or diet — the line is removed and the monthly drops, rather
+  than held. Removing something costs the member money they get back; shipping
+  the wrong thing could hurt them.
 
 ### 2.3 Forward billing
 
@@ -163,19 +185,23 @@ Rules baked into `apply.ts`:
 **Where:** a new step in `SubscriptionJourney` (before "Looks good →"), so the
 choice is made *before* payment rather than on the success page.
 
-- Plan-level default, one tap: **"Keep my plan whole"** (auto-swap) /
-  **"Just take it off my plan"** (remove & pay less) / **"Ask me first"**.
-- Expandable per-product overrides for members who want them — same three
-  options, defaulted from the plan choice.
+- Plan-level default, one tap, **two options**: **"Keep my plan whole"**
+  (auto-swap) or **"Just take it off my plan"** (remove & pay less).
+- Expandable per-product overrides for members who want them — same two options,
+  defaulted from the plan choice.
 - Each option shows its consequence in plain money, e.g.
   *"We'll swap in the closest match at the same or lower price — your £60.05/mo
   doesn't change"* vs *"Your monthly drops by the value of that item from the
   next payment"*.
+- Both options carry the same reassurance line, because it's what makes a
+  no-action-required default fair: *"Either way we'll email you, and you can
+  change it yourself in your hub any time."*
 - **Allergen/dietary safety gate:** if the member declared an allergy or a
   dietary requirement in the quiz, auto-swap is constrained to replacements
   carrying the same `dietaryTags` and passing the same allergen exclusion; when
-  no such replacement exists the line falls through to `ask-me` **even if they
-  chose auto-swap**, and the UI says so. Safety beats convenience, always.
+  no such replacement exists the line is **removed** (and the member emailed with
+  the reason and a suggestion to pick something themselves) rather than swapped.
+  Safety beats convenience, always.
 - Persisted with the subscription at `finalizeCheckout` (server-side, on the
   payload alongside the intro-discount claim), not by a follow-up PATCH.
 - Editable forever after in the hub (`LineManageSheet` + a plan-level control on
@@ -185,7 +211,8 @@ choice is made *before* payment rather than on the success page.
 **Acceptance:** a subscription created through checkout has a `changePolicy` on
 every line and a `defaultChangePolicy` on the plan; choosing "remove" and then
 triggering an out-of-stock event drops the line and lowers `flatMonthly` from
-the next cycle with no founder involvement.
+the next cycle with no founder and no member involvement; no code path can leave
+an event waiting on a member reply.
 
 ### F2 — Terms & conditions with a price-change clause
 
@@ -256,20 +283,29 @@ Extend `runStockCheck` into `runChangeDetection`:
 
 ### F5 — Auto-resolution by member policy
 
-Before anything reaches a founder, `service.ts` applies the member's policy:
+`service.ts` derives an `intendedAction` from the member's policy the moment an
+event is detected. It always resolves to something concrete:
 
 - `auto-swap` → pick the best replacement (`suggestReplacement`, tightened: same
   `swapGroup`, in stock, **dietary/allergen-compatible**, unit price within
   `substitutionPriceTolerancePct` (default 15%) of the original). Apply, keep the
-  monthly whole where price allows, email the member. No replacement → falls to
-  `requires-action`.
+  monthly whole where price allows, email the member. **No suitable replacement →
+  falls back to `remove`**, with the email explaining why and pointing at the hub.
 - `remove` → drop the line, reduce forward billing, credit anything paid-for and
-  unshipped, email the member. Last remaining line, or dropping below
-  `minSubscriptionMonthly` → `requires-action` instead.
-- `ask-me` → straight to `requires-action`.
+  unshipped, email the member with a "browse replacements" hub link.
 
-Every auto-resolution still writes an event row, so the hub shows what the system
-did on the founder's behalf, and it's reversible.
+Two cases still route to the founder queue rather than applying blind, because
+they change the shape of the plan rather than one line of it:
+
+- Removing the **last remaining line**, or dropping the flat monthly below
+  `minSubscriptionMonthly` (the plan stops being a viable subscription).
+- Any **discontinued** product, if `founderReviewHours > 0` — a permanent loss is
+  worth a founder's eye on the replacement choice.
+
+Both still carry the intended action and `autoApplyAt`, so they apply on the
+deadline regardless. Every resolution — automatic or founder-made — writes an
+event row, so the hub shows what the system did on the founder's behalf, and it
+stays reversible from the subscription detail view.
 
 ### F6 — Founders Hub: subscriptions + requires-action queue
 
@@ -282,7 +318,8 @@ New portal section `/portal/subscriptions`:
   history, their consent record, open events.
 - **Action queue** (`/portal/actions`, replacing `/portal/stock-alerts`): every
   `requires-action` event across all members, filterable by kind, showing:
-  product, member, why it flagged, the member's policy, the suggested
+  product, member, why it flagged, the member's policy, **what the system will do
+  and when** ("Removing from plan · auto-applies in 19h"), the suggested
   replacement, and the **billing preview** (`£60.05/mo → £54.39/mo`, one-off
   credit £4.20, effective 1 Sep).
 - **Resolve** with one control: *Change product* (searchable same-category
@@ -290,6 +327,9 @@ New portal section `/portal/subscriptions`:
   the member's declared requirements), *Remove from plan*, *Hold next box*, or
   *Dismiss*. Applying updates the subscription, writes the `BillingChange`,
   updates Stripe, and **queues the member email** — one action, not four.
+- A founder acting inside the review window is an override, not an unblock:
+  doing nothing produces the same outcome a beat later. The queue's empty state
+  is therefore the normal state, and the countdown makes that explicit.
 - **Bulk resolve** for one SKU affecting many members (accept the suggested
   replacement for all, or remove for all), with a per-member preview and a
   single confirm. This is the difference between usable and unusable when a
@@ -325,11 +365,18 @@ New portal section `/portal/subscriptions`:
 rendered in the hub so the flow is demoable without an email key) and a Resend
 adapter for live. Templates required:
 
+Because no email ever asks the member to *do* something for their subscription to
+keep working, every one of these is a **notice with an open invitation**: here's
+what we did, here's what it costs you, change it in your hub if you'd rather.
+That invitation only works if the link lands somewhere useful, so each email
+deep-links into the flow that already exists rather than the hub's front door:
+`/hub?change=<lineId>` opens `ChangeProductFlow` on that line, and
+`/hub?add=<swapGroup>` opens `AddProductSheet` pre-filtered to that category.
+
 | Template | Trigger | Must contain |
 |---|---|---|
-| `product-substituted` | auto-swap or founder swap applied | old → new product, why, **allergen check line**, monthly (unchanged or new), how to undo, hub link |
-| `product-removed` | line removed | what went, **new monthly**, effective date, any credit, how to add something back |
-| `action-needed` | `ask-me`, or no safe replacement | what's unavailable, the options, a hub deep link, what happens if they don't reply (hold N days then remove) |
+| `product-substituted` | auto-swap or founder swap applied | old → new product, why, **allergen check line**, monthly (unchanged or new), *"prefer something else? change it in your hub"* → `?change=` link |
+| `product-removed` | line removed (member's policy, or no safe match) | what went and **why**, **new monthly**, effective date, any credit, *"add a replacement whenever you like"* → `?add=` link with 2–3 suggestions |
 | `price-change-notice` | pass-on scheduled | old → new monthly, effective date, **notice period**, right to cancel free, hub link |
 | `terms-updated` | material terms change | what changed, when it applies, link |
 
@@ -360,7 +407,7 @@ adapter for live. Templates required:
 | `priceChangeNoticeDays` | 30 | Notice before an increase can bill |
 | `substitutionPriceTolerancePct` | 0.15 | Max price gap for an auto-swap |
 | `discontinuedAfterMissedSyncs` | 3 | Syncs absent before "discontinued" |
-| `unansweredActionHoldDays` | 14 | `ask-me` with no reply → hold, then remove |
+| `founderReviewHours` | 24 | Override window before an event auto-applies (0 = apply immediately) |
 | `defaultChangePolicy` | `auto-swap` | Plan default offered at checkout |
 
 ---
@@ -371,14 +418,22 @@ Each phase is shippable, tested, and leaves the app working.
 
 | Phase | Scope | Key files |
 |---|---|---|
-| **P1** | Change-event domain + migration v4 + policy model with back-compat | `lib/changes/*`, `db/migrations.ts`, `recharge/types.ts` |
-| **P2** | Legal content, consent capture, checkout disclaimer + T&Cs | `lib/legal/*`, `AccountGate`, `/legal/*` |
-| **P3** | Checkout policy step (F1) + hub editing of policy | `SubscriptionJourney`, `LineManageSheet`, `checkout/finalize` |
-| **P4** | Detection: snapshots, out-of-stock vs discontinued, auto-resolution | `changes/detect.ts`, `changes/service.ts` |
-| **P5** | Notification domain + templates + outbox, wired to P4 | `lib/notify/*` |
-| **P6** | Founders Hub subscriptions list + action queue + bulk resolve | `/portal/subscriptions`, `/portal/actions` |
+| **P1** | Change-event domain + migration v4 + the **two-option** policy model, `intendedAction`/`autoApplyAt` on the event, back-compat mapping (`allowSubstitution: false → remove`) | `lib/changes/*`, `db/migrations.ts`, `recharge/types.ts` |
+| **P2** | Legal content, consent capture, checkout disclaimer + T&Cs (terms describe the two options and the "we'll tell you, change it in your hub" promise) | `lib/legal/*`, `AccountGate`, `/legal/*` |
+| **P3** | Checkout two-option step (F1) + hub editing of policy, plan-level and per-line | `SubscriptionJourney`, `LineManageSheet`, `SubscriptionDashboard`, `checkout/finalize` |
+| **P4** | Detection (snapshots, out-of-stock vs discontinued) + auto-resolution with **remove as the universal safe fallback**, incl. the allergen gate | `changes/detect.ts`, `changes/policy.ts`, `changes/service.ts` |
+| **P5** | Notification domain + templates + outbox, wired to P4. **Includes the hub deep links** (`?change=`, `?add=`) the emails point at — an invitation with a dead link is not a feature | `lib/notify/*`, `HubPage`, `ChangeProductFlow`, `AddProductSheet` |
+| **P6** | Founders Hub subscriptions list + action queue with countdown-to-auto-apply + override + bulk resolve | `/portal/subscriptions`, `/portal/actions` |
 | **P7** | Price-change detection, absorb / pass-on / partial, scheduled billing + Stripe amount updates | `changes/price.ts`, `payments/stripe.ts` |
-| **P8** | Daily cron, dry-run, audit surfaces, docs update | `/api/cron/daily`, `docs/SUBSCRIPTIONS.md` |
+| **P8** | Daily cron (detect → auto-resolve → **promote expired review windows** → apply due scheduled changes → flush outbox), dry-run, audit surfaces, docs update | `/api/cron/daily`, `docs/SUBSCRIPTIONS.md` |
+
+The shape of the change from the first draft: P4 gained the fallback chain, P5
+gained the hub deep links (previously the emails could have got away with a bare
+hub link, because a member could also just reply to an "action needed" mail —
+without that path, the link *is* the mechanism), P6 gained the review-window
+countdown and lost its role as a blocking gate, and P8 gained the job that
+expires review windows. P1–P3 shrank slightly: one fewer option to model, render
+and explain.
 
 ## 6. Testing
 
@@ -386,8 +441,12 @@ Jest, alongside the existing `__tests__/` layout. Non-negotiable coverage:
 
 - `detect.ts` — OOS vs discontinued vs recovery vs price move, from fixture
   snapshots, no I/O.
-- `policy.ts` — every policy × every kind, including the allergen/dietary
-  override forcing `ask-me`.
+- `policy.ts` — every policy × every kind resolves to a concrete action; the
+  allergen/dietary gate downgrades `auto-swap` to `remove`; **a property test
+  asserting no input combination ever yields "wait for the member"**.
+- Review window — an untouched event applies its intended action after
+  `founderReviewHours`; a founder override inside the window wins and cancels the
+  auto-apply.
 - `apply.ts` — monthly recomputation on remove/swap/re-price; margin floor
   respected; `effectiveFrom` never inside the notice window for increases;
   credits match the existing settlement maths.
@@ -404,5 +463,7 @@ Jest, alongside the existing `__tests__/` layout. Non-negotiable coverage:
    "remove" is the honest alternative).
 3. **Email provider** for live — Resend assumed (cheapest adapter to write);
    Postmark/SES are drop-in alternatives.
-4. **Unanswered `ask-me`** — hold 14 days, then remove and tell them. Assumed.
+4. **Founder review window** — 24h assumed, and only for discontinued products
+   and plan-shape changes; out-of-stock events on a healthy plan apply straight
+   away. Set `founderReviewHours: 0` to have everything apply immediately.
 5. **Price decreases** — absorbed by default, with a one-click pass-down.
