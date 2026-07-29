@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
-import { finalizeCheckout } from '@/lib/checkout/finalize'
+import { CheckoutRejected, finalizeCheckout } from '@/lib/checkout/finalize'
+import { requestMetadata } from '@/lib/legal/consent'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +27,17 @@ export async function POST(req: Request) {
   }
 
   const origin = process.env.APP_URL || req.headers.get('origin') || new URL(req.url).origin
-  const result = await finalizeCheckout(user.id, user.email, body, origin)
-  return NextResponse.json({ ok: true, ...result })
+  try {
+    const result = await finalizeCheckout(user.id, user.email, body, {
+      origin,
+      ...requestMetadata(req),
+    })
+    return NextResponse.json({ ok: true, ...result })
+  } catch (err) {
+    // A missing or stale consent is the member's to fix, not a server fault.
+    if (err instanceof CheckoutRejected) {
+      return NextResponse.json({ error: err.message }, { status: 400 })
+    }
+    throw err
+  }
 }

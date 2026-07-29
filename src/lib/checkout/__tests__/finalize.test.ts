@@ -3,10 +3,12 @@
  * returns a payment URL (mock mode returns a placeholder). Runs against the
  * in-memory DB.
  */
-import { finalizeCheckout, claimIntroDiscount } from '../finalize'
+import { finalizeCheckout, claimIntroDiscount, CheckoutRejected } from '../finalize'
 import type { CheckoutPayload } from '../types'
 import { createUser } from '@/lib/db/users'
 import { getSubscription, getQuiz } from '@/lib/db/hub-data'
+import { latestConsent } from '@/lib/legal/consent'
+import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import { readIntroLedger, ledgerTotals } from '@/lib/stack-blueprint/intro-allocation'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -24,6 +26,9 @@ const subscription = {
   lines: [{ id: 'l1', productId: 'p1', productTitle: 'Whey' }],
 } as unknown as MemberSubscription
 
+/** Every checkout now needs consent; these tests are about what happens after it. */
+const consent = { accepted: true, termsVersion: TERMS_VERSION, disclaimerVersion: DISCLAIMER_VERSION }
+
 describe('finalizeCheckout', () => {
   it('saves the bundle + quiz to the account and returns a mock payment URL', async () => {
     const user = await createUser({ email: 'buyer@example.com', passwordHash: 'h' })
@@ -31,6 +36,7 @@ describe('finalizeCheckout', () => {
       subscription,
       quiz: { answers: { name: 'Sam', goals: ['muscle'] } as unknown as QuizAnswers },
       lines: [],
+      consent,
     }
 
     const result = await finalizeCheckout(user.id, user.email, payload)
@@ -51,6 +57,7 @@ describe('finalizeCheckout', () => {
     await finalizeCheckout(user.id, user.email, {
       subscription: { ...subscription, introDiscountRate: 0.5 },
       lines: [],
+      consent,
     })
 
     const stored = await getSubscription(user.id)
@@ -63,6 +70,7 @@ describe('finalizeCheckout', () => {
     const result = await finalizeCheckout(user.id, user.email, {
       subscription: { ...subscription, introDiscountRate: 0.9 },
       lines: [],
+      consent,
     })
 
     expect(result.checkoutUrl).toBe('#mock-subscription')
@@ -77,6 +85,7 @@ describe('finalizeCheckout', () => {
     await finalizeCheckout(user.id, user.email, {
       subscription: { ...subscription, introDiscountRate: 0.25 },
       lines: [],
+      consent,
     })
 
     const after = ledgerTotals(await readIntroLedger())
@@ -87,9 +96,64 @@ describe('finalizeCheckout', () => {
   it('spends nothing from the ledger when no discount was claimed', async () => {
     const before = ledgerTotals(await readIntroLedger())
     const user = await createUser({ email: 'nodiscount@example.com', passwordHash: 'h' })
-    await finalizeCheckout(user.id, user.email, { subscription, lines: [] })
+    await finalizeCheckout(user.id, user.email, { subscription, lines: [], consent })
 
     expect(ledgerTotals(await readIntroLedger()).count).toBe(before.count)
+  })
+})
+
+describe('consent is a precondition of checkout', () => {
+  it('records what the member agreed to, against their account', async () => {
+    const user = await createUser({ email: 'consented@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, { subscription, lines: [], consent }, {
+      ip: '203.0.113.9',
+      userAgent: 'jest',
+    })
+
+    const record = await latestConsent(user.id)
+    expect(record).toMatchObject({ context: 'checkout', ip: '203.0.113.9', userAgent: 'jest' })
+    expect(record!.documents.map((d) => d.id)).toEqual(['terms', 'disclaimer'])
+    expect(record!.documents.every((d) => /^[0-9a-f]{64}$/.test(d.hash))).toBe(true)
+  })
+
+  it('refuses to store a plan or start a payment without consent', async () => {
+    const user = await createUser({ email: 'unconsented@example.com', passwordHash: 'h' })
+
+    await expect(finalizeCheckout(user.id, user.email, { subscription, lines: [] }))
+      .rejects.toThrow(CheckoutRejected)
+
+    // Nothing was written — no half-finished account with a plan and no consent.
+    expect(await getSubscription(user.id)).toBeNull()
+    expect(await latestConsent(user.id)).toBeNull()
+  })
+
+  it('refuses consent to a version we no longer serve', async () => {
+    const user = await createUser({ email: 'stale@example.com', passwordHash: 'h' })
+
+    await expect(
+      finalizeCheckout(user.id, user.email, {
+        subscription,
+        lines: [],
+        consent: { ...consent, termsVersion: '2020-01-01' },
+      }),
+    ).rejects.toThrow(/updated/i)
+    expect(await getSubscription(user.id)).toBeNull()
+  })
+
+  it('snapshots the member’s dietary exclusions onto the subscription', async () => {
+    // Captured at the point of sale so a substitution months later is judged
+    // against what they told us when they bought, not whatever their answers
+    // happen to say by then.
+    const user = await createUser({ email: 'vegan@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      quiz: { answers: { lifestyle: ['vegan'], stimPreference: 'no' } as unknown as QuizAnswers },
+      lines: [],
+      consent,
+    })
+
+    const stored = await getSubscription(user.id)
+    expect(stored?.safetyConstraints).toEqual({ dietaryTags: ['vegan'], noStimulants: true })
   })
 })
 

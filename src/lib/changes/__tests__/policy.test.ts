@@ -225,7 +225,7 @@ describe('the review window', () => {
 
   it('defers by the configured hours when review is needed', () => {
     setPricingOverrides({ founderReviewHours: 24 })
-    const action = { resolution: { type: 'remove' }, reason: 'would-break-plan', needsReview: true } as const
+    const action = { resolution: { type: 'remove' }, reason: 'member-chose-remove', needsReview: true } as const
     expect(autoApplyAt(action, at, getPricingConfig())).toBe('2026-07-30T09:00:00.000Z')
   })
 

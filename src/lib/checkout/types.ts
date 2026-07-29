@@ -1,5 +1,6 @@
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { SubscriptionCheckoutLine } from '@/lib/stack-blueprint/checkout'
+import type { ConsentSubmission } from '@/lib/legal/consent'
 import type { QuizAnswers, StackLevel } from '@/lib/types'
 
 /** What a member subscribes with — persisted to their account at checkout so
@@ -11,4 +12,10 @@ export interface CheckoutPayload {
   quiz?: { answers: QuizAnswers; level?: StackLevel } | null
   /** Cart lines for the live Shopify checkout (empty/omitted in mock mode). */
   lines?: SubscriptionCheckoutLine[]
+  /**
+   * The member ticking the terms + health box at the gate. Required — the
+   * server refuses to finalize without it, and records its own view of which
+   * documents that means rather than trusting this.
+   */
+  consent?: ConsentSubmission
 }

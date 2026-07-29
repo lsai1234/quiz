@@ -3,6 +3,9 @@
 import { useEffect, useState } from 'react'
 import { ProviderButtons } from './ProviderButtons'
 import { fetchAuthContext, authenticateAccount } from '@/lib/auth-client'
+import { CheckoutConsent } from '@/components/legal/CheckoutConsent'
+import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
+import type { ConsentSubmission } from '@/lib/legal/consent'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
 const ACCENT = '#00D4FF'
@@ -12,6 +15,12 @@ const ACCENT = '#00D4FF'
  * inline (no redirect) then resumes checkout via `onAuthenticated`. OAuth
  * stashes the pending order (`/api/checkout/pending`) and redirects to the
  * provider, returning to `/api/checkout/continue` which finalizes server-side.
+ *
+ * It's also where consent is captured: the health disclaimer and the terms tick
+ * -box sit here, at the last step before payment, so nobody subscribes without
+ * having been shown them. Both paths carry the consent — inline via
+ * `onAuthenticated`, OAuth by stashing it with the pending order — because the
+ * server refuses to finalize a checkout without one.
  */
 export function AccountGate({
   payload,
@@ -19,7 +28,7 @@ export function AccountGate({
   onCancel,
 }: {
   payload: CheckoutPayload
-  onAuthenticated: () => void
+  onAuthenticated: (consent: ConsentSubmission) => void
   onCancel: () => void
 }) {
   const [providers, setProviders] = useState<{ id: string; label: string }[]>([])
@@ -27,16 +36,33 @@ export function AccountGate({
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [consented, setConsented] = useState(false)
+  const [consentError, setConsentError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     void fetchAuthContext().then((ctx) => setProviders(ctx.providers))
   }, [])
 
-  const valid = /\S+@\S+\.\S+/.test(email) && password.length >= (mode === 'signup' ? 8 : 1)
+  const consent: ConsentSubmission = {
+    accepted: consented,
+    termsVersion: TERMS_VERSION,
+    disclaimerVersion: DISCLAIMER_VERSION,
+  }
+
+  const credentialsValid = /\S+@\S+\.\S+/.test(email) && password.length >= (mode === 'signup' ? 8 : 1)
+  const valid = credentialsValid && consented
+
+  /** Shared by both paths: refuse to go anywhere until the box is ticked. */
+  const requireConsent = (): boolean => {
+    if (consented) return true
+    setConsentError('Please confirm you’ve read and agree to the terms and health information.')
+    return false
+  }
 
   const submit = async () => {
-    if (!valid || busy) return
+    if (busy || !credentialsValid) return
+    if (!requireConsent()) return
     setBusy(true)
     setError(null)
     const err = await authenticateAccount(mode, email.trim(), password)
@@ -45,15 +71,18 @@ export function AccountGate({
       setBusy(false)
       return
     }
-    onAuthenticated() // resume checkout with the now-signed-in account
+    onAuthenticated(consent) // resume checkout with the now-signed-in account
   }
 
-  // Stash the pending order before an OAuth redirect so it survives the round-trip.
+  // Stash the pending order before an OAuth redirect so it survives the
+  // round-trip — consent included, since the member won't pass through this
+  // component again on the way back.
   const stashPending = async () => {
+    if (!requireConsent()) throw new Error('consent required')
     const res = await fetch('/api/checkout/pending', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, consent }),
     })
     if (!res.ok) throw new Error('pending stash failed')
   }
@@ -94,6 +123,13 @@ export function AccountGate({
             className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none" style={inputStyle}
           />
           {error && <p className="text-xs font-semibold px-1" style={{ color: '#ff6b6b' }} role="alert">{error}</p>}
+
+          <CheckoutConsent
+            accepted={consented}
+            onChange={(next) => { setConsented(next); if (next) setConsentError(null) }}
+            error={consentError}
+          />
+
           <button
             type="submit" disabled={!valid || busy}
             className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-50"

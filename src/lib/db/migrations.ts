@@ -139,6 +139,24 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX subscription_changes_kind ON subscription_changes(kind);
   CREATE INDEX subscription_changes_auto_apply ON subscription_changes(auto_apply_at);
   `,
+  // v5 — `consents`: evidence of a member accepting the terms and the health
+  // disclaimer. Append-only; a row is never updated or deleted, because the
+  // whole point is being able to show what someone agreed to and when.
+  // `terms_version` is indexed so the re-consent sweep can find everyone still
+  // on an older version. The full record — every document, its version and a
+  // SHA-256 of the exact text served — lives in `data`.
+  `
+  CREATE TABLE consents (
+    id            TEXT PRIMARY KEY,
+    user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    context       TEXT NOT NULL,
+    terms_version TEXT NOT NULL,
+    data          TEXT NOT NULL,
+    accepted_at   TEXT NOT NULL
+  );
+  CREATE INDEX consents_user_id ON consents(user_id);
+  CREATE INDEX consents_terms_version ON consents(terms_version);
+  `,
 ]
 
 /**

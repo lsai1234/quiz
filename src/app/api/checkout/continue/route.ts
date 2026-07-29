@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { getHubUser } from '@/lib/auth/session'
 import { kvGet, kvDelete } from '@/lib/db/kv'
-import { finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX } from '@/lib/checkout/finalize'
+import { CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX } from '@/lib/checkout/finalize'
+import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
@@ -28,11 +29,21 @@ export async function GET(req: Request) {
   if (!stored?.payload) return NextResponse.redirect(`${origin}/hub`)
 
   try {
-    const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, stored.payload, origin)
+    const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, stored.payload, {
+      origin,
+      ...requestMetadata(req),
+    })
     if (!mock && checkoutUrl && !checkoutUrl.startsWith('#')) {
       return NextResponse.redirect(checkoutUrl)
     }
   } catch (err) {
+    if (err instanceof CheckoutRejected) {
+      // Consent was missing or stale by the time they got back from the
+      // provider. They're signed in, so send them back to re-confirm rather
+      // than landing on a hub with no plan and no explanation.
+      console.warn('[checkout/continue] consent rejected:', err.message)
+      return NextResponse.redirect(`${origin}/?checkout=consent-required`)
+    }
     console.error('[checkout/continue] finalize failed:', err)
   }
   // Mock mode (or a live failure we've logged): land on the hub with the saved bundle.

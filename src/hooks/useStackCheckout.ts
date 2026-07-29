@@ -15,6 +15,7 @@ import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { PlanType } from '@/lib/store'
 import { buildMemberSubscription } from '@/lib/recharge/mock'
 import type { CheckoutPayload } from '@/lib/checkout/types'
+import type { ConsentSubmission } from '@/lib/legal/consent'
 
 export type CheckoutState =
   | { status: 'idle' }
@@ -132,10 +133,19 @@ export function useStackCheckout() {
     [runFinalize],
   )
 
-  /** Re-run the subscription finalize after the member signs in via the gate. */
-  const resume = useCallback(() => {
-    if (pending.current) void runFinalize(pending.current.payload, pending.current.checkout)
-  }, [runFinalize])
+  /**
+   * Re-run the subscription finalize after the member signs in via the gate,
+   * carrying the consent they gave there — the server rejects a checkout
+   * without it.
+   */
+  const resume = useCallback(
+    (consent?: ConsentSubmission) => {
+      if (!pending.current) return
+      const payload = consent ? { ...pending.current.payload, consent } : pending.current.payload
+      void runFinalize(payload, pending.current.checkout)
+    },
+    [runFinalize],
+  )
 
   const reset = useCallback(() => { pending.current = null; setState({ status: 'idle' }) }, [])
 
