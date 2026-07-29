@@ -158,6 +158,53 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
   return { id: session.id, url: session.url }
 }
 
+/**
+ * Change what a live subscription bills each month.
+ *
+ * Stripe holds the schedule and the amount; our `MemberSubscription` holds what
+ * the amount is FOR. When a product change moves the flat monthly, both have to
+ * move, and Stripe is the one that actually takes the money — so it goes first.
+ * A failure here must leave the local price alone rather than produce a plan
+ * that says one thing and a card charge that says another.
+ *
+ * Replaces the single recurring line's price in place, keeping the billing
+ * anchor so the member's payment date doesn't jump. `proration_behavior: 'none'`
+ * because the new price is deliberately effective from the next cycle — a
+ * reduction is never backdated and an increase has already served its notice.
+ */
+export async function updateSubscriptionAmount(
+  stripeSubscriptionId: string,
+  monthlyTotal: number,
+  opts: { currency?: string } = {},
+): Promise<void> {
+  const stripe = getStripeClient()
+  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
+  const item = subscription.items.data[0]
+  if (!item) throw new Error(`Stripe subscription ${stripeSubscriptionId} has no billable item`)
+
+  // A subscription item's `price_data` takes a product ID, not inline product
+  // data — so reuse the product the current price already points at. That keeps
+  // every price this member has ever been on under one Stripe product, which is
+  // what makes their billing history readable in the dashboard.
+  const currentPrice = item.price
+  const productId = typeof currentPrice.product === 'string' ? currentPrice.product : currentPrice.product.id
+
+  await stripe.subscriptions.update(stripeSubscriptionId, {
+    items: [
+      {
+        id: item.id,
+        price_data: {
+          currency: (opts.currency ?? currentPrice.currency ?? 'gbp').toLowerCase(),
+          product: productId,
+          unit_amount: Math.round(monthlyTotal * 100),
+          recurring: { interval: 'month' },
+        },
+      },
+    ],
+    proration_behavior: 'none',
+  })
+}
+
 /** Open the Stripe billing portal so a member can manage their card / cancel. */
 export async function createBillingPortalSession(customerId: string, returnUrl: string): Promise<{ url: string }> {
   const stripe = getStripeClient()

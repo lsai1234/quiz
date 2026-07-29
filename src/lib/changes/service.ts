@@ -25,7 +25,7 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 import { getSubscription, listActiveSubscriptions, saveSubscription } from '@/lib/db/hub-data'
 import { getSupplier } from '@/lib/supplier'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { applyResolution } from './apply'
+import { applyResolution, earliestIncreaseDate } from './apply'
 import {
   diffSupplierFeed,
   findAffectedLines,
@@ -39,7 +39,7 @@ import { anyCategoryCandidate, findReplacement, isDueForAutoApply } from './poli
 import { getChange, listChanges, listDueForAutoApply, saveChange, updateChange } from './repo'
 import { constraintsFor } from './safety'
 import { listSnapshots, saveSnapshots } from './snapshots'
-import { OPEN_STATUSES, type ChangeEvent, type ChangeResolution } from './types'
+import { OPEN_STATUSES, PRICE_KINDS, type ChangeEvent, type ChangeResolution } from './types'
 
 export interface RunOptions {
   /** Injected in tests; otherwise read from the supplier and the database. */
@@ -141,6 +141,30 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
     result.events.push(event)
   }
 
+  // Price moves. Raised per affected line — the money, the notice date and the
+  // email are all per-member — and grouped back together for the founder by the
+  // hub. Their intended action is `absorb`, so an unattended queue costs the
+  // member nothing.
+  for (const { sku, move } of diff.priceMoves) {
+    for (const { userId, subscription } of subscriptions) {
+      for (const line of subscription.lines) {
+        if (skuForLine(line, catalogue) !== sku) continue
+
+        const kind = move.wholesaleDeltaPct > 0 ? 'price-increase' : 'price-decrease'
+        const existing = await getChange(changeEventId(userId, line.id, kind))
+        if (existing && !OPEN_STATUSES.includes(existing.status)) continue
+
+        const event = createChangeEvent({
+          kind, userId, subscription, line, sku, price: move, now, config,
+          createdAt: existing?.createdAt,
+        })
+        if (existing) event.autoApplyAt = existing.autoApplyAt
+        if (!opts.dryRun) await saveChange(event)
+        result.events.push(event)
+      }
+    }
+  }
+
   // A discontinuation supersedes any open out-of-stock event for the same line:
   // same problem, stronger fact, and two queue entries saying different things
   // about one product helps nobody.
@@ -215,9 +239,13 @@ export async function applyDueChanges(
 
   for (const event of due) {
     if (!isDueForAutoApply(event.autoApplyAt, now)) continue
-    // Price events default to `absorb`, which changes nothing on the member's
-    // plan. Applying one means closing it, not billing anyone.
-    const result = await applyChangeEvent(event, event.intendedAction.resolution, 'system', {
+    // A resolution already on the event is a decision someone made — most often
+    // a scheduled price pass-on waiting out its notice. Applying the ORIGINAL
+    // intent here would quietly undo it. Fall back to the intended action only
+    // when nobody has decided anything.
+    const resolution = event.resolution ?? event.intendedAction.resolution
+    const source = event.resolutionSource ?? 'system'
+    const result = await applyChangeEvent(event, resolution, source, {
       now,
       config: opts.config,
       catalogue,
@@ -279,6 +307,16 @@ export async function applyChangeEvent(
   }
 
   if (!outcome.rejected) {
+    // Stripe before us. It's what actually takes the money, so if it refuses
+    // the new amount we must not store a plan that disagrees with the card
+    // charge — the event stays open with the reason on it instead.
+    const billingError = await syncBilling(event, outcome.subscription)
+    if (billingError) {
+      return updateChange(event.id, (e) => {
+        e.error = billingError
+        e.resolutionDetail = `Could not update billing: ${billingError}`
+      })
+    }
     await saveSubscription(event.userId, outcome.subscription)
   }
 
@@ -302,6 +340,176 @@ export async function applyChangeEvent(
     // (P5) picks applied-but-unnotified events up.
     e.notifiedAt = e.notifiedAt ?? null
   })
+}
+
+/**
+ * Open AND undecided — nobody has chosen absorb or pass-on yet.
+ *
+ * A scheduled pass-on is still "open" (it hasn't billed), but it is decided.
+ * Offering it back to a founder as a fresh choice would let them absorb
+ * something a member has already been given notice of.
+ */
+export function isUndecided(event: ChangeEvent): boolean {
+  return event.resolution === undefined
+}
+
+/**
+ * Push a new recurring amount to Stripe. Returns an error message on failure,
+ * or null when there was nothing to do (mock mode, no Stripe subscription, or
+ * the amount hasn't moved).
+ */
+async function syncBilling(event: ChangeEvent, next: MemberSubscription): Promise<string | null> {
+  const previous = event.billingPreview?.currentMonthly
+  if (previous !== undefined && Math.abs(next.flatMonthly - previous) < 0.01) return null
+  if (!next.stripeSubscriptionId) return null
+
+  const { getPaymentSource } = await import('@/lib/payments')
+  if (getPaymentSource() !== 'stripe') return null
+
+  try {
+    const { updateSubscriptionAmount } = await import('@/lib/payments/stripe')
+    await updateSubscriptionAmount(next.stripeSubscriptionId, next.flatMonthly)
+    return null
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[changes] Stripe rejected the new amount:', message)
+    return message
+  }
+}
+
+/**
+ * Schedule a price pass-on for everyone holding a product.
+ *
+ * The member's plan is deliberately NOT touched here. An increase can't bill
+ * until its notice has run, so the event is parked as `scheduled` with
+ * `autoApplyAt` set to the effective date and the re-price recorded on it; the
+ * ordinary due-changes sweep applies it when the day comes. The notice email
+ * goes out NOW, which is the entire point of a notice period.
+ *
+ * That reuse matters: there is exactly one code path that changes a member's
+ * price, and it's the same one a swap or a removal goes through.
+ */
+export async function schedulePassOn(
+  productId: string,
+  passOnPct: number,
+  opts: { now?: Date; config?: PricingConfig; catalogue?: CatalogueProduct[] } = {},
+): Promise<{ scheduled: ChangeEvent[]; notified: number }> {
+  const config = opts.config ?? getPricingConfig()
+  const now = opts.now ?? new Date()
+  const catalogue = opts.catalogue ?? (await loadCatalogue())
+  const product = catalogue.find((p) => p.id === productId)
+
+  const events = (await listChanges({ status: OPEN_STATUSES, kind: PRICE_KINDS })).filter(
+    (e) => e.productId === productId && e.price && isUndecided(e),
+  )
+  if (!product || events.length === 0) return { scheduled: [], notified: 0 }
+
+  const subscriptions = new Map<string, MemberSubscription>()
+  for (const event of events) {
+    const sub = await getSubscription(event.userId)
+    if (sub) subscriptions.set(event.userId, sub)
+  }
+
+  const { summarisePriceGroup } = await import('./price')
+  const impact = summarisePriceGroup({ product, events, subscriptions, passOnPct, config })
+
+  const scheduled: ChangeEvent[] = []
+  for (const event of events) {
+    const sub = subscriptions.get(event.userId)
+    const member = impact.members.find((m) => m.eventId === event.id)
+    if (!sub || !member) continue
+
+    const effectiveFrom = earliestIncreaseDate(sub, now, config)
+    const updated = await updateChange(event.id, (e) => {
+      e.status = 'scheduled'
+      e.resolution = { type: 'pass-on', newUnitPrice: impact.passOnUnitPrice }
+      e.resolutionSource = 'founder'
+      e.resolutionDetail = `Passing on ${Math.round(passOnPct * 100)}% — ${member.monthlyBefore.toFixed(2)} → ${member.monthlyAfter.toFixed(2)}/mo from ${effectiveFrom.slice(0, 10)}`
+      // The sweep applies it on the day, through the same path as everything else.
+      e.autoApplyAt = effectiveFrom
+    })
+    if (!updated) continue
+    scheduled.push(updated)
+
+    await queuePriceNotice(updated, member, effectiveFrom, config)
+  }
+
+  const { sent } = await flushChangeNotifications()
+  return { scheduled, notified: sent }
+}
+
+/**
+ * Absorb a supplier move: record the new cost, leave the member's price alone.
+ *
+ * The cost baseline updates either way — that's simply what the product costs
+ * now — so margin reporting stays honest whichever way the decision went.
+ */
+export async function absorbPriceChange(
+  productId: string,
+  opts: { now?: Date } = {},
+): Promise<ChangeEvent[]> {
+  const events = (await listChanges({ status: OPEN_STATUSES, kind: PRICE_KINDS })).filter(
+    (e) => e.productId === productId && e.price && isUndecided(e),
+  )
+  if (events.length === 0) return []
+
+  await recordNewCost(productId, events[0].price!.newWholesale)
+
+  const resolved: ChangeEvent[] = []
+  for (const event of events) {
+    const updated = await updateChange(event.id, (e) => {
+      e.status = 'applied'
+      e.resolution = { type: 'absorb' }
+      e.resolutionSource = 'founder'
+      e.resolutionDetail = `Absorbed — cost now ${event.price!.newWholesale.toFixed(2)}, member's price unchanged`
+      e.resolvedAt = (opts.now ?? new Date()).toISOString()
+      e.appliedAt = (opts.now ?? new Date()).toISOString()
+    })
+    if (updated) resolved.push(updated)
+  }
+  return resolved
+}
+
+/** Persist what a product now costs us, as a founder-level product override. */
+async function recordNewCost(productId: string, cost: number): Promise<void> {
+  try {
+    const { setProductOverride } = await import('@/lib/portal/store')
+    await setProductOverride(productId, { cost })
+  } catch (err) {
+    console.error('[changes] could not record the new cost:', err)
+  }
+}
+
+/** The advance notice a member gets before an increase bills. */
+async function queuePriceNotice(
+  event: ChangeEvent,
+  member: { monthlyBefore: number; monthlyAfter: number },
+  effectiveFrom: string,
+  config: PricingConfig,
+): Promise<void> {
+  if (!event.customerEmail) return
+  try {
+    const { priceChangeNotice } = await import('@/lib/notify/templates')
+    const { queueNotification } = await import('@/lib/notify/outbox')
+    const { appBaseUrl } = await import('@/lib/notify')
+
+    await queueNotification({
+      userId: event.userId,
+      email: event.customerEmail,
+      template: 'price-change-notice',
+      changeEventId: event.id,
+      rendered: priceChangeNotice({
+        productTitle: event.productTitle,
+        monthlyBefore: member.monthlyBefore,
+        monthlyAfter: member.monthlyAfter,
+        effectiveFrom,
+        noticeDays: config.priceChangeNoticeDays,
+        hubUrl: `${appBaseUrl()}/hub`,
+      }),
+    })
+  } catch (err) {
+    console.error('[changes] could not queue the price notice:', err)
+  }
 }
 
 /**

@@ -3,7 +3,7 @@ import { isPortalAuthed } from '@/lib/portal/guard'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getChange } from '@/lib/changes/repo'
 import { flushChangeNotifications, resolveChangeEvent } from '@/lib/changes/service'
-import type { ChangeResolution } from '@/lib/changes/types'
+import { toResolution } from '@/lib/changes/parse'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,23 +41,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 
   const { sent, failed } = await flushChangeNotifications()
   return NextResponse.json({ ok: true, event: resolved, notified: sent, notifyFailed: failed })
-}
-
-export function toResolution(body: { action?: string; replacementProductId?: string }): ChangeResolution | null {
-  switch (body.action) {
-    case 'substitute':
-      return body.replacementProductId
-        ? { type: 'substitute', replacementProductId: body.replacementProductId }
-        : null
-    case 'remove':
-      return { type: 'remove' }
-    case 'hold':
-      return { type: 'hold' }
-    case 'dismiss':
-      return { type: 'dismiss' }
-    default:
-      return null
-  }
 }
 
 /** GET — one event, for the detail view. */

@@ -29,7 +29,14 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { dryRun?: boolean; forceOosSku?: string; clearForce?: boolean } = {}
+  let body: {
+    dryRun?: boolean
+    forceOosSku?: string
+    clearForce?: boolean
+    /** Demo: move a SKU's cost so the price journey can be exercised. */
+    forceCostSku?: string
+    forceCost?: number
+  } = {}
   try {
     body = await req.json()
   } catch {
@@ -40,10 +47,16 @@ export async function POST(req: Request) {
 
   // Demo affordance, mock supplier only: force a SKU out of stock so the whole
   // journey can be exercised on demand rather than waiting for a real outage.
-  if (body.forceOosSku || body.clearForce) {
+  if (body.forceOosSku || body.clearForce || body.forceCostSku) {
     const mock = await import('@/lib/supplier/powerbody/mock')
-    if (body.clearForce) mock.getForcedOutOfStock().forEach((sku) => mock.forceOutOfStock(sku, false))
+    if (body.clearForce) {
+      mock.getForcedOutOfStock().forEach((sku) => mock.forceOutOfStock(sku, false))
+      Object.keys(mock.getForcedWholesalePrices()).forEach((sku) => mock.forceWholesalePrice(sku, null))
+    }
     if (body.forceOosSku) mock.forceOutOfStock(body.forceOosSku, true)
+    if (body.forceCostSku && typeof body.forceCost === 'number') {
+      mock.forceWholesalePrice(body.forceCostSku, body.forceCost)
+    }
   }
 
   const result = await runChangeDetection({ dryRun: body.dryRun })

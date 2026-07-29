@@ -4,7 +4,7 @@ import { syncPortalRuntime } from '@/lib/portal/store'
 import { listChanges } from '@/lib/changes/repo'
 import { bulkResolveByProduct } from '@/lib/changes/service'
 import { OPEN_STATUSES } from '@/lib/changes/types'
-import { toResolution } from '../[id]/route'
+import { toResolution } from '@/lib/changes/parse'
 
 export const dynamic = 'force-dynamic'
 

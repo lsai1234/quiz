@@ -43,6 +43,28 @@ export function __resetForcedOutOfStock(): void {
   forcedOutOfStock.clear()
 }
 
+// The same affordance for cost: fixture prices never move, so without this the
+// price-change journey can't be exercised until a real supplier puts something
+// up. Process-local, mock-only.
+const forcedWholesale = new Map<string, number>()
+
+/** Force (or clear) a SKU's wholesale cost for demos/tests. */
+export function forceWholesalePrice(sku: string, price: number | null): void {
+  if (price === null) forcedWholesale.delete(sku)
+  else forcedWholesale.set(sku, price)
+}
+export function getForcedWholesalePrices(): Record<string, number> {
+  return Object.fromEntries(forcedWholesale)
+}
+export function __resetForcedWholesale(): void {
+  forcedWholesale.clear()
+}
+
+/** Cost for a SKU: the fixture price unless a demo has overridden it. */
+function currentWholesale(sku: string, base: number): number {
+  return forcedWholesale.get(sku) ?? base
+}
+
 /** Current stock for a SKU: the fixture level nudged by the daily drift, floored
  *  at 0. A genuinely out-of-stock fixture (0), or one force-flagged for a demo,
  *  stays out of stock. */
@@ -53,7 +75,7 @@ function currentStock(sku: string, baseStock: number): number {
 
 function withCurrentStock(p: SupplierProduct): SupplierProduct {
   const stock = currentStock(p.sku, p.stock)
-  return { ...p, stock, inStock: stock > 0 }
+  return { ...p, stock, inStock: stock > 0, wholesalePrice: currentWholesale(p.sku, p.wholesalePrice) }
 }
 
 // Process-local order store (supplier-side echo only).
@@ -80,7 +102,7 @@ export function createMockSupplier(): SupplierProvider {
           sku: p.sku,
           stock,
           inStock: stock > 0,
-          wholesalePrice: p.wholesalePrice,
+          wholesalePrice: currentWholesale(p.sku, p.wholesalePrice),
           rrp: p.rrp,
           updatedAt: new Date().toISOString(),
         }

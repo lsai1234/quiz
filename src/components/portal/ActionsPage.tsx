@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { ActionQueue } from './ActionQueue'
+import { PriceChanges } from './PriceChanges'
 import type { ChangeEvent } from '@/lib/changes/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -148,8 +149,27 @@ export function ActionsPage() {
       {!events ? (
         <p className="text-sm text-[var(--color-muted)]">Loading…</p>
       ) : (
-        <ActionQueue events={events} catalogue={catalogue} busyId={busyId} onResolve={resolve} onBulk={bulk} />
+        <ActionQueue
+          events={events.filter((e) => e.kind === 'out-of-stock' || e.kind === 'discontinued')}
+          catalogue={catalogue}
+          busyId={busyId}
+          onResolve={resolve}
+          onBulk={bulk}
+        />
       )}
+
+      {/* Price moves are a different decision with a different shape — margin
+          against member impact — so they get their own section rather than
+          being squeezed into a row built for "this product has gone". */}
+      <div className="pt-2">
+        <h2 className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          Supplier price moves
+        </h2>
+        <p className="text-[11px] text-[var(--color-muted)] mb-3">
+          Absorbed unless you say otherwise, so leaving this alone never costs a member anything.
+        </p>
+        <PriceChanges />
+      </div>
     </div>
   )
 }
