@@ -12,13 +12,22 @@
 import { fromAddress } from '../index'
 import type { NotificationProvider, RenderedEmail, SendResult } from '../types'
 
-const ENDPOINT = 'https://api.resend.com/emails'
+const DEFAULT_ENDPOINT = 'https://api.resend.com/emails'
+
+/**
+ * Overridable so the integration can be pointed at a stub — verifying the Send
+ * button end to end shouldn't mean emailing real people, and a self-hosted relay
+ * is a legitimate thing to want anyway.
+ */
+function endpoint(): string {
+  return process.env.RESEND_API_URL || DEFAULT_ENDPOINT
+}
 
 export function createResendProvider(): NotificationProvider {
   return {
     name: 'resend',
     async send(to: string, email: RenderedEmail): Promise<SendResult> {
-      const res = await fetch(ENDPOINT, {
+      const res = await fetch(endpoint(), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${process.env.RESEND_API_KEY}`,

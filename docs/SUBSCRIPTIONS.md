@@ -493,16 +493,26 @@ opens the swap flow on that line, `/hub?add=<swapGroup>` opens the add sheet
 with an "in place of what you lost" section. Those links are the mechanism by
 which a member takes control back, since nothing asks them to.
 
-**Sending is manual by default, and that is a real workflow rather than a stub.**
-Every email is written in full and listed in `/portal/emails` for a founder to
-copy into their own mail client and tick off. No provider, no API key, no domain
-verification — and the promise that a member is told still holds. A change that
-has been applied but not yet sent shows `notifiedAt: null` and appears in the
-member's record as outstanding, so the debt is visible rather than assumed away.
+**How email leaves is a three-rung ladder**, and every rung uses the same emails
+and the same page — you can start with no integration and add one later without
+relearning anything:
 
-`NOTIFY_SOURCE=resend` plus a key switches to automatic sending of the same
-emails, with nothing else to change. A forced `resend` without a key falls back
-to **manual**, never to silently dropping the message.
+| `NOTIFY_SOURCE` | What happens | The page shows |
+|---|---|---|
+| `manual` (default) | Nothing sends itself | Copy address / subject / message, then **Mark as sent** |
+| `resend` + key | A provider is configured | **Send email** per row and **Send all** — one click delivers and marks it sent |
+| `auto` + key | Unattended | The daily job flushes; you only look when something fails |
+
+`resend` deliberately does **not** send unattended. Configuring a provider gives
+you a button, not a hands-off system — "I can send with one click" and "email
+leaves without me seeing it" are different levels of trust, so they're different
+decisions (`isAutoSendEnabled` vs `canSendFromHub`).
+
+A forced `resend` without a key falls back to **manual**, never to silently
+dropping the message. A change applied but not yet sent shows `notifiedAt: null`
+and appears in the member's record as outstanding, so the debt is visible rather
+than assumed away — and a **failed** send leaves it that way, which is what keeps
+the outstanding count worth trusting.
 
 ### The Founders Hub
 
@@ -515,10 +525,12 @@ to **manual**, never to silently dropping the message.
   without a database console: lines and policies, billing history, every email
   sent, and their consent record.
 - `/portal/emails` — **To send** and **Sent**. Each waiting email shows its full
-  body with copy buttons for the address, subject and message, a "copy all" for
-  the whole batch, and a Mark as sent tick that also closes the loop on the
-  member's change record. `sentManually` keeps the audit honest: "a person says
-  they sent this" and "a provider confirmed delivery" are different claims.
+  body, copy buttons for the address, subject and message, and (with a provider
+  configured) **Send email** / **Send all**. Mark as sent stays available either
+  way — sometimes you want to send it yourself with a note attached. Both routes
+  close the loop on the member's change record, and `sentManually` keeps the
+  audit honest: "a person says they sent this" and "a provider confirmed
+  delivery" are different claims.
 
 Supersedes the old `/portal/stock-alerts` and `lib/stock`, both removed.
 

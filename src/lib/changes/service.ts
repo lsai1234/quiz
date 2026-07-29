@@ -647,23 +647,41 @@ export async function flushChangeNotifications(): Promise<{
 }
 
 /**
- * A founder ticking an email off as sent by hand.
+ * Stamp the change this notification concerns as told.
  *
- * Marks the outbox row AND stamps `notifiedAt` on the change it concerns, so the
- * two never disagree — a member's record shouldn't say "we haven't told them"
- * once someone has.
+ * Shared by every route an email can take — copied out by hand, sent with a
+ * click, or flushed automatically — so the member's record and the outbox can
+ * never disagree about whether they've heard from us.
  */
+async function recordAsTold(notification: { changeEventId?: string | null; sentAt?: string | null }) {
+  if (!notification.changeEventId) return
+  await updateChange(notification.changeEventId, (e) => {
+    e.notifiedAt = notification.sentAt ?? new Date().toISOString()
+  })
+}
+
+/** A founder ticking an email off as sent from their own mail client. */
 export async function markNotificationSentManually(notificationId: string) {
   const { markSentManually } = await import('@/lib/notify/outbox')
   const sent = await markSentManually(notificationId)
   if (!sent) return null
-
-  if (sent.changeEventId) {
-    await updateChange(sent.changeEventId, (e) => {
-      e.notifiedAt = sent.sentAt ?? new Date().toISOString()
-    })
-  }
+  await recordAsTold(sent)
   return sent
+}
+
+/**
+ * The Send button: deliver one email through the configured provider.
+ *
+ * Only stamps the change as told when the send actually succeeded — a failure
+ * leaves the member correctly showing as not-yet-told, which is what keeps the
+ * hub's "outstanding" count meaningful.
+ */
+export async function sendNotificationNow(notificationId: string) {
+  const { sendNotificationNow: send } = await import('@/lib/notify/outbox')
+  const result = await send(notificationId)
+  if (!result) return null
+  if (result.status === 'sent') await recordAsTold(result)
+  return result
 }
 
 function describeResolution(

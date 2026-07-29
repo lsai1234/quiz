@@ -1,8 +1,12 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { listNotifications, retryNotification } from '@/lib/notify/outbox'
-import { flushChangeNotifications, markNotificationSentManually } from '@/lib/changes/service'
-import { getNotificationSource } from '@/lib/notify'
+import {
+  flushChangeNotifications,
+  markNotificationSentManually,
+  sendNotificationNow,
+} from '@/lib/changes/service'
+import { canSendFromHub, getNotificationSource, isAutoSendEnabled } from '@/lib/notify'
 import type { NotificationStatus } from '@/lib/notify/types'
 
 export const dynamic = 'force-dynamic'
@@ -14,12 +18,14 @@ export const dynamic = 'force-dynamic'
  * a founder to copy them into their own mail client and tick them off. This
  * endpoint serves that list and takes the tick.
  *
- * GET  — recent notifications; `?status=queued|sent|failed` narrows it.
- * POST — `{ markSent: id }` ticks one off as sent by hand.
- *        `{ retry: id }`    requeues a failure (provider mode).
- *        `{}`               flushes the queue (provider mode only; a no-op when
- *                           sending is manual, so it can't mark unsent email as
- *                           delivered).
+ * GET  — recent notifications, plus whether this deployment can send at all.
+ *        `?status=queued|sent|failed` narrows the list.
+ * POST — `{ send: id }`     delivers one through the provider and marks it sent.
+ *        `{ sendAll: true }` does that for everything waiting.
+ *        `{ markSent: id }` ticks one off that you sent yourself.
+ *        `{ retry: id }`    requeues a failure.
+ *        `{}`               flushes automatically (no-op unless auto-send is on,
+ *                           so it can never mark unsent email as delivered).
  */
 export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -29,6 +35,9 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     provider: getNotificationSource(),
+    // Drives the Send button: no provider, no button.
+    canSend: canSendFromHub(),
+    autoSend: isAutoSendEnabled(),
     count: notifications.length,
     awaitingSend: notifications.filter((n) => n.status === 'queued').length,
     failed: notifications.filter((n) => n.status === 'failed').length,
@@ -39,11 +48,33 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  let body: { markSent?: string; retry?: string } = {}
+  let body: { send?: string; sendAll?: boolean; markSent?: string; retry?: string } = {}
   try {
     body = await req.json()
   } catch {
     /* no body — just flush */
+  }
+
+  if (body.send) {
+    const result = await sendNotificationNow(body.send)
+    if (!result) return NextResponse.json({ error: 'Notification not found' }, { status: 404 })
+    return NextResponse.json({
+      ok: result.status === 'sent',
+      notification: result,
+      error: result.status === 'sent' ? undefined : result.error,
+    })
+  }
+
+  if (body.sendAll) {
+    const waiting = await listNotifications({ status: 'queued', limit: 100 })
+    let sent = 0
+    const failures: { email: string; error: string }[] = []
+    for (const notification of waiting) {
+      const result = await sendNotificationNow(notification.id)
+      if (result?.status === 'sent') sent += 1
+      else failures.push({ email: notification.email, error: result?.error ?? 'Unknown error' })
+    }
+    return NextResponse.json({ ok: failures.length === 0, sent, failures })
   }
 
   if (body.markSent) {

@@ -5,29 +5,32 @@
  * the same shape as the supplier and payments resolvers, so there is one obvious
  * pattern for "manual vs live".
  *
- * Resolution order (highest priority first):
- *   1. Explicit env — NOTIFY_SOURCE = manual | mock | resend | auto
- *   2. Default      — MANUAL
+ * There are three rungs on the ladder, and you climb them as the volume
+ * justifies it. Every rung uses the same emails and the same page — only who
+ * presses send changes:
  *
- * **Manual is the default, and it is a real workflow rather than a stub.** The
- * email is written and stored exactly as it would be sent; it simply waits in
- * the Founders Hub for a human to copy it into their own mail client and tick
- * it off. No mail provider, no API key, no domain verification — and the
- * business still keeps its promise that a member is told when their plan
- * changes.
+ *   `manual` (default) — no provider at all. The email waits in the Founders
+ *       Hub for a human to copy into their own mail client and tick off. No API
+ *       key, no domain verification, and the promise that a member is told still
+ *       holds.
  *
- * That matters for a small operation: a handful of changes a week is a two
- * minute job, and doing it by hand means you read what your customers read.
- * When the volume stops being sensible, `NOTIFY_SOURCE=resend` plus a key sends
- * the same emails automatically with nothing else to change.
+ *   `resend` — a provider is configured, and each email gets a **Send** button.
+ *       One click delivers it and marks it sent. Still your decision, still your
+ *       eyes on the message, without the copy-paste.
  *
- * `mock` is the third mode: send-and-forget, used by tests that need the
- * delivered path without a provider.
+ *   `auto` — the same provider, sending by itself. The daily job flushes the
+ *       queue and you only look when something fails.
+ *
+ * Resolution order: explicit `NOTIFY_SOURCE` env, else MANUAL.
+ *
+ * `mock` is a fourth, test-only mode: sends and forgets, so the delivered path
+ * is exercisable without a provider.
  *
  * Server-only.
  */
 import type { NotificationProvider } from './types'
 
+/** Which provider actually delivers — `manual` meaning "a person does". */
 export type NotificationSource = 'manual' | 'mock' | 'resend'
 export type NotificationMode = 'auto' | 'manual' | 'mock' | 'resend'
 
@@ -56,9 +59,32 @@ export function getNotificationSource(): NotificationSource {
   return hasResendCredentials() ? 'resend' : 'manual'
 }
 
-/** True when emails wait for a person rather than a provider. */
+/** True when there is no provider at all — copy it out and tick it off. */
 export function isManualMode(): boolean {
   return getNotificationSource() === 'manual'
+}
+
+/**
+ * True when the hub can send an email itself, i.e. a provider is configured.
+ * Drives the Send button: no provider, no button.
+ */
+export function canSendFromHub(): boolean {
+  return getNotificationSource() !== 'manual'
+}
+
+/**
+ * True when queued email sends without anyone pressing anything.
+ *
+ * Deliberately narrower than "a provider exists": configuring Resend gives you a
+ * Send button, not a hands-off system. You opt into unattended sending
+ * separately with `NOTIFY_SOURCE=auto`, because "I can send with one click" and
+ * "email leaves without me seeing it" are different levels of trust and should
+ * be different decisions.
+ */
+export function isAutoSendEnabled(): boolean {
+  const mode = getNotificationMode()
+  if (mode === 'mock') return true
+  return mode === 'auto' && hasResendCredentials()
 }
 
 /** Throws in manual mode — nothing should be asking for a provider there. */

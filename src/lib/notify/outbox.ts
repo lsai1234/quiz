@@ -16,7 +16,7 @@
  */
 import { randomUUID } from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
-import { getNotifier, isManualMode } from './index'
+import { canSendFromHub, getNotifier, isAutoSendEnabled } from './index'
 import type { Notification, NotificationStatus, QueueInput, TemplateId } from './types'
 
 interface Row {
@@ -145,12 +145,12 @@ export interface FlushResult {
 }
 
 /**
- * Send everything queued.
+ * Send everything queued, unattended.
  *
- * **In manual mode this deliberately does nothing.** The queue IS the workflow:
- * emails wait in the Founders Hub for a person to copy out and tick off, so
- * "flushing" them would quietly mark unsent messages as delivered — the one
- * thing that would make the audit trail a lie.
+ * **Does nothing unless auto-send is switched on.** With no provider the queue
+ * IS the workflow, and with a provider but no `auto` the founder is expected to
+ * press Send — flushing behind their back would deliver email they hadn't
+ * looked at, or worse, mark unsent messages as delivered.
  *
  * With a provider configured, a failure marks the row `failed` with the reason
  * and stops there — it does NOT roll anything back. The member's plan has
@@ -161,7 +161,7 @@ export interface FlushResult {
 export async function flushOutbox(
   opts: { limit?: number; onSent?: (notification: Notification) => Promise<void> } = {},
 ): Promise<FlushResult> {
-  if (isManualMode()) return { sent: [], failed: [] }
+  if (!isAutoSendEnabled()) return { sent: [], failed: [] }
 
   const queued = await listNotifications({ status: 'queued', limit: opts.limit ?? 100 })
   if (queued.length === 0) return { sent: [], failed: [] }
@@ -196,6 +196,57 @@ export async function flushOutbox(
   }
 
   return result
+}
+
+/**
+ * Send one email now, through the configured provider.
+ *
+ * The Send button behind the Founders Hub. Distinct from the unattended flush:
+ * this is a person choosing to send this message, so it works whenever a
+ * provider exists rather than only when auto-send is on.
+ *
+ * A failure is recorded on the row and returned rather than thrown, so the page
+ * can show the member and the reason side by side and offer another go.
+ */
+export async function sendNotificationNow(id: string): Promise<Notification | null> {
+  const notification = await getNotification(id)
+  if (!notification) return null
+  if (notification.status === 'sent') return notification
+
+  if (!canSendFromHub()) {
+    const blocked: Notification = {
+      ...notification,
+      status: 'failed',
+      error: 'No email provider is configured — copy this one out and mark it sent.',
+      updatedAt: now(),
+    }
+    await write(blocked)
+    return blocked
+  }
+
+  const attempt = { ...notification, attempts: notification.attempts + 1, updatedAt: now() }
+  try {
+    const notifier = await getNotifier()
+    const { providerId } = await notifier.send(notification.email, notification.rendered)
+    const sent: Notification = {
+      ...attempt,
+      status: 'sent',
+      sentManually: false,
+      providerId: providerId ?? null,
+      error: null,
+      sentAt: now(),
+    }
+    await write(sent)
+    return sent
+  } catch (err) {
+    const failed: Notification = {
+      ...attempt,
+      status: 'failed',
+      error: err instanceof Error ? err.message : String(err),
+    }
+    await write(failed)
+    return failed
+  }
 }
 
 /**

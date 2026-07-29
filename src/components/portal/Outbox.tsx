@@ -59,19 +59,27 @@ function CopyButton({
 /**
  * The emails waiting to go out, and the ones already sent.
  *
- * Sending is a person's job by default: no mail provider, no API key, no domain
- * verification. Everything the system decides to tell a member is written here
- * in full, and a founder copies it into their own inbox and ticks it off. So
- * this page is built for that — the address, the subject and the body each have
- * their own copy button, and "Mark as sent" is the biggest thing on the row.
+ * The page works the same whether or not a mail provider is configured, which is
+ * the point — you can start with no integration at all and add one later without
+ * relearning anything:
  *
- * The distinction between the two lists is the whole point: **To send** is a
- * to-do list a member is waiting on. It should reach zero.
+ *   • **No provider.** Copy the address, subject and body into your own inbox,
+ *     send it, and tick it off. Nothing else needed.
+ *   • **Provider configured.** A Send button appears on every row (and a Send
+ *     all at the top). One click delivers it and marks it sent. The copy buttons
+ *     stay — sometimes you want to send it yourself with a personal note.
+ *
+ * Either way the full message is on screen, because you should read what your
+ * customers read. And either way **To send** is a to-do list somebody is waiting
+ * on, so it should reach zero.
  */
 export function Outbox() {
   const [notifications, setNotifications] = useState<Notification[] | null>(null)
   const [provider, setProvider] = useState<string>('manual')
+  const [canSend, setCanSend] = useState(false)
+  const [autoSend, setAutoSend] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
   const { copied, copy } = useCopy()
 
   const load = useCallback(() => {
@@ -80,6 +88,8 @@ export function Outbox() {
       .then((d) => {
         setNotifications(d.notifications ?? [])
         setProvider(d.provider ?? 'manual')
+        setCanSend(Boolean(d.canSend))
+        setAutoSend(Boolean(d.autoSend))
       })
       .catch(() => setNotifications([]))
   }, [])
@@ -87,18 +97,41 @@ export function Outbox() {
   useEffect(() => load(), [load])
 
   const act = useCallback(
-    async (id: string, action: 'markSent' | 'retry') => {
+    async (id: string, action: 'send' | 'markSent' | 'retry') => {
       setBusy(id)
-      await fetch('/api/portal/notifications', {
+      setNote(null)
+      const res = await fetch('/api/portal/notifications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [action]: id }),
       })
+      const d = await res.json().catch(() => ({}))
+      // A send that failed stays in the list with its reason on the row, so
+      // surface it here too rather than letting the click look like a no-op.
+      if (action === 'send' && d.ok === false) setNote(d.error ?? 'That one didn’t send — see the row for why.')
       load()
       setBusy(null)
     },
     [load],
   )
+
+  const sendAll = useCallback(async () => {
+    setBusy('all')
+    setNote(null)
+    const res = await fetch('/api/portal/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sendAll: true }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setNote(
+      d.failures?.length
+        ? `Sent ${d.sent}. ${d.failures.length} didn’t go — they’re still in the list with the reason.`
+        : `Sent ${d.sent}.`,
+    )
+    load()
+    setBusy(null)
+  }, [load])
 
   const { toSend, done } = useMemo(() => {
     const all = notifications ?? []
@@ -130,8 +163,15 @@ export function Outbox() {
         <p className="text-sm text-[var(--color-muted)]">
           {manual
             ? 'Written for you to send. Copy each one into your email, send it, then mark it as sent.'
-            : `Sending automatically via ${provider}.`}
+            : autoSend
+              ? `Sending automatically via ${provider}. Anything here needs a look.`
+              : `Ready to send via ${provider} — press Send, or copy one out and send it yourself.`}
         </p>
+        {note && (
+          <p className="text-xs mt-1" style={{ color: ACCENT }}>
+            {note}
+          </p>
+        )}
       </div>
 
       {/* ── To send ── */}
@@ -140,15 +180,27 @@ export function Outbox() {
           <h2 className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
             To send{toSend.length > 0 ? ` · ${toSend.length}` : ''}
           </h2>
-          {toSend.length > 1 && (
-            <CopyButton
-              label={`Copy all ${toSend.length}`}
-              text={allAsText}
-              copyKey="all"
-              copied={copied}
-              onCopy={copy}
-            />
-          )}
+          <div className="flex gap-2">
+            {toSend.length > 1 && (
+              <CopyButton
+                label={`Copy all ${toSend.length}`}
+                text={allAsText}
+                copyKey="all"
+                copied={copied}
+                onCopy={copy}
+              />
+            )}
+            {canSend && toSend.length > 1 && (
+              <button
+                onClick={sendAll}
+                disabled={busy !== null}
+                className="text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-40"
+                style={{ background: ACCENT, color: '#001018' }}
+              >
+                {busy === 'all' ? 'Sending…' : `Send all ${toSend.length}`}
+              </button>
+            )}
+          </div>
         </div>
 
         {toSend.length === 0 ? (
@@ -211,16 +263,43 @@ export function Outbox() {
                 <div className="mt-3 flex flex-wrap gap-2 items-center">
                   <CopyButton label="Copy address" text={n.email} copyKey={`${n.id}-to`} copied={copied} onCopy={copy} />
                   <CopyButton label="Copy subject" text={n.rendered.subject} copyKey={`${n.id}-subj`} copied={copied} onCopy={copy} />
-                  <CopyButton label="Copy message" text={n.rendered.text} copyKey={`${n.id}-body`} copied={copied} onCopy={copy} primary />
+                  <CopyButton
+                    label="Copy message"
+                    text={n.rendered.text}
+                    copyKey={`${n.id}-body`}
+                    copied={copied}
+                    onCopy={copy}
+                    primary={!canSend}
+                  />
 
-                  <button
-                    onClick={() => act(n.id, 'markSent')}
-                    disabled={busy !== null}
-                    className="text-xs font-bold px-4 py-1.5 rounded-xl ml-auto disabled:opacity-40"
-                    style={{ background: GREEN, color: '#00180e' }}
-                  >
-                    {busy === n.id ? 'Saving…' : '✓ Mark as sent'}
-                  </button>
+                  <div className="flex gap-2 ml-auto">
+                    {/* With a provider configured this is the one-click path.
+                        Copying stays available — sometimes you want to send it
+                        yourself with a note attached. */}
+                    {canSend && (
+                      <button
+                        onClick={() => act(n.id, 'send')}
+                        disabled={busy !== null}
+                        className="text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-40"
+                        style={{ background: ACCENT, color: '#001018' }}
+                      >
+                        {busy === n.id ? 'Sending…' : n.status === 'failed' ? '↻ Try again' : '→ Send email'}
+                      </button>
+                    )}
+                    <button
+                      onClick={() => act(n.id, 'markSent')}
+                      disabled={busy !== null}
+                      className="text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-40"
+                      style={
+                        canSend
+                          ? { border: '1px solid var(--color-border)', color: 'var(--color-text-2)' }
+                          : { background: GREEN, color: '#00180e' }
+                      }
+                      title={canSend ? 'I sent this one myself' : undefined}
+                    >
+                      {busy === n.id && !canSend ? 'Saving…' : '✓ Mark as sent'}
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -243,7 +322,7 @@ export function Outbox() {
                     <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
                       {n.email} ·{' '}
                       {new Date(n.sentAt ?? n.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      {n.sentManually ? ' · sent by hand' : ''}
+                      {n.sentManually ? ' · sent by hand' : n.providerId ? ' · delivered' : ''}
                     </p>
                   </div>
                   <span

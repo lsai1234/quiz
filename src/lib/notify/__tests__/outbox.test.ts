@@ -9,6 +9,7 @@ import {
   queueNotification,
   markSentManually,
   retryNotification,
+  sendNotificationNow,
 } from '@/lib/notify/outbox'
 import { createUser } from '@/lib/db/users'
 import type { QueueInput, RenderedEmail } from '@/lib/notify/types'
@@ -147,7 +148,7 @@ describe('failure handling', () => {
   })
 
   it('records why a send failed and keeps it retryable', async () => {
-    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.NOTIFY_SOURCE = 'auto'
     process.env.RESEND_API_KEY = 'test-key'
     global.fetch = jest.fn().mockResolvedValue({
       ok: false, status: 422, text: async () => 'invalid recipient',
@@ -163,7 +164,7 @@ describe('failure handling', () => {
   })
 
   it('requeues a failure and sends it on the next flush', async () => {
-    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.NOTIFY_SOURCE = 'auto'
     process.env.RESEND_API_KEY = 'test-key'
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: async () => 'boom' }) as unknown as typeof fetch
 
@@ -212,5 +213,91 @@ describe('provider selection', () => {
     const { getNotificationSource, isManualMode } = await import('@/lib/notify')
     expect(getNotificationSource()).toBe('manual')
     expect(isManualMode()).toBe(true)
+  })
+})
+
+describe('the Send button', () => {
+  const realFetch = global.fetch
+  afterEach(() => {
+    delete process.env.NOTIFY_SOURCE
+    delete process.env.RESEND_API_KEY
+    global.fetch = realFetch
+  })
+
+  function withResend(ok = true) {
+    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.RESEND_API_KEY = 'test-key'
+    global.fetch = jest.fn().mockResolvedValue(
+      ok
+        ? { ok: true, json: async () => ({ id: 're_123' }) }
+        : { ok: false, status: 422, text: async () => 'bad recipient' },
+    ) as unknown as typeof fetch
+  }
+
+  it('delivers one email and marks it sent, not sent-by-hand', async () => {
+    withResend()
+    await queueNotification(input({ changeEventId: 'chg_send_one' }))
+    const queued = await getByDedupeKey(dedupeKeyFor('chg_send_one', 'product-removed'))
+
+    const sent = await sendNotificationNow(queued!.id)
+
+    expect(sent).toMatchObject({ status: 'sent', sentManually: false, providerId: 're_123' })
+    expect(sent!.sentAt).not.toBeNull()
+  })
+
+  it('keeps a failed send in the queue with the reason attached', async () => {
+    withResend(false)
+    await queueNotification(input({ changeEventId: 'chg_send_fail' }))
+    const queued = await getByDedupeKey(dedupeKeyFor('chg_send_fail', 'product-removed'))
+
+    const result = await sendNotificationNow(queued!.id)
+
+    expect(result!.status).toBe('failed')
+    expect(result!.error).toContain('422')
+    // Still a to-do, not silently gone.
+    expect((await getByDedupeKey(dedupeKeyFor('chg_send_fail', 'product-removed')))!.status).toBe('failed')
+  })
+
+  it('refuses, with a useful reason, when no provider is configured', async () => {
+    // Pressing Send with nothing wired up must say so rather than pretend.
+    await queueNotification(input({ changeEventId: 'chg_send_noprov' }))
+    const queued = await getByDedupeKey(dedupeKeyFor('chg_send_noprov', 'product-removed'))
+
+    const result = await sendNotificationNow(queued!.id)
+
+    expect(result!.status).toBe('failed')
+    expect(result!.error).toMatch(/no email provider/i)
+  })
+
+  it('never sends the same email twice', async () => {
+    withResend()
+    await queueNotification(input({ changeEventId: 'chg_send_twice' }))
+    const queued = await getByDedupeKey(dedupeKeyFor('chg_send_twice', 'product-removed'))
+
+    const first = await sendNotificationNow(queued!.id)
+    const second = await sendNotificationNow(queued!.id)
+
+    expect(second!.sentAt).toBe(first!.sentAt)
+    expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1)
+  })
+
+  it('is available with a provider, without switching on unattended sending', async () => {
+    // Configuring Resend gives you a button, not a hands-off system — those are
+    // different levels of trust and stay different decisions.
+    withResend()
+    const { canSendFromHub, isAutoSendEnabled } = await import('@/lib/notify')
+    expect(canSendFromHub()).toBe(true)
+    expect(isAutoSendEnabled()).toBe(false)
+
+    process.env.NOTIFY_SOURCE = 'auto'
+    expect(isAutoSendEnabled()).toBe(true)
+  })
+
+  it('does not flush by itself while sending is click-to-send', async () => {
+    withResend()
+    await queueNotification(input({ changeEventId: 'chg_no_autoflush' }))
+
+    expect(await flushOutbox()).toEqual({ sent: [], failed: [] })
+    expect((await getByDedupeKey(dedupeKeyFor('chg_no_autoflush', 'product-removed')))!.status).toBe('queued')
   })
 })

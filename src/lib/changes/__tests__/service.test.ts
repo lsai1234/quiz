@@ -316,3 +316,40 @@ describe('telling the member by hand (the default)', () => {
     expect(await markNotificationSentManually('ntf_missing')).toBeNull()
   })
 })
+
+describe('the Send button', () => {
+  afterEach(() => {
+    delete process.env.NOTIFY_SOURCE
+    delete process.env.RESEND_API_KEY
+  })
+
+  it('marks the member as told only when the send actually worked', async () => {
+    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.RESEND_API_KEY = 'test-key'
+    const realFetch = global.fetch
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, text: async () => 'down' }) as unknown as typeof fetch
+
+    const member = await seedMember('sendfail@example.com', { defaultChangePolicy: 'auto-swap' })
+    await run([entry('SKU-A', { inStock: false, stock: 0 }), entry('SKU-B'), entry('SKU-OTHER')], [member])
+
+    const { listNotifications } = await import('@/lib/notify/outbox')
+    const { sendNotificationNow } = await import('@/lib/changes/service')
+    const waiting = (await listNotifications({ userId: member.userId })).filter((n) => n.status === 'queued')
+
+    const failed = await sendNotificationNow(waiting[0].id)
+    expect(failed!.status).toBe('failed')
+
+    // The member genuinely hasn't been told, so the record must still say so —
+    // that's what keeps "outstanding" a number worth trusting.
+    const eventId = changeEventId(member.userId, 'l1', 'out-of-stock')
+    expect((await getChange(eventId))!.notifiedAt).toBeNull()
+
+    // Provider recovers; the same button now works and closes the loop.
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 're_ok' }) }) as unknown as typeof fetch
+    const sent = await sendNotificationNow(waiting[0].id)
+
+    expect(sent).toMatchObject({ status: 'sent', sentManually: false })
+    expect((await getChange(eventId))!.notifiedAt).not.toBeNull()
+    global.fetch = realFetch
+  })
+})
