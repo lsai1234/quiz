@@ -1,4 +1,12 @@
-import type { AsNeededTrigger } from '@/lib/catalogue/types'
+import type { AsNeededTrigger, SafetyFlag } from '@/lib/catalogue/types'
+export type { SafetyFlag } from '@/lib/catalogue/types'
+
+/**
+ * Bodyweight band (optional) — scales weight-sensitive dosing, chiefly protein
+ * servings/day (heavier → more per day → tighter cadence). Asked as bands, never
+ * an exact figure. Null when not provided.
+ */
+export type WeightBand = 'under-60' | '60-75' | '75-90' | '90-105' | '105-plus'
 
 export type AgeBracket = '16-24' | '25-34' | '35-44' | '45+'
 export type Gender = 'male' | 'female' | 'nonbinary' | 'not-specified'
@@ -130,6 +138,14 @@ export interface QuizAnswers {
   ageBracket: AgeBracket | null
   exactAge: number | null
   gender: Gender | null
+  /**
+   * Safety-screen flags the user ticked (pregnancy/breastfeeding, medication).
+   * Products contraindicated against any ticked flag are hard-removed from the
+   * recommendation. Optional so answers saved before the screen existed stay valid.
+   */
+  safetyFlags?: SafetyFlag[]
+  /** Bodyweight band for weight-sensitive dosing (protein). Optional. */
+  weightBand?: WeightBand | null
   goals: Goal[]
   /**
    * "Already taking" items the user still wants in the stack — the follow-up

@@ -34,6 +34,13 @@ export interface StackBlueprint {
   /** True when an AI pass personalised the product choices / reasons. */
   personalised?: boolean
   /**
+   * Goals the user chose that no product in the final stack covers — because the
+   * only candidates were removed by a hard gate (safety, dietary). Drives the
+   * honest "no strong match — speak to your GP" note on the reveal, instead of a
+   * silent gap. Empty/absent = every chosen goal is covered.
+   */
+  unmetGoals?: Goal[]
+  /**
    * The bundle tier this stack represents. Drives the fixed subscribe-&-save
    * rate. When unset, derived from the product count via `stackLevelOf`.
    */

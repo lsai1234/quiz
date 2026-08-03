@@ -94,22 +94,19 @@ describe('LQD quiz flow', () => {
     expect(normal).not.toContain('dailyDrinks')
     expect(lqd).not.toContain('formats')
     expect(lqd).toContain('dailyDrinks')
-    expect(lqd).toContain('drinkVariety')
     expect(lqd).toContain('workoutAddOns')
-    // The bundle chooser is gone too — the foundation already sizes the package.
-    expect(normal).toContain('budget')
-    expect(lqd).not.toContain('budget')
-    // Nothing else moves — the foundation steps follow the goal question.
-    expect(lqd.filter((id) => !['dailyDrinks', 'drinkVariety', 'workoutAddOns'].includes(id))).toEqual(
-      normal.filter((id) => id !== 'formats' && id !== 'budget'),
+    // Budget is no longer a step in either mode (depth is chosen on the results
+    // screen) — nothing else moves; the foundation steps follow the goal question.
+    expect(lqd.filter((id) => !['dailyDrinks', 'workoutAddOns'].includes(id))).toEqual(
+      normal.filter((id) => id !== 'formats'),
     )
-    expect(lqd[lqd.indexOf('dailyDrinks') - 1]).toBe('goals')
+    // Safety follows the goal, then the LQD foundation steps.
+    expect(lqd[lqd.indexOf('dailyDrinks') - 1]).toBe('safety')
   })
 
   it('hides workout add-ons on the wellbeing (non-training) route', () => {
     const well = activeSteps('wellbeing', true).map((s) => s.id)
     expect(well).toContain('dailyDrinks')
-    expect(well).toContain('drinkVariety')
     expect(well).not.toContain('workoutAddOns') // no workout section off the training route
   })
 

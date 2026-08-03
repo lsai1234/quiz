@@ -548,6 +548,22 @@ export const USAGE_SERVINGS_PER_OCCASION: Record<UsageLevel, number> = {
 
 export const DEFAULT_USAGE_LEVEL: UsageLevel = 'standard'
 
+/**
+ * Weight-sensitive serving multiplier. Protein needs scale with body mass, so
+ * heavier bands take more per day (a tub runs out sooner → tighter cadence).
+ * Only protein-slot products are affected; everything else — and an unset
+ * weight — stays at 1, so nothing changes for users who skip the weight band.
+ */
+export function proteinWeightFactor(product: CatalogueProduct, answers?: QuizAnswers | null): number {
+  if (!product.stackSlots.includes('protein')) return 1
+  switch (answers?.weightBand) {
+    case 'under-60': return 0.8
+    case '90-105': return 1.5
+    case '105-plus': return 1.75
+    default: return 1 // 60–75, 75–90, or unset
+  }
+}
+
 /** How a product is sized into a subscription line: cadence + ship schedule. */
 export interface LineSizing {
   cadence: ConsumptionCadence
@@ -583,7 +599,7 @@ export function sizeConsumption(
 ): LineSizing {
   const { cadence, servingsPerUnit } = resolveConsumption(product)
   const occasionsPerMonth = occasionsOverride ?? occasionsPerMonthFor(product, answers)
-  const servingsPerOccasion = USAGE_SERVINGS_PER_OCCASION[usageLevel] ?? 1
+  const servingsPerOccasion = (USAGE_SERVINGS_PER_OCCASION[usageLevel] ?? 1) * proteinWeightFactor(product, answers)
   const servingsPerMonth = occasionsPerMonth * servingsPerOccasion
   const monthsOneUnitLasts = servingsPerMonth > 0 ? servingsPerUnit / servingsPerMonth : config.maxDeliveryMonths
 

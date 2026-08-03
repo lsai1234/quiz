@@ -31,7 +31,9 @@ const LQD_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {
 const STACK_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {
   diet: { icon: 'leaf', text: 'Most diets miss the basics — that’s exactly what the everyday essentials cover.' },
   supps: { icon: 'grid', text: 'We skip anything you already take, so you only pay for the gaps.' },
-  budget: { icon: 'bundle3', text: 'Subscribe & save — the bigger the bundle, the better the rate.' },
+  // The budget step is gone (you choose a depth on the results screen instead);
+  // the subscribe-&-save tidbit now lives on the formats step.
+  formats: { icon: 'bundle3', text: 'Subscribe & save — the bigger the bundle, the better the rate.' },
 }
 
 /**

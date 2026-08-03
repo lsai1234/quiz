@@ -2,23 +2,20 @@
 
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { useQuizStore } from '@/lib/store'
-import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
-import { calculatePricing, levelForStackPreference, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
-import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import { levelForStackPreference } from '@/lib/stack-blueprint/pricing'
 import { activeSteps, stepCopy, selectHint, type StepId } from '@/lib/quiz-flow'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from '@/lib/deep-dive'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
-import { BundleDeck } from '@/components/quiz/BundleDeck'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
+import { funnel } from '@/lib/analytics/quiz'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
-  CaffeineLevel, Budget, StackPreference,
+  CaffeineLevel,
   TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
-  DailyDrinks, DrinkVariety, WorkoutAddOn,
+  DailyDrinks, WorkoutAddOn, SafetyFlag, WeightBand,
 } from '@/lib/types'
 
 // Client-side fallback identity so the reveal is never empty if the identity
@@ -150,18 +147,6 @@ const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
     ],
   },
   {
-    id: 'immuneBaseline',
-    triggers: ['immune'],
-    serves: ['immune', 'health'],
-    question: 'How often do you get run down?',
-    hint: 'Sets how much immune support to include',
-    options: [
-      { id: 'often',     label: 'Catch everything going round' },
-      { id: 'sometimes', label: 'A couple of times a year' },
-      { id: 'rarely',    label: 'Rarely ill — just want insurance' },
-    ],
-  },
-  {
     id: 'collagenOk',
     triggers: ['skin-hair-nails'],
     serves: ['skin-hair-nails'],
@@ -194,6 +179,23 @@ function pickWellbeingQuestions(goals: Goal[]): WellbeingQuestion[] {
   return selected
 }
 
+// Safety screen — a private, remove-only filter. Ticking a flag drops
+// contraindicated products from the recommendation (never adds anything).
+const SAFETY_DATA: Array<{ id: SafetyFlag; label: string }> = [
+  { id: 'pregnancy',  label: 'Pregnant or breastfeeding' },
+  { id: 'medication', label: 'On prescription medication' },
+]
+
+// Bodyweight bands (optional) — scale weight-sensitive dosing (protein). Bands,
+// never an exact figure.
+const WEIGHT_DATA: Array<{ id: WeightBand; label: string }> = [
+  { id: 'under-60', label: 'Under 60kg' },
+  { id: '60-75',    label: '60–75kg' },
+  { id: '75-90',    label: '75–90kg' },
+  { id: '90-105',   label: '90–105kg' },
+  { id: '105-plus', label: '105kg+' },
+]
+
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
   { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
   { id: '3-4x',  label: '3–4× a week',  sub: 'Regular training' },
@@ -219,14 +221,13 @@ const WELLBEING_LIFESTYLE_DATA = [
   { id: 'desk-job',     label: 'Desk job / mostly indoors',  icon: 'monitor' },
   { id: 'shift-work',   label: 'Shift work / irregular hours', icon: 'clock' },
   { id: 'run-down',     label: 'Get run down easily',        icon: 'trending-down' },
-  { id: 'active',       label: 'Train or exercise regularly', icon: 'activity' },
   { id: 'joint-issues', label: 'Joint or old injuries',      icon: 'bone' },
 ]
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
-  { id: 'clean',        label: 'On point',               sub: 'Tracked macros, high protein' },
-  { id: 'mostly-good',  label: 'Pretty good',            sub: 'Healthy most of the time' },
-  { id: 'inconsistent', label: 'Hit and miss',           sub: 'Good days and bad days' },
-  { id: 'poor',         label: 'Room for improvement',   sub: 'Convenience-first right now' },
+  { id: 'clean',        label: 'Cooked from scratch',   sub: 'Mostly home-cooked and planned' },
+  { id: 'mostly-good',  label: 'Decent but rushed',     sub: 'Healthy-ish, not much time' },
+  { id: 'inconsistent', label: "Grab whatever's easy",  sub: 'Convenience-led — good and bad days' },
+  { id: 'poor',         label: 'All over the place',    sub: 'No real routine right now' },
 ]
 const SUPPS_DATA = [
   { id: 'protein',     label: 'Protein',        icon: 'shaker' },
@@ -263,29 +264,11 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
   { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
   { id: 'low',    label: 'Occasionally',    sub: 'One coffee here and there' },
   { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
-  { id: 'high',   label: 'High tolerance',  sub: '3+ coffees, used to pre-workout' },
+  { id: 'high',   label: 'I run on it',     sub: '3+ coffees, used to pre-workout' },
 ]
-const BUDGET_DATA: Array<{
-  id: Budget; name: string; budget: string; sub: string
-  pref: StackPreference; slots: number; icon: string
-}> = [
-  { id: 'under-30', name: 'Starter Bundle',   budget: 'Up to £30', sub: 'The essentials that move the needle most', pref: 'simple', slots: 2, icon: 'bundle1' },
-  { id: '30-50',    name: 'Saver Bundle',      budget: '£30–£50',    sub: 'Core supplements to cover your main goal', pref: 'simple', slots: 3, icon: 'bundle2' },
-  { id: '50-80',    name: 'Performance Bundle', budget: '£50–£80',   sub: 'A well-rounded daily stack', pref: 'balanced', slots: 5, icon: 'bundle3' },
-  { id: '80-plus',  name: 'Complete Bundle',   budget: '£80+',      sub: 'Every angle covered — nothing left out', pref: 'complete', slots: 7, icon: 'bundle4' },
-]
-
-// ─── Bundle sales framing (the budget step) ───────────────────────────────────
-// Good / better / best. Each bundle is a prefix of the previewed "complete"
-// stack, so we can show exactly what's in each one as a tick-list — the higher
-// bundles visibly carry more. Static merchandising badges drive the classic
-// pricing-ladder nudge; the subscribe-&-save rate rewards going bigger.
-
-/** Merchandising badge per bundle — the good/better/best sales ladder. */
-const BUNDLE_BADGE: Partial<Record<Budget, string>> = {
-  '50-80': 'Recommended',
-  '80-plus': 'Best value',
-}
+// Budget is no longer asked in the quiz — the full stack is built and the
+// customer chooses a depth (Essentials / Balanced / Complete) on the results
+// screen, value before price (see StackReviewPage tiers).
 
 // LQD FOUNDATION — how many drinks on a normal day. Not a dose: it tunes the
 // "your box lasts ~X days" story, never the amounts. `fills` drives the little
@@ -296,18 +279,11 @@ const DAILY_DRINKS_DATA: Array<{ id: DailyDrinks; label: string; sub: string; fi
   { id: 3, label: 'Three+',     sub: 'A drink with most meals',                  fills: 3 },
 ]
 
-// LQD FOUNDATION — staples vs a monthly mix. Shapes the box's variety, not size.
-const DRINK_VARIETY_DATA: Array<{ id: DrinkVariety; label: string; sub: string; fills: number }> = [
-  { id: 'staples', label: 'My staples', sub: 'The same go-to drinks every day — simple, no thinking', fills: 2 },
-  { id: 'variety', label: 'A monthly mix', sub: 'A rotating mix that covers more bases across the month', fills: 4 },
-]
-
-// LQD WORKOUT ADD-ONS — opt-in drinks around training (performance route only),
-// sized from training frequency rather than the daily pace.
+// LQD WORKOUT ADD-ONS — a single opt-in pre-workout drink (performance route
+// only). The protein/recovery options were inert (the daily base already covers
+// those slots), so it's now one toggle that adds/keeps the pre-workout line.
 const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }> = [
-  { id: 'pre-workout', label: 'Pre-workout', sub: 'A hit of energy & focus before you train' },
-  { id: 'protein',     label: 'Protein shake', sub: 'A ready-made protein drink after sessions' },
-  { id: 'recovery',    label: 'Recovery', sub: 'Refuel and repair after the hard ones' },
+  { id: 'pre-workout', label: 'Yes — add a pre-workout drink', sub: 'A hit of energy & focus before you train' },
 ]
 
 const FORMAT_DATA = [
@@ -580,10 +556,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     deepDiveQuestions, deepDiveStatus,
   } = useQuizStore()
 
-  const { products: liveCatalogue } = useCatalogueProducts()
-
   // Active step sequence for the chosen track (single source of truth).
-  const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode), [answers.track, answers.drinksMode])
+  const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode, { track: answers.track }), [answers.track, answers.drinksMode])
   const index = Math.min(step, seq.length - 1)
   const current = seq[index]
   const id = current.id
@@ -599,38 +573,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     return [...new Set(ids)].map((tid) => ({ id: tid, label: SUPP_LABEL_BY_ID[tid] ?? tid }))
   }, [answers.currentSupplements, answers.currentVitamins])
 
-  // Full ranked stack (unlimited budget) so budget cards show real products.
-  // Build each bundle's ACTUAL stack at its own budget + preference, so the
-  // "what you get" tick-list shows exactly what that bundle would contain — never
-  // a product that the bundle's price cap would actually exclude. Aligned to
-  // BUDGET_DATA order. Mirrors what generateStack builds when the bundle is picked
-  // (AI personalisation only swaps products within slots, never the slot titles).
-  const bundlePreviews = useMemo<Array<{ titles: string[]; freeDelivery: boolean }>>(() => {
-    // Drinks mode never shows the bundle step (pace sizes the package), so
-    // don't build four preview stacks that can never be seen.
-    if (answers.drinksMode || answers.goals.length === 0) return BUDGET_DATA.map(() => ({ titles: [], freeDelivery: false }))
-    const catalogue = liveCatalogue.length > 0 ? liveCatalogue : MOCK_CATALOGUE
-    return BUDGET_DATA.map((b) => {
-      try {
-        const a = { ...withDeepDiveSignals(answers), budget: b.id, stackPreference: b.pref }
-        const bp = buildStackBlueprint(a, catalogue)
-        // One-off total decides the free-delivery perk (not shown as a price —
-        // the card advertises the one-off budget range instead).
-        const { oneOffTotal } = calculatePricing(bp, catalogue, a, undefined, { level: levelForStackPreference(b.pref) })
-        return { titles: bp.slots.map((s) => s.title), freeDelivery: qualifiesForFreeDelivery(oneOffTotal) }
-      } catch {
-        return { titles: [], freeDelivery: false }
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    answers.goals, answers.lifestyle, answers.currentSupplements, answers.currentVitamins,
-    answers.stimPreference, answers.caffeineLevel, answers.wellbeingAnswers, answers.diet,
-    answers.dynamicAnswers,
-    answers.preferredFormats, answers.trainingFocus, answers.gender, answers.ageBracket,
-    answers.trainingTime, answers.trainingExperience, liveCatalogue,
-  ])
-
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   const [subQuestion, setSubQuestion] = useState<SubQuestion | null>(null)
@@ -642,6 +584,16 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const subRef = useRef<HTMLDivElement>(null)
   // Whether the options region has content below the fold (drives the scroll cue).
   const [moreBelow, setMoreBelow] = useState(false)
+
+  // ── Funnel instrumentation (Phase 0) ──────────────────────────────────────
+  // Timing + guards for the analytics events. `stepEnterRef` clocks time-on-step,
+  // `startTsRef` the whole run; `currentStepRef` lets the unload handler report the
+  // step the user abandoned on. `completedRef` suppresses an abandon after a build.
+  const startTsRef = useRef(0)
+  const stepEnterRef = useRef(0)
+  const currentStepRef = useRef<{ id: StepId; index: number }>({ id, index })
+  const startedRef = useRef(false)
+  const completedRef = useRef(false)
 
   // ── Charge rail (the getCHRGD signature) — climbs as you answer ──
   // Tops out at ~92% in the quiz; Act 3 finishes the charge and "powers on".
@@ -689,7 +641,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [localName, setLocalName] = useState(answers.name || '')
   const [localAge, setLocalAge] = useState<AgeBracket | ''>(answers.ageBracket || '')
   const [localGender, setLocalGender] = useState<Gender | ''>(answers.gender || '')
-  const [localExactAge, setLocalExactAge] = useState<number | null>(answers.exactAge ?? null)
+  const [localWeight, setLocalWeight] = useState<WeightBand | ''>(answers.weightBand ?? '')
 
   // Move focus to the question on every step change (orientation + a11y).
   useEffect(() => {
@@ -697,6 +649,42 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     const t = setTimeout(() => headingRef.current?.focus(), 60)
     return () => clearTimeout(t)
   }, [index, reducedMotion])
+
+  // Funnel: quiz_start (once) + an abandon beacon on tab-close/navigation, fired
+  // only if the run wasn't completed. `pagehide` is the reliable mobile signal.
+  useEffect(() => {
+    startTsRef.current = performance.now()
+    if (!startedRef.current) {
+      startedRef.current = true
+      funnel.start({ track: answers.track, drinksMode: !!answers.drinksMode })
+    }
+    const onLeave = () => {
+      if (completedRef.current) return
+      funnel.abandon({
+        lastStepId: currentStepRef.current.id,
+        index: currentStepRef.current.index,
+        msTotal: Math.round(performance.now() - startTsRef.current),
+      })
+    }
+    window.addEventListener('pagehide', onLeave)
+    return () => window.removeEventListener('pagehide', onLeave)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Funnel: a step became active — quiz_step_view (+ the deep-dive offer when the
+  // review screen first shows it). Also clocks time-on-step for quiz_step_complete.
+  useEffect(() => {
+    currentStepRef.current = { id, index }
+    stepEnterRef.current = performance.now()
+    funnel.stepView({
+      stepId: id, index, total: Math.max(1, seq.length - 2),
+      track: answers.track, drinksMode: !!answers.drinksMode,
+    })
+    if (id === 'review' && Object.keys(answers.dynamicAnswers ?? {}).length === 0) {
+      funnel.deepDiveOffer()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, index])
 
   // Track whether there's hidden content below in the options region so we can
   // show a "more below" cue — the fix for sub-questions/answers being off-screen.
@@ -768,11 +756,12 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setAnswer('name', localName.trim())
     if (localAge) setAnswer('ageBracket', localAge as AgeBracket)
     setAnswer('gender', (localGender || null) as Gender)
-    if (localExactAge !== null) setAnswer('exactAge', localExactAge)
+    setAnswer('weightBand', (localWeight || null) as WeightBand | null)
   }
 
   function advance() {
     clearPending()
+    funnel.stepComplete({ stepId: id, index, msOnStep: Math.round(performance.now() - stepEnterRef.current) })
     setSubQuestion(null)
     setSubAnswerId(null)
     if (id === 'personal') commitPersonal()
@@ -789,6 +778,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     const i = seq.findIndex((s) => s.id === 'deepDive')
     if (i < 0) return
+    funnel.deepDiveAccept()
     setDirection('forward')
     setAnimKey((k) => k + 1)
     setStep(i)
@@ -796,6 +786,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   function goBack() {
     clearPending()
+    funnel.stepBack({ from: id, to: seq[Math.max(index - 1, 0)]?.id, via: 'back' })
     setSubQuestion(null)
     setSubAnswerId(null)
     setDirection('back')
@@ -807,6 +798,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     const i = seq.findIndex((s) => s.id === target)
     if (i < 0) return
+    funnel.stepBack({ from: id, to: target, via: 'edit' })
     setSubQuestion(null)
     setSubAnswerId(null)
     setDirection('back')
@@ -814,14 +806,14 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setStep(i)
   }
 
-  // Training styles are multi-select — toggle in the array, no auto-advance.
-  function handleMultiType(tid: TrainingType) {
-    const cur = answers.trainingType
-    const next = cur.includes(tid) ? cur.filter((x) => x !== tid) : [...cur, tid]
-    setAnswer('trainingType', next)
-    // The style follow-up (strength focus / sport type) only makes sense for a
-    // single chosen style — clear the focus answer whenever it no longer applies.
-    const followUp = next.length === 1 ? getSubQuestion('type', next[0]) : null
+  // Main training style — single-select (the old multi-select never reached the
+  // engine unless exactly one was chosen; picking one always drives the focus
+  // follow-up that actually shapes the stack).
+  function handleSelectType(tid: TrainingType) {
+    setAnswer('trainingType', [tid])
+    // Clear any focus carried over from a previously-chosen style that no longer
+    // applies (only strength/sport reveal a focus follow-up).
+    const followUp = getSubQuestion('type', tid)
     if (!followUp) setAnswer('trainingFocus', null)
   }
 
@@ -831,7 +823,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     clearPending()
     const sub = getSubQuestion(id, value)
     if (sub) {
-      pendingTimerRef.current = setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub) }, 200)
+      pendingTimerRef.current = setTimeout(() => { setSubAnswerId(null); setSubQuestion(sub); funnel.subView({ subId: sub.id, parentStepId: id }) }, 200)
       return
     }
     pendingTimerRef.current = setTimeout(() => advance(), 340)
@@ -839,6 +831,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   function handleSubAnswer(subId: string, optId: string) {
     setSubAnswerId(optId)
+    funnel.subAnswer({ subId, parentStepId: id, optionId: optId })
     if (subId === 'experience') setAnswer('trainingExperience', optId as TrainingExperience)
     else if (subId === 'strengthFocus' || subId === 'sportType') setAnswer('trainingFocus', optId)
     else if (subId === 'stim') setAnswer('stimPreference', optId as StimPreference)
@@ -847,6 +840,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   }
 
   function handleFinish() {
+    completedRef.current = true
+    funnel.complete({
+      track: answers.track,
+      drinksMode: !!answers.drinksMode,
+      goalCount: answers.goals.length,
+      primaryGoal: answers.primaryGoal ?? answers.goals[0],
+      budget: answers.budget,
+      msTotal: Math.round(performance.now() - startTsRef.current),
+    })
     setStackReady(false)
     setIsGenerating(true)
     void generateStack()
@@ -887,11 +889,10 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     switch (id) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
-      case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
+      case 'safety': case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
       // Workout add-ons are optional — always allowed to continue (with or without picks).
       case 'workoutAddOns': return true
       case 'type': return answers.trainingType.length > 0
-      case 'budget': return !!answers.budget
       default: return false
     }
   })()
@@ -906,8 +907,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     switch (id) {
       case 'goals': return 'Pick at least one goal'
       case 'personal': return 'Add your age to continue'
-      case 'type': return 'Pick at least one style'
-      case 'budget': return 'Choose a bundle'
+      case 'type': return 'Pick your main style'
       default: return null
     }
   })()
@@ -928,17 +928,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   function reviewRows(): Array<{ label: string; value: string; edit: StepId }> {
     const rows: Array<{ label: string; value: string; edit: StepId }> = []
     rows.push({ label: 'Goals', value: answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || '—', edit: 'goals' })
+    if ((answers.safetyFlags ?? []).length) {
+      rows.push({ label: 'To factor in', value: labelsOf(SAFETY_DATA, answers.safetyFlags ?? []).join(', '), edit: 'safety' })
+    }
     if (answers.drinksMode && answers.dailyDrinks) {
       const pace = DAILY_DRINKS_DATA.find((d) => d.id === answers.dailyDrinks)
-      const variety = DRINK_VARIETY_DATA.find((v) => v.id === answers.drinkVariety)
-      const parts = [pace ? `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day` : '', variety?.label].filter(Boolean)
-      if (parts.length) rows.push({ label: 'Daily drinks', value: parts.join(' · '), edit: 'dailyDrinks' })
+      if (pace) rows.push({ label: 'Daily drinks', value: `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day`, edit: 'dailyDrinks' })
     }
     if (answers.drinksMode && answers.track === 'performance' && (answers.workoutAddOns ?? []).length > 0) {
       const labels = WORKOUT_ADDON_DATA.filter((w) => (answers.workoutAddOns ?? []).includes(w.id)).map((w) => w.label)
       rows.push({ label: 'Workout drinks', value: labels.join(', '), edit: 'workoutAddOns' })
     }
-    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localExactAge ? `${localExactAge}` : localAge].filter(Boolean).join(' · '), edit: 'personal' })
+    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localAge, labelOf(WEIGHT_DATA, localWeight || null)].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
       const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
       if (t) rows.push({ label: 'Training', value: t, edit: 'frequency' })
@@ -959,8 +960,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (trying.length) rows.push({ label: 'Trying ours', value: trying.join(', '), edit: 'supps' })
     if (answers.caffeineLevel) rows.push({ label: 'Caffeine', value: labelOf(CAFFEINE_DATA, answers.caffeineLevel), edit: 'caffeine' })
     if (answers.preferredFormats.length) rows.push({ label: 'Formats', value: answers.preferredFormats.includes('any') ? 'No preference' : labelsOf(FORMAT_DATA, answers.preferredFormats).join(', '), edit: 'formats' })
-    const b = BUDGET_DATA.find(x => x.id === answers.budget)
-    if (b) rows.push({ label: 'Budget', value: `${b.name} · ${b.budget}`, edit: 'budget' })
     return rows
   }
 
@@ -1228,12 +1227,38 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     key={`wq-${wq.id}-${oid}`}
                     label={label} sub={sub}
                     selected={answers.wellbeingAnswers[wq.id] === oid}
-                    onClick={() => setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: oid })}
+                    onClick={() => { funnel.subAnswer({ subId: wq.id, parentStepId: 'goals', optionId: oid }); setAnswer('wellbeingAnswers', { ...answers.wellbeingAnswers, [wq.id]: oid }) }}
                   />
                 ))}
               </div>
             </div>
           ))}
+
+          {/* ── Safety screen — private, remove-only filter ── */}
+          {id === 'safety' && (
+            <div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {SAFETY_DATA.map(({ id: sid, label }) => (
+                  <AnswerOption
+                    key={`safety-${sid}`} label={label} multi
+                    selected={(answers.safetyFlags ?? []).includes(sid)}
+                    onClick={() => {
+                      const c = answers.safetyFlags ?? []
+                      setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
+                    }}
+                  />
+                ))}
+                <AnswerOption
+                  key="safety-none" label="None of these" multi
+                  selected={(answers.safetyFlags ?? []).length === 0}
+                  onClick={() => setAnswer('safetyFlags', [])}
+                />
+              </div>
+              <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
+                Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.
+              </p>
+            </div>
+          )}
 
           {/* ── LQD pace — how many drinks a day (drinks mode only) ── */}
           {/* ── LQD foundation — how many drinks a day (mirrors into drinksPerDay
@@ -1271,39 +1296,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               <p className="text-[12px] text-white/30 leading-snug mt-1 px-1">
                 Your everyday base. No pressure to hit a number — it just helps us size and show how your box will flow.
               </p>
-            </div>
-          )}
-
-          {/* ── LQD foundation — staples vs a monthly mix ── */}
-          {id === 'drinkVariety' && (
-            <div className="flex flex-col gap-2.5">
-              {DRINK_VARIETY_DATA.map(({ id: vid, label, sub, fills }) => {
-                const active = answers.drinkVariety === vid
-                return (
-                  <button
-                    key={`variety-${vid}`}
-                    onClick={() => {
-                      setAnswer('drinkVariety', vid)
-                      clearPending()
-                      pendingTimerRef.current = setTimeout(() => advance(), 340)
-                    }}
-                    aria-pressed={active}
-                    className={[
-                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
-                      'transition-all duration-200 active:scale-[0.99]',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
-                      active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
-                    ].join(' ')}
-                  >
-                    <PaceGlass level={fills / 4} selected={active} reduced={reducedMotion} />
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[15px] font-medium leading-snug ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
-                    </div>
-                    <CheckMark selected={active} />
-                  </button>
-                )
-              })}
             </div>
           )}
 
@@ -1370,30 +1362,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     <AnswerOption key={`age-${aid}`} label={label} multi selected={localAge === aid} onClick={() => setLocalAge(aid)} />
                   ))}
                 </div>
-                <div className="mt-4 px-1">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-[11px] text-white/30">For more accurate results, set your exact age</p>
-                    {localExactAge !== null && <span className="text-xs font-bold text-[#00D4FF]">{localExactAge}</span>}
-                  </div>
-                  <input
-                    type="range" min={16} max={70} step={1} value={localExactAge ?? 25}
-                    onChange={(e) => {
-                      const v = parseInt(e.target.value, 10)
-                      setLocalExactAge(v)
-                      if (v < 25) setLocalAge('16-24')
-                      else if (v < 35) setLocalAge('25-34')
-                      else if (v < 45) setLocalAge('35-44')
-                      else setLocalAge('45+')
-                    }}
-                    onFocus={() => { if (localExactAge === null) setLocalExactAge(25) }}
-                    className="w-full h-1 rounded-full appearance-none cursor-pointer"
-                    style={{ background: localExactAge !== null ? `linear-gradient(to right, #00D4FF ${(((localExactAge - 16) / 54) * 100).toFixed(1)}%, rgba(255,255,255,0.12) 0%)` : 'rgba(255,255,255,0.12)' }}
-                  />
-                  <div className="flex justify-between mt-1">
-                    <span className="text-[10px] text-white/20">16</span>
-                    <span className="text-[10px] text-white/20">70+</span>
-                  </div>
-                </div>
               </div>
 
               <div>
@@ -1411,6 +1379,18 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   ))}
                 </div>
               </div>
+
+              <div>
+                <label className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block" style={{ fontFamily: 'var(--font-display)' }}>
+                  Weight <span className="normal-case font-normal tracking-normal text-white/15">· optional</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  {WEIGHT_DATA.map(({ id: wid, label }) => (
+                    <AnswerOption key={`weight-${wid}`} label={label} multi selected={localWeight === wid} onClick={() => setLocalWeight(prev => prev === wid ? '' : wid)} />
+                  ))}
+                </div>
+                <p className="text-[11px] text-white/20 mt-2">Makes your protein &amp; creatine doses accurate</p>
+              </div>
             </div>
           )}
 
@@ -1427,9 +1407,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           {id === 'type' && (
             <div className="flex flex-col gap-2.5">
               {TYPE_DATA.map(({ id: tid, label, sub }) => (
-                <AnswerOption key={`t-${tid}`} label={label} sub={sub} multi
-                  selected={answers.trainingType.includes(tid)}
-                  onClick={() => handleMultiType(tid)} />
+                <AnswerOption key={`t-${tid}`} label={label} sub={sub}
+                  selected={answers.trainingType[0] === tid}
+                  onClick={() => handleSelectType(tid)} />
               ))}
 
               {/* Inline refinement when a single style is chosen */}
@@ -1638,23 +1618,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           )}
 
-          {/* ── Budget — swipeable bundle deck, one tier per card ── */}
-          {id === 'budget' && (
-            <BundleDeck
-              options={BUDGET_DATA}
-              previews={bundlePreviews}
-              selectedId={answers.budget}
-              badges={BUNDLE_BADGE}
-              featuredId="50-80"
-              onSelect={(bid) => {
-                const b = BUDGET_DATA.find((x) => x.id === bid)
-                if (!b) return
-                setAnswer('budget', b.id)
-                setAnswer('stackPreference', b.pref)
-              }}
-            />
-          )}
-
           {/* ── Review ── */}
           {id === 'review' && (
             <div className="flex flex-col gap-2">
@@ -1737,7 +1700,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               disabled={!canContinue}
               className={`w-full py-4 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 active:scale-[0.99] ${
                 canContinue
-                  ? (id === 'review' || id === 'deepDive' || id === 'budget') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
+                  ? (id === 'review' || id === 'deepDive') ? 'bg-[#00D4FF] text-[#0A0A0A]' : 'bg-white text-[#0A0A0A]'
                   : 'bg-white/[0.06] text-white/25 cursor-not-allowed'
               }`}
               style={{ fontFamily: 'var(--font-display)' }}
@@ -1745,7 +1708,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               {continueNeeds ? continueNeeds
                 : id === 'review' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
                 : id === 'deepDive' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
-                : id === 'budget' ? 'Review my answers'
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`
                 : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()}`
                 : 'Continue'}

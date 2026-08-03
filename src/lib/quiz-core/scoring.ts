@@ -1,0 +1,103 @@
+/**
+ * The scoring weights (data, not magic numbers).
+ *
+ * Every lever the engine used to hard-code as a literal `score += N` now lives
+ * here as a named, editable value. `factory.ts`'s `scoreProduct` reads these, so
+ * the recommendation can be re-tuned WITHOUT touching scoring code — the thing
+ * the audit flagged as the engine's biggest maintainability risk.
+ *
+ * The values are the engine's original ones: extracting them into config is
+ * behaviour-preserving (the persona snapshot suite proves it). Tune from here.
+ */
+export const SCORING = {
+  /** Base: recommendationPriority × this. Set low to demote priority to a near
+   *  tie-breaker (e.g. once the supplier feed pins everything to 5). */
+  priorityBase: 10,
+  /** Per goal the product shares with the user. */
+  goalOverlap: 15,
+  /** No goal overlap AND not a foundational supplement → penalty. */
+  noGoalFloor: -30,
+
+  /** Archetype → slot boosts. */
+  archetype: {
+    muscleProteinOrPerformance: 20,
+    fatLossEnergyOrHealth: 15,
+    healthTriad: 15,      // health slot / sleep / recovery
+    wellbeingSleepOrHealth: 15,
+  },
+
+  /** Wellbeing follow-up refinements (sleep step). */
+  wellbeing: {
+    switchOffSleepSupport: 15,
+    wakeMagnesium: 15,
+    sleepFinePenalty: -20,
+  },
+
+  /** Lifestyle context. */
+  lifestyle: {
+    runDownImmune: 10,
+    deskVitaminD: 8,
+    shiftSleep: 8,
+    jointCollagen: 22,
+    jointOmega: 15,
+  },
+
+  /** sleep-better → magnesium, but only when no sleep follow-up was answered. */
+  sleepBetterMagnesium: 12,
+
+  /** Deprioritise training slots the goals don't call for. */
+  deprioritise: {
+    performanceNonMuscle: -60,
+    proteinNonMuscle: -50,
+  },
+
+  /** Mass gainer vs bulking. */
+  mass: { bulkingBonus: 25, nonBulkingPenalty: -20 },
+
+  /** Budget sensitivity: cheaper tiers penalise >£30 products. */
+  budgetOverThreshold: -15,
+  budgetThresholdPrice: 30,
+
+  /** Diet quality. */
+  diet: {
+    cleanProtein: -20,
+    poorMultivitamin: 12,
+    poorOmega: 8,
+    inconsistentMultivitamin: 6,
+  },
+
+  /** Format preference mismatch. */
+  formatMismatch: -18,
+
+  /** Training focus (strength sub-question) + sport type. */
+  focus: {
+    hypertrophyPerformance: 20,
+    hypertrophyProtein: 10,
+    powerliftingPerformance: 25,
+    powerliftingCollagen: 10,
+    generalPerformance: -8,
+    sportEnergy: 10,
+    sportHydration: 12,
+  },
+
+  /** Gender + age. */
+  gender: { femaleMultivitamin: 8 },
+  age: {
+    over45VitaminD: 12, over45Collagen: 12, over45Omega: 8,
+    midVitaminD: 6, midOmega: 5,
+  },
+
+  /** Stimulant timing + caffeine tolerance (stim products only). */
+  trainingTime: { eveningWantsSleep: -40, eveningLowCaffeine: -20 },
+  caffeine: { low: -15, medium: -5 },
+
+  /** Training experience → stack complexity. */
+  experience: {
+    newProtein: 8, newPerformance: 5, newEnergyPenalty: -10,
+    expPerformance: 10, expRecovery: 8, expHydration: 5,
+  },
+}
+
+/** Swap groups with broad evidence for any active person — exempt from the
+ *  no-goal-overlap floor. */
+export const FOUNDATIONAL_SWAP_GROUPS = ['omega-3', 'vitamin-d', 'multivitamin', 'vitamin-c', 'magnesium'] as const

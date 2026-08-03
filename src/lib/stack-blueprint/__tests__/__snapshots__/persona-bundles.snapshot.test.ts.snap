@@ -1,0 +1,573 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`persona → bundle regression drinks-perf-muscle-energy 1`] = `
+{
+  "lqd": {
+    "anytime": 60,
+    "fit": "stretches",
+    "timed": 15,
+    "totalDrinks": 75,
+  },
+  "oneOffTotal": 97.72,
+  "slots": [
+    {
+      "productId": "chrgd-lqd-protein-rtd",
+      "required": true,
+      "swapGroup": "protein-whey",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-lqd-creatine-shot",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-lqd-charge",
+      "required": false,
+      "swapGroup": "pre-workout-stim",
+      "title": "Energy / Pre-Workout",
+    },
+  ],
+  "stackName": "Strength Engine Stack",
+  "subscriptionItemCount": 3,
+  "subscriptionTotal": 77.98,
+}
+`;
+
+exports[`persona → bundle regression drinks-well-sleep-immune-gut 1`] = `
+{
+  "lqd": {
+    "anytime": 99,
+    "fit": "balanced",
+    "timed": 0,
+    "totalDrinks": 99,
+  },
+  "oneOffTotal": 100.26,
+  "slots": [
+    {
+      "productId": "chrgd-lqd-night",
+      "required": false,
+      "swapGroup": "sleep-support",
+      "title": "Sleep",
+    },
+    {
+      "productId": "chrgd-lqd-vits",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Immunity",
+    },
+    {
+      "productId": "chrgd-lqd-greens",
+      "required": false,
+      "swapGroup": "greens",
+      "title": "Gut Health",
+    },
+    {
+      "productId": "chrgd-lqd-immunity",
+      "required": false,
+      "swapGroup": "vitamin-c",
+      "title": "Immune Support",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 4,
+  "subscriptionTotal": 79.43,
+}
+`;
+
+exports[`persona → bundle regression perf-bulking-balanced 1`] = `
+{
+  "oneOffTotal": 79.01,
+  "slots": [
+    {
+      "productId": "chrgd-mass-builder",
+      "required": true,
+      "swapGroup": "protein-mass",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-creatine",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Health",
+    },
+  ],
+  "stackName": "Strength Engine Stack",
+  "subscriptionItemCount": 4,
+  "subscriptionTotal": 55.71,
+}
+`;
+
+exports[`persona → bundle regression perf-cutting-energy-clean 1`] = `
+{
+  "oneOffTotal": 46.98,
+  "slots": [
+    {
+      "productId": "chrgd-pre-workout",
+      "required": false,
+      "swapGroup": "pre-workout-stim",
+      "title": "Energy / Pre-Workout",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Health",
+    },
+  ],
+  "stackName": "Fat Loss Protocol",
+  "subscriptionItemCount": 2,
+  "subscriptionTotal": 27.19,
+}
+`;
+
+exports[`persona → bundle regression perf-muscle-hypertrophy-complete 1`] = `
+{
+  "oneOffTotal": 106.34,
+  "slots": [
+    {
+      "productId": "chrgd-whey-protein",
+      "required": true,
+      "swapGroup": "protein-whey",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-creatine",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-pre-workout",
+      "required": false,
+      "swapGroup": "pre-workout-stim",
+      "title": "Energy / Pre-Workout",
+    },
+    {
+      "productId": "chrgd-electrolytes",
+      "required": false,
+      "swapGroup": "electrolytes",
+      "title": "Hydration",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Health",
+    },
+  ],
+  "stackName": "Performance Core Stack",
+  "subscriptionItemCount": 6,
+  "subscriptionTotal": 82.21,
+}
+`;
+
+exports[`persona → bundle regression perf-muscle-under30 1`] = `
+{
+  "oneOffTotal": 29.99,
+  "slots": [
+    {
+      "productId": "chrgd-clear-whey",
+      "required": true,
+      "swapGroup": "protein-clear",
+      "title": "Protein",
+    },
+  ],
+  "stackName": "Strength Engine Stack",
+  "subscriptionItemCount": 1,
+  "subscriptionTotal": 50.98,
+}
+`;
+
+exports[`persona → bundle regression perf-muscle-vegan-noncaffeine 1`] = `
+{
+  "oneOffTotal": 76.46,
+  "slots": [
+    {
+      "productId": "chrgd-plant-protein",
+      "required": true,
+      "swapGroup": "protein-plant",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-creatine",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Health",
+    },
+  ],
+  "stackName": "Strength Engine Stack",
+  "subscriptionItemCount": 4,
+  "subscriptionTotal": 52.11,
+}
+`;
+
+exports[`persona → bundle regression perf-performance-hydration-football 1`] = `
+{
+  "oneOffTotal": 127.93,
+  "slots": [
+    {
+      "productId": "chrgd-creatine",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-pre-workout",
+      "required": false,
+      "swapGroup": "pre-workout-stim",
+      "title": "Energy / Pre-Workout",
+    },
+    {
+      "productId": "chrgd-electrolytes",
+      "required": false,
+      "swapGroup": "electrolytes",
+      "title": "Hydration",
+    },
+    {
+      "productId": "chrgd-whey-protein",
+      "required": false,
+      "swapGroup": "protein-whey",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-bcaa",
+      "required": false,
+      "swapGroup": "aminos",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Health",
+    },
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Sleep",
+    },
+  ],
+  "stackName": "Endurance Edge Stack",
+  "subscriptionItemCount": 7,
+  "subscriptionTotal": 109.94,
+}
+`;
+
+exports[`persona → bundle regression perf-recovery-45-joints 1`] = `
+{
+  "oneOffTotal": 65.67,
+  "slots": [
+    {
+      "productId": "chrgd-collagen",
+      "required": false,
+      "swapGroup": "collagen",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Health",
+    },
+    {
+      "productId": "chrgd-whey-protein",
+      "required": false,
+      "swapGroup": "protein-whey",
+      "title": "Protein",
+    },
+  ],
+  "stackName": "Foundation Health Stack",
+  "subscriptionItemCount": 3,
+  "subscriptionTotal": 50.38,
+}
+`;
+
+exports[`persona → bundle regression valuefirst-perf-muscle-energy 1`] = `
+{
+  "oneOffTotal": 107.94,
+  "slots": [
+    {
+      "productId": "chrgd-whey-protein",
+      "required": true,
+      "swapGroup": "protein-whey",
+      "title": "Protein",
+    },
+    {
+      "productId": "chrgd-creatine",
+      "required": true,
+      "swapGroup": "creatine",
+      "title": "Performance",
+    },
+    {
+      "productId": "chrgd-pre-workout",
+      "required": false,
+      "swapGroup": "pre-workout-stim",
+      "title": "Energy / Pre-Workout",
+    },
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Recovery",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Health",
+    },
+    {
+      "productId": "chrgd-electrolytes",
+      "required": false,
+      "swapGroup": "electrolytes",
+      "title": "Hydration",
+    },
+  ],
+  "stackName": "Performance Core Stack",
+  "subscriptionItemCount": 6,
+  "subscriptionTotal": 97.28,
+}
+`;
+
+exports[`persona → bundle regression valuefirst-well-sleep-stress-immune 1`] = `
+{
+  "oneOffTotal": 85.79,
+  "slots": [
+    {
+      "productId": "chrgd-magnesium",
+      "required": false,
+      "swapGroup": "magnesium",
+      "title": "Sleep",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Immunity",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Daily Multivitamin",
+    },
+    {
+      "productId": "chrgd-ashwagandha",
+      "required": false,
+      "swapGroup": "adaptogen",
+      "title": "Stress Support",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Omega-3",
+    },
+    {
+      "productId": "chrgd-daily-probiotic",
+      "required": false,
+      "swapGroup": "probiotic",
+      "title": "Gut Health",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 6,
+  "subscriptionTotal": 67.56,
+}
+`;
+
+exports[`persona → bundle regression well-health-under30 1`] = `
+{
+  "oneOffTotal": 27.98,
+  "slots": [
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Daily Health",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Vitamin D",
+    },
+  ],
+  "stackName": "Foundation Health Stack",
+  "subscriptionItemCount": 2,
+  "subscriptionTotal": 9.77,
+}
+`;
+
+exports[`persona → bundle regression well-immune-focus-poordiet 1`] = `
+{
+  "oneOffTotal": 44.97,
+  "slots": [
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Focus",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Immunity",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Omega-3",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 3,
+  "subscriptionTotal": 24.21,
+}
+`;
+
+exports[`persona → bundle regression well-menopause-gut-female45 1`] = `
+{
+  "oneOffTotal": 111.13,
+  "slots": [
+    {
+      "productId": "chrgd-daily-probiotic",
+      "required": false,
+      "swapGroup": "probiotic",
+      "title": "Gut Health",
+    },
+    {
+      "productId": "chrgd-menopause-complete",
+      "required": false,
+      "swapGroup": "menopause",
+      "title": "Menopause Support",
+    },
+    {
+      "productId": "chrgd-ashwagandha",
+      "required": false,
+      "swapGroup": "adaptogen",
+      "title": "Stress Support",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Omega-3",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Vitamin D",
+    },
+    {
+      "productId": "chrgd-super-greens",
+      "required": false,
+      "swapGroup": "greens",
+      "title": "Daily Greens",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Daily Multivitamin",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 7,
+  "subscriptionTotal": 91.82,
+}
+`;
+
+exports[`persona → bundle regression well-skin-veggie 1`] = `
+{
+  "oneOffTotal": 44.97,
+  "slots": [
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Omega-3",
+    },
+    {
+      "productId": "chrgd-vitamin-d3-k2",
+      "required": false,
+      "swapGroup": "vitamin-d",
+      "title": "Vitamin D",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Daily Multivitamin",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 3,
+  "subscriptionTotal": 24.21,
+}
+`;
+
+exports[`persona → bundle regression well-sleep-stress-female 1`] = `
+{
+  "oneOffTotal": 46.77,
+  "slots": [
+    {
+      "productId": "chrgd-sleep-support",
+      "required": false,
+      "swapGroup": "sleep-support",
+      "title": "Sleep",
+    },
+    {
+      "productId": "chrgd-omega-3",
+      "required": false,
+      "swapGroup": "omega-3",
+      "title": "Omega-3",
+    },
+    {
+      "productId": "chrgd-multivitamin",
+      "required": false,
+      "swapGroup": "multivitamin",
+      "title": "Daily Multivitamin",
+    },
+  ],
+  "stackName": "Everyday Wellbeing Stack",
+  "subscriptionItemCount": 3,
+  "subscriptionTotal": 33.58,
+}
+`;

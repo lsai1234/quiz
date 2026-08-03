@@ -31,11 +31,96 @@ import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
+import { funnel } from '@/lib/analytics/quiz'
+import type { StackLevel, Goal } from '@/lib/types'
+import { TIER_ORDER, TIER_SIZES, TIER_META } from '@/lib/quiz-core'
+
+// Compact goal labels for the honest "no strong match" note.
+const GOAL_LABEL: Partial<Record<Goal, string>> = {
+  'sleep-better': 'sleep', 'less-stress': 'stress', focus: 'focus', immune: 'immunity',
+  'skin-hair-nails': 'skin, hair & nails', 'gut-health': 'gut health', menopause: 'menopause support',
+  muscle: 'muscle', energy: 'energy', performance: 'performance', hydration: 'hydration',
+  recovery: 'recovery', health: 'general health', cutting: 'getting lean', bulking: 'gaining mass',
+}
+
+interface TierInfo { level: StackLevel; size: number; oneOff: number; monthly: number }
+
+/**
+ * The value-first depth selector: build the full stack, let the customer choose
+ * how deep to go. Shows what each depth contains (count) and its price, so the
+ * value is visible before the price — and picking a depth reprices instantly.
+ */
+function StackTierSelector({
+  tiers, current, isSub, onChange,
+}: {
+  tiers: TierInfo[]
+  current: StackLevel
+  isSub: boolean
+  onChange: (level: StackLevel) => void
+}) {
+  return (
+    <div className="px-5 max-w-lg mx-auto">
+      <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>
+        Choose your depth
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {tiers.map(({ level, size, oneOff, monthly }) => {
+          const meta = TIER_META[level]
+          const active = current === level
+          return (
+            <button
+              key={level}
+              onClick={() => onChange(level)}
+              aria-pressed={active}
+              className="relative text-left rounded-2xl border p-3 transition-all active:scale-[0.98]"
+              style={{
+                borderColor: active ? 'var(--color-accent)' : 'var(--color-border)',
+                background: active ? 'color-mix(in srgb, var(--color-accent) 8%, transparent)' : 'var(--color-surface)',
+              }}
+            >
+              {meta.badge && (
+                <span
+                  className="absolute -top-2 left-2 px-1.5 py-0.5 rounded-full text-[8px] font-bold uppercase tracking-wide"
+                  style={{ background: 'var(--color-accent)', color: 'var(--color-bg)' }}
+                >
+                  {meta.badge}
+                </span>
+              )}
+              <div className="text-xs font-bold" style={{ color: active ? 'var(--color-accent)' : 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                {meta.label}
+              </div>
+              <div className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
+                {size} product{size === 1 ? '' : 's'}
+              </div>
+              {/* Both prices: whichever plan is active is emphasised, the other
+                  shown small — so the value is clear before the plan is chosen. */}
+              {isSub && monthly > 0 ? (
+                <>
+                  <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(monthly)}<span className="text-[9px] font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>
+                  </div>
+                  <div className="text-[9px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{formatGBP(oneOff)} one-off</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(oneOff)}
+                  </div>
+                  {monthly > 0 && <div className="text-[9px] mt-0.5" style={{ color: 'var(--color-accent)' }}>{formatGBP(monthly)}/mo subscribed</div>}
+                </>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
 
 export function StackReviewPage() {
   const {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
-    stackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
+    stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
     revealedIntroDiscount, setRevealedIntroDiscount,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
@@ -52,6 +137,7 @@ export function StackReviewPage() {
   // to that wrapper instead of the viewport.
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
+
   // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
   // The factory guarantees at least one slot, so a real blueprint — however
   // small — is always shown as-is rather than replaced with the mock stack.
@@ -104,6 +190,8 @@ export function StackReviewPage() {
   const handleSelectSwap = useCallback(
     (slotId: string, newProductId: string) => {
       const product = products.find((p) => p.id === newProductId)
+      const from = blueprint.slots.find((sl) => sl.slotId === slotId)?.selectedProductId
+      funnel.stackSwap({ slotId, from, to: newProductId })
       const defaultVariant = product?.variants.find((v) => v.available)
       let updated = updateStackSlotProduct(blueprint, slotId, newProductId)
       if (defaultVariant) updated = updateStackSlotVariant(updated, slotId, defaultVariant.id)
@@ -117,6 +205,7 @@ export function StackReviewPage() {
     (slotId: string) => {
       try {
         setStackBlueprint(removeOptionalSlot(blueprint, slotId))
+        funnel.stackRemove({ slotId })
       } catch {
         // required slot — silently ignore (button shouldn't appear for these)
       }
@@ -129,6 +218,7 @@ export function StackReviewPage() {
       const firstVariant = product.variants.find((v) => v.available) ?? product.variants[0]
       const slotType = product.stackSlots[0]
       const slotId = `booster-${product.id}`
+      funnel.stackAdd({ productId: product.id, slotType })
       const updated = addBoosterSlot(blueprint, {
         slotId,
         slotType,
@@ -161,21 +251,47 @@ export function StackReviewPage() {
     [subscriptionUsage, stackLevel, revealedIntroDiscount, changePolicy],
   )
 
-  const handleCheckout = useCallback(
-    () => checkout(blueprint, products, planType, answers, subOpts),
-    [checkout, blueprint, products, planType, answers, subOpts],
+  const sortedSlots = useMemo(
+    () => [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder),
+    [blueprint.slots],
   )
 
-  const sortedSlots = [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
+  // ── Value-first tiers ──────────────────────────────────────────────────────
+  // The engine builds the full stack; the customer chooses a depth here, seeing
+  // the value before the price. Each tier is a ranked prefix of the complete
+  // bundle. Drinks mode is pace-sized (not tiered), so it shows the whole box.
+  const isDrinks = !!answers.drinksMode
+  const tierSize = isDrinks ? sortedSlots.length : Math.min(TIER_SIZES[stackLevel], sortedSlots.length)
+  const activeSlots = useMemo(() => sortedSlots.slice(0, tierSize), [sortedSlots, tierSize])
+  const activeBlueprint = useMemo(() => ({ ...blueprint, slots: activeSlots }), [blueprint, activeSlots])
+  const showTiers = !isDrinks && sortedSlots.length > 3
+
+  const handleCheckout = useCallback(
+    () => checkout(activeBlueprint, products, planType, answers, subOpts),
+    [checkout, activeBlueprint, products, planType, answers, subOpts],
+  )
+
   // Shared top-trumps axes for the deck — the user's own goals, so every card
   // compares on the same footing.
-  const statAxes = useMemo(() => selectStatAxes(blueprint, products), [blueprint, products])
-  const pricing = calculatePricing(blueprint, products, answers, undefined, subOpts)
+  const statAxes = useMemo(() => selectStatAxes(activeBlueprint, products), [activeBlueprint, products])
+  const pricing = calculatePricing(activeBlueprint, products, answers, undefined, subOpts)
   const subscriptionPlan = useMemo(
-    () => buildSubscriptionPlan(blueprint, products, answers, undefined, subOpts),
-    [blueprint, products, answers, subOpts],
+    () => buildSubscriptionPlan(activeBlueprint, products, answers, undefined, subOpts),
+    [activeBlueprint, products, answers, subOpts],
   )
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
+
+  // Per-tier price summary for the selector (one-off + monthly at each depth), so
+  // the price follows the depth the customer picks.
+  const tierInfos = useMemo(
+    () => TIER_ORDER.map((level) => {
+      const size = Math.min(TIER_SIZES[level], sortedSlots.length)
+      const bp = { ...blueprint, slots: sortedSlots.slice(0, size) }
+      const pr = calculatePricing(bp, products, answers, undefined, { ...subOpts, level })
+      return { level, size, oneOff: pr.oneOffTotal, monthly: pr.subscriptionTotal }
+    }),
+    [blueprint, sortedSlots, products, answers, subOpts],
+  )
 
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
   // so the sale is always reachable without scrolling to the bottom.
@@ -185,6 +301,33 @@ export function StackReviewPage() {
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
   const showStickyBar = !swapSlot && !journeyOpen && checkoutState.status !== 'needs-account'
   const leavingForStripe = checkoutState.status === 'redirecting'
+
+  // Funnel: the built-bundle screen was reached (once), and the checkout
+  // start/success transitions — closing the quiz → checkout conversion loop.
+  const revealedRef = useRef(false)
+  useEffect(() => {
+    if (revealedRef.current) return
+    revealedRef.current = true
+    funnel.revealView({
+      slotCount: activeSlots.length,
+      oneOff: pricing.oneOffTotal,
+      sub: pricing.subscriptionTotal,
+      plan: planType,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  const prevCheckoutStatus = useRef(checkoutState.status)
+  useEffect(() => {
+    const prev = prevCheckoutStatus.current
+    prevCheckoutStatus.current = checkoutState.status
+    if (checkoutState.status === prev) return
+    // Start only. Success is NOT reported from here: `redirecting` means the
+    // member is on their way to Stripe, not that they paid (OC-F-002). The
+    // server-verified `purchase` event on /order/confirmation is the success
+    // signal for these orders.
+    if (checkoutState.status === 'loading') funnel.checkoutStart({ plan: planType, total: stickyTotal })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkoutState.status])
 
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
@@ -256,13 +399,46 @@ export function StackReviewPage() {
     <>
       <div className="pb-28">
         <StackHero
-          blueprint={blueprint}
-          productCount={sortedSlots.length}
+          blueprint={activeBlueprint}
+          productCount={activeSlots.length}
           totalPrice={pricing.oneOffTotal}
+          monthlyPrice={pricing.subscriptionTotal}
+          canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
           drinksMode={!!answers.drinksMode}
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
+
+        {/* Honest "no strong match" note — a chosen goal whose only products were
+            removed by a hard gate (safety / dietary). Surfaced, never silently dropped. */}
+        {(activeBlueprint.unmetGoals?.length ?? 0) > 0 && (
+          <div
+            className="mx-5 max-w-lg lg:mx-auto mt-5 rounded-2xl border px-4 py-3"
+            style={{ borderColor: 'var(--color-border-2)', background: 'var(--color-surface)' }}
+          >
+            <p className="text-xs font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              One thing we couldn’t match
+            </p>
+            <p className="text-xs mt-1 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+              We didn’t find a suitable product for{' '}
+              {(activeBlueprint.unmetGoals ?? []).map((g) => GOAL_LABEL[g] ?? g).join(', ')}{' '}
+              given your answers, so we’ve left it out rather than suggest something that isn’t right for you. It’s worth a chat with your GP or pharmacist.
+            </p>
+          </div>
+        )}
+
+        {/* Value-first depth selector — choose Essentials / Balanced / Complete,
+            each a ranked prefix of the full stack, priced so value comes first. */}
+        {showTiers && (
+          <div className="pt-6">
+            <StackTierSelector
+              tiers={tierInfos}
+              current={stackLevel}
+              isSub={planType === 'subscription'}
+              onChange={setStackLevel}
+            />
+          </div>
+        )}
 
         {/* Core + added booster product cards — a swipeable top-trumps deck */}
         <div ref={stackRef} className="pt-7" style={{ scrollMarginTop: 16 }}>
@@ -271,11 +447,11 @@ export function StackReviewPage() {
             style={{ fontFamily: 'var(--font-display)' }}
           >
             {answers.drinksMode
-              ? `Your LQD package — ${sortedSlots.length} ready-made drinks · swipe to compare`
-              : `Your personalised stack — ${sortedSlots.length} products · swipe to compare`}
+              ? `Your LQD package — ${activeSlots.length} ready-made drinks · swipe to compare`
+              : `Your personalised stack — ${activeSlots.length} products · swipe to compare`}
           </p>
           <StackDeck
-            slots={sortedSlots}
+            slots={activeSlots}
             products={products}
             planType={planType}
             axes={statAxes}
@@ -334,7 +510,7 @@ export function StackReviewPage() {
 
           {/* The high-level receipt — what you're buying, discounts, total */}
           <PlanReceipt
-            slots={sortedSlots}
+            slots={activeSlots}
             products={products}
             subscriptionPlan={subscriptionPlan}
             slotTitleById={slotTitleById}

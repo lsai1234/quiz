@@ -274,7 +274,9 @@ describe('buildStackBlueprint — wellbeing goals', () => {
     const slotTypes = blueprint.slots.map(s => s.slotType)
     expect(slotTypes).toContain('protein')
     expect(slotTypes).toContain('performance')
-    expect(slotTypes).toContain('sleep')
+    // sleep-better stays covered even though the redundant sleep-labelled slot is
+    // de-duplicated against the recovery magnesium (both are the same active).
+    expect(blueprint.unmetGoals ?? []).not.toContain('sleep-better')
   })
 })
 
