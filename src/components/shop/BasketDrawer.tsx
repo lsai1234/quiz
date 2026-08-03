@@ -6,15 +6,18 @@ import Link from 'next/link'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
 import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
-import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
 
 const ACCENT = '#00D4FF'
+const GREEN = '#34d399'
 
 interface Props {
   resolved: ResolvedBasketLine[]
   subtotal: number
+  /** The discounted price — what /api/cart will bill. */
+  priced: OneOffPricing
   checkoutState: ShopCheckoutState
   onCheckout: () => void
   onClose: () => void
@@ -26,7 +29,7 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 }
 
 /** A right-side slide-in cart drawer: line items up top, the money below. */
-export function BasketDrawer({ resolved, subtotal, checkoutState, onCheckout, onClose }: Props) {
+export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onCheckout, onClose }: Props) {
   const { setQty, remove } = useBasket()
   const [mounted, setMounted] = useState(false)
   const [shown, setShown] = useState(false)
@@ -143,9 +146,28 @@ export function BasketDrawer({ resolved, subtotal, checkoutState, onCheckout, on
                 <span aria-hidden>→</span>
               </Link>
 
+              {/* Show the discount they've earned, and total at what the card
+                  will actually be charged. Both come from `priceOneOffLines`,
+                  the same function /api/cart bills Stripe from. */}
+              {priced.discount > 0.01 && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>Subtotal</span>
+                    <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: GREEN }}>
+                      {priced.tierLabel ?? 'Bundle discount'}
+                    </span>
+                    <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
+                  </div>
+                </>
+              )}
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>Subtotal</span>
-                <span className="text-xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(subtotal)}</span>
+                <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>
+                  {priced.discount > 0.01 ? 'Total' : 'Subtotal'}
+                </span>
+                <span className="text-xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(priced.total)}</span>
               </div>
 
               {checkoutState.status === 'error' && (

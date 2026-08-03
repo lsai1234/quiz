@@ -5,6 +5,7 @@ import { getHubUser } from '@/lib/auth/session'
 import { getSubscription } from '@/lib/db/hub-data'
 import { createOrderFromCheckout, newOrderId } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
+import { priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
 
@@ -67,21 +68,42 @@ export async function POST(req: Request) {
     }
   }
 
-  const orderLines: OrderLine[] = []
+  // Resolve every line to its catalogue price + cost first, then price the whole
+  // order in ONE pass — the bundle tier depends on the order total, so a line
+  // cannot be priced in isolation.
+  const matched: { product: CatalogueProduct; variant: CatalogueVariant; quantity: number }[] = []
   for (const line of lines) {
     const match = byMerchId.get(line.merchandiseId!)
     if (!match) continue // stale/unknown line — drop it
-    const { product, variant } = match
-    orderLines.push({
-      sku: variant.sku ?? null,
-      productId: product.id,
-      title: product.title,
-      variantTitle: variant.flavour || variant.size || null,
-      quantity: line.quantity!,
-      unitPrice: variant.price,
-      supplierCost: product.cost ?? null,
-    })
+    matched.push({ ...match, quantity: line.quantity! })
   }
+
+  /**
+   * The discount, applied server-side, from the same function the storefront
+   * displays (`priceOneOffLines`).
+   *
+   * This used to bill `variant.price` — the raw list price — so the quiz showed
+   * a tier-discounted total and Stripe charged the undiscounted one, and the
+   * shop never applied the configured tiers at all. Both the number on screen
+   * and the number on the card now come from here.
+   */
+  const priced = priceOneOffLines(
+    matched.map((m) => ({
+      price: m.variant.price,
+      cost: unitCostOf(m.product, m.variant.price),
+      quantity: m.quantity,
+    })),
+  )
+
+  const orderLines: OrderLine[] = matched.map((m, i) => ({
+    sku: m.variant.sku ?? null,
+    productId: m.product.id,
+    title: m.product.title,
+    variantTitle: m.variant.flavour || m.variant.size || null,
+    quantity: m.quantity,
+    unitPrice: priced.lines[i].discountedUnitPrice,
+    supplierCost: m.product.cost ?? null,
+  }))
 
   if (orderLines.length === 0) {
     return NextResponse.json({ error: 'None of the basket lines could be matched to a product.' }, { status: 400 })

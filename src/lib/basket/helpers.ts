@@ -1,3 +1,4 @@
+import { getPricingConfig, priceOneOffLines, unitCostOf, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { CheckoutLineItem } from '@/lib/stack-blueprint/checkout'
 import type { BasketLine, ResolvedBasketLine } from './types'
@@ -59,9 +60,29 @@ export function resolveBasket(lines: BasketLine[], products: CatalogueProduct[])
   return resolved
 }
 
-/** Basket subtotal (sum of line totals), rounded to pennies. */
+/** Basket subtotal BEFORE any bundle discount, rounded to pennies. */
 export function basketSubtotal(resolved: ResolvedBasketLine[]): number {
   return Math.round(resolved.reduce((sum, l) => sum + l.lineTotal, 0) * 100) / 100
+}
+
+/**
+ * What the basket actually costs: the bundle tier applied, margin-floored.
+ *
+ * Uses `priceOneOffLines` — the same function `/api/cart` bills Stripe from — so
+ * the number in the drawer and the number on the card are the same number. The
+ * shop previously showed a raw subtotal and never applied the configured tiers
+ * at all, so customers who had earned "£90+ bundle, 15% off" were quietly
+ * charged full price.
+ */
+export function priceBasket(resolved: ResolvedBasketLine[], config = getPricingConfig()): OneOffPricing {
+  return priceOneOffLines(
+    resolved.map(({ product, variant, quantity }) => ({
+      price: variant.price,
+      cost: unitCostOf(product, variant.price, config),
+      quantity,
+    })),
+    config,
+  )
 }
 
 /**

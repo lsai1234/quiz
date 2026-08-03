@@ -7,7 +7,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
-import { resolveBasket, basketSubtotal, basketItemCount } from '@/lib/basket/helpers'
+import { resolveBasket, basketSubtotal, basketItemCount, priceBasket } from '@/lib/basket/helpers'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
@@ -180,6 +180,8 @@ export function ShopShell() {
 
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
+  // What they'll actually be charged — the same computation /api/cart bills from.
+  const pricedBasket = priceBasket(resolved)
   const count = basketItemCount(lines)
 
   // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
@@ -329,6 +331,7 @@ export function ShopShell() {
         <BasketDrawer
           resolved={resolved}
           subtotal={subtotal}
+          priced={pricedBasket}
           checkoutState={state}
           onCheckout={() => checkout(resolved)}
           onClose={closeDrawer}

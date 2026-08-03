@@ -337,10 +337,87 @@ export function discountedOneOffTotal(
   lines: { price: number; cost: number }[],
   config = getPricingConfig(),
 ): number {
-  const subtotal = lines.reduce((s, l) => s + l.price, 0)
-  const { pct } = resolveTier(config.bundleTiers, subtotal, lines.length)
-  const total = lines.reduce((s, l) => s + discountWithFloor(l.price, pct, l.cost, config), 0)
-  return Math.round(total * 100) / 100
+  return priceOneOffLines(lines, config).total
+}
+
+/** One line of a priced one-off order. */
+export interface OneOffPricedLine {
+  /** List price of one unit, before any discount. */
+  unitPrice: number
+  /**
+   * What one unit is actually charged, after the bundle tier and the margin
+   * floor. Rounded to whole pence, because this is the number handed to Stripe
+   * as `unit_amount` — anything finer than a penny does not survive the trip.
+   */
+  discountedUnitPrice: number
+  quantity: number
+  /** `discountedUnitPrice × quantity`. */
+  lineTotal: number
+}
+
+export interface OneOffPricing {
+  lines: OneOffPricedLine[]
+  /** Undiscounted order value — what the tier qualification is measured against. */
+  subtotal: number
+  /** What the customer pays. */
+  total: number
+  /** `subtotal − total`. */
+  discount: number
+  /** The qualifying tier rate, 0–1. */
+  tierPct: number
+  tierLabel: string | null
+}
+
+/**
+ * Price a one-off order: the bundle tier applied per line, floored at the
+ * margin, quantity-aware.
+ *
+ * **This is the single definition of what a one-off order costs**, and it exists
+ * because there used to be two. The quiz displayed `calculatePricing().oneOffTotal`
+ * — tier-discounted — while `/api/cart` billed Stripe the raw sum of variant
+ * prices, so a stack shown at £96 was charged at £120. The shop had the mirror
+ * problem: it displayed a raw subtotal and never applied the configured tiers at
+ * all, so shop customers silently never received a discount the config said they
+ * had earned.
+ *
+ * Both the display and the Stripe line items now come from here, so they cannot
+ * disagree. Rounding is per-unit rather than on the total, because that is what
+ * Stripe actually charges: `unit_amount × quantity`. Summing unrounded prices
+ * and rounding once would produce a displayed total the card never matches.
+ */
+export function priceOneOffLines(
+  lines: { price: number; cost: number; quantity?: number }[],
+  config = getPricingConfig(),
+): OneOffPricing {
+  const round = (n: number) => Math.round(n * 100) / 100
+  const qtyOf = (l: { quantity?: number }) => Math.max(1, Math.round(l.quantity ?? 1))
+
+  // Qualification is measured on the UNDISCOUNTED order — the tier is what the
+  // basket has earned, not what it costs after earning it.
+  const subtotal = lines.reduce((s, l) => s + l.price * qtyOf(l), 0)
+  const itemCount = lines.reduce((n, l) => n + qtyOf(l), 0)
+  const { pct, tier } = resolveTier(config.bundleTiers, subtotal, itemCount)
+
+  const priced: OneOffPricedLine[] = lines.map((l) => {
+    const quantity = qtyOf(l)
+    const discountedUnitPrice = round(discountWithFloor(l.price, pct, l.cost, config))
+    return {
+      unitPrice: round(l.price),
+      discountedUnitPrice,
+      quantity,
+      lineTotal: round(discountedUnitPrice * quantity),
+    }
+  })
+
+  const total = round(priced.reduce((s, l) => s + l.lineTotal, 0))
+  return {
+    lines: priced,
+    subtotal: round(subtotal),
+    total,
+    discount: round(subtotal - total),
+    tierPct: pct,
+    tierLabel: tier?.label ?? null,
+  }
 }
 
 // ─── Subscription qualification & resolution ─────────────────────────────────
@@ -866,12 +943,13 @@ export function calculatePricing(
     const price = slotPrice(slot, product)
     oneOffLines.push({ price, rrp: slotRrp(slot, product), cost: unitCostOf(product, price, config) })
   }
-  const oneOffSubtotal = oneOffLines.reduce((s, l) => s + l.price, 0)
   const rrpTotal = oneOffLines.reduce((s, l) => s + l.rrp, 0)
-  const bundleTier = resolveTier(config.bundleTiers, oneOffSubtotal, oneOffLines.length)
-  const oneOffTotal = round(
-    oneOffLines.reduce((s, l) => s + discountWithFloor(l.price, bundleTier.pct, l.cost, config), 0),
-  )
+  // Delegated so the price shown here and the price billed to Stripe come from
+  // one implementation and cannot drift apart — see `priceOneOffLines`.
+  const oneOff = priceOneOffLines(oneOffLines, config)
+  const oneOffSubtotal = oneOff.subtotal
+  const bundleTier = { pct: oneOff.tierPct, tier: oneOff.tierLabel ? { label: oneOff.tierLabel } : null }
+  const oneOffTotal = oneOff.total
   const oneOffCost = round(oneOffLines.reduce((s, l) => s + l.cost, 0))
   const bundleSaving = round(rrpTotal - oneOffTotal)
   const oneOffMargin = round(oneOffTotal - oneOffCost)
