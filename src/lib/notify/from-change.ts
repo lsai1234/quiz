@@ -19,6 +19,8 @@ export const hubLinks = {
   /** Opens `AddProductSheet` filtered to that category — "browse replacements". */
   add: (base: string, swapGroup: string) => `${base}/hub?add=${encodeURIComponent(swapGroup)}`,
   hub: (base: string) => `${base}/hub`,
+  /** Opens the hub with the billing panel focused, from which the Stripe portal opens. */
+  billing: (base: string) => `${base}/hub?billing=1`,
 }
 
 /**

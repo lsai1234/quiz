@@ -52,13 +52,40 @@ export interface HubSession {
   name: string
 }
 
-/** Write the mutated subscription through to the account (fire-and-forget). */
+/**
+ * Write the mutated subscription through to the account.
+ *
+ * Optimistic — the local state has already moved and this returns it unchanged,
+ * because every one of these mutations is instant and reversible in the UI.
+ *
+ * What it can no longer do is fail in silence. The save now also pushes the
+ * change to Stripe and answers 502 with NOTHING saved if Stripe refuses, so a
+ * swallowed rejection would leave someone looking at a plan and a price that
+ * their card knows nothing about. On failure we reload the stored truth and
+ * surface a message.
+ */
 function persist(subscription: MemberSubscription): MemberSubscription {
-  void fetch('/api/hub/subscription', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ subscription }),
-  }).catch(() => {})
+  void (async () => {
+    try {
+      const res = await fetch('/api/hub/subscription', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscription }),
+      })
+      if (res.ok) return
+      const data = (await res.json().catch(() => ({}))) as { error?: string }
+      useHubStore.setState({
+        saveError: data.error ?? 'We couldn’t save that change. Please try again.',
+      })
+      // Pull back what's actually stored so the screen stops showing a change
+      // that didn't happen.
+      await useHubStore.getState().refresh()
+    } catch {
+      useHubStore.setState({
+        saveError: 'We couldn’t reach your account. Check your connection and try again.',
+      })
+    }
+  })()
   return subscription
 }
 
@@ -79,9 +106,18 @@ interface HubStore {
   hydrated: boolean
   /** OAuth providers the server has configured (which buttons to show). */
   providers: { id: string; label: string }[]
+  /**
+   * Set when a write-through failed and the local state has been rolled back to
+   * what is actually stored. The hub shows it and clears it — a mutation that
+   * silently didn't happen is worse than one that visibly didn't.
+   */
+  saveError: string | null
 
   /** Restore the signed-in state on load (cookie session → account data). */
   hydrate: () => Promise<void>
+  /** Re-read the stored subscription — used to roll back after a failed save. */
+  refresh: () => Promise<void>
+  clearSaveError: () => void
   /** Sign in or create an account. Resolves to an error message, or null on success. */
   authenticate: (mode: 'login' | 'signup', email: string, password: string) => Promise<string | null>
   logout: () => void
@@ -155,6 +191,14 @@ export const useHubStore = create<HubStore>((set) => ({
   feedback: [],
   hydrated: false,
   providers: [],
+  saveError: null,
+
+  refresh: async () => {
+    const { subscription, feedback } = await loadAccountData()
+    if (subscription) set({ subscription, feedback })
+  },
+
+  clearSaveError: () => set({ saveError: null }),
 
   hydrate: async () => {
     try {

@@ -8,13 +8,43 @@
  */
 import Stripe from 'stripe'
 
+/**
+ * Pinned deliberately. Left unset, Stripe applies whatever default version the
+ * ACCOUNT is on, which can be changed from the dashboard or moved by Stripe
+ * itself — so the shape of the webhook payloads we parse could shift without a
+ * deploy. The defensive shape-juggling in `webhook.ts` (`addressFromSession`,
+ * `idOf`) exists precisely because that has bitten before. Upgrade this
+ * intentionally, with the changelog open, not by accident.
+ */
+const STRIPE_API_VERSION = '2025-09-30.clover'
+
+/** One currency for the whole app. Every amount we send Stripe is in minor units of this. */
+export const DEFAULT_CURRENCY = 'gbp'
+
 let _client: Stripe | null = null
 
 export function getStripeClient(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY
   if (!key) throw new Error('STRIPE_SECRET_KEY is not set — cannot use Stripe.')
-  if (!_client) _client = new Stripe(key)
+  if (!_client) _client = new Stripe(key, { apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion })
   return _client
+}
+
+/**
+ * Identify the buyer to Stripe: an existing Customer if we know one, otherwise
+ * just their email so Checkout can create one.
+ *
+ * Stripe rejects `customer` and `customer_email` together, so this is
+ * deliberately either/or rather than two independent options a caller could get
+ * wrong.
+ */
+function customerFields(opts: { customerId?: string | null; customerEmail?: string | null }):
+  | { customer: string }
+  | { customer_email: string }
+  | Record<string, never> {
+  if (opts.customerId) return { customer: opts.customerId }
+  if (opts.customerEmail) return { customer_email: opts.customerEmail }
+  return {}
 }
 
 export interface StripeLineInput {
@@ -28,6 +58,13 @@ export interface CreateSessionOptions {
   lines: StripeLineInput[]
   /** Our order id — echoed back on the webhook to reconcile. */
   clientReferenceId: string
+  /**
+   * An existing Stripe Customer to bill against, when we know the buyer. Wins
+   * over `customerEmail` — Stripe rejects both together — and keeps a returning
+   * member's payments, cards and invoices on ONE customer record instead of
+   * minting a fresh one per checkout.
+   */
+  customerId?: string | null
   customerEmail?: string | null
   currency?: string
   successUrl: string
@@ -39,7 +76,7 @@ export interface CreateSessionOptions {
  *  no account required; Stripe collects the email. */
 export async function createCheckoutSession(opts: CreateSessionOptions): Promise<{ id: string; url: string | null }> {
   const stripe = getStripeClient()
-  const currency = (opts.currency ?? 'gbp').toLowerCase()
+  const currency = (opts.currency ?? DEFAULT_CURRENCY).toLowerCase()
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
     line_items: opts.lines.map((l) => ({
@@ -51,7 +88,7 @@ export async function createCheckoutSession(opts: CreateSessionOptions): Promise
       },
     })),
     client_reference_id: opts.clientReferenceId,
-    customer_email: opts.customerEmail ?? undefined,
+    ...customerFields(opts),
     // Collect a delivery address so the order can be dropshipped by the supplier.
     shipping_address_collection: { allowed_countries: ['GB'] },
     phone_number_collection: { enabled: true },
@@ -67,6 +104,8 @@ export interface CreateSubscriptionSessionOptions {
   monthlyTotal: number
   /** Our reference (the member's user id) — echoed back on the webhook. */
   clientReferenceId: string
+  /** Reuse an existing Stripe Customer when we have one. See `CreateSessionOptions`. */
+  customerId?: string | null
   customerEmail?: string | null
   currency?: string
   successUrl: string
@@ -128,7 +167,7 @@ async function getOrCreateFirstMonthCoupon(rate: number): Promise<string | null>
  */
 export async function createSubscriptionSession(opts: CreateSubscriptionSessionOptions): Promise<{ id: string; url: string | null }> {
   const stripe = getStripeClient()
-  const currency = (opts.currency ?? 'gbp').toLowerCase()
+  const currency = (opts.currency ?? DEFAULT_CURRENCY).toLowerCase()
   const rate = opts.introDiscountRate ?? 0
   const coupon = rate > 0 ? await getOrCreateFirstMonthCoupon(rate) : null
   if (rate > 0 && !coupon) {
@@ -148,8 +187,14 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
       },
     ],
     client_reference_id: opts.clientReferenceId,
-    customer_email: opts.customerEmail ?? undefined,
+    ...customerFields(opts),
     discounts: coupon ? [{ coupon }] : undefined,
+    // A subscription ships a physical box every month, so it needs a delivery
+    // address just as much as a one-off does. Without this the webhook has no
+    // address to put on the order and `submitOrderToSupplier` falls through to
+    // its blank-address placeholder — i.e. every box dropshipped to nowhere.
+    shipping_address_collection: { allowed_countries: ['GB'] },
+    phone_number_collection: { enabled: true },
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
     metadata: opts.metadata,
@@ -194,7 +239,7 @@ export async function updateSubscriptionAmount(
       {
         id: item.id,
         price_data: {
-          currency: (opts.currency ?? currentPrice.currency ?? 'gbp').toLowerCase(),
+          currency: (opts.currency ?? currentPrice.currency ?? DEFAULT_CURRENCY).toLowerCase(),
           product: productId,
           unit_amount: Math.round(monthlyTotal * 100),
           recurring: { interval: 'month' },
@@ -203,6 +248,73 @@ export async function updateSubscriptionAmount(
     ],
     proration_behavior: 'none',
   })
+}
+
+/**
+ * End a subscription in Stripe, immediately.
+ *
+ * Immediate rather than `cancel_at_period_end` on purpose: the offer is "cancel
+ * whenever you want, settle what we've already sent you", and the settlement —
+ * not a final month's billing — is what squares us up. Leaving it to run to the
+ * period end would take another payment from someone who has already left.
+ *
+ * Tolerates an already-cancelled subscription: a member cancelling from the
+ * Stripe billing portal, and then again in the hub, must not error.
+ */
+export async function cancelStripeSubscription(stripeSubscriptionId: string): Promise<void> {
+  const stripe = getStripeClient()
+  try {
+    await stripe.subscriptions.cancel(stripeSubscriptionId)
+  } catch (err) {
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && err.statusCode === 404) return
+    // Already cancelled is a success for our purposes — we wanted it stopped.
+    if (err instanceof Stripe.errors.StripeInvalidRequestError && /no such subscription|already canceled/i.test(err.message)) return
+    throw err
+  }
+}
+
+/**
+ * Pause billing without ending the subscription.
+ *
+ * `behavior: 'void'` means invoices raised while paused are voided rather than
+ * banked as a debt — the member is not shipped to and must not be billed for the
+ * gap, and the terms promise a pause costs nothing.
+ */
+export async function pauseStripeSubscription(stripeSubscriptionId: string): Promise<void> {
+  const stripe = getStripeClient()
+  await stripe.subscriptions.update(stripeSubscriptionId, {
+    pause_collection: { behavior: 'void' },
+  })
+}
+
+/** Resume a paused subscription — billing restarts on the existing anchor. */
+export async function resumeStripeSubscription(stripeSubscriptionId: string): Promise<void> {
+  const stripe = getStripeClient()
+  await stripe.subscriptions.update(stripeSubscriptionId, { pause_collection: null })
+}
+
+/**
+ * The card a subscription actually bills, for display in the hub.
+ *
+ * Best-effort: returns null rather than throwing, because not knowing the card
+ * is a cosmetic problem and must never be able to fail a webhook that is also
+ * activating someone's plan.
+ */
+export async function defaultCardFor(
+  stripeSubscriptionId: string,
+): Promise<{ brand: string; last4: string } | null> {
+  try {
+    const stripe = getStripeClient()
+    const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+      expand: ['default_payment_method'],
+    })
+    const pm = subscription.default_payment_method
+    if (!pm || typeof pm === 'string' || !pm.card) return null
+    return { brand: pm.card.brand, last4: pm.card.last4 }
+  } catch (err) {
+    console.error('[stripe] could not read the default payment method:', err)
+    return null
+  }
 }
 
 /** Open the Stripe billing portal so a member can manage their card / cancel. */

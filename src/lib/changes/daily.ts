@@ -8,6 +8,7 @@
  * Server-only.
  */
 import { syncPortalRuntime } from '@/lib/portal/store'
+import { sweepStalePendingOrders } from '@/lib/orders/service'
 import { applyDueChanges, flushChangeNotifications, runChangeDetection } from './service'
 
 export interface DailyRunResult {
@@ -25,6 +26,8 @@ export interface DailyRunResult {
   notifyFailed?: number
   /** Emails written and waiting for a person to send (manual mode). */
   awaitingSend?: number
+  /** Abandoned checkouts closed off (see `sweepStalePendingOrders`). */
+  staleOrdersClosed?: number
   note?: string
 }
 
@@ -39,6 +42,10 @@ export interface DailyRunResult {
  *     with work to do.
  *   • `flushChangeNotifications`, so an email that failed yesterday is retried
  *     today rather than sitting in the outbox forever.
+ *   • `sweepStalePendingOrders`, the backstop for abandoned checkouts whose
+ *     `checkout.session.expired` webhook never arrived. Webhooks are
+ *     best-effort; without this those rows sit at `pending_payment` forever and
+ *     quietly poison anything counting conversions.
  *
  * Both are idempotent — applying an applied event is a no-op, and the outbox's
  * dedupe key means nobody is told the same thing twice — so running this more
@@ -63,6 +70,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
 
   const dueNow = await applyDueChanges()
   const outbox = await flushChangeNotifications()
+  const staleOrdersClosed = await sweepStalePendingOrders()
 
   return {
     dryRun: false,
@@ -74,6 +82,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     notified: detection.notified + outbox.sent,
     notifyFailed: outbox.failed,
     awaitingSend: outbox.awaitingSend,
+    staleOrdersClosed,
   }
 }
 

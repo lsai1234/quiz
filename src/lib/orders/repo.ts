@@ -66,6 +66,31 @@ export async function getOrderByStripeSession(sessionId: string): Promise<Order 
   return parse(await db.get<Row>('SELECT data FROM orders WHERE stripe_session_id = ?', [sessionId]))
 }
 
+/**
+ * Find the order behind a Stripe charge. Used to reconcile a refund or dispute
+ * raised in the Stripe dashboard rather than the Founders Hub — the payment
+ * intent is the only handle such an event gives us.
+ */
+export async function getOrderByPaymentIntent(paymentIntentId: string): Promise<Order | null> {
+  const db = await getEngine()
+  return parse(await db.get<Row>('SELECT data FROM orders WHERE stripe_payment_id = ?', [paymentIntentId]))
+}
+
+/**
+ * Pending-payment orders older than `cutoff` — abandoned checkouts to sweep.
+ *
+ * `checkout.session.expired` covers most of them, but webhooks are best-effort
+ * and a missed one leaves a row that never resolves, so this is the backstop.
+ */
+export async function listStalePendingOrders(cutoffIso: string): Promise<Order[]> {
+  const db = await getEngine()
+  const rows = await db.all<Row>(
+    "SELECT data FROM orders WHERE status = 'pending_payment' AND created_at < ? ORDER BY created_at ASC LIMIT 500",
+    [cutoffIso],
+  )
+  return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
+}
+
 export interface OrderFilter {
   status?: OrderStatus
   channel?: OrderChannel

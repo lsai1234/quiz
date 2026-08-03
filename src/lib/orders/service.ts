@@ -17,7 +17,7 @@ import type { SupplierOrderStatus, SupplierAddress } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
-import { getOrder, saveOrder, updateOrder } from './repo'
+import { getOrder, listStalePendingOrders, saveOrder, updateOrder } from './repo'
 import type { CreateOrderInput, Order, OrderLine, OrderStatus, OrderEvent } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -91,6 +91,10 @@ export async function createSubscriptionOrder(input: {
   sub: MemberSubscription
   catalogue: CatalogueProduct[]
   stripeSubscriptionId?: string | null
+  /** Where to ship it. Held on the subscription because Stripe asks once, at signup. */
+  shippingAddress?: SupplierAddress | null
+  /** The charge behind this invoice, so the order is refundable for real. */
+  stripePaymentIntentId?: string | null
 }): Promise<Order> {
   // Idempotency: if this invoice already produced an order, return it unchanged.
   if (input.id) {
@@ -103,6 +107,8 @@ export async function createSubscriptionOrder(input: {
     userId: input.userId ?? null,
     email: input.email ?? input.sub.customerEmail ?? null,
     lines: subscriptionOrderLines(input.sub, input.catalogue),
+    shippingAddress: input.shippingAddress ?? input.sub.shippingAddress ?? null,
+    stripePaymentIntentId: input.stripePaymentIntentId ?? null,
     status: 'paid',
   })
 }
@@ -202,6 +208,36 @@ export async function refundOrder(id: string, detail?: string): Promise<Order | 
     o.status = 'refunded'
     o.events.push(event('refunded', detail))
   })
+}
+
+/**
+ * Close out an order that never got paid — an expired or abandoned checkout.
+ *
+ * Guarded to `pending_payment` so a late `checkout.session.expired` can never
+ * undo a payment that landed first; Stripe does not promise event order.
+ */
+export async function failOrder(id: string, detail?: string): Promise<Order | null> {
+  return updateOrder(id, (o) => {
+    if (o.status !== 'pending_payment') return
+    o.status = 'failed'
+    o.events.push(event('payment_not_completed', detail))
+  })
+}
+
+/**
+ * Sweep abandoned checkouts. `checkout.session.expired` handles these in the
+ * normal case; this catches the ones whose webhook never arrived, so the orders
+ * list and anything counting conversions off it stay truthful.
+ */
+export async function sweepStalePendingOrders(olderThanHours = 24, now: Date = new Date()): Promise<number> {
+  const cutoff = new Date(now.getTime() - olderThanHours * 3600_000).toISOString()
+  const stale = await listStalePendingOrders(cutoff)
+  let closed = 0
+  for (const order of stale) {
+    const updated = await failOrder(order.id, `No payment ${olderThanHours}h after checkout started`)
+    if (updated) closed += 1
+  }
+  return closed
 }
 
 export async function cancelOrder(id: string, detail?: string): Promise<Order | null> {

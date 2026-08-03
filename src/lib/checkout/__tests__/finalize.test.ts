@@ -35,7 +35,6 @@ describe('finalizeCheckout', () => {
     const payload: CheckoutPayload = {
       subscription,
       quiz: { answers: { name: 'Sam', goals: ['muscle'] } as unknown as QuizAnswers },
-      lines: [],
       consent,
     }
 
@@ -56,7 +55,6 @@ describe('finalizeCheckout', () => {
     const user = await createUser({ email: 'lucky@example.com', passwordHash: 'h' })
     await finalizeCheckout(user.id, user.email, {
       subscription: { ...subscription, introDiscountRate: 0.5 },
-      lines: [],
       consent,
     })
 
@@ -69,7 +67,6 @@ describe('finalizeCheckout', () => {
     const user = await createUser({ email: 'chancer@example.com', passwordHash: 'h' })
     const result = await finalizeCheckout(user.id, user.email, {
       subscription: { ...subscription, introDiscountRate: 0.9 },
-      lines: [],
       consent,
     })
 
@@ -84,7 +81,6 @@ describe('finalizeCheckout', () => {
     const user = await createUser({ email: 'ledger@example.com', passwordHash: 'h' })
     await finalizeCheckout(user.id, user.email, {
       subscription: { ...subscription, introDiscountRate: 0.25 },
-      lines: [],
       consent,
     })
 
@@ -96,7 +92,7 @@ describe('finalizeCheckout', () => {
   it('spends nothing from the ledger when no discount was claimed', async () => {
     const before = ledgerTotals(await readIntroLedger())
     const user = await createUser({ email: 'nodiscount@example.com', passwordHash: 'h' })
-    await finalizeCheckout(user.id, user.email, { subscription, lines: [], consent })
+    await finalizeCheckout(user.id, user.email, { subscription, consent })
 
     expect(ledgerTotals(await readIntroLedger()).count).toBe(before.count)
   })
@@ -105,7 +101,7 @@ describe('finalizeCheckout', () => {
 describe('consent is a precondition of checkout', () => {
   it('records what the member agreed to, against their account', async () => {
     const user = await createUser({ email: 'consented@example.com', passwordHash: 'h' })
-    await finalizeCheckout(user.id, user.email, { subscription, lines: [], consent }, {
+    await finalizeCheckout(user.id, user.email, { subscription, consent }, {
       ip: '203.0.113.9',
       userAgent: 'jest',
     })
@@ -119,7 +115,7 @@ describe('consent is a precondition of checkout', () => {
   it('refuses to store a plan or start a payment without consent', async () => {
     const user = await createUser({ email: 'unconsented@example.com', passwordHash: 'h' })
 
-    await expect(finalizeCheckout(user.id, user.email, { subscription, lines: [] }))
+    await expect(finalizeCheckout(user.id, user.email, { subscription }))
       .rejects.toThrow(CheckoutRejected)
 
     // Nothing was written — no half-finished account with a plan and no consent.
@@ -133,7 +129,6 @@ describe('consent is a precondition of checkout', () => {
     await expect(
       finalizeCheckout(user.id, user.email, {
         subscription,
-        lines: [],
         consent: { ...consent, termsVersion: '2020-01-01' },
       }),
     ).rejects.toThrow(/updated/i)
@@ -148,7 +143,6 @@ describe('consent is a precondition of checkout', () => {
     await finalizeCheckout(user.id, user.email, {
       subscription,
       quiz: { answers: { lifestyle: ['vegan'], stimPreference: 'no' } as unknown as QuizAnswers },
-      lines: [],
       consent,
     })
 

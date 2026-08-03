@@ -208,6 +208,35 @@ export function priceChangeNotice(ctx: PriceChangeContext): RenderedEmail {
   }
 }
 
+// ─── Payment failed ───────────────────────────────────────────────────────────
+
+export interface PaymentFailedContext {
+  monthly: number
+  /** Where they update the card — the Stripe billing portal, via the hub. */
+  billingUrl: string
+}
+
+/**
+ * The one email in this domain that DOES ask the member to act, and the reason
+ * the rule is worth stating: nothing we can do at our end puts money on a card
+ * that declined. Written to be easy rather than alarming — a card expires, it is
+ * nobody's fault, and their plan is still there.
+ */
+export function paymentFailed(ctx: PaymentFailedContext): RenderedEmail {
+  return {
+    subject: "We couldn't take your payment",
+    ...layout("We couldn't take this month's payment", {
+      paragraphs: [
+        `Your ${formatGBP(ctx.monthly)} payment didn't go through. Usually that's a card that has expired or been replaced — it's rarely anything more than that.`,
+        "We'll try again automatically over the next few days, so if you've already sorted it you can ignore this. Updating your card now saves the wait.",
+        'Your plan and everything on it are unchanged.',
+      ],
+      cta: { label: 'Update your card', url: ctx.billingUrl },
+      footnote: "If you'd rather stop, you can cancel any time from your account.",
+    }),
+  }
+}
+
 // ─── Terms updated ────────────────────────────────────────────────────────────
 
 export interface TermsUpdatedContext {

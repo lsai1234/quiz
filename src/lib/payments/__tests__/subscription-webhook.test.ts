@@ -5,6 +5,7 @@ import { saveSubscription, getSubscription } from '@/lib/db/hub-data'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { listOrders, getOrder } from '@/lib/orders/repo'
 import { createUser } from '@/lib/db/users'
+import { listNotifications } from '@/lib/notify/outbox'
 
 async function makeUserWithSub(email: string) {
   const user = await createUser({ email })
@@ -129,6 +130,97 @@ describe('subscription webhook flow', () => {
     await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_4c'))
 
     expect((await getSubscription(user.id))!.monthsActive).toBe(before + 3)
+  })
+
+  // ── Dunning ─────────────────────────────────────────────────────────────────
+  // Before these, a failed card meant Stripe retried silently and we learned
+  // nothing until the subscription was deleted weeks later — while the hub
+  // showed a perfectly healthy plan and the member was never told.
+
+  it('flags past_due on a failed payment without stopping the plan', async () => {
+    const user = await makeUserWithSub('dun1@example.com')
+    const subId = 'sub_dun_1'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+
+    const evt = {
+      id: 'evt_fail',
+      type: 'invoice.payment_failed',
+      data: { object: { id: 'in_fail_1', subscription: subId } as unknown as Stripe.Invoice },
+    } as unknown as Stripe.Event
+    expect((await handleStripeEvent(evt)).handled).toBe(true)
+
+    const stored = (await getSubscription(user.id))!
+    expect(stored.billingStatus).toBe('past_due')
+    // Still active: it is still their plan and still shipping while Stripe retries.
+    expect(stored.status).toBe('active')
+  })
+
+  it('queues exactly one email across a run of retries', async () => {
+    // Stripe raises payment_failed on EVERY retry. Four identical emails about
+    // one expired card is how a solvable problem becomes a cancellation.
+    const user = await makeUserWithSub('dun2@example.com')
+    const subId = 'sub_dun_2'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+
+    const evt = (invoiceId: string) => ({
+      id: `evt_${invoiceId}`,
+      type: 'invoice.payment_failed',
+      data: { object: { id: invoiceId, subscription: subId } as unknown as Stripe.Invoice },
+    }) as unknown as Stripe.Event
+
+    await handleStripeEvent(evt('in_r1'))
+    await handleStripeEvent(evt('in_r1'))
+    await handleStripeEvent(evt('in_r2'))
+
+    const queued = (await listNotifications({ userId: user.id })).filter((n) => n.template === 'payment-failed')
+    expect(queued).toHaveLength(1)
+  })
+
+  it('clears past_due when a payment finally succeeds', async () => {
+    const user = await makeUserWithSub('dun3@example.com')
+    const subId = 'sub_dun_3'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    await handleStripeEvent({
+      id: 'evt_f',
+      type: 'invoice.payment_failed',
+      data: { object: { id: 'in_f', subscription: subId } as unknown as Stripe.Invoice },
+    } as unknown as Stripe.Event)
+    expect((await getSubscription(user.id))!.billingStatus).toBe('past_due')
+
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_recovered'))
+    expect((await getSubscription(user.id))!.billingStatus).toBe('ok')
+  })
+
+  // ── State changed outside our hub ───────────────────────────────────────────
+
+  it('mirrors a cancellation made in the Stripe dashboard', async () => {
+    const user = await makeUserWithSub('mirror1@example.com')
+    const subId = 'sub_mirror_1'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+
+    await handleStripeEvent({
+      id: 'evt_upd',
+      type: 'customer.subscription.updated',
+      data: { object: { id: subId, status: 'canceled' } as unknown as Stripe.Subscription },
+    } as unknown as Stripe.Event)
+
+    expect((await getSubscription(user.id))!.status).toBe('cancelled')
+  })
+
+  it('mirrors a pause applied in Stripe', async () => {
+    const user = await makeUserWithSub('mirror2@example.com')
+    const subId = 'sub_mirror_2'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+
+    await handleStripeEvent({
+      id: 'evt_pause',
+      type: 'customer.subscription.updated',
+      data: {
+        object: { id: subId, status: 'active', pause_collection: { behavior: 'void' } } as unknown as Stripe.Subscription,
+      },
+    } as unknown as Stripe.Event)
+
+    expect((await getSubscription(user.id))!.status).toBe('paused')
   })
 
   it('cancels the member subscription on customer.subscription.deleted', async () => {

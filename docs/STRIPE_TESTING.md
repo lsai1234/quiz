@@ -59,9 +59,24 @@ Keep `stripe listen` running while you test.
 ### Deployed (Vercel etc.)
 Stripe **Developers → Webhooks → Add endpoint**:
 - URL: `https://<your-domain>/api/webhooks/stripe`
-- Events: `checkout.session.completed`, `invoice.paid`,
-  `invoice.payment_failed`, `customer.subscription.deleted`
+- Events — **all seven matter**, and the app handles each:
+
+  | Event | What it does here |
+  |---|---|
+  | `checkout.session.completed` | marks a one-off order paid; activates a subscription, and captures its delivery address + real card |
+  | `invoice.paid` | raises the fulfilment order, advances the subscription clock, clears `past_due` |
+  | `invoice.payment_failed` | flags `past_due` and emails the member once per dunning episode |
+  | `customer.subscription.updated` | mirrors a pause/cancel made in the Stripe dashboard or billing portal |
+  | `customer.subscription.deleted` | marks the stored subscription cancelled |
+  | `checkout.session.expired` | closes an abandoned checkout so it stops sitting at `pending_payment` |
+  | `charge.refunded` | reconciles a refund issued in Stripe back onto the order |
+
 - Copy the endpoint's **Signing secret** into `STRIPE_WEBHOOK_SECRET`.
+
+> **The clock depends on `invoice.paid` arriving.** `monthsActive` — which the
+> cancel settlement is measured against — only advances when that event lands.
+> Miss it and members look permanently new, and are asked to settle balances
+> they cleared months ago.
 
 > A DB that persists is required for orders/subscriptions to survive. Locally,
 > SQLite is fine. On serverless (Vercel) set `DATABASE_URL` to hosted Postgres —
@@ -98,6 +113,29 @@ Run the quiz → choose the one-off plan → checkout. Same as above, order `cha
 5. Cancelling the subscription in Stripe (or the billing portal) flips the stored
    subscription to cancelled via the `customer.subscription.deleted` webhook.
 
+### C2. Changing a live subscription (the hub → Stripe path)
+
+1. In `/hub`, **add a product**. Watch Stripe → the subscription's amount changes
+   from the next cycle (`proration_behavior: 'none'`, so no mid-cycle top-up).
+2. **Pause**. Stripe shows `pause_collection` with behaviour *void* — invoices
+   raised while paused are voided, never banked as a debt. **Resume** clears it.
+3. **Cancel**. The Stripe subscription ends immediately. The hub shows the
+   outstanding balance and its arithmetic first — *note that nothing charges it
+   yet*, that is Phase 3.
+4. Break it on purpose: put Stripe in a failing state (or use an invalid
+   subscription id in the DB) and change the plan. The hub should show an error
+   and **roll back** — a stored plan must never disagree with the card charge.
+
+### C3. A failed payment
+
+1. Update the customer's card to `4000 0000 0000 0341` (attaches fine, fails on
+   the next charge) and trigger a renewal, or use
+   `stripe trigger invoice.payment_failed`.
+2. The hub shows the plan still active, flagged past due.
+3. **Founders Hub → Emails**: one "we couldn't take your payment" email, queued.
+   Retries of the same invoice must NOT queue more.
+4. Pay the invoice in Stripe → the flag clears on `invoice.paid`.
+
 ### D. Supplier + catalogue (stays mock — no PowerBody keys)
 1. **Founders Hub → PowerBody**: browse the mock feed, see stock / cost / RRP /
    margin, **Add** a few products (single or bulk). They're **AI-classified**
@@ -133,5 +171,13 @@ Run the quiz → choose the one-off plan → checkout. Same as above, order `cha
   that `STRIPE_WEBHOOK_SECRET` matches.
 - **Checkout returns `#mock-checkout`** → payments resolved to mock. Confirm
   `STRIPE_SECRET_KEY` is set and the mode is `stripe`/`auto` (env or Settings).
+  `GET /api/config` reports `paymentsLive` — the quickest way to check what the
+  server actually resolved.
+- **A hub change fails with "we couldn't update your billing"** → Stripe refused
+  the update and nothing was saved, on purpose. The reason is in the server log.
+- **A cancellation succeeded but Stripe still shows the subscription** → look for
+  `cancelled locally but NOT in Stripe` in the logs and cancel it by hand.
+  Cancellation is deliberately never blocked on Stripe, so this is the one case
+  that can drift.
 - **Billing portal 400** → only works after a Stripe subscription exists (we need a
   customer id) and with the portal enabled in the Stripe dashboard.

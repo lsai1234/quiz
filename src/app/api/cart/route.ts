@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getPaymentSource } from '@/lib/payments'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { getHubUser } from '@/lib/auth/session'
+import { getSubscription } from '@/lib/db/hub-data'
 import { createOrderFromCheckout, newOrderId } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
@@ -89,6 +90,12 @@ export async function POST(req: Request) {
   const channel = channelFrom(lines)
   const user = await getHubUser().catch(() => null)
 
+  // A signed-in member who already has a Stripe customer (from subscribing)
+  // should buy one-offs against the SAME customer, so their orders, cards and
+  // receipts live in one place rather than a new record per purchase. Guests
+  // have none, and Stripe creates one for them.
+  const stripeCustomerId = user ? (await getSubscription(user.id))?.stripeCustomerId ?? null : null
+
   // ── Stripe ──
   if (getPaymentSource() === 'stripe') {
     const orderId = newOrderId()
@@ -110,6 +117,7 @@ export async function POST(req: Request) {
           quantity: l.quantity,
         })),
         clientReferenceId: orderId,
+        customerId: stripeCustomerId,
         customerEmail: user?.email ?? null,
         successUrl: `${origin}/shop?checkout=success&order=${orderId}`,
         cancelUrl: `${origin}/shop?checkout=cancelled`,

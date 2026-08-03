@@ -1,5 +1,6 @@
 import type { SwapGroup, StackSlot, DietaryTag } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
+import type { SupplierAddress } from '@/lib/supplier/types'
 
 /** Subscription as the customer manages it — shaped like a Recharge subscription contract. */
 
@@ -203,6 +204,22 @@ export interface MemberSubscription {
   stripeSubscriptionId?: string
   /** Stripe customer id — used to open the billing portal. */
   stripeCustomerId?: string
+  /**
+   * Where the monthly box goes, captured by Stripe Checkout at signup.
+   *
+   * Held on the subscription rather than only on the first order because EVERY
+   * renewal raises a fulfilment order and each one needs somewhere to ship to;
+   * Stripe only collects the address once. A member changing address updates
+   * this, and the next box follows it.
+   */
+  shippingAddress?: SupplierAddress | null
+  /**
+   * Set when Stripe tells us a payment failed and it is retrying. Deliberately
+   * NOT a `status` — the plan is still active and still shipping while the
+   * dunning runs; conflating the two would either stop deliveries too early or
+   * hide the problem. Cleared when a payment next succeeds.
+   */
+  billingStatus?: 'ok' | 'past_due'
 }
 
 /** A member's edit to a single scheduled delivery (from the calendar). */

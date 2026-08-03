@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useState } from 'react'
-import { isShopifyLive } from '@/lib/data-source'
 import { basketToCheckoutLines } from '@/lib/basket/helpers'
 import type { ResolvedBasketLine } from '@/lib/basket/types'
 import { track } from '@/lib/analytics/events'
@@ -13,11 +12,16 @@ export type ShopCheckoutState =
   | { status: 'success'; checkoutUrl: string; mock: boolean }
 
 /**
- * One-off shop checkout: resolves the basket to Shopify cart lines and creates
- * a cart via POST /api/cart, then redirects to the Shopify checkout. In mock
- * mode (no live Shopify) it returns a placeholder URL so the UI can show a
- * success state without leaving the app — the same contract the stack checkout
- * uses.
+ * One-off shop checkout: hands the basket to `POST /api/cart` and follows the
+ * URL it returns.
+ *
+ * The SERVER decides whether that's a real Stripe Checkout Session or the
+ * `#mock-checkout` placeholder — it re-prices every line from the catalogue and
+ * reads the payments resolver, neither of which the browser can be trusted with.
+ * This hook used to short-circuit to the placeholder whenever Shopify wasn't
+ * live, which meant that with the shipping default (Shopify off, as it always
+ * is) the request was never made at all and Stripe could not be reached however
+ * it was configured. Deciding here is what broke it; the fix is to stop.
  */
 export function useShopCheckout() {
   const [state, setState] = useState<ShopCheckoutState>({ status: 'idle' })
@@ -33,11 +37,6 @@ export function useShopCheckout() {
     track('checkout_start', { source, items: resolved.length, value })
 
     const lines = basketToCheckoutLines(resolved)
-    if (!isShopifyLive()) {
-      track('checkout_success', { source, mock: true, value })
-      setState({ status: 'success', checkoutUrl: '#mock-checkout', mock: true })
-      return
-    }
 
     try {
       const res = await fetch('/api/cart', {

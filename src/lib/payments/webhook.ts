@@ -17,10 +17,12 @@
  * `ord_inv_<invoiceId>`), so a redelivered event is a no-op.
  */
 import type Stripe from 'stripe'
-import { markOrderPaid, createSubscriptionOrder } from '@/lib/orders/service'
-import { getOrder } from '@/lib/orders/repo'
+import { markOrderPaid, createSubscriptionOrder, failOrder, refundOrder } from '@/lib/orders/service'
+import { getOrder, getOrderByPaymentIntent } from '@/lib/orders/repo'
+import { queuePaymentFailedEmail } from '@/lib/notify/billing'
 import { getSubscription, saveSubscription } from '@/lib/db/hub-data'
 import { advanceCycle } from '@/lib/recharge/clock'
+import { defaultCardFor } from './stripe'
 import { linkStripeSubscription, userIdForStripeSubscription } from './subscription-link'
 import type { SupplierAddress } from '@/lib/supplier/types'
 
@@ -76,6 +78,15 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
           sub.status = 'active'
           sub.stripeSubscriptionId = stripeSubscriptionId
           if (stripeCustomerId) sub.stripeCustomerId = stripeCustomerId
+          // Stripe collects the delivery address once, here. Persist it on the
+          // subscription — every future renewal raises a fulfilment order and
+          // each one needs somewhere to ship to.
+          const address = addressFromSession(session)
+          if (address) sub.shippingAddress = address
+          // The card they actually paid with, so the hub can stop claiming
+          // everyone is on a Visa ending 4242.
+          const card = await defaultCardFor(stripeSubscriptionId)
+          if (card) sub.paymentMethod = card
           await saveSubscription(userId, sub)
         }
         return { handled: true, type: event.type, userId }
@@ -99,6 +110,7 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
       const invoice = event.data.object as Stripe.Invoice & {
         subscription?: string | { id: string }
         billing_reason?: string | null
+        payment_intent?: string | { id: string } | null
       }
       const stripeSubscriptionId = idOf(invoice.subscription)
       if (!stripeSubscriptionId) return { handled: false, type: event.type }
@@ -124,17 +136,104 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         sub,
         catalogue: products,
         stripeSubscriptionId,
+        // Captured at signup and carried on the subscription, because Stripe
+        // only asks for it once.
+        shippingAddress: sub.shippingAddress ?? null,
+        // The charge behind this invoice, so a refund from the Founders Hub
+        // actually moves money instead of just relabelling the row.
+        stripePaymentIntentId: idOf(invoice.payment_intent),
       })
+
+      // A paid invoice clears any dunning flag: whatever went wrong before, the
+      // money is in.
+      let next = sub.billingStatus === 'past_due' ? { ...sub, billingStatus: 'ok' as const } : sub
 
       // Advance the subscription clock on RENEWALS only. The first invoice
       // (`subscription_create`) is the month already accounted for by
       // `monthsActive: 0` + the box that ships at signup, so counting it here
       // would bill the member's first month twice over in `paidToDateOf`.
       if (!alreadyProcessed && invoice.billing_reason === 'subscription_cycle') {
-        await saveSubscription(userId, advanceCycle(sub))
+        next = advanceCycle(next)
       }
+      if (next !== sub) await saveSubscription(userId, next)
 
       return { handled: true, type: event.type, userId, orderId: order.id }
+    }
+
+    case 'invoice.payment_failed': {
+      // Stripe will retry on its own schedule and eventually give up. Until this
+      // was handled we learned nothing until `customer.subscription.deleted`
+      // arrived weeks later — the hub showed a healthy plan the whole time and
+      // the member was never told, despite the outbox existing to tell them.
+      const invoice = event.data.object as Stripe.Invoice & { subscription?: string | { id: string } }
+      const stripeSubscriptionId = idOf(invoice.subscription)
+      if (!stripeSubscriptionId) return { handled: false, type: event.type }
+      const userId = await userIdForStripeSubscription(stripeSubscriptionId)
+      if (!userId) return { handled: false, type: event.type }
+      const sub = await getSubscription(userId)
+      if (!sub || sub.billingStatus === 'past_due') return { handled: !!sub, type: event.type, userId }
+
+      // The plan stays `active`: it is still theirs and still shipping while the
+      // retries run. `billingStatus` is what says the money hasn't landed.
+      await saveSubscription(userId, { ...sub, billingStatus: 'past_due' })
+      // Keyed by INVOICE, not by subscription: Stripe retries the same invoice
+      // several times (the `past_due` guard above already absorbs those), but a
+      // separate dunning episode months later is a different invoice and does
+      // need its own email.
+      await queuePaymentFailedEmail(userId, sub, invoice.id)
+      return { handled: true, type: event.type, userId }
+    }
+
+    case 'customer.subscription.updated': {
+      // Mirror state changed anywhere OTHER than our hub — the Stripe dashboard,
+      // the billing portal, or Stripe's own dunning. Without this the hub can
+      // disagree with the thing that actually holds the card.
+      const subscription = event.data.object as Stripe.Subscription & {
+        pause_collection?: { behavior?: string } | null
+      }
+      const userId = await userIdForStripeSubscription(subscription.id)
+      if (!userId) return { handled: false, type: event.type }
+      const sub = await getSubscription(userId)
+      if (!sub) return { handled: false, type: event.type }
+
+      const next = { ...sub }
+      if (subscription.status === 'canceled') next.status = 'cancelled'
+      else if (subscription.pause_collection) next.status = 'paused'
+      else if (subscription.status === 'active' && sub.status === 'paused') next.status = 'active'
+
+      next.billingStatus =
+        subscription.status === 'past_due' || subscription.status === 'unpaid' ? 'past_due' : 'ok'
+
+      if (next.status !== sub.status || next.billingStatus !== sub.billingStatus) {
+        await saveSubscription(userId, next)
+      }
+      return { handled: true, type: event.type, userId }
+    }
+
+    case 'checkout.session.expired': {
+      // An abandoned one-off checkout. The order was pre-created as
+      // `pending_payment` before the redirect, so without this it sits in the
+      // orders list forever and quietly poisons any conversion metric built on
+      // it. Subscription sessions have no pre-created order — nothing to close.
+      const session = event.data.object as Stripe.Checkout.Session
+      const orderId = session.client_reference_id ?? undefined
+      if (!orderId) return { handled: false, type: event.type }
+      const order = await getOrder(orderId)
+      if (!order || order.status !== 'pending_payment') return { handled: false, type: event.type }
+      await failOrder(orderId, 'Checkout session expired without payment')
+      return { handled: true, type: event.type, orderId }
+    }
+
+    case 'charge.refunded': {
+      // Money refunded from the Stripe dashboard rather than the Founders Hub.
+      // Our ledger has to agree with Stripe's, whichever end the refund started.
+      const charge = event.data.object as Stripe.Charge
+      const paymentIntentId = idOf(charge.payment_intent)
+      if (!paymentIntentId) return { handled: false, type: event.type }
+      const order = await getOrderByPaymentIntent(paymentIntentId)
+      if (!order || order.status === 'refunded') return { handled: false, type: event.type }
+      await refundOrder(order.id, 'Refunded in Stripe')
+      return { handled: true, type: event.type, orderId: order.id }
     }
 
     case 'customer.subscription.deleted': {

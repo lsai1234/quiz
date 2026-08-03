@@ -3,6 +3,8 @@ import { getHubUser } from '@/lib/auth/session'
 import { getSubscription, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { createMockSubscription } from '@/lib/recharge/mock'
+import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
+import { syncPortalRuntime } from '@/lib/portal/store'
 import type { MemberSubscription } from '@/lib/recharge/types'
 
 export const dynamic = 'force-dynamic'
@@ -36,9 +38,23 @@ export async function GET() {
 
 /**
  * PUT /api/hub/subscription
- * Body: { subscription: MemberSubscription } → { ok }
- * Persists the latest subscription state after a hub mutation. The mutation
- * helpers are pure client-side functions, so the document is stored verbatim.
+ * Body: { subscription: MemberSubscription } → { ok } | { error }
+ *
+ * Persists the latest subscription state after a hub mutation, AND tells Stripe.
+ *
+ * The mutation helpers are pure client-side functions, so the document arrives
+ * whole and what actually changed is worked out here by diffing against what we
+ * hold. That diff is the point: this route used to save and return, which meant
+ * cancelling in the hub left Stripe billing happily on, and adding a product
+ * shipped more for the same money.
+ *
+ * Stripe goes first and a refusal is a 502 with nothing saved — a stored plan
+ * that disagrees with the card charge is worse than a change that didn't happen,
+ * because nobody notices until a statement arrives. Cancellation is the one
+ * exception: it always persists (see `syncSubscriptionToStripe`).
+ *
+ * The Stripe ids are never taken from the request. A client that could rewrite
+ * `stripeSubscriptionId` could point our billing calls at somebody else's plan.
  */
 export async function PUT(req: Request) {
   const user = await getHubUser()
@@ -51,9 +67,39 @@ export async function PUT(req: Request) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const subscription = body.subscription as MemberSubscription | undefined
-  if (!subscription || typeof subscription !== 'object' || !Array.isArray(subscription.lines)) {
+  const incoming = body.subscription as MemberSubscription | undefined
+  if (!incoming || typeof incoming !== 'object' || !Array.isArray(incoming.lines)) {
     return NextResponse.json({ error: 'subscription must be a MemberSubscription' }, { status: 400 })
+  }
+
+  const previous = await getSubscription(user.id)
+  if (!previous) {
+    // Nothing to diff against and no Stripe link to keep in step.
+    await saveSubscription(user.id, incoming)
+    return NextResponse.json({ ok: true })
+  }
+
+  // Server-held fields the browser has no business changing.
+  const subscription: MemberSubscription = {
+    ...incoming,
+    stripeSubscriptionId: previous.stripeSubscriptionId,
+    stripeCustomerId: previous.stripeCustomerId,
+    shippingAddress: previous.shippingAddress,
+    monthsActive: previous.monthsActive,
+    billingStatus: previous.billingStatus,
+  }
+
+  await syncPortalRuntime()
+  const sync = await syncSubscriptionToStripe(previous, subscription)
+  if (!sync.ok) {
+    return NextResponse.json(
+      { error: 'We couldn’t update your billing just now. Nothing has changed — please try again.' },
+      { status: 502 },
+    )
+  }
+  if (sync.cancelError) {
+    // The member is out either way; this needs reconciling in Stripe by hand.
+    console.error(`[hub] subscription cancelled locally but NOT in Stripe for ${user.id}:`, sync.cancelError)
   }
 
   await saveSubscription(user.id, subscription)

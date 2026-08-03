@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { isShopifyLive } from '@/lib/data-source'
 import {
   validateCheckout,
   validationErrorMessage,
@@ -82,13 +81,13 @@ export function useStackCheckout() {
       } = {},
     ) => {
       setState({ status: 'loading' })
-      const live = isShopifyLive()
 
       // ── Subscription ── (account-gated; bundle + quiz persist to the account)
       if (planType === 'subscription') {
+        // No Shopify id / selling-plan requirements: payment goes through Stripe
+        // from server-resolved prices, so a variant needs nothing from Shopify to
+        // be sellable.
         const result = buildSubscriptionCheckout(blueprint, catalogue, answers, {
-          requireShopifyIds: live,
-          requireSellingPlans: live,
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
           introDiscountOverride: subOpts.introDiscountOverride,
@@ -112,20 +111,19 @@ export function useStackCheckout() {
         const payload: CheckoutPayload = {
           subscription: memberSubscription,
           quiz: answers ? { answers, level: subOpts.level } : null,
-          lines: live ? result.checkout.lines : [],
         }
         await runFinalize(payload, result.checkout)
         return
       }
 
       // ── One-off ──
-      const validation = validateCheckout(blueprint, catalogue, { requireShopifyIds: live })
+      // Validation checks the stack is sellable (a variant exists and is in
+      // stock); the SERVER prices it and decides Stripe-vs-mock. The old
+      // `if (!live) return mock` short-circuit here is what made one-off Stripe
+      // checkout unreachable under the shipping default.
+      const validation = validateCheckout(blueprint, catalogue, { requireShopifyIds: false })
       if (!validation.ok) {
         setState({ status: 'error', messages: validation.errors.map(validationErrorMessage) })
-        return
-      }
-      if (!live) {
-        setState({ status: 'success', plan: 'oneoff', checkoutUrl: '#mock-checkout', mock: true })
         return
       }
       try {

@@ -22,6 +22,8 @@ export type TemplateId =
   | 'price-change-notice'
   /** The terms changed materially. */
   | 'terms-updated'
+  /** A card was declined and Stripe is retrying. */
+  | 'payment-failed'
 
 export type NotificationStatus = 'queued' | 'sent' | 'failed'
 

@@ -141,6 +141,9 @@ export async function finalizeCheckout(
       // The rate validated above, not the one the browser sent.
       introDiscountRate: subscription.introDiscountRate,
       clientReferenceId: userId,
+      // Reuse the Stripe customer if this member has subscribed before, so their
+      // cards and billing history stay on one record.
+      customerId: subscription.stripeCustomerId ?? null,
       customerEmail: subscription.customerEmail || email,
       successUrl: `${base}/hub?welcome=subscribed`,
       cancelUrl: `${base}/hub`,
