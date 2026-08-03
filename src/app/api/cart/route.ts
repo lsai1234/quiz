@@ -119,7 +119,9 @@ export async function POST(req: Request) {
         clientReferenceId: orderId,
         customerId: stripeCustomerId,
         customerEmail: user?.email ?? null,
-        successUrl: `${origin}/shop?checkout=success&order=${orderId}`,
+        // Stripe substitutes {CHECKOUT_SESSION_ID}; the confirmation endpoint then
+        // verifies it server-side. Arrival here proves nothing on its own.
+        successUrl: `${origin}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${origin}/shop?checkout=cancelled`,
         metadata: { orderId, channel },
       })

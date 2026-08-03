@@ -46,8 +46,31 @@ describe('SHOP_EVENTS', () => {
     expect(SHOP_EVENTS).toEqual(
       expect.arrayContaining([
         'shop_view', 'shop_filter_toggle', 'product_open', 'add_to_basket',
-        'basket_open', 'checkout_start', 'checkout_success', 'checkout_error',
+        'basket_open', 'checkout_start', 'checkout_error',
+        'purchase', 'confirmation_cta',
       ]),
     )
+  })
+
+  it('no longer fires checkout_success anywhere', async () => {
+    // It fired when the Checkout Session was created — before payment, and on
+    // everyone who then abandoned at Stripe. `purchase` replaces it and fires
+    // once, after the server has verified the session.
+    const { readFileSync, readdirSync, statSync } = await import('fs')
+    const { join } = await import('path')
+
+    const offenders: string[] = []
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry)
+        if (statSync(full).isDirectory()) {
+          if (entry !== '__tests__') walk(full)
+        } else if (/\.tsx?$/.test(entry)) {
+          if (readFileSync(full, 'utf8').includes("track('checkout_success'")) offenders.push(full)
+        }
+      }
+    }
+    walk(join(process.cwd(), 'src'))
+    expect(offenders).toEqual([])
   })
 })

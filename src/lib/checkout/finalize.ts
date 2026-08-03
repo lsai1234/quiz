@@ -145,7 +145,7 @@ export async function finalizeCheckout(
       // cards and billing history stay on one record.
       customerId: subscription.stripeCustomerId ?? null,
       customerEmail: subscription.customerEmail || email,
-      successUrl: `${base}/hub?welcome=subscribed`,
+      successUrl: `${base}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${base}/hub`,
       metadata: { userId },
     })

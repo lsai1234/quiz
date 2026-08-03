@@ -67,6 +67,22 @@ export async function getOrderByStripeSession(sessionId: string): Promise<Order 
 }
 
 /**
+ * Find an order by its customer-facing reference (`CHRGD-…`).
+ *
+ * Scans rather than indexes: the reference lives in the JSON document, and
+ * adding a column would need a migration for a lookup that happens a handful of
+ * times per order. Revisit if the orders table ever gets large.
+ */
+export async function getOrderByReference(reference: string): Promise<Order | null> {
+  const db = await getEngine()
+  const rows = await db.all<Row>(
+    "SELECT data FROM orders WHERE data LIKE ? ORDER BY created_at DESC LIMIT 50",
+    [`%"reference":"${reference}"%`],
+  )
+  return rows.map(parse).find((o): o is Order => o?.reference === reference) ?? null
+}
+
+/**
  * Find the order behind a Stripe charge. Used to reconcile a refund or dispute
  * raised in the Stripe dashboard rather than the Founders Hub — the payment
  * intent is the only handle such an event gives us.

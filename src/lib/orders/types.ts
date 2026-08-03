@@ -45,6 +45,19 @@ export interface OrderEvent {
 
 export interface Order {
   id: string
+  /**
+   * Customer-facing reference, e.g. `CHRGD-7K4M2XQP`. Shown on the confirmation
+   * screen and in support conversations; the internal `id` and every Stripe id
+   * stay private (OC-F-020).
+   *
+   * Deliberately random rather than sequential. A counter would be friendlier to
+   * read but tells anyone who buys twice how many orders you take, and lets a
+   * stranger walk the range — which OC-E-007 exists to prevent.
+   *
+   * Optional so orders written before this existed still parse; `orderReference`
+   * falls back to the internal id for those.
+   */
+  reference?: string
   channel: OrderChannel
   status: OrderStatus
   userId: string | null
@@ -66,6 +79,13 @@ export interface Order {
   events: OrderEvent[]
   createdAt: string
   updatedAt: string
+  /**
+   * Whether the purchase/conversion event has already been reported to
+   * analytics. Server-side and on the order itself, NOT localStorage — a
+   * refresh, a second device or a shared link must not each count as a sale
+   * (OC-F-090).
+   */
+  analyticsReported?: boolean
 }
 
 /** What `createOrderFromCheckout` needs to raise a paid order. */

@@ -17,8 +17,22 @@ export const SHOP_EVENTS = [
   'add_to_basket',
   'basket_open',
   'checkout_start',
+  /**
+   * @deprecated Fired when the Checkout Session was created — i.e. before the
+   * customer had paid, and on everyone who then abandoned at Stripe. It made
+   * conversion look far better than it was. `purchase` replaces it.
+   */
   'checkout_success',
   'checkout_error',
+  /**
+   * The real conversion. Fired ONCE per order from the confirmation screen,
+   * after the server has verified the session as paid, and gated on a
+   * server-held flag so refreshes and second devices don't recount (OC-F-090).
+   * Carries `journey_variant` so V1–V5 can be compared (OC-F-092).
+   */
+  'purchase',
+  /** A click on a confirmation-screen CTA, to measure post-purchase exploration. */
+  'confirmation_cta',
 ] as const
 
 export type ShopEvent = (typeof SHOP_EVENTS)[number]

@@ -17,7 +17,7 @@ import type { SupplierOrderStatus, SupplierAddress } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
-import { getOrder, listStalePendingOrders, saveOrder, updateOrder } from './repo'
+import { getOrder, getOrderByReference, listStalePendingOrders, saveOrder, updateOrder } from './repo'
 import type { CreateOrderInput, Order, OrderLine, OrderStatus, OrderEvent } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -30,6 +30,29 @@ export function newOrderId(): string {
   return `ord_${crypto.randomBytes(9).toString('hex')}`
 }
 
+/**
+ * A customer-facing order reference, e.g. `CHRGD-7K4M2XQP`.
+ *
+ * Crockford-style base32 (no I, L, O or U) so it survives being read down a
+ * phone line without a 1/I or 0/O argument. Random rather than sequential: a
+ * counter leaks how many orders the business takes and invites walking the
+ * range, which is what OC-E-007 is guarding against.
+ */
+const REFERENCE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
+
+export function newOrderReference(): string {
+  const bytes = crypto.randomBytes(8)
+  let out = ''
+  for (let i = 0; i < 8; i++) out += REFERENCE_ALPHABET[bytes[i] % REFERENCE_ALPHABET.length]
+  return `CHRGD-${out}`
+}
+
+/** The reference to show a customer. Falls back to the internal id for orders
+ *  written before references existed, so nothing renders blank. */
+export function orderReference(order: Pick<Order, 'id' | 'reference'>): string {
+  return order.reference ?? order.id
+}
+
 /** Raise an order that has been (or is treated as) paid. Idempotent-friendly:
  *  pass a stable `id` and a repeated call updates the same row. */
 export async function createOrderFromCheckout(input: CreateOrderInput): Promise<Order> {
@@ -38,6 +61,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
   const status: OrderStatus = input.status ?? 'paid'
   const order: Order = {
     id: input.id ?? newOrderId(),
+    reference: newOrderReference(),
     channel: input.channel,
     status,
     userId: input.userId ?? null,
@@ -111,6 +135,27 @@ export async function createSubscriptionOrder(input: {
     stripePaymentIntentId: input.stripePaymentIntentId ?? null,
     status: 'paid',
   })
+}
+
+/**
+ * Claim the once-only conversion event for an order, by customer reference.
+ *
+ * Returns true for the caller that won the claim and false for everyone after —
+ * so a refresh, a second tab or a shared link reports nothing (OC-F-090). The
+ * flag lives on the order rather than in the browser precisely because
+ * localStorage is per-device and a customer opening their confirmation on their
+ * phone would otherwise count as a second sale.
+ */
+export async function markAnalyticsReported(reference: string): Promise<boolean> {
+  const order = await getOrderByReference(reference)
+  if (!order || order.analyticsReported) return false
+  let claimed = false
+  await updateOrder(order.id, (o) => {
+    if (o.analyticsReported) return
+    o.analyticsReported = true
+    claimed = true
+  })
+  return claimed
 }
 
 /** Mark a pending order paid (webhook path when the order was pre-created). */

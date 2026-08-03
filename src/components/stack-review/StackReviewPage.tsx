@@ -184,6 +184,7 @@ export function StackReviewPage() {
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
   const showStickyBar = !swapSlot && !journeyOpen && checkoutState.status !== 'needs-account'
+  const leavingForStripe = checkoutState.status === 'redirecting'
 
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
@@ -236,11 +237,14 @@ export function StackReviewPage() {
     )
   }
 
-  if (checkoutState.status === 'success') {
+  // Only the MOCK path confirms in place. A real payment leaves this page for
+  // Stripe and confirms on /order/confirmation, after the server has verified
+  // the session — rendering success here during the redirect is DEF-001.
+  if (checkoutState.status === 'mock-complete') {
     return (
       <CheckoutSuccess
         plan={checkoutState.plan}
-        mock={checkoutState.mock}
+        mock
         subscription={checkoutState.subscription}
         changePolicy={changePolicy.default}
         onBack={resetCheckout}
@@ -408,12 +412,12 @@ export function StackReviewPage() {
             </div>
             <button
               onClick={handleCheckout}
-              disabled={checkoutState.status === 'loading'}
+              disabled={checkoutState.status === 'loading' || leavingForStripe}
               className="flex-1 py-3.5 rounded-xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
               style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
             >
-              {checkoutState.status === 'loading'
-                ? 'Building…'
+              {checkoutState.status === 'loading' || leavingForStripe
+                ? 'Taking you to secure checkout…'
                 : stickyIsSub
                   ? 'Start subscription →'
                   : answers.drinksMode

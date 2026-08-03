@@ -149,14 +149,15 @@ export function BundleLandingPage({ bundle }: Props) {
     && pricing.subscriptionItemCount > 0
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
-  const showStickyBar = checkoutState.status !== 'needs-account' && checkoutState.status !== 'success'
+  const showStickyBar = checkoutState.status !== 'needs-account' && checkoutState.status !== 'mock-complete'
 
-  if (checkoutState.status === 'success') {
+  // Mock payments only — a real payment confirms on /order/confirmation.
+  if (checkoutState.status === 'mock-complete') {
     return (
       <div className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
         <CheckoutSuccess
           plan={checkoutState.plan}
-          mock={checkoutState.mock}
+          mock
           subscription={checkoutState.subscription}
           onBack={resetCheckout}
         />

@@ -20,11 +20,25 @@ import type { ConsentSubmission } from '@/lib/legal/consent'
 
 export type CheckoutState =
   | { status: 'idle' }
+  /** Creating the Checkout Session. Nothing has been bought yet. */
   | { status: 'loading' }
+  /**
+   * The session exists and the browser is navigating to Stripe.
+   *
+   * Its own state, and NOT a success state (OC-F-002). This used to be
+   * `success`, so `CheckoutSuccess` — "Your stack is on its way" — rendered for
+   * the whole length of the redirect, before the customer had paid a penny.
+   * Copy here may name the destination, never the outcome.
+   */
+  | { status: 'redirecting'; plan: PlanType }
   | { status: 'error'; messages: string[] }
   // Subscription checkout requires an account — the page shows the AccountGate.
   | { status: 'needs-account'; payload: CheckoutPayload }
-  | { status: 'success'; plan: PlanType; checkoutUrl: string; mock: boolean; subscription?: SubscriptionCheckout }
+  /**
+   * Mock payments only: no Stripe to go to, so the demo order is complete. Real
+   * payments end at `redirecting` and confirm on `/order/confirmation`.
+   */
+  | { status: 'mock-complete'; plan: PlanType; subscription?: SubscriptionCheckout }
 
 /**
  * Validates and initiates checkout for a StackBlueprint, for either plan.
@@ -58,8 +72,12 @@ export function useStackCheckout() {
         setState({ status: 'error', messages: [data.error ?? 'Something went wrong. Please try again.'] })
         return
       }
-      setState({ status: 'success', plan: 'subscription', checkoutUrl: data.checkoutUrl, mock: data.mock ?? false, subscription: checkout })
-      if (!data.checkoutUrl.startsWith('#')) window.location.href = data.checkoutUrl
+      if (data.checkoutUrl.startsWith('#')) {
+        setState({ status: 'mock-complete', plan: 'subscription', subscription: checkout })
+        return
+      }
+      setState({ status: 'redirecting', plan: 'subscription' })
+      window.location.href = data.checkoutUrl
     } catch {
       setState({ status: 'error', messages: ['Unable to reach the store. Check your connection and try again.'] })
     }
@@ -137,8 +155,12 @@ export function useStackCheckout() {
           setState({ status: 'error', messages: [data.error ?? 'Something went wrong. Please try again.'] })
           return
         }
-        setState({ status: 'success', plan: 'oneoff', checkoutUrl: data.checkoutUrl, mock: data.mock ?? false })
-        if (data.checkoutUrl && !data.checkoutUrl.startsWith('#')) window.location.href = data.checkoutUrl
+        if (data.checkoutUrl.startsWith('#')) {
+          setState({ status: 'mock-complete', plan: 'oneoff' })
+          return
+        }
+        setState({ status: 'redirecting', plan: 'oneoff' })
+        window.location.href = data.checkoutUrl
       } catch {
         setState({ status: 'error', messages: ['Unable to reach the store. Check your connection and try again.'] })
       }

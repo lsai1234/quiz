@@ -56,7 +56,7 @@ export function BasketDrawer({ resolved, subtotal, checkoutState, onCheckout, on
   const progress = threshold > 0 ? Math.min(1, subtotal / threshold) : 1
   const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
 
-  const mockDone = checkoutState.status === 'success' && checkoutState.mock
+  const mockDone = checkoutState.status === 'mock-complete'
 
   if (!mounted) return null
 
@@ -154,11 +154,13 @@ export function BasketDrawer({ resolved, subtotal, checkoutState, onCheckout, on
 
               <button
                 onClick={onCheckout}
-                disabled={checkoutState.status === 'loading'}
+                disabled={checkoutState.status === 'loading' || checkoutState.status === 'redirecting'}
                 className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
                 style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
               >
-                {checkoutState.status === 'loading' ? 'Taking you to secure checkout…' : mockDone ? 'Demo checkout ✓' : 'Checkout →'}
+                {checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
+                  ? 'Taking you to secure checkout…'
+                  : mockDone ? 'Demo checkout ✓' : 'Checkout →'}
               </button>
 
               {/* Secure-checkout reassurance — honest cues, no surprise steps. */}
