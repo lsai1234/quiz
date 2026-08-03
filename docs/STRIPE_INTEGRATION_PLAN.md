@@ -3,594 +3,458 @@
 Status: **scan complete, plan proposed.** No application code has been changed by this
 document.
 
-- **Rev 2** — rebased onto `master` @ `a3051e5`, after the P1–P8 product-changes /
-  consent / notifications track landed. Baseline: **66 suites / 899 tests passing**.
-- Rev 1 — scanned at `a4c1154` (49 suites / 643 tests).
+- **Rev 3** — rescanned at `master` @ `a3051e5`, focused on the **cancel buy-out /
+  outstanding-balance** requirement. Baseline: 66 suites / 899 tests passing.
+- Rev 2 — after the P1–P8 product-changes / consent / notifications track.
+- Rev 1 — initial scan at `a4c1154`.
 
-> **What changed since Rev 1.** The product-changes track (`src/lib/changes/*`,
-> `src/lib/legal/*`, `src/lib/notify/*`, ~11k LOC) landed and it moved the needle on
-> billing: **`updateSubscriptionAmount` now exists and a live subscription's recurring
-> amount is re-priced in Stripe** when a supplier-driven change resolves. That closes half
-> of Rev 1's F-4 and settles decision D-2. It also added a **consent gate on the
-> subscription checkout** and a **daily cron** that can change what members are billed.
+> **Where the settlement work actually is.** Nothing has landed on `master` since Rev 2 —
+> it is still `a3051e5` (29 Jul), tree clean. The cancel buy-out lives on an **unmerged**
+> branch, `claude/supplement-quiz-audit-algeoo` @ `d3e668e` ("Cancel buy-out:
+> pay-for-what-shipped settlement on early cancel"), which also carries a 12-commit quiz
+> redesign (~3,700 insertions). Master already has the *per-line* settlement
+> (`lineSettlement`, returned by `removeLine`); the branch adds the *whole-subscription*
+> one (`cancelSettlement`).
 >
-> **What did not change:** every P0 in Rev 1 is still open, re-verified against current
-> `master`. One-off Stripe checkout is still unreachable (F-1), subscription sessions
-> still collect no delivery address (F-2), and the member-driven half of the lifecycle
-> still never reaches Stripe (F-4b) — which now sits awkwardly beside a changes domain
-> that does it properly.
+> **The formula is right. Everything around it is not.** Rev 3's headline is that the
+> settlement cannot be charged until three things underneath it are fixed — and two of
+> them are live bugs affecting members today, independent of Stripe.
 
 ---
 
-## 1. Architecture scan
+## 1. The cancel buy-out — the requirement
 
-### 1.1 Money-flow map (current)
+You want: when a member cancels, they settle the outstanding balance for goods already
+delivered. Your example — three products in month one, one in month two, cancel after one
+month — is exactly the case the branch's own test encodes:
 
 ```
-  ENTRY POINTS                    SERVER                          MONEY              LEDGER
-  ───────────                     ──────                          ─────              ──────
+  a monthly £30 item      → ships every month
+  two 3-month £60 tubs    → ship once, last three months
 
-  /shop  ShopShell
-    └─ useShopCheckout ──┐
-                         ├──► POST /api/cart ──► getPaymentSource()
-  / (quiz) StackReview   │         │                  ├─ stripe ─► createCheckoutSession   ─┐
-    └─ useStackCheckout ─┘         │                  │            (mode: payment)          │
-       (one-off)                   │                  └─ mock ───► '#mock-checkout'         │
-                                   └─ prices re-resolved from catalogue                     │
-                                                                                            │
-  / (quiz) StackReview      POST /api/checkout/finalize ──► finalizeCheckout()               │
-    └─ useStackCheckout      POST /api/checkout/pending   ├─ validateConsent  ◄── NEW (P2)   │
-       (subscription)        GET  /api/checkout/continue  │   └─ CheckoutRejected on miss    │
-       AccountGate                                        ├─ recordConsent (evidence row)    │
-       + CheckoutConsent ◄── NEW                          ├─ saveSubscription + policy       │
-       + ChangePolicyChoice ◄── NEW                       ├─ claimIntroDiscount              │
-                                                          ├─ recordIntroClaim (ledger)       │
-                                                          └─ createSubscriptionSession ─────┤
-                                                             (mode: subscription            │
-                                                              + one-cycle coupon)           │
-                                                                                            ▼
-                                                                          Stripe hosted Checkout
-                                                                                            │
-                                                                                            ▼
-                                            POST /api/webhooks/stripe  (constructWebhookEvent)
-                                                            │
-                        ┌───────────────────────────────────┼────────────────────────────────┐
-                        ▼                                   ▼                                ▼
-          checkout.session.completed              invoice.paid              customer.subscription.deleted
-                        │                                   │                                │
-                        └───────────────┬───────────────────┘                                │
-                                        ▼                                                    │
-                          Orders domain  src/lib/orders/*  ──► PowerBody dropship (mock)      │
-                                                                                             │
-  ── THE SECOND WRITER (new) ────────────────────────────────────────────────────────────────┤
-                                                                                             │
-  Vercel Cron 06:00 ──► GET /api/cron/daily ──► runDailyJob()                                 │
-                          (CRON_SECRET)          ├─ detect supplier changes                   │
-                                                 ├─ applyChangeEvent()                        │
-                                                 │    ├─ applyResolution (pure)               │
-                                                 │    ├─ syncBilling ──► updateSubscription-  ┘
-                                                 │    │                  Amount()  ◄── NEW
-                                                 │    │   (Stripe FIRST; on failure the
-                                                 │    │    local plan is left untouched)
-                                                 │    └─ saveSubscription
-                                                 └─ queueMemberNotification ──► outbox ──► Resend
-                                                                                  (manual default)
-
-  ── THE THIRD WRITER (unsynced) ────────────────────────────────────────────────────────────
-                                                                                    ✗ Stripe
-  /hub  hub-store ──► PUT /api/hub/subscription ──► saveSubscription()  ────────────► never told
-        (add / remove / swap / usage / pause / snooze / cancel)
+  flatMonthly  = 30 + (60/3) + (60/3)  = £70
+  first box shipped        30 + 60 + 60 = £150
+  paid after one month                  = £70
+  ─────────────────────────────────────────────
+  cancelSettlement                      = £80
 ```
 
-That third writer is the shape of the remaining problem. See F-4b.
+That is the correct economic answer, and the reasoning in the code comments is sound: the
+flat monthly *spreads* multi-month items, so "cancel anytime" would otherwise let someone
+bank three tubs for one month's pay. Framing it as **paying for what was shipped** — not a
+cancellation fee — is also the framing that survives UK consumer-law scrutiny. Keep that
+framing; it matters (see S-4).
 
-### 1.2 The resolvers — now three axes
+### 1.1 What exists
 
-All three share one deliberate shape (env → optional runtime override → mock-first default),
-which is a genuine strength of this codebase.
-
-| Axis | Module | Env | Default | Portal toggle |
-|---|---|---|---|---|
-| Payments | `lib/payments/index.ts` | `PAYMENTS_SOURCE` | `mock` | ✅ Settings |
-| Supplier | `lib/supplier/index.ts` | `SUPPLIER_SOURCE` | `mock` | ✅ Settings |
-| **Notifications** *(new)* | `lib/notify/index.ts` | `NOTIFY_SOURCE` | `manual` | — |
-| *(legacy)* Data source | `lib/data-source.ts` | `NEXT_PUBLIC_DATA_SOURCE` | `mock` | ✅ Settings — **retire** |
-
-`getPaymentSource()` downgrades `stripe` → `mock` when `STRIPE_SECRET_KEY` is absent, so a
-misconfigured environment fails safe. Keep as-is.
-
-**Critical property, unchanged:** the payments resolver is **server-only**, and `/api/config`
-still exposes only `dataSourceMode` and `pricingOverrides` — not the payments mode. This
-remains the root cause of F-1.
-
-### 1.3 The three checkout entry points
-
-| # | Path | Hook | Route | Stripe mode | Guest? | Reachable in Stripe mode? |
-|---|---|---|---|---|---|---|
-| 1 | `/shop` basket | `useShopCheckout` | `POST /api/cart` | `payment` | ✅ | ❌ **blocked by F-1** |
-| 2 | Quiz one-off | `useStackCheckout` | `POST /api/cart` | `payment` | ✅ | ❌ **blocked by F-1** |
-| 3 | Quiz subscription | `useStackCheckout` | `POST /api/checkout/finalize` | `subscription` | ❌ account + consent | ✅ works |
-| — | *Legacy* `/api/subscribe` | *none* | — | Shopify cart | — | ☠️ dead code |
-| — | *Legacy* `Act5Bundle` | `useShopifyCart` | Shopify Storefront | — | — | ☠️ unreachable |
-
-**New in P2/P3:** path 3 now hard-rejects a checkout with missing or stale consent
-(`CheckoutRejected` → 400), and carries the member's `ChangePolicy` (`auto-swap | remove`)
-plus a `SafetyConstraints` snapshot into the stored plan. Both are re-derived server-side
-in `finalize.ts` rather than trusted from the browser — consistent with how the intro
-discount is handled, and correct.
-
-### 1.4 The discount engine
-
-Unchanged in substance. Six mechanisms, all in `stack-blueprint/pricing.ts`, all
-portal-overridable as data:
-
-| # | Mechanism | Config key | Default | Reaches Stripe as |
-|---|---|---|---|---|
-| 1 | One-off bundle tiers | `bundleTiers` | 10% @ £50, 15% @ £90, 20% @ £120 | baked into `unit_amount` |
-| 2 | Subscribe & save per level | `levelSubscriptionDiscount` | 15 / 20 / 25% | baked into `monthlyTotal` |
-| 3 | Subscription volume tiers | `subscriptionTiers` | `[]` unused | baked into `monthlyTotal` |
-| 4 | First-month intro (scratch) | `introOffer.scratchReveal` | 50%/w1, 25%/w10, 10%/w10 | ✅ real coupon, `duration: 'once'` |
-| 5 | Margin floor *(limiter)* | `marginFloorPct` | 15% over cost | caps 1–3 |
-| 6 | Budget caps *(constraint)* | `budgetCaps` | £30/£50/£80/∞ | n/a |
-
-**New knobs from P1/P7**, which now also move money and belong in this inventory:
-
-| Key | Default | Effect |
+| Piece | Where | State |
 |---|---|---|
-| `substitutionPriceTolerancePct` | 0.15 | how far a replacement's price may sit from the original — a swap never raises the monthly, so this bounds what **we absorb** |
-| `priceChangeThresholdPct` | 0.02 | supplier move that raises a price-change event |
-| `priceChangeNoticeDays` | 30 | notice before an increase may bill (UK subscription rules) |
-| `founderReviewHours` | 24 | override window before the member's own policy applies anyway |
-| `defaultChangePolicy` | `auto-swap` | pre-selected option at checkout |
-| `discontinuedAfterMissedSyncs` | 3 | OOS vs discontinued |
+| `shippedValueToDate(line)` | `recharge/mock.ts:366` | master ✅ |
+| `paidToDate(line, sub)` | `recharge/mock.ts:370` | master ✅ |
+| `lineSettlement(line, sub)` | `recharge/mock.ts:380` | master ✅ — per-line, on removal |
+| `removeLine` → `{ sub, settlement }` | `recharge/mock.ts:422` | master ✅ |
+| `shippedValueOf(sub)` / `paidToDateOf(sub)` | branch | unmerged |
+| `cancelSettlement(sub)` | branch | unmerged |
+| `firstMonthDiscountRate` | branch, `types.ts` | unmerged — **collides**, see S-5 |
+| Display in `BillingImpact` / `LineManageSheet` | master | ✅ shown to the member |
+| Display in `CancelSaveFlow` | branch | unmerged |
+| **Anything that charges it** | — | ❌ **does not exist** |
 
-The architectural decision stands: every discount except the intro offer is computed in
-our engine and handed to Stripe as one pre-discounted `unit_amount` via inline `price_data`.
-`updateSubscriptionAmount` follows the same convention and — notably — **reuses the existing
-Stripe Product** so a member's price history stays readable in the dashboard. That is a
-thoughtful detail and should be preserved.
+### 1.2 Findings
 
-### 1.5 The subscription model
+---
 
-`MemberSubscription` (JSON doc in `subscriptions`, keyed by user id) is the source of truth
-for contents; Stripe holds the schedule and payment method. One flat monthly recurring
-price = `flatMonthly`.
+**S-1 · P0 · Cancel is a silent no-op for every real paying member.**
 
-| Concept | Ours | In Stripe | Rev 1 → Rev 2 |
+```
+monthsRemainingOnTerm = max(0, minMonths − monthsActive + skipped + snoozed)
+canCancel             = monthsRemainingOnTerm === 0
+cancelSubscription    = canCancel(sub) ? {...cancelled} : sub      ← returns sub UNCHANGED
+```
+
+`minSubscriptionMonths` defaults to **1**. `monthsActive` for a subscription built by the
+real checkout is **0** (`buildMemberSubscription`, `opts.monthsActive ?? 0`) and — see S-2 —
+never advances. So `monthsRemainingOnTerm = 1`, `canCancel = false`, and
+`cancelSubscription` returns the subscription **unmodified**. The member clicks Cancel, the
+sheet closes, nothing happens. `pauseSubscription` carries the same guard, so pause is
+blocked too.
+
+**Why nobody has caught it:** the hub's *demo seed* (`createMockSubscription`) passes
+`monthsActive: 2`, so `canCancel` is true and cancel works perfectly in every demo and in
+the mock flow. Only accounts that actually checked out are affected — i.e. only real
+customers.
+
+This is a P0 on its own, before any settlement work. It also directly contradicts the
+Terms the member consented to: *"After any minimum term you can cancel whenever you like
+from your account, with no fee and no phone call"* (`legal/content.ts:188`), with
+`minMonths: 1` meaning there is no minimum term.
+
+---
+
+**S-2 · P0 · The settlement's two inputs are never advanced, so the number is only correct
+in month zero.**
+
+`monthsActive` is written in exactly one place — `buildMemberSubscription`, at construction.
+`deliveriesMade` likewise (`deliveriesInMonths(monthsActive, …)` at construction, `0` in
+`addLine`). Nothing increments either: not the `invoice.paid` webhook, not the daily cron,
+not the orders service. Confirmed by grep across `src/`.
+
+For a live Stripe member, both freeze at signup. Consequences:
+
+| After | `monthsActive` | `paidToDateOf` | `shippedValueOf` | `cancelSettlement` |
+|---|---|---|---|---|
+| month 0 | 0 | £70 | £150 | £80 ✅ correct |
+| month 6 | 0 *(should be 6)* | £70 *(should be £490)* | £150 *(should be ~£330)* | £80 ❌ |
+| month 12 | 0 *(should be 12)* | £70 *(should be £910)* | £150 *(should be ~£570)* | £80 ❌ |
+
+A member who has paid £910 against £570 of goods would be charged **£80 they do not owe**.
+Both inputs are stale and they err in opposite directions, so the error does not even
+cancel out predictably — the number is simply not meaningful after month zero.
+
+**This is the dependency that makes the rest of the work coherent.** Stripe's invoice stream
+is the natural source of truth for "months actually paid": `invoice.paid` already fires for
+the first box and every renewal, and already raises a fulfilment order. Advancing
+`monthsActive` there, and `deliveriesMade` when a fulfilment order is raised for a line,
+makes the settlement correct by construction. **The settlement cannot be charged until this
+is done.**
+
+---
+
+**S-3 · P1 · The settlement is computed and displayed, but never charged — and there is no
+primitive that could charge it.**
+
+`lineSettlement` reaches `BillingImpact` ("Settlement (already-shipped box)") and
+`LineManageSheet`; `cancelSettlement` reaches `CancelSaveFlow` on the branch. All display.
+Cancel and remove both run as **pure client-side mutations** → `persist()` →
+`PUT /api/hub/subscription`, which saves the document and returns.
+
+So today the member is *shown* a settlement figure and then not charged it. That is the
+worse of the two failure modes: it reads as a fee they agreed to and never paid.
+
+`lib/payments/stripe.ts` exposes only hosted **Checkout Sessions** (redirect-based),
+`updateSubscriptionAmount`, the billing portal, and `refundPayment`. There is **no
+off-session charge primitive** — and a redirect-to-Checkout is the wrong tool for a cancel
+settlement, because the member can simply close the tab and walk away with both the goods
+and the cancellation.
+
+---
+
+**S-4 · P0 · The Terms the member consented to promise cancellation with no fee.**
+
+`lib/legal/content.ts`, `TERMS_VERSION = '2026-07-29'`, is a **versioned, consented
+document with an evidence row per member** (`recordConsent` in `finalize.ts`, migration v4).
+It currently says:
+
+- *"After any minimum term you can cancel whenever you like from your account, **with no fee
+  and no phone call**. Your plan runs to the end of the month you have paid for."* (:188)
+- *"Where there is no minimum term, you can cancel any time."* (:187)
+- *"You also have the statutory right to cancel within 14 days of your first order under the
+  Consumer Contracts Regulations 2013."* (:190)
+- *"If a change materially affects you, we will tell you and ask you to accept the new
+  version before it applies to your plan."* (:219)
+
+Charging a buy-out contradicts the first line, and the document itself binds you to the
+process in the last. So the sequence is forced:
+
+1. Draft settlement terms into `TERMS_VERSION` — framed as **paying the balance for goods
+   already delivered**, never as a cancellation fee or penalty. A penalty on a
+   no-minimum-term contract is very likely an unfair term under the Consumer Rights Act
+   2015; a genuine debt for product received is not, *provided it is disclosed before
+   purchase* and the method of calculation is transparent.
+2. Show the mechanism at checkout, next to the flat-monthly explanation — the reason the
+   monthly is smoothed is the reason the settlement exists, and it reads honestly when the
+   two are presented together.
+3. Bump the version, re-consent existing members, and **only apply the settlement to
+   subscriptions whose consent row carries the new version**. The evidence table makes this
+   enforceable; use it.
+4. Carve out the statutory 14-day window (S-7).
+
+**This is a legal-sequencing blocker, not a technical one, and it gates the whole feature.**
+I would get the wording reviewed before building the charge path.
+
+---
+
+**S-5 · P2 · The branch introduces a duplicate discount field.**
+
+The branch adds `MemberSubscription.firstMonthDiscountRate` ("the first-month intro discount
+actually applied at signup"). Master already has `introDiscountRate` — *"the first-month
+intro discount (0–1) the member claimed at checkout … this is the granted rate, not the one
+the browser asked for"* — plus `firstMonth` (the amount actually billed).
+
+These are the same concept. On merge, drop `firstMonthDiscountRate` and read
+`introDiscountRate`; `paidToDateOf` gets the value it needs with no new field. Two fields
+that must agree, in the input to a charge, is exactly where a silent money bug lives.
+
+---
+
+**S-6 · P1 · Choosing how to collect it.**
+
+Recommended: **invoice item + a one-off invoice, charged off-session**, not a PaymentIntent
+and not a Checkout redirect.
+
+```
+  computeSettlement(sub)          ← SERVER-SIDE, from the stored doc, never the client
+        ↓
+  stripe.invoiceItems.create({ customer, amount, currency, description })
+        ↓
+  stripe.invoices.create({ customer, collection_method: 'charge_automatically',
+                           pending_invoice_items_behavior: 'include', auto_advance: true })
+        ↓
+  finalise → Stripe attempts the saved card off-session
+        ↓
+  ┌── paid ──────────► cancel Stripe subscription · save sub cancelled · receipt email
+  └── failed / requires_action
+              └──────► cancel Stripe subscription ANYWAY · leave the invoice open
+                       · email hosted_invoice_url · pursue via normal dunning
+```
+
+Why an invoice rather than a PaymentIntent: it produces a real invoice document, appears in
+the member's billing history beside their subscription, gets Stripe's dunning and the hosted
+payment page (which is also the SCA fallback) for free. For a charge people will query, the
+paper trail is the point.
+
+**The ordering is the inverse of `applyChangeEvent`, deliberately.** The re-price path puts
+Stripe first because a plan that disagrees with the card charge is worse than no change. Here
+the opposite holds: **cancellation must never be withheld pending payment.** Blocking a
+cancellation until a debt is settled is precisely the kind of term that gets struck down.
+Cancel first, always; collect the debt as an ordinary receivable.
+
+Two things to verify before relying on this, rather than assume:
+
+- **Mandate scope.** Subscription Checkout saves a payment method for *recurring* charges.
+  An unscheduled, variable-amount off-session charge may sit outside that mandate under UK/EU
+  SCA rules. Confirm with Stripe (and set `setup_future_usage` / an explicit unscheduled
+  mandate at checkout if needed) rather than discovering it via `authentication_required`
+  failures in production.
+- **Customer identity.** F-7 (below) means returning members can end up with multiple Stripe
+  Customers. The settlement invoice must land on the customer that holds the card — fix F-7
+  first or the charge has nothing to bill.
+
+**Snapshot the figure.** Compute the settlement once, at cancel, and store it on the
+subscription (or an audit row) with its inputs. `deliveriesMade` and `monthsActive` keep
+moving; a number the member was shown must not silently change before it is charged.
+
+---
+
+**S-7 · P1 · Edge cases the charge path has to answer.**
+
+| Case | Required behaviour |
+|---|---|
+| **Statutory 14-day cancellation** | Consumer Contracts Regs 2013 override. Within 14 days of the first order the member returns unopened goods for refund — a settlement must not be used to defeat that. Waive, or limit strictly to opened/consumed goods |
+| **Cancelling in a price-increase notice window** | Terms already promise a free exit (`content.ts:157`). Waive the settlement |
+| **We changed their plan** | `changes/event.ts:76` already sets `settlement: 0` for involuntary changes — *"we never charge a settlement on a removal we caused"*. Extend the same principle to a cancel that follows one |
+| **Pause / snooze** | Not a cancellation. No settlement |
+| **Substituted lines** | `deliveriesMade` must survive a swap, or shipped-value resets and the member is under-charged |
+| **Settlement ≤ £0** | No invoice item, no invoice, no email. Do not create a £0 invoice |
+| **Charge fails** | Cancel stands. Invoice stays open. One clear email with the hosted invoice link |
+| **Member disputes it** | The snapshot plus `deliveriesMade` history is the evidence. Store it |
+| **Mock mode** | `getPaymentSource() !== 'stripe'` → compute, display, record, charge nothing |
+
+---
+
+## 2. Carry-forward findings
+
+Re-verified at `a3051e5`. Statuses unchanged from Rev 2 except where noted.
+
+| # | Sev | Status | Summary |
 |---|---|---|---|
-| Recurring price | `flatMonthly` | `price_data.unit_amount`, monthly | — |
-| First month | `firstMonth` | one-cycle coupon | — |
-| Contents | `lines[]` | not represented | — |
-| Re-price **from a product change** | `flatMonthly` | ✅ `updateSubscriptionAmount` | ❌ → ✅ **fixed** |
-| Re-price **from a hub edit** | `flatMonthly` | ❌ not synced | ❌ still open |
-| Cancel / pause / snooze | `status` | ❌ not synced | ❌ still open |
-| Change policy | `defaultChangePolicy`, `line.changePolicy` | n/a | new |
-| Consent | `subscription_consents` (v4) | n/a | new |
-| Minimum term | `minMonths` (default 1) | ❌ not enforced | — |
-| Skip credit | `pendingCredit` | ❌ not applied | — |
-| Card on file | `paymentMethod` | ❌ hardcoded `Visa 4242` | ❌ still open |
-| ID mapping | `stripe_sub:<id>` → userId | ✅ `subscription-link.ts` | — |
+| F-1 | P0 | OPEN | One-off Stripe checkout unreachable — `useShopCheckout:36` / `useStackCheckout:85` gate on `isShopifyLive()`, false by default |
+| F-2 | P0 | OPEN | Subscription sessions collect no delivery address → boxes dropship to a blank address |
+| F-3 | P1 | OPEN | No `invoice.payment_failed` / `customer.subscription.updated` — dunning invisible |
+| F-4a | — | **DONE** | Supplier-driven re-price syncs to Stripe (`syncBilling` → `updateSubscriptionAmount`), Stripe-first, `proration_behavior: 'none'` |
+| F-4b | P1 | OPEN | Member-driven changes never reach Stripe — `PUT /api/hub/subscription` just saves. **Now compounded by S-1/S-3** |
+| F-4c | P2 | OPEN | Two writers mutate `flatMonthly`, one unsynced |
+| F-5 | P1 | OPEN | Hardcoded `Visa 4242` on real checkouts (`mock.ts:136`) |
+| F-6 | P1 | OPEN | Subscription-order refunds are a silent no-op (no payment intent captured) |
+| F-7 | P2 | OPEN | No Stripe Customer reuse — **now blocks S-6** |
+| F-8 | P2 | OPEN | Abandoned `pending_payment` rows leak |
+| F-9 | P2 | OPEN | Free-delivery threshold advertised, never charged |
+| F-10 | P2 | OPEN | API version unpinned; `'gbp'` hardcoded at four sites |
+| F-11 | P2 | OPEN | No Stripe Tax / VAT |
+| F-12 | P3 | OPEN→**P1** | Minimum term unenforced in Stripe. **No longer latent**: S-1 shows the term guard is load-bearing and currently misfiring |
+| F-13 | P3 | OPEN | `POWERBODY_STRIPE_PLAN.md` says "not yet built"; `SUBSCRIPTIONS.md` still Shopify/Recharge-framed with stale figures; `README.md` describes a different product |
+| F-14 | P2 | OPEN | Daily cron re-prices without retry or alerting on `syncBilling` failure |
 
-`src/lib/stock/*` has been **deleted** and superseded by `src/lib/changes/*`, which models
-out-of-stock, discontinued and price moves as one event type. The design rule — *an event
-always resolves on its own; nothing waits on a human* — is well enforced (there's a property
-test over every input combination in `changes/__tests__/policy.test.ts`).
-
-### 1.6 Webhook coverage — unchanged since Rev 1
-
-| Event | Handled | Notes |
-|---|---|---|
-| `checkout.session.completed` (payment) | ✅ | `markOrderPaid`, idempotent |
-| `checkout.session.completed` (subscription) | ✅ | links ids, activates bundle |
-| `invoice.paid` | ✅ | fulfilment order, first box + renewals |
-| `customer.subscription.deleted` | ✅ | marks cancelled |
-| `invoice.payment_failed` | ❌ | **dunning invisible** (F-3) |
-| `customer.subscription.updated` | ❌ | `past_due` / paused never reflected (F-3) |
-| `checkout.session.expired` | ❌ | abandoned rows accumulate (F-8) |
-| `charge.refunded` / `charge.dispute.created` | ❌ | money moved in Stripe doesn't reach us |
-
-This gap matters more than it did in Rev 1: the notification outbox can now email a member
-about their plan, but nothing can email them about a **failed payment**, because we never
-learn about one.
+Shopify debt inventory is unchanged from Rev 2 §4 — ~2,000 LOC across ~15 files, still
+inert, still the cause of F-1. `lib/recharge/` now has 20 importers; the rename gets more
+expensive each phase.
 
 ---
 
-## 2. What works today
+## 3. Plan
 
-- All three mock-first resolvers and the payments fail-safe downgrade.
-- Server-side price re-resolution on `/api/cart` — client numbers never trusted.
-- The subscription checkout path end-to-end: scratch-card intro as a real Stripe coupon,
-  server-side revalidation, allocation ledger that only spends at checkout.
-- **New:** versioned consent captured with evidence before anything is stored or charged.
-- **New:** the product-changes → Stripe re-price path, ordered **Stripe-first** so a
-  rejected amount leaves the local plan untouched rather than producing a plan that
-  disagrees with the card charge. This is the correct ordering and the best new code here.
-- **New:** 30-day notice scheduling on price increases, with the notice email sent at
-  decision time rather than application time.
-- Webhook signature verification and idempotent order creation.
-- The orders domain, state machine, and `/portal/orders` actions.
-- Full refunds on **one-off** orders.
+Phase 0 is new and unblocks everything else. Phases 1–3 are the settlement track. The
+original Stripe phases follow, renumbered.
 
 ---
 
-## 3. Findings
+### Phase 0 — Make the subscription clock real *(P0; ~1 day)*
 
-Severity: **P0** blocks go-live · **P1** correctness/money-affecting · **P2** hardening ·
-**P3** debt/hygiene. Status re-verified against `master` @ `a3051e5`.
+*Depends on: nothing. Fixes live bugs. **Prerequisite for any settlement work.***
 
----
+1. Advance `monthsActive` on `invoice.paid` (Stripe's invoice stream is the source of truth
+   for months paid); advance `deliveriesMade` per line when a fulfilment order is raised.
+   Both idempotent, keyed off the invoice id as `createSubscriptionOrder` already is. **(S-2)**
+2. In mock mode, advance the same fields from the mock subscription-order path so the two
+   modes stay behaviourally identical.
+3. Fix `canCancel` so a real member can cancel: with `minMonths: 1` and a correct
+   `monthsActive` this resolves itself, but add a regression test asserting a
+   **freshly-checked-out** subscription (`monthsActive: 0`) can cancel — the current demo
+   seed's `monthsActive: 2` hides exactly this. **(S-1, F-12)**
+4. Make `cancelSubscription` and `pauseSubscription` report refusal instead of silently
+   returning the input, so a blocked mutation can never again look like success.
 
-**F-1 · P0 · OPEN · One-off Stripe checkout is unreachable — gated on the wrong flag.**
-
-`src/hooks/useShopCheckout.ts:36` and `src/hooks/useStackCheckout.ts:85` still short-circuit
-to `#mock-checkout` when `isShopifyLive()` is false. Under the shipping default
-(`NEXT_PUBLIC_DATA_SOURCE=mock`) that is always false, so `PAYMENTS_SOURCE=stripe` changes
-nothing for the shop basket or the quiz one-off — the browser never calls `/api/cart` and
-the working Stripe branch inside it is dead.
-
-The subscription path works because `finalizeCheckout` consults `getPaymentSource()`
-server-side. The one-off paths never ask the server at all.
-
-Fix is a deletion: remove the client gate, always POST to `/api/cart`, let the server's
-`{ checkoutUrl, mock }` decide. The hooks' contract is unchanged.
-
-*The `/shop` checkout button is currently a no-op-with-success-UI in every default
-deployment.*
+**Done when:** a member who checked out today can cancel and pause; `monthsActive` and
+`deliveriesMade` advance with real invoices; `cancelSettlement` returns £0 for a member who
+has paid off everything shipped, at any month.
 
 ---
 
-**F-2 · P0 · OPEN · Subscription Checkout Sessions collect no delivery address.**
+### Phase 1 — Terms, consent, and disclosure *(P0; legal-led)*
 
-`createSubscriptionSession` (`src/lib/payments/stripe.ts:137`) still omits
-`shipping_address_collection` — present on the one-off session at line 56. Every
-subscription order therefore reaches `submitOrderToSupplier` with `shippingAddress: null`
-and falls through to the placeholder at `src/lib/orders/service.ts:150`:
-`{ line1: '', city: '', postcode: '', country: 'GB' }`.
+*Depends on: 0 conceptually. Gates Phase 3. **Not a coding phase.***
 
-**Every subscription box would be dropshipped to a blank address.** Still the
-highest-consequence bug in the tree, and now more so: the changes domain will happily swap
-products into a plan whose deliveries have nowhere to go.
-
----
-
-**F-3 · P1 · OPEN · Failed payments and dunning are invisible.**
-
-No `invoice.payment_failed` or `customer.subscription.updated` handler. A member whose card
-fails stays `active` in our DB while Stripe retries and eventually cancels.
-
-Sharper in Rev 2: we now have a **notification outbox** and templates for telling members
-their plan changed — but the one message a subscription business must send, *"your payment
-failed"*, cannot be triggered, because the event never arrives. The plumbing exists; only
-the webhook case and template are missing.
+5. Draft the settlement into the Terms as *paying the balance for goods already delivered*,
+   with a worked example. Get it reviewed. **(S-4)**
+6. Surface it at checkout beside the flat-monthly explanation, and in the hub's billing
+   explainer. `CheckoutConsent` and `portal/pricing` already have the right slots.
+7. Bump `TERMS_VERSION`; re-consent existing members via the notification outbox.
+8. Gate the charge on consent version: only settle subscriptions whose consent row carries
+   the settlement terms. Members on older terms cancel free — accept that cost.
 
 ---
 
-**F-4 · P1 · SPLIT — half fixed.**
+### Phase 2 — Merge the settlement branch *(P2; ~half a day + conflict work)*
 
-**F-4a · DONE.** Supplier-driven changes now re-price Stripe.
-`lib/changes/service.ts:syncBilling` → `updateSubscriptionAmount`, guarded on payment
-source, `stripeSubscriptionId` presence and a >1p delta; Stripe-first ordering with the
-local save skipped on failure and the error recorded on the event. `proration_behavior:
-'none'`, billing anchor preserved, Stripe Product reused. Nothing to add.
+*Depends on: 0.*
 
-**F-4b · P1 · OPEN.** Member-driven changes still never reach Stripe.
-`PUT /api/hub/subscription` (`src/app/api/hub/subscription/route.ts:59`) calls
-`saveSubscription` and returns. Every hub mutation in `lib/recharge/mock.ts` — `addLine`,
-`removeLine`, `swapProduct`, usage-level change, `pauseSubscription`, `snoozeSubscription`,
-`cancelSubscription` — recomputes `flatMonthly` and is written through that route.
-
-In production:
-- Member cancels in the hub → **Stripe keeps charging them.**
-- Member adds a product → we ship more, bill the same.
-- Member removes a line or snoozes → we bill the same. Overcharging.
-
-`grep` confirms exactly one `stripe.subscriptions.update` call site in the tree, inside
-`updateSubscriptionAmount`, and **no** cancel or pause call anywhere.
-
-The fix is now mostly *reuse*: `updateSubscriptionAmount` already handles the re-price;
-what's needed is `cancelStripeSubscription` / `pauseStripeSubscription` beside it, and a
-diff-and-sync step in the hub route that mirrors `syncBilling`'s ordering.
+9. Cherry-pick `d3e668e` (`cancelSettlement`, `shippedValueOf`, `paidToDateOf`, the tests)
+   off `claude/supplement-quiz-audit-algeoo`. **Do not merge the whole branch** — the other
+   11 commits are a quiz redesign that conflicts with the P1–P8 work in
+   `recharge/mock.ts`, `recharge/types.ts`, `stack-blueprint/{pricing,factory}.ts`, and
+   should be assessed on its own merits.
+10. Drop `firstMonthDiscountRate`; read master's `introDiscountRate`. **(S-5)**
+11. Extend `settlement.test.ts` with the month-6 and month-12 cases that S-2 currently gets
+    wrong, so the clock fix is pinned by the settlement's own tests.
 
 ---
 
-**F-4c · P2 · NEW · Two writers, one invariant, one of them unguarded.**
+### Phase 3 — Charge the settlement *(P1; ~2 days)*
 
-`lib/changes/service.ts` carries the comment *"there is exactly one code path that changes
-a member's price."* That is true **within the changes domain** and is a good property. It
-is not true of the application: `lib/changes/apply.ts` (Stripe-synced) and
-`lib/recharge/mock.ts` via the hub (not synced) both mutate `flatMonthly`.
+*Depends on: 0, 1, 2, and F-7. Live impact: money moves on cancel.*
 
-The asymmetry is visible in the product's own rules. A **supplier** price increase gets 30
-days' notice, a scheduled effective date, a notice email and a Stripe re-price. A **member**
-adding a product to their box raises their monthly immediately, with no notice, and Stripe
-never hears. Once F-4b lands, both writers should funnel through one guarded helper so this
-can't drift again.
+12. Add `chargeSettlement(customerId, amount, description)` to `lib/payments/stripe.ts` —
+    invoice item + off-session invoice per S-6. **(S-3, S-6)**
+13. Move cancellation server-side: a `POST /api/hub/subscription/cancel` route that
+    recomputes the settlement from the stored document (never the client), snapshots it,
+    charges, cancels the Stripe subscription, saves. **Cancel proceeds regardless of charge
+    outcome.**
+14. Implement the S-7 waivers: 14-day statutory window, price-increase notice window,
+    involuntary-change follow-on, pause/snooze, £0.
+15. Receipt and failed-charge emails through the existing outbox.
 
----
-
-**F-5 · P1 · OPEN · Every member's hub shows a hardcoded "Visa ending 4242".**
-
-`buildMemberSubscription` (`src/lib/recharge/mock.ts:136`) still sets
-`paymentMethod: { brand: 'Visa', last4: '4242' }` unconditionally, and is used by the *real*
-checkout path in `useStackCheckout`. Populate from the subscription's default payment method
-on `checkout.session.completed`, or drop the field and rely on the billing portal.
+**Done when:** a member cancelling in month one is invoiced the un-amortised balance and
+their subscription ends; a member cancelling in month twelve is charged nothing; a declined
+settlement still cancels the plan and leaves a payable invoice.
 
 ---
 
-**F-6 · P1 · OPEN · Refunding a subscription order is a silent no-op in Stripe.**
+### Phase 4 — Unblock Stripe checkout *(P0; ~half a day)* — *was Phase 1*
 
-`createSubscriptionOrder` never sets `stripePaymentIntentId`, so the guard at
-`src/app/api/portal/orders/[id]/route.ts:53` is false for every subscription order — the row
-is marked `refunded` and no money moves. Capture the payment intent / charge from the
-invoice on `invoice.paid`. `refundPayment` is also full-refund-only.
+16. Delete the `isShopifyLive()` gates; always POST to `/api/cart`. **(F-1)**
+17. Add `shipping_address_collection` to `createSubscriptionSession`. **(F-2)**
+18. Pin `apiVersion`; single `DEFAULT_CURRENCY`. **(F-10)**
+19. Expose `paymentsMode` on `/api/config`.
 
----
-
-**F-7 · P2 · OPEN · No Stripe Customer reuse.** Both session builders pass `customer_email`,
-never `customer`. Returning members get a fresh Stripe Customer each time, fragmenting
-billing history and payment methods.
-
-**F-8 · P2 · OPEN · Abandoned checkouts leak `pending_payment` rows.** No
-`checkout.session.expired` handler and no sweeper.
-
-**F-9 · P2 · OPEN · Free-delivery threshold advertised but never charged.**
-`freeDeliveryThreshold: 50` drives copy in `PlanReceipt`, `ShopShell`, `BasketDrawer`; no
-session sets `shipping_options` and `order.shipping` is hardcoded `0`.
-
-**F-10 · P2 · OPEN · API version unpinned; currency hardcoded.** `new Stripe(key)` with no
-`apiVersion` (`stripe.ts:16`) — the webhook already carries defensive shape-juggling for
-exactly this. `'gbp'` defaults at four call sites now (`updateSubscriptionAmount` added one)
-with no central constant.
-
-**F-11 · P2 · OPEN · No Stripe Tax.** No `automatic_tax` on either session; UK VAT neither
-collected nor recorded.
-
-**F-12 · P3 · OPEN · Minimum term not enforced at the billing layer.**
-`minSubscriptionMonths` defaults to `1`, so latent — but the billing portal would let a
-member cancel regardless if it ever rises.
+*Independent of 0–3 and can run first if you want the shop earning sooner.*
 
 ---
 
-**F-13 · P3 · PARTLY WORSE · Documentation contradicts the shipped code.**
+### Phase 5 — Close the member-driven lifecycle *(P1; ~1 day)* — *was Phase 2*
 
-- `docs/POWERBODY_STRIPE_PLAN.md:3` — still *"**not yet built.** No application code changes
-  have been made yet"* — now describing work that is eight phases past done.
-- `docs/SUBSCRIPTIONS.md` — grew by 161 lines for the product-changes model but **kept its
-  Shopify framing**: the title is still "how it will plug into Shopify", §166 still names
-  **Recharge** as the billing engine that owns "card vaulting, recurring charges,
-  retries/dunning", and it still quotes stale figures (25%/50% at weights 2/1, a 4-month
-  minimum; the code has 50/25/10 at weights 1/10/10 and `minSubscriptionMonths: 1`).
-  It now describes a Recharge-based billing engine *and* a Stripe-based one in the same file.
-- `README.md` still describes a "Mobile-first AI TikTok carousel idea builder" — a different
-  product.
-
-`docs/PRODUCT_CHANGES_SPEC.md` and `docs/STRIPE_TESTING.md` are accurate and current; the
-rot is confined to the three above.
+20. `cancelStripeSubscription` / `pauseStripeSubscription` / `resumeStripeSubscription`
+    beside `updateSubscriptionAmount`.
+21. Extract `syncBilling`'s guard-and-order logic into a shared helper; call it from the hub
+    mutation path on a stored-vs-incoming diff. **(F-4b, F-4c)**
+22. `invoice.payment_failed` → `past_due` + outbox template; `customer.subscription.updated`
+    → mirror status. **(F-3)**
+23. Populate `paymentMethod` from the real payment method. **(F-5)**
 
 ---
 
-**F-14 · P2 · NEW · The daily cron changes what members are billed; its failure modes are
-thin.**
+### Phase 6 — Money-movement correctness *(P1–P2; ~1 day)*
 
-`/api/cron/daily` (Vercel Cron, 06:00 UTC) now detects supplier changes, applies what's due,
-re-prices Stripe and queues member email. Guarded by `CRON_SECRET` — open in dev, **closed in
-production when unset**, which is the right default. Two gaps:
-
-- A `syncBilling` failure leaves the event open with `e.error` set and the plan untouched
-  (correct), but nothing **retries** it or alerts a human. It surfaces only if a founder
-  opens the queue. For a job that can silently stop re-pricing, that needs a health signal
-  — `lib/changes/health.ts` exists and looks like the right home.
-- `maxDuration = 300` with detection walking every active subscription is fine now and will
-  not be at volume. Worth a note before it becomes an incident.
+24. Capture payment intent / charge on `invoice.paid` so subscription refunds work; partial
+    refunds. **(F-6)**
+25. Stripe Customer reuse — **pull forward, Phase 3 depends on it**. **(F-7)**
+26. `checkout.session.expired` → `failed`; sweeper. **(F-8)**
+27. `charge.refunded` / `charge.dispute.created` reconciliation.
+28. `syncBilling` failures through `changes/health.ts` with retry. **(F-14)**
 
 ---
 
-## 4. Shopify tech-debt inventory
+### Phases 7–8 — Shopify removal *(P3; ~2 days)*
 
-Nothing here is *running* (`NEXT_PUBLIC_DATA_SOURCE=mock` is the default). It is inert
-weight that is nonetheless **causing F-1**. The P1–P8 track did not touch it.
-
-### 4.1 Delete outright
-
-| Path | Why |
-|---|---|
-| `src/lib/shopify/` (5 files, ~1000 LOC) | Storefront + Admin API layer |
-| `src/app/api/subscribe/route.ts` | **Zero callers.** Shopify selling-plan cart, superseded by `/api/checkout/finalize` |
-| `src/hooks/useShopifyCart.ts` | Only consumer is `Act5Bundle` |
-| `src/components/scroll/Act5Bundle.tsx` | **Unreachable** — `Act4Reveal` takes no `onComplete`, so `ScrollExperience` can never reach act 5 |
-| `src/app/api/products/route.ts` | Shopify-only, plus a `?debug` branch echoing store domain and a token preview — **mild info-disclosure** |
-| `src/hooks/useProducts.ts` | Consumer of `/api/products` |
-| `scripts/seed-shopify-tags.mjs` | Seeds `chrgd.*` Shopify metafields |
-| `src/lib/mock-products.ts` | Shopify-shaped mock, only the `/api/products` fallback |
-
-### 4.2 Rewrite / narrow
-
-| Path | Change |
-|---|---|
-| `useShopCheckout.ts`, `useStackCheckout.ts` | Drop `isShopifyLive()` gating — **F-1's fix** |
-| `lib/data-source.ts` | Retire once `catalogue/resolve.ts` reads supplier + curated catalogue only |
-| `catalogue/resolve.ts:31` | Remove the Shopify branch |
-| `stack-blueprint/checkout.ts` | Drop `requireShopifyIds`/`requireSellingPlans`, the two Shopify `ValidationError` variants, `buildCartPermalink`, `gidToNumeric`; rename `merchandiseId` → `variantId` |
-| `catalogue/types.ts` | Retire `shopifyProductId`, `shopifyVariantId`, `sellingPlanId` |
-| `stack-blueprint/pricing.ts` | Drop `sellingPlanId` from `SubscriptionLine` |
-| `checkout/types.ts` | `CheckoutPayload.lines` carries Shopify cart lines and **`finalizeCheckout` never reads it**. Delete |
-| `portal/readiness.ts` | Drop the "no selling plan configured" check |
-| `api/portal/{products,import,ai-classify}` | Remove `getDataSource() === 'shopify'` write-through branches |
-| `portal/settings`, `DataSourceToggle`, `PortalShell`, `PortalSync`, `/api/config`, `/api/portal/data-source` | Retire the Shopify toggle; **`/api/config` should expose the payments mode instead** |
-| `src/lib/recharge/` → `src/lib/subscription/` | Pure, well-tested, misleading vendor name. Now **20 files import it**, including all of `lib/changes/*` — rename earlier rather than later |
-| `MemberSubscriptionLine.allowSubstitution` | Superseded by `changePolicy`; `policyForLine` already maps the legacy `false` → `remove`. Plan its removal once stored subs are migrated |
-| `.env.example` | Remove the four `SHOPIFY_*` blocks |
-| `docs/SUBSCRIPTIONS.md`, `docs/POWERBODY_STRIPE_PLAN.md`, `README.md` | Rewrite against Stripe (F-13) |
-
-**Scale:** ~2,000 LOC deleted, ~15 files removed, one module renamed. The 899-test suite is
-the safety net.
+Unchanged from Rev 2 §5 Phases 4–5: delete the dead layer (`lib/shopify/`,
+`/api/subscribe`, `Act5Bundle`, `useShopifyCart`, `/api/products`, the seed script), then
+retire the types, the data-source flag, rename `lib/recharge/` → `lib/subscription/`, and
+rewrite the three stale docs. **(F-13)**
 
 ---
 
-## 5. Phased plan
+### Phase 9 — Commercial hardening *(P2; gated on §5)*
 
-Phases 1–2 are the go-live blockers. Rev 2 shrinks Phase 2 considerably — the hard part
-(re-pricing Stripe safely) is already built and just needs a second caller.
-
----
-
-### Phase 1 — Unblock Stripe checkout *(P0; ~half a day)*
-
-*Depends on: nothing.*
-
-1. Delete the `isShopifyLive()` short-circuits in `useShopCheckout` and `useStackCheckout`;
-   always POST to `/api/cart`, honour the server's `{ checkoutUrl, mock }`. **(F-1)**
-2. Add `shipping_address_collection` + `phone_number_collection` to
-   `createSubscriptionSession`, matching the one-off session. **(F-2)**
-3. Pin `apiVersion`; add a single `DEFAULT_CURRENCY` used by all four call sites. **(F-10)**
-4. Expose `paymentsMode` on `/api/config` so the client renders honest copy without
-   importing a payments module.
-
-**Done when:** with `PAYMENTS_SOURCE=stripe` + a test key, a guest completes a `/shop`
-basket and a quiz one-off through Stripe Checkout, both orders land `paid` via webhook, and
-a subscription checkout captures a real delivery address that appears on the order.
+Shipping options (F-9), Stripe Tax (F-11), minimum-term enforcement (F-12), idempotency keys
+and webhook event dedupe.
 
 ---
 
-### Phase 2 — Close the member-driven half of the lifecycle *(P1; ~1 day — was ~2)*
-
-*Depends on: 1. Live impact: hub actions start moving money.*
-
-5. Add `cancelStripeSubscription` / `pauseStripeSubscription` / `resumeStripeSubscription`
-   beside the existing `updateSubscriptionAmount` in `lib/payments/stripe.ts`.
-6. Extract `syncBilling`'s guard-and-order logic from `lib/changes/service.ts` into a shared
-   helper, and call it from `PUT /api/hub/subscription` on a stored-vs-incoming diff of
-   `status` and `flatMonthly`. **Keep the Stripe-first ordering** the changes domain already
-   proved out. **(F-4b, F-4c)**
-7. Handle `invoice.payment_failed` → `status: 'past_due'` + a **payment-failed notification
-   template** (the outbox is already there); and `customer.subscription.updated` → mirror
-   status and `cancel_at_period_end`. **(F-3)**
-8. Populate `paymentMethod` from the subscription's default payment method on
-   `checkout.session.completed`; stop hardcoding it. **(F-5)**
-
-**Done when:** cancelling in the hub cancels in Stripe; adding a line re-prices the Stripe
-subscription; a declined test card surfaces as `past_due` and queues an email; the hub shows
-the card actually used.
-
----
-
-### Phase 3 — Money-movement correctness *(P1–P2; ~1 day)*
-
-*Depends on: 1.*
-
-9. Capture the payment intent / charge from `invoice.paid` onto subscription orders so
-   `/portal/orders` refunds actually refund; add partial refunds. **(F-6)**
-10. Reuse Stripe Customers — persist `stripeCustomerId` on the user, pass `customer` when
-    known. **(F-7)**
-11. Handle `checkout.session.expired` → `failed`; sweep `pending_payment` rows older than
-    24h. **(F-8)**
-12. Handle `charge.refunded` and `charge.dispute.created` so money moved in the Stripe
-    dashboard reconciles back. **(F-8)**
-13. Surface `syncBilling` failures through `lib/changes/health.ts` with a retry, so a
-    silently-stalled re-price is visible without opening the queue. **(F-14)**
-
----
-
-### Phase 4 — Shopify removal, part 1: the dead layer *(P3; ~1 day)*
-
-*Depends on: 1.*
-
-14. Delete everything in §4.1; strip the unused `CheckoutPayload.lines`.
-15. Remove `requireShopifyIds` / `requireSellingPlans` and the two Shopify `ValidationError`
-    variants; rename `merchandiseId` → `variantId`.
-16. Update affected `__tests__/`.
-
-**Done when:** `grep -ri shopify src/` returns only the catalogue-type fields deferred to
-Phase 5, suite green.
-
----
-
-### Phase 5 — Shopify removal, part 2: types, flags & docs *(P3; ~1 day)*
-
-*Depends on: 4.*
-
-17. Retire `shopifyProductId` / `shopifyVariantId` / `sellingPlanId` from `CatalogueProduct`,
-    `SubscriptionLine`, `readiness.ts`.
-18. Retire `data-source.ts` and the portal data-source toggle; leave `SUPPLIER_SOURCE`,
-    `PAYMENTS_SOURCE`, `NOTIFY_SOURCE` as the axes.
-19. Rename `lib/recharge/` → `lib/subscription/` (20 importers — do it as one mechanical
-    commit). Plan `allowSubstitution`'s removal behind a stored-subscription migration.
-20. Clean `.env.example`. Rewrite `docs/SUBSCRIPTIONS.md` against Stripe and remove its
-    Recharge billing-engine section, correct the stale discount figures, mark
-    `docs/POWERBODY_STRIPE_PLAN.md` delivered, fix `README.md`. **(F-13)**
-
----
-
-### Phase 6 — Commercial hardening *(P2; gated on §7)*
-
-21. Shipping: `shipping_options` honouring `freeDeliveryThreshold`, or remove the messaging.
-    **(F-9)**
-22. `automatic_tax` + address collection for VAT, if adopted. **(F-11)**
-23. Minimum-term enforcement, if `minSubscriptionMonths` ever rises. **(F-12)**
-24. Idempotency keys on session creation; webhook event-id dedupe table.
-
----
-
-## 6. Test plan
-
-The 899-test suite covers the changes/consent/notify domains well and is the safety net for
-the deletion phases. New coverage needed:
+## 4. Test plan
 
 | Area | Tests |
 |---|---|
-| Checkout gating (F-1) | `/api/cart` is called in mock mode too; the hook honours the server's `mock` flag rather than deciding |
-| Subscription session (F-2) | address collection requested; webhook writes a real address onto the order |
-| Hub → Stripe sync (F-4b) | cancel → Stripe cancel called; `flatMonthly` change → re-price called; **document write skipped when Stripe rejects**, mirroring `applyChangeEvent` |
-| One-writer invariant (F-4c) | both the changes path and the hub path go through the shared guarded helper |
-| Dunning (F-3) | `invoice.payment_failed` → `past_due` + queued notification; `customer.subscription.updated` mirrors status |
-| Refunds (F-6) | subscription order carries a payment intent and refunds for real; partial-refund arithmetic |
-| Customer reuse (F-7) | second checkout passes `customer`, not `customer_email` |
-| Expiry (F-8) | `checkout.session.expired` → `failed`; sweeper picks up stale rows |
-| Discount regression | after every Shopify deletion, `pricing.test.ts` figures byte-identical — **the discount engine must not move** |
-
-`docs/STRIPE_TESTING.md` stays the manual runbook; extend it with the dunning and hub-cancel
-paths, and with a `?dryRun=1` pass over `/api/cron/daily`.
+| Subscription clock (S-2) | `monthsActive` advances on `invoice.paid`, idempotent on redelivery; `deliveriesMade` advances per line and survives a substitution |
+| Cancel guard (S-1) | a `monthsActive: 0` subscription can cancel and pause; a refused mutation reports refusal rather than returning the input |
+| Settlement correctness | the month-0 / month-6 / month-12 table in S-2; £0 once paid off; intro discount raises the settlement, never lowers it |
+| Settlement charge (S-3, S-6) | computed server-side and snapshotted; invoice raised on the customer holding the card; **cancel proceeds when the charge fails**; no invoice at £0 |
+| Waivers (S-7) | 14-day window, price-increase window, involuntary follow-on, pause/snooze |
+| Consent gating (S-4) | a subscription on pre-settlement terms is never charged |
+| Carry-forward | F-1/F-2/F-3/F-4b/F-6/F-7/F-8 per Rev 2 §6 |
+| Discount regression | `pricing.test.ts` figures byte-identical after every Shopify deletion |
 
 ---
 
-## 7. Decisions
+## 5. Decisions
 
-**D-1 · Do discounts stay in our engine, or move to Stripe Coupons?**
-*Recommendation: stay.* The logic depends on quiz answers, usage levels and per-line margin
-floors — not expressible as Stripe Prices. Accept that Stripe reporting shows gross figures
-and treat our DB as the ledger of record. Record the decision, because the reflex when
-Stripe reporting looks wrong will be to "fix" it here.
+**D-1 · Discounts stay in our engine.** *Recommendation: yes.* Record it, so the reflex when
+Stripe reporting shows gross figures isn't to "fix" it here.
 
-**D-2 · Proration on re-price. ✅ RESOLVED.** `updateSubscriptionAmount` ships
-`proration_behavior: 'none'` with the billing anchor preserved — effective next cycle, no
-backdating. This matches the flat-monthly smoothed-average model and Rev 1's recommendation.
-Phase 2's hub-driven sync must use the same policy.
+**D-2 · Proration on re-price. ✅ RESOLVED** — shipped as `proration_behavior: 'none'`.
+Phase 5's hub-driven sync must match.
 
-**D-3 · VAT.** Adopt Stripe Tax, or handle out-of-band? Blocks F-11.
+**D-3 · VAT.** Stripe Tax or out-of-band? Blocks F-11. *Note the settlement is also a taxable
+supply* — whatever you decide has to cover it.
 
-**D-4 · Shipping.** Charge below £50, or drop the threshold messaging? Blocks F-9.
+**D-4 · Shipping.** Charge below £50, or drop the messaging? Blocks F-9.
 
-**D-5 · Minimum term.** Keep `minSubscriptionMonths: 1`? If it rises, F-12 becomes P1 and
-the billing portal must be restricted.
+**D-5 · Minimum term.** Keep `minSubscriptionMonths: 1`? The settlement is arguably a
+*better* instrument than a minimum term — it recovers exactly what is owed instead of binding
+the member — so keeping 1 and relying on the buy-out is the more defensible position, and
+the easier one to sell.
 
-**D-6 · NEW · Notice symmetry on member-driven increases.** A supplier price rise gets 30
-days' notice and a free exit; a member adding a product to their own box raises their
-monthly immediately. That is defensible — they asked for it — but it should be a stated
-position, because F-4b will make both paths write to Stripe and the difference will become
-visible in billing.
+**D-6 · Notice symmetry.** A supplier price rise gets 30 days' notice; a member adding a
+product raises their monthly immediately. Defensible, but state the position.
 
----
+**D-7 · NEW · Settlement or minimum term — not both.** Charging a buy-out *and* enforcing a
+minimum term would be double-counting, and would read as punitive. Pick one. My
+recommendation is the buy-out, per D-5.
 
-## 8. Sequencing
+**D-8 · NEW · Grandfathering.** Members on pre-settlement terms who never re-consent cancel
+free. Accept the cost, or run a re-consent campaign with a deadline? This is a commercial
+call and it determines how much the feature is actually worth in year one.
 
-```
-  Phase 1  ██   P0  unblock checkout + address collection        ← go-live blocker
-  Phase 2  ██   P1  hub → Stripe sync + dunning                  ← go-live blocker (halved by F-4a)
-  Phase 3  ██   P1  refunds, customers, expiry, cron health
-  Phase 4  ██   P3  delete the dead Shopify layer
-  Phase 5  ██   P3  types, flags, recharge rename, docs
-  Phase 6  ??   P2  shipping / tax / term    ← gated on §7
-```
-
-Phases 4–5 touch files disjoint from 2–3 and can run in parallel, but sequencing them after
-1 avoids deleting the Shopify gate and rewriting the hooks in one commit.
+**D-9 · NEW · What is the settlement for the quiz's own product mix?** Worth modelling before
+committing: with `minSubscriptionMonths: 1` and multi-month tubs common, the month-one
+settlement could be a large fraction of the first month's bill. If a typical canceller owes
+more than they have paid, expect complaints and chargebacks regardless of how correct the
+maths is. Run the numbers across real bundles before Phase 1's wording is drafted.
