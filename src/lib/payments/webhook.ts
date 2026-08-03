@@ -7,7 +7,10 @@
  * Subscriptions (Phase 4):
  *   • checkout.session.completed (mode=subscription) → link the Stripe
  *     subscription/customer to the account and activate the stored bundle.
- *   • invoice.paid → raise a fulfilment order for that delivery (first + renewals).
+ *   • invoice.paid → raise a fulfilment order for that delivery (first + renewals),
+ *     and advance the subscription clock on renewals (see lib/recharge/clock.ts).
+ *     Stripe's invoice stream is the source of truth for how many cycles a member
+ *     has actually paid for, which is what the cancel settlement is measured against.
  *   • customer.subscription.deleted → mark the member's subscription cancelled.
  *
  * All handlers are idempotent: orders key off the id passed in (order id or
@@ -15,7 +18,9 @@
  */
 import type Stripe from 'stripe'
 import { markOrderPaid, createSubscriptionOrder } from '@/lib/orders/service'
+import { getOrder } from '@/lib/orders/repo'
 import { getSubscription, saveSubscription } from '@/lib/db/hub-data'
+import { advanceCycle } from '@/lib/recharge/clock'
 import { linkStripeSubscription, userIdForStripeSubscription } from './subscription-link'
 import type { SupplierAddress } from '@/lib/supplier/types'
 
@@ -91,7 +96,10 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
     }
 
     case 'invoice.paid': {
-      const invoice = event.data.object as Stripe.Invoice & { subscription?: string | { id: string } }
+      const invoice = event.data.object as Stripe.Invoice & {
+        subscription?: string | { id: string }
+        billing_reason?: string | null
+      }
       const stripeSubscriptionId = idOf(invoice.subscription)
       if (!stripeSubscriptionId) return { handled: false, type: event.type }
       const userId = await userIdForStripeSubscription(stripeSubscriptionId)
@@ -99,16 +107,33 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
       const sub = await getSubscription(userId)
       if (!sub) return { handled: false, type: event.type }
 
+      // Idempotency: the fulfilment order is keyed by invoice id, so its prior
+      // existence is our record of having already processed this invoice. Check
+      // BEFORE raising it — the clock must move exactly once per paid cycle, and
+      // a redelivered webhook that advanced it again would quietly shrink the
+      // member's settlement.
+      const orderId = `ord_inv_${invoice.id}`
+      const alreadyProcessed = (await getOrder(orderId)) !== null
+
       const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
       const { products } = await getResolvedCatalogue()
       const order = await createSubscriptionOrder({
-        id: `ord_inv_${invoice.id}`,
+        id: orderId,
         userId,
         email: sub.customerEmail,
         sub,
         catalogue: products,
         stripeSubscriptionId,
       })
+
+      // Advance the subscription clock on RENEWALS only. The first invoice
+      // (`subscription_create`) is the month already accounted for by
+      // `monthsActive: 0` + the box that ships at signup, so counting it here
+      // would bill the member's first month twice over in `paidToDateOf`.
+      if (!alreadyProcessed && invoice.billing_reason === 'subscription_cycle') {
+        await saveSubscription(userId, advanceCycle(sub))
+      }
+
       return { handled: true, type: event.type, userId, orderId: order.id }
     }
 

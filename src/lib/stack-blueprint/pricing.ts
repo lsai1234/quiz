@@ -82,9 +82,14 @@ export const PRICING_CONFIG = {
   /**
    * Minimum subscription commitment in months (per-product can override up).
    * 1 = no commitment — cancel or pause any time, which is what we sell on.
-   * Raising this re-arms the hub's cancel/pause guard (`monthsRemainingOnTerm`)
-   * AND the "N-month minimum" copy on the receipt, so only change it if the
-   * offer really does bind the member.
+   *
+   * NOTE: this NO LONGER gates cancelling or pausing. The offer is "cancel
+   * whenever you want, and settle what we've already sent you", and the
+   * pay-for-what-shipped buy-out (`cancelSettlement`) is what protects the
+   * smoothed monthly instead — it recovers exactly what is owed rather than
+   * binding the member. Raising this above 1 therefore only affects the
+   * "N-month minimum" copy and the committed-margin projections; it will not
+   * stop anyone leaving, and the terms now promise it won't.
    */
   minSubscriptionMonths: 1,
 

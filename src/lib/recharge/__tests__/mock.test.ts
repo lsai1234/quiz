@@ -77,31 +77,46 @@ describe('dispatch day + pause/resume', () => {
     expect(setDispatchDay(sub(), 40).dispatchDayOfMonth).toBe(28)
   })
 
-  it('pauses (once past the minimum term) and resumes', () => {
-    const eligible = { ...sub(), minMonths: 4, monthsActive: 4 }
-    const paused = pauseSubscription(eligible)
+  it('pauses and resumes', () => {
+    const paused = pauseSubscription(sub())
     expect(paused.status).toBe('paused')
     expect(resumeSubscription(paused).status).toBe('active')
   })
 
-  it('blocks pause during the minimum term', () => {
+  it('pauses even inside a nominal minimum term — cancelling is unconditional, so blocking the gentler action would be incoherent', () => {
     const s = { ...sub(), minMonths: 4, monthsActive: 2 }
-    expect(pauseSubscription(s).status).toBe('active')
+    expect(pauseSubscription(s).status).toBe('paused')
+  })
+
+  it('will not pause a cancelled subscription', () => {
+    const s = { ...sub(), status: 'cancelled' as const }
+    expect(pauseSubscription(s).status).toBe('cancelled')
   })
 })
 
-describe('minimum-term cancel guard', () => {
-  it('blocks cancel before the minimum term and reports months left', () => {
+describe('cancel is unconditional', () => {
+  // The offer is "cancel whenever you want, settle what we've already sent you".
+  // The pay-for-what-shipped buy-out is the protection, so nothing may refuse a
+  // cancellation — least of all silently, which is what the old minimum-term
+  // guard did to every member who actually checked out (monthsActive: 0).
+  it('cancels regardless of months remaining on a nominal term', () => {
     const s = { ...sub(), minMonths: 4, monthsActive: 2 }
     expect(monthsRemainingOnTerm(s)).toBe(2)
-    expect(canCancel(s)).toBe(false)
-    expect(cancelSubscription(s).status).toBe('active') // unchanged
+    expect(cancelSubscription(s).status).toBe('cancelled')
   })
 
-  it('allows cancel once the minimum term is met', () => {
-    const s = { ...sub(), minMonths: 4, monthsActive: 4 }
-    expect(canCancel(s)).toBe(true)
+  it('cancels a freshly checked-out subscription — the regression that shipped', () => {
+    // monthsActive: 0 is exactly what buildMemberSubscription produces at the
+    // real checkout. Under the old guard this returned the subscription
+    // untouched and the member's Cancel button did nothing at all.
+    const s = { ...sub(), minMonths: 1, monthsActive: 0 }
     expect(cancelSubscription(s).status).toBe('cancelled')
+  })
+
+  it('records the reason and is idempotent', () => {
+    const once = cancelSubscription(sub(), 'too expensive')
+    expect(once.cancelReason).toBe('too expensive')
+    expect(cancelSubscription(once).cancelReason).toBe('too expensive')
   })
 })
 

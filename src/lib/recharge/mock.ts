@@ -194,8 +194,11 @@ export function setDispatchDay(sub: MemberSubscription, day: number): MemberSubs
 }
 
 export function pauseSubscription(sub: MemberSubscription): MemberSubscription {
-  // Pausing during the minimum term would side-step the commitment — block it.
-  return sub.status === 'active' && canCancel(sub) ? { ...sub, status: 'paused' } : sub
+  // Gated on state, not on policy. Pausing used to be blocked during the minimum
+  // term to stop it side-stepping the commitment; now that cancelling is
+  // unconditional (see `cancelSubscription`), blocking the gentler action while
+  // allowing the drastic one would make no sense to a member.
+  return sub.status === 'active' ? { ...sub, status: 'paused' } : sub
 }
 
 export function resumeSubscription(sub: MemberSubscription): MemberSubscription {
@@ -215,9 +218,24 @@ export function snoozeSubscription(sub: MemberSubscription, months: number): Mem
   return { ...sub, status: 'paused', snoozeUntil: until.toISOString(), snoozedMonths: (sub.snoozedMonths ?? 0) + m }
 }
 
+/**
+ * Cancel, unconditionally.
+ *
+ * The offer is "cancel whenever you want, and settle what we've already sent
+ * you": the pay-for-what-shipped buy-out (`cancelSettlement`) is what stops the
+ * flat monthly being used to bank three months of product for one month's pay,
+ * so there is nothing left for a minimum term to protect and no reason to ever
+ * refuse the request.
+ *
+ * This used to be gated on `canCancel(sub)`, which read the minimum term against
+ * `monthsActive` — a field that never advanced. For anyone who actually checked
+ * out (`monthsActive: 0`) the guard was permanently closed and this function
+ * silently returned the subscription unchanged: the member pressed Cancel and
+ * nothing happened. Cancelling must never be able to fail quietly again.
+ */
 export function cancelSubscription(sub: MemberSubscription, reason?: string): MemberSubscription {
-  // Honour the minimum term — Recharge enforces this server-side too.
-  return canCancel(sub) ? { ...sub, status: 'cancelled', cancelReason: reason ?? sub.cancelReason } : sub
+  if (sub.status === 'cancelled') return sub
+  return { ...sub, status: 'cancelled', cancelReason: reason ?? sub.cancelReason }
 }
 
 /** Swap a line's product (within its swap group) and re-price it + the flat monthly. */
@@ -381,6 +399,50 @@ export function lineSettlement(line: MemberSubscriptionLine, sub: MemberSubscrip
   return round(Math.max(0, shippedValueToDate(line) - paidToDate(line, sub)))
 }
 
+// ─── Cancel buy-out (whole subscription) ─────────────────────────────────────
+// The offer is "cancel whenever you want, and settle what we've already sent".
+// These three functions are what makes that honest in both directions.
+
+/** Total retail value of everything the subscription has shipped so far. */
+export function shippedValueOf(sub: MemberSubscription): number {
+  return round(sub.lines.reduce((s, l) => s + shippedValueToDate(l), 0))
+}
+
+/**
+ * What the member has actually paid so far: the discounted first month, plus the
+ * flat rate for every cycle since.
+ *
+ * `firstMonth` is the amount genuinely billed at signup (after whatever intro
+ * discount they revealed), so it is preferred over re-deriving it — the stored
+ * figure is what their card was charged. `introDiscountRate` is the fallback for
+ * subscriptions written before `firstMonth` was recorded.
+ */
+export function paidToDateOf(sub: MemberSubscription): number {
+  const firstMonth = sub.firstMonth ?? sub.flatMonthly * (1 - (sub.introDiscountRate ?? 0))
+  return round(firstMonth + Math.max(0, sub.monthsActive) * sub.flatMonthly)
+}
+
+/**
+ * The cancel BUY-OUT: the outstanding balance on goods already delivered.
+ *
+ * The flat monthly SPREADS the cost of items that last several months, so a
+ * member who cancels early has received more product than they have paid for —
+ * three tubs in month one when only one is due in month two. This is that gap,
+ * and nothing more: the value of what we shipped, minus everything they paid.
+ *
+ * It reaches 0 as soon as their payments cover what was sent, which is what lets
+ * "cancel whenever you want" be true without the smoothing being exploitable.
+ * It is a debt for goods received, NOT a cancellation fee — that distinction is
+ * the whole basis on which it is chargeable, so keep it in the maths and in the
+ * copy (see docs/STRIPE_INTEGRATION_PLAN.md §1).
+ *
+ * Correct at any point in the subscription's life only because the clock now
+ * advances — see `lib/recharge/clock.ts`.
+ */
+export function cancelSettlement(sub: MemberSubscription): number {
+  return round(Math.max(0, shippedValueOf(sub) - paidToDateOf(sub)))
+}
+
 /** Add a product as a new subscription line (sized & priced at the sub rate, no intro). */
 export function addLine(
   sub: MemberSubscription,
@@ -412,6 +474,9 @@ export function addLine(
     swapGroup: subProduct.swapGroup,
     addedAt: new Date().toISOString(),
     deliveriesMade: 0, // hasn't shipped yet
+    // Anchor it to the current cycle so the clock never credits this line with
+    // boxes that shipped before it was on the plan.
+    joinedAtMonth: sub.monthsActive,
     nextShipAt: nextDispatchDate(sub.dispatchDayOfMonth).toISOString(),
   }
   const lines = [...sub.lines, newLine]

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { downsizePreview, monthsRemainingOnTerm, canCancel } from '@/lib/recharge/mock'
+import { downsizePreview, cancelSettlement, shippedValueOf, paidToDateOf } from '@/lib/recharge/mock'
 import { BillingImpact } from './BillingImpact'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -55,8 +55,13 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
 
   if (!mounted) return null
 
-  const remaining = monthsRemainingOnTerm(sub)
-  const cancellable = canCancel(sub)
+  // Cancelling is unconditional — there is no term to serve out and nothing to
+  // refuse. What there can be is a balance on product already sent that the flat
+  // monthly hasn't covered yet; the terms promise the member sees that figure,
+  // and what it's made of, before they confirm.
+  const settlement = cancelSettlement(sub)
+  const shipped = shippedValueOf(sub)
+  const paid = paidToDateOf(sub)
   const downsize = downsizePreview(sub, catalogue)
   const reviewItems = recommendations.filter((r) => r.phase === 'review')
   const reasonLabel = REASONS.find((r) => r.id === reason)?.label ?? ''
@@ -185,7 +190,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {step === 'snooze' && (
             <>
               <button onClick={() => setStep(reason && reason !== 'break' ? 'save' : 'reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
-              <p className="text-xs text-[var(--color-text-2)] leading-relaxed">Pick how long. Billing and deliveries pause; your stack and prices are untouched; your minimum term moves back to match — so you lose nothing.</p>
+              <p className="text-xs text-[var(--color-text-2)] leading-relaxed">Pick how long. Billing and deliveries pause; your stack and prices are untouched; there’s nothing to settle — so you lose nothing.</p>
               <div className="grid grid-cols-3 gap-2 mt-1">
                 {[1, 2, 3].map((m) => {
                   const until = new Date(); until.setMonth(until.getMonth() + m)
@@ -205,26 +210,59 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {step === 'cancel' && (
             <>
               <button onClick={() => setStep(reason ? 'save' : 'reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
-              {cancellable ? (
-                <>
-                  <p className="text-sm text-[var(--color-text-2)] leading-relaxed">You can cancel now and you won’t be charged again. We’d love to know why{reasonLabel ? ` — you said “${reasonLabel.toLowerCase()}”` : ''}.</p>
-                  <button onClick={() => { onCancel(reasonLabel || 'unspecified'); onClose() }} className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all" style={{ background: AMBER, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
-                    Confirm cancellation
-                  </button>
-                  <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
-                    Keep my subscription
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
-                    You’re still within your minimum term ({remaining} {remaining === 1 ? 'month' : 'months'} left). You can’t cancel just yet, but a <span className="font-semibold text-[var(--color-text)]">snooze</span> pauses everything and pushes the term back — so you’re not paying for nothing.
+              <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
+                You can cancel now — there’s no minimum term and no cancellation fee. We’d love to know why{reasonLabel ? ` — you said “${reasonLabel.toLowerCase()}”` : ''}.
+              </p>
+
+              {settlement > 0.01 ? (
+                <div
+                  className="rounded-2xl p-4"
+                  style={{ border: `1px solid color-mix(in srgb, ${AMBER} 35%, transparent)`, background: `color-mix(in srgb, ${AMBER} 6%, transparent)` }}
+                >
+                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                    One last payment: {formatGBP(settlement)}
                   </p>
-                  <button onClick={() => setStep('snooze')} className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
-                    Snooze instead
-                  </button>
-                </>
+                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                    Your monthly is a smoothed average, so longer-lasting items are spread over the months they last. You’ve had more product than your payments have covered so far — this settles that difference, and nothing else. Everything already sent to you is yours to keep.
+                  </p>
+                  <dl className="mt-3 space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <dt className="text-[var(--color-text-2)]">Value of everything sent to you</dt>
+                      <dd className="font-semibold text-[var(--color-text)]">{formatGBP(shipped)}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt className="text-[var(--color-text-2)]">Paid so far</dt>
+                      <dd className="font-semibold text-[var(--color-text)]">−{formatGBP(paid)}</dd>
+                    </div>
+                    <div className="flex justify-between pt-1.5 border-t border-[var(--color-border)]">
+                      <dt className="font-semibold text-[var(--color-text)]">To settle</dt>
+                      <dd className="font-bold" style={{ color: AMBER }}>{formatGBP(settlement)}</dd>
+                    </div>
+                  </dl>
+                </div>
+              ) : (
+                <div
+                  className="rounded-2xl p-4"
+                  style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}
+                >
+                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                    Nothing left to pay
+                  </p>
+                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                    Your payments have covered everything we’ve sent you. Cancel and you won’t be charged again.
+                  </p>
+                </div>
               )}
+
+              <button onClick={() => { onCancel(reasonLabel || 'unspecified'); onClose() }} className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all" style={{ background: AMBER, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
+                {settlement > 0.01 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
+              </button>
+              <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                Keep my subscription
+              </button>
+              <button onClick={() => setStep('snooze')} className="w-full py-3 rounded-2xl text-sm font-bold border border-[var(--color-border)] text-[var(--color-text-2)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                Snooze instead — nothing to settle
+              </button>
             </>
           )}
         </div>

@@ -189,7 +189,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                 Skip this box{credit > 0 ? ` · credit ${formatGBP(credit)}` : ''}
               </button>
               <p className="text-[11px] text-[var(--color-muted)] mt-2 text-center leading-relaxed">
-                You won’t be charged for it, and it won’t use up a month — your plan and minimum term simply move back a month.
+                You won’t be charged for it, and it won’t use up a month — your plan simply moves back a month.
               </p>
             </div>
           )}

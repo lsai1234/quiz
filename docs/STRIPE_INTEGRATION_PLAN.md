@@ -1,24 +1,30 @@
 # Stripe integration — architecture scan & phased plan
 
-Status: **scan complete, plan proposed.** No application code has been changed by this
-document.
+Status: **Phases 0–2 shipped; Phase 3 specified, not built.**
 
-- **Rev 3** — rescanned at `master` @ `a3051e5`, focused on the **cancel buy-out /
-  outstanding-balance** requirement. Baseline: 66 suites / 899 tests passing.
+- **Rev 4** — **Phases 0–2 implemented.** Policy confirmed: *cancel whenever you want,
+  settle the outstanding balance on what has already been sent.* 68 suites / 935 tests
+  passing (was 899). Phase 3 (actually charging it) is specified but **not built**.
+- Rev 3 — rescanned at `master` @ `a3051e5`, focused on the cancel buy-out.
 - Rev 2 — after the P1–P8 product-changes / consent / notifications track.
 - Rev 1 — initial scan at `a4c1154`.
 
-> **Where the settlement work actually is.** Nothing has landed on `master` since Rev 2 —
-> it is still `a3051e5` (29 Jul), tree clean. The cancel buy-out lives on an **unmerged**
-> branch, `claude/supplement-quiz-audit-algeoo` @ `d3e668e` ("Cancel buy-out:
-> pay-for-what-shipped settlement on early cancel"), which also carries a 12-commit quiz
-> redesign (~3,700 insertions). Master already has the *per-line* settlement
-> (`lineSettlement`, returned by `removeLine`); the branch adds the *whole-subscription*
-> one (`cancelSettlement`).
+> **The confirmed offer.** *Cancel whenever you want — there is no minimum term and no
+> cancellation fee — but settle the outstanding balance on anything already sent you that
+> your payments have not yet covered.* The settlement replaces the minimum term rather than
+> sitting alongside it (D-7): it recovers exactly what is owed instead of binding anyone.
 >
-> **The formula is right. Everything around it is not.** Rev 3's headline is that the
-> settlement cannot be charged until three things underneath it are fixed — and two of
-> them are live bugs affecting members today, independent of Stripe.
+> **What Rev 4 built.** The maths was already right; nothing underneath it was. Phase 0
+> made the subscription clock real, so the figure is correct at any point in a plan's life
+> rather than only in month zero. Phase 1 put the settlement into the consented Terms and
+> disclosed it at checkout, with a version gate so it can never be charged to someone who
+> was promised "no fee". Phase 2 brought `cancelSettlement` across and showed the member
+> the figure and its arithmetic before they confirm.
+>
+> **What it deliberately did not build.** Phase 3 — actually taking the money. The
+> settlement is calculated, disclosed and shown, but nothing charges it yet. That is the
+> right order: the clock had to be trustworthy and the terms had to permit it before a
+> single pound moved.
 
 ---
 
@@ -53,18 +59,21 @@ framing; it matters (see S-4).
 | `paidToDate(line, sub)` | `recharge/mock.ts:370` | master ✅ |
 | `lineSettlement(line, sub)` | `recharge/mock.ts:380` | master ✅ — per-line, on removal |
 | `removeLine` → `{ sub, settlement }` | `recharge/mock.ts:422` | master ✅ |
-| `shippedValueOf(sub)` / `paidToDateOf(sub)` | branch | unmerged |
-| `cancelSettlement(sub)` | branch | unmerged |
-| `firstMonthDiscountRate` | branch, `types.ts` | unmerged — **collides**, see S-5 |
+| `shippedValueOf(sub)` / `paidToDateOf(sub)` | `recharge/mock.ts` | ✅ **added (P2)** |
+| `cancelSettlement(sub)` | `recharge/mock.ts` | ✅ **added (P2)** |
+| The clock that keeps them honest | `recharge/clock.ts` | ✅ **new (P0)** |
+| `firstMonthDiscountRate` | — | ✅ **dropped** — reads master's `introDiscountRate` (S-5) |
 | Display in `BillingImpact` / `LineManageSheet` | master | ✅ shown to the member |
-| Display in `CancelSaveFlow` | branch | unmerged |
-| **Anything that charges it** | — | ❌ **does not exist** |
+| Display + arithmetic in `CancelSaveFlow` | `CancelSaveFlow.tsx` | ✅ **added (P2)** |
+| Disclosure in the Terms + at checkout | `legal/content.ts` | ✅ **added (P1)** |
+| Consent gate before it may be charged | `legal/consent.ts` | ✅ **added (P1)** |
+| **Anything that charges it** | — | ❌ **still does not exist — Phase 3** |
 
 ### 1.2 Findings
 
 ---
 
-**S-1 · P0 · Cancel is a silent no-op for every real paying member.**
+**S-1 · P0 · ✅ FIXED · Cancel was a silent no-op for every real paying member.**
 
 ```
 monthsRemainingOnTerm = max(0, minMonths − monthsActive + skipped + snoozed)
@@ -84,15 +93,17 @@ blocked too.
 the mock flow. Only accounts that actually checked out are affected — i.e. only real
 customers.
 
-This is a P0 on its own, before any settlement work. It also directly contradicts the
-Terms the member consented to: *"After any minimum term you can cancel whenever you like
-from your account, with no fee and no phone call"* (`legal/content.ts:188`), with
-`minMonths: 1` meaning there is no minimum term.
+**Fixed in Phase 0.** `cancelSubscription` is now unconditional — the settlement is the
+protection, so there is nothing left for a term to guard and no reason to refuse. The
+`canCancel` gate came off `pauseSubscription` too: blocking the gentler action while
+allowing the drastic one made no sense to a member. Pinned by a test that cancels a
+`monthsActive: 0` subscription — exactly what the real checkout produces, and exactly what
+the demo seed's `monthsActive: 2` was hiding.
 
 ---
 
-**S-2 · P0 · The settlement's two inputs are never advanced, so the number is only correct
-in month zero.**
+**S-2 · P0 · ✅ FIXED · The settlement's two inputs were never advanced, so the number was
+only correct in month zero.**
 
 `monthsActive` is written in exactly one place — `buildMemberSubscription`, at construction.
 `deliveriesMade` likewise (`deliveriesInMonths(monthsActive, …)` at construction, `0` in
@@ -111,25 +122,41 @@ A member who has paid £910 against £570 of goods would be charged **£80 they 
 Both inputs are stale and they err in opposite directions, so the error does not even
 cancel out predictably — the number is simply not meaningful after month zero.
 
-**This is the dependency that makes the rest of the work coherent.** Stripe's invoice stream
-is the natural source of truth for "months actually paid": `invoice.paid` already fires for
-the first box and every renewal, and already raises a fulfilment order. Advancing
-`monthsActive` there, and `deliveriesMade` when a fulfilment order is raised for a line,
-makes the settlement correct by construction. **The settlement cannot be charged until this
-is done.**
+**Fixed in Phase 0**, in `src/lib/recharge/clock.ts` (pure) driven from the `invoice.paid`
+webhook. Stripe's invoice stream is the source of truth for "cycles actually paid for".
+Three decisions worth knowing:
+
+- **Renewals only.** The clock advances on `billing_reason === 'subscription_cycle'`, not
+  `subscription_create`. The first invoice is the month already accounted for by
+  `monthsActive: 0` plus the box that ships at signup; counting it would credit the member
+  with paying their first month twice and undercharge the settlement.
+- **Idempotent against redelivery.** Keyed off the fulfilment order's prior existence
+  (`ord_inv_<invoiceId>`), checked *before* the order is raised. A redelivered webhook that
+  advanced the clock again would silently shrink what someone owes.
+- **`deliveriesMade` is derived, not accumulated.** Recomputed each cycle from the line's
+  own cadence and `joinedAtMonth` (new field, defaults to 0). An accumulator drifts on
+  replay or substitution; deriving it means a swap that keeps the line id keeps its
+  delivery history, and a product added in month four is never credited with the four
+  boxes that shipped before it existed.
 
 ---
 
-**S-3 · P1 · The settlement is computed and displayed, but never charged — and there is no
-primitive that could charge it.**
+**S-3 · P1 · PARTLY ADDRESSED · The settlement is computed and displayed, but never charged
+— and there is still no primitive that could charge it.**
 
 `lineSettlement` reaches `BillingImpact` ("Settlement (already-shipped box)") and
 `LineManageSheet`; `cancelSettlement` reaches `CancelSaveFlow` on the branch. All display.
 Cancel and remove both run as **pure client-side mutations** → `persist()` →
 `PUT /api/hub/subscription`, which saves the document and returns.
 
-So today the member is *shown* a settlement figure and then not charged it. That is the
-worse of the two failure modes: it reads as a fee they agreed to and never paid.
+**Phase 2** made the display honest rather than incidental: `CancelSaveFlow` now shows the
+figure with its arithmetic (value sent − paid so far = to settle), or an explicit "nothing
+left to pay" when it is zero, and the confirm button names the amount. The Terms promise
+the member sees it before confirming, so this is now load-bearing copy, not decoration.
+
+**Still true:** nothing collects it. A member confirms and no money moves. That is Phase 3,
+and it is the honest state to be in — better than charging against terms nobody had agreed
+to, but it must not be left here indefinitely.
 
 `lib/payments/stripe.ts` exposes only hosted **Checkout Sessions** (redirect-based),
 `updateSubscriptionAmount`, the billing portal, and `refundPayment`. There is **no
@@ -139,7 +166,7 @@ and the cancellation.
 
 ---
 
-**S-4 · P0 · The Terms the member consented to promise cancellation with no fee.**
+**S-4 · P0 · ✅ FIXED · The Terms the member consented to promised cancellation with no fee.**
 
 `lib/legal/content.ts`, `TERMS_VERSION = '2026-07-29'`, is a **versioned, consented
 document with an evidence row per member** (`recordConsent` in `finalize.ts`, migration v4).
@@ -169,25 +196,43 @@ process in the last. So the sequence is forced:
    enforceable; use it.
 4. Carve out the statutory 14-day window (S-7).
 
-**This is a legal-sequencing blocker, not a technical one, and it gates the whole feature.**
-I would get the wording reviewed before building the charge path.
+**Done in Phase 1.** `TERMS_VERSION` is now `2026-08-03`. The "Minimum term and cancelling"
+section became **"Cancelling, and settling what we have already sent you"**: no minimum
+term, no cancellation fee, and a balance framed throughout as *a debt for goods received*
+— *"This is not a charge for leaving; it is the outstanding balance on goods you have
+received and kept."* It carries the worked example from §1, states that the balance only
+ever covers goods already dispatched and falls to zero, and promises the figure is shown
+before confirmation. The statutory 14-day right is placed explicitly *ahead* of it.
+
+Disclosed at checkout too, not only in the terms: `CHECKOUT_BILLING_POINTS` renders above
+the consent box, next to the flat-monthly explanation that is the reason the balance exists.
+A balance that only appears when someone tries to leave is the kind of term that gets struck
+down however sound the arithmetic.
+
+`SETTLEMENT_TERMS_VERSION` + `consentCoversSettlement(userId)` are the enforcement point.
+Anyone still on the old terms was promised "no fee" and **cancels free** until they accept
+the new ones — enforced per member against the consent evidence table, not by deploy date.
+
+**Still needs a lawyer.** The structure and framing are right; the wording has not been
+reviewed, and it should be before it earns a penny.
 
 ---
 
-**S-5 · P2 · The branch introduces a duplicate discount field.**
+**S-5 · P2 · ✅ FIXED · The branch introduced a duplicate discount field.**
 
 The branch adds `MemberSubscription.firstMonthDiscountRate` ("the first-month intro discount
 actually applied at signup"). Master already has `introDiscountRate` — *"the first-month
 intro discount (0–1) the member claimed at checkout … this is the granted rate, not the one
 the browser asked for"* — plus `firstMonth` (the amount actually billed).
 
-These are the same concept. On merge, drop `firstMonthDiscountRate` and read
-`introDiscountRate`; `paidToDateOf` gets the value it needs with no new field. Two fields
+These are the same concept. `firstMonthDiscountRate` was dropped. `paidToDateOf` prefers
+`firstMonth` — the amount the card was actually charged — and falls back to
+`introDiscountRate` for subscriptions written before `firstMonth` was recorded. Two fields
 that must agree, in the input to a charge, is exactly where a silent money bug lives.
 
 ---
 
-**S-6 · P1 · Choosing how to collect it.**
+**S-6 · P1 · SPECIFIED, NOT BUILT · Choosing how to collect it.**
 
 Recommended: **invoice item + a one-off invoice, charged off-session**, not a PaymentIntent
 and not a Checkout redirect.
@@ -236,7 +281,7 @@ moving; a number the member was shown must not silently change before it is char
 
 ---
 
-**S-7 · P1 · Edge cases the charge path has to answer.**
+**S-7 · P1 · DISCLOSED, NOT ENFORCED · Edge cases the charge path has to answer.**
 
 | Case | Required behaviour |
 |---|---|
@@ -288,60 +333,75 @@ original Stripe phases follow, renumbered.
 
 ---
 
-### Phase 0 — Make the subscription clock real *(P0; ~1 day)*
+### Phase 0 — Make the subscription clock real ✅ **DONE**
 
-*Depends on: nothing. Fixes live bugs. **Prerequisite for any settlement work.***
+*Fixed two live bugs. Prerequisite for any settlement work.*
 
-1. Advance `monthsActive` on `invoice.paid` (Stripe's invoice stream is the source of truth
-   for months paid); advance `deliveriesMade` per line when a fulfilment order is raised.
-   Both idempotent, keyed off the invoice id as `createSubscriptionOrder` already is. **(S-2)**
-2. In mock mode, advance the same fields from the mock subscription-order path so the two
-   modes stay behaviourally identical.
-3. Fix `canCancel` so a real member can cancel: with `minMonths: 1` and a correct
-   `monthsActive` this resolves itself, but add a regression test asserting a
-   **freshly-checked-out** subscription (`monthsActive: 0`) can cancel — the current demo
-   seed's `monthsActive: 2` hides exactly this. **(S-1, F-12)**
-4. Make `cancelSubscription` and `pauseSubscription` report refusal instead of silently
-   returning the input, so a blocked mutation can never again look like success.
+1. ✅ `src/lib/recharge/clock.ts` — `advanceCycle`, `deliveriesMadeFor`, `syncDeliveryCounts`.
+   Pure; the webhook does the I/O. **(S-2)**
+2. ✅ Wired into `invoice.paid`: renewals only, idempotent against redelivery.
+3. ✅ `MemberSubscriptionLine.joinedAtMonth` — set by `addLine`, so a later addition is not
+   credited with earlier boxes.
+4. ✅ `cancelSubscription` is unconditional; `pauseSubscription` gates on state, not policy.
+   **(S-1, F-12)**
+5. ✅ Copy that promised a minimum term removed from `BillingSummary`, `CancelSaveFlow` and
+   `DeliveryDetailSheet`, and `minSubscriptionMonths`' doc comment rewritten to say plainly
+   that it no longer gates anything.
 
-**Done when:** a member who checked out today can cancel and pause; `monthsActive` and
-`deliveriesMade` advance with real invoices; `cancelSettlement` returns £0 for a member who
-has paid off everything shipped, at any month.
+**Verified by:** `recharge/__tests__/clock.test.ts` (14 assertions on the semantics), four
+new webhook tests (advances on renewal, not on `subscription_create`, not twice for a
+redelivered invoice, once per distinct invoice), and a regression test cancelling a
+`monthsActive: 0` subscription.
 
----
-
-### Phase 1 — Terms, consent, and disclosure *(P0; legal-led)*
-
-*Depends on: 0 conceptually. Gates Phase 3. **Not a coding phase.***
-
-5. Draft the settlement into the Terms as *paying the balance for goods already delivered*,
-   with a worked example. Get it reviewed. **(S-4)**
-6. Surface it at checkout beside the flat-monthly explanation, and in the hub's billing
-   explainer. `CheckoutConsent` and `portal/pricing` already have the right slots.
-7. Bump `TERMS_VERSION`; re-consent existing members via the notification outbox.
-8. Gate the charge on consent version: only settle subscriptions whose consent row carries
-   the settlement terms. Members on older terms cancel free — accept that cost.
+**Known follow-up, deliberately out of scope:** `subscriptionOrderLines` puts *every* line
+in *every* subscription order, so a 3-month tub is dropshipped monthly. The clock models
+per-line cadence correctly; fulfilment does not. Fixing it changes what physically ships
+and belongs in its own change.
 
 ---
 
-### Phase 2 — Merge the settlement branch *(P2; ~half a day + conflict work)*
+### Phase 1 — Terms, consent, and disclosure ✅ **DONE (pending legal review)**
 
-*Depends on: 0.*
+*Gates Phase 3. The wording still needs a lawyer's eyes before it earns money.*
 
-9. Cherry-pick `d3e668e` (`cancelSettlement`, `shippedValueOf`, `paidToDateOf`, the tests)
-   off `claude/supplement-quiz-audit-algeoo`. **Do not merge the whole branch** — the other
-   11 commits are a quiz redesign that conflicts with the P1–P8 work in
-   `recharge/mock.ts`, `recharge/types.ts`, `stack-blueprint/{pricing,factory}.ts`, and
-   should be assessed on its own merits.
-10. Drop `firstMonthDiscountRate`; read master's `introDiscountRate`. **(S-5)**
-11. Extend `settlement.test.ts` with the month-6 and month-12 cases that S-2 currently gets
-    wrong, so the clock fix is pinned by the settlement's own tests.
+6. ✅ Terms section rewritten as *settling the balance on goods already delivered*, with the
+   worked example, the falls-to-zero promise and the "shown before you confirm" commitment.
+   **(S-4)**
+7. ✅ `CHECKOUT_BILLING_POINTS` — disclosed at checkout, above the consent box.
+8. ✅ `TERMS_VERSION` → `2026-08-03`. `needsReconsent` already keys off the version, so the
+   in-hub re-consent prompt arms itself.
+9. ✅ `SETTLEMENT_TERMS_VERSION` + `consentCoversSettlement(userId)` — the gate Phase 3 must
+   call before charging anyone.
+10. ⬜ **Legal review of the wording.** Not done. Nothing should be charged until it is.
+11. ⬜ Re-consent campaign for existing members via the outbox.
+
+**Verified by:** nine new assertions in `legal/__tests__/content.test.ts` (it is a fee-free
+cancellation, it is not a charge for leaving, it is capped by what was sent, it shows the
+arithmetic, it lists the waivers, the statutory right comes first) and six in
+`consent.test.ts` for the gate.
 
 ---
 
-### Phase 3 — Charge the settlement *(P1; ~2 days)*
+### Phase 2 — Bring the settlement across ✅ **DONE**
 
-*Depends on: 0, 1, 2, and F-7. Live impact: money moves on cancel.*
+12. ✅ `cancelSettlement`, `shippedValueOf`, `paidToDateOf` added to `recharge/mock.ts`.
+    Written fresh against master rather than cherry-picked — the branch's other 11 commits
+    are a quiz redesign that conflicts with the P1–P8 work in `recharge/{mock,types}.ts`
+    and `stack-blueprint/{pricing,factory}.ts`, and **should still be assessed on its own
+    merits**; nothing here depends on it.
+13. ✅ `firstMonthDiscountRate` dropped in favour of `firstMonth` / `introDiscountRate`. **(S-5)**
+14. ✅ `settlement.test.ts` covers month 0, 6 and 12, so the clock fix is pinned by the
+    settlement's own tests — the month-6 and month-12 cases are precisely what the frozen
+    clock got wrong.
+15. ✅ `CancelSaveFlow` shows the figure, its arithmetic, and names the amount on the confirm
+    button; `BillingSummary` shows the standing position.
+
+---
+
+### Phase 3 — Charge the settlement — **NOT BUILT** *(P1; ~2 days)*
+
+*Depends on: F-7 (Customer reuse) and legal sign-off on Phase 1's wording. Until this
+ships, the settlement is calculated, disclosed and shown — but never collected.*
 
 12. Add `chargeSettlement(customerId, amount, description)` to `lib/payments/stripe.ts` —
     invoice item + off-session invoice per S-6. **(S-3, S-6)**
@@ -413,12 +473,13 @@ and webhook event dedupe.
 
 | Area | Tests |
 |---|---|
-| Subscription clock (S-2) | `monthsActive` advances on `invoice.paid`, idempotent on redelivery; `deliveriesMade` advances per line and survives a substitution |
-| Cancel guard (S-1) | a `monthsActive: 0` subscription can cancel and pause; a refused mutation reports refusal rather than returning the input |
-| Settlement correctness | the month-0 / month-6 / month-12 table in S-2; £0 once paid off; intro discount raises the settlement, never lowers it |
-| Settlement charge (S-3, S-6) | computed server-side and snapshotted; invoice raised on the customer holding the card; **cancel proceeds when the charge fails**; no invoice at £0 |
-| Waivers (S-7) | 14-day window, price-increase window, involuntary follow-on, pause/snooze |
-| Consent gating (S-4) | a subscription on pre-settlement terms is never charged |
+| Subscription clock (S-2) | ✅ `clock.test.ts` + 4 webhook tests — advances on renewal, not on `subscription_create`, not twice on redelivery, once per distinct invoice |
+| Cancel guard (S-1) | ✅ a `monthsActive: 0` subscription cancels; pause gates on state only |
+| Settlement correctness | ✅ month-0 / 6 / 12; £0 once paid off; never negative; intro discount raises it, never lowers it; a line added but not shipped is not charged |
+| Terms + consent gate (S-4) | ✅ 9 content assertions + 6 gate assertions |
+| Settlement charge (S-3, S-6) | ⬜ Phase 3 — computed server-side and snapshotted; invoice raised on the customer holding the card; **cancel proceeds when the charge fails**; no invoice at £0 |
+| Waivers (S-7) | ⬜ Phase 3 — 14-day window, price-increase window, involuntary follow-on, pause/snooze |
+| Consent gating at the charge | ⬜ Phase 3 — `consentCoversSettlement` is built; nothing calls it yet |
 | Carry-forward | F-1/F-2/F-3/F-4b/F-6/F-7/F-8 per Rev 2 §6 |
 | Discount regression | `pricing.test.ts` figures byte-identical after every Shopify deletion |
 
@@ -432,29 +493,36 @@ Stripe reporting shows gross figures isn't to "fix" it here.
 **D-2 · Proration on re-price. ✅ RESOLVED** — shipped as `proration_behavior: 'none'`.
 Phase 5's hub-driven sync must match.
 
-**D-3 · VAT.** Stripe Tax or out-of-band? Blocks F-11. *Note the settlement is also a taxable
-supply* — whatever you decide has to cover it.
+**D-3 · VAT.** Stripe Tax or out-of-band? Blocks F-11. *The settlement is also a taxable
+supply* — whatever you decide has to cover it, and Phase 3 should not ship before it does.
 
 **D-4 · Shipping.** Charge below £50, or drop the messaging? Blocks F-9.
 
-**D-5 · Minimum term.** Keep `minSubscriptionMonths: 1`? The settlement is arguably a
-*better* instrument than a minimum term — it recovers exactly what is owed instead of binding
-the member — so keeping 1 and relying on the buy-out is the more defensible position, and
-the easier one to sell.
+**D-5 · Minimum term. ✅ RESOLVED — no minimum term.** Confirmed: cancel whenever you want,
+settle the outstanding balance. `minSubscriptionMonths` stays 1 and no longer gates
+cancelling or pausing; the buy-out is the instrument. Raising it above 1 now only affects
+copy and margin projections, and the Terms promise it will not stop anyone leaving.
 
 **D-6 · Notice symmetry.** A supplier price rise gets 30 days' notice; a member adding a
 product raises their monthly immediately. Defensible, but state the position.
 
-**D-7 · NEW · Settlement or minimum term — not both.** Charging a buy-out *and* enforcing a
-minimum term would be double-counting, and would read as punitive. Pick one. My
-recommendation is the buy-out, per D-5.
+**D-7 · Settlement or minimum term — not both. ✅ RESOLVED — settlement.** Implemented that
+way throughout: the term guard is off both cancel and pause, and every surface that promised
+a minimum term now says there isn't one.
 
 **D-8 · NEW · Grandfathering.** Members on pre-settlement terms who never re-consent cancel
 free. Accept the cost, or run a re-consent campaign with a deadline? This is a commercial
 call and it determines how much the feature is actually worth in year one.
 
-**D-9 · NEW · What is the settlement for the quiz's own product mix?** Worth modelling before
-committing: with `minSubscriptionMonths: 1` and multi-month tubs common, the month-one
-settlement could be a large fraction of the first month's bill. If a typical canceller owes
-more than they have paid, expect complaints and chargebacks regardless of how correct the
-maths is. Run the numbers across real bundles before Phase 1's wording is drafted.
+**D-9 · What is the settlement for the quiz's own product mix? — STILL OPEN, and now the
+most valuable thing to do next.** With no minimum term and multi-month tubs common, a
+month-one settlement can be a large fraction of the first bill — in the published example it
+is £80 against £70 paid, i.e. *more than the first month itself*. A scratch-card intro
+discount makes it larger still (the 50%-off case owes £115). If a typical canceller owes
+more than they have paid, expect complaints and chargebacks however correct the arithmetic
+is, and expect it to show up in refund rates before it shows up in revenue.
+
+Model it across real bundles **before Phase 3 makes it chargeable**. Options if the numbers
+look hostile: cap the settlement at some fraction of what has been paid, exclude the intro
+discount from the shortfall, or bias bundle construction away from multi-month tubs in month
+one. All three are cheaper to decide now than to retrofit after the first chargeback.

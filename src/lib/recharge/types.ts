@@ -99,8 +99,18 @@ export interface MemberSubscriptionLine {
    * Deliveries of this line that have already shipped. Drives the
    * pay-for-what-shipped settlement when a line is removed mid-term, and the
    * "next ship" estimate. 0 for a freshly added line that hasn't shipped yet.
+   *
+   * Re-derived from the subscription clock on every paid cycle — see
+   * `lib/recharge/clock.ts`. Stored rather than computed on read so the value a
+   * settlement was calculated from stays auditable.
    */
   deliveriesMade: number
+  /**
+   * The subscription's `monthsActive` when this line joined the plan. 0 (or
+   * absent) for everything created at signup. Stops a product added in month
+   * four being credited with the four boxes that shipped before it existed.
+   */
+  joinedAtMonth?: number
   /** Next scheduled ship date for this line (ISO), if it differs from the box default. */
   nextShipAt?: string
   /**

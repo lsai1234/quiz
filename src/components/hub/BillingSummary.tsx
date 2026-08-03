@@ -2,7 +2,7 @@
 
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { nextChargeBreakdown } from '@/lib/recharge/schedule'
-import { monthsRemainingOnTerm } from '@/lib/recharge/mock'
+import { cancelSettlement } from '@/lib/recharge/mock'
 import type { Delivery } from '@/lib/recharge/schedule'
 import type { MemberSubscription } from '@/lib/recharge/types'
 
@@ -27,7 +27,7 @@ interface Props {
 /** The single source of truth for "what am I actually charged?". */
 export function BillingSummary({ subscription: sub, deliveries }: Props) {
   const charge = nextChargeBreakdown(sub, deliveries)
-  const remaining = monthsRemainingOnTerm(sub)
+  const settlement = cancelSettlement(sub)
   const hasAdjustments = charge.extras > 0.01 || charge.credits > 0.01
 
   return (
@@ -74,15 +74,18 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
 
         {charge.skippedUpcoming > 0 && (
           <p className="text-[11px] mt-2" style={{ color: GREEN }}>
-            {charge.skippedUpcoming} upcoming {charge.skippedUpcoming === 1 ? 'box is' : 'boxes are'} skipped — no charge those cycles, and your term moves back to match.
+            {charge.skippedUpcoming} upcoming {charge.skippedUpcoming === 1 ? 'box is' : 'boxes are'} skipped — no charge those cycles.
           </p>
         )}
       </div>
 
+      {/* No minimum term: cancelling is unconditional. What can be outstanding
+          is the balance on product already sent that the smoothed monthly hasn't
+          covered yet — so show that, not a commitment that no longer exists. */}
       <p className="text-[11px] text-[var(--color-muted)] mt-3">
-        {remaining > 0
-          ? `Minimum term: ${remaining} ${remaining === 1 ? 'month' : 'months'} left (about ${formatGBP(remaining * sub.flatMonthly)} of committed payments).`
-          : 'No minimum term remaining — pause or cancel anytime.'}
+        {settlement > 0.01
+          ? `No minimum term — cancel or pause anytime. If you cancelled today you'd settle ${formatGBP(settlement)} for what's already been sent to you, and nothing more.`
+          : 'No minimum term — cancel or pause anytime, with nothing left to settle.'}
       </p>
     </div>
   )

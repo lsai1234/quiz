@@ -73,8 +73,20 @@ export interface LegalDocument {
 export type LegalDocumentId = 'terms' | 'disclaimer'
 
 /** Bump on a material change. Triggers the in-hub re-consent notice. */
-export const TERMS_VERSION = '2026-07-29'
+export const TERMS_VERSION = '2026-08-03'
 export const DISCLAIMER_VERSION = '2026-07-29'
+
+/**
+ * The first terms version that discloses the cancel settlement — the balance a
+ * member settles on goods already sent them when they cancel early.
+ *
+ * This is a GATE, not a note. A member who agreed to the previous terms was told
+ * they could cancel "with no fee", and we do not get to charge them a balance
+ * they were never shown; they cancel free until they accept these terms. Consent
+ * records are keyed by version (see `lib/legal/consent.ts`), so this is
+ * enforceable per member rather than by deploy date.
+ */
+export const SETTLEMENT_TERMS_VERSION = '2026-08-03'
 
 // ─── Shared sentences (one definition, used everywhere) ───────────────────────
 
@@ -106,6 +118,21 @@ export const CHECKOUT_DISCLAIMER_POINTS: string[] = [
   'Stop taking a product and get medical advice if you have any kind of reaction to it.',
 ]
 
+/**
+ * The billing points shown at checkout, above the consent box.
+ *
+ * The settlement is disclosed HERE, before anyone pays — not only in the terms.
+ * A balance that only appears at the moment someone tries to leave is the kind
+ * of surprise that gets a term struck down however sound the arithmetic is; one
+ * shown next to the flat-monthly explanation, which is the reason it exists,
+ * reads as what it is.
+ */
+export const CHECKOUT_BILLING_POINTS: string[] = [
+  'You pay one flat amount every month. It is the smoothed average of your plan, so your bill stays the same even in months when a big tub is due.',
+  'No minimum term and no cancellation fee — cancel whenever you like, from your account.',
+  'Because longer-lasting items are spread across the months they last, cancelling early can leave a balance on what has already been sent you. You settle that, and nothing more. It falls to zero as your payments catch up, and you always see the figure before you confirm.',
+]
+
 /** The liability wording, shared by both documents so it can't drift. */
 const LIABILITY_BODY = (entity: typeof LEGAL_ENTITY): string[] => [
   `We do not exclude or limit our liability to you where it would be unlawful to do so. That includes liability for death or personal injury caused by our negligence, for fraud or fraudulent misrepresentation, and for anything else that cannot lawfully be excluded under the Consumer Rights Act 2015 or the Unfair Contract Terms Act 1977.`,
@@ -127,7 +154,7 @@ export function getTermsDocument(
     version: TERMS_VERSION,
     effectiveFrom: '2026-07-29',
     summary:
-      'What you pay, what happens when prices or products change, and how to cancel. Written to be read, not skimmed past.',
+      'What you pay, what happens when prices or products change, and how to cancel — including the balance to settle on anything already sent you. Written to be read, not skimmed past.',
     sections: [
       {
         id: 'about',
@@ -142,6 +169,7 @@ export function getTermsDocument(
         heading: 'Your plan and what you pay',
         body: [
           'Your plan is billed as one flat amount every month. That amount is the smoothed average of everything on your plan — items still arrive on their own schedules (some monthly, some every two or three months), but you pay the same predictable figure each month rather than a different amount every time something ships.',
+          'Because the cost of longer-lasting items is spread this way, an early box can hold more value than you have paid for at that point. That evens out as you go, and there is nothing to think about while you are subscribed — but it is why cancelling early can leave a balance to settle on what has already been sent. See “Cancelling, and settling what we have already sent you”.',
           'If you claimed a first-month discount, it applies to your first payment only. The ongoing monthly price is shown clearly before you pay, and it is the price that continues afterwards.',
           'Your subscribe-and-save discount is fixed for your bundle and carries through anything you add or swap later, so changing your plan never quietly costs you your discount.',
         ],
@@ -154,7 +182,7 @@ export function getTermsDocument(
           noticeDays > 0
             ? `If your monthly price is going up, we will email you at least ${noticeDays} days before the new price takes effect. That email will tell you the current price, the new price, and the date it starts.`
             : 'If your monthly price is going up, we will email you before the new price takes effect, telling you the current price, the new price, and the date it starts.',
-          `You do not have to accept an increase. You can cancel free of charge at any point between that email and the date the new price starts — including during any minimum term. If you cancel in that window, the minimum term does not apply and there is nothing to pay beyond what you have already been billed.`,
+          `You do not have to accept an increase. You can cancel free of charge at any point between that email and the date the new price starts. Cancel in that window and there is nothing to pay beyond what you have already been billed — we waive any balance outstanding on goods already sent you.`,
           'We often absorb supplier increases rather than passing them on, and if our costs fall we may lower your price. We will not raise your price for any reason other than a genuine change in what a product costs us or a change in tax.',
           'Separately from this, your monthly amount changes automatically when YOU change your plan — adding a product, removing one, or changing how much you get through. Those changes are shown to you with the new figure before you confirm them.',
         ],
@@ -176,18 +204,23 @@ export function getTermsDocument(
         heading: 'Deliveries, skips and pauses',
         body: [
           'You choose which day of the month your deliveries land, and you can move a delivery, skip one, or ask for something early from your account.',
-          'Skipping a box does not cost you a payment — the value of the skipped box is credited against your next one, and a skipped month does not count towards any minimum term.',
-          'You can pause your plan for up to three months. Pausing stops billing and deliveries and pushes any remaining minimum term back by the same amount, so pausing never shortens or sidesteps your commitment — but it never extends it in real terms either.',
+          'Skipping a box does not cost you a payment — the value of the skipped box is credited against your next one.',
+          'You can pause your plan for up to three months. Pausing stops billing and deliveries, your plan stays exactly as it is, and there is nothing to settle — it is not a cancellation.',
         ],
       },
       {
         id: 'term',
-        heading: 'Minimum term and cancelling',
+        heading: 'Cancelling, and settling what we have already sent you',
         body: [
-          'If your plan has a minimum term, it is shown clearly before you pay, along with the total you are committing to. Where there is no minimum term, you can cancel any time.',
-          'After any minimum term you can cancel whenever you like from your account, with no fee and no phone call. Your plan runs to the end of the month you have paid for.',
-          'You can always cancel free of charge during a price-increase notice period, even inside a minimum term — see “Prices can change”.',
-          'You also have the statutory right to cancel within 14 days of your first order under the Consumer Contracts Regulations 2013. Return any unopened products and we will refund you; for hygiene reasons we cannot refund opened supplements unless they are faulty.',
+          'There is no minimum term and no cancellation fee. You can cancel whenever you like, from your account, in a couple of taps — we will never ask you to phone us or make you wait out a notice period.',
+          'What you do settle when you cancel is the balance on anything we have already sent you and you have not finished paying for. This is not a charge for leaving; it is the outstanding balance on goods you have received and kept.',
+          'Here is why it can arise. Your monthly amount is a smoothed average, so items that last several months are spread across those months rather than charged in full the month they arrive. That is good for you while you are subscribed — it keeps your bill flat and predictable instead of spiking whenever a big tub is due. But it means a first box can contain more value than a first payment covers.',
+          'A worked example. Your plan is £70 a month: a £30 protein you get every month, and two £60 tubs that each last three months (£20 a month each). Your first box contains all three — £150 of product — and you have paid £70. If you cancel after that first month, you keep everything in the box and settle the £80 difference. Nothing more.',
+          'The balance only ever covers goods already dispatched to you. It goes down every month as your payments catch up with what was sent, and it reaches zero — nothing at all to pay — as soon as they do. It can never be more than the value of what you have actually received, and we never charge you for a box that has not shipped.',
+          'You will see the exact figure, and what it is made up of, before you confirm the cancellation. Your plan then ends and nothing further is billed.',
+          'Some cancellations settle nothing at all. You pay no balance if you cancel during a price-increase notice period (see “Prices can change”), if you are cancelling after we changed your plan ourselves because a product became unavailable, or if your payments have already covered everything sent to you.',
+          'You also have the statutory right to cancel within 14 days of your first order under the Consumer Contracts Regulations 2013. That right comes first: exercise it and you return any unopened products for a refund rather than settling a balance. For hygiene reasons we cannot refund opened supplements unless they are faulty.',
+          'Pausing is not cancelling. You can pause for up to three months with nothing to settle — deliveries and billing simply stop and your plan waits for you.',
         ],
       },
       {

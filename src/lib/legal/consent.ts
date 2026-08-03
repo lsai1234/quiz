@@ -15,6 +15,7 @@ import { createHash, randomUUID } from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import {
+  SETTLEMENT_TERMS_VERSION,
   TERMS_VERSION,
   checkoutDocuments,
   documentText,
@@ -172,6 +173,27 @@ export async function needsReconsent(userId: string, termsVersion = TERMS_VERSIO
   const consents = await listConsents(userId)
   if (consents.length === 0) return true
   return !consents.some((c) => c.documents.some((d) => d.id === 'terms' && d.version === termsVersion))
+}
+
+/**
+ * Whether this member's consent covers the cancel settlement — the balance owed
+ * on goods already sent when they cancel early.
+ *
+ * The gate for ever charging one. A member who accepted the earlier terms was
+ * told they could cancel "with no fee"; charging them a balance they were never
+ * shown would be a term they never agreed to, whatever the maths says. They
+ * cancel free until they accept the version that discloses it.
+ *
+ * Compares versions as ordered strings — the versions are ISO dates, so "later
+ * or equal" is the correct reading and a member who has since accepted a NEWER
+ * set of terms is covered too.
+ */
+export async function consentCoversSettlement(
+  userId: string,
+  since = SETTLEMENT_TERMS_VERSION,
+): Promise<boolean> {
+  const consents = await listConsents(userId)
+  return consents.some((c) => c.documents.some((d) => d.id === 'terms' && d.version >= since))
 }
 
 /**

@@ -29,11 +29,13 @@ function subCompletedEvent(userId: string, subId: string): Stripe.Event {
   } as unknown as Stripe.Event
 }
 
-function invoicePaidEvent(subId: string, invoiceId: string): Stripe.Event {
+function invoicePaidEvent(subId: string, invoiceId: string, billingReason = 'subscription_cycle'): Stripe.Event {
   return {
     id: 'evt_inv',
     type: 'invoice.paid',
-    data: { object: { id: invoiceId, subscription: subId } as unknown as Stripe.Invoice },
+    data: {
+      object: { id: invoiceId, subscription: subId, billing_reason: billingReason } as unknown as Stripe.Invoice,
+    },
   } as unknown as Stripe.Event
 }
 
@@ -65,6 +67,68 @@ describe('subscription webhook flow', () => {
     await handleStripeEvent(invoicePaidEvent(subId, 'in_2'))
     const subOrders = (await listOrders({ channel: 'subscription' })).filter((o) => o.id === 'ord_inv_in_2')
     expect(subOrders).toHaveLength(1)
+  })
+
+  // ── The subscription clock ──────────────────────────────────────────────────
+  // Stripe's invoice stream is what tells us how many cycles a member has
+  // actually paid for, and the cancel settlement is measured against exactly
+  // that. Every assertion below is really about someone's bill.
+
+  it('advances the clock on a renewal invoice', async () => {
+    const user = await makeUserWithSub('clock1@example.com')
+    const subId = 'sub_clock_1'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    const before = (await getSubscription(user.id))!.monthsActive
+
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_1', 'subscription_cycle'))
+
+    const after = (await getSubscription(user.id))!
+    expect(after.monthsActive).toBe(before + 1)
+    // Lines are re-derived, not left behind.
+    const monthly = after.lines.find((l) => l.deliveryIntervalMonths === 1)
+    if (monthly) expect(monthly.deliveriesMade).toBeGreaterThan(0)
+  })
+
+  it('does NOT advance the clock on the first invoice', async () => {
+    // `subscription_create` is the month already accounted for by monthsActive: 0
+    // plus the box that ships at signup. Counting it here would credit the member
+    // with paying for their first month twice, and undercharge the settlement.
+    const user = await makeUserWithSub('clock2@example.com')
+    const subId = 'sub_clock_2'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    const before = (await getSubscription(user.id))!.monthsActive
+
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_2', 'subscription_create'))
+
+    expect((await getSubscription(user.id))!.monthsActive).toBe(before)
+  })
+
+  it('does not advance the clock twice for a redelivered invoice', async () => {
+    // Stripe redelivers. A second advance would silently shrink what the member
+    // owes on cancellation, so this is a money assertion, not a tidiness one.
+    const user = await makeUserWithSub('clock3@example.com')
+    const subId = 'sub_clock_3'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    const before = (await getSubscription(user.id))!.monthsActive
+
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_3'))
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_3'))
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_3'))
+
+    expect((await getSubscription(user.id))!.monthsActive).toBe(before + 1)
+  })
+
+  it('advances once per distinct invoice', async () => {
+    const user = await makeUserWithSub('clock4@example.com')
+    const subId = 'sub_clock_4'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    const before = (await getSubscription(user.id))!.monthsActive
+
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_4a'))
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_4b'))
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_clock_4c'))
+
+    expect((await getSubscription(user.id))!.monthsActive).toBe(before + 3)
   })
 
   it('cancels the member subscription on customer.subscription.deleted', async () => {

@@ -1,4 +1,5 @@
 import {
+  consentCoversSettlement,
   consentErrorMessage,
   hashDocument,
   latestConsent,
@@ -10,6 +11,7 @@ import {
 } from '@/lib/legal/consent'
 import {
   DISCLAIMER_VERSION,
+  SETTLEMENT_TERMS_VERSION,
   TERMS_VERSION,
   getTermsDocument,
 } from '@/lib/legal/content'
@@ -147,6 +149,65 @@ describe('re-consent', () => {
 
     setPricingOverrides({ priceChangeNoticeDays: 60 })
     expect(await needsReconsent(user.id)).toBe(false)
+  })
+})
+
+describe('the settlement consent gate', () => {
+  // Charging a member a balance they were never shown is a term they never
+  // agreed to, whatever the arithmetic says. The previous terms promised
+  // cancellation "with no fee", so anyone still on them cancels free.
+
+  it('is closed for someone who has never consented', async () => {
+    const user = await createUser({ email: 'settle-1@example.com' })
+    expect(await consentCoversSettlement(user.id)).toBe(false)
+  })
+
+  it('is closed for someone who only accepted the pre-settlement terms', async () => {
+    const user = await createUser({ email: 'settle-2@example.com' })
+    await recordConsent({
+      userId: user.id,
+      context: 'checkout',
+      documents: [{ id: 'terms', version: '2026-07-29', hash: 'x' }],
+    })
+    expect(await consentCoversSettlement(user.id)).toBe(false)
+  })
+
+  it('opens once they accept the terms that disclose it', async () => {
+    const user = await createUser({ email: 'settle-3@example.com' })
+    const result = validateConsent(good)
+    if (!result.ok) throw new Error('expected valid consent')
+    await recordConsent({ userId: user.id, context: 'checkout', documents: result.documents })
+
+    expect(await consentCoversSettlement(user.id)).toBe(true)
+  })
+
+  it('stays open for someone who has since accepted even newer terms', async () => {
+    const user = await createUser({ email: 'settle-4@example.com' })
+    await recordConsent({
+      userId: user.id,
+      context: 're-consent',
+      documents: [{ id: 'terms', version: '2027-03-01', hash: 'x' }],
+    })
+    expect(await consentCoversSettlement(user.id)).toBe(true)
+  })
+
+  it('is satisfied by any accepted version at or after the disclosure, not just the latest', async () => {
+    // Someone who consented to the settlement terms and then let a later,
+    // unrelated bump go by has still agreed to the settlement.
+    const user = await createUser({ email: 'settle-5@example.com' })
+    await recordConsent({
+      userId: user.id,
+      context: 'checkout',
+      documents: [{ id: 'terms', version: SETTLEMENT_TERMS_VERSION, hash: 'x' }],
+    })
+    expect(await consentCoversSettlement(user.id, '2099-01-01')).toBe(false)
+    expect(await consentCoversSettlement(user.id)).toBe(true)
+  })
+
+  it('the current terms are at or past the settlement disclosure', () => {
+    // A guard against bumping TERMS_VERSION backwards and quietly closing the
+    // gate on every member who consented since.
+    expect(TERMS_VERSION >= SETTLEMENT_TERMS_VERSION).toBe(true)
   })
 })
 

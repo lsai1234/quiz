@@ -1,5 +1,6 @@
 import {
   ALLERGEN_CHECK_SENTENCE,
+  CHECKOUT_BILLING_POINTS,
   CHECKOUT_DISCLAIMER_POINTS,
   NOT_MEDICAL_ADVICE_SENTENCE,
   READ_THE_LABEL_SENTENCE,
@@ -40,10 +41,10 @@ describe('terms cover the promises the app makes', () => {
     expect(prose).toContain('we will email you before the new price takes effect')
   })
 
-  it('grants a free exit during the notice window, including inside a minimum term', () => {
+  it('grants a free exit during the notice window, waiving any outstanding balance', () => {
     const prose = proseOf(terms())
     expect(prose).toContain('cancel free of charge')
-    expect(prose).toContain('including during any minimum term')
+    expect(prose).toContain('we waive any balance outstanding on goods already sent you')
   })
 
   it('describes both unavailability options and the never-costs-you-more promise', () => {
@@ -55,11 +56,64 @@ describe('terms cover the promises the app makes', () => {
     expect(prose).toContain('never substitute a product that conflicts with the dietary requirements')
   })
 
-  it('covers the minimum term, statutory cancellation and skips/pauses', () => {
+  it('covers statutory cancellation and skips/pauses', () => {
     const prose = proseOf(terms())
     expect(prose).toContain('consumer contracts regulations 2013')
-    expect(prose).toContain('minimum term')
     expect(prose).toContain('skipping a box does not cost you a payment')
+  })
+
+  // ── The cancel settlement ───────────────────────────────────────────────────
+  // Charging a balance on cancellation is only defensible because it is a debt
+  // for goods received, disclosed before purchase — not a fee for leaving. These
+  // assertions are the wording that makes that true, so they guard a legal
+  // position, not a phrasing preference.
+
+  it('promises cancellation with no minimum term and no fee', () => {
+    const prose = proseOf(terms())
+    expect(prose).toContain('no minimum term and no cancellation fee')
+    expect(prose).toContain('cancel whenever you like')
+  })
+
+  it('discloses the settlement as a balance on goods received, never as a fee for leaving', () => {
+    const prose = proseOf(terms())
+    expect(prose).toContain('not a charge for leaving')
+    expect(prose).toContain('outstanding balance on goods you have received')
+    // Capped by what was actually sent, and falls to zero — both are the
+    // substance of the promise, not decoration.
+    expect(prose).toContain('only ever covers goods already dispatched')
+    expect(prose).toContain('reaches zero')
+    expect(prose).toContain('never charge you for a box that has not shipped')
+  })
+
+  it('explains WHY a balance can arise, and shows the arithmetic', () => {
+    const prose = proseOf(terms())
+    expect(prose).toContain('smoothed average')
+    // A worked example, because "smoothed average" means nothing to most people.
+    expect(prose).toContain('£150 of product')
+    expect(prose).toContain('£80')
+  })
+
+  it('shows the figure before the member confirms', () => {
+    expect(proseOf(terms())).toContain('before you confirm the cancellation')
+  })
+
+  it('lists the cases that settle nothing', () => {
+    const prose = proseOf(terms())
+    expect(prose).toContain('price-increase notice period')
+    expect(prose).toContain('after we changed your plan ourselves')
+    expect(prose).toContain('pausing is not cancelling')
+  })
+
+  it('puts the statutory 14-day right ahead of the settlement', () => {
+    const prose = proseOf(terms())
+    expect(prose).toContain('that right comes first')
+  })
+
+  it('discloses the settlement at checkout too, not only in the terms', () => {
+    const points = CHECKOUT_BILLING_POINTS.join(' ').toLowerCase()
+    expect(points).toContain('no minimum term and no cancellation fee')
+    expect(points).toContain('balance on what has already been sent')
+    expect(points).toContain('before you confirm')
   })
 
   it('carries the health and allergen position through to the terms themselves', () => {

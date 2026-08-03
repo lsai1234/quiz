@@ -1,6 +1,6 @@
 'use client'
 
-import { CHECKOUT_DISCLAIMER_POINTS } from '@/lib/legal/content'
+import { CHECKOUT_BILLING_POINTS, CHECKOUT_DISCLAIMER_POINTS } from '@/lib/legal/content'
 
 const ACCENT = '#00D4FF'
 
@@ -22,29 +22,37 @@ export function CheckoutConsent({
   onChange: (accepted: boolean) => void
   error?: string | null
 }) {
+  const Points = ({ label, points }: { label: string; points: string[] }) => (
+    <div
+      className="rounded-2xl p-4 mb-3"
+      style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+    >
+      <p
+        className="text-[10px] font-bold tracking-widest uppercase mb-2"
+        style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
+      >
+        {label}
+      </p>
+      <ul className="space-y-2">
+        {points.map((point, i) => (
+          <li key={i} className="text-[11px] leading-relaxed text-[var(--color-text-2)] flex gap-2">
+            <span aria-hidden="true" style={{ color: ACCENT }}>
+              •
+            </span>
+            <span>{point}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+
   return (
     <div className="mt-5">
-      <div
-        className="rounded-2xl p-4 mb-3"
-        style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
-      >
-        <p
-          className="text-[10px] font-bold tracking-widest uppercase mb-2"
-          style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
-        >
-          Before you subscribe
-        </p>
-        <ul className="space-y-2">
-          {CHECKOUT_DISCLAIMER_POINTS.map((point, i) => (
-            <li key={i} className="text-[11px] leading-relaxed text-[var(--color-text-2)] flex gap-2">
-              <span aria-hidden="true" style={{ color: ACCENT }}>
-                •
-              </span>
-              <span>{point}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+      {/* Billing first: how the flat monthly works, and the balance that can be
+          left if they cancel early. Disclosed before payment, not only in the
+          terms — see CHECKOUT_BILLING_POINTS. */}
+      <Points label="How your billing works" points={CHECKOUT_BILLING_POINTS} />
+      <Points label="Before you subscribe" points={CHECKOUT_DISCLAIMER_POINTS} />
 
       <label className="flex gap-3 items-start cursor-pointer px-1">
         <input
