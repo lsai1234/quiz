@@ -2,6 +2,7 @@ import { createMockSupplier } from '@/lib/supplier/powerbody/mock'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
 import { addImportedProducts } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { anchoredListPrice } from '@/lib/pricing/anchor'
 
 // Proves the Phase 1 "done when": a scanned PowerBody product, once added,
 // shows up in the catalogue the shop + quiz read (via the imported-products
@@ -20,7 +21,7 @@ describe('adding a PowerBody product surfaces it in the catalogue', () => {
     const after = await getResolvedCatalogue()
     const added = after.products.find((p) => p.id === mapped.id)
     expect(added).toBeDefined()
-    expect(added?.basePrice).toBe(sp.rrp)
+    expect(added?.basePrice).toBe(anchoredListPrice(sp.rrp))
     expect(added?.cost).toBe(sp.wholesalePrice)
     expect(added?.variants[0].sku).toBe(sp.sku)
   })

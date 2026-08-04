@@ -1,8 +1,12 @@
+import { PRICING_CONFIG } from '../pricing'
 import { validateCheckout, validationErrorMessage, buildCartPermalink, gidToNumeric, buildSubscriptionCheckout } from '../checkout'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
+
+/** £30/month less the performance subscribe-&-save rate, read from config. */
+const MONTHLY = Math.round(30 * (1 - PRICING_CONFIG.levelSubscriptionDiscount.performance) * 100) / 100
 
 const makeVariant = (overrides: Partial<CatalogueProduct['variants'][number]> = {}): CatalogueProduct['variants'][number] => ({
   id: 'var-1',
@@ -221,14 +225,18 @@ describe('buildSubscriptionCheckout', () => {
     expect(lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/111')
     expect(lines[0].quantity).toBe(1)                 // daily → 1 unit / month
     expect(lines[0].deliveryIntervalMonths).toBe(1)
-    expect(lines[0].pricePerDelivery).toBe(Math.round(30 * 0.8 * 100) / 100)  // 24.00 (performance = 20% off)
+    // Read the rate from config — the ladder is a commercial lever that gets
+    // tuned, and hard-coding it makes every tuning decision a test failure.
+    expect(lines[0].pricePerDelivery).toBe(
+      Math.round(30 * (1 - PRICING_CONFIG.levelSubscriptionDiscount.performance) * 100) / 100,
+    )
     expect(lines[0].attributes).toEqual(
       expect.arrayContaining([{ key: 'plan', value: 'subscription' }]),
     )
-    expect(flatMonthly).toBe(24)
+    expect(flatMonthly).toBe(MONTHLY)
     // Scratch-to-reveal: no intro discount is applied until the member reveals one.
     expect(introDiscountPct).toBe(0)
-    expect(firstMonth).toBe(24)
+    expect(firstMonth).toBe(MONTHLY)
     // No minimum commitment — cancel any time.
     expect(minMonths).toBe(1)
     expect(minTermTotal).toBe(firstMonth)
@@ -241,9 +249,9 @@ describe('buildSubscriptionCheckout', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const { flatMonthly, firstMonth, introDiscountPct } = result.checkout
-    expect(flatMonthly).toBe(24)
+    expect(flatMonthly).toBe(MONTHLY)
     expect(introDiscountPct).toBe(25)
-    expect(firstMonth).toBe(Math.round(24 * 0.75 * 100) / 100)  // 18.00
+    expect(firstMonth).toBe(Math.round(MONTHLY * 0.75 * 100) / 100)  // 25% off the first month
   })
 
   it('ignores an invalid (non-outcome) revealed discount', () => {
@@ -254,7 +262,7 @@ describe('buildSubscriptionCheckout', () => {
     if (!result.ok) return
     // 0.9 isn't one of the configured scratch outcomes → treated as no discount.
     expect(result.checkout.introDiscountPct).toBe(0)
-    expect(result.checkout.firstMonth).toBe(24)
+    expect(result.checkout.firstMonth).toBe(MONTHLY)
   })
 
   it('rejects when Shopify IDs are required but missing (mock variant)', () => {

@@ -11,6 +11,7 @@
 import type { AsNeededTrigger, CatalogueProduct, CatalogueVariant, ConsumptionCadence, DietaryTag, PourAnchor, StackSlot, SwapGroup } from '@/lib/catalogue/types'
 import type { Goal } from '@/lib/types'
 import type { SupplierProduct } from './types'
+import { anchoredListPrice } from '@/lib/pricing/anchor'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -165,8 +166,13 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     formats,
     variants,
     defaultVariantId: variants.find((v) => v.available)?.id ?? variants[0]?.id ?? null,
-    basePrice: sp.rrp,
-    compareAtPrice: null,
+    // The list price is ANCHORED to the supplier's RRP and set a little above
+    // it, not taken raw — almost everyone buys a bundle, so this is the number
+    // the discount is measured against and the bundle price is what they pay.
+    // See `lib/pricing/anchor.ts`.
+    basePrice: anchoredListPrice(sp.rrp),
+    // …and the RRP itself becomes the was-price, which is exactly what it is.
+    compareAtPrice: sp.rrp,
     cost: sp.wholesalePrice,
     // Fulfilment economics. PowerBody charge delivery by weight band and their
     // `createOrder` call needs a weight, so an added product without one can be

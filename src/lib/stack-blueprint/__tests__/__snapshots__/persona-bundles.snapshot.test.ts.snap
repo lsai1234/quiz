@@ -31,7 +31,7 @@ exports[`persona → bundle regression drinks-perf-muscle-energy 1`] = `
   ],
   "stackName": "Strength Engine Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 77.98,
+  "subscriptionTotal": 82.85,
 }
 `;
 
@@ -72,7 +72,7 @@ exports[`persona → bundle regression drinks-well-sleep-immune-gut 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 4,
-  "subscriptionTotal": 79.43,
+  "subscriptionTotal": 84.4,
 }
 `;
 
@@ -107,7 +107,7 @@ exports[`persona → bundle regression perf-bulking-balanced 1`] = `
   ],
   "stackName": "Strength Engine Stack",
   "subscriptionItemCount": 4,
-  "subscriptionTotal": 55.71,
+  "subscriptionTotal": 59.19,
 }
 `;
 
@@ -130,7 +130,7 @@ exports[`persona → bundle regression perf-cutting-energy-clean 1`] = `
   ],
   "stackName": "Fat Loss Protocol",
   "subscriptionItemCount": 2,
-  "subscriptionTotal": 27.19,
+  "subscriptionTotal": 28.79,
 }
 `;
 
@@ -177,7 +177,7 @@ exports[`persona → bundle regression perf-muscle-hypertrophy-complete 1`] = `
   ],
   "stackName": "Performance Core Stack",
   "subscriptionItemCount": 6,
-  "subscriptionTotal": 82.21,
+  "subscriptionTotal": 87.69,
 }
 `;
 
@@ -194,7 +194,7 @@ exports[`persona → bundle regression perf-muscle-under30 1`] = `
   ],
   "stackName": "Strength Engine Stack",
   "subscriptionItemCount": 1,
-  "subscriptionTotal": 50.98,
+  "subscriptionTotal": 53.98,
 }
 `;
 
@@ -229,7 +229,7 @@ exports[`persona → bundle regression perf-muscle-vegan-noncaffeine 1`] = `
   ],
   "stackName": "Strength Engine Stack",
   "subscriptionItemCount": 4,
-  "subscriptionTotal": 52.11,
+  "subscriptionTotal": 55.36,
 }
 `;
 
@@ -282,7 +282,7 @@ exports[`persona → bundle regression perf-performance-hydration-football 1`] =
   ],
   "stackName": "Endurance Edge Stack",
   "subscriptionItemCount": 7,
-  "subscriptionTotal": 109.94,
+  "subscriptionTotal": 117.27,
 }
 `;
 
@@ -311,7 +311,7 @@ exports[`persona → bundle regression perf-recovery-45-joints 1`] = `
   ],
   "stackName": "Foundation Health Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 50.38,
+  "subscriptionTotal": 53.53,
 }
 `;
 
@@ -358,7 +358,7 @@ exports[`persona → bundle regression valuefirst-perf-muscle-energy 1`] = `
   ],
   "stackName": "Performance Core Stack",
   "subscriptionItemCount": 6,
-  "subscriptionTotal": 97.28,
+  "subscriptionTotal": 103.36,
 }
 `;
 
@@ -405,7 +405,7 @@ exports[`persona → bundle regression valuefirst-well-sleep-stress-immune 1`] =
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 6,
-  "subscriptionTotal": 67.56,
+  "subscriptionTotal": 71.78,
 }
 `;
 
@@ -428,7 +428,7 @@ exports[`persona → bundle regression well-health-under30 1`] = `
   ],
   "stackName": "Foundation Health Stack",
   "subscriptionItemCount": 2,
-  "subscriptionTotal": 9.77,
+  "subscriptionTotal": 10.35,
 }
 `;
 
@@ -457,7 +457,7 @@ exports[`persona → bundle regression well-immune-focus-poordiet 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 24.21,
+  "subscriptionTotal": 25.64,
 }
 `;
 
@@ -510,7 +510,7 @@ exports[`persona → bundle regression well-menopause-gut-female45 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 7,
-  "subscriptionTotal": 91.82,
+  "subscriptionTotal": 97.95,
 }
 `;
 
@@ -539,7 +539,7 @@ exports[`persona → bundle regression well-skin-veggie 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 24.21,
+  "subscriptionTotal": 25.64,
 }
 `;
 
@@ -568,6 +568,6 @@ exports[`persona → bundle regression well-sleep-stress-female 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 33.58,
+  "subscriptionTotal": 35.68,
 }
 `;

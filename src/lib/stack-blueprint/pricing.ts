@@ -61,9 +61,9 @@ export const PRICING_CONFIG = {
    * subscriptionTier. Falls back to `subscriptionDiscount` if a level is unset.
    */
   levelSubscriptionDiscount: {
-    essentials: 0.15,
-    performance: 0.2,
-    complete: 0.25,
+    essentials: 0.1,
+    performance: 0.15,
+    complete: 0.2,
   } as Record<StackLevel, number>,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
@@ -314,6 +314,14 @@ export const PRICING_CONFIG = {
     attributedShare: 0.3,
     /** Months an average subscriber stays. Drives lifetime contribution. */
     averageRetentionMonths: 6,
+    /**
+     * Products in a typical order. The quiz builds a stack, so an order is
+     * several products in ONE parcel — and since PowerBody charge per parcel,
+     * that shared delivery is the difference between a product working on
+     * subscription and not. Pricing a product as though it ships alone is the
+     * worst case, not the normal one.
+     */
+    itemsPerOrder: 3,
     /** How orders spread across the bundle sizes. Normalised, so these are
      *  relative weights rather than percentages that must sum to 1. */
     levelMix: { essentials: 3, performance: 5, complete: 2 } as Record<StackLevel, number>,
@@ -332,6 +340,45 @@ export const PRICING_CONFIG = {
     /** The average order value PowerBody suggest aiming for (£). A benchmark,
      *  not a rule — shown next to ours so we can see how we compare. */
     targetOrderValue: 35,
+  },
+
+  /**
+   * How we set the LIST price — the number shown next to a bundle.
+   *
+   * WHY THIS EXISTS, AND WHY COST-PLUS ISN'T ENOUGH
+   * ───────────────────────────────────────────────
+   * We resell branded goods. A customer knows what Gold Standard Whey costs and
+   * can check in ten seconds. Working a price up from cost — which is what the
+   * Good-price model below does — produced prices roughly DOUBLE PowerBody's own
+   * RRP, and an unsellable price loses money just as surely as a thin one.
+   *
+   * So the list price is ANCHORED to the supplier's RRP instead, and set a little
+   * above it. That premium is deliberate: almost everyone arrives through the
+   * quiz and buys a bundle, so the individual price is the number the discount is
+   * measured against. A modest premium makes the bundle a visible, checkable
+   * saving; a large one just gets us caught.
+   *
+   * Cost-plus doesn't go away — it becomes the FLOOR. If the anchored price
+   * can't cover its costs, the hub says so rather than selling at a loss.
+   */
+  anchor: {
+    /**
+     * The saving against RRP a member on the middle bundle should end up with
+     * (0–1). **This is the only lever** — the premium over RRP is derived from
+     * it, so the two can never contradict.
+     *
+     * That matters more than it sounds. Setting a premium directly, alongside a
+     * separate target, lets you pick a pair that don't work: a 30% premium with
+     * a 15% bundle discount lands the member ABOVE RRP, turning the "bargain"
+     * into a markup nobody would fall for. Deriving the premium makes that
+     * impossible — see `anchoredListPrice`.
+     */
+    targetBargainVsRrpPct: 0.08,
+    /**
+     * Round list prices to a .99 ending. Retail convention, and it stops the
+     * anchor looking like the output of a spreadsheet — which it is.
+     */
+    roundTo99: true,
   },
 
   /**
@@ -466,7 +513,7 @@ export type PricingConfig = typeof PRICING_CONFIG
  */
 type NestedKeys =
   | 'introOffer' | 'delivery' | 'goodPricing' | 'vat'
-  | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix'
+  | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'anchor'
 
 export type PricingOverrides = Partial<Omit<PricingConfig, NestedKeys>> & {
   [K in NestedKeys]?: Partial<PricingConfig[K]>
@@ -493,6 +540,7 @@ function recomputeConfig() {
     returns: { ...PRICING_CONFIG.returns, ...(_overrides.returns ?? {}) },
     supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(_overrides.supplierAccount ?? {}) },
     partners: { ...PRICING_CONFIG.partners, ...(_overrides.partners ?? {}) },
+    anchor: { ...PRICING_CONFIG.anchor, ...(_overrides.anchor ?? {}) },
     orderMix: {
       ...PRICING_CONFIG.orderMix,
       ...(_overrides.orderMix ?? {}),

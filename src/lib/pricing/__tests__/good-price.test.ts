@@ -226,7 +226,7 @@ describe('the good price', () => {
   const c = cfg()
 
   it('prices against the deepest discount any bundle can reach', () => {
-    expect(worstCaseSubscriptionRate(c)).toBeCloseTo(0.25, 4)
+    expect(worstCaseSubscriptionRate(c)).toBeCloseTo(PRICING_CONFIG.levelSubscriptionDiscount.complete, 4)
     expect(worstCaseSubscriptionRate(cfg({ subscriptionTiers: [{ id: 't', label: 'Big', minSubtotal: 100, discountPct: 0.32 }] }))).toBeCloseTo(0.32, 4)
   })
 

@@ -132,23 +132,63 @@ export function selectService(
   return eligibleServices(orderValue, zone, config)[0] ?? null
 }
 
-/** What we'd have to add to this order, in wholesale terms, to ship free. */
+/** The next band down, and what reaching it is worth. */
+export interface NextBand {
+  /** Wholesale value at which the cheaper band starts (£). */
+  threshold: number
+  /** How much more stock this parcel needs to get there (£ wholesale). */
+  shortfall: number
+  /** What the supplier charges in that band, ex VAT (£). */
+  price: number
+  /** What reaching it saves on this parcel, after VAT recovery (£). */
+  saving: number
+}
+
+/**
+ * What we'd have to add to this order, in wholesale terms, to ship free — and,
+ * more usefully, to reach the next band down.
+ *
+ * The free line is the headline but rarely the actionable one: £99 of wholesale
+ * is roughly a £190 basket, which almost no order reaches. The step from £6.50
+ * to £5.50 at £50 of wholesale IS reachable — often one more product — and that
+ * is the number worth putting in front of someone building a bundle.
+ */
 export function toFreeShipping(
   orderValue: number,
   zone: DeliveryZone = getPricingConfig().delivery.defaultZone,
   config: PricingConfig = getPricingConfig(),
-): { threshold: number | null; shortfall: number | null; alreadyFree: boolean } {
+): { threshold: number | null; shortfall: number | null; alreadyFree: boolean; next: NextBand | null } {
   const free = config.delivery.services
     .filter((s) => s.zone === zone && s.price === 0)
     .sort((a, b) => (a.maxOrderValue ?? Infinity) - (b.maxOrderValue ?? Infinity))[0]
-  if (!free) return { threshold: null, shortfall: null, alreadyFree: false }
+
+  // The bands cheaper than the one this order currently falls in, nearest first.
+  const current = selectService(orderValue, zone, config)
+  const next: NextBand | null = (() => {
+    if (!current) return null
+    const cheaper = config.delivery.services
+      .filter((s) => s.zone === zone && s.price < current.price && (s.maxOrderValue ?? Infinity) > orderValue)
+      .sort((a, b) => (a.maxOrderValue ?? Infinity) - (b.maxOrderValue ?? Infinity))[0]
+    if (!cheaper) return null
+    // A band with ceiling C starts just above the previous ceiling — which, for
+    // the band we are currently in, is our own ceiling.
+    const threshold = current.maxOrderValue ?? 0
+    return {
+      threshold,
+      shortfall: round(Math.max(0, threshold - orderValue)),
+      price: round(cheaper.price),
+      saving: round(costFromSupplierPrice(current.price, config) - costFromSupplierPrice(cheaper.price, config)),
+    }
+  })()
+
+  if (!free) return { threshold: null, shortfall: null, alreadyFree: false, next }
   // The free band starts where the last paid band ends.
   const paid = config.delivery.services
     .filter((s) => s.zone === zone && s.price > 0 && s.maxOrderValue != null)
     .sort((a, b) => (b.maxOrderValue ?? 0) - (a.maxOrderValue ?? 0))[0]
   const threshold = paid?.maxOrderValue ?? 0
   const alreadyFree = orderValue > threshold
-  return { threshold, shortfall: alreadyFree ? null : round(threshold - orderValue), alreadyFree }
+  return { threshold, shortfall: alreadyFree ? null : round(threshold - orderValue), alreadyFree, next }
 }
 
 export function customerDeliveryCharge(orderValue: number, config: PricingConfig = getPricingConfig()): number {

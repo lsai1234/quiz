@@ -91,6 +91,11 @@ export interface GoodPriceInput {
   shipEveryMonths?: number
   /** An existing shelf price to grade against the model (£ inc VAT). */
   listPrice?: number
+  /**
+   * Products sharing the parcel this one ships in. Default 1 — priced as if it
+   * ships alone, which is the worst case and not how the quiz sells.
+   */
+  sharedParcelItems?: number
 }
 
 /** How a member could be paying for this product. */
@@ -169,7 +174,15 @@ export function landedMonthlyCost(input: GoodPriceInput, config: PricingConfig =
   // Reuse the real stack for one shipment so the cost basis can never drift
   // from what the waterfall shows.
   const shipment = unitEconomics(
-    { shelfPrice: 0, supplierCost: input.assetPrice, grams: input.grams, vatRate: input.vatRate, quantity: units, chargeDelivery: false },
+    {
+      shelfPrice: 0,
+      supplierCost: input.assetPrice,
+      grams: input.grams,
+      vatRate: input.vatRate,
+      quantity: units,
+      chargeDelivery: false,
+      sharedParcelItems: input.sharedParcelItems,
+    },
     config,
   )
   return {
@@ -199,6 +212,7 @@ export function goodPriceFor(input: GoodPriceInput, config: PricingConfig = getP
     // The worst case is that we carry the postage, which is also what happens
     // on any subscription clearing the free-delivery threshold.
     chargeDelivery: !config.goodPricing.assumeFreeDelivery,
+    sharedParcelItems: input.sharedParcelItems,
   }
 
   // Solve on the DISCOUNTED price the member actually pays, then gross it back

@@ -73,6 +73,14 @@ const makeBlueprint = (slots: Partial<StackBlueprint['slots'][number]>[] = []): 
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
+/**
+ * The subscribe-&-save factor these expectations are built on, read from config
+ * rather than hard-coded. The ladder is a commercial lever that will be tuned;
+ * these tests are about the ARITHMETIC being right, not about any particular
+ * rate, and hard-coding one turned every tuning decision into a test failure.
+ */
+const SUB = 1 - PRICING_CONFIG.levelSubscriptionDiscount.performance
+
 describe('calculatePricing', () => {
   it('uses basePrice when no variant selected and no available variant', () => {
     const product = makeProduct({ variants: [], basePrice: 25 })
@@ -151,7 +159,7 @@ describe('calculatePricing', () => {
     const p = calculatePricing(blueprint, [longProduct, monthly])
     expect(p.oneOffTotal).toBe(20)                          // one-off uses the 500g tub
     expect(p.subscriptionItemsOneOffTotal).toBe(9)          // subscription uses the monthly refill
-    expect(p.subscriptionTotal).toBe(Math.round(9 * 0.8 * 100) / 100)
+    expect(p.subscriptionTotal).toBe(Math.round(9 * SUB * 100) / 100)
     expect(p.subscriptionItemCount).toBe(1)
     expect(p.subscriptionSwappedCount).toBe(1)
     expect(p.excludedFromSubscriptionCount).toBe(0)
@@ -178,7 +186,7 @@ describe('calculatePricing', () => {
     // Both slots map to the same monthly product → billed once.
     expect(p.subscriptionItemCount).toBe(1)
     expect(p.subscriptionItemsOneOffTotal).toBe(8)
-    expect(p.subscriptionTotal).toBe(Math.round(8 * 0.8 * 100) / 100)
+    expect(p.subscriptionTotal).toBe(Math.round(8 * SUB * 100) / 100)
     expect(p.subscriptionSwappedCount).toBe(2)
   })
 
@@ -195,7 +203,7 @@ describe('calculatePricing', () => {
     expect(p.rrpTotal).toBe(60)   // 40 + 20 (no compare for B)
     expect(p.bundleSaving).toBe(15)
     // Only prodA qualifies for the monthly plan; prodB (ineligible) is excluded.
-    const subA = Math.round(30 * 0.8 * 100) / 100
+    const subA = Math.round(30 * SUB * 100) / 100
     expect(p.subscriptionTotal).toBe(subA)
     expect(p.subscriptionItemsOneOffTotal).toBe(30)
     expect(p.subscriptionItemCount).toBe(1)
@@ -289,7 +297,7 @@ describe('consumption protocol & monthly quantities', () => {
     const [line] = buildSubscriptionPlan(bp, [daily], answersWith('1-2x'))
     expect(line.cadence).toBe('daily')
     expect(line.shipEveryMonths).toBe(1)
-    expect(line.monthlyPrice).toBe(Math.round(20 * 0.8 * 100) / 100)
+    expect(line.monthlyPrice).toBe(Math.round(20 * SUB * 100) / 100)
   })
 
   it('scales a per-workout product to training frequency', () => {
@@ -302,12 +310,12 @@ describe('consumption protocol & monthly quantities', () => {
     expect(light.cadence).toBe('per-workout')
     expect(light.occasionsPerMonth).toBe(15)
     expect(light.shipEveryMonths).toBe(2)
-    expect(light.monthlyPrice).toBe(Math.round((30 / 2) * 0.8 * 100) / 100)
+    expect(light.monthlyPrice).toBe(Math.round((30 / 2) * SUB * 100) / 100)
 
     // Daily training → 30/month → ships every month at full quantity
     const [heavy] = buildSubscriptionPlan(bp, [pre], answersWith('daily'))
     expect(heavy.shipEveryMonths).toBe(1)
-    expect(heavy.monthlyPrice).toBe(Math.round(30 * 0.8 * 100) / 100)
+    expect(heavy.monthlyPrice).toBe(Math.round(30 * SUB * 100) / 100)
 
     // The quantity flows through to the headline subscription total
     expect(calculatePricing(bp, [pre], answersWith('3-4x')).subscriptionTotal).toBe(light.monthlyPrice)
@@ -322,8 +330,8 @@ describe('consumption protocol & monthly quantities', () => {
     expect(line.cadence).toBe('daily')
     expect(line.shipEveryMonths).toBe(3)      // 100 servings ÷ 30/mo ≈ 3.3 → 3
     expect(line.unitsPerShipment).toBe(1)
-    expect(line.pricePerDelivery).toBe(Math.round(19.99 * 0.8 * 100) / 100)         // per delivery
-    expect(line.monthlyPrice).toBe(Math.round((19.99 / 3) * 0.8 * 100) / 100)       // / mo
+    expect(line.pricePerDelivery).toBe(Math.round(19.99 * SUB * 100) / 100)         // per delivery
+    expect(line.monthlyPrice).toBe(Math.round((19.99 / 3) * SUB * 100) / 100)       // / mo
     // The monthly figure and the per-delivery figure stay consistent.
     expect(Math.abs(line.monthlyPrice - line.pricePerDelivery / line.shipEveryMonths)).toBeLessThan(0.01)
   })
@@ -352,7 +360,7 @@ describe('consumption protocol & monthly quantities', () => {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a])
-    const monthly = Math.round(30 * 0.8 * 100) / 100   // daily, 1/month
+    const monthly = Math.round(30 * SUB * 100) / 100   // daily, 1/month
     expect(p.subscriptionTotal).toBe(monthly)
     // Scratch-to-reveal is enabled by default → nothing applied until revealed.
     expect(p.subscriptionIntroDiscountPct).toBe(0)
@@ -364,7 +372,7 @@ describe('consumption protocol & monthly quantities', () => {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a], null, undefined, { introDiscountOverride: 0.5 })
-    const monthly = Math.round(30 * 0.8 * 100) / 100
+    const monthly = Math.round(30 * SUB * 100) / 100
     expect(p.subscriptionIntroDiscountPct).toBe(50)
     expect(p.subscriptionFirstMonth).toBe(Math.round(monthly * 0.5 * 100) / 100)
     // Commitment = discounted first month + the remaining months at the flat rate.
@@ -457,10 +465,18 @@ describe('bundle save-rate consistency (budget step ↔ final screen)', () => {
     }
   })
 
-  it('advertises the expected default rates: 15 / 20 / 25', () => {
-    expect(Math.round(levelSubscriptionRate(levelForStackPreference('simple')) * 100)).toBe(15)
-    expect(Math.round(levelSubscriptionRate(levelForStackPreference('balanced')) * 100)).toBe(20)
-    expect(Math.round(levelSubscriptionRate(levelForStackPreference('complete')) * 100)).toBe(25)
+  it('advertises whatever rates the config carries, in the right order', () => {
+    // Read from config so tuning the ladder is a pricing decision, not a test
+    // failure. What must hold is that a stack preference maps to its level's
+    // rate and that deeper always means better.
+    const rate = (pref: 'simple' | 'balanced' | 'complete') =>
+      levelSubscriptionRate(levelForStackPreference(pref))
+    const cfg = PRICING_CONFIG.levelSubscriptionDiscount
+    expect(rate('simple')).toBeCloseTo(cfg.essentials, 4)
+    expect(rate('balanced')).toBeCloseTo(cfg.performance, 4)
+    expect(rate('complete')).toBeCloseTo(cfg.complete, 4)
+    expect(rate('complete')).toBeGreaterThan(rate('balanced'))
+    expect(rate('balanced')).toBeGreaterThan(rate('simple'))
   })
 })
 
@@ -494,7 +510,7 @@ describe('pricing rules — subscription profit guardrails', () => {
   it('reports monthly margin and is profitable on cancel under the default config', () => {
     const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 40, cost: 10, compareAtPrice: null, variants: oneVariant(40) })
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a])
-    expect(p.subscriptionMonthlyMargin).toBe(round2(40 * 0.8 - 10))  // 32 - 10 = 22
+    expect(p.subscriptionMonthlyMargin).toBe(round2(40 * SUB - 10))
     expect(p.subscriptionProfitableOnCancel).toBe(true)
     // Monthly delivery, so one delivery per committed month — derived from the
     // configured term rather than hardcoded, since we sell no minimum term.

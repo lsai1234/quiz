@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { formatGBP, type PricingConfig, type DiscountTier, type DeliveryService } from '@/lib/stack-blueprint/pricing'
 import { goodPriceFor, auditProductPrice, worstCaseSubscriptionRate, supplierAccountCheck } from '@/lib/pricing/good-price'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
-import { quoteDelivery, freeDeliveryImpact, ZONE_LABELS } from '@/lib/pricing/delivery'
+import { quoteDelivery, freeDeliveryImpact, toFreeShipping, ZONE_LABELS } from '@/lib/pricing/delivery'
+import { anchorPrice, anchorCoherence, premiumOverRrp, auditAnchors } from '@/lib/pricing/anchor'
 import { Waterfall } from '@/components/portal/pricing/Waterfall'
 import { RateCard } from '@/components/portal/pricing/RateCard'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
@@ -28,6 +29,7 @@ const BUDGETS: Budget[] = ['under-30', '30-50', '50-80', '80-plus']
 
 const pct = (n: number) => Math.round(n * 1000) / 10
 const money = (n: number) => `£${n.toFixed(2)}`
+const round2 = (n: number) => Math.round(n * 100) / 100
 
 type Tab = 'average' | 'model' | 'catalogue' | 'vat' | 'rules'
 
@@ -52,7 +54,14 @@ export default function PricingPage() {
   const [grams, setGrams] = useState(1150)
   const [shipEvery, setShipEvery] = useState(1)
   const [priceOverride, setPriceOverride] = useState<number | null>(null)
+  const [rrp, setRrp] = useState(60)
   const [scenarioId, setScenarioId] = useState(2)
+  // How many products share the parcel. PowerBody band delivery on the whole
+  // box, so this is the single biggest lever on a small product's margin — and
+  // modelling every product as if it posts alone was reporting healthy lines as
+  // loss-makers. 1 is the worst case; the quiz sells a stack.
+  const [parcelItems, setParcelItems] = useState(1)
+  useEffect(() => { if (draft) setParcelItems(Math.max(1, Math.round(draft.orderMix.itemsPerOrder ?? 1))) }, [draft?.orderMix.itemsPerOrder]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetch('/api/portal/pricing').then((r) => r.json()).then((d) => { setDraft(d.current); setSavedConfig(d.current) }).catch(() => {})
@@ -60,8 +69,14 @@ export default function PricingPage() {
   }, [])
 
   const good = useMemo(
-    () => (draft ? goodPriceFor({ assetPrice, grams, shipEveryMonths: shipEvery, listPrice: priceOverride ?? undefined }, draft) : null),
-    [draft, assetPrice, grams, shipEvery, priceOverride],
+    () =>
+      draft
+        ? goodPriceFor(
+            { assetPrice, grams, shipEveryMonths: shipEvery, listPrice: priceOverride ?? undefined, sharedParcelItems: parcelItems },
+            draft,
+          )
+        : null,
+    [draft, assetPrice, grams, shipEvery, priceOverride, parcelItems],
   )
 
   const audit = useMemo(() => {
@@ -87,6 +102,20 @@ export default function PricingPage() {
     return { ...supplierAccountCheck(avgPrice, 0, ratio, draft), avgPrice, ratio }
   }, [draft, catalogue])
 
+  const anchors = useMemo(() => {
+    if (!draft || catalogue.length === 0) return null
+    return auditAnchors(
+      catalogue.map((p) => ({
+        title: p.title,
+        supplierRrp: p.supplierRrp ?? p.compareAtPrice ?? null,
+        cost: p.cost ?? null,
+        servings: p.servings,
+        currentPrice: p.basePrice,
+      })),
+      draft,
+    )
+  }, [draft, catalogue])
+
   // The blend is modelled on a representative basket drawn from the real
   // catalogue — average shelf price, average cost, average weight — so it moves
   // with what we actually sell rather than a figure typed in once.
@@ -96,7 +125,7 @@ export default function PricingPage() {
     if (priced.length === 0) return blendedEconomics({ shelfPrice: 100, supplierCost: 35, grams: 2500 }, draft)
     const avg = (f: (p: CatalogueProduct) => number) => priced.reduce((s, p) => s + f(p), 0) / priced.length
     // A quiz stack is several products, so the basket is a multiple of one.
-    const itemsPerOrder = 3
+    const itemsPerOrder = Math.max(1, Math.round(draft.orderMix.itemsPerOrder ?? 1))
     return blendedEconomics(
       {
         shelfPrice: avg((p) => p.basePrice) * itemsPerOrder,
@@ -110,7 +139,7 @@ export default function PricingPage() {
   if (!draft || !good || !blended) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
-  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix'>(
+  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'anchor'>(
     key: K,
     patch: Partial<PricingConfig[K]>,
   ) => set({ [key]: { ...draft[key], ...patch } })
@@ -135,8 +164,13 @@ export default function PricingPage() {
 
   const scenario = good.scenarios[scenarioId] ?? good.scenarios[2]
   const shelfPrice = priceOverride ?? good.goodPrice ?? 0
-  const parcel = quoteDelivery({ supplierValue: assetPrice, orderValue: scenario.economics.shelfPrice }, draft)
-  const freeDelivery = freeDeliveryImpact(assetPrice, draft)
+  // Delivery is priced on the whole BOX, so every one of these reads the parcel
+  // value — this product's wholesale times whatever else ships with it.
+  const parcelValue = round2(assetPrice * parcelItems)
+  const parcel = quoteDelivery({ supplierValue: parcelValue, orderValue: scenario.economics.shelfPrice }, draft)
+  const freeDelivery = freeDeliveryImpact(parcelValue, draft)
+  const freeShipping = toFreeShipping(parcelValue, draft.delivery.defaultZone, draft)
+  const coherence = anchorCoherence(draft)
 
   return (
     <div className="pb-10">
@@ -183,12 +217,19 @@ export default function PricingPage() {
           {/* Inputs */}
           <Card>
             <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-2">The product</p>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <Input label="PowerBody charge us" prefix="£" value={assetPrice} step="0.01" onChange={setAssetPrice} help="ex VAT" />
               <Input label="Shipped weight" suffix="g" value={grams} onChange={setGrams} help={parcel.service ? parcel.service.name : 'no service!'} />
               <Input label="Ships every" suffix="mo" value={shipEvery} onChange={(n) => setShipEvery(Math.max(1, n))} help="months" />
+              <Input label="In a parcel of" suffix="items" value={parcelItems} onChange={(n) => setParcelItems(Math.max(1, Math.round(n)))}
+                help={parcelItems > 1 ? `${money(parcelValue)} of stock in the box` : 'ships on its own'} />
               <Input label="Sell it for" prefix="£" value={shelfPrice} step="0.01" onChange={(n) => setPriceOverride(n)} help={priceOverride == null ? 'our recommendation' : 'your price'} />
             </div>
+            <p className="text-[11px] text-[var(--color-muted)] mt-2 leading-snug">
+              PowerBody band delivery on the <strong>whole box</strong>, not the item — so a product in a{' '}
+              {draft.orderMix.itemsPerOrder}-item stack carries a fraction of one delivery, and a big enough stack
+              carries none. Set the parcel to 1 to see the worst case: this product posted on its own.
+            </p>
             {priceOverride != null && (
               <button onClick={() => setPriceOverride(null)} className="text-[11px] font-bold mt-2" style={{ color: ACCENT }}>
                 ← back to the recommended price
@@ -205,6 +246,72 @@ export default function PricingPage() {
             <Headline label="Costs us each month" value={money(good.monthlyCost.total)} colour="var(--color-text)"
               note={`${money(good.monthlyCost.goods)} goods + ${money(good.monthlyCost.delivery)} delivery`} />
           </div>
+
+          {/* What to actually put on the shelf */}
+          <Card>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-1">
+              What to put on the shelf
+            </p>
+            <p className="text-[11px] text-[var(--color-muted)] mb-3 leading-snug">
+              We resell branded goods, so the market sets the price — a customer can check the RRP in ten seconds.
+              The list price is anchored just above it ({pct(premiumOverRrp(draft))}%) so the bundle discount lands them
+              a visible {pct(draft.anchor.targetBargainVsRrpPct)}% below. Cost-plus below is the floor, not the price.
+            </p>
+            <div className="flex flex-wrap gap-3 mb-3">
+              <label className="flex-1 min-w-[130px]">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-muted)] block mb-1">Supplier RRP</span>
+                <input type="number" step="0.01" value={rrp} onChange={(e) => setRrp(Math.max(0, parseFloat(e.target.value) || 0))}
+                  className="w-full px-3 py-2 rounded-xl text-sm outline-none" style={INPUT_STYLE} />
+              </label>
+            </div>
+            {(() => {
+              const a = anchorPrice({ supplierRrp: rrp || null, cost: assetPrice, servings: shipEvery * 30, sharedParcelItems: parcelItems }, draft)
+              return (
+                <>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Headline label="List price" value={money(a.listPrice)} colour="var(--color-text)" note="the anchor" small />
+                    <Headline label="They pay" value={money(a.bundlePrice)} colour={ACCENT} note="on the middle bundle" small />
+                    <Headline label="vs RRP" value={a.bargainVsRrp != null ? `−${pct(a.bargainVsRrp)}%` : '—'}
+                      colour={a.bargainVsRrp != null && a.bargainVsRrp > 0 ? GREEN : AMBER} note="the visible saving" small />
+                  </div>
+                  <p className="text-[11px] mt-2" style={{ color: a.viable ? 'var(--color-muted)' : RED }}>
+                    Keeps {money(a.contribution)} a month ({pct(a.marginPct)}%).
+                    {a.costPlusFloor != null && ` Cost-plus floor ${money(a.costPlusFloor)}.`}
+                  </p>
+                  {a.warning && <p className="text-[11px] mt-1" style={{ color: AMBER }}>{a.warning}</p>}
+                </>
+              )
+            })()}
+            {!coherence.coherent && (
+              <p className="text-[11px] mt-2" style={{ color: RED }}>{coherence.reason}</p>
+            )}
+          </Card>
+
+          {/* Free shipping — the biggest single lever on delivery */}
+          <Card>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-1">
+              PowerBody&apos;s free-shipping line
+            </p>
+            {freeShipping.alreadyFree ? (
+              <p className="text-[11px] leading-relaxed" style={{ color: GREEN }}>
+                At {money(parcelValue)} of wholesale this parcel ships <strong>free</strong> — it clears their
+                £{freeShipping.threshold} line. That is worth more than any discount we could negotiate.
+              </p>
+            ) : (
+              <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed">
+                At {money(parcelValue)} of wholesale we pay {money(freeDelivery.supplierCost)} to ship this parcel
+                {parcelItems > 1 ? `, or ${money(round2(freeDelivery.supplierCost / parcelItems))} against each of its ${parcelItems} products` : ''}.{' '}
+                {freeShipping.next && (
+                  <strong style={{ color: ACCENT }}>
+                    {money(freeShipping.next.shortfall)} more of stock and it drops to {money(freeShipping.next.price)}
+                    {freeShipping.next.price > 0 ? `; ${money(freeShipping.shortfall ?? 0)} more and it ships free.` : '.'}
+                  </strong>
+                )}{' '}
+                Free is £{freeShipping.threshold} of wholesale — roughly a {money((freeShipping.threshold ?? 0) / Math.max(0.01, draft.defaultCostRatio))} basket,
+                which is why the next band down is usually the one to chase.
+              </p>
+            )}
+          </Card>
 
           {/* Scenario picker + waterfall */}
           <Card>
@@ -283,8 +390,53 @@ export default function PricingPage() {
       )}
 
       {/* ══ EVERY PRODUCT ══════════════════════════════════════════════════ */}
-      {tab === 'catalogue' && audit && (
+      {tab === 'catalogue' && audit && anchors && (
         <div className="space-y-3">
+          <Card>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-1">
+              Against the market
+            </p>
+            <p className="text-[11px] text-[var(--color-muted)] mb-3 leading-snug">
+              List prices anchored to the supplier&apos;s RRP. The saving shown is what a member on the middle bundle
+              actually sees against the price they could look up — the number that has to feel real. Margins assume a{' '}
+              {anchors.sharedParcelItems}-item parcel, because that is how the quiz sells; each product carries its
+              share of one delivery rather than a whole one.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
+              <Headline label="Average saving" value={`${pct(anchors.averageBargain)}%`} colour={GREEN} note="vs RRP, on the bundle" small />
+              <Headline label="Average margin" value={`${pct(anchors.averageMargin)}%`}
+                colour={anchors.averageMargin >= anchors.targetMarginPct ? GREEN : AMBER}
+                note={`target ${pct(anchors.targetMarginPct)}%`} small />
+              <Headline label="Losing money" value={String(anchors.losing)} colour={anchors.losing > 0 ? RED : GREEN} note="keep off subscription" small />
+              <Headline label="Under target" value={String(anchors.squeezed)} colour={anchors.squeezed > 0 ? AMBER : GREEN} note="thin, not a loss" small />
+              <Headline label="No RRP" value={String(anchors.unanchored)} colour={anchors.unanchored > 0 ? AMBER : GREEN} note="priced from cost" small />
+            </div>
+            {anchors.note && (
+              <p className="text-[11px] mb-3 rounded-lg px-2.5 py-2 leading-relaxed"
+                style={{ background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, color: AMBER }}>
+                {anchors.note}
+              </p>
+            )}
+            <div className="space-y-1 max-h-80 overflow-y-auto">
+              {anchors.rows.map((r) => (
+                <div key={r.title} className="py-1.5 border-b border-[var(--color-border)] last:border-0">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="text-[11px] text-[var(--color-text-2)] truncate">{r.title}</span>
+                    <span className="text-[11px] font-bold whitespace-nowrap" style={{ color: !r.viable ? RED : r.shortfall != null ? AMBER : GREEN }}>
+                      {money(r.listPrice)} → {money(r.bundlePrice)} ({pct(r.marginPct)}%)
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[var(--color-muted)]">
+                    {r.rrp != null ? `RRP ${money(r.rrp)} · member saves ${pct(r.bargainVsRrp ?? 0)}%` : 'no RRP — priced from cost'}
+                    {r.deliveryShare > 0 && ` · ${money(r.deliveryShare)} postage`}
+                    {/* When the note above already explains the squeeze, repeating it on
+                        every row buries the products that genuinely lose money. */}
+                    {r.warning && (!anchors.note || !r.viable) && <span style={{ color: AMBER }}> · {r.warning}</span>}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Headline label="Losing money" value={String(audit.losing)} colour={audit.losing > 0 ? RED : GREEN} note="on the worst case" small />
             <Headline label="Under target" value={String(audit.belowTarget)} colour={audit.belowTarget > 0 ? AMBER : GREEN} note={`below ${pct(draft.goodPricing.targetMarginPct)}%`} small />
@@ -341,6 +493,14 @@ export default function PricingPage() {
               help="Taxable turnover over any rolling 12 months at which registering becomes compulsory. HMRC's figure — £90,000 since April 2024." />
             <Num label="Deregistration threshold" value={draft.vat.deregistrationThreshold} suffix="£" onChange={(n) => setNested('vat', { deregistrationThreshold: n })}
               help="Below this a registered business may deregister." />
+          </Section>
+
+          <Section title="What we put on the shelf" desc="We resell branded goods, so the market sets the price. The list price is anchored to the supplier's RRP and the bundle discount is what makes it a bargain — cost-plus is the floor, not the price.">
+            <Num label="Saving a member should see" value={pct(draft.anchor.targetBargainVsRrpPct)} suffix="% off RRP" onChange={(n) => setNested('anchor', { targetBargainVsRrpPct: n / 100 })}
+              help={`The only lever — the premium over RRP is derived from it, so the two can never contradict. Currently ${pct(premiumOverRrp(draft))}% above RRP. It must stay below the middle bundle rate (${pct(draft.levelSubscriptionDiscount.performance)}%) or the list price drops below RRP and we are undercutting rather than anchoring.`} />
+            <Toggle label="Round to .99" value={draft.anchor.roundTo99} onChange={(v) => setNested('anchor', { roundTo99: v })}
+              help="Rounds DOWN, never up — rounding up can push the discounted price back above RRP and turn the saving into a markup." />
+            {!coherence.coherent && <p className="text-[11px] pt-2" style={{ color: RED }}>{coherence.reason}</p>}
           </Section>
 
           <Section title="Delivery — PowerBody's rate card" desc="Priced by weight and zone. There is no free-shipping threshold: their guide states free delivery is not available to dropshippers, so this lands on every order.">

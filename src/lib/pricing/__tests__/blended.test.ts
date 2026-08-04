@@ -46,9 +46,10 @@ describe('commission', () => {
 describe('the average order', () => {
   it('weights the bundle discount across the mix rather than taking the worst', () => {
     const avg = averageBundleDiscount(cfg())
-    // Between the smallest (15%) and biggest (25%) bundle rates.
-    expect(avg).toBeGreaterThan(0.15)
-    expect(avg).toBeLessThan(0.25)
+    const ladder = PRICING_CONFIG.levelSubscriptionDiscount
+    // Strictly between the smallest and biggest rates, whatever they are.
+    expect(avg).toBeGreaterThan(ladder.essentials)
+    expect(avg).toBeLessThan(ladder.complete)
   })
 
   it('makes money at the shipped settings', () => {

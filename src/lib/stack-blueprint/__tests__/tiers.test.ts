@@ -5,7 +5,7 @@
  * monotonicity, computed with the SAME calculatePricing the UI uses (parity).
  */
 import { buildStackBlueprint } from '../factory'
-import { calculatePricing } from '../pricing'
+import { calculatePricing, PRICING_CONFIG } from '../pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { QuizAnswers, StackLevel } from '@/lib/types'
 
@@ -59,12 +59,18 @@ describe('value-first tiers', () => {
     expect(prices[2]).toBeGreaterThanOrEqual(prices[1])
   })
 
-  it('subscribe-&-save rate rises with depth (15 / 20 / 25%)', () => {
+  it('subscribe-&-save rate rises with depth', () => {
+    // Read from config rather than hard-coded, so tuning the ladder is a pricing
+    // decision rather than a test failure. The PROPERTY — deeper bundle, better
+    // rate — is what matters and is what's asserted.
     const rate = (level: StackLevel) =>
       calculatePricing(sliceForTier(full, level), MOCK_CATALOGUE, a, undefined, { level }).subscriptionDiscountPct
-    expect(rate('essentials')).toBe(15)
-    expect(rate('performance')).toBe(20)
-    expect(rate('complete')).toBe(25)
+    const expected = PRICING_CONFIG.levelSubscriptionDiscount
+    expect(rate('essentials')).toBe(expected.essentials * 100)
+    expect(rate('performance')).toBe(expected.performance * 100)
+    expect(rate('complete')).toBe(expected.complete * 100)
+    expect(rate('complete')).toBeGreaterThan(rate('performance'))
+    expect(rate('performance')).toBeGreaterThan(rate('essentials'))
   })
 
   it('parity: the tier the customer selects prices exactly as the sliced stack', () => {
