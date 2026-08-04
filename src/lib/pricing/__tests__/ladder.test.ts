@@ -10,10 +10,10 @@ const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_
 const AVG = 25
 
 describe('the discount ladder', () => {
-  it('is coherent as shipped', () => {
+  it('has every rung individually healthy as shipped', () => {
     const check = checkLadder(AVG, cfg())
-    expect(check.coherent).toBe(true)
     for (const r of check.rungs) expect(r.warning).toBeNull()
+    expect(check.rungs.every((r) => r.healthy)).toBe(true)
   })
 
   it('gives a bigger reason to subscribe the bigger the bundle', () => {
@@ -25,9 +25,9 @@ describe('the discount ladder', () => {
     expect(essentials.advantage).toBeGreaterThanOrEqual(HEALTHY_ADVANTAGE_PP)
   })
 
-  it('lands every subscriber below the supplier’s RRP', () => {
+  it('always charges a subscriber less than someone buying once', () => {
     for (const r of checkLadder(AVG, cfg()).rungs) {
-      expect(r.vsRrpSubscribed).toBeGreaterThan(0)
+      expect(r.paysSubscribed).toBeLessThan(r.paysOneOff)
     }
   })
 
@@ -53,28 +53,47 @@ describe('the discount ladder', () => {
     expect(old.rungs.filter((r) => !r.healthy).length).toBe(3)
   })
 
-  it('flags a rung too shallow to clear the anchor premium', () => {
-    // The list price sits above RRP, so a discount smaller than that premium
-    // leaves the member paying over the odds. This is the constraint that
-    // decided the entry rung — see docs/PRICING_STRATEGY.md §5.
-    const check = checkLadder(
-      AVG,
-      cfg({
-        levelSubscriptionDiscount: { essentials: 0.03, performance: 0.15, complete: 0.2 },
-        bundleTiers: [] as DiscountTier[],
-      }),
-    )
-    const entry = check.rungs.find((r) => r.level === 'essentials')!
-    expect(entry.vsRrpSubscribed).toBeLessThan(0)
-    expect(entry.warning).toMatch(/ABOVE the supplier's RRP/)
+  it('reports how deep a discount the prices can actually carry', () => {
+    // Prices are cost × markup and floored at cost × (1 + marginFloor), so the
+    // ceiling falls straight out of two numbers we set ourselves — no RRP, no
+    // supplier suggestion, nothing that can change under us.
+    const check = checkLadder(AVG, cfg())
+    const expected = 1 - (1 + PRICING_CONFIG.marginFloorPct) / PRICING_CONFIG.listPricing.markupOnCost
+    expect(check.deepestPossibleDiscount).toBeCloseTo(expected, 4)
   })
 
-  it('reports the shallowest discount that still beats RRP', () => {
+  it('says out loud when the top card promises more than the floor allows', () => {
+    // The biggest bundle plus the best scratch card asks for more off than a
+    // price set at 2× cost can carry, so the margin floor clips it — and the
+    // member sees a smaller discount than the one they scratched. A promise we
+    // don't keep is worth surfacing rather than averaging away.
     const check = checkLadder(AVG, cfg())
-    // premium/(1+premium) — a ~8.2% premium needs a ~7.6% discount to break even
-    // against RRP.
-    expect(check.minDiscountForRrp).toBeCloseTo(check.anchorPremium / (1 + check.anchorPremium), 4)
-    expect(check.minDiscountForRrp).toBeLessThan(PRICING_CONFIG.levelSubscriptionDiscount.essentials)
+    expect(check.clipped).not.toBeNull()
+    expect(check.clipped!.advertised).toBeGreaterThan(check.clipped!.delivered)
+    expect(check.coherent).toBe(false)
+    expect(check.summary).toMatch(/can only carry/)
+    // Every rung is still individually healthy — this is about the combination.
+    for (const r of check.rungs) expect(r.warning).toBeNull()
+  })
+
+  it('is clean once the top card fits inside the floor', () => {
+    const fits = checkLadder(
+      AVG,
+      cfg({
+        introOffer: {
+          ...PRICING_CONFIG.introOffer,
+          scratchReveal: { enabled: true, outcomes: [{ discount: 0.25, weight: 1 }, { discount: 0.2, weight: 8 }, { discount: 0.1, weight: 12 }] },
+        },
+      }),
+    )
+    expect(fits.clipped).toBeNull()
+    expect(fits.coherent).toBe(true)
+  })
+
+  it('moves the ceiling when the markup moves', () => {
+    const lean = checkLadder(AVG, cfg({ listPricing: { ...PRICING_CONFIG.listPricing, markupOnCost: 1.6 } }))
+    const fat = checkLadder(AVG, cfg({ listPricing: { ...PRICING_CONFIG.listPricing, markupOnCost: 2.5 } }))
+    expect(fat.deepestPossibleDiscount).toBeGreaterThan(lean.deepestPossibleDiscount)
   })
 
   it('moves the basket values with what we actually sell', () => {
@@ -88,8 +107,8 @@ describe('the discount ladder', () => {
     const dear = checkLadder(60, cfg())
     expect(cheap.rungs[0].listPrice).toBe(30)
     expect(dear.rungs[0].listPrice).toBe(180)
-    expect(cheap.coherent).toBe(true)
-    expect(dear.coherent).toBe(true)
+    expect(cheap.rungs.every((r) => r.healthy)).toBe(true)
+    expect(dear.rungs.every((r) => r.healthy)).toBe(true)
     // The cheap basket earns no one-off discount, so the advantage is the rate.
     expect(cheap.rungs[0].oneOffPct).toBe(0)
     expect(cheap.rungs[0].advantage).toBe(cheap.rungs[0].subscriptionPct)

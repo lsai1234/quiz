@@ -1,5 +1,11 @@
 # Pricing strategy — analysis and recommendation
 
+> **Superseded in part.** §5 and §7.1's anchoring argument no longer applies —
+> prices are now set at a flat multiple of what we pay, with the supplier's RRP
+> kept only as a cross-check. The reasoning about the *ladder* (§2, §7.1) and the
+> *partner programme* (§3, §7.2) is unchanged and still live. See
+> `docs/PRICING_GUIDE.md` §5.
+>
 > **Status: implemented.** Every recommendation in §7 is live in
 > `src/lib/stack-blueprint/pricing.ts`, except §7.5 (quarterly shipping) and
 > §7.6 (dropping GO Hydro), which are catalogue and scheduling changes rather

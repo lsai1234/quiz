@@ -5,7 +5,7 @@ import { formatGBP, type PricingConfig, type DiscountTier, type DeliveryService 
 import { goodPriceFor, auditProductPrice, worstCaseSubscriptionRate, supplierAccountCheck } from '@/lib/pricing/good-price'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
 import { quoteDelivery, freeDeliveryImpact, toFreeShipping, ZONE_LABELS } from '@/lib/pricing/delivery'
-import { anchorPrice, anchorCoherence, premiumOverRrp, auditAnchors } from '@/lib/pricing/anchor'
+import { priceProduct, listPriceFor, reviewCatalogue } from '@/lib/pricing/list-price'
 import { Waterfall } from '@/components/portal/pricing/Waterfall'
 import { RateCard } from '@/components/portal/pricing/RateCard'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
@@ -13,6 +13,8 @@ import { BlendedPanel } from '@/components/portal/pricing/BlendedPanel'
 import { LadderPanel } from '@/components/portal/pricing/LadderPanel'
 import { checkLadder } from '@/lib/pricing/ladder'
 import { blendedEconomics } from '@/lib/pricing/blended'
+import type { CatalogueReview } from '@/lib/pricing/list-price'
+import type { BlendedEconomics } from '@/lib/pricing/blended'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
 
@@ -33,14 +35,12 @@ const pct = (n: number) => Math.round(n * 1000) / 10
 const money = (n: number) => `£${n.toFixed(2)}`
 const round2 = (n: number) => Math.round(n * 100) / 100
 
-type Tab = 'average' | 'model' | 'catalogue' | 'vat' | 'rules'
+type Tab = 'overview' | 'products' | 'rules'
 
 const TABS: { id: Tab; label: string; blurb: string }[] = [
-  { id: 'average', label: 'Are we making money?', blurb: 'The average order across the whole mix — the only question with a yes/no answer.' },
-  { id: 'model', label: 'The model', blurb: 'What a product costs us and what to sell it for.' },
-  { id: 'catalogue', label: 'Every product', blurb: 'The same maths run over everything we sell.' },
-  { id: 'vat', label: 'VAT', blurb: 'Where we stand on registration, and what it would cost.' },
-  { id: 'rules', label: 'The rules', blurb: 'Every setting the model reads.' },
+  { id: 'overview', label: 'Overview', blurb: 'The few numbers that matter.' },
+  { id: 'products', label: 'Products', blurb: 'What we pay, what we charge, and what we keep on each one.' },
+  { id: 'rules', label: 'Rules', blurb: 'Every setting, with what it does written next to it.' },
 ]
 
 export default function PricingPage() {
@@ -49,7 +49,7 @@ export default function PricingPage() {
   const [catalogue, setCatalogue] = useState<CatalogueProduct[]>([])
   const [saving, setSaving] = useState(false)
   const [savedFlag, setSavedFlag] = useState(false)
-  const [tab, setTab] = useState<Tab>('average')
+  const [tab, setTab] = useState<Tab>('overview')
 
   // The worked example.
   const [assetPrice, setAssetPrice] = useState(10)
@@ -114,9 +114,9 @@ export default function PricingPage() {
     return checkLadder(avg, draft)
   }, [draft, catalogue])
 
-  const anchors = useMemo(() => {
+  const products = useMemo(() => {
     if (!draft || catalogue.length === 0) return null
-    return auditAnchors(
+    return reviewCatalogue(
       catalogue.map((p) => ({
         title: p.title,
         supplierRrp: p.supplierRrp ?? p.compareAtPrice ?? null,
@@ -151,7 +151,7 @@ export default function PricingPage() {
   if (!draft || !good || !blended || !ladder) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
-  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'anchor'>(
+  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'>(
     key: K,
     patch: Partial<PricingConfig[K]>,
   ) => set({ [key]: { ...draft[key], ...patch } })
@@ -182,7 +182,6 @@ export default function PricingPage() {
   const parcel = quoteDelivery({ supplierValue: parcelValue, orderValue: scenario.economics.shelfPrice }, draft)
   const freeDelivery = freeDeliveryImpact(parcelValue, draft)
   const freeShipping = toFreeShipping(parcelValue, draft.delivery.defaultZone, draft)
-  const coherence = anchorCoherence(draft)
 
   return (
     <div className="pb-10">
@@ -191,7 +190,7 @@ export default function PricingPage() {
         <div>
           <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Pricing</h1>
           <p className="text-sm text-[var(--color-muted)] mt-0.5">
-            Every rule that decides a price, and the full cost of a sale — VAT, PowerBody&apos;s delivery, card fees and returns included.
+            Every price is <strong style={{ color: 'var(--color-text)' }}>what we pay, doubled</strong>. This page shows what that leaves us once VAT, postage, card fees and returns come out.
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -220,16 +219,26 @@ export default function PricingPage() {
       </nav>
       <p className="text-[11px] text-[var(--color-muted)] mb-4">{TABS.find((t) => t.id === tab)!.blurb}</p>
 
-      {/* ══ ARE WE MAKING MONEY? ═══════════════════════════════════════════ */}
-      {tab === 'average' && (
+      {/* ══ OVERVIEW ═══════════════════════════════════════════════════════ */}
+      {tab === 'overview' && (
         <div className="space-y-4">
-          <BlendedPanel blended={blended} />
+          <PlainSummary blended={blended} products={products} config={draft} />
           <LadderPanel check={ladder} />
+          <Detail label="Show the working — the full average-order model">
+            <div className="space-y-4">
+              <BlendedPanel blended={blended} />
+              <VatPanel registered={draft.vat.registered} />
+            </div>
+          </Detail>
         </div>
       )}
 
-      {/* ══ THE MODEL ══════════════════════════════════════════════════════ */}
-      {tab === 'model' && (
+      {/* ══ PRODUCTS ═══════════════════════════════════════════════════════ */}
+      {tab === 'products' && products && audit && (
+        <div className="space-y-4">
+          <ProductTable review={products} />
+          <Detail label="Show the working — price one product from scratch">
+            <div className="space-y-4">
         <div className="space-y-4">
           {/* Inputs */}
           <Card>
@@ -270,38 +279,34 @@ export default function PricingPage() {
               What to put on the shelf
             </p>
             <p className="text-[11px] text-[var(--color-muted)] mb-3 leading-snug">
-              We resell branded goods, so the market sets the price — a customer can check the RRP in ten seconds.
-              The list price is anchored just above it ({pct(premiumOverRrp(draft))}%) so the bundle discount lands them
-              a visible {pct(draft.anchor.targetBargainVsRrpPct)}% below. Cost-plus below is the floor, not the price.
+              One rule: <strong className="text-[var(--color-text)]">what we pay × {draft.listPricing.markupOnCost}</strong>,
+              rounded down to .99. Nothing here depends on the brand&apos;s RRP — that is only ever a suggestion, so it
+              is used as a cross-check below rather than as the price.
             </p>
             <div className="flex flex-wrap gap-3 mb-3">
               <label className="flex-1 min-w-[130px]">
-                <span className="text-[10px] uppercase font-bold text-[var(--color-muted)] block mb-1">Supplier RRP</span>
+                <span className="text-[10px] uppercase font-bold text-[var(--color-muted)] block mb-1">Their RRP (check only)</span>
                 <input type="number" step="0.01" value={rrp} onChange={(e) => setRrp(Math.max(0, parseFloat(e.target.value) || 0))}
                   className="w-full px-3 py-2 rounded-xl text-sm outline-none" style={INPUT_STYLE} />
               </label>
             </div>
             {(() => {
-              const a = anchorPrice({ supplierRrp: rrp || null, cost: assetPrice, servings: shipEvery * 30, sharedParcelItems: parcelItems }, draft)
+              const a = priceProduct({ supplierRrp: rrp || null, cost: assetPrice, servings: shipEvery * 30, sharedParcelItems: parcelItems }, draft)
               return (
                 <>
                   <div className="grid grid-cols-3 gap-3">
-                    <Headline label="List price" value={money(a.listPrice)} colour="var(--color-text)" note="the anchor" small />
-                    <Headline label="They pay" value={money(a.bundlePrice)} colour={ACCENT} note="on the middle bundle" small />
-                    <Headline label="vs RRP" value={a.bargainVsRrp != null ? `−${pct(a.bargainVsRrp)}%` : '—'}
-                      colour={a.bargainVsRrp != null && a.bargainVsRrp > 0 ? GREEN : AMBER} note="the visible saving" small />
+                    <Headline label="We charge" value={money(a.listPrice)} colour="var(--color-text)" note={`${money(a.cost)} × ${draft.listPricing.markupOnCost}`} small />
+                    <Headline label="A subscriber pays" value={money(a.subscriberPrice)} colour={ACCENT} note="on the middle bundle" small />
+                    <Headline label="vs their RRP" value={a.vsRrp != null ? `${a.vsRrp >= 0 ? '+' : ''}${pct(a.vsRrp)}%` : '—'}
+                      colour={a.overRrp ? AMBER : GREEN} note="cross-check only" small />
                   </div>
                   <p className="text-[11px] mt-2" style={{ color: a.viable ? 'var(--color-muted)' : RED }}>
-                    Keeps {money(a.contribution)} a month ({pct(a.marginPct)}%).
-                    {a.costPlusFloor != null && ` Cost-plus floor ${money(a.costPlusFloor)}.`}
+                    We keep {money(a.keeps)} a month ({pct(a.marginPct)}%), after its {money(a.deliveryShare)} share of the postage.
                   </p>
                   {a.warning && <p className="text-[11px] mt-1" style={{ color: AMBER }}>{a.warning}</p>}
                 </>
               )
             })()}
-            {!coherence.coherent && (
-              <p className="text-[11px] mt-2" style={{ color: RED }}>{coherence.reason}</p>
-            )}
           </Card>
 
           {/* Free shipping — the biggest single lever on delivery */}
@@ -404,56 +409,9 @@ export default function PricingPage() {
             </Card>
           )}
         </div>
-      )}
 
-      {/* ══ EVERY PRODUCT ══════════════════════════════════════════════════ */}
-      {tab === 'catalogue' && audit && anchors && (
+        {/* The per-product audit, kept as depth rather than the headline. */}
         <div className="space-y-3">
-          <Card>
-            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-1">
-              Against the market
-            </p>
-            <p className="text-[11px] text-[var(--color-muted)] mb-3 leading-snug">
-              List prices anchored to the supplier&apos;s RRP. The saving shown is what a member on the middle bundle
-              actually sees against the price they could look up — the number that has to feel real. Margins assume a{' '}
-              {anchors.sharedParcelItems}-item parcel, because that is how the quiz sells; each product carries its
-              share of one delivery rather than a whole one.
-            </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-3">
-              <Headline label="Average saving" value={`${pct(anchors.averageBargain)}%`} colour={GREEN} note="vs RRP, on the bundle" small />
-              <Headline label="Average margin" value={`${pct(anchors.averageMargin)}%`}
-                colour={anchors.averageMargin >= anchors.targetMarginPct ? GREEN : AMBER}
-                note={`target ${pct(anchors.targetMarginPct)}%`} small />
-              <Headline label="Losing money" value={String(anchors.losing)} colour={anchors.losing > 0 ? RED : GREEN} note="keep off subscription" small />
-              <Headline label="Under target" value={String(anchors.squeezed)} colour={anchors.squeezed > 0 ? AMBER : GREEN} note="thin, not a loss" small />
-              <Headline label="No RRP" value={String(anchors.unanchored)} colour={anchors.unanchored > 0 ? AMBER : GREEN} note="priced from cost" small />
-            </div>
-            {anchors.note && (
-              <p className="text-[11px] mb-3 rounded-lg px-2.5 py-2 leading-relaxed"
-                style={{ background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, color: AMBER }}>
-                {anchors.note}
-              </p>
-            )}
-            <div className="space-y-1 max-h-80 overflow-y-auto">
-              {anchors.rows.map((r) => (
-                <div key={r.title} className="py-1.5 border-b border-[var(--color-border)] last:border-0">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <span className="text-[11px] text-[var(--color-text-2)] truncate">{r.title}</span>
-                    <span className="text-[11px] font-bold whitespace-nowrap" style={{ color: !r.viable ? RED : r.shortfall != null ? AMBER : GREEN }}>
-                      {money(r.listPrice)} → {money(r.bundlePrice)} ({pct(r.marginPct)}%)
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-[var(--color-muted)]">
-                    {r.rrp != null ? `RRP ${money(r.rrp)} · member saves ${pct(r.bargainVsRrp ?? 0)}%` : 'no RRP — priced from cost'}
-                    {r.deliveryShare > 0 && ` · ${money(r.deliveryShare)} postage`}
-                    {/* When the note above already explains the squeeze, repeating it on
-                        every row buries the products that genuinely lose money. */}
-                    {r.warning && (!anchors.note || !r.viable) && <span style={{ color: AMBER }}> · {r.warning}</span>}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </Card>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <Headline label="Losing money" value={String(audit.losing)} colour={audit.losing > 0 ? RED : GREEN} note="on the worst case" small />
             <Headline label="Under target" value={String(audit.belowTarget)} colour={audit.belowTarget > 0 ? AMBER : GREEN} note={`below ${pct(draft.goodPricing.targetMarginPct)}%`} small />
@@ -492,11 +450,11 @@ export default function PricingPage() {
               })}
             </div>
           </Card>
+            </div>
+            </div>
+          </Detail>
         </div>
       )}
-
-      {/* ══ VAT ════════════════════════════════════════════════════════════ */}
-      {tab === 'vat' && <VatPanel registered={draft.vat.registered} />}
 
       {/* ══ THE RULES ══════════════════════════════════════════════════════ */}
       {tab === 'rules' && (
@@ -512,12 +470,13 @@ export default function PricingPage() {
               help="Below this a registered business may deregister." />
           </Section>
 
-          <Section title="What we put on the shelf" desc="We resell branded goods, so the market sets the price. The list price is anchored to the supplier's RRP and the bundle discount is what makes it a bargain — cost-plus is the floor, not the price.">
-            <Num label="Saving a member should see" value={pct(draft.anchor.targetBargainVsRrpPct)} suffix="% off RRP" onChange={(n) => setNested('anchor', { targetBargainVsRrpPct: n / 100 })}
-              help={`The only lever — the premium over RRP is derived from it, so the two can never contradict. Currently ${pct(premiumOverRrp(draft))}% above RRP. It must stay below the middle bundle rate (${pct(draft.levelSubscriptionDiscount.performance)}%) or the list price drops below RRP and we are undercutting rather than anchoring.`} />
-            <Toggle label="Round to .99" value={draft.anchor.roundTo99} onChange={(v) => setNested('anchor', { roundTo99: v })}
-              help="Rounds DOWN, never up — rounding up can push the discounted price back above RRP and turn the saving into a markup." />
-            {!coherence.coherent && <p className="text-[11px] pt-2" style={{ color: RED }}>{coherence.reason}</p>}
+          <Section title="What we charge" desc="One rule for the whole catalogue: double what PowerBody charge us. Deliberately not derived from the brand's RRP — that is a suggestion, it varies, and some products don't have one.">
+            <Num label="Multiply what we pay by" value={draft.listPricing.markupOnCost} suffix="×" onChange={(n) => setNested('listPricing', { markupOnCost: n })}
+              help={`A £10 product sells for ${money(listPriceFor(10, draft))}. Below about 1.9× the margin gets thin enough that one bad delivery band wipes it out; much above 2.1× and most of the catalogue prices above what the brands themselves recommend — which is the thing customers can check in ten seconds.`} />
+            <Toggle label="Round to .99" value={draft.listPricing.roundTo99} onChange={(v) => setNested('listPricing', { roundTo99: v })}
+              help="Rounds DOWN, never up. Rounding up nudges past the round number people compare against, and on a discounted line it can turn a saving into a markup." />
+            <Num label="Flag us above their RRP by" value={pct(draft.listPricing.rrpToleranceAbovePct)} suffix="%" onChange={(n) => setNested('listPricing', { rrpToleranceAbovePct: n / 100 })}
+              help="Purely a warning on the Products tab. RRP never sets a price here — it only ever raises a flag, which is much safer than letting a supplier's suggestion quietly reprice the shop." />
           </Section>
 
           <Section title="Delivery — PowerBody's rate card" desc="Priced by weight and zone. There is no free-shipping threshold: their guide states free delivery is not available to dropshippers, so this lands on every order.">
@@ -677,6 +636,135 @@ export default function PricingPage() {
 
 const INPUT_STYLE = { background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' } as const
 const SMALL_INPUT = 'w-16 px-2 py-1.5 rounded-lg text-xs text-right outline-none'
+
+/**
+ * A disclosure for the deep modelling.
+ *
+ * The pricing page grew every model it needed and put them all on screen at
+ * once — weighted case tables, break-even sweeps, waterfalls. Each was built to
+ * answer a real question and together they answered none of them, because a
+ * page that shows everything ranks nothing. The depth is still here; it just
+ * isn't the first thing you meet.
+ */
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <button onClick={() => setOpen(!open)} className="text-[11px] font-bold py-1" style={{ color: ACCENT }}>
+        {open ? '▾' : '▸'} {label}
+      </button>
+      {open && <div className="mt-3">{children}</div>}
+    </div>
+  )
+}
+
+/**
+ * The whole pricing picture in numbers you could read out loud.
+ *
+ * Deliberately four figures and a sentence. Everything behind them is a click
+ * away in `Detail` — the point of this panel is that you can look at it for five
+ * seconds and know whether anything needs attention.
+ */
+function PlainSummary({ blended, products, config }: {
+  blended: BlendedEconomics
+  products: CatalogueReview | null
+  config: PricingConfig
+}) {
+  const ok = blended.perOrder > 0
+  const tone = !ok ? RED : blended.marginPct < 0.1 ? AMBER : GREEN
+  const typicalOrder = round2(blended.netRevenuePerOrder + blended.perOrder * 0)
+  const losing = products?.losing ?? 0
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-2xl border p-5" style={{ background: `color-mix(in srgb, ${tone} 8%, transparent)`, borderColor: `color-mix(in srgb, ${tone} 40%, transparent)` }}>
+        <p className="text-3xl font-black" style={{ color: tone, fontFamily: 'var(--font-display)' }}>
+          {ok ? 'We make ' : 'We lose '}{money(Math.abs(blended.perOrder))}
+          <span className="text-lg"> on a typical order</span>
+        </p>
+        <p className="text-xs text-[var(--color-text-2)] leading-relaxed mt-1">
+          Someone spends about {money(typicalOrder)}. After the goods, the postage, the card fee and everything we
+          give away, {money(Math.abs(blended.perOrder))} of it is ours.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Headline label="A typical order" value={money(typicalOrder)} colour="var(--color-text)" note="what they spend" small />
+        <Headline label="We keep" value={money(blended.perOrder)} colour={tone} note={`${pct(blended.marginPct)}% of it`} small />
+        <Headline label="A customer is worth" value={money(blended.perCustomer)} colour={ACCENT}
+          note={`over ${config.orderMix.averageRetentionMonths} months`} small />
+        <Headline label="Products losing money" value={String(losing)} colour={losing > 0 ? AMBER : GREEN}
+          note={losing > 0 ? 'see Products' : 'all of them pay'} small />
+      </div>
+
+      <Card>
+        <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed">
+          <strong className="text-[var(--color-text)]">Two things make an order better:</strong> a bigger box, and a
+          longer gap between them. PowerBody charge us once per parcel — {money(config.delivery.services[0]?.price ?? 0)} on a
+          small one, nothing at all once there is £{config.delivery.services[1]?.maxOrderValue ?? 99} of stock in it — so
+          three products shipped together cost the same to send as one, and a tub that lasts three months pays that
+          postage once instead of three times.
+        </p>
+      </Card>
+    </div>
+  )
+}
+
+/**
+ * What we charge for everything, and what is left.
+ *
+ * Five columns, worst first. No margin-of-net versus margin-of-gross, no target
+ * comparison, no scenario spread — just the four numbers a shopkeeper would ask
+ * for and a flag when one of them is wrong.
+ */
+function ProductTable({ review }: { review: CatalogueReview }) {
+  return (
+    <div className="space-y-3">
+      <Card>
+        <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed">
+          <strong className="text-[var(--color-text)]">Every price is what we pay × {review.markupOnCost}</strong>, rounded
+          down to .99. That is the whole rule — it does not depend on the brand&apos;s recommended price, which is only
+          ever a suggestion and which some products don&apos;t have. Where there is one, we compare against it and flag
+          anything a customer would notice.
+        </p>
+      </Card>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Headline label="Products" value={String(review.rows.length)} colour="var(--color-text)" note="priced by the rule" small />
+        <Headline label="We keep, typically" value={`${pct(review.averageMargin)}%`}
+          colour={review.averageMargin > 0.1 ? GREEN : AMBER} note="of a subscriber's price" small />
+        <Headline label="Losing money" value={String(review.losing)} colour={review.losing > 0 ? RED : GREEN}
+          note="best off subscription" small />
+        <Headline label="Dearer than the brand" value={String(review.overRrp)} colour={review.overRrp > 0 ? AMBER : GREEN}
+          note="worth a look" small />
+      </div>
+
+      <Card>
+        <div className="flex text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] pb-2 border-b border-[var(--color-border)]">
+          <span className="flex-1">Product</span>
+          <span className="w-20 text-right">We pay</span>
+          <span className="w-20 text-right">We charge</span>
+          <span className="w-24 text-right">They pay</span>
+          <span className="w-20 text-right">We keep</span>
+        </div>
+        <div className="max-h-[28rem] overflow-y-auto">
+          {review.rows.map((r) => (
+            <div key={r.title} className="py-2 border-b border-[var(--color-border)] last:border-0">
+              <div className="flex items-baseline text-[11px]">
+                <span className="flex-1 truncate text-[var(--color-text-2)] pr-2">{r.title}</span>
+                <span className="w-20 text-right text-[var(--color-muted)]">{money(r.cost)}</span>
+                <span className="w-20 text-right text-[var(--color-text)]">{money(r.listPrice)}</span>
+                <span className="w-24 text-right text-[var(--color-text)]">{money(r.subscriberPrice)}</span>
+                <span className="w-20 text-right font-bold" style={{ color: r.viable ? GREEN : RED }}>{money(r.keeps)}</span>
+              </div>
+              {r.warning && <p className="text-[10px] mt-0.5" style={{ color: r.viable ? AMBER : RED }}>{r.warning}</p>}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
 
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">{children}</div>

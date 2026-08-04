@@ -16,16 +16,17 @@
  * the subscription ladder beats the one-off discount a basket of that size would
  * qualify for, by a margin worth having** — and the hub renders it.
  *
- * A second invariant sits alongside it. The list price is anchored ABOVE the
- * supplier's RRP, so a discount shallower than that premium leaves the member
- * paying more than they'd pay on the high street. Every rung has to clear the
- * anchor, or the "saving" is a markup.
+ * A second invariant sits alongside it. Prices are set at a fixed multiple of
+ * what we pay, and no discount may take a product below cost plus the margin
+ * floor — so there is a hard ceiling on how deep the ladder can ever go, and it
+ * is worth showing how much room is left before the deepest rung plus a scratch
+ * card runs into it.
  *
  * Pure. Takes its config, so the hub previews unsaved rules.
  */
 import { getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import type { StackLevel } from '@/lib/types'
-import { premiumOverRrp } from './anchor'
+
 
 const round4 = (n: number) => Math.round(n * 10000) / 10000
 
@@ -50,9 +51,9 @@ export interface LadderRung {
   subscriptionPct: number
   /** subscriptionPct − oneOffPct. Negative = subscribing costs the member money. */
   advantage: number
-  /** Where the member lands against the supplier's RRP on each path (0–1). */
-  vsRrpOneOff: number
-  vsRrpSubscribed: number
+  /** What the member pays on each path, on a £100 list basket (£). */
+  paysOneOff: number
+  paysSubscribed: number
   /** True when the subscription beats the one-off by a margin worth having. */
   healthy: boolean
   /** Set when this rung needs a decision. */
@@ -63,10 +64,23 @@ export interface LadderCheck {
   rungs: LadderRung[]
   /** True when every rung is healthy — the headline. */
   coherent: boolean
-  /** The anchor premium every rung has to clear (0–1). */
-  anchorPremium: number
-  /** The shallowest discount that still lands the member at or below RRP (0–1). */
-  minDiscountForRrp: number
+  /** The multiple of supplier cost every list price is set at. */
+  markupOnCost: number
+  /** The deepest total discount any product can take before hitting the margin
+   *  floor (0–1) — the hard ceiling on the ladder plus any intro offer. */
+  deepestPossibleDiscount: number
+  /** The deepest combination we actually offer: biggest bundle + best card (0–1). */
+  deepestOffered: number
+  /**
+   * Set when the deepest offer is deeper than the prices can carry, so the floor
+   * silently clips it.
+   *
+   * This matters because it is a promise we don't keep: the card says 40% off,
+   * the floor hands back 28%, and the member sees a number that doesn't match
+   * the one they scratched. Either the card comes down or the floor does — but
+   * quietly splitting the difference is the worst of the three.
+   */
+  clipped: { advertised: number; delivered: number } | null
   /** One sentence on the state of the ladder, for the top of the panel. */
   summary: string
 }
@@ -89,10 +103,17 @@ export function checkLadder(
   averageListPrice: number,
   config: PricingConfig = getPricingConfig(),
 ): LadderCheck {
-  const premium = premiumOverRrp(config)
-  // list = rrp × (1 + premium), so the member is at RRP exactly when
-  // (1 + premium)(1 − d) = 1, i.e. d = premium / (1 + premium).
-  const minDiscountForRrp = round4(premium / (1 + premium))
+  // A price set at cost × markup, floored at cost × (1 + marginFloor), can take
+  // at most this much off before the floor stops it. Nothing to do with RRP —
+  // it falls straight out of the two numbers we set ourselves.
+  const markup = Math.max(0.01, config.listPricing.markupOnCost)
+  const deepestPossibleDiscount = round4(Math.max(0, 1 - (1 + config.marginFloorPct) / markup))
+
+  // The deepest thing we actually offer: biggest bundle, then the best card on
+  // top of it.
+  const bestCard = Math.max(0, ...config.introOffer.scratchReveal.outcomes.map((o) => o.discount))
+  const deepestRung = Math.max(...Object.values(config.levelSubscriptionDiscount))
+  const deepestOffered = round4(1 - (1 - deepestRung) * (1 - bestCard))
 
   const levels = Object.keys(ITEMS_BY_LEVEL) as StackLevel[]
   const rungs = levels.map<LadderRung>((level) => {
@@ -101,9 +122,7 @@ export function checkLadder(
     const tier = resolveTier(config.bundleTiers, listPrice, items)
     const subscriptionPct = config.levelSubscriptionDiscount[level] ?? config.subscriptionDiscount
     const advantage = round4(subscriptionPct - tier.pct)
-
-    // Negative = above RRP.
-    const vsRrp = (d: number) => round4(1 - (1 + premium) * (1 - d))
+    const pays = (d: number) => Math.round(listPrice * (1 - d) * 100) / 100
 
     return {
       level,
@@ -113,41 +132,37 @@ export function checkLadder(
       oneOffLabel: tier.tier?.label ?? null,
       subscriptionPct: round4(subscriptionPct),
       advantage,
-      vsRrpOneOff: vsRrp(tier.pct),
-      vsRrpSubscribed: vsRrp(subscriptionPct),
-      healthy: advantage >= HEALTHY_ADVANTAGE_PP && subscriptionPct >= minDiscountForRrp,
-      warning: warningFor(level, advantage, subscriptionPct, tier.pct, minDiscountForRrp),
+      paysOneOff: pays(tier.pct),
+      paysSubscribed: pays(subscriptionPct),
+      healthy: advantage >= HEALTHY_ADVANTAGE_PP,
+      warning: warningFor(advantage, subscriptionPct, tier.pct),
     }
   })
 
+  const clipped =
+    deepestOffered > deepestPossibleDiscount
+      ? { advertised: deepestOffered, delivered: deepestPossibleDiscount }
+      : null
+
   const broken = rungs.filter((r) => !r.healthy)
+  const summary = broken.length > 0
+    ? `${broken.length} of ${rungs.length} bundles ${broken.length === 1 ? 'gives' : 'give'} members too little reason to subscribe.`
+    : clipped
+      ? `Every bundle beats buying once — but the biggest bundle plus the top scratch card asks for ${Math.round(clipped.advertised * 100)}% off, and prices at ${markup}× cost can only carry ${Math.round(clipped.delivered * 100)}%.`
+      : `Every bundle beats buying once by at least ${Math.round(HEALTHY_ADVANTAGE_PP * 100)} points, and the biggest discount we offer stays inside what the prices can carry.`
+
   return {
     rungs,
-    coherent: broken.length === 0,
-    anchorPremium: premium,
-    minDiscountForRrp,
-    summary: broken.length === 0
-      ? `Every bundle beats buying once by at least ${Math.round(HEALTHY_ADVANTAGE_PP * 100)} points, and every rung lands the member below RRP.`
-      : `${broken.length} of ${rungs.length} bundles ${broken.length === 1 ? 'gives' : 'give'} members too little reason to subscribe.`,
+    coherent: broken.length === 0 && clipped == null,
+    markupOnCost: markup,
+    deepestPossibleDiscount,
+    deepestOffered,
+    clipped,
+    summary,
   }
 }
 
-function warningFor(
-  level: StackLevel,
-  advantage: number,
-  subscriptionPct: number,
-  oneOffPct: number,
-  minDiscountForRrp: number,
-): string | null {
-  // The RRP breach is reported first even when the advantage is also thin: a
-  // rung that prices above the market is wrong in a way that no gap to the
-  // one-off tier can excuse, and fixing it usually fixes the gap too.
-  if (subscriptionPct < minDiscountForRrp) {
-    return (
-      `At ${Math.round(subscriptionPct * 1000) / 10}% this rung leaves the member paying ABOVE the supplier's RRP — ` +
-      `the list price is anchored ${Math.round(minDiscountForRrp * 1000) / 10}% above it. The "saving" is a markup.`
-    )
-  }
+function warningFor(advantage: number, subscriptionPct: number, oneOffPct: number): string | null {
   if (advantage < 0) {
     return (
       `Subscribing COSTS the member ${Math.round(-advantage * 1000) / 10} points on this bundle — the one-off ` +

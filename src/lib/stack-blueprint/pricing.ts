@@ -61,15 +61,10 @@ export const PRICING_CONFIG = {
    * subscriptionTier. Falls back to `subscriptionDiscount` if a level is unset.
    */
   levelSubscriptionDiscount: {
-    // 13 rather than a tidier 10 because the entry rung has to CLEAR TWO
-    // CONSTRAINTS at once, and 10 cleared neither with room to spare.
-    //
-    // First the anchor: the list price sits ~8.2% over RRP, so any discount
-    // below ~7.6% leaves the member paying more than they would on the high
-    // street. Second the ladder: it has to beat the flat 8% one-off tier by
-    // enough to be a reason to commit — `lib/pricing/ladder.ts` puts that bar at
-    // 5 points, which is roughly the smallest gap a shopper reliably notices.
-    // 13 − 8 = 5 exactly. See docs/PRICING_STRATEGY.md §5.
+    // 13 rather than a tidier 10 because the entry rung has to beat the flat 8%
+    // one-off tier by enough to be a reason to commit. `lib/pricing/ladder.ts`
+    // puts that bar at 5 points — roughly the smallest gap a shopper reliably
+    // notices — and 13 − 8 = 5 exactly. See docs/PRICING_STRATEGY.md §5.
     essentials: 0.13,
     performance: 0.15,
     complete: 0.2,
@@ -391,40 +386,50 @@ export const PRICING_CONFIG = {
   /**
    * How we set the LIST price — the number shown next to a bundle.
    *
-   * WHY THIS EXISTS, AND WHY COST-PLUS ISN'T ENOUGH
-   * ───────────────────────────────────────────────
-   * We resell branded goods. A customer knows what Gold Standard Whey costs and
-   * can check in ten seconds. Working a price up from cost — which is what the
-   * Good-price model below does — produced prices roughly DOUBLE PowerBody's own
-   * RRP, and an unsellable price loses money just as surely as a thin one.
+   * ONE RULE: DOUBLE WHAT WE PAY.
+   * ─────────────────────────────
+   *     list price = what PowerBody charge us × markupOnCost, rounded to .99
    *
-   * So the list price is ANCHORED to the supplier's RRP instead, and set a little
-   * above it. That premium is deliberate: almost everyone arrives through the
-   * quiz and buys a bundle, so the individual price is the number the discount is
-   * measured against. A modest premium makes the bundle a visible, checkable
-   * saving; a large one just gets us caught.
+   * That is the whole model, and it is deliberately something we own. The
+   * previous version worked backwards from the supplier's RRP, which made every
+   * price in the catalogue depend on a number that is only ever a *suggestion* —
+   * one PowerBody can change, that varies by brand, and that some products don't
+   * carry at all.
    *
-   * Cost-plus doesn't go away — it becomes the FLOOR. If the anchored price
-   * can't cover its costs, the hub says so rather than selling at a loss.
+   * Pricing from cost also happens to land in the same place. Across the
+   * catalogue their RRP is about 1.94× their wholesale, so doubling what we pay
+   * puts us within a few percent of the market anyway — we just get there by a
+   * rule we can explain in a sentence instead of by inheriting theirs.
+   *
+   * RRP DOESN'T DISAPPEAR — IT BECOMES THE CHECK. `rrpToleranceAbovePct` below
+   * flags any product where our price has drifted far enough above the
+   * supplier's recommendation that a customer would notice. A check that can
+   * only ever raise a flag is much safer than a driver that silently sets every
+   * price in the shop.
    */
-  anchor: {
+  listPricing: {
     /**
-     * The saving against RRP a member on the middle bundle should end up with
-     * (0–1). **This is the only lever** — the premium over RRP is derived from
-     * it, so the two can never contradict.
+     * What we multiply the supplier's price by to get our shelf price.
      *
-     * That matters more than it sounds. Setting a premium directly, alongside a
-     * separate target, lets you pick a pair that don't work: a 30% premium with
-     * a 15% bundle discount lands the member ABOVE RRP, turning the "bargain"
-     * into a markup nobody would fall for. Deriving the premium makes that
-     * impossible — see `anchoredListPrice`.
+     * 2.0 keeps roughly a fifth of a subscriber's order as contribution after
+     * VAT-on-costs, postage, card fees and returns. Below about 1.9 the margin
+     * gets thin enough that a single bad delivery band wipes it out; much above
+     * 2.1 and most of the catalogue prices above what the brands themselves
+     * recommend, which is the thing customers can check in ten seconds.
      */
-    targetBargainVsRrpPct: 0.08,
+    markupOnCost: 2.0,
     /**
-     * Round list prices to a .99 ending. Retail convention, and it stops the
-     * anchor looking like the output of a spreadsheet — which it is.
+     * Round list prices DOWN to a .99 ending. Retail convention, and down rather
+     * than to nearest because rounding up can quietly turn a saving into a
+     * markup.
      */
     roundTo99: true,
+    /**
+     * Raise a flag when our price sits more than this above the supplier's RRP
+     * (0–1). Not a cap and not a price rule — purely a "someone might notice"
+     * warning on the products tab.
+     */
+    rrpToleranceAbovePct: 0.15,
   },
 
   /**
@@ -569,7 +574,7 @@ export type PricingConfig = typeof PRICING_CONFIG
  */
 type NestedKeys =
   | 'introOffer' | 'delivery' | 'goodPricing' | 'vat'
-  | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'anchor'
+  | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'
 
 export type PricingOverrides = Partial<Omit<PricingConfig, NestedKeys>> & {
   [K in NestedKeys]?: Partial<PricingConfig[K]>
@@ -596,7 +601,7 @@ function recomputeConfig() {
     returns: { ...PRICING_CONFIG.returns, ...(_overrides.returns ?? {}) },
     supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(_overrides.supplierAccount ?? {}) },
     partners: { ...PRICING_CONFIG.partners, ...(_overrides.partners ?? {}) },
-    anchor: { ...PRICING_CONFIG.anchor, ...(_overrides.anchor ?? {}) },
+    listPricing: { ...PRICING_CONFIG.listPricing, ...(_overrides.listPricing ?? {}) },
     orderMix: {
       ...PRICING_CONFIG.orderMix,
       ...(_overrides.orderMix ?? {}),

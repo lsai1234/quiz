@@ -8,6 +8,7 @@ const RED = '#f87171'
 
 const money = (n: number) => `£${n.toFixed(2)}`
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`
+const round2 = (n: number) => Math.round(n * 100) / 100
 const pp = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(Math.round(n * 1000) / 10)}pp`
 
 const LABEL: Record<string, string> = {
@@ -72,9 +73,8 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
                 </span>
               </div>
               <p className="text-[10px] text-[var(--color-muted)]">
-                Member lands {pct(Math.abs(r.vsRrpSubscribed))}{' '}
-                {r.vsRrpSubscribed >= 0 ? 'below' : 'ABOVE'} RRP on the plan,{' '}
-                {pct(Math.abs(r.vsRrpOneOff))} {r.vsRrpOneOff >= 0 ? 'below' : 'ABOVE'} buying once.
+                On a {money(r.listPrice)} box: {money(r.paysSubscribed)} on a plan against{' '}
+                {money(r.paysOneOff)} buying once — {money(round2(r.paysOneOff - r.paysSubscribed))} a month better off.
               </p>
               {r.warning && (
                 <p className="text-[10px] mt-0.5 leading-snug" style={{ color: rowTone }}>
@@ -86,10 +86,20 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
         })}
       </div>
 
+      {check.clipped && (
+        <p className="text-[11px] mt-2.5 rounded-lg px-2.5 py-2 leading-relaxed"
+          style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
+          <strong>The biggest bundle plus the top scratch card promises more than we can give.</strong> Together they
+          ask for {pct(check.clipped.advertised)} off, but a price set at {check.markupOnCost}× what we pay can only
+          go to {pct(check.clipped.delivered)} before it is below cost. Someone who scratches the top card on the
+          biggest bundle sees a smaller discount than the one on the card. Either bring the top card down, or accept
+          selling that first month nearer cost.
+        </p>
+      )}
       <p className="text-[10px] text-[var(--color-muted)] mt-2.5 leading-relaxed">
-        The list price is anchored {pct(check.anchorPremium)} above the supplier&apos;s RRP, so any discount
-        below <strong>{pct(check.minDiscountForRrp)}</strong> leaves the member paying more than they would on
-        the high street. Every rung has to clear that line before it can be a saving at all.
+        Prices are {check.markupOnCost}× what we pay, and nothing is ever sold below cost plus a little — so the most
+        that can come off any product is <strong>{pct(check.deepestPossibleDiscount)}</strong>, whatever the discounts
+        add up to. The deepest we currently offer is {pct(check.deepestOffered)}.
       </p>
     </div>
   )

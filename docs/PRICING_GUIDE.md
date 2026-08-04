@@ -3,12 +3,13 @@
 Everything on this page is live in the Founders Hub under **Pricing**. Numbers
 come from the model, not from assumption.
 
-**What changed in this round:** list prices are anchored to the supplier's RRP
-instead of built up from cost, delivery is costed per *parcel* rather than per
-product, and — the big one — **the discount ladder now belongs to the
-subscription alone.** Buying once got a laddered discount that quietly beat
-subscribing; on the middle bundle it cost members 5 points to subscribe. See
-`docs/PRICING_STRATEGY.md` for the full audit.
+**The whole thing in three lines:**
+
+1. **Every price is what we pay, doubled** (rounded down to .99).
+2. **Buy once: 8% off** over £50. **Subscribe: 13 / 15 / 20%** by bundle size.
+3. **Nothing is ever sold below cost plus 15%**, whatever the discounts add up to.
+
+Everything below is detail behind those three.
 
 ---
 
@@ -155,67 +156,54 @@ past the guardrail.
 
 ---
 
-## 5. Where prices come from — solved
+## 5. Where prices come from — one rule
 
-You said individual prices can sit higher because people buy through the quiz and
-should feel they got a bargain. That's exactly right, and it's now how the model
-works.
-
-**Before:** cost-plus. Add up the five costs, apply a target profit, work
-backwards. That produced prices roughly **double PowerBody's own RRP** — £118 for
-a whey they say should retail at £64.99. Nobody buys that, and an unsellable
-price loses money just as surely as a thin one.
-
-**Now:** the market sets the price and we anchor to it.
+**Every price is what we pay, doubled, rounded down to .99.** That's it.
 
 ```
-list price   = RRP + 8.2%          ← the anchor, what a single unit costs
-bundle price = list − 13/15/20%    ← what a quiz member actually pays
-the bargain  = ~8% BELOW RRP       ← real, and checkable in ten seconds
+Titan Whey: PowerBody charge us £31.00  →  we sell it at £61.99
 ```
 
-**The one lever is the saving, not the premium.** You set "members should end up
-~8% under RRP" and the premium is *derived* from it. That sounds fussy and isn't:
-setting both by hand lets you pick a pair that don't work — a 30% premium with a
-15% bundle discount lands the member *above* RRP, turning the bargain into a
-markup. The hub makes that impossible, and warns you if you ask for a saving
-deeper than the bundle discount can deliver.
+### Why not the brand's RRP
 
-Worked example:
+It used to be. Prices were worked backwards from PowerBody's recommended retail
+price, and that produced sensible numbers — but it meant **every price in the
+shop depended on somebody else's suggestion.** An RRP isn't a fact: it varies by
+brand, PowerBody can change it, and plenty of products don't carry one at all.
+A feed update could quietly reprice the catalogue.
 
-| | |
-| --- | --- |
-| Gold Standard Whey — PowerBody RRP | £64.99 |
-| Our list price (the anchor) | **£69.99** |
-| What a quiz member pays on the middle bundle | **£59.49** |
-| What they save against a price they can look up | **8.5%** |
+Doubling what we pay lands in almost the same place anyway. Across the catalogue
+their RRP is about **1.94× their wholesale**, so ×2 puts us within a few percent
+of the market — we just get there by a rule we own and can explain in a sentence.
 
-**Cost-plus didn't disappear — its job changed** from *"what should we charge?"*
-to *"at that price, do we still make money?"* It's now the floor, and it flags
-the products where the answer is no.
+### RRP is now the check, not the driver
 
-### Are the prices still too high?
+Where a brand does publish one, the hub compares our price against it and flags
+anything more than 15% above. A check can only ever raise a flag; a driver
+silently sets every price in the shop. **4 of 24 products** currently sit above
+their brand's RRP — worth a look, not an emergency.
 
-No. The catalogue averages **+8.2% over RRP** on singles, and a member on a
-bundle lands **9.8% below RRP**. The old cost-plus model averaged +111%.
+### What this exposed
 
-### One product genuinely doesn't work
+Under the old rule, 1 product lost money. Under this one, **4 do** — and that is
+the rule telling the truth rather than a step backwards.
 
-GO Hydro Electrolyte Tablets: £6.49 RRP, and it can't absorb even a third of a
-£6.50 delivery. At −15% it's the only loss left in the catalogue, and no amount
-of bundling fixes it. The honest answer is to keep it off subscription, or only
-ever sell it as an add-on inside a parcel that's already going out. **Still to
-do** — it needs a catalogue change, not a pricing one.
+| Product | We pay | We charge | Subscriber pays | We keep |
+| --- | --- | --- | --- | --- |
+| GO Hydro Electrolytes | £3.20 | £5.99 | £5.09 | **−£1.75** |
+| Vitamin D3 4000iu | £4.00 | £7.99 | £6.79 | **−£0.34** |
+| Vitamin C 1000mg | £5.00 | £9.99 | £8.49 | **−£0.19** |
+| Daily Multivitamin | £6.00 | £11.99 | £10.19 | **−£0.03** |
 
-### Most of the catalogue is under target — and that's the target's fault
+All four are cheap vitamins, and the problem is the same one every time: a
+product carrying a **£2.62 share of the postage** needs to be worth more than
+about £12 to survive it. The old RRP rule hid three of these because those
+brands happen to recommend a generous retail price relative to what they charge
+us — Vitamin D3 costs £4.00 and its RRP is £9.99, so pricing off RRP made it
+look fine when the postage says otherwise.
 
-23 of 24 products come in under the 35% target margin, averaging 12.3%. That
-isn't 23 findings, it's one: **resold brands are priced against their own RRP,
-and the market won't pay an own-brand margin for them.** Either accept a lower
-target on resale, or make the money on bundle size and own-brand lines. The hub
-now says this once at the top instead of flagging every row.
-
----
+**They aren't bad products, they're bad *subscription lines*.** The fix is to
+sell them as add-ons to a box that's already going out, not as stack items.
 
 ## 6. Influencer commission
 
@@ -251,11 +239,20 @@ You asked for this to be unmistakable in the hub, and it's the first tab:
 On a representative 3-item basket (£76.10 list, £38.46 of wholesale), after
 discounts, commission, postage, VAT, card fees and returns:
 
-| | Before | After |
+| | |
+| --- | --- |
+| **A typical order** | £76.85 |
+| **We keep** | **£8.69** (13.1%) |
+| A customer, over 6 months | **£27.01** |
+
+And all four kinds of order pay their way:
+
+| Order type | Share | We keep |
 | --- | --- | --- |
-| **Average order keeps** | £6.70 (10.3%) | **£8.08** (12.3%) |
-| Average customer, over their life | £21.72 | **£24.63** |
-| Commission paid, per order | £2.91 | **£1.97** |
+| Subscription, direct | 42% | £7.90 |
+| One-off, direct | 28% | £15.11 |
+| Subscription, via a partner | 18% | £3.36 |
+| One-off, via a partner | 12% | £4.50 |
 
 And the sensitivity sweep — how far each lever could move before the *average*
 order broke even:
@@ -286,13 +283,19 @@ order type now pays, which is *why* no attribution share can break the average.
 
 ## 8. Where to look in the hub
 
+Three tabs, and that's deliberate — it used to be five and they buried each
+other.
+
 | Tab | Question it answers |
 | --- | --- |
-| **Are we making money?** | Does the average order pay, and what would have to go wrong |
-| **The model** | What one product costs and what to sell it for, with every step shown — including how many items share its parcel |
-| **Every product** | The same maths across the catalogue, worst first |
-| **VAT** | Are we required to register, and what would it cost |
-| **The rules** | Every setting, editable, with the reasoning next to it |
+| **Overview** | What a typical order makes us, what a customer is worth, and whether anything is losing money |
+| **Products** | What we pay, what we charge, and what we keep on every product — worst first |
+| **Rules** | Every setting, editable, with what it does written next to it |
+
+The deep modelling — the weighted average-order model, the break-even sweeps,
+the full cost waterfall, the VAT projection — is all still there, behind a
+**"show the working"** link on the first two tabs. It's there when you want it
+and out of the way when you don't.
 
 Worked examples of every model above — with invented products, and every number
 produced by the real code — are in **`docs/PRICING_EXAMPLES.md`**.

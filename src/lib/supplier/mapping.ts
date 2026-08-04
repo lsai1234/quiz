@@ -11,7 +11,7 @@
 import type { AsNeededTrigger, CatalogueProduct, CatalogueVariant, ConsumptionCadence, DietaryTag, PourAnchor, StackSlot, SwapGroup } from '@/lib/catalogue/types'
 import type { Goal } from '@/lib/types'
 import type { SupplierProduct } from './types'
-import { anchoredListPrice } from '@/lib/pricing/anchor'
+import { listPriceFor } from '@/lib/pricing/list-price'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -166,12 +166,14 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     formats,
     variants,
     defaultVariantId: variants.find((v) => v.available)?.id ?? variants[0]?.id ?? null,
-    // The list price is ANCHORED to the supplier's RRP and set a little above
-    // it, not taken raw — almost everyone buys a bundle, so this is the number
-    // the discount is measured against and the bundle price is what they pay.
-    // See `lib/pricing/anchor.ts`.
-    basePrice: anchoredListPrice(sp.rrp),
-    // …and the RRP itself becomes the was-price, which is exactly what it is.
+    // One rule: double what they charge us, rounded to .99. Deliberately NOT
+    // derived from their RRP — that is a suggestion, it varies by brand, and
+    // some products don't carry one, so hanging every price in the shop off it
+    // means a feed update can silently reprice the catalogue.
+    // See `lib/pricing/list-price.ts`.
+    basePrice: listPriceFor(sp.wholesalePrice),
+    // Their RRP becomes the was-price, which is exactly what it is — and the
+    // number the hub cross-checks us against.
     compareAtPrice: sp.rrp,
     cost: sp.wholesalePrice,
     // Fulfilment economics. PowerBody charge delivery by weight band and their

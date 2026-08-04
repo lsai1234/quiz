@@ -1,7 +1,7 @@
 import { supplierProductToCatalogue, classifySupplierProduct } from '@/lib/supplier/mapping'
 import { POWERBODY_FIXTURES } from '@/lib/supplier/powerbody/fixtures'
 import type { SupplierProduct } from '@/lib/supplier/types'
-import { anchoredListPrice } from '@/lib/pricing/anchor'
+import { listPriceFor } from '@/lib/pricing/list-price'
 
 const bySku = (sku: string): SupplierProduct => POWERBODY_FIXTURES.find((p) => p.sku === sku)!
 
@@ -11,7 +11,7 @@ describe('supplier → catalogue mapping', () => {
     const cp = supplierProductToCatalogue(sp)
     // The list price is ANCHORED above the supplier's RRP, not taken raw — the
     // bundle discount is measured against it, and the RRP becomes the was-price.
-    expect(cp.basePrice).toBe(anchoredListPrice(sp.rrp))
+    expect(cp.basePrice).toBe(listPriceFor(sp.wholesalePrice))
     expect(cp.basePrice).toBeGreaterThan(sp.rrp)
     expect(cp.compareAtPrice).toBe(sp.rrp)
     expect(cp.cost).toBe(sp.wholesalePrice)

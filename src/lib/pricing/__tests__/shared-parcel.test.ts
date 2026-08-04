@@ -9,7 +9,7 @@
  */
 import { unitEconomics, priceForMargin } from '../unit-economics'
 import { toFreeShipping, selectService } from '../delivery'
-import { anchorPrice, auditAnchors } from '../anchor'
+import { priceProduct, reviewCatalogue } from '../list-price'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { POWERBODY_FIXTURES } from '@/lib/supplier/powerbody/fixtures'
 
@@ -108,9 +108,9 @@ describe('the catalogue audit, packed the way we actually sell', () => {
       cost: p.wholesalePrice,
       servings: p.servings,
     }))
-    const alone = auditAnchors(rows.map((r) => ({ ...r, sharedParcelItems: 1 })), cfg())
-    const packed = auditAnchors(rows, cfg())
-    expect(packed.sharedParcelItems).toBe(PRICING_CONFIG.orderMix.itemsPerOrder)
+    const alone = reviewCatalogue(rows.map((r) => ({ ...r, sharedParcelItems: 1 })), cfg())
+    const packed = reviewCatalogue(rows, cfg())
+    expect(packed.rows[0].sharedParcelItems).toBe(PRICING_CONFIG.orderMix.itemsPerOrder)
     expect(packed.losing).toBeLessThan(alone.losing)
     expect(packed.averageMargin).toBeGreaterThan(alone.averageMargin)
     // The prices themselves don't move — this is about what they have to carry.
@@ -120,28 +120,27 @@ describe('the catalogue audit, packed the way we actually sell', () => {
   it('still calls out a product too cheap to carry its share of a parcel', () => {
     // A £6.49 item can't absorb even a third of £6.50 of postage, and no amount
     // of bundling changes that. It should stay flagged.
-    const r = anchorPrice({ title: 'Tiny', supplierRrp: 6.49, cost: 3.4, servings: 20 }, cfg())
+    const r = priceProduct({ title: 'Tiny', supplierRrp: 6.49, cost: 3.4, servings: 20 }, cfg())
     expect(r.viable).toBe(false)
-    expect(r.warning).toMatch(/keep it off subscription/)
+    expect(r.warning).toMatch(/best kept off subscription/i)
   })
 
-  it('says once, at the top, when the TARGET is what the catalogue is failing', () => {
-    // Two dozen individually-flagged products is not two dozen findings — it is
-    // one finding about the target margin, repeated.
-    const audit = auditAnchors(
-      POWERBODY_FIXTURES.map((p) => ({ title: p.name, supplierRrp: p.rrp, cost: p.wholesalePrice, servings: p.servings })),
-      cfg(),
-    )
-    expect(audit.squeezed).toBeGreaterThan(audit.rows.length * 0.6)
-    expect(audit.note).toMatch(/target, not the catalogue/)
-    expect(audit.targetMarginPct).toBe(PRICING_CONFIG.goodPricing.targetMarginPct)
+  it('flags a product priced noticeably above what the brand recommends', () => {
+    // RRP is a CHECK now, not the price rule — so a cheap-to-buy product whose
+    // brand recommends a low price gets a flag rather than a lower price.
+    const r = priceProduct({ title: 'Dear', supplierRrp: 20, cost: 15, servings: 60 }, cfg())
+    expect(r.listPrice).toBe(29.99)
+    expect(r.overRrp).toBe(true)
+    expect(r.warning).toMatch(/above what the brand recommends/)
   })
 
-  it('leaves the note off a catalogue that is mostly fine', () => {
-    const audit = auditAnchors(
-      Array.from({ length: 6 }, (_, i) => ({ title: `p${i}`, supplierRrp: 60, cost: 12, servings: 90 })),
-      cfg(),
-    )
-    expect(audit.note).toBeNull()
+  it('prices a product with no RRP exactly the same way', () => {
+    // The whole point of pricing from cost: an own-brand line with no
+    // recommended price is not a special case.
+    const withRrp = priceProduct({ cost: 12, servings: 60, supplierRrp: 25 }, cfg())
+    const without = priceProduct({ cost: 12, servings: 60, supplierRrp: null }, cfg())
+    expect(without.listPrice).toBe(withRrp.listPrice)
+    expect(without.rrp).toBeNull()
+    expect(without.warning).toBeNull()
   })
 })
