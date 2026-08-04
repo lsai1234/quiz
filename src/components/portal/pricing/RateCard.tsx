@@ -18,12 +18,12 @@ const ZONES: DeliveryZone[] = ['uk-1', 'uk-2', 'eu']
  */
 export function RateCard({
   config,
-  grams,
+  supplierValue,
   onChange,
 }: {
   config: PricingConfig
-  /** The weight currently being modelled, so the applicable row can be marked. */
-  grams: number
+  /** The wholesale order value being modelled, so the applicable band is marked. */
+  supplierValue: number
   onChange: (services: DeliveryService[]) => void
 }) {
   const update = (id: string, patch: Partial<DeliveryService>) =>
@@ -34,24 +34,24 @@ export function RateCard({
   const add = () =>
     onChange([
       ...config.delivery.services,
-      { id: `svc-${Date.now()}`, name: 'New service', zone: 'uk-1', minGrams: 0, maxGrams: 1000, price: 0 },
+      { id: `svc-${Date.now()}`, name: 'New band', zone: 'uk-1', maxOrderValue: 100, price: 0 },
     ])
 
   return (
     <div className="space-y-3">
       {ZONES.map((zone) => {
         const services = config.delivery.services.filter((s) => s.zone === zone)
-        const applicable = selectService(grams, zone, config)
+        const applicable = selectService(supplierValue, zone, config)
         return (
           <div key={zone}>
             <div className="flex items-baseline justify-between gap-2 mb-1">
               <p className="text-[11px] font-bold text-[var(--color-text)]">{ZONE_LABELS[zone]}</p>
               {applicable ? (
                 <p className="text-[10px]" style={{ color: ACCENT }}>
-                  {grams}g → {applicable.name} at £{applicable.price.toFixed(2)}
+                  £{supplierValue.toFixed(2)} wholesale → {applicable.price === 0 ? 'free' : `£${applicable.price.toFixed(2)}`}
                 </p>
               ) : (
-                <p className="text-[10px]" style={{ color: RED }}>no service carries {grams}g</p>
+                <p className="text-[10px]" style={{ color: RED }}>no band covers £{supplierValue.toFixed(2)}</p>
               )}
             </div>
 
@@ -75,24 +75,17 @@ export function RateCard({
                       className="flex-1 min-w-0 bg-transparent text-[11px] outline-none text-[var(--color-text)]"
                       aria-label="Service name"
                     />
+                    <span className="text-[10px] text-[var(--color-muted)]">up to £</span>
                     <input
                       type="number"
-                      value={s.minGrams}
-                      onChange={(e) => update(s.id, { minGrams: parseInt(e.target.value) || 0 })}
-                      className="w-14 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                      aria-label="Minimum grams"
-                    />
-                    <span className="text-[10px] text-[var(--color-muted)]">–</span>
-                    <input
-                      type="number"
-                      value={s.maxGrams}
-                      onChange={(e) => update(s.id, { maxGrams: parseInt(e.target.value) || 0 })}
+                      value={s.maxOrderValue ?? ''}
+                      placeholder="∞"
+                      onChange={(e) => update(s.id, { maxOrderValue: e.target.value === '' ? null : parseFloat(e.target.value) || 0 })}
                       className="w-16 px-1 py-0.5 rounded text-[11px] text-right outline-none"
                       style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                      aria-label="Maximum grams"
+                      aria-label="Maximum order value (blank for no limit)"
                     />
-                    <span className="text-[10px] text-[var(--color-muted)]">g · £</span>
+                    <span className="text-[10px] text-[var(--color-muted)]">wholesale · costs £</span>
                     <input
                       type="number"
                       step="0.01"
@@ -113,8 +106,9 @@ export function RateCard({
 
       <button onClick={add} className="text-xs font-bold" style={{ color: ACCENT }}>+ Add a service</button>
       <p className="text-[10px] text-[var(--color-muted)] leading-snug">
-        Prices are ex VAT, as PowerBody quote them. Bands are (min, max] so a weight sitting exactly on a boundary
-        lands in the lower band. The cheapest service that can carry the weight is the one they&apos;ll use.
+        Banded on what <strong>we</strong> pay PowerBody for the order, ex VAT — not on weight, and not on what the
+        member pays us. Leave the limit blank for the open-ended top band. The cheapest band an order qualifies for is
+        the one they charge, so a basket that clears the free line costs nothing to deliver.
       </p>
     </div>
   )

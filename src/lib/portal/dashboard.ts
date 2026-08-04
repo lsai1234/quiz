@@ -14,7 +14,7 @@
  */
 import type { Order } from '@/lib/orders/types'
 import type { SubscriptionSummary } from '@/lib/changes/health'
-import { blendedDeliveryCost, shipmentWeight } from '@/lib/pricing/delivery'
+import { blendedDeliveryCost } from '@/lib/pricing/delivery'
 import { revenueFromShelfPrice, costFromSupplierPrice } from '@/lib/pricing/vat'
 import type { PricingConfig } from '@/lib/stack-blueprint/pricing'
 
@@ -96,18 +96,17 @@ function orderCost(order: Order, config: PricingConfig): { cogs: number; deliver
     order.lines.reduce((s, l) => s + (l.supplierCost ?? 0) * l.quantity, 0),
     config,
   )
-  // PowerBody charge by weight band, so the shipped weight — not the unit count
-  // — is what sets the delivery cost.
-  const { grams } = shipmentWeight(
-    order.lines.map((l) => ({ weightGrams: l.weightGrams ?? null, quantity: l.quantity })),
-    config,
-  )
+  // PowerBody band delivery on the WHOLESALE VALUE of the order — what we pay
+  // them — so that is what sets the cost, and a big enough order ships free.
+  // Note this is their ex-VAT price, not `cogs` above, which may have had
+  // irrecoverable VAT added to it.
+  const wholesale = order.lines.reduce((s, l) => s + (l.supplierCost ?? 0) * l.quantity, 0)
   // What the supplier charges us to ship it, less whatever the member paid for
   // postage net of VAT — their contribution is already inside `order.total`.
   const collected = revenueFromShelfPrice(order.shipping, config.vat.standardRate, config)
   return {
     cogs: round(cogs),
-    delivery: round(Math.max(0, blendedDeliveryCost(grams, config) - collected)),
+    delivery: round(Math.max(0, blendedDeliveryCost(wholesale, config) - collected)),
     known,
   }
 }

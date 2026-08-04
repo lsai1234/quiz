@@ -15,16 +15,25 @@ const DAYS_PER_MONTH = 30
  */
 export type DeliveryZone = 'uk-1' | 'uk-2' | 'eu'
 
-/** One line of the supplier's delivery rate card. Prices are ex VAT. */
+/**
+ * One line of the supplier's delivery rate card.
+ *
+ * Banded on the ORDER VALUE — specifically what WE pay PowerBody for that
+ * order, not what the member pays us. Their site prices delivery this way, so
+ * cheaper stock means a cheaper parcel and a bigger basket eventually ships
+ * free. That is the opposite shape to a weight-banded card and it changes what
+ * a good order looks like: bundle up, ship less often, cross the free line.
+ */
 export interface DeliveryService {
   id: string
   name: string
   zone: DeliveryZone
-  /** Inclusive lower bound of the weight band (g). */
-  minGrams: number
-  /** Inclusive upper bound of the weight band (g). */
-  maxGrams: number
-  /** What the supplier charges us, ex VAT (£). */
+  /**
+   * Upper bound of the band — our wholesale value for the order (£, ex VAT).
+   * null means "and above", i.e. the open-ended top band.
+   */
+  maxOrderValue: number | null
+  /** What the supplier charges us, ex VAT (£). 0 for the free band. */
   price: number
 }
 
@@ -198,11 +207,16 @@ export const PRICING_CONFIG = {
      * weight in the destination zone wins.
      */
     services: [
-      { id: 'rm48-z1', name: 'Royal Mail Tracked 48', zone: 'uk-1', minGrams: 0, maxGrams: 7000, price: 3.25 },
-      { id: 'dpd-z1-light', name: 'DPD Two Day', zone: 'uk-1', minGrams: 0, maxGrams: 1990, price: 4.75 },
-      { id: 'dpd-z1-heavy', name: 'DPD Two Day', zone: 'uk-1', minGrams: 1990, maxGrams: 30000, price: 5.17 },
-      { id: 'rm48-z2', name: 'Royal Mail Tracked 48', zone: 'uk-2', minGrams: 0, maxGrams: 7000, price: 4.49 },
-      { id: 'ups-eu', name: 'UPS International', zone: 'eu', minGrams: 0, maxGrams: 20000, price: 8.6 },
+      // UK mainland, from powerbody.com. THE FREE BAND IS THE WHOLE GAME: an
+      // order where our wholesale cost clears £99 ships for nothing, which is
+      // worth more than any discount we could negotiate.
+      { id: 'z1-50', name: 'Standard', zone: 'uk-1', maxOrderValue: 50, price: 6.5 },
+      { id: 'z1-99', name: 'Standard', zone: 'uk-1', maxOrderValue: 99, price: 5.5 },
+      { id: 'z1-free', name: 'Free over £99', zone: 'uk-1', maxOrderValue: null, price: 0 },
+      // Highlands & Islands.
+      { id: 'z2-300', name: 'Standard', zone: 'uk-2', maxOrderValue: 300, price: 7.99 },
+      { id: 'z2-free', name: 'Free over £300', zone: 'uk-2', maxOrderValue: null, price: 0 },
+      { id: 'eu', name: 'UPS International', zone: 'eu', maxOrderValue: null, price: 8.6 },
     ] as DeliveryService[],
     /**
      * The zone to assume when we're pricing rather than shipping — i.e. on the

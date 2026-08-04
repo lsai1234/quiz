@@ -135,8 +135,8 @@ export default function PricingPage() {
 
   const scenario = good.scenarios[scenarioId] ?? good.scenarios[2]
   const shelfPrice = priceOverride ?? good.goodPrice ?? 0
-  const parcel = quoteDelivery({ grams, orderValue: scenario.economics.shelfPrice }, draft)
-  const freeDelivery = freeDeliveryImpact(grams, draft)
+  const parcel = quoteDelivery({ supplierValue: assetPrice, orderValue: scenario.economics.shelfPrice }, draft)
+  const freeDelivery = freeDeliveryImpact(assetPrice, draft)
 
   return (
     <div className="pb-10">
@@ -344,7 +344,7 @@ export default function PricingPage() {
           </Section>
 
           <Section title="Delivery — PowerBody's rate card" desc="Priced by weight and zone. There is no free-shipping threshold: their guide states free delivery is not available to dropshippers, so this lands on every order.">
-            <RateCard config={draft} grams={grams} onChange={(services: DeliveryService[]) => setNested('delivery', { services })} />
+            <RateCard config={draft} supplierValue={assetPrice} onChange={(services: DeliveryService[]) => setNested('delivery', { services })} />
             <div className="mt-3">
               <Num label="Orders to the Highlands & Islands" value={pct(draft.delivery.zone2SharePct)} suffix="%" onChange={(n) => setNested('delivery', { zone2SharePct: n / 100 })}
                 help="Used to blend one honest delivery cost instead of pricing everything at the mainland or the worst rate." />

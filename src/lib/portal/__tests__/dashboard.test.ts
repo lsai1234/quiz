@@ -77,12 +77,12 @@ describe('money windows', () => {
     expect(w.aov).toBe(40)
   })
 
-  it('counts goods, PowerBody’s weight-banded delivery and card fees', () => {
+  it('counts goods, PowerBody’s value-banded delivery and card fees', () => {
     const w = moneyWindow(ago(24), [order(), order()], REGISTERED)
     expect(w.cogs).toBe(24)
-    // No weight on the lines, so the default 1kg — Royal Mail Tracked 48,
-    // blended across zones — on each of the two orders.
-    expect(w.delivery).toBeCloseTo(6.6, 1)
+    // £12 of wholesale per order sits in PowerBody's cheapest band (£6.50),
+    // blended across zones, on each of the two orders.
+    expect(w.delivery).toBeCloseTo(13.1, 1)
     expect(w.paymentFees).toBeCloseTo(80 * 0.015 + 0.4, 2)
     expect(w.grossProfit).toBeCloseTo(w.netRevenue - w.cogs - w.delivery - w.paymentFees, 1)
     // The naive "£80 − £24 = 70% margin" is nowhere near the truth.
@@ -90,10 +90,26 @@ describe('money windows', () => {
   })
 
   it('subtracts what the member paid for postage, net of its own VAT', () => {
-    const w = moneyWindow(ago(24), [order({ shipping: 3.95, total: 43.95 })], REGISTERED)
-    // £3.95 collected is £3.29 net against a ~£3.30 cost, so we carry ~nothing.
-    expect(w.delivery).toBeCloseTo(0, 1)
-    expect(w.revenue).toBe(43.95)
+    const withPostage = moneyWindow(ago(24), [order({ shipping: 3.95, total: 43.95 })], REGISTERED)
+    const without = moneyWindow(ago(24), [order()], REGISTERED)
+    // The £3.95 they paid is £3.29 net, and comes straight off what we carry.
+    expect(withPostage.delivery).toBeCloseTo(without.delivery - 3.95 / 1.2, 1)
+    expect(withPostage.revenue).toBe(43.95)
+  })
+
+  it('gets nearly-free delivery once our wholesale clears PowerBody’s line', () => {
+    // £150 of wholesale ships free to the mainland (over £99) but NOT to the
+    // Highlands, whose free line is £300 — so the blend keeps a sliver rather
+    // than dropping to zero. The whole argument for bigger baskets in one number.
+    const big = order({ lines: [{ sku: 'S', productId: 'p', title: 'P', quantity: 1, unitPrice: 300, supplierCost: 150 }] })
+    const small = order()
+    const bigDelivery = moneyWindow(ago(24), [big], REGISTERED).delivery
+    expect(bigDelivery).toBeLessThan(1)
+    expect(bigDelivery).toBeLessThan(moneyWindow(ago(24), [small], REGISTERED).delivery)
+
+    // Clear the Highlands line too and it really is free everywhere.
+    const huge = order({ lines: [{ sku: 'S', productId: 'p', title: 'P', quantity: 1, unitPrice: 700, supplierCost: 350 }] })
+    expect(moneyWindow(ago(24), [huge], REGISTERED).delivery).toBe(0)
   })
 
   it('leaves orders it cannot cost out of the margin, and says how many', () => {

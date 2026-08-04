@@ -27,7 +27,7 @@
  * Pure. Every function takes its config, so the hub previews unsaved rules.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { blendedDeliveryCost, customerDeliveryCharge, shipmentWeight } from './delivery'
+import { blendedDeliveryCost, customerDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
 import { costFromSupplierPrice, revenueFromShelfPrice, vatRateFor } from './vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -139,7 +139,9 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
     : round((netRevenue - revenueFromShelfPrice(deliveryCharged, config.vat.standardRate, config)) * config.defaultCostRatio)
   const productCost = costFromSupplierPrice(supplierExVat, config)
 
-  const deliveryCost = blendedDeliveryCost(grams, config)
+  // PowerBody band delivery on what WE pay them, so the goods cost IS the input
+  // to the delivery cost — which is why a bigger basket eventually ships free.
+  const deliveryCost = blendedDeliveryCost(supplierExVat, config)
   const paymentFee = round(grossRevenue * config.paymentFees.percent + config.paymentFees.fixed)
 
   // A return refunds the goods but never the shipping, so what a return costs
@@ -150,6 +152,8 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
   )
 
   const contribution = round(netRevenue - productCost - deliveryCost - paymentFee - returnsProvision)
+
+  const free = toFreeShipping(supplierExVat, config.delivery.defaultZone, config)
 
   // ── The waterfall ──
   const steps: EconomicsStep[] = []
@@ -173,7 +177,9 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
       : 'Their wholesale price plus VAT, which we cannot reclaim.',
     !costKnown)
   push('delivery-cost', 'Less what PowerBody charge to ship it', -deliveryCost,
-    `${grams}g, blended across mainland and Highlands rates. Dropshippers get no free delivery, so this is on every order.`,
+    deliveryCost === 0
+      ? `Free — the £${supplierExVat.toFixed(2)} of wholesale in this order clears PowerBody's £${free.threshold} line.`
+      : `Banded on the £${supplierExVat.toFixed(2)} of wholesale in this order${free.shortfall ? `; £${free.shortfall.toFixed(2)} more of stock ships it free` : ''}.`,
     !weightKnown)
   push('fees', 'Less card fees', -paymentFee,
     `${Math.round(config.paymentFees.percent * 1000) / 10}% + ${config.paymentFees.fixed.toFixed(2)} of the gross. VAT-exempt, so there is nothing to reclaim.`)
@@ -239,10 +245,6 @@ export function priceForMargin(
   const vatRate = vatRateFor({ vatRate: input.vatRate }, config)
   const m = Math.min(0.99, Math.max(0, targetMargin))
 
-  const { grams } = shipmentWeight([{ weightGrams: input.grams ?? null, quantity }], config)
-  const deliveryCost = blendedDeliveryCost(grams, config)
-  const returnsProvision = round(config.returns.ratePct * deliveryCost * config.returns.costMultipleOfDelivery)
-
   // An unknown cost is a share of the net price, which makes it scale WITH P —
   // so it belongs on the left of the equation, not the right.
   const costKnown = input.supplierCost != null
@@ -257,7 +259,26 @@ export function priceForMargin(
 
   if (perPound <= 0) return null
 
+  // Delivery bands on OUR wholesale cost, so when that cost is itself a share of
+  // the price we are solving for, delivery depends on the answer. Rather than
+  // inverting a step function, start from a guess and iterate: solve, re-read
+  // which band the resulting cost lands in, solve again. It settles in two or
+  // three passes because the bands are coarse and the cost moves smoothly.
+  //
+  // Seeded from the DEAREST band rather than from zero when the cost is unknown.
+  // A zero seed makes the first pass believe delivery is free, which produced a
+  // nonsense first price — and on the postage-charged branch a negative one,
+  // because the postage we collect outweighed a cost base of almost nothing.
+  const dearestBand = Math.max(
+    0,
+    ...config.delivery.services.filter((sv) => sv.zone === config.delivery.defaultZone).map((sv) => sv.price),
+  )
+  let deliveryCost = costKnown
+    ? blendedDeliveryCost(input.supplierCost! * quantity, config)
+    : costFromSupplierPrice(dearestBand, config)
+
   const solve = (deliveryCharged: number): number => {
+    const returnsProvision = round(config.returns.ratePct * deliveryCost * config.returns.costMultipleOfDelivery)
     const base =
       (costKnown ? costFromSupplierPrice(input.supplierCost! * quantity, config) : 0) +
       deliveryCost +
@@ -267,6 +288,16 @@ export function priceForMargin(
       ((1 - m) * deliveryCharged) / stdDivisor
     // Round UP: rounding a floor down puts you under it.
     return Math.ceil((base / perPound) * 100) / 100
+  }
+
+  /** Re-read the delivery band from the price a solve produced. */
+  const settleDelivery = (price: number): boolean => {
+    if (costKnown || price <= 0) return true
+    const estimatedCost = (price / netDivisor) * config.defaultCostRatio
+    const next = blendedDeliveryCost(estimatedCost, config)
+    if (next === deliveryCost) return true
+    deliveryCost = next
+    return false
   }
 
   const charge = round(config.delivery.customerDeliveryCharge)
@@ -281,7 +312,13 @@ export function priceForMargin(
 
     const withoutPostage = solve(0)
     if (withoutPostage >= freeAbove) return withoutPostage
+
+    // A branch that solves to a non-positive price has not found an answer, it
+    // has found an arithmetic artefact — the postage collected outweighing the
+    // costs. Fall back rather than returning a negative price that would then
+    // sail through the convergence check.
     const withPostage = solve(charge)
+    if (withPostage <= 0) return withoutPostage
     return withPostage < freeAbove ? withPostage : withoutPostage
   }
 
@@ -295,6 +332,10 @@ export function priceForMargin(
   // actually clear it. Bounded because a config where a penny never helps
   // (fees ≥ margin) should return null, not spin.
   let price = chooseBranch()
+  // Settle the delivery band first — a price solved against the wrong band is
+  // out by pounds, and the penny-nudge below only fixes rounding.
+  for (let pass = 0; pass < 6 && !settleDelivery(price); pass++) price = chooseBranch()
+
   for (let i = 0; i < 25; i++) {
     if (unitEconomics({ ...input, shelfPrice: price }, config).marginPct >= m) return price
     price = round(price + 0.01)

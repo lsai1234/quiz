@@ -1,6 +1,6 @@
 import { goodPriceFor, auditProductPrice, worstCaseSubscriptionRate, pricingHorizonMonths, supplierAccountCheck } from '../good-price'
 import { unitEconomics, priceForMargin, gradePrice } from '../unit-economics'
-import { selectService, quoteDelivery, blendedDeliveryCost, shipmentWeight, eligibleServices } from '../delivery'
+import { selectService, quoteDelivery, blendedDeliveryCost, shipmentWeight, toFreeShipping } from '../delivery'
 import { netFromGross, grossFromNet, revenueFromShelfPrice, costFromSupplierPrice, vatRateFor } from '../vat'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
@@ -51,53 +51,58 @@ describe('VAT', () => {
 describe('PowerBody’s delivery rate card', () => {
   const c = cfg()
 
-  it('picks the cheapest service that can carry the weight', () => {
-    // Under 7kg on the mainland, Royal Mail Tracked 48 at £3.25 beats DPD.
-    expect(selectService(500, 'uk-1', c)).toMatchObject({ name: 'Royal Mail Tracked 48', price: 3.25 })
-    // Over 7kg only DPD's heavy band is left.
-    expect(selectService(8000, 'uk-1', c)).toMatchObject({ name: 'DPD Two Day', price: 5.17 })
+  it('bands on what WE pay for the order, not on weight', () => {
+    expect(selectService(30, 'uk-1', c)?.price).toBe(6.5)
+    expect(selectService(60, 'uk-1', c)?.price).toBe(5.5)
+    expect(selectService(120, 'uk-1', c)?.price).toBe(0)
   })
 
-  it('charges more to the Highlands and Islands', () => {
-    expect(selectService(500, 'uk-2', c)?.price).toBe(4.49)
+  it('ships free once the wholesale value clears their line', () => {
+    // The single most important fact in the rate card: a big enough basket
+    // costs nothing to deliver, which is the opposite of a weight-banded card.
+    expect(quoteDelivery({ supplierValue: 100, zone: 'uk-1' }, c).supplierCost).toBe(0)
+    expect(quoteDelivery({ supplierValue: 99, zone: 'uk-1' }, c).supplierCost).toBeGreaterThan(0)
   })
 
-  it('treats weight bands as (min, max] so a boundary lands in one band only', () => {
-    // 1990g is the top of DPD's light band and the bottom of its heavy one.
-    const at = eligibleServices(1990, 'uk-1', c).map((s) => s.id)
-    expect(at).toContain('dpd-z1-light')
-    expect(at).not.toContain('dpd-z1-heavy')
+  it('says how much more stock would ship an order free', () => {
+    const under = toFreeShipping(60, 'uk-1', c)
+    expect(under.threshold).toBe(99)
+    expect(under.shortfall).toBe(39)
+    expect(under.alreadyFree).toBe(false)
+    expect(toFreeShipping(150, 'uk-1', c).alreadyFree).toBe(true)
   })
 
-  it('reports when nothing on the card can carry it, rather than pricing it at zero', () => {
-    // PowerBody list no Highlands service above 7kg.
-    const q = quoteDelivery({ grams: 9000, zone: 'uk-2' }, c)
+  it('charges more to the Highlands and Islands, with a higher free line', () => {
+    expect(selectService(60, 'uk-2', c)?.price).toBe(7.99)
+    expect(selectService(400, 'uk-2', c)?.price).toBe(0)
+  })
+
+  it('treats a zero-value shipment as no shipment, not a free one', () => {
+    const q = quoteDelivery({ supplierValue: 0, zone: 'uk-1' }, c)
     expect(q.service).toBeNull()
-    expect(q.supplierCost).toBe(0)
-    expect(q.unavailableReason).toMatch(/Nothing on the rate card/)
+    expect(q.unavailableReason).toMatch(/Nothing to ship/)
   })
 
-  it('never gives dropshippers free supplier shipping, however big the order', () => {
-    // Our own free-delivery offer to the member does not reach PowerBody.
-    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', orderValue: 500 }, registered())
-    expect(q.customerCharge).toBe(0)
-    expect(q.freeForCustomer).toBe(true)
-    expect(q.supplierCost).toBe(3.25)
-    expect(q.absorbed).toBe(3.25)
-  })
-
-  it('collects postage from the member below the free-delivery threshold', () => {
-    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', orderValue: 20 }, c)
+  it('collects postage from the member below OUR free-delivery threshold', () => {
+    const q = quoteDelivery({ supplierValue: 30, zone: 'uk-1', orderValue: 20 }, c)
     expect(q.customerCharge).toBe(3.95)
-    expect(q.absorbed).toBe(0)
+    // Their £6.50 against our £3.95 collected — we carry the rest.
+    expect(q.absorbed).toBeGreaterThan(0)
+  })
+
+  it('keeps our free-delivery offer separate from theirs', () => {
+    // A member spending £500 retail gets free delivery from us, but the band
+    // PowerBody charge us depends on OUR wholesale cost, not their spend.
+    const q = quoteDelivery({ supplierValue: 30, zone: 'uk-1', orderValue: 500 }, registered())
+    expect(q.customerCharge).toBe(0)
+    expect(q.supplierCost).toBe(6.5)
+    expect(q.absorbed).toBe(6.5)
   })
 
   it('blends the zones rather than pricing everything at the worst one', () => {
-    const blended = blendedDeliveryCost(1000, registered())
-    expect(blended).toBeGreaterThan(3.25)
-    expect(blended).toBeLessThan(4.49)
-    // 96% × £3.25 + 4% × £4.49
-    expect(blended).toBeCloseTo(3.3, 2)
+    const blended = blendedDeliveryCost(60, registered())
+    expect(blended).toBeGreaterThan(5.5)
+    expect(blended).toBeLessThan(7.99)
   })
 
   it('falls back to a default weight and says that it guessed', () => {
@@ -106,7 +111,7 @@ describe('PowerBody’s delivery rate card', () => {
   })
 
   it('costs the supplier’s VAT into delivery when we cannot reclaim it', () => {
-    expect(quoteDelivery({ grams: 1000, zone: 'uk-1' }, unregistered()).supplierCost).toBeCloseTo(3.9, 2)
+    expect(quoteDelivery({ supplierValue: 30, zone: 'uk-1' }, unregistered()).supplierCost).toBeCloseTo(7.8, 2)
   })
 })
 
@@ -269,10 +274,12 @@ describe('the good price', () => {
     expect(long.goodPrice!).toBeLessThan(short.goodPrice!)
   })
 
-  it('demands more price for a heavier product', () => {
-    const light = goodPriceFor({ assetPrice: 10, grams: 500 }, c)
-    const heavy = goodPriceFor({ assetPrice: 10, grams: 9000 }, c)
-    expect(heavy.goodPrice!).toBeGreaterThan(light.goodPrice!)
+  it('demands LESS price for a bigger basket, because delivery gets cheaper', () => {
+    // Value-banded delivery inverts the old intuition: buy more and the parcel
+    // gets cheaper per pound, until it is free.
+    const small = goodPriceFor({ assetPrice: 20 }, c)
+    const big = goodPriceFor({ assetPrice: 120 }, c)
+    expect(big.goodPrice! / 120).toBeLessThan(small.goodPrice! / 20)
   })
 
   it('audits a catalogue product, estimating cost and weight when unset', () => {

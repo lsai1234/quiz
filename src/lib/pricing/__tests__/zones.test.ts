@@ -95,28 +95,28 @@ describe('a postcode beats an assumed zone', () => {
   const c = PRICING_CONFIG
 
   it('prices a Highlands postcode at the Highlands rate', () => {
-    const mainland = quoteDelivery({ grams: 1000, postcode: 'M1 1AA' }, c)
-    const highlands = quoteDelivery({ grams: 1000, postcode: 'IV30 1AA' }, c)
+    const mainland = quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, c)
+    const highlands = quoteDelivery({ supplierValue: 30, postcode: 'IV30 1AA' }, c)
     // Rate-card prices, as PowerBody quote them (ex VAT).
-    expect(mainland.supplierPriceExVat).toBe(3.25)
-    expect(highlands.supplierPriceExVat).toBe(4.49)
+    expect(mainland.supplierPriceExVat).toBe(6.5)
+    expect(highlands.supplierPriceExVat).toBe(7.99)
     expect(highlands.zone).toBe('uk-2')
   })
 
   it('costs their VAT in while we are not registered', () => {
-    // Default config is unregistered, so their £3.25 really costs us £3.90.
-    expect(quoteDelivery({ grams: 1000, postcode: 'M1 1AA' }, c).supplierCost).toBeCloseTo(3.9, 2)
+    // Default config is unregistered, so their £6.50 really costs us £7.80.
+    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, c).supplierCost).toBeCloseTo(7.8, 2)
     const registered = { ...c, vat: { ...c.vat, registered: true } }
-    expect(quoteDelivery({ grams: 1000, postcode: 'M1 1AA' }, registered).supplierCost).toBe(3.25)
+    expect(quoteDelivery({ supplierValue: 30, postcode: 'M1 1AA' }, registered).supplierCost).toBe(6.5)
   })
 
   it('overrides an explicitly-passed zone when a postcode is given', () => {
-    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', postcode: 'IV30 1AA' }, c)
+    const q = quoteDelivery({ supplierValue: 30, zone: 'uk-1', postcode: 'IV30 1AA' }, c)
     expect(q.zone).toBe('uk-2')
   })
 
   it('refuses to price an excluded address instead of quoting a cost', () => {
-    const q = quoteDelivery({ grams: 1000, postcode: 'BT1 5GS' }, c)
+    const q = quoteDelivery({ supplierValue: 30, postcode: 'BT1 5GS' }, c)
     expect(q.service).toBeNull()
     expect(q.supplierCost).toBe(0)
     expect(q.unavailableReason).toContain('Northern Ireland')
