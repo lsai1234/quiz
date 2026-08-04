@@ -11,6 +11,7 @@
  * dashboard reuse the same summary the queue page shows.
  */
 import { reviewStateOf } from './service'
+import { deliverability } from '@/lib/pricing/zones'
 import type { Order, OrderReviewState } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -37,6 +38,18 @@ export interface QueueOrder {
   /** Lines with no SKU can't be dropshipped; they need a decision, not a send. */
   linesWithoutSku: number
   hasShippingAddress: boolean
+  /**
+   * Set when PowerBody will not dropship to this address at all — Northern
+   * Ireland, Guernsey, Jersey, or anywhere outside the UK on a UK account.
+   *
+   * These look like ordinary orders: a Belfast address is a UK address, in
+   * PowerBody's own Zone 2, and nothing about it warns you until the supplier
+   * refuses it. Catching it here is the difference between a refund and a
+   * customer waiting for a parcel that was never coming.
+   */
+  undeliverableReason: string | null
+  /** Which zone the address falls in — Zone 2 costs us more to ship to. */
+  deliveryZone: string | null
   review: OrderReviewState
   reviewNote: string | null
   createdAt: string
@@ -66,6 +79,8 @@ export interface FulfilmentQueue {
   rejected: number
   /** Pending orders that can't be dropshipped as they stand (missing SKU or address). */
   blocked: number
+  /** Pending orders going somewhere PowerBody will not ship at all. */
+  undeliverable: number
   oneOff: number
   subscription: number
   /** Value of everything in the queue (£). */
@@ -74,7 +89,10 @@ export interface FulfilmentQueue {
 
 function toQueueOrder(order: Order): QueueOrder {
   const costKnown = order.lines.every((l) => l.supplierCost != null)
+  const reach = order.shippingAddress ? deliverability(order.shippingAddress) : null
   return {
+    undeliverableReason: reach?.excluded ? reach.reason : null,
+    deliveryZone: reach?.zone ?? null,
     id: order.id,
     reference: order.reference ?? null,
     kind: queueKindOf(order),
@@ -97,7 +115,7 @@ function toQueueOrder(order: Order): QueueOrder {
 
 /** True when an order needs a decision before it could be sent at all. */
 function isBlocked(o: QueueOrder): boolean {
-  return o.linesWithoutSku > 0 || !o.hasShippingAddress
+  return o.linesWithoutSku > 0 || !o.hasShippingAddress || o.undeliverableReason != null
 }
 
 /**
@@ -137,6 +155,7 @@ export function buildFulfilmentQueue(orders: Order[], kind?: QueueKind): Fulfilm
     held: rows.filter((o) => o.review === 'held').length,
     rejected: rows.filter((o) => o.review === 'rejected').length,
     blocked: rows.filter((o) => o.review === 'pending' && isBlocked(o)).length,
+    undeliverable: rows.filter((o) => o.review === 'pending' && o.undeliverableReason != null).length,
     oneOff: rows.filter((o) => o.kind === 'one-off').length,
     subscription: rows.filter((o) => o.kind === 'subscription').length,
     total: round(rows.reduce((s, o) => s + o.total, 0)),

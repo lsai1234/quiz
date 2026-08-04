@@ -80,6 +80,12 @@ export interface DashboardSummary {
   }
   /** Everything asking for a founder's attention, biggest first. */
   actionRequired: { label: string; count: number; href: string }[]
+  /**
+   * Things that need a decision but have no count — a VAT threshold coming up
+   * isn't "3 of something", it's one fact with a date on it. Kept separate so
+   * the counted list stays sortable by urgency.
+   */
+  notices: { id: string; label: string; detail: string; href: string; tone: 'watch' | 'act' }[]
 }
 
 function orderCost(order: Order, config: PricingConfig): { cogs: number; delivery: number; known: boolean } {
@@ -166,6 +172,10 @@ export interface DashboardInput {
   openChanges: number
   /** Products failing a launch-readiness check. */
   productsNeedingAttention: number
+  /** Where we stand on VAT registration, when it's worth saying anything. */
+  vat?: { tone: 'ok' | 'watch' | 'act'; headline: string; detail: string } | null
+  /** Paid orders going somewhere PowerBody will not ship. */
+  undeliverable?: number
   now?: Date
 }
 
@@ -181,6 +191,7 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
   const requiresAction = subscriptions.filter((s) => s.health === 'requires-action').length
 
   const actionRequired = [
+    { label: 'Orders PowerBody will not ship to', count: input.undeliverable ?? 0, href: '/portal/commerce/queue' },
     { label: 'Orders to review before we ask the supplier', count: input.awaitingReview, href: '/portal/commerce/queue' },
     { label: 'Approved orders ready to send', count: input.readyToSend, href: '/portal/commerce/queue' },
     { label: 'Product changes on live subscriptions', count: input.openChanges, href: '/portal/actions' },
@@ -209,5 +220,10 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
       arpu: subscriptions.length > 0 ? round(mrr / subscriptions.length) : 0,
     },
     actionRequired,
+    // Only surfaced once it's actionable — a threshold six years away is noise.
+    notices:
+      input.vat && input.vat.tone !== 'ok'
+        ? [{ id: 'vat', label: input.vat.headline, detail: input.vat.detail, href: '/portal/pricing', tone: input.vat.tone }]
+        : [],
   }
 }

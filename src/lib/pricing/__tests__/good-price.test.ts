@@ -4,11 +4,21 @@ import { selectService, quoteDelivery, blendedDeliveryCost, shipmentWeight, elig
 import { netFromGross, grossFromNet, revenueFromShelfPrice, costFromSupplierPrice, vatRateFor } from '../vat'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
-/** A config built from the defaults with a few rules overridden. */
+/**
+ * A config built from the defaults with a few rules overridden.
+ *
+ * NOTE the shipped default is NOT VAT-registered — that is the phase the
+ * business is in, and it changes both sides of every calculation. Tests about
+ * VAT mechanics say which they mean rather than relying on the default.
+ */
 function cfg(over: Partial<PricingConfig> = {}): PricingConfig {
   return { ...PRICING_CONFIG, ...over }
 }
 const unregistered = () => cfg({ vat: { ...PRICING_CONFIG.vat, registered: false } })
+const registered = (over: Partial<PricingConfig> = {}) => ({
+  ...cfg(over),
+  vat: { ...PRICING_CONFIG.vat, registered: true },
+})
 
 describe('VAT', () => {
   it('strips and adds VAT symmetrically', () => {
@@ -26,7 +36,7 @@ describe('VAT', () => {
   })
 
   it('registered: we hand VAT over but reclaim what the supplier charged', () => {
-    const c = cfg()
+    const c = registered()
     expect(revenueFromShelfPrice(30, 0.2, c)).toBe(25)
     expect(costFromSupplierPrice(10, c)).toBe(10)
   })
@@ -69,7 +79,7 @@ describe('PowerBody’s delivery rate card', () => {
 
   it('never gives dropshippers free supplier shipping, however big the order', () => {
     // Our own free-delivery offer to the member does not reach PowerBody.
-    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', orderValue: 500 }, c)
+    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', orderValue: 500 }, registered())
     expect(q.customerCharge).toBe(0)
     expect(q.freeForCustomer).toBe(true)
     expect(q.supplierCost).toBe(3.25)
@@ -83,7 +93,7 @@ describe('PowerBody’s delivery rate card', () => {
   })
 
   it('blends the zones rather than pricing everything at the worst one', () => {
-    const blended = blendedDeliveryCost(1000, c)
+    const blended = blendedDeliveryCost(1000, registered())
     expect(blended).toBeGreaterThan(3.25)
     expect(blended).toBeLessThan(4.49)
     // 96% × £3.25 + 4% × £4.49
@@ -101,7 +111,9 @@ describe('PowerBody’s delivery rate card', () => {
 })
 
 describe('the unit-economics waterfall', () => {
-  const c = cfg()
+  // VAT mechanics are the subject here, so these run registered; the
+  // unregistered path has its own tests above and below.
+  const c = registered()
 
   it('sums every step exactly to the contribution', () => {
     const e = unitEconomics({ shelfPrice: 30, supplierCost: 10, grams: 1000 }, c)
@@ -269,14 +281,14 @@ describe('the good price', () => {
   })
 
   it('estimates an unknown cost off the NET price, not the VAT-inclusive one', () => {
-    const audit = auditProductPrice({ title: 'X', basePrice: 60, cost: null, servings: 30, weightGrams: 1000 }, c)
+    const audit = auditProductPrice({ title: 'X', basePrice: 60, cost: null, servings: 30, weightGrams: 1000 }, registered())
     // 35% of the £50 net price, not of the £60 shelf price.
-    expect(audit.monthlyCost.goods).toBeCloseTo(50 * c.defaultCostRatio, 1)
+    expect(audit.monthlyCost.goods).toBeCloseTo(50 * PRICING_CONFIG.defaultCostRatio, 1)
   })
 
   it('never schedules a shipment further apart than the delivery cap allows', () => {
-    const yearly = auditProductPrice({ title: 'Huge tub', basePrice: 60, cost: 20, servings: 365, weightGrams: 1000 }, c)
-    expect(yearly.monthlyCost.goods).toBeCloseTo(20 / c.maxDeliveryMonths, 2)
+    const yearly = auditProductPrice({ title: 'Huge tub', basePrice: 60, cost: 20, servings: 365, weightGrams: 1000 }, registered())
+    expect(yearly.monthlyCost.goods).toBeCloseTo(20 / PRICING_CONFIG.maxDeliveryMonths, 2)
   })
 
   it('reports where our price sits against the supplier’s RRP', () => {

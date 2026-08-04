@@ -28,6 +28,8 @@ function dayLabel(iso: string): string {
 
 /** Why an order can't be dropshipped as it stands. */
 function blockedReason(o: QueueOrder): string | null {
+  // The address one first: it is the only reason that can never be fixed by us.
+  if (o.undeliverableReason) return o.undeliverableReason
   if (o.linesWithoutSku > 0) return `${o.linesWithoutSku} line${o.linesWithoutSku === 1 ? '' : 's'} with no supplier SKU`
   if (!o.hasShippingAddress) return 'no delivery address'
   return null
@@ -110,9 +112,18 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
         <Stat n={queue.held + queue.rejected} label="Held / rejected" colour={queue.held + queue.rejected > 0 ? RED : 'var(--color-muted)'} />
       </div>
 
-      {queue.blocked > 0 && (
-        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${RED} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 30%, transparent)`, color: '#fca5a5' }}>
-          {queue.blocked} order{queue.blocked === 1 ? '' : 's'} can&apos;t be dropshipped as {queue.blocked === 1 ? 'it stands' : 'they stand'} — missing a supplier SKU or a delivery address. Fix or reject {queue.blocked === 1 ? 'it' : 'them'} rather than sending.
+      {queue.undeliverable > 0 && (
+        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${RED} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 40%, transparent)`, color: '#fca5a5' }}>
+          <strong>{queue.undeliverable} order{queue.undeliverable === 1 ? '' : 's'} PowerBody will not ship to.</strong>{' '}
+          Northern Ireland, Guernsey, Jersey and anywhere outside the UK are off-limits on a UK dropshipping account.
+          These look like ordinary UK orders — refund {queue.undeliverable === 1 ? 'it' : 'them'} rather than leaving
+          someone waiting for a parcel that was never coming.
+        </p>
+      )}
+
+      {queue.blocked > queue.undeliverable && (
+        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 30%, transparent)`, color: AMBER }}>
+          {queue.blocked - queue.undeliverable} more can&apos;t be sent as {queue.blocked - queue.undeliverable === 1 ? 'it stands' : 'they stand'} — missing a supplier SKU or a delivery address.
         </p>
       )}
 
@@ -180,6 +191,7 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                         </div>
                         <p className="text-[11px] text-[var(--color-muted)] mt-0.5 truncate">
                           {o.email ?? 'guest'} · {o.itemCount} item{o.itemCount === 1 ? '' : 's'} · {new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          {o.deliveryZone === 'uk-2' && <span style={{ color: AMBER }}> · Highlands rate</span>}
                           {o.supplierCost != null && ` · costs us ${money(o.supplierCost, o.currency)}`}
                         </p>
                         {blocked && <p className="text-[11px] mt-1" style={{ color: RED }}>Can&apos;t send — {blocked}.</p>}

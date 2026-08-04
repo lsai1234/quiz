@@ -114,8 +114,19 @@ export const PRICING_CONFIG = {
   minSubscriptionMonths: 1,
 
   // ── Fulfilment ──
-  /** Order total (£) at or above which delivery is free. Advertised on the
-   *  bundle selector; 0 disables the free-delivery messaging entirely. */
+  /**
+   * OUR free-delivery offer: the total (£, inc VAT, at OUR retail prices) at or
+   * above which the member pays nothing for postage. Advertised on the bundle
+   * selector; 0 turns the offer off entirely.
+   *
+   * NOTHING TO DO WITH POWERBODY'S THRESHOLDS. Their wholesale terms carry their
+   * own free-shipping figures on THEIR wholesale values (e.g. free over £300 for
+   * a Zone 2 wholesale order), and dropshipping gets no free delivery at all.
+   * The two are different numbers, on different price bases, in different
+   * directions — ours is a marketing promise that costs us money; theirs is a
+   * discount we don't qualify for. Crossing them is how a margin model quietly
+   * starts believing postage is free.
+   */
   freeDeliveryThreshold: 50,
 
   /**
@@ -143,8 +154,20 @@ export const PRICING_CONFIG = {
      * Not registered: we charge no VAT (keeping the whole shelf price) but
      * CANNOT reclaim, so PowerBody's VAT is a real cost. These are genuinely
      * different businesses, not a display toggle, which is why it lives here.
+     *
+     * Defaults to FALSE: a new business is below the threshold and not
+     * registered, and that is the phase this is being built in. Flip it the day
+     * registration takes effect and the whole hub reprices.
      */
-    registered: true,
+    registered: false,
+    /**
+     * HMRC's compulsory registration threshold — taxable turnover over any
+     * rolling 12 months (£). Public figure, £90,000 since April 2024.
+     * `lib/pricing/vat-position.ts` tracks us against it.
+     */
+    registrationThreshold: 90_000,
+    /** The threshold below which a registered business may deregister (£). */
+    deregistrationThreshold: 88_000,
   },
 
   /**

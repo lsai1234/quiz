@@ -49,6 +49,13 @@ const sub = (monthly: number, health: SubscriptionSummary['health'] = 'healthy')
   startedAt: ago(500),
 })
 
+/**
+ * The shipped default is NOT VAT-registered. These money tests are about what
+ * VAT does to a margin, so they run registered explicitly; the unregistered
+ * path has its own test below.
+ */
+const REGISTERED = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: true } }
+
 const base = {
   config: PRICING_CONFIG,
   awaitingReview: 0,
@@ -60,7 +67,7 @@ const base = {
 
 describe('money windows', () => {
   it('separates the till total from what we actually keep after VAT', () => {
-    const w = moneyWindow(ago(24), [order(), order()], PRICING_CONFIG)
+    const w = moneyWindow(ago(24), [order(), order()], REGISTERED)
     expect(w.orders).toBe(2)
     // What customers paid…
     expect(w.revenue).toBe(80)
@@ -71,7 +78,7 @@ describe('money windows', () => {
   })
 
   it('counts goods, PowerBody’s weight-banded delivery and card fees', () => {
-    const w = moneyWindow(ago(24), [order(), order()], PRICING_CONFIG)
+    const w = moneyWindow(ago(24), [order(), order()], REGISTERED)
     expect(w.cogs).toBe(24)
     // No weight on the lines, so the default 1kg — Royal Mail Tracked 48,
     // blended across zones — on each of the two orders.
@@ -83,7 +90,7 @@ describe('money windows', () => {
   })
 
   it('subtracts what the member paid for postage, net of its own VAT', () => {
-    const w = moneyWindow(ago(24), [order({ shipping: 3.95, total: 43.95 })], PRICING_CONFIG)
+    const w = moneyWindow(ago(24), [order({ shipping: 3.95, total: 43.95 })], REGISTERED)
     // £3.95 collected is £3.29 net against a ~£3.30 cost, so we carry ~nothing.
     expect(w.delivery).toBeCloseTo(0, 1)
     expect(w.revenue).toBe(43.95)
@@ -91,7 +98,7 @@ describe('money windows', () => {
 
   it('leaves orders it cannot cost out of the margin, and says how many', () => {
     const uncosted = order({ lines: [{ sku: 'S', productId: 'p', title: 'P', quantity: 1, unitPrice: 40 }] })
-    const w = moneyWindow(ago(24), [order(), uncosted], PRICING_CONFIG)
+    const w = moneyWindow(ago(24), [order(), uncosted], REGISTERED)
     expect(w.orders).toBe(2)
     expect(w.revenue).toBe(80) // revenue still counts both
     expect(w.ordersWithUnknownCost).toBe(1)
@@ -102,8 +109,7 @@ describe('money windows', () => {
   })
 
   it('costs the supplier’s VAT in when we cannot reclaim it', () => {
-    const unregistered = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false } }
-    const w = moneyWindow(ago(24), [order()], unregistered)
+    const w = moneyWindow(ago(24), [order()], PRICING_CONFIG) // the shipped default
     // Not registered: we keep the whole £40, but the £12 of goods costs £14.40.
     expect(w.netRevenue).toBe(40)
     expect(w.vat).toBe(0)

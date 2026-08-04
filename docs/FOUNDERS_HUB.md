@@ -88,13 +88,55 @@ its own answer wins; the result is then verified against the real (penny-rounded
 waterfall and nudged up if rounding left it a hundredth under target. The solver
 and the display cannot disagree.
 
-### VAT (`lib/pricing/vat.ts`)
+### VAT (`lib/pricing/vat.ts`, `lib/pricing/vat-position.ts`)
 
 `vat.registered` is a pricing rule, not a display toggle — registered and
-unregistered are genuinely different businesses. Registered: we hand VAT over on
-sales and reclaim what PowerBody charge us, so costs are net. Unregistered: we
-keep the whole shelf price but cannot reclaim, so their VAT is a permanent cost.
-Per-product `vatRate` covers the handful of zero-rated items.
+unregistered are genuinely different businesses. **It ships as `false`**, which
+is the phase the business is in. Flip it the day registration takes effect and
+the whole hub reprices. Per-product `vatRate` covers the zero-rated items.
+
+The **VAT tab** answers the three questions in the order they get asked.
+
+**1. Am I required to register yet?** Rolling 12-month taxable turnover from real
+orders against HMRC's £90,000 threshold, with the crossing date projected from
+the run rate over the months we actually have (not a full year we don't — a
+three-month-old business would otherwise look a quarter as busy as it is). The
+threshold is on *any rolling 12 months*, not a tax year, so it can be crossed by
+one good quarter; HMRC expect registration within 30 days of the end of that
+month.
+
+**2. What would it cost?** This is the part that needs care. PowerBody are
+VAT-registered, so while we aren't we eat the VAT on everything they charge us —
+a big, visible, annoying number that makes registering look attractive. It's a
+trap, and the arithmetic settles it. Holding prices:
+
+```
+unregistered:  contribution = P − C(1+v)
+registered:    contribution = P/(1+v) − C
+difference   = v × [ P/(1+v) − C ]  =  v × your net gross margin
+```
+
+**Registering costs you the VAT rate times your margin.** Reclaiming input VAT
+only wins when costs exceed net revenue — i.e. when you're already losing money.
+So the panel shows *both* sides (what we'd reclaim, what we'd hand over) and the
+net, because either one alone misleads. At a £45 average order and a 40% cost
+ratio that's roughly £776/yr, or +8.7% on prices to stand still.
+
+The reprice figure is deliberately **bigger** than the per-order cost: raising a
+price also raises the VAT and card fee on the increment, so it has to be grossed
+up to net the shortfall. Both sides of that calculation use the same delivery
+assumption — solving them differently made it read as a price *cut*, which is
+the bug the test `quotes a reprice that actually restores the contribution`
+exists to prevent.
+
+**3. What don't we know?** Stated on the panel: the Flat Rate Scheme, zero-rated
+products, Making Tax Digital, and any turnover sold outside this hub that counts
+towards the same threshold. It models what registration does to margin — it is
+not tax advice, and the panel says so.
+
+The verdict is mirrored onto the dashboard as a notice once it's actionable
+(`watch` or `act`), above the counted queues — a VAT deadline outranks anything
+with a number next to it.
 
 ### Delivery — PowerBody's real rate card (`lib/pricing/delivery.ts`)
 
@@ -121,7 +163,40 @@ Three things this encodes that the old placeholder model got wrong:
 - **It is a fulfilment fee, not postage** — picking, packaging, invoice printing,
   labour, storage and shipping. That is why it is so large next to a £20 tub.
 - **Zones are blended, not worst-cased.** `zone2SharePct` (default 4%) mixes
-  mainland and Highlands into one honest number rather than overpricing the 96%.
+  mainland and Highlands into one honest number rather than overpricing the 96% —
+  but only when pricing something nobody has bought yet. A real order has an
+  address, so it gets the real zone (below).
+
+### Our free-delivery offer is not their threshold
+
+Two numbers that look comparable and are not, in different directions:
+
+|  | Ours | PowerBody's |
+| --- | --- | --- |
+| Basis | Our **retail** prices, inc VAT | Their **wholesale** values, ex VAT |
+| Figure | Free over £50 | Free over £300 (Zone 2 **wholesale** only) |
+| Applies to us? | It's our promise, it costs us | **No** — dropshipping never gets free delivery |
+
+`freeDeliveryImpact()` prices the promise. Below £50 the member's £3.95 (£3.29
+net) roughly covers PowerBody's £3.25–£3.30, so postage is near enough free to
+us. At or above £50 we collect nothing and still pay the full charge on **every**
+qualifying order — that's the cost of the promise, and it's a marketing cost,
+not a fulfilment one. The Delivery rules section shows both lines.
+
+### Zone from postcode, and where they won't go (`lib/pricing/zones.ts`)
+
+The delivery page publishes the exact Zone 2 postcode list, so for a real order
+there is no need to assume anything. `zoneForPostcode` handles the numbered
+ranges properly — `PA20–49` and `PA60–78` are Zone 2 but `PA1` (Paisley) is
+mainland, and a plain prefix match would get half of Scotland wrong.
+
+More importantly it encodes what a UK dropshipping account **cannot serve at
+all**: Northern Ireland (BT), Guernsey (GY), Jersey (JE), and anywhere outside
+the UK. All of those are ordinary-looking UK addresses sitting in PowerBody's own
+Zone 2 — nothing about "BT1 5GS" warns you the supplier will refuse it. The
+review queue flags them in red and counts them as blocked so nobody bulk-approves
+one, and the dashboard lists them first. The Isle of Man (IM) is Zone 2 and
+allowed — it's on the expensive list, not the banned one.
 
 Because the charge is weight-banded, **`CatalogueProduct.weightGrams` is
 load-bearing** — it also feeds PowerBody's `createOrder`, which requires a

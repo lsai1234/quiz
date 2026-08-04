@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { formatGBP, type PricingConfig, type DiscountTier, type DeliveryService } from '@/lib/stack-blueprint/pricing'
 import { goodPriceFor, auditProductPrice, worstCaseSubscriptionRate, supplierAccountCheck } from '@/lib/pricing/good-price'
 import { unitEconomics } from '@/lib/pricing/unit-economics'
-import { quoteDelivery, ZONE_LABELS } from '@/lib/pricing/delivery'
+import { quoteDelivery, freeDeliveryImpact, ZONE_LABELS } from '@/lib/pricing/delivery'
 import { Waterfall } from '@/components/portal/pricing/Waterfall'
 import { RateCard } from '@/components/portal/pricing/RateCard'
+import { VatPanel } from '@/components/portal/pricing/VatPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
 
@@ -26,11 +27,12 @@ const BUDGETS: Budget[] = ['under-30', '30-50', '50-80', '80-plus']
 const pct = (n: number) => Math.round(n * 1000) / 10
 const money = (n: number) => `£${n.toFixed(2)}`
 
-type Tab = 'model' | 'catalogue' | 'rules'
+type Tab = 'model' | 'catalogue' | 'vat' | 'rules'
 
 const TABS: { id: Tab; label: string; blurb: string }[] = [
   { id: 'model', label: 'The model', blurb: 'What a product costs us and what to sell it for.' },
   { id: 'catalogue', label: 'Every product', blurb: 'The same maths run over everything we sell.' },
+  { id: 'vat', label: 'VAT', blurb: 'Where we stand on registration, and what it would cost.' },
   { id: 'rules', label: 'The rules', blurb: 'Every setting the model reads.' },
 ]
 
@@ -111,6 +113,7 @@ export default function PricingPage() {
   const scenario = good.scenarios[scenarioId] ?? good.scenarios[2]
   const shelfPrice = priceOverride ?? good.goodPrice ?? 0
   const parcel = quoteDelivery({ grams, orderValue: scenario.economics.shelfPrice }, draft)
+  const freeDelivery = freeDeliveryImpact(grams, draft)
 
   return (
     <div className="pb-10">
@@ -297,14 +300,21 @@ export default function PricingPage() {
         </div>
       )}
 
+      {/* ══ VAT ════════════════════════════════════════════════════════════ */}
+      {tab === 'vat' && <VatPanel registered={draft.vat.registered} />}
+
       {/* ══ THE RULES ══════════════════════════════════════════════════════ */}
       {tab === 'rules' && (
         <div>
-          <Section title="VAT" desc="The single biggest thing a retail margin gets wrong. Our shelf prices include VAT; PowerBody quote us without it.">
+          <Section title="VAT" desc="The single biggest thing a retail margin gets wrong. Our shelf prices include VAT; PowerBody quote us without it. See the VAT tab for where we stand on registration.">
             <Toggle label="VAT-registered" value={draft.vat.registered} onChange={(v) => setNested('vat', { registered: v })}
-              help="On: we hand over VAT on sales and reclaim what PowerBody charge us. Off: we keep the whole shelf price but their VAT becomes a real cost. These are genuinely different businesses." />
+              help="On: we hand over VAT on sales and reclaim what PowerBody charge us. Off: we keep the whole shelf price but their VAT becomes a real cost. These are genuinely different businesses — flip this the day registration takes effect and the whole hub reprices." />
             <Num label="Standard rate" value={pct(draft.vat.standardRate)} suffix="%" onChange={(n) => setNested('vat', { standardRate: n / 100 })}
               help="Applied unless a product carries its own rate — a few products sold as food are zero-rated." />
+            <Num label="Registration threshold" value={draft.vat.registrationThreshold} suffix="£" onChange={(n) => setNested('vat', { registrationThreshold: n })}
+              help="Taxable turnover over any rolling 12 months at which registering becomes compulsory. HMRC's figure — £90,000 since April 2024." />
+            <Num label="Deregistration threshold" value={draft.vat.deregistrationThreshold} suffix="£" onChange={(n) => setNested('vat', { deregistrationThreshold: n })}
+              help="Below this a registered business may deregister." />
           </Section>
 
           <Section title="Delivery — PowerBody's rate card" desc="Priced by weight and zone. There is no free-shipping threshold: their guide states free delivery is not available to dropshippers, so this lands on every order.">
@@ -314,9 +324,27 @@ export default function PricingPage() {
                 help="Used to blend one honest delivery cost instead of pricing everything at the mainland or the worst rate." />
               <Num label="Assumed weight when unset" value={draft.delivery.defaultProductGrams} suffix="g" onChange={(n) => setNested('delivery', { defaultProductGrams: n })}
                 help="What a product with no recorded weight is costed at. Readiness flags those products." />
-              <Num label="We charge the member" value={draft.delivery.customerDeliveryCharge} suffix="£" onChange={(n) => setNested('delivery', { customerDeliveryCharge: n })} help="Inc VAT, on orders below the free threshold." />
-              <Num label="Free delivery above" value={draft.freeDeliveryThreshold} suffix="£" onChange={(n) => set({ freeDeliveryThreshold: n })} help="Our offer to the member. It does not reach PowerBody — we absorb their charge." />
+              <Num label="We charge the member" value={draft.delivery.customerDeliveryCharge} suffix="£" onChange={(n) => setNested('delivery', { customerDeliveryCharge: n })} help="Inc VAT, at our retail prices, on orders below our own free threshold." />
+              <Num label="Our free delivery above" value={draft.freeDeliveryThreshold} suffix="£" onChange={(n) => set({ freeDeliveryThreshold: n })}
+                help="Our promise to the member, on OUR retail prices. Nothing to do with PowerBody's thresholds — theirs sit on wholesale values and dropshipping doesn't qualify for free shipping at all." />
               <Num label="Longest gap between deliveries" value={draft.maxDeliveryMonths} suffix="mo" onChange={(n) => set({ maxDeliveryMonths: n })} help="However big the tub." />
+
+              {/* What the free-delivery promise actually costs. */}
+              <div className="mt-3 rounded-xl p-3 text-[11px] leading-relaxed" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+                <p className="font-bold text-[var(--color-text)] mb-1">What the free-delivery offer costs</p>
+                <p className="text-[var(--color-muted)]">
+                  Under {money(freeDelivery.threshold)} the member pays {money(freeDelivery.charge)}, of which we keep{' '}
+                  {money(freeDelivery.chargeNet)} after VAT, against a {money(freeDelivery.supplierCost)} supplier charge
+                  — so postage roughly {freeDelivery.belowThreshold >= 0 ? 'pays for itself' : 'costs us a little'}{' '}
+                  ({freeDelivery.belowThreshold >= 0 ? '+' : ''}{money(freeDelivery.belowThreshold)}).
+                </p>
+                <p className="text-[var(--color-muted)] mt-1">
+                  At or over {money(freeDelivery.threshold)} we collect nothing and still pay{' '}
+                  <strong style={{ color: AMBER }}>{money(Math.abs(freeDelivery.aboveThreshold))}</strong> — on every
+                  qualifying order. That is the price of the promise, and it is a marketing cost rather than a
+                  fulfilment one.
+                </p>
+              </div>
             </div>
           </Section>
 

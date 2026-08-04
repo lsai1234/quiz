@@ -31,7 +31,8 @@ import {
   type DeliveryZone,
   type DeliveryService,
 } from '@/lib/stack-blueprint/pricing'
-import { costFromSupplierPrice } from './vat'
+import { costFromSupplierPrice, revenueFromShelfPrice } from './vat'
+import { zoneForPostcode } from './zones'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -49,8 +50,16 @@ export interface Shipment {
   grams: number
   /** Where it's going. Defaults to the configured pricing zone. */
   zone?: DeliveryZone
-  /** What the member is being charged for the goods (£ inc VAT), which decides
-   *  whether they qualify for our free delivery. */
+  /**
+   * The delivery postcode, when we have one. Beats `zone` — for a real order
+   * there is no need to assume a zone, and PowerBody publish the postcode list.
+   */
+  postcode?: string | null
+  /**
+   * What the member is being charged for the goods (£ inc VAT at OUR retail
+   * prices), which decides whether they qualify for OUR free-delivery offer.
+   * Not comparable to any PowerBody threshold — see `freeDeliveryThreshold`.
+   */
   orderValue?: number
 }
 
@@ -115,8 +124,24 @@ export function customerDeliveryCharge(orderValue: number, config: PricingConfig
 
 /** Both sides of one shipment's delivery, and what it leaves us carrying. */
 export function quoteDelivery(shipment: Shipment, config: PricingConfig = getPricingConfig()): DeliveryQuote {
-  const zone = shipment.zone ?? config.delivery.defaultZone
+  // A known postcode beats an assumed zone every time.
+  const fromPostcode = shipment.postcode ? zoneForPostcode(shipment.postcode) : null
+  const zone: DeliveryZone = fromPostcode?.zone ?? shipment.zone ?? config.delivery.defaultZone
   const grams = Math.max(0, shipment.grams)
+
+  if (fromPostcode?.excluded) {
+    return {
+      service: null,
+      zone,
+      grams,
+      supplierPriceExVat: 0,
+      supplierCost: 0,
+      customerCharge: customerDeliveryCharge(shipment.orderValue ?? 0, config),
+      absorbed: 0,
+      freeForCustomer: false,
+      unavailableReason: fromPostcode.reason,
+    }
+  }
   const service = selectService(grams, zone, config)
 
   const supplierPriceExVat = service?.price ?? 0
@@ -184,6 +209,50 @@ export function shipmentWeight(
     }
   }
   return { grams, weightKnown: known }
+}
+
+export interface FreeDeliveryImpact {
+  /** Our own threshold (£ inc VAT, at our retail prices). */
+  threshold: number
+  /** What we charge below it (£ inc VAT). */
+  charge: number
+  /** What we keep of that after VAT (£). */
+  chargeNet: number
+  /** What the supplier charges us for a typical parcel (£). */
+  supplierCost: number
+  /** Net position on an order BELOW the threshold (£). Positive = postage pays for itself. */
+  belowThreshold: number
+  /** Net position on an order ABOVE it (£). Always negative — the whole cost. */
+  aboveThreshold: number
+}
+
+/**
+ * What our free-delivery offer actually costs.
+ *
+ * Worth stating plainly because the two sides look symmetrical and are not.
+ * Below the threshold the member's postage roughly pays the supplier's charge,
+ * so delivery is near enough free to us. Above it we collect nothing and still
+ * pay the full charge — every qualifying order carries it. That is the price of
+ * the promise, and it is a marketing cost, not a fulfilment one.
+ *
+ * It has NOTHING to do with PowerBody's own free-shipping thresholds, which sit
+ * on their wholesale values and which dropshipping does not qualify for at all.
+ */
+export function freeDeliveryImpact(
+  grams: number,
+  config: PricingConfig = getPricingConfig(),
+): FreeDeliveryImpact {
+  const supplierCost = blendedDeliveryCost(grams, config)
+  const charge = round(config.delivery.customerDeliveryCharge)
+  const chargeNet = revenueFromShelfPrice(charge, config.vat.standardRate, config)
+  return {
+    threshold: config.freeDeliveryThreshold,
+    charge,
+    chargeNet,
+    supplierCost,
+    belowThreshold: round(chargeNet - supplierCost),
+    aboveThreshold: round(-supplierCost),
+  }
 }
 
 /**

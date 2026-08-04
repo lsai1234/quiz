@@ -57,7 +57,20 @@ export default function HubDashboard() {
       {/* ── Needs you ─────────────────────────────────────────────────────── */}
       <section>
         <SectionTitle>Needs you</SectionTitle>
-        {actionRequired.length === 0 ? (
+
+        {/* Notices come first: a VAT deadline outranks any queue. */}
+        {summary.notices.map((n) => (
+          <Link key={n.id} href={n.href} className="block rounded-2xl border p-3.5 mb-2"
+            style={{
+              background: `color-mix(in srgb, ${n.tone === 'act' ? RED : AMBER} 8%, transparent)`,
+              borderColor: `color-mix(in srgb, ${n.tone === 'act' ? RED : AMBER} 35%, transparent)`,
+            }}>
+            <p className="text-sm font-bold" style={{ color: n.tone === 'act' ? RED : AMBER, fontFamily: 'var(--font-display)' }}>{n.label}</p>
+            <p className="text-[11px] text-[var(--color-text-2)] mt-0.5 leading-relaxed">{n.detail}</p>
+          </Link>
+        ))}
+
+        {actionRequired.length === 0 && summary.notices.length === 0 ? (
           <p className="text-sm rounded-2xl border p-4" style={{ background: `color-mix(in srgb, ${GREEN} 7%, transparent)`, borderColor: `color-mix(in srgb, ${GREEN} 30%, transparent)`, color: GREEN }}>
             Nothing outstanding. Every order has been reviewed and nothing on a live plan has changed.
           </p>

@@ -9,6 +9,7 @@ import { OPEN_STATUSES } from '@/lib/changes/types'
 import { listEventsSince } from '@/lib/analytics/repo'
 import { buildQuizFunnel } from '@/lib/analytics/funnel'
 import { buildDashboard } from '@/lib/portal/dashboard'
+import { buildVatPosition } from '@/lib/pricing/vat-position'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { productReadiness } from '@/lib/portal/readiness'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
@@ -50,17 +51,30 @@ export async function GET(req: Request) {
   const queue = buildFulfilmentQueue(unfulfilled)
   const live = catalogue.source === 'shopify'
   const notReady = catalogue.products.filter((p) => productReadiness(p, { live }).overall !== 'ok').length
+  const config = getPricingConfig()
+
+  const costed = catalogue.products.filter((p) => p.cost != null && p.basePrice > 0)
+  const vat = buildVatPosition({
+    orders,
+    config,
+    averageCostRatio:
+      costed.length > 0
+        ? costed.reduce((s, p) => s + p.cost! / p.basePrice, 0) / costed.length
+        : config.defaultCostRatio,
+  })
 
   return NextResponse.json({
     windowDays: days,
     summary: buildDashboard({
       orders,
       subscriptions,
-      config: getPricingConfig(),
+      config,
       awaitingReview: queue.pending,
       readyToSend: queue.readyToSend,
+      undeliverable: queue.undeliverable,
       openChanges: openChanges.length,
       productsNeedingAttention: notReady,
+      vat: vat.verdict,
     }),
     funnel: buildQuizFunnel(events),
   })

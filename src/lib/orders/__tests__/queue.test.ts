@@ -146,6 +146,32 @@ describe('the daily queue', () => {
     expect(q.blocked).toBe(2)
   })
 
+  it('catches addresses PowerBody will not ship to at all', () => {
+    // A Belfast order looks completely normal — UK country, valid postcode, in
+    // PowerBody's own Zone 2 — right up until the supplier refuses it.
+    const belfast = at('2026-08-03', { shippingAddress: { ...ADDRESS, postcode: 'BT1 5GS', city: 'Belfast' } })
+    const jersey = at('2026-08-03', { shippingAddress: { ...ADDRESS, postcode: 'JE2 3AA', city: 'St Helier' } })
+    const paris = at('2026-08-03', { shippingAddress: { ...ADDRESS, postcode: '75001', city: 'Paris', country: 'FR' } })
+
+    const q = buildFulfilmentQueue([belfast, jersey, paris, at('2026-08-03')])
+    expect(q.undeliverable).toBe(3)
+    // …and they count as blocked, so nobody bulk-approves them by accident.
+    expect(q.blocked).toBe(3)
+
+    const rows = q.days[0].orders
+    expect(rows.find((o) => o.id === belfast.id)?.undeliverableReason).toContain('Northern Ireland')
+    expect(rows.find((o) => o.id === paris.id)?.undeliverableReason).toMatch(/UK only/i)
+  })
+
+  it('records the delivery zone so the Highlands premium is visible', () => {
+    const highlands = at('2026-08-03', { shippingAddress: { ...ADDRESS, postcode: 'IV30 1AA', city: 'Elgin' } })
+    const q = buildFulfilmentQueue([highlands, at('2026-08-03')])
+    const rows = q.days[0].orders
+    expect(rows.find((o) => o.id === highlands.id)?.deliveryZone).toBe('uk-2')
+    expect(rows.find((o) => o.id !== highlands.id)?.deliveryZone).toBe('uk-1')
+    expect(q.undeliverable).toBe(0)
+  })
+
   it('treats an order written before the queue existed as needing review', () => {
     const legacy = at('2026-07-01')
     delete (legacy as Partial<Order>).review
