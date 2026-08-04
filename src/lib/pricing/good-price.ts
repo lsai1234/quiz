@@ -60,9 +60,22 @@ export function typicalSubscriptionRate(config: PricingConfig = getPricingConfig
   return round4(config.levelSubscriptionDiscount.performance ?? config.subscriptionDiscount)
 }
 
-/** The months a price is judged over — the earliest a member can leave. */
+/**
+ * The months a price is judged over.
+ *
+ * Defaults to how long a customer ACTUALLY stays, not to the earliest they could
+ * leave. That distinction was producing prices roughly double the market: with a
+ * one-month horizon the model demanded that the first month alone — the month
+ * carrying both the deepest bundle discount and the intro offer — deliver the
+ * full target margin. Nothing survives that and still sells.
+ *
+ * Pricing for a customer who cancels immediately is not conservative, it is
+ * wrong: an unsellable price loses just as much money as a thin one, and faster.
+ * That scenario is still reported (it's the third one `goodPriceFor` returns) —
+ * it is a risk to see, not the basis to price on.
+ */
 export function pricingHorizonMonths(config: PricingConfig = getPricingConfig()): number {
-  return Math.max(1, config.goodPricing.horizonMonths ?? config.minSubscriptionMonths)
+  return Math.max(1, config.goodPricing.horizonMonths ?? config.orderMix.averageRetentionMonths)
 }
 
 export interface GoodPriceInput {

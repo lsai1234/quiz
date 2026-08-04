@@ -85,8 +85,16 @@ export const PRICING_CONFIG = {
   } as Record<Budget, number | null>,
 
   // ── Margin / profit guardrails ──
-  /** When a product has no explicit cost, estimate it as price × this. */
-  defaultCostRatio: 0.35,
+  /**
+   * When a product has no explicit cost, estimate it as its NET price × this.
+   *
+   * 0.55, not the 0.35 this started at. PowerBody's own feed puts wholesale at
+   * about 52% of their recommended retail across the catalogue, so 0.35 was
+   * assuming a markup the market does not support and quietly made every
+   * uncosted product look healthier than it is. Better to be slightly
+   * pessimistic about a number we are guessing at.
+   */
+  defaultCostRatio: 0.55,
   /** Never discount a line below cost × (1 + this). */
   marginFloorPct: 0.15,
   /** Minimum flat monthly value for the subscription to be offered (£). */
@@ -333,8 +341,13 @@ export const PRICING_CONFIG = {
      */
     targetMarginPct: 0.35,
     /**
-     * Months of subscription revenue to judge a price over. null = the earliest
-     * a member can leave (`minSubscriptionMonths`), which is the true worst case.
+     * Months of subscription revenue to judge a price over. null = how long a
+     * customer actually stays (`orderMix.averageRetentionMonths`).
+     *
+     * This used to fall back to `minSubscriptionMonths` — the earliest anyone
+     * could leave — and that produced prices roughly DOUBLE the market, because
+     * it asked the first month alone to carry the full target margin after both
+     * the deepest bundle discount and the intro offer. See `pricingHorizonMonths`.
      */
     horizonMonths: null as number | null,
     /**

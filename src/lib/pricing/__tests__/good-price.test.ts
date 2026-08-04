@@ -225,9 +225,14 @@ describe('the good price', () => {
     expect(worstCaseSubscriptionRate(cfg({ subscriptionTiers: [{ id: 't', label: 'Big', minSubtotal: 100, discountPct: 0.32 }] }))).toBeCloseTo(0.32, 4)
   })
 
-  it('judges a price over the earliest a member can leave', () => {
-    expect(pricingHorizonMonths(cfg({ minSubscriptionMonths: 3 }))).toBe(3)
-    expect(pricingHorizonMonths(cfg({ goodPricing: { ...PRICING_CONFIG.goodPricing, horizonMonths: 6 } }))).toBe(6)
+  it('judges a price over how long a customer actually stays', () => {
+    // Not over the earliest they COULD leave. Pricing for immediate cancellation
+    // produced prices roughly double the market — an unsellable price loses money
+    // just as surely as a thin one.
+    expect(pricingHorizonMonths(cfg())).toBe(PRICING_CONFIG.orderMix.averageRetentionMonths)
+    expect(pricingHorizonMonths(cfg({ orderMix: { ...PRICING_CONFIG.orderMix, averageRetentionMonths: 9 } }))).toBe(9)
+    // An explicit horizon still overrides.
+    expect(pricingHorizonMonths(cfg({ goodPricing: { ...PRICING_CONFIG.goodPricing, horizonMonths: 3 } }))).toBe(3)
   })
 
   it('recommends a price whose worst case still clears the target', () => {
@@ -258,9 +263,9 @@ describe('the good price', () => {
     expect(rich.goodPrice!).toBeGreaterThan(lean.goodPrice!)
   })
 
-  it('dilutes the first month over a longer commitment', () => {
-    const short = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ minSubscriptionMonths: 1 }))
-    const long = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ minSubscriptionMonths: 6 }))
+  it('dilutes the first month over a longer expected life', () => {
+    const short = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ orderMix: { ...PRICING_CONFIG.orderMix, averageRetentionMonths: 1 } }))
+    const long = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ orderMix: { ...PRICING_CONFIG.orderMix, averageRetentionMonths: 6 } }))
     expect(long.goodPrice!).toBeLessThan(short.goodPrice!)
   })
 
