@@ -2,7 +2,7 @@
  * Founders Hub persistence — backed by the app database.
  *
  * State that founders manage over time (product overrides, removed/imported
- * products, the improvements backlog, runtime settings) lives in the `kv`
+ * products, the top-25 quiz roster, runtime settings) lives in the `kv`
  * table (`src/lib/db/`), keyed by the same names as the legacy `.data/*.json`
  * files. A legacy JSON snapshot, if present locally, is migrated into the
  * database the first time its key is read, so existing local edits survive

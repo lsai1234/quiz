@@ -131,6 +131,13 @@ export function scoreProduct(
 ): number {
   let score = product.recommendationPriority * SCORING.priorityBase
 
+  // The founders' Top 25 roster: a preference between products that could both
+  // serve this user, ranked so the #1 pick edges out the #25. Nothing off the
+  // roster is penalised, so an empty roster leaves scoring exactly as it was.
+  if (product.topRank != null && product.topRank > 0) {
+    score += Math.max(0, SCORING.topProductBase - (product.topRank - 1) * SCORING.topProductStep)
+  }
+
   // Goal overlap
   const goalOverlap = answers.goals.filter(g => product.goals.includes(g)).length
   score += goalOverlap * SCORING.goalOverlap

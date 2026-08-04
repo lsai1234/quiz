@@ -16,10 +16,12 @@ interface OrderLine {
   supplierCost?: number | null
 }
 interface OrderEvent { at: string; type: string; detail?: string }
+interface OrderReview { state: string; by?: string | null; at?: string; note?: string | null }
 interface Order {
   id: string
   channel: string
   status: string
+  review?: OrderReview
   email: string | null
   currency: string
   subtotal: number
@@ -37,6 +39,21 @@ interface Order {
 }
 
 const money = (n: number, ccy: string) => `${ccy === 'GBP' ? '£' : ''}${n.toFixed(2)}`
+
+const BACK_HREF = '/portal/commerce/orders'
+
+const REVIEW_LABEL: Record<string, string> = {
+  pending: 'Waiting on your review',
+  approved: 'Approved — ready to send',
+  held: 'On hold',
+  rejected: 'Rejected — will not be fulfilled',
+}
+const REVIEW_COLOUR: Record<string, string> = {
+  pending: '#fbbf24',
+  approved: '#34d399',
+  held: '#fbbf24',
+  rejected: '#f87171',
+}
 
 export function OrderDetail({ id }: { id: string }) {
   const [order, setOrder] = useState<Order | null>(null)
@@ -67,17 +84,19 @@ export function OrderDetail({ id }: { id: string }) {
     setBusy(null)
   }, [id])
 
-  if (notFound) return <p className="text-sm text-[var(--color-muted)]">Order not found. <Link href="/portal/orders" className="underline">Back to orders</Link></p>
+  if (notFound) return <p className="text-sm text-[var(--color-muted)]">Order not found. <Link href={BACK_HREF} className="underline">Back to orders</Link></p>
   if (!order) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const canSubmit = order.status === 'paid' || order.status === 'failed'
   const canSync = !!order.supplierOrderId
   const terminal = ['refunded', 'cancelled'].includes(order.status)
   const btn = 'text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40'
+  const review = order.review?.state ?? 'pending'
+  const awaitingReview = !order.supplierOrderId && canSubmit
 
   return (
     <div className="space-y-5">
-      <Link href="/portal/orders" className="text-xs text-[var(--color-muted)] underline">← All orders</Link>
+      <Link href={BACK_HREF} className="text-xs text-[var(--color-muted)] underline">← All orders</Link>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
@@ -87,10 +106,33 @@ export function OrderDetail({ id }: { id: string }) {
         <StatusBadge status={order.status} />
       </div>
 
+      {/* Fulfilment review — nothing reaches PowerBody until this says approved. */}
+      {awaitingReview && (
+        <div className="rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: `color-mix(in srgb, ${REVIEW_COLOUR[review] ?? ACCENT} 35%, transparent)` }}>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div>
+              <p className="text-sm font-bold" style={{ color: REVIEW_COLOUR[review] ?? ACCENT, fontFamily: 'var(--font-display)' }}>
+                {REVIEW_LABEL[review] ?? review}
+              </p>
+              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                We ask PowerBody for nothing until you confirm it.
+                {order.review?.by && ` Last set by ${order.review.by}.`}
+                {order.review?.note && ` “${order.review.note}”`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              {review !== 'held' && <button onClick={() => act('hold')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: '#fbbf24' }}>Hold</button>}
+              {review !== 'pending' && <button onClick={() => act('return')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>Back to queue</button>}
+              {review !== 'rejected' && <button onClick={() => act('reject')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-red)' }}>Reject</button>}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
         <button onClick={() => act('submit')} disabled={!canSubmit || busy !== null} className={btn} style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}>
-          {busy === 'submit' ? 'Submitting…' : order.status === 'failed' ? 'Retry submit to PowerBody' : 'Submit to PowerBody'}
+          {busy === 'submit' ? 'Sending…' : order.status === 'failed' ? 'Retry send to PowerBody' : 'Confirm & send to PowerBody'}
         </button>
         <button onClick={() => act('sync')} disabled={!canSync || busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>
           {busy === 'sync' ? 'Syncing…' : 'Sync status'}

@@ -285,6 +285,16 @@ export interface CatalogueProduct {
    * products when recommendation scores are equal.
    */
   marginPriority: number
+  /**
+   * Position on the founders' Top 25 — the hand-picked roster the quiz should
+   * reach for first. 1 is the top pick; absent means "not on the roster", which
+   * is the normal case and carries no penalty.
+   *
+   * Set by the catalogue resolver from the roster the hub manages
+   * (`lib/portal/top-products.ts`), never stored on the product itself, so
+   * reordering the roster reprioritises the quiz without editing 25 products.
+   */
+  topRank?: number | null
   /** Can this product appear in the recommended core stack? */
   isCoreEligible: boolean
   /** Can this product appear as an upgrade/booster suggestion? */

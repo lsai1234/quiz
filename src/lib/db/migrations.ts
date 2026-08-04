@@ -198,6 +198,28 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX notifications_user_id ON notifications(user_id);
   CREATE INDEX notifications_created_at ON notifications(created_at);
   `,
+  // v8 — `analytics_events`: the funnel, kept. Until now /api/analytics wrote a
+  // structured log line and nothing else, which is fine for forwarding to a
+  // provider but means the Founders Hub cannot answer the one question the
+  // business actually has — "where are people dropping out of the quiz?".
+  //
+  // Anonymous by construction: `session_id` is the per-visit id the client keeps
+  // in sessionStorage, there is no user id, no IP and no cookie, and the events
+  // themselves carry no PII. `created_at` is indexed because every read is a
+  // window ("this month"), and `event` because the funnel counts by name.
+  `
+  CREATE TABLE analytics_events (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT,
+    event      TEXT NOT NULL,
+    props      TEXT NOT NULL,
+    path       TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX analytics_events_event ON analytics_events(event);
+  CREATE INDEX analytics_events_created_at ON analytics_events(created_at);
+  CREATE INDEX analytics_events_session ON analytics_events(session_id);
+  `,
 ]
 
 /**

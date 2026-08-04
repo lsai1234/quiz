@@ -107,6 +107,27 @@ export async function listStalePendingOrders(cutoffIso: string): Promise<Order[]
   return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
 }
 
+/**
+ * Every order that has been paid for but never sent to the supplier — the raw
+ * material of the daily fulfilment review.
+ *
+ * Filtered on the indexed `status` column and the `supplier_order_id` we already
+ * write, so it stays a cheap query; the review state itself lives in the JSON
+ * document and is applied by the caller (`buildFulfilmentQueue`), which also
+ * lets orders written before the queue existed default to "needs review".
+ * `failed` is included on purpose: a submit that errored is exactly the kind of
+ * order a founder needs to see again.
+ */
+export async function listAwaitingFulfilment(limit = 500): Promise<Order[]> {
+  const db = await getEngine()
+  const rows = await db.all<Row>(
+    `SELECT data FROM orders
+      WHERE status IN ('paid', 'failed') AND supplier_order_id IS NULL
+      ORDER BY created_at ASC LIMIT ${Math.min(Math.max(1, limit), 1000)}`,
+  )
+  return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
+}
+
 export interface OrderFilter {
   status?: OrderStatus
   channel?: OrderChannel

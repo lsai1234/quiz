@@ -6,21 +6,18 @@ import { useEffect, useState } from 'react'
 
 const ACCENT = '#00D4FF'
 
+/**
+ * The top bar is deliberately short. Fifteen tabs is a filing cabinet, not a
+ * navigation — everything about the range now lives under Products and
+ * everything about money under Commerce, each with its own sub-nav.
+ */
 const NAV = [
-  { href: '/portal', label: 'Home' },
-  { href: '/portal/dashboard', label: 'Dashboard' },
-  { href: '/portal/orders', label: 'Orders' },
-  { href: '/portal/actions', label: 'Requires action' },
-  { href: '/portal/subscriptions', label: 'Subscriptions' },
-  { href: '/portal/emails', label: 'Emails' },
+  { href: '/portal', label: 'Dashboard' },
+  { href: '/portal/commerce', label: 'Commerce' },
   { href: '/portal/products', label: 'Products' },
-  { href: '/portal/supplier', label: 'PowerBody' },
-  { href: '/portal/bundles', label: 'Bundles' },
-  { href: '/portal/backlog', label: 'Backlog' },
-  { href: '/portal/import', label: 'Import' },
   { href: '/portal/pricing', label: 'Pricing' },
-  { href: '/portal/coverage', label: 'Coverage' },
-  { href: '/portal/readiness', label: 'Readiness' },
+  { href: '/portal/actions', label: 'Requires action' },
+  { href: '/portal/emails', label: 'Emails' },
   { href: '/portal/settings', label: 'Settings' },
 ]
 

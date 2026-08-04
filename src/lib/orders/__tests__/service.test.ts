@@ -5,6 +5,7 @@ import {
   refundOrder,
   cancelOrder,
   markOrderPaid,
+  approveOrderForSupplier,
 } from '@/lib/orders/service'
 import { getOrder } from '@/lib/orders/repo'
 import type { OrderLine } from '@/lib/orders/types'
@@ -23,8 +24,9 @@ describe('order lifecycle', () => {
     expect(order.events.map((e) => e.type)).toEqual(['created', 'paid'])
   })
 
-  it('submits a paid order to the supplier, then syncs its status', async () => {
+  it('submits an approved order to the supplier, then syncs its status', async () => {
     const order = await createOrderFromCheckout({ channel: 'shop', lines: LINES })
+    await approveOrderForSupplier(order.id, 'Test founder')
     const submitted = await submitOrderToSupplier(order.id)
     expect(submitted?.status).toBe('submitted_to_supplier')
     expect(submitted?.supplierOrderId).toMatch(/^PB-/)

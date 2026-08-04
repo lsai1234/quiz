@@ -58,7 +58,7 @@ export function SubscriptionDetail({ userId }: { userId: string }) {
   return (
     <div className="space-y-6">
       <div>
-        <Link href="/portal/subscriptions" className="text-[11px] font-semibold underline text-[var(--color-muted)]">
+        <Link href="/portal/commerce/subscriptions" className="text-[11px] font-semibold underline text-[var(--color-muted)]">
           ← All subscriptions
         </Link>
         <h1 className="text-2xl font-black mt-2 mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>

@@ -13,6 +13,19 @@ export const SCORING = {
   /** Base: recommendationPriority × this. Set low to demote priority to a near
    *  tie-breaker (e.g. once the supplier feed pins everything to 5). */
   priorityBase: 10,
+  /**
+   * Top 25 roster boost. Applied as `topProductBase − (rank − 1) × topProductStep`
+   * to products the founders put on the roster, so the #1 pick outranks the #25
+   * one while every roster product still beats an unlisted equivalent.
+   *
+   * Deliberately smaller than `goalOverlap`: the roster is a preference between
+   * products that could BOTH serve the user, never a reason to recommend
+   * something that doesn't fit them. Products off the roster are not penalised —
+   * with an empty roster (the default) scoring is exactly as it was.
+   */
+  topProductBase: 12,
+  topProductStep: 0.4,
+
   /** Per goal the product shares with the user. */
   goalOverlap: 15,
   /** No goal overlap AND not a foundational supplement → penalty. */

@@ -43,6 +43,32 @@ export interface OrderEvent {
   detail?: string
 }
 
+/**
+ * Where an order sits in the daily fulfilment review.
+ *
+ *   pending  — paid, waiting for a founder to look at it. The default, and the
+ *              reason nothing reaches the supplier by accident.
+ *   approved — a founder has confirmed it; only now may it be sent.
+ *   held     — parked deliberately (a query on the address, a stock doubt).
+ *              Stays out of the queue's "to do" count until released.
+ *   rejected — will not be fulfilled as it stands; refund or cancel it.
+ *
+ * Orders written before this existed have no `review` at all, which reads as
+ * `pending` — the safe default, so an old paid order surfaces for review rather
+ * than being silently treated as approved.
+ */
+export type OrderReviewState = 'pending' | 'approved' | 'held' | 'rejected'
+
+export interface OrderReview {
+  state: OrderReviewState
+  /** Who decided, when we know. */
+  by?: string | null
+  /** When the state was last set (ISO). */
+  at?: string
+  /** Free-text reason, shown in the queue. */
+  note?: string | null
+}
+
 export interface Order {
   id: string
   /**
@@ -72,6 +98,13 @@ export interface Order {
   stripeSessionId: string | null
   stripePaymentIntentId: string | null
   // ── Supplier fulfilment (PowerBody) ──
+  /**
+   * The founder's decision on whether this may be sent to the supplier. Absent
+   * on orders written before the review queue existed — read it through
+   * `reviewStateOf()` in `service.ts`, never directly, so those default to
+   * `pending` rather than to nothing.
+   */
+  review?: OrderReview
   supplierOrderId: string | null
   supplierStatus: string | null
   trackingNumber: string | null

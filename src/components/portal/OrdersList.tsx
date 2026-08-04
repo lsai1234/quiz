@@ -7,11 +7,13 @@ const ACCENT = '#00D4FF'
 
 interface OrderRow {
   id: string
+  reference?: string | null
   channel: string
   status: string
   email: string | null
   total: number
   currency: string
+  review?: { state: string } | null
   supplierOrderId: string | null
   supplierStatus: string | null
   createdAt: string
@@ -35,6 +37,13 @@ export function statusLabel(s: string): string {
 
 const money = (n: number, ccy: string) => `${ccy === 'GBP' ? '£' : ''}${n.toFixed(2)}`
 
+/** Paid, never sent, and nobody has decided on it yet — see the review queue. */
+function needsReview(o: OrderRow): boolean {
+  if (o.supplierOrderId) return false
+  if (o.status !== 'paid' && o.status !== 'failed') return false
+  return (o.review?.state ?? 'pending') === 'pending'
+}
+
 export function StatusBadge({ status }: { status: string }) {
   const color = STATUS_COLOR[status] ?? 'var(--color-muted)'
   return (
@@ -46,18 +55,21 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 const STATUSES = ['all', 'pending_payment', 'paid', 'submitted_to_supplier', 'shipped', 'delivered', 'cancelled', 'refunded', 'failed']
-const CHANNELS = ['all', 'shop', 'quiz', 'subscription']
+/** `one-off` is a view, not a channel: shop + quiz, i.e. everything not a renewal. */
+const CHANNELS = ['all', 'one-off', 'shop', 'quiz', 'subscription']
 
-export function OrdersList() {
+export function OrdersList({ defaultChannel = 'all' }: { defaultChannel?: string } = {}) {
   const [orders, setOrders] = useState<OrderRow[] | null>(null)
   const [status, setStatus] = useState('all')
-  const [channel, setChannel] = useState('all')
+  const [channel, setChannel] = useState(defaultChannel)
   const [query, setQuery] = useState('')
 
   useEffect(() => {
     const p = new URLSearchParams()
     if (status !== 'all') p.set('status', status)
-    if (channel !== 'all') p.set('channel', channel)
+    // `one-off` spans two channels, so it is filtered client-side rather than
+    // pushed into a query the API would have to grow a special case for.
+    if (channel !== 'all' && channel !== 'one-off') p.set('channel', channel)
     fetch(`/api/portal/orders?${p.toString()}`)
       .then((r) => r.json())
       .then((d) => setOrders(d.orders ?? []))
@@ -66,8 +78,10 @@ export function OrdersList() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return (orders ?? []).filter((o) => !q || `${o.id} ${o.email ?? ''}`.toLowerCase().includes(q))
-  }, [orders, query])
+    return (orders ?? [])
+      .filter((o) => channel !== 'one-off' || o.channel !== 'subscription')
+      .filter((o) => !q || `${o.id} ${o.reference ?? ''} ${o.email ?? ''}`.toLowerCase().includes(q))
+  }, [orders, query, channel])
 
   if (!orders) return <p className="text-sm text-[var(--color-muted)]">Loading orders…</p>
 
@@ -80,7 +94,7 @@ export function OrdersList() {
           {STATUSES.map((s) => <option key={s} value={s}>{s === 'all' ? 'All statuses' : statusLabel(s)}</option>)}
         </select>
         <select value={channel} onChange={(e) => setChannel(e.target.value)} className="text-sm rounded-xl px-3 py-2 border" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
-          {CHANNELS.map((c) => <option key={c} value={c}>{c === 'all' ? 'All channels' : c}</option>)}
+          {CHANNELS.map((c) => <option key={c} value={c}>{c === 'all' ? 'All channels' : c === 'one-off' ? 'One-off (shop + quiz)' : c}</option>)}
         </select>
       </div>
 
@@ -89,12 +103,18 @@ export function OrdersList() {
       ) : (
         <div className="space-y-2">
           {filtered.map((o) => (
-            <Link key={o.id} href={`/portal/orders/${o.id}`} className="block rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <Link key={o.id} href={`/portal/commerce/orders/${o.id}`} className="block rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{o.id}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{o.reference ?? o.id}</span>
                     <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{o.channel}</span>
+                    {needsReview(o) && (
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
+                        style={{ color: '#fbbf24', background: 'color-mix(in srgb, #fbbf24 14%, transparent)' }}>
+                        needs review
+                      </span>
+                    )}
                   </div>
                   <p className="text-[11px] text-[var(--color-muted)] truncate">{o.email ?? 'guest'} · {new Date(o.createdAt).toLocaleString()}</p>
                 </div>

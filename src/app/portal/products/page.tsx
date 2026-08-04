@@ -36,7 +36,7 @@ export default function ProductsPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Products</h1>
+        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Catalogue</h2>
         <button
           onClick={() => setShowAi(true)}
           disabled={notReady === 0}

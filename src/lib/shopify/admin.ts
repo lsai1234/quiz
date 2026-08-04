@@ -105,8 +105,8 @@ export async function deleteProduct(shopifyProductId: string | null): Promise<vo
 }
 
 /**
- * Create a product in Shopify from a catalogue product (used by bulk import when
- * live). Maps the catalogue's variants → Shopify variants (Flavour option, price,
+ * Create a product in Shopify from a catalogue product, for pushing something we
+ * added here into a live store. Maps the catalogue's variants → Shopify variants (Flavour option, price,
  * compare-at, SKU), sets description/category/tags, and attaches the image.
  * Returns the new product GID + per-variant GIDs so callers can persist them.
  */

@@ -98,6 +98,57 @@ export const PRICING_CONFIG = {
    *  bundle selector; 0 disables the free-delivery messaging entirely. */
   freeDeliveryThreshold: 50,
 
+  /**
+   * What dropship delivery costs us and what we charge for it.
+   *
+   * These are OUR side of the supplier deal, so they belong with the pricing
+   * rules rather than in the supplier adapter: every price we set has to carry
+   * them, and the Good-price model below is wrong without them. The figures are
+   * placeholders until the PowerBody contract is signed — the shape is what
+   * matters, so plugging the real rate card in is an edit here and nothing else.
+   * See `lib/pricing/delivery.ts` for the maths that consumes them.
+   */
+  delivery: {
+    /** What the supplier charges us to send one parcel to a member (£). */
+    supplierParcelCost: 3.5,
+    /** Extra per unit inside a parcel — weight-driven handling (£). */
+    supplierPerUnitCost: 0.4,
+    /** Units the supplier fits in one parcel before it splits into two. */
+    unitsPerParcel: 6,
+    /** Goods value (£) in a parcel at or above which the supplier ships it free.
+     *  0 = the supplier always charges. */
+    supplierFreeParcelThreshold: 0,
+    /** What we charge a member for delivery below `freeDeliveryThreshold` (£). */
+    customerDeliveryCharge: 3.95,
+  },
+
+  /**
+   * The Good-price model — how we turn a supplier asset price into a sell price.
+   *
+   * The model prices for the WORST case rather than the average one: a member
+   * who lands on the biggest subscription bundle (so the deepest subscribe-&-save
+   * rate), takes the average first-month discount, and cancels at the earliest
+   * point. If a price makes money there it makes money everywhere.
+   * See `lib/pricing/good-price.ts`.
+   */
+  goodPricing: {
+    /** Gross margin we want on that worst case, as a share of revenue (0–1).
+     *  NOTE this is a MARGIN (profit ÷ revenue), not `marginFloorPct`, which is
+     *  a markup over cost used to floor the discount engine. */
+    targetMarginPct: 0.35,
+    /**
+     * Months of subscription revenue to judge a price over. null = the earliest
+     * a member can leave (`minSubscriptionMonths`), which is the true worst case.
+     */
+    horizonMonths: null as number | null,
+    /**
+     * Assume we eat the delivery rather than collect it. True is the honest
+     * worst case: a subscription that clears `freeDeliveryThreshold` pays us
+     * nothing for postage, and that is the common outcome.
+     */
+    assumeFreeDelivery: true,
+  },
+
   // ── Product changes (unavailability + supplier price moves) ──
   // See docs/PRODUCT_CHANGES_SPEC.md. Consumed by lib/changes/*.
   /** What happens by default when a product becomes unavailable. The member
@@ -190,8 +241,10 @@ export type PricingConfig = typeof PRICING_CONFIG
  * partial (e.g. change just the flat discount, or just the scratch outcomes) —
  * recomputeConfig shallow-merges it onto the defaults.
  */
-export type PricingOverrides = Partial<Omit<PricingConfig, 'introOffer'>> & {
+export type PricingOverrides = Partial<Omit<PricingConfig, 'introOffer' | 'delivery' | 'goodPricing'>> & {
   introOffer?: Partial<PricingConfig['introOffer']>
+  delivery?: Partial<PricingConfig['delivery']>
+  goodPricing?: Partial<PricingConfig['goodPricing']>
 }
 
 let _overrides: PricingOverrides = {}
@@ -202,6 +255,8 @@ function recomputeConfig() {
     ...PRICING_CONFIG,
     ..._overrides,
     introOffer: { ...PRICING_CONFIG.introOffer, ...(_overrides.introOffer ?? {}) },
+    delivery: { ...PRICING_CONFIG.delivery, ...(_overrides.delivery ?? {}) },
+    goodPricing: { ...PRICING_CONFIG.goodPricing, ...(_overrides.goodPricing ?? {}) },
     bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
     subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
     budgetCaps: _overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,

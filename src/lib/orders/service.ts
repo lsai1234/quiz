@@ -18,7 +18,14 @@ import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { getOrder, getOrderByReference, listStalePendingOrders, saveOrder, updateOrder } from './repo'
-import type { CreateOrderInput, Order, OrderLine, OrderStatus, OrderEvent } from './types'
+import type {
+  CreateOrderInput,
+  Order,
+  OrderLine,
+  OrderStatus,
+  OrderEvent,
+  OrderReviewState,
+} from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -74,6 +81,9 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     shippingAddress: input.shippingAddress ?? null,
     stripeSessionId: input.stripeSessionId ?? null,
     stripePaymentIntentId: input.stripePaymentIntentId ?? null,
+    // Every order starts unreviewed. Nothing reaches the supplier until a
+    // founder says so — see `approveOrderForSupplier`.
+    review: { state: 'pending', at: now() },
     supplierOrderId: null,
     supplierStatus: null,
     trackingNumber: null,
@@ -179,14 +189,83 @@ export async function markOrderPaid(
   })
 }
 
+// ─── Daily fulfilment review ──────────────────────────────────────────────────
+// We do not ask the supplier for anything until a human has looked at it. That
+// is a deliberate business rule, not a missing feature: while the PowerBody
+// integration is young, a wrong address or a stock surprise is far cheaper to
+// catch here than after a parcel has shipped. It is enforced in the domain
+// rather than by "nothing happens to call it yet", so adding a cron or a webhook
+// later cannot quietly start dropshipping on its own.
+
+/** An order's review state, defaulting to `pending` for orders written before it existed. */
+export function reviewStateOf(order: Pick<Order, 'review'>): OrderReviewState {
+  return order.review?.state ?? 'pending'
+}
+
+/** True when the order is waiting on a founder in the daily queue. */
+export function awaitingReview(order: Pick<Order, 'status' | 'supplierOrderId' | 'review'>): boolean {
+  if (order.supplierOrderId) return false
+  if (order.status !== 'paid' && order.status !== 'failed') return false
+  return reviewStateOf(order) === 'pending'
+}
+
+async function setReview(
+  id: string,
+  state: OrderReviewState,
+  opts: { by?: string | null; note?: string | null } = {},
+): Promise<Order | null> {
+  return updateOrder(id, (o) => {
+    o.review = { state, at: now(), by: opts.by ?? null, note: opts.note ?? null }
+    o.events.push(event(`review_${state}`, opts.note ?? undefined))
+  })
+}
+
+/**
+ * Confirm an order may be dropshipped. This is the gate `submitOrderToSupplier`
+ * checks — approving does not itself send anything, so a founder can clear a
+ * day's queue and let the send happen as its own step.
+ */
+export async function approveOrderForSupplier(id: string, by?: string | null, note?: string | null) {
+  const order = await getOrder(id)
+  if (!order) return null
+  if (order.status !== 'paid' && order.status !== 'failed') {
+    throw new Error(`Order ${id} is ${order.status} — only a paid order can be approved for fulfilment.`)
+  }
+  return setReview(id, 'approved', { by, note })
+}
+
+/** Park an order — a query on the address, a stock doubt — without rejecting it. */
+export async function holdOrder(id: string, by?: string | null, note?: string | null) {
+  return setReview(id, 'held', { by, note })
+}
+
+/** Put a held or rejected order back in the queue for a fresh decision. */
+export async function returnOrderToQueue(id: string, by?: string | null, note?: string | null) {
+  return setReview(id, 'pending', { by, note })
+}
+
+/**
+ * Decide an order will not be fulfilled as it stands. Deliberately does NOT
+ * refund or cancel: money is a separate decision with separate consequences, and
+ * conflating them here would make a queue click move a customer's money.
+ */
+export async function rejectOrderForFulfilment(id: string, by?: string | null, note?: string | null) {
+  return setReview(id, 'rejected', { by, note })
+}
+
 const SUBMITTABLE: OrderStatus[] = ['paid', 'failed']
 
-/** Send the order to PowerBody for dropship fulfilment. */
+/** Send the order to PowerBody for dropship fulfilment. Requires approval. */
 export async function submitOrderToSupplier(id: string): Promise<Order | null> {
   const order = await getOrder(id)
   if (!order) return null
   if (!SUBMITTABLE.includes(order.status)) {
     throw new Error(`Order ${id} is ${order.status} — only paid or failed orders can be submitted.`)
+  }
+  if (reviewStateOf(order) !== 'approved') {
+    throw new Error(
+      `Order ${id} has not been approved for fulfilment (${reviewStateOf(order)}) — review it in the fulfilment queue first.`,
+    )
   }
   const fulfilable = order.lines.filter((l) => l.sku)
   if (fulfilable.length === 0) {

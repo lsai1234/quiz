@@ -27,6 +27,7 @@ import {
   resetPricingOverrides,
   type PricingConfig,
 } from '@/lib/stack-blueprint/pricing'
+import { normaliseRoster } from './top-products'
 import { readJson, writeJson } from './persist'
 
 export type ProductOverrides = Record<string, Partial<CatalogueProduct>>
@@ -38,6 +39,8 @@ interface PersistedProducts {
   overrides: ProductOverrides
   removedIds: string[]
   imported: CatalogueProduct[]
+  /** The Top 25 roster, in order. See `./top-products.ts`. */
+  topProductIds?: string[]
 }
 
 interface PersistedSettings {
@@ -47,7 +50,7 @@ interface PersistedSettings {
   pricingOverrides?: Partial<PricingConfig>
 }
 
-const EMPTY_PRODUCTS: PersistedProducts = { overrides: {}, removedIds: [], imported: [] }
+const EMPTY_PRODUCTS: PersistedProducts = { overrides: {}, removedIds: [], imported: [], topProductIds: [] }
 
 async function loadProducts(): Promise<PersistedProducts> {
   const stored = await readJson<PersistedProducts>(PRODUCTS_FILE, EMPTY_PRODUCTS)
@@ -55,6 +58,7 @@ async function loadProducts(): Promise<PersistedProducts> {
     overrides: stored.overrides ?? {},
     removedIds: stored.removedIds ?? [],
     imported: stored.imported ?? [],
+    topProductIds: stored.topProductIds ?? [],
   }
 }
 
@@ -175,7 +179,7 @@ export async function restoreProduct(id: string): Promise<void> {
   await writeJson(PRODUCTS_FILE, state)
 }
 
-// ── Imported products (added via bulk import) ──
+// ── Imported products (added from the PowerBody supplier feed) ──
 export async function getImportedProducts(): Promise<CatalogueProduct[]> {
   return (await loadProducts()).imported
 }
@@ -185,6 +189,16 @@ export async function addImportedProducts(products: CatalogueProduct[]): Promise
   const byId = new Map(state.imported.map((p) => [p.id, p]))
   for (const p of products) byId.set(p.id, p)
   state.imported = [...byId.values()]
+  await writeJson(PRODUCTS_FILE, state)
+}
+
+// ── Top 25 roster (the products the quiz reaches for first) ──
+export async function getTopProductIds(): Promise<string[]> {
+  return normaliseRoster((await loadProducts()).topProductIds ?? [])
+}
+export async function setTopProductIds(ids: string[]): Promise<void> {
+  const state = await loadProducts()
+  state.topProductIds = normaliseRoster(ids)
   await writeJson(PRODUCTS_FILE, state)
 }
 

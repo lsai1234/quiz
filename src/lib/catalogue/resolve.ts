@@ -5,19 +5,23 @@ import {
   getPersistedProducts,
   syncPortalRuntime,
 } from '@/lib/portal/store'
+import { applyTopRanks } from '@/lib/portal/top-products'
 import type { CatalogueProduct } from './types'
 
 /**
  * Compose the catalogue founders actually see: base products with field
- * overrides merged on, bulk-imported products appended, and any products the
- * founders removed filtered out. Applied to both the live and mock branches so
- * removals/imports reflect everywhere (quiz, hub, dashboard).
+ * overrides merged on, products added from the supplier feed appended, and any
+ * products the founders removed filtered out. Applied to both the live and mock
+ * branches so removals/imports reflect everywhere (quiz, hub, dashboard).
  */
 async function composeCatalogue(base: CatalogueProduct[]): Promise<CatalogueProduct[]> {
-  const { overrides, removedIds, imported } = await getPersistedProducts()
+  const { overrides, removedIds, imported, topProductIds } = await getPersistedProducts()
   const removed = new Set(removedIds)
   const withImports = [...applyProductOverrides(base, overrides), ...imported]
-  return removed.size === 0 ? withImports : withImports.filter((p) => !removed.has(p.id))
+  const visible = removed.size === 0 ? withImports : withImports.filter((p) => !removed.has(p.id))
+  // Last, so the Top 25 is stamped only onto products that actually survived —
+  // a roster entry for a removed product simply doesn't apply.
+  return applyTopRanks(visible, topProductIds ?? [])
 }
 
 /**

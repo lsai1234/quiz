@@ -1,0 +1,29 @@
+import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
+
+/**
+ * Commerce — money in, orders out.
+ *
+ * One-off orders, monthly subscriptions, the supplier review queue and the
+ * month's financials are four views of the same ledger, so they live in one tab
+ * rather than being scattered across the top bar. The queue sits here rather
+ * than under Products because it is a decision about an order, not a product.
+ */
+const ITEMS: SubNavItem[] = [
+  { href: '/portal/commerce/queue', label: 'Review queue' },
+  { href: '/portal/commerce/orders', label: 'Single orders' },
+  { href: '/portal/commerce/subscriptions', label: 'Subscriptions' },
+  { href: '/portal/commerce/financials', label: 'Financials' },
+]
+
+export default function CommerceLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div>
+      <SubNav
+        title="Commerce"
+        blurb="Every order and subscription, what still needs your sign-off, and what it all made."
+        items={ITEMS}
+      />
+      {children}
+    </div>
+  )
+}

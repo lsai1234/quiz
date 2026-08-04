@@ -1,0 +1,67 @@
+import { NextResponse } from 'next/server'
+import { isPortalAuthed } from '@/lib/portal/guard'
+import { listOrders, listAwaitingFulfilment } from '@/lib/orders/repo'
+import { buildFulfilmentQueue } from '@/lib/orders/queue'
+import { listActiveSubscriptions } from '@/lib/db/hub-data'
+import { listChanges } from '@/lib/changes/repo'
+import { summarise } from '@/lib/changes/health'
+import { OPEN_STATUSES } from '@/lib/changes/types'
+import { listEventsSince } from '@/lib/analytics/repo'
+import { buildQuizFunnel } from '@/lib/analytics/funnel'
+import { buildDashboard } from '@/lib/portal/dashboard'
+import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { productReadiness } from '@/lib/portal/readiness'
+import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { syncPortalRuntime } from '@/lib/portal/store'
+
+export const dynamic = 'force-dynamic'
+
+/**
+ * GET /api/portal/dashboard?days=30
+ *
+ * Everything the hub's front page shows, in one round trip: the money, what
+ * needs a founder, the subscription book, and where the quiz is losing people.
+ * Assembled here and aggregated by pure functions, so the arithmetic is tested
+ * in `lib/portal/dashboard.ts` and `lib/analytics/funnel.ts` rather than in a
+ * route nobody can call from a test.
+ */
+export async function GET(req: Request) {
+  if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  await syncPortalRuntime()
+
+  const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 30))
+  const since = new Date(Date.now() - days * 86_400_000).toISOString()
+
+  const [orders, unfulfilled, subs, openChanges, events, catalogue] = await Promise.all([
+    listOrders({ limit: 500 }),
+    listAwaitingFulfilment(),
+    listActiveSubscriptions(),
+    listChanges({ status: OPEN_STATUSES }),
+    listEventsSince(since),
+    getResolvedCatalogue(),
+  ])
+
+  const byUser = new Map<string, typeof openChanges>()
+  for (const e of openChanges) byUser.set(e.userId, [...(byUser.get(e.userId) ?? []), e])
+  const subscriptions = subs.map(({ userId, subscription }) =>
+    summarise(userId, subscription, byUser.get(userId) ?? []),
+  )
+
+  const queue = buildFulfilmentQueue(unfulfilled)
+  const live = catalogue.source === 'shopify'
+  const notReady = catalogue.products.filter((p) => productReadiness(p, { live }).overall !== 'ok').length
+
+  return NextResponse.json({
+    windowDays: days,
+    summary: buildDashboard({
+      orders,
+      subscriptions,
+      config: getPricingConfig(),
+      awaitingReview: queue.pending,
+      readyToSend: queue.readyToSend,
+      openChanges: openChanges.length,
+      productsNeedingAttention: notReady,
+    }),
+    funnel: buildQuizFunnel(events),
+  })
+}

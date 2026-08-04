@@ -1,6 +1,6 @@
 /**
  * JSON key-value table — the durable backing for the portal's persistence seam
- * (`src/lib/portal/persist.ts`): product overrides, imports/removals, backlog,
+ * (`src/lib/portal/persist.ts`): product overrides, imports/removals,
  * runtime settings.
  */
 import { getEngine, now } from './engine'

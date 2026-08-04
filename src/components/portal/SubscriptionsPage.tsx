@@ -37,9 +37,9 @@ export function SubscriptionsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-lg font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
           Subscriptions
-        </h1>
+        </h2>
         <p className="text-sm text-[var(--color-muted)]">
           {data.count} member{data.count === 1 ? '' : 's'} · {formatGBP(data.monthlyRevenue)}/mo recurring
           {data.requiresAction > 0 && ` · ${data.requiresAction} needing attention`}
@@ -53,7 +53,7 @@ export function SubscriptionsPage() {
           {data.subscriptions.map((s) => (
             <Link
               key={s.userId}
-              href={`/portal/subscriptions/${s.userId}`}
+              href={`/portal/commerce/subscriptions/${s.userId}`}
               className="block rounded-2xl border p-4 transition-colors hover:border-[var(--color-border-2)]"
               style={{
                 background: 'var(--color-surface)',
