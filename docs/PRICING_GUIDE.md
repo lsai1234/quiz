@@ -92,9 +92,14 @@ thresholds are on **their wholesale values**. Different numbers, different
 bases — they are not related, and crossing them is how a margin model starts
 believing postage is free.
 
-Under our £50 line the customer's £3.95 roughly covers PowerBody's charge. Over
-it we collect nothing and still pay them — on every qualifying order. That's the
-cost of the promise, and it's a marketing cost, not a fulfilment one.
+Under our £50 line the customer pays £3.95 — which covers **about half** of what
+a small parcel actually costs us (£7.87, because we can't reclaim the VAT
+PowerBody charge). So we lose ~£3.92 on postage even on the orders where we
+charge for it. Over the £50 line we collect nothing and pay the whole £7.87.
+
+Both are marketing costs rather than fulfilment ones, and both are bigger than
+they look. Worth a decision: raise the charge towards £5.95–£6.95, or accept it
+as a loss-leader that pulls basket size up. See `docs/PRICING_EXAMPLES.md` §7.
 
 ---
 
@@ -288,3 +293,6 @@ order type now pays, which is *why* no attribution share can break the average.
 | **Every product** | The same maths across the catalogue, worst first |
 | **VAT** | Are we required to register, and what would it cost |
 | **The rules** | Every setting, editable, with the reasoning next to it |
+
+Worked examples of every model above — with invented products, and every number
+produced by the real code — are in **`docs/PRICING_EXAMPLES.md`**.
