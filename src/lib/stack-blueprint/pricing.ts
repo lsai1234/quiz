@@ -125,8 +125,28 @@ export const PRICING_CONFIG = {
   defaultCostRatio: 0.55,
   /** Never discount a line below cost × (1 + this). */
   marginFloorPct: 0.15,
-  /** Minimum flat monthly value for the subscription to be offered (£). */
-  minSubscriptionMonthly: 25,
+  /**
+   * Minimum flat monthly value for the subscription to be offered (£).
+   *
+   * 40, not the 25 this sat at for months. At £25 a month on the deepest bundle
+   * rate the plan DOES NOT COVER ITS OWN GOODS AND POSTAGE — we were offering,
+   * and honouring, subscriptions that lose money on every renewal. £40 is where
+   * a plan breaks even across its whole life including the average scratch card;
+   * `lib/pricing/thresholds.ts` computes it and the hub flags this setting the
+   * moment it drops below.
+   */
+  minSubscriptionMonthly: 40,
+
+  /**
+   * Smallest order we will take at all (£ inc VAT).
+   *
+   * A one-off order has nothing behind it — no renewal, no second chance — so if
+   * the checkout lets someone buy a £6 tub we simply lose the difference between
+   * what they pay and what the parcel costs. Below roughly £12 no order can
+   * carry a £7.87 parcel, whatever it contains. Cheap products aren't banned;
+   * they just can't be the whole order.
+   */
+  minOrderValue: 12,
 
   // ── Subscription cadence / commitment ──
   /** Products with more servings than this are candidates for a monthly refill SKU. */
@@ -1512,8 +1532,19 @@ export function allowedUsageLevels(
     const total = calculatePricing(blueprint, catalogue, answers, config, { usageByProductId: trial }).subscriptionTotal
     return total >= config.minSubscriptionMonthly
   })
-  // Never strand a product with no options — always allow at least 'standard'.
-  return allowed.length > 0 ? allowed : [DEFAULT_USAGE_LEVEL]
+  // The suggested level is ALWAYS offered, even when it leaves the plan under
+  // the subscription minimum.
+  //
+  // Otherwise this turns into a nudge: raising `minSubscriptionMonthly` can
+  // leave a small plan qualifying only at 'heavy', and the member is quietly
+  // funnelled into getting through product faster in order to be allowed to
+  // subscribe at all. Whether a plan is big enough to subscribe is a separate
+  // question with its own answer (`subscriptionMinOrderMet`) — the usage slider
+  // is for how much they actually use, and it should not be doing commercial
+  // work behind their back.
+  return allowed.includes(DEFAULT_USAGE_LEVEL) ? allowed : [...allowed, DEFAULT_USAGE_LEVEL].sort(
+    (a, b) => USAGE_LEVELS.indexOf(a) - USAGE_LEVELS.indexOf(b),
+  )
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────

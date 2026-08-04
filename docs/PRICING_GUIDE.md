@@ -9,7 +9,51 @@ come from the model, not from assumption.
 2. **Buy once: 8% off** over £50. **Subscribe: 13 / 15 / 20%** by bundle size.
 3. **Nothing is ever sold below cost plus 15%**, whatever the discounts add up to.
 
-Everything below is detail behind those three.
+---
+
+## 0. The cut-offs — what we can afford to sell
+
+If you only look at one thing, look at these. Everything else on this page is
+the working behind them.
+
+| | Floor | Enforced by |
+| --- | --- | --- |
+| The cheapest single thing we can sell | **£12** | *Smallest order we accept* |
+| The smallest one-off order worth taking | **£12** | *Smallest order we accept* |
+| The smallest monthly plan that pays for itself | **£36** | — |
+| The smallest plan that survives the scratch card | **£40** | *Minimum to subscribe* |
+
+### Two different tests, and the difference matters
+
+**A one-off has to pay every single time.** There's no renewal behind it, no
+second chance — so if the checkout lets someone buy a £6 tub, we lose the
+difference between what they pay and what the parcel costs. That's a hard floor,
+and it's why nothing under £12 can be sold on its own: no order that small can
+carry a £7.87 parcel, whatever is in it.
+
+**A subscription only has to pay across its life.** The scratch card is
+*supposed* to lose money on month one — that's rationed marketing, priced into
+the blend, and holding it to break-even would mean having no intro offer at all.
+So a plan is judged over six months: first month at the average card, then
+renewals. It has to average out, not clear zero every month.
+
+Getting these the wrong way round is expensive in both directions. Apply the
+one-off rule to subscriptions and you kill the offer; apply the subscription rule
+to one-offs and you bleed quietly.
+
+### What this found
+
+**The minimum to subscribe was set to £25.** A £25/month plan on the deepest
+bundle rate does not cover its own goods and postage — we were offering, and
+honouring, subscriptions that lose money on every renewal. It's now **£40**, and
+the hub flags the setting the moment it drops below the computed floor.
+
+There was also **no minimum order value at all**, so a single £5.99 item could be
+bought on its own at a £1.75 loss. That's now £12.
+
+---
+
+Everything below is detail behind those.
 
 ---
 
@@ -288,7 +332,7 @@ other.
 
 | Tab | Question it answers |
 | --- | --- |
-| **Overview** | What a typical order makes us, what a customer is worth, and whether anything is losing money |
+| **Overview** | The cut-offs first — what we can afford to sell — then what a typical order makes us and what a customer is worth |
 | **Products** | What we pay, what we charge, and what we keep on every product — worst first |
 | **Rules** | Every setting, editable, with what it does written next to it |
 

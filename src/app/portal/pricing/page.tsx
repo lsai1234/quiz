@@ -11,6 +11,8 @@ import { RateCard } from '@/components/portal/pricing/RateCard'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
 import { BlendedPanel } from '@/components/portal/pricing/BlendedPanel'
 import { LadderPanel } from '@/components/portal/pricing/LadderPanel'
+import { CutOffs } from '@/components/portal/pricing/CutOffs'
+import { pricingThresholds } from '@/lib/pricing/thresholds'
 import { checkLadder } from '@/lib/pricing/ladder'
 import { blendedEconomics } from '@/lib/pricing/blended'
 import type { CatalogueReview } from '@/lib/pricing/list-price'
@@ -107,6 +109,10 @@ export default function PricingPage() {
   // Does subscribing actually beat buying once? Checked against the real
   // catalogue's average shelf price, because which one-off tier a stack trips
   // depends on what a stack costs.
+  // The floors — what we can afford to sell at all. Cheap to compute and the
+  // first thing on the page, because it is the only part that says "don't".
+  const cutOffs = useMemo(() => (draft ? pricingThresholds(draft) : null), [draft])
+
   const ladder = useMemo(() => {
     if (!draft) return null
     const priced = catalogue.filter((p) => p.basePrice > 0)
@@ -148,7 +154,7 @@ export default function PricingPage() {
     )
   }, [draft, catalogue])
 
-  if (!draft || !good || !blended || !ladder) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!draft || !good || !blended || !ladder || !cutOffs) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
   const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'>(
@@ -222,6 +228,7 @@ export default function PricingPage() {
       {/* ══ OVERVIEW ═══════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
         <div className="space-y-4">
+          <CutOffs thresholds={cutOffs} />
           <PlainSummary blended={blended} products={products} config={draft} />
           <LadderPanel check={ladder} />
           <Detail label="Show the working — the full average-order model">
@@ -552,7 +559,10 @@ export default function PricingPage() {
             ))}
             <LadderPanel check={ladder} compact />
             <Num label="Minimum commitment" value={draft.minSubscriptionMonths} suffix="mo" onChange={(n) => set({ minSubscriptionMonths: n })} help="Months of revenue a price is judged over. It no longer stops anyone cancelling — the pay-for-what-shipped settlement does that." />
-            <Num label="Minimum to subscribe" value={draft.minSubscriptionMonthly} suffix="£/mo" onChange={(n) => set({ minSubscriptionMonthly: n })} />
+            <Num label="Smallest order we accept" value={draft.minOrderValue} suffix="£" onChange={(n) => set({ minOrderValue: n })}
+              help="A one-off order has nothing behind it, so it has to pay on its own. Below roughly £12 no order can carry a £7.87 parcel, whatever is in it — cheap products aren't banned, they just can't be the whole order." />
+            <Num label="Minimum to subscribe" value={draft.minSubscriptionMonthly} suffix="£/mo" onChange={(n) => set({ minSubscriptionMonthly: n })}
+              help={`A plan smaller than this doesn't cover its own goods and postage over its life. The Overview tab computes the floor and flags this the moment it drops below — it sat at £25 for months, which was under it.`} />
             <Num label="Servings before a refill SKU" value={draft.maxSubscriptionServings} suffix="srv" onChange={(n) => set({ maxSubscriptionServings: n })} />
           </Section>
 

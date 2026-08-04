@@ -72,6 +72,15 @@ function run(feed: FeedEntry[], subs: { userId: string; subscription: MemberSubs
   })
 }
 
+/**
+ * These fixtures carry two £30 lines, so removing one leaves a £30 plan. That is
+ * under the live `minSubscriptionMonthly`, which would make removal "break the
+ * plan" and route it to review — a different path from the one under test here.
+ * Pinning the minimum keeps these tests about the REMOVE flow rather than about
+ * the subscription floor, which has its own tests in lib/pricing/thresholds.
+ */
+const ALLOW_REMOVAL = () => setPricingOverrides({ minSubscriptionMonthly: 20 })
+
 describe('the first run', () => {
   it('only establishes a baseline — it cannot detect a change against nothing', async () => {
     const member = await seedMember('baseline@example.com')
@@ -90,6 +99,8 @@ describe('the first run', () => {
 })
 
 describe('a routine outage resolves itself', () => {
+  beforeEach(ALLOW_REMOVAL)
+
   it('swaps for a member who asked us to keep their plan whole', async () => {
     const member = await seedMember('swap@example.com', { defaultChangePolicy: 'auto-swap' })
     const result = await run([entry('SKU-A', { inStock: false, stock: 0 }), entry('SKU-B'), entry('SKU-OTHER')], [member])
@@ -192,6 +203,8 @@ describe('the founder review window', () => {
 })
 
 describe('re-running detection', () => {
+  beforeEach(ALLOW_REMOVAL)
+
   it('refreshes an open event without duplicating it or restarting its deadline', async () => {
     setPricingOverrides({ founderReviewHours: 24, discontinuedAfterMissedSyncs: 1 })
     const member = await seedMember('rerun@example.com', { defaultChangePolicy: 'auto-swap' })

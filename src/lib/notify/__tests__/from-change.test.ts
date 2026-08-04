@@ -13,7 +13,7 @@ import { getByDedupeKey, dedupeKeyFor, listNotifications } from '@/lib/notify/ou
 import type { FeedEntry } from '@/lib/changes/detect'
 import { createUser } from '@/lib/db/users'
 import { getSubscription, saveSubscription } from '@/lib/db/hub-data'
-import { getPricingConfig, resetPricingOverrides } from '@/lib/stack-blueprint/pricing'
+import { getPricingConfig, resetPricingOverrides, setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 import { ALLERGEN_CHECK_SENTENCE } from '@/lib/legal/content'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
@@ -66,6 +66,15 @@ const run = (feed: FeedEntry[], subs: { userId: string; subscription: MemberSubs
     config: getPricingConfig(),
   })
 
+/**
+ * These fixtures carry two £30 lines, so removing one leaves a £30 plan. That is
+ * under the live `minSubscriptionMonthly`, which would make removal "break the
+ * plan" and route it to review — a different path from the one under test here.
+ * Pinning the minimum keeps these tests about the REMOVE flow rather than about
+ * the subscription floor, which has its own tests in lib/pricing/thresholds.
+ */
+const ALLOW_REMOVAL = () => setPricingOverrides({ minSubscriptionMonthly: 20 })
+
 describe('a swap reaches the member', () => {
   it('writes a substitution email naming both products, with the allergen line', async () => {
     const member = await seedMember('swap-notify@example.com', { defaultChangePolicy: 'auto-swap' })
@@ -104,6 +113,8 @@ describe('a swap reaches the member', () => {
 })
 
 describe('a removal reaches the member', () => {
+  beforeEach(ALLOW_REMOVAL)
+
   it('states the new monthly and links into the add flow for that category', async () => {
     const member = await seedMember('removed-notify@example.com', { defaultChangePolicy: 'remove' })
     await run(OUTAGE, [member])
@@ -136,6 +147,8 @@ describe('a removal reaches the member', () => {
 })
 
 describe('what does not get an email', () => {
+  beforeEach(ALLOW_REMOVAL)
+
   it('says nothing when the outcome left the plan untouched', () => {
     // An absorbed price rise costs the member nothing and changes nothing.
     const sub = subscriptionWith([line({ id: 'l1' })], { customerEmail: 'quiet@example.com' })

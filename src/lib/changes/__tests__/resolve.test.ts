@@ -67,7 +67,18 @@ function heldForReview() {
   setPricingOverrides({ founderReviewHours: 24 })
 }
 
+/**
+ * These fixtures carry two £30 lines, so removing one leaves a £30 plan. That is
+ * under the live `minSubscriptionMonthly`, which would make removal "break the
+ * plan" and route it to review — a different path from the one under test here.
+ * Pinning the minimum keeps these tests about the REMOVE flow rather than about
+ * the subscription floor, which has its own tests in lib/pricing/thresholds.
+ */
+const ALLOW_REMOVAL = () => setPricingOverrides({ minSubscriptionMonthly: 20 })
+
 describe('a founder overriding the system', () => {
+  beforeEach(ALLOW_REMOVAL)
+
   it('can swap to something other than the suggestion', async () => {
     heldForReview()
     const member = await seedMember('override@example.com', {
