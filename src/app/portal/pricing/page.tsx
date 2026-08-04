@@ -8,6 +8,8 @@ import { quoteDelivery, freeDeliveryImpact, ZONE_LABELS } from '@/lib/pricing/de
 import { Waterfall } from '@/components/portal/pricing/Waterfall'
 import { RateCard } from '@/components/portal/pricing/RateCard'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
+import { BlendedPanel } from '@/components/portal/pricing/BlendedPanel'
+import { blendedEconomics } from '@/lib/pricing/blended'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
 
@@ -27,9 +29,10 @@ const BUDGETS: Budget[] = ['under-30', '30-50', '50-80', '80-plus']
 const pct = (n: number) => Math.round(n * 1000) / 10
 const money = (n: number) => `£${n.toFixed(2)}`
 
-type Tab = 'model' | 'catalogue' | 'vat' | 'rules'
+type Tab = 'average' | 'model' | 'catalogue' | 'vat' | 'rules'
 
 const TABS: { id: Tab; label: string; blurb: string }[] = [
+  { id: 'average', label: 'Are we making money?', blurb: 'The average order across the whole mix — the only question with a yes/no answer.' },
   { id: 'model', label: 'The model', blurb: 'What a product costs us and what to sell it for.' },
   { id: 'catalogue', label: 'Every product', blurb: 'The same maths run over everything we sell.' },
   { id: 'vat', label: 'VAT', blurb: 'Where we stand on registration, and what it would cost.' },
@@ -42,7 +45,7 @@ export default function PricingPage() {
   const [catalogue, setCatalogue] = useState<CatalogueProduct[]>([])
   const [saving, setSaving] = useState(false)
   const [savedFlag, setSavedFlag] = useState(false)
-  const [tab, setTab] = useState<Tab>('model')
+  const [tab, setTab] = useState<Tab>('average')
 
   // The worked example.
   const [assetPrice, setAssetPrice] = useState(10)
@@ -84,10 +87,30 @@ export default function PricingPage() {
     return { ...supplierAccountCheck(avgPrice, 0, ratio, draft), avgPrice, ratio }
   }, [draft, catalogue])
 
-  if (!draft || !good) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  // The blend is modelled on a representative basket drawn from the real
+  // catalogue — average shelf price, average cost, average weight — so it moves
+  // with what we actually sell rather than a figure typed in once.
+  const blended = useMemo(() => {
+    if (!draft) return null
+    const priced = catalogue.filter((p) => p.basePrice > 0)
+    if (priced.length === 0) return blendedEconomics({ shelfPrice: 100, supplierCost: 35, grams: 2500 }, draft)
+    const avg = (f: (p: CatalogueProduct) => number) => priced.reduce((s, p) => s + f(p), 0) / priced.length
+    // A quiz stack is several products, so the basket is a multiple of one.
+    const itemsPerOrder = 3
+    return blendedEconomics(
+      {
+        shelfPrice: avg((p) => p.basePrice) * itemsPerOrder,
+        supplierCost: avg((p) => p.cost ?? p.basePrice * draft.defaultCostRatio) * itemsPerOrder,
+        grams: avg((p) => p.weightGrams ?? draft.delivery.defaultProductGrams) * itemsPerOrder,
+      },
+      draft,
+    )
+  }, [draft, catalogue])
+
+  if (!draft || !good || !blended) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
-  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount'>(
+  const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix'>(
     key: K,
     patch: Partial<PricingConfig[K]>,
   ) => set({ [key]: { ...draft[key], ...patch } })
@@ -150,6 +173,9 @@ export default function PricingPage() {
         ))}
       </nav>
       <p className="text-[11px] text-[var(--color-muted)] mb-4">{TABS.find((t) => t.id === tab)!.blurb}</p>
+
+      {/* ══ ARE WE MAKING MONEY? ═══════════════════════════════════════════ */}
+      {tab === 'average' && <BlendedPanel blended={blended} />}
 
       {/* ══ THE MODEL ══════════════════════════════════════════════════════ */}
       {tab === 'model' && (
@@ -353,6 +379,32 @@ export default function PricingPage() {
             <Num label="Card fee, fixed" value={draft.paymentFees.fixed} suffix="£" onChange={(n) => setNested('paymentFees', { fixed: n })} help="Per successful charge." />
             <Num label="Orders returned" value={pct(draft.returns.ratePct)} suffix="%" onChange={(n) => setNested('returns', { ratePct: n / 100 })} help="Consumers have 14 days to change their mind. PowerBody refund the goods but never the shipping." />
             <Num label="A return costs" value={draft.returns.costMultipleOfDelivery} suffix="× delivery" onChange={(n) => setNested('returns', { costMultipleOfDelivery: n })} help="2 = the delivery out and the delivery back." />
+          </Section>
+
+          <Section title="Influencer partners" desc="Commission is a share of NET revenue — never of the gross, because up to a fifth of that is HMRC's money. See docs/INFLUENCER_PROGRAMME.md.">
+            <Num label="Commission, first order" value={pct(draft.partners.firstOrderPct)} suffix="%" onChange={(n) => setNested('partners', { firstOrderPct: n / 100 })}
+              help="The headline rate a partner is recruited on. Paid once per customer." />
+            <Num label="Commission, renewals" value={pct(draft.partners.renewalPct)} suffix="%" onChange={(n) => setNested('partners', { renewalPct: n / 100 })}
+              help="Paid on every subsequent billing month, which is what makes a partner care whether the traffic they sent actually stays." />
+            <Num label="Renewals earn for" value={draft.partners.renewalMonths} suffix="mo" onChange={(n) => setNested('partners', { renewalMonths: n })}
+              help="Then it stops. Their post drove the first few months; it has nothing to do with whether someone is still subscribed in year three." />
+            <Num label="Their code guarantees" value={pct(draft.partners.introFloorPct)} suffix="% off" onChange={(n) => setNested('partners', { introFloorPct: n / 100 })}
+              help="The floor a partner's code puts under the scratch card. The card still runs and can still pay its top prize — the code raises the worst outcome, so they can promise “at least this much off”. It never stacks on top of a won card." />
+            <Toggle label="Partners charge us VAT" value={draft.partners.partnersChargeVat} onChange={(v) => setNested('partners', { partnersChargeVat: v })}
+              help="A VAT-registered partner invoices commission plus VAT. While we cannot reclaim, that makes their commission cost 20% more than the rate says — and that is most of the partners worth having." />
+          </Section>
+
+          <Section title="What the average order looks like" desc="The mix these rules land in. Estimates until there are enough real orders to measure them from — and the single biggest driver of whether the business works.">
+            <Num label="Orders on subscription" value={pct(draft.orderMix.subscriptionShare)} suffix="%" onChange={(n) => setNested('orderMix', { subscriptionShare: n / 100 })}
+              help="The rest are one-off. Subscriptions carry the intro offer but earn it back over the following months." />
+            <Num label="Orders via a partner" value={pct(draft.orderMix.attributedShare)} suffix="%" onChange={(n) => setNested('orderMix', { attributedShare: n / 100 })}
+              help="Nobody knows this yet. The “Are we making money?” tab reports how high it could go before it mattered — which is a better answer than a guess." />
+            <Num label="Average subscriber life" value={draft.orderMix.averageRetentionMonths} suffix="mo" onChange={(n) => setNested('orderMix', { averageRetentionMonths: n })}
+              help="The most load-bearing number on this page. Retention is what pays for the discounted first month, so a shorter life is a far bigger risk than a deeper discount." />
+            {LEVELS.map((lvl) => (
+              <Num key={lvl} label={`${LEVEL_LABEL[lvl]} — relative weight`} value={draft.orderMix.levelMix[lvl]} onChange={(n) => setNested('orderMix', { levelMix: { ...draft.orderMix.levelMix, [lvl]: n } })}
+                help={lvl === 'essentials' ? 'Relative weights, not percentages — they are normalised, so 3/5/2 and 30/50/20 mean the same thing.' : undefined} />
+            ))}
           </Section>
 
           <Section title="Subscription offer" desc="What customers get for subscribing.">

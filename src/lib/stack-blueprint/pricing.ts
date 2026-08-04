@@ -244,6 +244,60 @@ export const PRICING_CONFIG = {
   },
 
   /**
+   * The influencer partner programme. See docs/INFLUENCER_PROGRAMME.md.
+   *
+   * Commission is a percentage of NET revenue (ex VAT, ex delivery) — never of
+   * the gross, because up to a fifth of a gross price is HMRC's money and paying
+   * partners out of the VAT account is not a mistake you notice quickly.
+   */
+  partners: {
+    /** Commission on a member's first order (0–1). */
+    firstOrderPct: 0.2,
+    /** Commission on each subsequent subscription renewal (0–1). */
+    renewalPct: 0.1,
+    /** Months of renewals a partner earns on, from signup. */
+    renewalMonths: 12,
+    /**
+     * The floor a partner's code puts under the scratch card (0–1). The card
+     * still runs and can still pay out its top prize — the code raises the worst
+     * outcome, so a partner can promise "at least this much off".
+     */
+    introFloorPct: 0.25,
+    /**
+     * Whether partners are typically VAT-registered. A registered partner
+     * invoices commission plus VAT, and while WE cannot reclaim, that makes
+     * their commission cost 20% more than the rate suggests.
+     */
+    partnersChargeVat: false,
+  },
+
+  /**
+   * What the average order actually looks like.
+   *
+   * Every figure above prices ONE order under ONE set of assumptions. This is
+   * the mix those orders arrive in, and it is what decides whether the business
+   * makes money — a single order that loses £2 because someone won the top
+   * scratch card is a rationed promotional cost, not a problem, provided the
+   * blend is healthy. `lib/pricing/blended.ts` does that arithmetic.
+   *
+   * These are assumptions until there are enough real orders to measure them
+   * from, and the hub says which is which rather than quietly presenting a guess
+   * as a fact.
+   */
+  orderMix: {
+    /** Share of orders that start or continue a subscription (0–1). */
+    subscriptionShare: 0.6,
+    /** Share of orders credited to a partner (0–1). The great unknown — the
+     *  blended model reports how high this could go before it matters. */
+    attributedShare: 0.3,
+    /** Months an average subscriber stays. Drives lifetime contribution. */
+    averageRetentionMonths: 6,
+    /** How orders spread across the bundle sizes. Normalised, so these are
+     *  relative weights rather than percentages that must sum to 1. */
+    levelMix: { essentials: 3, performance: 5, complete: 2 } as Record<StackLevel, number>,
+  },
+
+  /**
    * The supplier account itself. PowerBody require a minimum monthly spend to
    * keep a dropshipping account open — miss it and the account can be closed,
    * which is a pricing constraint as real as any margin floor.
@@ -383,7 +437,9 @@ export type PricingConfig = typeof PRICING_CONFIG
  * partial (e.g. change just the flat discount, or just the scratch outcomes) —
  * recomputeConfig shallow-merges it onto the defaults.
  */
-type NestedKeys = 'introOffer' | 'delivery' | 'goodPricing' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount'
+type NestedKeys =
+  | 'introOffer' | 'delivery' | 'goodPricing' | 'vat'
+  | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix'
 
 export type PricingOverrides = Partial<Omit<PricingConfig, NestedKeys>> & {
   [K in NestedKeys]?: Partial<PricingConfig[K]>
@@ -409,6 +465,12 @@ function recomputeConfig() {
     paymentFees: { ...PRICING_CONFIG.paymentFees, ...(_overrides.paymentFees ?? {}) },
     returns: { ...PRICING_CONFIG.returns, ...(_overrides.returns ?? {}) },
     supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(_overrides.supplierAccount ?? {}) },
+    partners: { ...PRICING_CONFIG.partners, ...(_overrides.partners ?? {}) },
+    orderMix: {
+      ...PRICING_CONFIG.orderMix,
+      ...(_overrides.orderMix ?? {}),
+      levelMix: { ...PRICING_CONFIG.orderMix.levelMix, ...(_overrides.orderMix?.levelMix ?? {}) },
+    },
     bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
     subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
     budgetCaps: _overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,
