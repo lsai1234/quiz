@@ -1,5 +1,12 @@
 # Pricing strategy — analysis and recommendation
 
+> **Status: implemented.** Every recommendation in §7 is live in
+> `src/lib/stack-blueprint/pricing.ts`, except §7.5 (quarterly shipping) and
+> §7.6 (dropping GO Hydro), which are catalogue and scheduling changes rather
+> than pricing settings. See §10 for what the shipped numbers actually came out
+> at — two of them differ from the projections below, and the reasons are worth
+> reading.
+
 An audit of every price and discount CHRGD charges, what each one does to the
 money, and what to change. Every figure comes from the model in
 `src/lib/pricing/*` run over the real PowerBody catalogue, not from assumption.
@@ -281,3 +288,64 @@ rather than a pricing level that was wrong.
 - **The 35% target margin** as a *target*. It isn't achievable on branded resale
   and the hub now says so plainly, which is more useful than a target set where
   everything passes.
+
+
+---
+
+## 10. What shipped, and where the projections were wrong
+
+Implementing this surfaced two errors in the analysis above. Both are corrected
+here rather than quietly edited into §8.
+
+### The entry rung had to go to 13%, not 12.5%
+
+§7.1 proposed 12.5%. Against a flat 8% one-off tier that is a **4.5-point**
+advantage — under the 5-point bar the same section set for "worth a commitment".
+The bar is the right one, so the rung moved to **13%**. The shipped ladder is
+**13 / 15 / 20**, giving **+5 / +7 / +12** points.
+
+`src/lib/pricing/ladder.ts` now enforces this as an invariant and the hub renders
+it, so the next time someone edits a rate the verdict moves under their hand
+instead of nobody noticing for a month.
+
+### The blended model was overstating one-off orders
+
+`blendedEconomics` priced every one-off at full list — it never applied the
+bundle tier at all. Since 40% of orders are one-off, the headline number on the
+hub's first tab was flattering by the whole tier. Now fixed, which makes the
+before-and-after look **worse in absolute terms and better in what it shows**:
+
+| On the hub's own basis (3-item basket at the catalogue average) | Before | After |
+| --- | --- | --- |
+| Average order keeps | £6.70 (10.3%) | **£8.08 (12.3%)** |
+| Customer lifetime value | £21.72 | **£24.63** |
+| Commission per order | £2.91 | **£1.97** |
+| One-off, direct | £12.93 | £14.43 |
+| One-off, via a partner | **−£0.77** | **+£3.93** |
+| Subscription, direct | £7.63 | £7.30 |
+| Subscription, via a partner | **−£0.17** | **+£2.80** |
+
+The headline figures in §8 (£24.42 → £25.93) were measured on a 5-item basket
+and before this fix. The direction and the ratio hold; the absolute numbers were
+optimistic on both sides of the comparison.
+
+**The finding that matters:** under the old settings *two of the four order
+types lost money* — every partner-attributed order, one-off and subscription
+alike. All four are now positive, which is what makes the partner attribution
+rate genuinely safe to not know.
+
+### Two side effects worth having on the record
+
+**One budget-capped stack lost a product.** Budget caps are enforced on the
+*one-off discounted* total, so a shallower one-off discount fits fewer products
+under the same ceiling. Across 16 persona snapshots exactly one changed —
+`perf-bulking-balanced` went from 4 products to 3 under an £80 cap. Every other
+stack kept its selection, and every subscription total fell. Worth deciding
+later whether a subscription-first business should cap stacks on the one-off
+price at all; it currently does.
+
+**The margin floor now binds where it never used to.** Applying it to the intro
+discount means a deep scratch card on a thin product no longer discounts to
+whatever the card says — it stops at cost × 1.15. That is the point, but it does
+mean the advertised "40% off" is occasionally not 40% off. The card is still
+honest at the basket level; it is the per-line floor that clips it.

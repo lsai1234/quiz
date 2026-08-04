@@ -4,21 +4,50 @@ import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricin
 
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
 
+// Read from config, so repricing the programme is a config change rather than a
+// test rewrite. The rates matter to the business; what these tests pin is the
+// arithmetic applied to them.
+const { firstOrderPct: FIRST, renewalPct: RENEWAL, renewalMonths: WINDOW } = PRICING_CONFIG.partners
+
 /** A representative basket at roughly what the model recommends for it. */
 const BASKET = { shelfPrice: 103, supplierCost: 30, grams: 2500 }
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+describe('the one-off case', () => {
+  it('carries the bundle tier a basket of that size earns', () => {
+    // This used to price every one-off at full list, overstating 40% of orders
+    // by the whole tier — in the one place a founder looks for the headline.
+    const withTier = blendedEconomics(BASKET, cfg())
+    const noTier = blendedEconomics(BASKET, cfg({ bundleTiers: [] }))
+    const paidWith = withTier.cases.find((c) => c.label === 'One-off, direct')!.paid
+    const paidWithout = noTier.cases.find((c) => c.label === 'One-off, direct')!.paid
+    expect(paidWith).toBeLessThan(paidWithout)
+    expect(paidWithout).toBe(BASKET.shelfPrice)
+    // And a real discount costs real contribution — the blend must not flatter.
+    expect(withTier.perOrder).toBeLessThan(noTier.perOrder)
+  })
+
+  it('qualifies on the basket value, so a small basket earns nothing', () => {
+    const small = blendedEconomics({ ...BASKET, shelfPrice: 20, supplierCost: 6 }, cfg())
+    expect(small.cases.find((c) => c.label === 'One-off, direct')!.paid).toBe(20)
+  })
+})
 
 describe('commission', () => {
   it('is a share of net revenue, by kind', () => {
     const c = cfg()
-    expect(commissionOn(100, 'first', c).amount).toBe(20)
-    expect(commissionOn(100, 'renewal', c).amount).toBe(10)
+    expect(commissionOn(100, 'first', c).amount).toBe(round2(100 * FIRST))
+    expect(commissionOn(100, 'renewal', c).amount).toBe(round2(100 * RENEWAL))
+    // The first order pays more than a renewal — that is the shape of the deal.
+    expect(FIRST).toBeGreaterThan(RENEWAL)
   })
 
   it('costs more when the partner is VAT-registered and we cannot reclaim', () => {
     const eating = cfg({ partners: { ...PRICING_CONFIG.partners, partnersChargeVat: true } })
     const c = commissionOn(100, 'first', eating)
-    expect(c.amount).toBe(20) // what they earn
-    expect(c.cost).toBe(24) // what it costs us
+    expect(c.amount).toBe(round2(100 * FIRST)) // what they earn
+    expect(c.cost).toBe(round2(100 * FIRST * (1 + PRICING_CONFIG.vat.standardRate))) // what it costs us
   })
 
   it('stops costing more once we can reclaim', () => {
@@ -26,20 +55,20 @@ describe('commission', () => {
       partners: { ...PRICING_CONFIG.partners, partnersChargeVat: true },
       vat: { ...PRICING_CONFIG.vat, registered: true },
     })
-    expect(commissionOn(100, 'first', reclaiming).cost).toBe(20)
+    expect(commissionOn(100, 'first', reclaiming).cost).toBe(round2(100 * FIRST))
   })
 
   it('pays renewals only for the agreed window', () => {
     const c = cfg()
-    // A customer who stays 24 months earns the partner 12 renewals, not 23.
-    const long = lifetimeCommission(100, 80, 24, c)
-    expect(long.monthsPaid).toBe(12)
-    expect(long.total).toBe(20 + 8 * 12)
+    // A long-staying customer earns the partner the WINDOW, not every month.
+    const long = lifetimeCommission(100, 80, WINDOW * 2, c)
+    expect(long.monthsPaid).toBe(WINDOW)
+    expect(long.total).toBe(round2(100 * FIRST + 80 * RENEWAL * WINDOW))
 
     // Someone who leaves after 3 months earns 2 renewals.
-    expect(lifetimeCommission(100, 80, 3, c).monthsPaid).toBe(2)
+    expect(lifetimeCommission(100, 80, 3, c).monthsPaid).toBe(Math.min(2, WINDOW))
     // And someone who never renews earns only the first order.
-    expect(lifetimeCommission(100, 80, 1, c).total).toBe(20)
+    expect(lifetimeCommission(100, 80, 1, c).total).toBe(round2(100 * FIRST))
   })
 })
 

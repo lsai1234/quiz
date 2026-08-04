@@ -245,13 +245,16 @@ describe('buildSubscriptionCheckout', () => {
   it('applies a revealed scratch discount to the first month', () => {
     const product = makeProduct()
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
-    const result = buildSubscriptionCheckout(blueprint, [product], null, { introDiscountOverride: 0.25 })
+    // The middle scratch outcome, read from config rather than typed in.
+    const CARD = [...PRICING_CONFIG.introOffer.scratchReveal.outcomes]
+      .sort((a, b) => b.discount - a.discount)[1].discount
+    const result = buildSubscriptionCheckout(blueprint, [product], null, { introDiscountOverride: CARD })
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const { flatMonthly, firstMonth, introDiscountPct } = result.checkout
     expect(flatMonthly).toBe(MONTHLY)
-    expect(introDiscountPct).toBe(25)
-    expect(firstMonth).toBe(Math.round(MONTHLY * 0.75 * 100) / 100)  // 25% off the first month
+    expect(introDiscountPct).toBe(Math.round(CARD * 100))
+    expect(firstMonth).toBe(Math.round(MONTHLY * (1 - CARD) * 100) / 100)
   })
 
   it('ignores an invalid (non-outcome) revealed discount', () => {

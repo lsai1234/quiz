@@ -1,9 +1,38 @@
 # Influencer partner programme — proposal
 
-**Status: proposal, nothing built.** Numbers below come from the live pricing
-model (`lib/pricing/*`), not from assumption — a representative 3-product quiz
-stack, £30 wholesale, 2.5kg, at the model's own recommended price of £103.26,
-with the business **not yet VAT-registered** (today's setting).
+**Status: rates repriced and live in config; no plumbing built.** The commission
+rates in §1 are what `PRICING_CONFIG.partners` now holds. Everything about
+attribution, payout and qualification is still a proposal.
+
+> ### ⚠️ Repriced — read this before §2 onwards
+>
+> The original design (20% first order, 10% renewals for 12 months, a 25% intro
+> floor) was modelled against a **representative order, not the actual mix**, and
+> when it was run across all four order types it turned out that **every
+> partner-attributed order lost money** — one-off at −£0.77 and subscription at
+> −£0.17. Three things compounded:
+>
+> - **20% on a first order is priced for a subscription that follows.** On a
+>   one-off order there is no renewal stream to pay it back.
+> - **12 months of renewals** against an average subscriber life of 6. Not
+>   directly expensive — the months don't happen — but it promises money the
+>   retention curve doesn't produce.
+> - **The 25% intro floor was deeper than the ~18% card we gave away anyway**, so
+>   a partner's code cost us a bigger discount *and* a commission on top. This
+>   was the expensive one.
+>
+> Now **15% / 5% for 6 months, with a 20% floor**. Every order type pays. The
+> full audit is in `docs/PRICING_STRATEGY.md` §3.
+>
+> **Sections 2–5 below still contain the original 20/10/25 modelling.** The
+> reasoning about programme *shape* — split rate, code-first attribution,
+> qualification windows, no tiers in v1 — is unchanged and still worth reading.
+> The specific pound figures in those sections are superseded by §1 and by
+> PRICING_STRATEGY.md.
+
+Numbers in §2 onwards come from the live pricing model (`lib/pricing/*`) — a
+representative 3-product quiz stack, £30 wholesale, 2.5kg, at the model's own
+recommended price of £103.26, with the business **not yet VAT-registered**.
 
 ---
 
@@ -12,27 +41,32 @@ with the business **not yet VAT-registered** (today's setting).
 | | |
 | --- | --- |
 | **Model** | Percentage of **net revenue** (ex VAT, ex delivery) |
-| **First order** | **20%** |
-| **Renewals** | **10%**, for **12 months** from signup |
-| **Follower offer** | The partner's code **raises the floor of the scratch card to 25%**. The card stays; nobody skips it |
+| **First order** | **15%** |
+| **Renewals** | **5%**, for **6 months** from signup |
+| **Follower offer** | The partner's code **raises the floor of the scratch card to 20%**. The card stays; nobody skips it |
 | **Attribution** | **Discount code first**, referral link as a convenience. 30-day last-click cookie |
 | **Qualification** | Accrues on order, confirms after the 14-day return window, reverses on refund |
 | **Hard guard** | Commission is floored at **5%** contribution so it can never make an order a loss |
 | **Tiers** | **Not in v1** — flat rates for everyone |
 | **Payout** | Monthly in arrears, £25 minimum, self-billed |
 
-Blended over a six-month subscriber this is **11.3% of net revenue** — the
-headline 20% is only ever paid on one order.
+Across the whole book at 30% attribution this is about **£1.97 an order** — the
+headline 15% is only ever paid on one order, and only ever on the net.
 
 ### Why this shape
 
 A subscription business should pay for **subscribers**, not for clicks. A split
-rate does three things a flat rate can't: the 20% headline competes for
-attention against every other programme an influencer is offered, the 10% tail
-makes them care whether the traffic they send actually stays, and the two
+rate does three things a flat rate can't: the headline rate competes for
+attention against every other programme an influencer is offered, the recurring
+tail makes them care whether the traffic they send actually stays, and the two
 together cost us less than a flat rate worth the same to them.
 
-### Why 12 months and not life-of-subscription
+The rates have to clear one bar the original design missed: **an attributed
+one-off order must still make money on its own.** A one-off carries the first-order
+rate with no renewals behind it, so whatever the headline is, it has to survive
+that case. 15% does; 20% didn't.
+
+### Why 6 months and not life-of-subscription
 
 Life-of-subscription is the most attractive thing you can offer a partner, and
 the wrong thing to offer. Three reasons:
@@ -45,12 +79,16 @@ the wrong thing to offer. Three reasons:
   ever posted, including people who go inactive, change career or become
   unreachable. It is also the kind of thing that complicates ever valuing or
   selling the business.
-- **12 months is already a strong pitch.** "You earn on every order for a year"
-  reads as generous, and the modelling backs it: 4.6:1 LTV:CAC on a 12-month
-  subscriber life.
+- **A window longer than the subscriber life promises nothing real.** At an
+  average life of 6 months, a 12-month window and a 6-month window pay out
+  almost identically — the extra months simply don't happen. What the longer
+  window does is set an expectation the business can't fund *if retention ever
+  improves*, which is precisely the moment it would hurt most. Matching the
+  window to `orderMix.averageRetentionMonths` keeps the promise honest in both
+  directions.
 
-Six months would be cheaper but weakens the one thing the recurring rate is
-there to buy — a partner who cares whether the traffic they sent actually stays.
+The recurring rate is still there to buy the thing that matters — a partner who
+cares whether the traffic they sent actually stays.
 
 If a single flagship partner ever needs life-of-subscription to sign, that's a
 bespoke term for one deal, not the shape of the programme.
@@ -148,7 +186,7 @@ for different reasons.
 customer scratches, exactly as they do now. A partner's code changes the **odds
 table**, not the code path — same screen, same animation, better prizes.
 
-> "Use Sarah's code and you're guaranteed **at least 25% off** your first month —
+> "Use Sarah's code and you're guaranteed **at least 20% off** your first month —
 > scratch to see if you got **50%**."
 
 That is a stronger pitch than a flat number, because it has a floor she can

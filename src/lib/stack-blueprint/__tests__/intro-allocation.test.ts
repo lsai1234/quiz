@@ -14,6 +14,12 @@ import {
 } from '../intro-allocation'
 import { PRICING_CONFIG } from '../pricing'
 
+// The scratch outcomes, read from config rather than typed in: these tests pin
+// the ALLOCATION MATHS, which has to work for whatever card is on offer.
+const CARDS = [...PRICING_CONFIG.introOffer.scratchReveal.outcomes].sort((a, b) => b.discount - a.discount)
+const [TOP, MID, BOTTOM] = CARDS.map((o) => o.discount)
+const TOP_ODDS = CARDS[0].weight / CARDS.reduce((s, o) => s + o.weight, 0)
+
 const configWith = (effective: number) => ({
   ...PRICING_CONFIG,
   introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: effective },
@@ -64,7 +70,9 @@ describe('ledgerTotals', () => {
 
 describe('tiltedOdds', () => {
   it('hits the aim exactly for any reachable rate', () => {
-    for (const aim of [0.1, 0.13, 0.18, 0.25, 0.33, 0.42, 0.5]) {
+    // Every reachable aim: the outcomes themselves and a spread between them.
+    const spread = [BOTTOM, (BOTTOM + MID) / 2, MID, (MID + TOP) / 2, TOP]
+    for (const aim of spread) {
       expect(meanOf(tiltedOdds(aim))).toBeCloseTo(aim, 6)
     }
   })
@@ -86,23 +94,26 @@ describe('tiltedOdds', () => {
   })
 
   it('saturates on the nearest outcome for an unreachable aim', () => {
-    expect(meanOf(tiltedOdds(0.9))).toBeCloseTo(0.5, 4)
+    expect(meanOf(tiltedOdds(0.9))).toBeCloseTo(TOP, 4)
     expect(meanOf(tiltedOdds(0))).toBeCloseTo(0.1, 4)
   })
 
   it('shifts probability toward 50% as the aim rises', () => {
-    const p50 = (aim: number) => tiltedOdds(aim).find((o) => o.rate === 0.5)!.probability
+    const p50 = (aim: number) => tiltedOdds(aim).find((o) => o.rate === TOP)!.probability
     expect(p50(0.45)).toBeGreaterThan(p50(0.3))
     expect(p50(0.3)).toBeGreaterThan(p50(0.15))
     expect(p50(0.15)).toBeGreaterThan(0)
   })
 
   it('leaves the configured weights alone at their natural average', () => {
-    // Weights 1 : 10 : 10 over 0.5 / 0.25 / 0.1 average to 0.19047…
-    const natural = (0.5 * 1 + 0.25 * 10 + 0.1 * 10) / 21
+    // Aim at exactly what the declared weights already average to, and nothing
+    // should be tilted at all.
+    const totalWeight = CARDS.reduce((s, o) => s + o.weight, 0)
+    const natural = CARDS.reduce((s, o) => s + o.discount * o.weight, 0) / totalWeight
     const odds = tiltedOdds(natural)
-    expect(odds.find((o) => o.rate === 0.5)!.probability).toBeCloseTo(1 / 21, 4)
-    expect(odds.find((o) => o.rate === 0.25)!.probability).toBeCloseTo(10 / 21, 4)
+    for (const c of CARDS) {
+      expect(odds.find((o) => o.rate === c.discount)!.probability).toBeCloseTo(c.weight / totalWeight, 4)
+    }
   })
 
   it('returns nothing to grant when no outcomes are configured', () => {
@@ -124,12 +135,12 @@ describe('correctedAim', () => {
   })
 
   it('aims rich when claims have underspent it', () => {
-    expect(correctedAim({ claims: { '0.1': 10 } }, 0.35)).toBe(0.5)
+    expect(correctedAim({ claims: { [String(BOTTOM)]: 10 } }, (BOTTOM + TOP) / 2 + 0.05)).toBe(TOP)
   })
 
   it('never aims outside the configured outcomes', () => {
     expect(correctedAim({ claims: { '0.5': 500 } }, 0.18)).toBe(0.1)
-    expect(correctedAim({ claims: { '0.1': 500 } }, 0.45)).toBe(0.5)
+    expect(correctedAim({ claims: { [String(BOTTOM)]: 500 } }, TOP - 0.01)).toBe(TOP)
   })
 })
 
@@ -142,27 +153,27 @@ describe('chooseIntroRate', () => {
 
   it('hands out all three outcomes across a run', () => {
     for (const effective of [0.15, 0.25, 0.35]) {
-      expect(new Set(simulate(effective, 600).granted)).toEqual(new Set([0.5, 0.25, 0.1]))
+      expect(new Set(simulate(effective, 600).granted)).toEqual(new Set([TOP, MID, BOTTOM]))
     }
   })
 
-  it('makes 50% commoner the higher the effective discount', () => {
-    const share = (effective: number) => shareOf(simulate(effective, 600).granted, 0.5)
-    expect(share(0.4)).toBeGreaterThan(share(0.25))
-    expect(share(0.25)).toBeGreaterThan(share(0.12))
+  it('makes the top prize commoner the higher the effective discount', () => {
+    const share = (effective: number) => shareOf(simulate(effective, 600).granted, TOP)
+    expect(share((MID + TOP) / 2)).toBeGreaterThan(share(MID))
+    expect(share(MID)).toBeGreaterThan(share((BOTTOM + MID) / 2))
   })
 
   it('grants only the top outcome when the target reaches it', () => {
-    expect(new Set(simulate(0.5, 200).granted)).toEqual(new Set([0.5]))
+    expect(new Set(simulate(TOP, 200).granted)).toEqual(new Set([TOP]))
   })
 
   it('grants only the bottom outcome when the target reaches it', () => {
-    expect(new Set(simulate(0.1, 200).granted)).toEqual(new Set([0.1]))
+    expect(new Set(simulate(BOTTOM, 200).granted)).toEqual(new Set([BOTTOM]))
   })
 
   it('only ever returns a configured outcome', () => {
-    const valid = new Set([0.5, 0.25, 0.1])
-    for (const rate of simulate(0.3, 300).granted) expect(valid.has(rate)).toBe(true)
+    const valid = new Set(CARDS.map((c) => c.discount))
+    for (const rate of simulate((MID + TOP) / 2, 300).granted) expect(valid.has(rate)).toBe(true)
   })
 
   it('recovers the average after a run of overspending', () => {
@@ -182,7 +193,7 @@ describe('chooseIntroRate', () => {
     const rich = introOdds({ claims: { '0.5': 10 } }, 0.18)
     const fresh = introOdds(EMPTY_LEDGER, 0.18)
     const p50 = (odds: { rate: number; probability: number }[]) =>
-      odds.find((o) => o.rate === 0.5)!.probability
+      odds.find((o) => o.rate === TOP)!.probability
     expect(p50(rich)).toBeLessThan(p50(fresh))
   })
 

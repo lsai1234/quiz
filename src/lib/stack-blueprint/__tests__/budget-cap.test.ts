@@ -1,5 +1,7 @@
 import { buildStackBlueprint } from '../factory'
 import {
+  PRICING_CONFIG,
+  resolveTier,
   budgetCapFor,
   discountedOneOffTotal,
   calculatePricing,
@@ -53,12 +55,13 @@ describe('budgetCapFor', () => {
 
 describe('discountedOneOffTotal', () => {
   it('sums lines and applies the best qualifying bundle tier', () => {
-    // Two £50 lines (£100 subtotal) → qualifies for the £90+ tier (15%).
+    // Two £50 lines → a £100 subtotal, which qualifies for the one-off tier.
     const lines = [
       { price: 50, cost: 10 },
       { price: 50, cost: 10 },
     ]
-    expect(discountedOneOffTotal(lines)).toBeCloseTo(85, 2)
+    const tier = resolveTier(PRICING_CONFIG.bundleTiers, 100, 2).pct
+    expect(discountedOneOffTotal(lines)).toBeCloseTo(100 * (1 - tier), 2)
   })
 })
 

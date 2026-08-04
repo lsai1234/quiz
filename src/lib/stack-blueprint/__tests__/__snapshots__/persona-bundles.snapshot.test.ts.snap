@@ -8,7 +8,7 @@ exports[`persona → bundle regression drinks-perf-muscle-energy 1`] = `
     "timed": 15,
     "totalDrinks": 75,
   },
-  "oneOffTotal": 97.72,
+  "oneOffTotal": 105.77,
   "slots": [
     {
       "productId": "chrgd-lqd-protein-rtd",
@@ -43,7 +43,7 @@ exports[`persona → bundle regression drinks-well-sleep-immune-gut 1`] = `
     "timed": 0,
     "totalDrinks": 99,
   },
-  "oneOffTotal": 100.26,
+  "oneOffTotal": 108.52,
   "slots": [
     {
       "productId": "chrgd-lqd-night",
@@ -78,7 +78,7 @@ exports[`persona → bundle regression drinks-well-sleep-immune-gut 1`] = `
 
 exports[`persona → bundle regression perf-bulking-balanced 1`] = `
 {
-  "oneOffTotal": 79.01,
+  "oneOffTotal": 71.73,
   "slots": [
     {
       "productId": "chrgd-mass-builder",
@@ -98,16 +98,10 @@ exports[`persona → bundle regression perf-bulking-balanced 1`] = `
       "swapGroup": "magnesium",
       "title": "Recovery",
     },
-    {
-      "productId": "chrgd-omega-3",
-      "required": false,
-      "swapGroup": "omega-3",
-      "title": "Health",
-    },
   ],
   "stackName": "Strength Engine Stack",
-  "subscriptionItemCount": 4,
-  "subscriptionTotal": 59.19,
+  "subscriptionItemCount": 3,
+  "subscriptionTotal": 54.94,
 }
 `;
 
@@ -130,13 +124,13 @@ exports[`persona → bundle regression perf-cutting-energy-clean 1`] = `
   ],
   "stackName": "Fat Loss Protocol",
   "subscriptionItemCount": 2,
-  "subscriptionTotal": 28.79,
+  "subscriptionTotal": 27.83,
 }
 `;
 
 exports[`persona → bundle regression perf-muscle-hypertrophy-complete 1`] = `
 {
-  "oneOffTotal": 106.34,
+  "oneOffTotal": 122.3,
   "slots": [
     {
       "productId": "chrgd-whey-protein",
@@ -194,13 +188,13 @@ exports[`persona → bundle regression perf-muscle-under30 1`] = `
   ],
   "stackName": "Strength Engine Stack",
   "subscriptionItemCount": 1,
-  "subscriptionTotal": 53.98,
+  "subscriptionTotal": 52.18,
 }
 `;
 
 exports[`persona → bundle regression perf-muscle-vegan-noncaffeine 1`] = `
 {
-  "oneOffTotal": 76.46,
+  "oneOffTotal": 78.16,
   "slots": [
     {
       "productId": "chrgd-plant-protein",
@@ -235,7 +229,7 @@ exports[`persona → bundle regression perf-muscle-vegan-noncaffeine 1`] = `
 
 exports[`persona → bundle regression perf-performance-hydration-football 1`] = `
 {
-  "oneOffTotal": 127.93,
+  "oneOffTotal": 147.13,
   "slots": [
     {
       "productId": "chrgd-creatine",
@@ -288,7 +282,7 @@ exports[`persona → bundle regression perf-performance-hydration-football 1`] =
 
 exports[`persona → bundle regression perf-recovery-45-joints 1`] = `
 {
-  "oneOffTotal": 65.67,
+  "oneOffTotal": 67.13,
   "slots": [
     {
       "productId": "chrgd-collagen",
@@ -317,7 +311,7 @@ exports[`persona → bundle regression perf-recovery-45-joints 1`] = `
 
 exports[`persona → bundle regression valuefirst-perf-muscle-energy 1`] = `
 {
-  "oneOffTotal": 107.94,
+  "oneOffTotal": 124.14,
   "slots": [
     {
       "productId": "chrgd-whey-protein",
@@ -364,7 +358,7 @@ exports[`persona → bundle regression valuefirst-perf-muscle-energy 1`] = `
 
 exports[`persona → bundle regression valuefirst-well-sleep-stress-immune 1`] = `
 {
-  "oneOffTotal": 85.79,
+  "oneOffTotal": 92.86,
   "slots": [
     {
       "productId": "chrgd-magnesium",
@@ -428,7 +422,7 @@ exports[`persona → bundle regression well-health-under30 1`] = `
   ],
   "stackName": "Foundation Health Stack",
   "subscriptionItemCount": 2,
-  "subscriptionTotal": 10.35,
+  "subscriptionTotal": 10,
 }
 `;
 
@@ -457,13 +451,13 @@ exports[`persona → bundle regression well-immune-focus-poordiet 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 25.64,
+  "subscriptionTotal": 24.78,
 }
 `;
 
 exports[`persona → bundle regression well-menopause-gut-female45 1`] = `
 {
-  "oneOffTotal": 111.13,
+  "oneOffTotal": 127.81,
   "slots": [
     {
       "productId": "chrgd-daily-probiotic",
@@ -539,13 +533,13 @@ exports[`persona → bundle regression well-skin-veggie 1`] = `
   ],
   "stackName": "Everyday Wellbeing Stack",
   "subscriptionItemCount": 3,
-  "subscriptionTotal": 25.64,
+  "subscriptionTotal": 24.78,
 }
 `;
 
 exports[`persona → bundle regression well-sleep-stress-female 1`] = `
 {
-  "oneOffTotal": 46.77,
+  "oneOffTotal": 47.81,
   "slots": [
     {
       "productId": "chrgd-sleep-support",

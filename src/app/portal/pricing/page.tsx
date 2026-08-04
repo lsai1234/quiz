@@ -10,6 +10,8 @@ import { Waterfall } from '@/components/portal/pricing/Waterfall'
 import { RateCard } from '@/components/portal/pricing/RateCard'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
 import { BlendedPanel } from '@/components/portal/pricing/BlendedPanel'
+import { LadderPanel } from '@/components/portal/pricing/LadderPanel'
+import { checkLadder } from '@/lib/pricing/ladder'
 import { blendedEconomics } from '@/lib/pricing/blended'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
@@ -102,6 +104,16 @@ export default function PricingPage() {
     return { ...supplierAccountCheck(avgPrice, 0, ratio, draft), avgPrice, ratio }
   }, [draft, catalogue])
 
+  // Does subscribing actually beat buying once? Checked against the real
+  // catalogue's average shelf price, because which one-off tier a stack trips
+  // depends on what a stack costs.
+  const ladder = useMemo(() => {
+    if (!draft) return null
+    const priced = catalogue.filter((p) => p.basePrice > 0)
+    const avg = priced.length > 0 ? priced.reduce((s, p) => s + p.basePrice, 0) / priced.length : 25
+    return checkLadder(avg, draft)
+  }, [draft, catalogue])
+
   const anchors = useMemo(() => {
     if (!draft || catalogue.length === 0) return null
     return auditAnchors(
@@ -136,7 +148,7 @@ export default function PricingPage() {
     )
   }, [draft, catalogue])
 
-  if (!draft || !good || !blended) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!draft || !good || !blended || !ladder) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
   const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'anchor'>(
@@ -209,7 +221,12 @@ export default function PricingPage() {
       <p className="text-[11px] text-[var(--color-muted)] mb-4">{TABS.find((t) => t.id === tab)!.blurb}</p>
 
       {/* ══ ARE WE MAKING MONEY? ═══════════════════════════════════════════ */}
-      {tab === 'average' && <BlendedPanel blended={blended} />}
+      {tab === 'average' && (
+        <div className="space-y-4">
+          <BlendedPanel blended={blended} />
+          <LadderPanel check={ladder} />
+        </div>
+      )}
 
       {/* ══ THE MODEL ══════════════════════════════════════════════════════ */}
       {tab === 'model' && (
@@ -543,13 +560,13 @@ export default function PricingPage() {
 
           <Section title="Influencer partners" desc="Commission is a share of NET revenue — never of the gross, because up to a fifth of that is HMRC's money. See docs/INFLUENCER_PROGRAMME.md.">
             <Num label="Commission, first order" value={pct(draft.partners.firstOrderPct)} suffix="%" onChange={(n) => setNested('partners', { firstOrderPct: n / 100 })}
-              help="The headline rate a partner is recruited on. Paid once per customer." />
+              help="The headline rate a partner is recruited on. Paid once per customer — and priced for a subscription that follows, so it has to stay low enough that an attributed ONE-OFF order still pays. Check the four cases above." />
             <Num label="Commission, renewals" value={pct(draft.partners.renewalPct)} suffix="%" onChange={(n) => setNested('partners', { renewalPct: n / 100 })}
               help="Paid on every subsequent billing month, which is what makes a partner care whether the traffic they sent actually stays." />
             <Num label="Renewals earn for" value={draft.partners.renewalMonths} suffix="mo" onChange={(n) => setNested('partners', { renewalMonths: n })}
-              help="Then it stops. Their post drove the first few months; it has nothing to do with whether someone is still subscribed in year three." />
+              help={`Then it stops. Their post drove the first few months; it has nothing to do with whether someone is still subscribed in year three. Worth matching to how long a subscriber actually stays (${draft.orderMix.averageRetentionMonths} months) — a longer window promises money the retention curve does not produce.`} />
             <Num label="Their code guarantees" value={pct(draft.partners.introFloorPct)} suffix="% off" onChange={(n) => setNested('partners', { introFloorPct: n / 100 })}
-              help="The floor a partner's code puts under the scratch card. The card still runs and can still pay its top prize — the code raises the worst outcome, so they can promise “at least this much off”. It never stacks on top of a won card." />
+              help={`The floor a partner's code puts under the scratch card. The card still runs and can still pay its top prize — the code raises the worst outcome, so they can promise “at least this much off”. It never stacks on top of a won card. KEEP IT NEAR THE BLENDED CARD (${pct(draft.introOffer.effectiveFirstMonthDiscount)}%): set it deeper and a partner's code costs us a bigger discount AND a commission on top, which is what made month one a guaranteed loss at 25%.`} />
             <Toggle label="Partners charge us VAT" value={draft.partners.partnersChargeVat} onChange={(v) => setNested('partners', { partnersChargeVat: v })}
               help="A VAT-registered partner invoices commission plus VAT. While we cannot reclaim, that makes their commission cost 20% more than the rate says — and that is most of the partners worth having." />
           </Section>
@@ -574,6 +591,7 @@ export default function PricingPage() {
                 help={lvl === 'complete' ? 'The deepest rate on offer — the one the model prices against.' : undefined}
                 onChange={(n) => set({ levelSubscriptionDiscount: { ...draft.levelSubscriptionDiscount, [lvl]: n / 100 } })} />
             ))}
+            <LadderPanel check={ladder} compact />
             <Num label="Minimum commitment" value={draft.minSubscriptionMonths} suffix="mo" onChange={(n) => set({ minSubscriptionMonths: n })} help="Months of revenue a price is judged over. It no longer stops anyone cancelling — the pay-for-what-shipped settlement does that." />
             <Num label="Minimum to subscribe" value={draft.minSubscriptionMonthly} suffix="£/mo" onChange={(n) => set({ minSubscriptionMonthly: n })} />
             <Num label="Servings before a refill SKU" value={draft.maxSubscriptionServings} suffix="srv" onChange={(n) => set({ maxSubscriptionServings: n })} />
@@ -619,7 +637,7 @@ export default function PricingPage() {
             <Num label="Their suggested order value" value={draft.supplierAccount.targetOrderValue} suffix="£" onChange={(n) => setNested('supplierAccount', { targetOrderValue: n })} help="A benchmark to compare ours against." />
           </Section>
 
-          <Section title="One-off bundle discounts" desc="Spend more in a single order, save more. The best-qualifying tier applies.">
+          <Section title="One-off bundle discounts" desc="What someone gets for buying a big box once, without committing. Deliberately flat — the ladder belongs to the subscription, and when both laddered they collided.">
             <TierEditor tiers={draft.bundleTiers} onChange={(i, p) => setTier('bundleTiers', i, p)}
               onAdd={() => set({ bundleTiers: [...draft.bundleTiers, { id: `tier-${Date.now()}`, label: 'New tier', minSubtotal: 0, discountPct: 0.05 }] })}
               onRemove={(i) => set({ bundleTiers: draft.bundleTiers.filter((_, idx) => idx !== i) })} />

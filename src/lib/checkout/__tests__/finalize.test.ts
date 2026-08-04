@@ -1,3 +1,4 @@
+import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 /**
  * Checkout finalize — persists the member's bundle + quiz to their account and
  * returns a payment URL (mock mode returns a placeholder). Runs against the
@@ -12,6 +13,13 @@ import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import { readIntroLedger, ledgerTotals } from '@/lib/stack-blueprint/intro-allocation'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
+
+// The scratch outcomes, from config — these tests pin the banking of a claim,
+// not which cards are on offer this month.
+const CARDS = [...PRICING_CONFIG.introOffer.scratchReveal.outcomes]
+  .map((o) => o.discount)
+  .sort((a, b) => b - a)
+const [TOP, MID] = CARDS
 
 const subscription = {
   id: 'sub-x',
@@ -54,13 +62,13 @@ describe('finalizeCheckout', () => {
   it('banks the revealed scratch discount onto the stored subscription', async () => {
     const user = await createUser({ email: 'lucky@example.com', passwordHash: 'h' })
     await finalizeCheckout(user.id, user.email, {
-      subscription: { ...subscription, introDiscountRate: 0.5 },
+      subscription: { ...subscription, introDiscountRate: TOP },
       consent,
     })
 
     const stored = await getSubscription(user.id)
-    expect(stored?.introDiscountRate).toBe(0.5)
-    expect(stored?.firstMonth).toBe(21) // 42 × 0.5
+    expect(stored?.introDiscountRate).toBe(TOP)
+    expect(stored?.firstMonth).toBe(Math.round(42 * (1 - TOP) * 100) / 100)
   })
 
   it('refuses a discount the client made up, without failing the checkout', async () => {
@@ -80,13 +88,13 @@ describe('finalizeCheckout', () => {
     const before = ledgerTotals(await readIntroLedger())
     const user = await createUser({ email: 'ledger@example.com', passwordHash: 'h' })
     await finalizeCheckout(user.id, user.email, {
-      subscription: { ...subscription, introDiscountRate: 0.25 },
+      subscription: { ...subscription, introDiscountRate: MID },
       consent,
     })
 
     const after = ledgerTotals(await readIntroLedger())
     expect(after.count).toBe(before.count + 1)
-    expect(after.sum).toBeCloseTo(before.sum + 0.25, 10)
+    expect(after.sum).toBeCloseTo(before.sum + MID, 10)
   })
 
   it('spends nothing from the ledger when no discount was claimed', async () => {
@@ -154,7 +162,7 @@ describe('consent is a precondition of checkout', () => {
 describe('claimIntroDiscount', () => {
   const sub = { ...subscription, flatMonthly: 40 } as MemberSubscription
 
-  it.each([0.5, 0.25, 0.1])('honours the configured outcome %s', (rate) => {
+  it.each(CARDS)('honours the configured outcome %s', (rate) => {
     const claimed = claimIntroDiscount({ ...sub, introDiscountRate: rate })
     expect(claimed.introDiscountRate).toBe(rate)
     expect(claimed.firstMonth).toBe(Math.round(40 * (1 - rate) * 100) / 100)
@@ -167,8 +175,8 @@ describe('claimIntroDiscount', () => {
   })
 
   it('recomputes firstMonth from our own total, ignoring the one sent', () => {
-    const claimed = claimIntroDiscount({ ...sub, introDiscountRate: 0.25, firstMonth: 1 })
-    expect(claimed.firstMonth).toBe(30)
+    const claimed = claimIntroDiscount({ ...sub, introDiscountRate: MID, firstMonth: 1 })
+    expect(claimed.firstMonth).toBe(Math.round(40 * (1 - MID) * 100) / 100)
   })
 
   it('leaves a per-product minimum term alone', () => {

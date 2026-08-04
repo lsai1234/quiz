@@ -17,6 +17,7 @@ import {
   getPricingConfig,
   priceOneOffLines,
   resetPricingOverrides,
+  resolveTier,
   setPricingOverrides,
   unitCostOf,
 } from '@/lib/stack-blueprint/pricing'
@@ -29,26 +30,31 @@ afterEach(() => resetPricingOverrides())
 /** A line at a given price with a cost low enough not to hit the margin floor. */
 const line = (price: number, quantity = 1) => ({ price, cost: price * 0.3, quantity })
 
+/** The tier a basket of this value earns, from config rather than typed in. */
+const tierFor = (subtotal: number, items = 1) => resolveTier(PRICING_CONFIG.bundleTiers, subtotal, items).pct
+const round2 = (n: number) => Math.round(n * 100) / 100
+
 describe('regime 1 — one-off bundle tiers reach the charged price', () => {
   it('applies the qualifying tier to every unit', () => {
-    // £120 subtotal → the 20% tier.
+    const t = tierFor(120, 2)
     const priced = priceOneOffLines([line(60), line(60)])
-    expect(priced.tierPct).toBe(0.2)
+    expect(priced.tierPct).toBe(t)
     expect(priced.subtotal).toBe(120)
-    expect(priced.total).toBe(96)
-    expect(priced.discount).toBe(24)
+    expect(priced.total).toBe(round2(120 * (1 - t)))
+    expect(priced.discount).toBe(round2(120 * t))
     // Per UNIT, because that is what Stripe is handed.
-    expect(priced.lines[0].discountedUnitPrice).toBe(48)
+    expect(priced.lines[0].discountedUnitPrice).toBe(round2(60 * (1 - t)))
   })
 
   it('counts quantity towards tier qualification', () => {
-    // 3 × £40 = £120 on one line still earns the £120 tier.
+    // 3 × £40 = £120 on one line still qualifies on the whole subtotal.
+    const t = tierFor(120, 3)
     const priced = priceOneOffLines([line(40, 3)])
     expect(priced.subtotal).toBe(120)
-    expect(priced.tierPct).toBe(0.2)
-    expect(priced.total).toBe(96)
+    expect(priced.tierPct).toBe(t)
+    expect(priced.total).toBe(round2(120 * (1 - t)))
     expect(priced.lines[0].quantity).toBe(3)
-    expect(priced.lines[0].discountedUnitPrice).toBe(32)
+    expect(priced.lines[0].discountedUnitPrice).toBe(round2(40 * (1 - t)))
   })
 
   it('gives no discount below the first threshold', () => {
@@ -59,9 +65,20 @@ describe('regime 1 — one-off bundle tiers reach the charged price', () => {
   })
 
   it('picks the best qualifying tier, not the first', () => {
-    expect(priceOneOffLines([line(50)]).tierPct).toBe(0.1)
-    expect(priceOneOffLines([line(90)]).tierPct).toBe(0.15)
-    expect(priceOneOffLines([line(120)]).tierPct).toBe(0.2)
+    // Config-driven, and deliberately non-decreasing: a bigger basket must never
+    // earn LESS than a smaller one, whatever tiers are configured.
+    const rates = [50, 90, 120, 500].map((v) => priceOneOffLines([line(v)]).tierPct)
+    for (let i = 1; i < rates.length; i++) expect(rates[i]).toBeGreaterThanOrEqual(rates[i - 1])
+    expect(rates[0]).toBe(tierFor(50))
+
+    // And it really does pick the best rather than the first declared.
+    setPricingOverrides({
+      bundleTiers: [
+        { id: 'lo', label: 'lo', minSubtotal: 10, discountPct: 0.05 },
+        { id: 'hi', label: 'hi', minSubtotal: 20, discountPct: 0.3 },
+      ],
+    })
+    expect(priceOneOffLines([line(100)], getPricingConfig()).tierPct).toBe(0.3)
   })
 
   it('honours a portal override rather than the compiled default', () => {
@@ -73,13 +90,14 @@ describe('regime 1 — one-off bundle tiers reach the charged price', () => {
 
 describe('regime 2 — the margin floor still caps the discount', () => {
   it('never discounts a line below cost plus the floor', () => {
-    // Cost £50 against a £60 price: 20% off would be £48, under the floor.
+    // Cost £50 against a £60 price: the tier discount would go under the floor.
+    const t = tierFor(120, 2)
     const priced = priceOneOffLines([{ price: 60, cost: 50, quantity: 1 }, { price: 60, cost: 18, quantity: 1 }])
     const floored = priced.lines[0]
-    expect(floored.discountedUnitPrice).toBeGreaterThan(48)
-    expect(floored.discountedUnitPrice).toBe(57.5) // 50 × 1.15
+    expect(floored.discountedUnitPrice).toBeGreaterThan(round2(60 * (1 - t)))
+    expect(floored.discountedUnitPrice).toBe(round2(50 * (1 + PRICING_CONFIG.marginFloorPct)))
     // The unconstrained line still gets the full tier.
-    expect(priced.lines[1].discountedUnitPrice).toBe(48)
+    expect(priced.lines[1].discountedUnitPrice).toBe(round2(60 * (1 - t)))
   })
 
   it('never marks a line UP when cost already exceeds the floor', () => {
@@ -149,13 +167,17 @@ describe('regime 3 — subscriptions carry subscribe-&-save into the billed amou
 
 describe('regime 4 — the first-month intro discount', () => {
   it('is a real reduction on the first month, passed to Stripe as a coupon', () => {
+    const TOP = Math.max(...PRICING_CONFIG.introOffer.scratchReveal.outcomes.map((o) => o.discount))
     const pricing = calculatePricing(MOCK_BLUEPRINT, MOCK_CATALOGUE as CatalogueProduct[], null, undefined, {
-      introDiscountOverride: 0.5,
+      introDiscountOverride: TOP,
     })
     // `createSubscriptionSession` turns this rate into a one-cycle coupon, so
     // the recurring price stays whole and only month one is discounted.
-    expect(pricing.subscriptionIntroDiscountPct).toBe(50)
-    expect(pricing.subscriptionFirstMonth).toBeCloseTo(pricing.subscriptionTotal * 0.5, 1)
+    expect(pricing.subscriptionIntroDiscountPct).toBe(Math.round(TOP * 100))
+    expect(pricing.subscriptionFirstMonth).toBeLessThan(pricing.subscriptionTotal)
+    // A real reduction, but never below the margin floor — the intro is floored
+    // per line like every other discount.
+    expect(pricing.subscriptionFirstMonth).toBeGreaterThanOrEqual(pricing.subscriptionTotal * (1 - TOP) - 0.01)
   })
 
   it('is not applied until the member has revealed a valid rate', () => {

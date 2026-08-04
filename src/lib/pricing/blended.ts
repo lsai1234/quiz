@@ -30,7 +30,7 @@
  *
  * Pure — the caller supplies the config and the representative product.
  */
-import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import type { StackLevel } from '@/lib/types'
 import { unitEconomics } from './unit-economics'
 import { commissionOn } from './commission'
@@ -179,10 +179,14 @@ export function blendedEconomics(
   })
 
   // ── One-off orders ──
-  // No intro offer (that is a subscription mechanic), no renewals.
+  // No intro offer (that is a subscription mechanic), no renewals — but they DO
+  // carry the one-off bundle tier, which this used to ignore. Pricing every
+  // one-off at full list overstated 40% of orders by the whole tier, and did it
+  // in the one place a founder looks for the headline number.
   const oneOffShare = 1 - subShare
-  push('One-off, direct', oneOffShare * (1 - attShare), flatten(priceCase(0, false, 'first')))
-  push('One-off, via a partner', oneOffShare * attShare, flatten(priceCase(0, true, 'first')))
+  const oneOffDiscount = resolveTier(config.bundleTiers, input.shelfPrice, mix.itemsPerOrder).pct
+  push('One-off, direct', oneOffShare * (1 - attShare), flatten(priceCase(oneOffDiscount, false, 'first')))
+  push('One-off, via a partner', oneOffShare * attShare, flatten(priceCase(oneOffDiscount, true, 'first')))
 
   // ── Subscriptions ──
   // Modelled over the whole life — one first month at the intro discount and the

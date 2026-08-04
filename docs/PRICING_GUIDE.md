@@ -3,10 +3,12 @@
 Everything on this page is live in the Founders Hub under **Pricing**. Numbers
 come from the model, not from assumption.
 
-**What changed in this round:** the bundle ladder came down to 10/15/20, list
-prices are now anchored to the supplier's RRP instead of built up from cost, and
-delivery is costed per *parcel* rather than per product. Between them those three
-took the catalogue from 23 products showing a loss to 1.
+**What changed in this round:** list prices are anchored to the supplier's RRP
+instead of built up from cost, delivery is costed per *parcel* rather than per
+product, and — the big one — **the discount ladder now belongs to the
+subscription alone.** Buying once got a laddered discount that quietly beat
+subscribing; on the middle bundle it cost members 5 points to subscribe. See
+`docs/PRICING_STRATEGY.md` for the full audit.
 
 ---
 
@@ -120,16 +122,31 @@ it — the **VAT tab** tracks the £90,000 threshold and projects when that land
 
 ## 4. What the customer gives up and gets
 
-**Three discounts, and they stack:**
+**Buy once:** a flat **8% off** any basket over £50, plus free delivery.
 
-1. **Subscribe & save** — **10% / 15% / 20%** by bundle size *(was 15/20/25 —
-   you said 25% was too deep, and it was)*
-2. **First month** — a scratch card averaging 18% (top prize 50%, ~1 in 21)
-3. **Free delivery** over £50 of our prices
+**Subscribe:** **13% / 15% / 20%** by bundle size — always a clear step better
+than buying once, and the step *grows* with the stack:
+
+| Bundle | Buy once | Subscribe | You save by subscribing |
+| --- | --- | --- | --- |
+| Essentials | 8% | **13%** | +5 points |
+| Performance | 8% | **15%** | +7 points |
+| Complete | 8% | **20%** | +12 points |
+
+That gap is the whole point, and it used to be zero or negative. The one-off
+discount is deliberately **flat** — when both laddered they collided, and the
+one-off tier won.
+
+**Plus, on your first month:** a scratch card averaging 15% (top prize 40%,
+~1 in 21).
 
 **Plus, when the partner programme goes live:** the influencer's code raises the
-scratch card's floor to 25% — the card still runs and can still pay 50%, the
+scratch card's floor to 20% — the card still runs and can still pay 40%, the
 code just raises the worst outcome. It never stacks on top of a won card.
+
+**Every discount is floored.** No combination can take a product below cost plus
+15%, including the scratch card — which used to be the one discount that slipped
+past the guardrail.
 
 ---
 
@@ -148,7 +165,7 @@ price loses money just as surely as a thin one.
 
 ```
 list price   = RRP + 8.2%          ← the anchor, what a single unit costs
-bundle price = list − 15%          ← what a quiz member actually pays
+bundle price = list − 13/15/20%    ← what a quiz member actually pays
 the bargain  = ~8% BELOW RRP       ← real, and checkable in ten seconds
 ```
 
@@ -182,7 +199,8 @@ bundle lands **9.8% below RRP**. The old cost-plus model averaged +111%.
 GO Hydro Electrolyte Tablets: £6.49 RRP, and it can't absorb even a third of a
 £6.50 delivery. At −15% it's the only loss left in the catalogue, and no amount
 of bundling fixes it. The honest answer is to keep it off subscription, or only
-ever sell it as an add-on inside a parcel that's already going out.
+ever sell it as an add-on inside a parcel that's already going out. **Still to
+do** — it needs a catalogue change, not a pricing one.
 
 ### Most of the catalogue is under target — and that's the target's fault
 
@@ -196,28 +214,27 @@ now says this once at the top instead of flagging every row.
 
 ## 6. Influencer commission
 
-**20% of net revenue on a member's first order, 10% on renewals for 12 months.**
+**15% of net revenue on a member's first order, 5% on renewals for 6 months.**
 Never on the gross — up to a fifth of that is HMRC's.
 
-Blended over a six-month subscriber that's 11.3%. Across the whole book at 30%
-attribution it's about **£3.10 an order** — the headline 20% is a per-order rate,
-not a business-wide cost, and the two get confused constantly.
+It used to be 20% / 10% for 12 months, with the code guaranteeing 25% off month
+one. Three problems compounded: the renewal window ran twice as long as a
+subscriber actually stays, and the 25% floor was *deeper than the 15% card we
+give away anyway* — so a partner's code cost us a bigger discount **and** a
+commission on top of it.
 
-**One thing to watch.** At these settings a subscription taken *through a partner
-code* is roughly break-even over its whole life:
+The result was that **every partner-attributed order lost money**:
 
-| Order type | Share | Member pays | We keep |
+| Order type | Share | Before | After |
 | --- | --- | --- | --- |
-| One-off, direct | 28% | £76.10 | **£20.43** (26.9%) |
-| Subscription, direct | 42% | £63.11 | **£7.63** (12.1%) |
-| One-off, via a partner | 12% | £76.10 | **£5.21** (6.9%) |
-| Subscription, via a partner | 18% | £62.35 | **−£0.17** (−0.3%) |
+| One-off, direct | 28% | £12.93 | £14.43 |
+| Subscription, direct | 42% | £7.63 | £7.30 |
+| One-off, via a partner | 12% | **−£0.77** | **+£3.93** |
+| Subscription, via a partner | 18% | **−£0.17** | **+£2.80** |
 
-That last row is the partner intro floor (25% on month one) landing on top of the
-bundle discount, then 20% commission on the discounted total. It's break-even,
-not a hole — but if partner attribution climbed well past 30% it's the number
-that would start to bite. The lever to pull first is the intro floor, not the
-commission rate.
+All four now make money. That is what makes not knowing the partner attribution
+rate genuinely safe: whatever share of orders come through partners, the average
+stays positive.
 
 ---
 
@@ -229,11 +246,11 @@ You asked for this to be unmistakable in the hub, and it's the first tab:
 On a representative 3-item basket (£76.10 list, £38.46 of wholesale), after
 discounts, commission, postage, VAT, card fees and returns:
 
-| | |
-| --- | --- |
-| **Average order keeps** | **£9.52** (14.0% of net revenue) |
-| Average customer, over their life | **£22.85** |
-| Commission paid, per order | £3.10 |
+| | Before | After |
+| --- | --- | --- |
+| **Average order keeps** | £6.70 (10.3%) | **£8.08** (12.3%) |
+| Average customer, over their life | £21.72 | **£24.63** |
+| Commission paid, per order | £2.91 | **£1.97** |
 
 And the sensitivity sweep — how far each lever could move before the *average*
 order broke even:
@@ -241,17 +258,24 @@ order broke even:
 | Lever | Now | Breaks even at |
 | --- | --- | --- |
 | Orders through partners | 30% | **never** — 0% or 100%, the average stays positive |
-| Commission on a first order | 20% | **never** |
+| Commission on a first order | 15% | **never** |
 | Average subscriber life | 6 months | **never** |
-| Average first-month discount | 18% | **never** |
+| Average first-month discount | 15% | **never** |
 | Biggest bundle discount | 20% | **never** |
-| Orders returned | 2% | 62.8% |
-| **What PowerBody charge us** | £38.46 | **£46.92** — 22% headroom |
+| Orders returned | 2% | 68.6% |
+| **What PowerBody charge us** | £38.46 | **£47.69** — 24% headroom |
 
-Only two levers can break it, and one of them needs a 30× rise in returns. **The
-real risk is supplier cost**, which has 22% of room in it. That is the number to
+Only two levers can break it, and one of them needs a 34× rise in returns. **The
+real risk is supplier cost**, which has 24% of room in it. That is the number to
 watch, and it's why not knowing the partner attribution rate isn't a risk worth
 worrying about.
+
+### Why "never" is the answer that matters
+
+Under the old settings this table looked similar — but it was measured with two
+of the four order types quietly losing money, and with one-off orders priced at
+full list because the model never applied their discount. Both are fixed. Every
+order type now pays, which is *why* no attribution share can break the average.
 
 ---
 

@@ -80,6 +80,8 @@ const makeBlueprint = (slots: Partial<StackBlueprint['slots'][number]>[] = []): 
  * rate, and hard-coding one turned every tuning decision into a test failure.
  */
 const SUB = 1 - PRICING_CONFIG.levelSubscriptionDiscount.performance
+/** The deepest scratch outcome on offer, read from config rather than typed in. */
+const TOP_CARD = Math.max(...PRICING_CONFIG.introOffer.scratchReveal.outcomes.map((o) => o.discount))
 
 describe('calculatePricing', () => {
   it('uses basePrice when no variant selected and no available variant', () => {
@@ -198,10 +200,12 @@ describe('calculatePricing', () => {
       { selectedProductId: 'prod-b', selectedVariantId: 'vb', slotType: 'performance' } as never,
     ])
     const p = calculatePricing(blueprint, [prodA, prodB])
-    // £50 subtotal qualifies for the £50+ bundle tier (10% off): 27 + 18 = 45.
-    expect(p.oneOffTotal).toBe(45)
+    // £50 subtotal qualifies for the one-off bundle tier, applied per line.
+    const tier = resolveTier(PRICING_CONFIG.bundleTiers, 50, 2).pct
+    const line = (v: number) => Math.round(v * (1 - tier) * 100) / 100
+    expect(p.oneOffTotal).toBe(line(30) + line(20))
     expect(p.rrpTotal).toBe(60)   // 40 + 20 (no compare for B)
-    expect(p.bundleSaving).toBe(15)
+    expect(p.bundleSaving).toBe(Math.round((60 - p.oneOffTotal) * 100) / 100)
     // Only prodA qualifies for the monthly plan; prodB (ineligible) is excluded.
     const subA = Math.round(30 * SUB * 100) / 100
     expect(p.subscriptionTotal).toBe(subA)
@@ -371,10 +375,18 @@ describe('consumption protocol & monthly quantities', () => {
   it('applies a revealed scratch discount to the first month and commitment total', () => {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
-    const p = calculatePricing(bp, [a], null, undefined, { introDiscountOverride: 0.5 })
-    const monthly = Math.round(30 * SUB * 100) / 100
-    expect(p.subscriptionIntroDiscountPct).toBe(50)
-    expect(p.subscriptionFirstMonth).toBe(Math.round(monthly * 0.5 * 100) / 100)
+    const p = calculatePricing(bp, [a], null, undefined, { introDiscountOverride: TOP_CARD })
+    const rate = levelSubscriptionRate('essentials')
+    const monthly = Math.round(30 * (1 - rate) * 100) / 100
+    expect(p.subscriptionIntroDiscountPct).toBe(Math.round(TOP_CARD * 100))
+    // The intro is FLOORED like every other discount — it used to be applied
+    // outside `discountWithFloor`, which let the deepest discount in the
+    // business walk past the guardrail built to bound it.
+    const cost = unitCostOf(a, 30)
+    expect(p.subscriptionFirstMonth).toBe(
+      Math.round(discountWithFloor(30 * (1 - rate), TOP_CARD, cost) * 100) / 100,
+    )
+    expect(p.subscriptionFirstMonth).toBeGreaterThan(Math.round(monthly * (1 - TOP_CARD) * 100) / 100)
     // Commitment = discounted first month + the remaining months at the flat rate.
     const expectedTerm = Math.round((p.subscriptionFirstMonth + (p.subscriptionMinMonths - 1) * monthly) * 100) / 100
     expect(p.subscriptionMinTermTotal).toBe(expectedTerm)
@@ -426,13 +438,14 @@ describe('pricing rules — discount tiers', () => {
       { selectedProductId: 'a', selectedVariantId: 'v' },
       { selectedProductId: 'b', selectedVariantId: 'v2', slotType: 'performance' } as never,
     ])
-    const p = calculatePricing(bp, [a, b]) // subtotal 140 → £120+ tier (20%)
-    expect(p.bundleDiscountPct).toBe(20)
-    expect(p.bundleTierLabel).toBe('£120+ bundle')
-    expect(p.oneOffTotal).toBe(round2(140 * 0.8))
+    const p = calculatePricing(bp, [a, b])
+    const { pct: tier, tier: qualifying } = resolveTier(PRICING_CONFIG.bundleTiers, 140, 2)
+    expect(p.bundleDiscountPct).toBe(round2(tier * 100))
+    expect(p.bundleTierLabel).toBe(qualifying!.label)
+    expect(p.oneOffTotal).toBe(round2(140 * (1 - tier)))
     // The pre-discount selling subtotal drives the customer-facing saving line.
     expect(p.oneOffSubtotal).toBe(140)
-    expect(round2(p.oneOffSubtotal - p.oneOffTotal)).toBe(round2(140 * 0.2))
+    expect(round2(p.oneOffSubtotal - p.oneOffTotal)).toBe(round2(140 * tier))
   })
 
   it('gives no bundle discount below the first tier threshold', () => {
@@ -518,10 +531,33 @@ describe('pricing rules — subscription profit guardrails', () => {
   })
 
   it('flags a config that loses money if cancelled early', () => {
-    const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 18, compareAtPrice: null, variants: oneVariant(20) })
+    // The loss has to come from the goods costing more than we charge — an
+    // intro discount can no longer do it on its own, which is the point of the
+    // test below.
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 25, compareAtPrice: null, variants: oneVariant(20) })
     const badConfig = { ...PRICING_CONFIG, marginFloorPct: 0, minSubscriptionMonths: 1, introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } } }
     const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, badConfig)
     expect(p.subscriptionProfitableOnCancel).toBe(false)
+  })
+
+  it('will not let the intro discount sell below the margin floor', () => {
+    // The regression this guards. The intro used to be applied to the whole
+    // subscription total AFTER `buildSubscriptionPlan` had floored every line,
+    // so a 90% first month sailed straight past `marginFloorPct` and shipped
+    // goods at a fraction of what they cost. It is now floored per line, like
+    // the subscribe-&-save rate it stacks on.
+    const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 10, compareAtPrice: null, variants: oneVariant(20) })
+    const greedy = {
+      ...PRICING_CONFIG,
+      minSubscriptionMonths: 1,
+      introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } },
+    }
+    const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, greedy)
+    const floor = round2(10 * (1 + PRICING_CONFIG.marginFloorPct))
+    expect(p.subscriptionFirstMonth).toBe(floor)
+    // Unfloored it would have been £2.61 on £10 of goods.
+    expect(p.subscriptionFirstMonth).toBeGreaterThan(10)
+    expect(p.subscriptionProfitableOnCancel).toBe(true)
   })
 
   it('gates subscription on the minimum monthly order value', () => {
@@ -533,14 +569,28 @@ describe('pricing rules — subscription profit guardrails', () => {
 // ─── Scratch-to-reveal first-month discount ───────────────────────────────────
 
 describe('scratch-to-reveal intro discount', () => {
+  // Derived from the config rather than typed in, so recutting the card is a
+  // one-line change instead of a test rewrite. Sorted deepest-first, the order
+  // the outcomes are declared in.
+  const CARDS = [...PRICING_CONFIG.introOffer.scratchReveal.outcomes].sort((a, b) => b.discount - a.discount)
+  const [TOP, MID, BOTTOM] = CARDS.map((o) => o.discount)
+  const WEIGHT = CARDS.reduce((s, o) => s + o.weight, 0)
+  const TOP_ODDS = CARDS[0].weight / WEIGHT
+  const MID_BOUNDARY = (CARDS[0].weight + CARDS[1].weight) / WEIGHT
+
   const scratchOff = {
     ...PRICING_CONFIG,
     introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
   }
 
-  it('is enabled by default with 10%/25%/50% weighted outcomes', () => {
+  it('is enabled by default with three weighted outcomes', () => {
     expect(scratchRevealEnabled()).toBe(true)
-    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([0.1, 0.25, 0.5])
+    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([...CARDS].map((o) => o.discount).sort())
+    // A rare top prize and two everyday outcomes is the shape the card depends
+    // on — if the top one stops being rare it stops being a prize.
+    expect(TOP_ODDS).toBeLessThan(0.1)
+    expect(TOP).toBeGreaterThan(MID)
+    expect(MID).toBeGreaterThan(BOTTOM)
   })
 
   it('rollScratchDiscount only ever returns a configured outcome', () => {
@@ -550,25 +600,24 @@ describe('scratch-to-reveal intro discount', () => {
     }
   })
 
-  it('rollScratchDiscount makes 50% the rare prize (weights 1 : 10 : 10)', () => {
-    // Outcomes are declared [0.5, 0.25, 0.1] with weights 1, 10, 10 (total 21),
-    // so the boundaries sit at 1/21 and 11/21.
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(0.5)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 1 / 21 - 0.001)).toBe(0.5)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 1 / 21 + 0.001)).toBe(0.25)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 11 / 21 - 0.001)).toBe(0.25)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 11 / 21 + 0.001)).toBe(0.1)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(0.1)
+  it('rollScratchDiscount draws each outcome in its declared band', () => {
+    // The draw walks the outcomes in order, subtracting weights, so the
+    // boundaries sit at the cumulative weight fractions.
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(TOP)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => TOP_ODDS - 0.001)).toBe(TOP)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => TOP_ODDS + 0.001)).toBe(MID)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => MID_BOUNDARY - 0.001)).toBe(MID)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => MID_BOUNDARY + 0.001)).toBe(BOTTOM)
+    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(BOTTOM)
   })
 
-  it('rollScratchDiscount hands out 25%-or-10% about 20x as often as 50%', () => {
-    let fifties = 0
+  it('keeps the top prize as rare as its weight says', () => {
+    let tops = 0
     const N = 4200
     for (let i = 0; i < N; i++) {
-      if (rollScratchDiscount(PRICING_CONFIG, () => (i + 0.5) / N) === 0.5) fifties += 1
+      if (rollScratchDiscount(PRICING_CONFIG, () => (i + 0.5) / N) === TOP) tops += 1
     }
-    expect(fifties / N).toBeCloseTo(1 / 21, 2)
-    expect((N - fifties) / fifties).toBeCloseTo(20, 0)
+    expect(tops / N).toBeCloseTo(TOP_ODDS, 2)
   })
 
   it('rollScratchDiscount falls back to the flat rate when scratch is disabled', () => {
@@ -576,9 +625,7 @@ describe('scratch-to-reveal intro discount', () => {
   })
 
   it('isValidScratchDiscount accepts only configured outcomes', () => {
-    expect(isValidScratchDiscount(0.1)).toBe(true)
-    expect(isValidScratchDiscount(0.25)).toBe(true)
-    expect(isValidScratchDiscount(0.5)).toBe(true)
+    for (const c of CARDS) expect(isValidScratchDiscount(c.discount)).toBe(true)
     expect(isValidScratchDiscount(0.9)).toBe(false)
     expect(isValidScratchDiscount(0)).toBe(false)
   })
@@ -587,8 +634,8 @@ describe('scratch-to-reveal intro discount', () => {
     expect(resolveIntroDiscount(null)).toBe(0)        // not scratched yet → nothing applied
     expect(resolveIntroDiscount(undefined)).toBe(0)
     expect(resolveIntroDiscount(0)).toBe(0)
-    expect(resolveIntroDiscount(0.25)).toBe(0.25)
-    expect(resolveIntroDiscount(0.5)).toBe(0.5)
+    expect(resolveIntroDiscount(MID)).toBe(MID)
+    expect(resolveIntroDiscount(TOP)).toBe(TOP)
     expect(resolveIntroDiscount(0.9)).toBe(0)          // not a valid outcome → ignored
   })
 

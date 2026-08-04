@@ -61,20 +61,44 @@ export const PRICING_CONFIG = {
    * subscriptionTier. Falls back to `subscriptionDiscount` if a level is unset.
    */
   levelSubscriptionDiscount: {
-    essentials: 0.1,
+    // 13 rather than a tidier 10 because the entry rung has to CLEAR TWO
+    // CONSTRAINTS at once, and 10 cleared neither with room to spare.
+    //
+    // First the anchor: the list price sits ~8.2% over RRP, so any discount
+    // below ~7.6% leaves the member paying more than they would on the high
+    // street. Second the ladder: it has to beat the flat 8% one-off tier by
+    // enough to be a reason to commit — `lib/pricing/ladder.ts` puts that bar at
+    // 5 points, which is roughly the smallest gap a shopper reliably notices.
+    // 13 − 8 = 5 exactly. See docs/PRICING_STRATEGY.md §5.
+    essentials: 0.13,
     performance: 0.15,
     complete: 0.2,
   } as Record<StackLevel, number>,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
 
-  // ── One-off bundle discount tiers (best-qualifying wins) ──
+  /**
+   * One-off bundle discount tiers (best-qualifying wins).
+   *
+   * ONE FLAT TIER, DELIBERATELY. This used to ladder 10/15/20 by basket value,
+   * in parallel with the subscribe-&-save ladder — and the two collided. A
+   * 5-item Performance stack lists at ~£126, which tripped the old £120+ tier at
+   * 20% against a 15% subscription rate, so SUBSCRIBING COST THE MEMBER 5
+   * POINTS. Essentials and Complete were level pegging. There was no ongoing
+   * reason to subscribe at all; the whole recurring-revenue case rested on the
+   * first-month scratch card.
+   *
+   * The ladder now belongs to the subscription alone, which is what it was
+   * always for. One-off buyers get a flat 8% for clearing £50 — enough to be
+   * worth having, shallow enough that every rung of the subscription ladder
+   * beats it by a widening margin (+4.5 / +7 / +12 points). See
+   * docs/PRICING_STRATEGY.md §7.1.
+   *
+   * Aligned to `freeDeliveryThreshold` so the discount and free delivery arrive
+   * together — no dead zone where one perk applies and the other doesn't.
+   */
   bundleTiers: [
-    // First tier aligned to the free-delivery threshold (£50) so both perks kick
-    // in together — no dead zone where delivery is free but the discount isn't.
-    { id: 'bundle-50', label: '£50+ bundle', minSubtotal: 50, discountPct: 0.1 },
-    { id: 'bundle-90', label: '£90+ bundle', minSubtotal: 90, discountPct: 0.15 },
-    { id: 'bundle-120', label: '£120+ bundle', minSubtotal: 120, discountPct: 0.2 },
+    { id: 'bundle-50', label: '£50+ bundle', minSubtotal: 50, discountPct: 0.08 },
   ] as DiscountTier[],
   // ── Extra subscription discount tiers, on top of the base rate (best wins) ──
   subscriptionTiers: [] as DiscountTier[],
@@ -273,18 +297,40 @@ export const PRICING_CONFIG = {
    * partners out of the VAT account is not a mistake you notice quickly.
    */
   partners: {
-    /** Commission on a member's first order (0–1). */
-    firstOrderPct: 0.2,
+    /**
+     * Commission on a member's first order (0–1).
+     *
+     * 15%, down from 20%. A fifth of net revenue is a normal affiliate rate WHEN
+     * A SUBSCRIPTION FOLLOWS AND PAYS IT BACK. On a one-off order there is
+     * nothing to pay it back with, and at 20% every attributed one-off order
+     * landed at or below break-even.
+     */
+    firstOrderPct: 0.15,
     /** Commission on each subsequent subscription renewal (0–1). */
-    renewalPct: 0.1,
-    /** Months of renewals a partner earns on, from signup. */
-    renewalMonths: 12,
+    renewalPct: 0.05,
+    /**
+     * Months of renewals a partner earns on, from signup.
+     *
+     * 6, matching `orderMix.averageRetentionMonths`. Paying renewals for 12
+     * months on a customer who stays 6 doesn't cost double — it costs nothing
+     * extra, because the months don't happen — but it sets an expectation the
+     * business can't fund if retention ever improves, which is precisely when it
+     * would hurt most.
+     */
+    renewalMonths: 6,
     /**
      * The floor a partner's code puts under the scratch card (0–1). The card
      * still runs and can still pay out its top prize — the code raises the worst
      * outcome, so a partner can promise "at least this much off".
+     *
+     * 20%, down from 25%. At 25% the floor was DEEPER THAN THE ~18% BLENDED CARD
+     * WE GIVE AWAY ANYWAY, so a partner's code cost us a bigger discount AND a
+     * commission on top of it — the single most expensive line in the programme,
+     * and the reason month one via a partner lost £12–£28 at every stack size.
+     * At 20% against a 15% blended card it is still a genuine "at least 20% off"
+     * a partner can advertise.
      */
-    introFloorPct: 0.25,
+    introFloorPct: 0.2,
     /**
      * Whether partners are typically VAT-registered. A registered partner
      * invoices commission plus VAT, and while WE cannot reclaim, that makes
@@ -467,7 +513,7 @@ export const PRICING_CONFIG = {
      * becomes vanishingly rare. Setting it at or above the top outcome grants
      * that outcome to everyone; at or below the bottom one, likewise.
      */
-    effectiveFirstMonthDiscount: 0.18,
+    effectiveFirstMonthDiscount: 0.15,
     /**
      * Scratch-to-reveal intro: instead of one fixed first-month discount, the
      * member scratches a card to reveal theirs, drawn at random from these
@@ -475,17 +521,27 @@ export const PRICING_CONFIG = {
      * weights. Set `enabled: false` to fall back to the flat
      * `firstMonthDiscount` above.
      *
-     * 50% is the rare top prize — the everyday outcomes (25% / 10%) are ~20×
-     * more likely between them (weights 10 + 10 against 1, so 50% lands about
+     * 40% is the rare top prize — the everyday outcomes (20% / 10%) are 20×
+     * more likely between them (weights 8 + 12 against 1, so 40% lands about
      * 1 draw in 21). Keep that ratio in mind when editing: the weights are
      * relative, so raising one lowers everything else's odds.
+     *
+     * WHY NOT 50/25/10. Under the old card, 52% OF FIRST MONTHS LOST MONEY —
+     * the top prize and the 25% card, which was half of all draws. Expected
+     * value was positive but carried entirely by the 10% outcome, and the 25%
+     * card was what the old partner floor forced onto every attributed order.
+     * A loss-making first month is fine when the subscription pays it back;
+     * a loss-making MEDIAN first month is an acquisition cost nobody chose.
+     * The shape is unchanged — rare big prize, two everyday outcomes — but the
+     * middle rung now makes money and the worst case is ~£14 better on a
+     * Complete stack.
      */
     scratchReveal: {
       enabled: true,
       outcomes: [
-        { discount: 0.5, weight: 1 },
-        { discount: 0.25, weight: 10 },
-        { discount: 0.1, weight: 10 },
+        { discount: 0.4, weight: 1 },
+        { discount: 0.2, weight: 8 },
+        { discount: 0.1, weight: 12 },
       ] as ScratchOutcome[],
     },
   },
@@ -1342,8 +1398,28 @@ export function calculatePricing(
   // Intro offer: a discount on the first month; the rest bill at the flat total.
   // With scratch-to-reveal enabled nothing is applied until the member reveals a
   // rate (opts.introDiscountOverride); resolveIntroDiscount validates it.
+  //
+  // FLOORED PER LINE, like every other discount. This used to be a flat
+  // `subscriptionTotal × (1 − intro)`, which walked straight past
+  // `marginFloorPct` — the floor is applied inside `buildSubscriptionPlan` and
+  // the intro was applied after it, out here. So the single deepest discount in
+  // the business was the one discount the guardrail never saw: a Complete stack
+  // with the old 25% card came to 40% off against a floor set at ~37%. Applying
+  // it line by line puts the intro under the same rule as the subscribe-&-save
+  // rate, and the two now compound against one floor rather than around it.
   const introDiscount = subPlan.length > 0 ? resolveIntroDiscount(opts.introDiscountOverride, config) : 0
-  const subscriptionFirstMonth = round(subscriptionTotal * (1 - introDiscount))
+  const subscriptionFirstMonth = round(
+    subPlan.reduce((s, line) => {
+      // `unitsPerShipment` is always ≥ 1, so this recovers the subscribe-&-save
+      // unit price without dividing by a fractional monthly quantity.
+      const subscribedUnit = line.pricePerDelivery / line.unitsPerShipment
+      // Rounded PER LINE, exactly as `monthlyPrice` is, so that a first month
+      // carrying no intro discount comes to the same total as every month after
+      // it. Summing unrounded and rounding once lands a penny out, and "£53.24
+      // now, £53.25 thereafter" is the kind of detail that costs a checkout.
+      return s + round(line.monthlyUnits * discountWithFloor(subscribedUnit, introDiscount, line.unitCost, config))
+    }, 0),
+  )
   const subscriptionMinTermTotal = round(
     subscriptionFirstMonth + Math.max(0, subscriptionMinMonths - 1) * subscriptionTotal,
   )
