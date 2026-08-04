@@ -13,11 +13,12 @@ with the business **not yet VAT-registered** (today's setting).
 | --- | --- |
 | **Model** | Percentage of **net revenue** (ex VAT, ex delivery) |
 | **First order** | **20%** |
-| **Renewals** | **10%**, for 12 months from signup |
-| **Follower offer** | A fixed **30% first month**, which **replaces** the scratch card rather than stacking |
+| **Renewals** | **10%**, for **12 months** from signup |
+| **Follower offer** | The partner's code **raises the floor of the scratch card to 25%**. The card stays; nobody skips it |
 | **Attribution** | **Discount code first**, referral link as a convenience. 30-day last-click cookie |
 | **Qualification** | Accrues on order, confirms after the 14-day return window, reverses on refund |
-| **Hard guard** | Commission is floored so it can never push an order below a set contribution margin |
+| **Hard guard** | Commission is floored at **5%** contribution so it can never make an order a loss |
+| **Tiers** | **Not in v1** — flat rates for everyone |
 | **Payout** | Monthly in arrears, £25 minimum, self-billed |
 
 Blended over a six-month subscriber this is **11.3% of net revenue** — the
@@ -30,6 +31,29 @@ rate does three things a flat rate can't: the 20% headline competes for
 attention against every other programme an influencer is offered, the 10% tail
 makes them care whether the traffic they send actually stays, and the two
 together cost us less than a flat rate worth the same to them.
+
+### Why 12 months and not life-of-subscription
+
+Life-of-subscription is the most attractive thing you can offer a partner, and
+the wrong thing to offer. Three reasons:
+
+- **The influence expires long before the payments do.** A partner's post plausibly
+  drives months 1–3. It has nothing to do with whether someone is still
+  subscribed in month 30 — that's the product and the service. Paying forever
+  for a customer acquired once is paying for something that already happened.
+- **It creates an unbounded liability.** A permanent obligation to everyone who
+  ever posted, including people who go inactive, change career or become
+  unreachable. It is also the kind of thing that complicates ever valuing or
+  selling the business.
+- **12 months is already a strong pitch.** "You earn on every order for a year"
+  reads as generous, and the modelling backs it: 4.6:1 LTV:CAC on a 12-month
+  subscriber life.
+
+Six months would be cheaper but weakens the one thing the recurring rate is
+there to buy — a partner who cares whether the traffic they sent actually stays.
+
+If a single flagship partner ever needs life-of-subscription to sign, that's a
+bespoke term for one deal, not the shape of the programme.
 
 ---
 
@@ -118,29 +142,49 @@ for different reasons.
 
 ---
 
-## 4. The follower offer (the half of this that actually drives sales)
+## 4. The follower offer, and what happens to the scratch card
 
-Commission motivates the influencer. It does nothing for their audience. Every
-successful programme pairs it with something the follower gets, and that is
-usually what converts.
+**The scratch card does not go away, and there is no second journey.** Every
+customer scratches, exactly as they do now. A partner's code changes the **odds
+table**, not the code path — same screen, same animation, better prizes.
 
-**Recommendation: the partner's code sets a fixed 30% first month, replacing the
-scratch card.**
+> "Use Sarah's code and you're guaranteed **at least 25% off** your first month —
+> scratch to see if you got **50%**."
 
-Why this rather than an extra discount on top:
+That is a stronger pitch than a flat number, because it has a floor she can
+promise *and* an upside worth watching. And it is one implementation: the intro
+allocator (`stack-blueprint/intro-allocation.ts`) already draws from a weighted
+outcome table and rations it to hit a target effective rate. A partner code swaps
+the table. Nothing branches.
 
-- **It must not stack.** A 30% code plus a won 50% scratch card is 65% off, and
-  on the worst-case order that is a loss. One first-month discount applies, ever.
-- **It's a better pitch.** "Sarah's code gets you 30% off your first month" is
-  concrete. "Scratch a card and see what you get" is fun on-site but impossible
-  to promise in a video.
-- **It's already modelled.** The intro offer is a configured lever with a blended
-  cost (`introOffer.effectiveFirstMonthDiscount`, currently 18%). A fixed 30% for
-  attributed orders costs about 12 points more on month one only, on attributed
-  orders only, and the existing machinery prices it.
+| | Outcomes | Effective first month |
+| --- | --- | --- |
+| Unattributed (today) | 50% (w1) · 25% (w10) · 10% (w10) | **19.0%** |
+| Attributed | 50% (w1) · 25% (w20) | **26.2%** |
 
-The rate should be per-tier, so a bigger partner can be given a stronger offer
-without renegotiating the commission.
+So an attributed customer costs about **7 points more** on month one only.
+
+### Why not a flat 30% replacing the card (my first proposal)
+
+I modelled it and it's worse on both counts. Worst-case attributed first order,
+after the biggest bundle discount and 20% commission:
+
+| Follower offer | Effective intro | Member pays | Left after commission |
+| --- | --- | --- | --- |
+| Unattributed today | 19.0% | £62.69 | £8.89 (14.2%) |
+| **Partner floor 25%** | **26.2%** | **£57.16** | **£4.55 (8.0%)** |
+| Partner floor 30% | 31.0% | £53.47 | £1.66 (3.1%) |
+| Flat 30%, no card | 30.0% | £54.21 | £2.24 (4.1%) |
+
+A flat 30% is both **more expensive** than the 25% floor and **a weaker pitch**,
+because it throws away the 50% upside that makes the card worth talking about.
+The 25% floor is the better trade in both directions.
+
+### The rule that must not bend
+
+**One first-month discount, ever.** A partner code and a won scratch card do not
+stack — the code *is* the card, with better odds. Stacking a 30% code onto a won
+50% card is 65% off and a straight loss on the worst-case order.
 
 ---
 
@@ -191,7 +235,7 @@ grows and prices follow. Same lever, same semantics, one line of new config.
 
 ```ts
 /** Commission is reduced rather than paid if it would take an order below this. */
-commissionMarginFloor: 0.15,
+commissionMarginFloor: 0.05,
 ```
 
 If an order's contribution after commission would fall under the floor, the
@@ -201,6 +245,18 @@ visible, and it makes a loss-making attributed order structurally impossible.
 
 This is the correct answer to the worry that pushes people towards profit share:
 you get the protection without the opacity.
+
+**5%, not the 15% I first proposed.** That was wrong and would have quietly
+broken the programme. An attributed first order lands at **8%** contribution
+after commission (see §4) — that is *by design*, because the first month carries
+both the deepest intro discount and the highest commission rate. A 15% floor
+would have capped commission on essentially **every** attributed first order,
+which is precisely the moment a partner is watching their dashboard.
+
+The floor's job is to make a **loss** impossible, not to defend a target margin.
+Acquisition months are supposed to be thin; the renewal month leaves **£28.22**
+after its 10%, and payback is 1.3 months. 5% does the safety job without
+fighting the business model.
 
 ### 5d. Partner VAT is a real cost while we're unregistered
 
@@ -278,24 +334,26 @@ Controls worth having from day one:
 
 ---
 
-## 8. Tiers
+## 8. Tiers — deferred
 
-Rates should improve with proven performance, not with follower count —
-follower count is the least reliable number in the industry.
+**Not in v1.** Flat 20% / 10% / 25%-floor for everyone.
 
-| Tier | Qualifies at | First order | Renewals | Follower offer |
-| --- | --- | --- | --- | --- |
-| **Partner** | Default | 15% | 8% | 25% first month |
-| **Established** | 10 approved orders | 20% | 10% | 30% first month |
-| **Ambassador** | 40 approved orders, refund rate under book average | 25% | 12% | 35% first month + a bundle named with them |
+Tiers add a qualification rule, a promotion job, a second set of rates to test
+and a conversation to have with every partner about which band they're in —
+before there is any evidence about what actually drives performance. With a
+handful of partners, one flat rate is easier to sell, easier to explain and
+easier to change.
 
-Two things this buys: a reason for a partner to keep going after their first
-post, and a defensible answer to "can you do better than 20%" that isn't a
-negotiation.
+The data to build them on is being collected from day one anyway (§10): approved
+orders, refund rate, retention by partner. When there's enough of it, tiers can
+be introduced on evidence rather than guesswork — and rates should key off
+**proven performance, not follower count**, which is the least reliable number
+in the industry.
 
-Worth checking: Ambassador at 25% leaves **10% margin on the worst case** before
-the floor bites, so the floor at §5c should be set at or below that — or
-Ambassador capped at 22%.
+One note for when they arrive: at a 25% first-order rate the worst case lands at
+about 3% contribution, below even the 5% floor — so a top tier should be capped
+nearer **22%**, or should buy its extra value in something other than commission
+(a co-named bundle, a bigger follower discount, guaranteed content spend).
 
 ---
 
@@ -353,21 +411,26 @@ documents.
 
 ---
 
-## 12. Decisions needed before I build
+## 12. Decisions
 
-1. **Rates.** 20% / 10% for 12 months as proposed, or a different split? The
-   binding constraint is that first-order rate against a 35% worst case.
-2. **Recurring window.** 12 months, or shorter (6) / for the life of the
-   subscription? Life-of-subscription is the most attractive pitch and the most
-   expensive; it also means paying forever for a customer acquired once.
-3. **Follower offer.** Fixed 30% first month replacing the scratch card, as
-   proposed? And is anyone allowed to stack it — my strong recommendation is no.
-4. **Attributed share to price in.** I've assumed 30% of orders. If the plan is
-   for this to be the main growth channel, that number is higher and prices need
-   to carry more.
-5. **Margin floor for commission.** 15% suggested. Below that the commission is
-   capped rather than paid.
-6. **Tiers now or later?** They add real complexity; flat rates for the first
-   handful of partners is a legitimate choice.
-7. **One-off campaign CPA** — worth supporting as an exception, or keep the
-   model to one shape?
+### Settled
+
+| Decision | Answer |
+| --- | --- |
+| Rates | **20% first order, 10% renewals** |
+| Recurring window | **12 months** (§1) |
+| Tiers | **Not in v1** (§8) |
+| Follower offer | **Partner code raises the scratch floor to 25%** — the card stays, one journey (§4) |
+| Stacking | **Never.** One first-month discount per order (§4) |
+| Commission margin floor | **5%**, revised down from 15% (§5c) |
+
+### Still open
+
+1. **Attributed share to price in.** I've assumed **30%** of orders end up
+   attributed, which puts the programme at ~3.4% of net revenue book-wide. If
+   this is meant to be the *main* growth channel that figure is higher and prices
+   need to carry more. It is one config value and can be revised as the channel
+   proves out — but the initial number should be a decision, not a default.
+2. **One-off campaign CPA.** Worth supporting a flat fee per order as an
+   exception for a specific campaign, or keep the programme to exactly one shape?
+   My inclination is to keep one shape until something forces otherwise.
