@@ -1,75 +1,111 @@
 /**
- * Delivery economics for dropship fulfilment.
+ * Delivery economics — PowerBody's real dropship rate card.
  *
- * Two different numbers hide behind the word "delivery" and confusing them is
- * how a catalogue ends up quietly unprofitable:
+ * WHAT CHANGED AND WHY IT MATTERS
+ * ───────────────────────────────
+ * This used to model delivery as "a cost per parcel plus a bit per unit, free
+ * over some threshold". PowerBody's guide says otherwise on every count:
  *
- *   • what the SUPPLIER charges US to put a parcel on a courier, and
- *   • what we charge the MEMBER for it.
+ *   • It is priced by WEIGHT and ZONE, not per parcel. A 500g tub on Royal Mail
+ *     Tracked 48 is £3.25; the same order to the Highlands is £4.49; over 7kg it
+ *     has to go DPD at £5.17.
+ *   • There is NO free-shipping threshold. "Next Day Delivery and Free Delivery
+ *     are not available to Dropshippers." Every order carries a charge.
+ *   • It is not postage. The charge covers picking, packaging, invoice printing,
+ *     labour, storage and shipping — a fulfilment fee, which is why it is so
+ *     large next to a £20 tub and why it can never be waved away.
  *
- * They are rarely equal, and on a subscription that clears the free-delivery
- * threshold the second one is zero. The gap — `absorbed` — is a real cost of
- * goods that has to be carried by the sell price, which is exactly what the
- * Good-price model does with this.
+ * Two numbers hide behind the word "delivery" and confusing them is how a
+ * catalogue goes quietly unprofitable: what the SUPPLIER charges US, and what we
+ * charge the MEMBER. On anything over our free-delivery threshold the second is
+ * zero, and the gap is a real cost the sell price has to carry.
  *
- * The rate card itself lives in `PRICING_CONFIG.delivery` so the Founders Hub
- * can edit it, and so plugging in PowerBody's real numbers when the supplier
- * integration lands is one edit rather than a hunt through the codebase.
+ * All supplier prices here are EX VAT, as PowerBody quote them; what that
+ * actually costs us depends on whether we can reclaim it (see `./vat.ts`).
  *
- * Pure functions — no I/O, no supplier calls — so the hub can preview a change
- * before saving it and the tests can pin the maths down exactly.
+ * Pure functions — the hub can preview a rate-card change before saving it.
  */
-import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import {
+  getPricingConfig,
+  type PricingConfig,
+  type DeliveryZone,
+  type DeliveryService,
+} from '@/lib/stack-blueprint/pricing'
+import { costFromSupplierPrice } from './vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
-/** One physical shipment, as the supplier would pack it. */
+export type { DeliveryZone, DeliveryService }
+
+export const ZONE_LABELS: Record<DeliveryZone, string> = {
+  'uk-1': 'UK mainland',
+  'uk-2': 'Highlands & Islands',
+  eu: 'EU',
+}
+
+/** One shipment, as the supplier would weigh it. */
 export interface Shipment {
-  /** Units going in the box. */
-  units: number
-  /** Goods value of those units at what we PAY (£) — sets the supplier's free-shipping test. */
-  goodsValue: number
-  /** What the member is being charged for the goods in this shipment (£).
-   *  Sets whether they qualify for free delivery. Defaults to `goodsValue`. */
+  /** Total shipped weight (g) — the only thing the rate card cares about. */
+  grams: number
+  /** Where it's going. Defaults to the configured pricing zone. */
+  zone?: DeliveryZone
+  /** What the member is being charged for the goods (£ inc VAT), which decides
+   *  whether they qualify for our free delivery. */
   orderValue?: number
 }
 
 export interface DeliveryQuote {
-  /** Parcels the supplier will split this into. */
-  parcels: number
-  /** What the supplier charges us (£). */
+  /** The service the supplier would use, or null when nothing can carry it. */
+  service: DeliveryService | null
+  zone: DeliveryZone
+  grams: number
+  /** What the supplier charges us, ex VAT (£). */
+  supplierPriceExVat: number
+  /** What that actually costs us once VAT recovery is accounted for (£). */
   supplierCost: number
-  /** What the member is charged (£). */
+  /** What the member is charged, inc VAT (£). */
   customerCharge: number
-  /** What we carry ourselves — supplier cost minus what we collected (£).
-   *  Never negative: collecting more than it cost is margin, not negative cost. */
+  /** What we carry ourselves (£). Never negative — collecting more than it cost
+   *  is margin, not a negative cost. */
   absorbed: number
-  /** True when the member pays nothing for delivery. */
   freeForCustomer: boolean
+  /**
+   * Set when no service on the rate card can carry this weight to this zone —
+   * e.g. over 7kg to the Highlands, which PowerBody simply don't list. The
+   * order can't be fulfilled as it stands, and pretending it costs £0 would
+   * hide that.
+   */
+  unavailableReason: string | null
+}
+
+/** Every service that could carry this weight to this zone, cheapest first. */
+export function eligibleServices(
+  grams: number,
+  zone: DeliveryZone,
+  config: PricingConfig = getPricingConfig(),
+): DeliveryService[] {
+  return config.delivery.services
+    .filter((s) => s.zone === zone && grams > s.minGrams && grams <= s.maxGrams)
+    .sort((a, b) => a.price - b.price)
 }
 
 /**
- * How many parcels a shipment splits into. Zero units is zero parcels — an empty
- * shipment is not a free one, it is not a shipment.
+ * The service the supplier would actually use: the cheapest that can carry it.
+ *
+ * Weight bands are treated as (min, max] so a weight sitting exactly on a
+ * boundary — 1990g, where DPD's light and heavy bands meet — lands in the lower
+ * band rather than qualifying for both and picking whichever sorted first.
  */
-export function parcelsFor(units: number, config: PricingConfig = getPricingConfig()): number {
-  if (units <= 0) return 0
-  const per = Math.max(1, config.delivery.unitsPerParcel)
-  return Math.ceil(units / per)
+export function selectService(
+  grams: number,
+  zone: DeliveryZone,
+  config: PricingConfig = getPricingConfig(),
+): DeliveryService | null {
+  if (grams <= 0) return null
+  return eligibleServices(grams, zone, config)[0] ?? null
 }
 
-/** What the supplier charges us to ship one shipment (£). */
-export function supplierDeliveryCost(shipment: Shipment, config: PricingConfig = getPricingConfig()): number {
-  const parcels = parcelsFor(shipment.units, config)
-  if (parcels === 0) return 0
-  const { supplierFreeParcelThreshold, supplierParcelCost, supplierPerUnitCost } = config.delivery
-  // A free-shipping deal is struck on the value of the consignment, so it applies
-  // to the whole shipment rather than being pro-rated across its parcels.
-  if (supplierFreeParcelThreshold > 0 && shipment.goodsValue >= supplierFreeParcelThreshold) return 0
-  return round(parcels * supplierParcelCost + shipment.units * supplierPerUnitCost)
-}
-
-/** What we charge the member for a shipment of this value (£). */
+/** What we charge the member for a shipment of this value (£ inc VAT). */
 export function customerDeliveryCharge(orderValue: number, config: PricingConfig = getPricingConfig()): number {
   if (orderValue <= 0) return 0
   const { freeDeliveryThreshold } = config
@@ -79,31 +115,90 @@ export function customerDeliveryCharge(orderValue: number, config: PricingConfig
 
 /** Both sides of one shipment's delivery, and what it leaves us carrying. */
 export function quoteDelivery(shipment: Shipment, config: PricingConfig = getPricingConfig()): DeliveryQuote {
-  const parcels = parcelsFor(shipment.units, config)
-  const supplierCost = supplierDeliveryCost(shipment, config)
-  const customerCharge = customerDeliveryCharge(shipment.orderValue ?? shipment.goodsValue, config)
+  const zone = shipment.zone ?? config.delivery.defaultZone
+  const grams = Math.max(0, shipment.grams)
+  const service = selectService(grams, zone, config)
+
+  const supplierPriceExVat = service?.price ?? 0
+  const supplierCost = service ? costFromSupplierPrice(supplierPriceExVat, config) : 0
+  const customerCharge = customerDeliveryCharge(shipment.orderValue ?? 0, config)
+
   return {
-    parcels,
+    service,
+    zone,
+    grams,
+    supplierPriceExVat: round(supplierPriceExVat),
     supplierCost,
     customerCharge,
     absorbed: round(Math.max(0, supplierCost - customerCharge)),
     freeForCustomer: customerCharge === 0,
+    unavailableReason:
+      grams <= 0
+        ? 'No shipped weight recorded'
+        : service
+          ? null
+          : `Nothing on the rate card carries ${grams}g to ${ZONE_LABELS[zone]}`,
   }
+}
+
+/**
+ * The delivery cost to assume when PRICING rather than shipping — a blend of
+ * the zones we actually ship to.
+ *
+ * Pricing everything at the Highlands rate would overprice the 96% of orders
+ * going to the mainland; pricing everything at the mainland rate quietly loses
+ * money on the rest. The blend is the honest single number, and
+ * `delivery.zone2SharePct` is the only assumption in it.
+ */
+export function blendedDeliveryCost(grams: number, config: PricingConfig = getPricingConfig()): number {
+  const share = Math.min(1, Math.max(0, config.delivery.zone2SharePct))
+  const zone1 = quoteDelivery({ grams, zone: 'uk-1' }, config)
+  const zone2 = quoteDelivery({ grams, zone: 'uk-2' }, config)
+  // When a weight can't go to Zone 2 at all, those orders simply don't happen
+  // there, so the mainland cost is the whole story rather than a free ride.
+  if (zone2.unavailableReason) return zone1.supplierCost
+  return round(zone1.supplierCost * (1 - share) + zone2.supplierCost * share)
+}
+
+/**
+ * Shipped weight for a quantity of a product, falling back to a configured
+ * default when a product has no weight recorded.
+ *
+ * The fallback exists so the margin model covers the whole catalogue rather
+ * than the tidy half of it — but a guessed weight makes a guessed delivery
+ * cost, so `weightKnown` is reported alongside and the hub says so.
+ */
+export function shipmentWeight(
+  products: { weightGrams?: number | null; quantity?: number }[],
+  config: PricingConfig = getPricingConfig(),
+): { grams: number; weightKnown: boolean } {
+  let grams = 0
+  let known = true
+  for (const p of products) {
+    const qty = Math.max(1, p.quantity ?? 1)
+    if (p.weightGrams == null || p.weightGrams <= 0) {
+      known = false
+      grams += config.delivery.defaultProductGrams * qty
+    } else {
+      grams += p.weightGrams * qty
+    }
+  }
+  return { grams, weightKnown: known }
 }
 
 /**
  * Monthly delivery cost for something that ships every `shipEveryMonths`.
  *
- * Subscriptions are billed as one smoothed monthly amount but do not necessarily
- * ship every month, so a per-shipment cost has to be spread the same way the
- * goods are — otherwise a product that ships quarterly looks three times as
- * expensive to deliver as it is.
+ * Subscriptions bill one smoothed monthly amount but do not necessarily ship
+ * every month, so a per-shipment cost has to be spread the same way the goods
+ * are — otherwise a product that ships quarterly looks three times as expensive
+ * to deliver as it is.
  */
 export function monthlyDeliveryCost(
-  shipment: Shipment,
+  grams: number,
   shipEveryMonths: number,
   config: PricingConfig = getPricingConfig(),
 ): number {
   const months = Math.max(1, shipEveryMonths)
-  return round(supplierDeliveryCost(shipment, config) / months)
+  return round(blendedDeliveryCost(grams, config) / months)
 }

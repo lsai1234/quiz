@@ -295,6 +295,35 @@ export interface CatalogueProduct {
    * reordering the roster reprioritises the quiz without editing 25 products.
    */
   topRank?: number | null
+
+  // ── Fulfilment economics ──────────────────────────────────────────────────────
+  /**
+   * Shipped weight of one unit in grams.
+   *
+   * Not cosmetic: PowerBody price dropship delivery by WEIGHT band, and their
+   * `createOrder` call takes a `weight` parameter, so without this we can
+   * neither predict what an order costs us nor place it accurately. Absent means
+   * the margin model falls back to `delivery.defaultProductGrams` and says it
+   * guessed. Readiness flags it.
+   */
+  weightGrams?: number | null
+  /**
+   * VAT rate for this product (0–1). Absent = the standard rate.
+   *
+   * Nearly all sports nutrition is standard-rated, but some products sold as
+   * food (certain bars, flapjacks, drinks) are zero-rated, and getting that
+   * wrong is a 20% error on the product's whole margin. PowerBody return a
+   * `vat_rate` per product, so this is populated from the feed where available.
+   */
+  vatRate?: number | null
+  /**
+   * The supplier's recommended retail price (£ inc VAT).
+   *
+   * PowerBody's feed carries this as `detail_price` and they ask that the
+   * manufacturer's RRP be adhered to. Kept so the hub can show where our price
+   * sits against the market rather than only against our own costs.
+   */
+  supplierRrp?: number | null
   /** Can this product appear in the recommended core stack? */
   isCoreEligible: boolean
   /** Can this product appear as an upgrade/booster suggestion? */

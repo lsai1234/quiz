@@ -1,174 +1,308 @@
-import {
-  goodPriceFor,
-  landedMonthlyCost,
-  worstCaseSubscriptionRate,
-  pricingHorizonMonths,
-  auditProductPrice,
-} from '../good-price'
-import { parcelsFor, quoteDelivery, supplierDeliveryCost, monthlyDeliveryCost } from '../delivery'
+import { goodPriceFor, auditProductPrice, worstCaseSubscriptionRate, pricingHorizonMonths, supplierAccountCheck } from '../good-price'
+import { unitEconomics, priceForMargin, gradePrice } from '../unit-economics'
+import { selectService, quoteDelivery, blendedDeliveryCost, shipmentWeight, eligibleServices } from '../delivery'
+import { netFromGross, grossFromNet, revenueFromShelfPrice, costFromSupplierPrice, vatRateFor } from '../vat'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
 /** A config built from the defaults with a few rules overridden. */
 function cfg(over: Partial<PricingConfig> = {}): PricingConfig {
   return { ...PRICING_CONFIG, ...over }
 }
+const unregistered = () => cfg({ vat: { ...PRICING_CONFIG.vat, registered: false } })
 
-describe('delivery economics', () => {
-  it('splits a shipment into parcels and charges per parcel plus per unit', () => {
-    const c = cfg()
-    expect(parcelsFor(0, c)).toBe(0)
-    expect(parcelsFor(1, c)).toBe(1)
-    expect(parcelsFor(6, c)).toBe(1)
-    expect(parcelsFor(7, c)).toBe(2)
-    // 1 parcel × £3.50 + 2 units × £0.40
-    expect(supplierDeliveryCost({ units: 2, goodsValue: 20 }, c)).toBeCloseTo(4.3, 2)
-    // 2 parcels × £3.50 + 7 units × £0.40
-    expect(supplierDeliveryCost({ units: 7, goodsValue: 70 }, c)).toBeCloseTo(9.8, 2)
+describe('VAT', () => {
+  it('strips and adds VAT symmetrically', () => {
+    expect(netFromGross(30, 0.2)).toBe(25)
+    expect(grossFromNet(25, 0.2)).toBe(30)
+    expect(netFromGross(0, 0.2)).toBe(0)
   })
 
-  it('ships free once the supplier free-shipping threshold is met', () => {
-    const c = cfg({ delivery: { ...PRICING_CONFIG.delivery, supplierFreeParcelThreshold: 50 } })
-    expect(supplierDeliveryCost({ units: 2, goodsValue: 49.99 }, c)).toBeGreaterThan(0)
-    expect(supplierDeliveryCost({ units: 2, goodsValue: 50 }, c)).toBe(0)
+  it('uses a product’s own rate when it has one, including zero-rated', () => {
+    const c = cfg()
+    expect(vatRateFor({ vatRate: null }, c)).toBe(0.2)
+    expect(vatRateFor(undefined, c)).toBe(0.2)
+    // 0 is a real rate, not "unset" — zero-rated food must not fall back to 20%.
+    expect(vatRateFor({ vatRate: 0 }, c)).toBe(0)
   })
 
-  it('charges the member nothing above the free-delivery threshold, and shows what we absorb', () => {
+  it('registered: we hand VAT over but reclaim what the supplier charged', () => {
     const c = cfg()
-    const small = quoteDelivery({ units: 1, goodsValue: 8, orderValue: 20 }, c)
-    expect(small.customerCharge).toBeCloseTo(3.95, 2)
-    expect(small.freeForCustomer).toBe(false)
-    // £3.90 supplier cost against £3.95 collected — we are not out of pocket.
-    expect(small.absorbed).toBe(0)
-
-    const big = quoteDelivery({ units: 1, goodsValue: 8, orderValue: 60 }, c)
-    expect(big.customerCharge).toBe(0)
-    expect(big.freeForCustomer).toBe(true)
-    expect(big.absorbed).toBeCloseTo(3.9, 2)
+    expect(revenueFromShelfPrice(30, 0.2, c)).toBe(25)
+    expect(costFromSupplierPrice(10, c)).toBe(10)
   })
 
-  it('spreads a quarterly shipment across the months it covers', () => {
-    const c = cfg()
-    expect(monthlyDeliveryCost({ units: 1, goodsValue: 10 }, 3, c)).toBeCloseTo(1.3, 2)
+  it('unregistered: we keep the whole price but eat the supplier’s VAT', () => {
+    const c = unregistered()
+    expect(revenueFromShelfPrice(30, 0.2, c)).toBe(30)
+    expect(costFromSupplierPrice(10, c)).toBe(12)
   })
 })
 
-describe('worst-case assumptions', () => {
-  it('takes the deepest subscribe-and-save rate any bundle can reach', () => {
-    // Defaults: essentials 15 / performance 20 / complete 25 → the biggest bundle.
-    expect(worstCaseSubscriptionRate(cfg())).toBeCloseTo(0.25, 4)
+describe('PowerBody’s delivery rate card', () => {
+  const c = cfg()
+
+  it('picks the cheapest service that can carry the weight', () => {
+    // Under 7kg on the mainland, Royal Mail Tracked 48 at £3.25 beats DPD.
+    expect(selectService(500, 'uk-1', c)).toMatchObject({ name: 'Royal Mail Tracked 48', price: 3.25 })
+    // Over 7kg only DPD's heavy band is left.
+    expect(selectService(8000, 'uk-1', c)).toMatchObject({ name: 'DPD Two Day', price: 5.17 })
   })
 
-  it('lets a subscription tier beat the biggest bundle', () => {
-    const c = cfg({ subscriptionTiers: [{ id: 't', label: 'Big', minSubtotal: 100, discountPct: 0.32 }] })
-    expect(worstCaseSubscriptionRate(c)).toBeCloseTo(0.32, 4)
+  it('charges more to the Highlands and Islands', () => {
+    expect(selectService(500, 'uk-2', c)?.price).toBe(4.49)
   })
 
-  it('judges a price over the earliest a member can leave', () => {
-    expect(pricingHorizonMonths(cfg({ minSubscriptionMonths: 3 }))).toBe(3)
-    // An explicit horizon overrides the commitment.
-    expect(pricingHorizonMonths(cfg({ goodPricing: { ...PRICING_CONFIG.goodPricing, horizonMonths: 6 } }))).toBe(6)
+  it('treats weight bands as (min, max] so a boundary lands in one band only', () => {
+    // 1990g is the top of DPD's light band and the bottom of its heavy one.
+    const at = eligibleServices(1990, 'uk-1', c).map((s) => s.id)
+    expect(at).toContain('dpd-z1-light')
+    expect(at).not.toContain('dpd-z1-heavy')
+  })
+
+  it('reports when nothing on the card can carry it, rather than pricing it at zero', () => {
+    // PowerBody list no Highlands service above 7kg.
+    const q = quoteDelivery({ grams: 9000, zone: 'uk-2' }, c)
+    expect(q.service).toBeNull()
+    expect(q.supplierCost).toBe(0)
+    expect(q.unavailableReason).toMatch(/Nothing on the rate card/)
+  })
+
+  it('never gives dropshippers free supplier shipping, however big the order', () => {
+    // Our own free-delivery offer to the member does not reach PowerBody.
+    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', orderValue: 500 }, c)
+    expect(q.customerCharge).toBe(0)
+    expect(q.freeForCustomer).toBe(true)
+    expect(q.supplierCost).toBe(3.25)
+    expect(q.absorbed).toBe(3.25)
+  })
+
+  it('collects postage from the member below the free-delivery threshold', () => {
+    const q = quoteDelivery({ grams: 1000, zone: 'uk-1', orderValue: 20 }, c)
+    expect(q.customerCharge).toBe(3.95)
+    expect(q.absorbed).toBe(0)
+  })
+
+  it('blends the zones rather than pricing everything at the worst one', () => {
+    const blended = blendedDeliveryCost(1000, c)
+    expect(blended).toBeGreaterThan(3.25)
+    expect(blended).toBeLessThan(4.49)
+    // 96% × £3.25 + 4% × £4.49
+    expect(blended).toBeCloseTo(3.3, 2)
+  })
+
+  it('falls back to a default weight and says that it guessed', () => {
+    expect(shipmentWeight([{ weightGrams: 900, quantity: 2 }], c)).toEqual({ grams: 1800, weightKnown: true })
+    expect(shipmentWeight([{ weightGrams: null, quantity: 1 }], c)).toEqual({ grams: 1000, weightKnown: false })
+  })
+
+  it('costs the supplier’s VAT into delivery when we cannot reclaim it', () => {
+    expect(quoteDelivery({ grams: 1000, zone: 'uk-1' }, unregistered()).supplierCost).toBeCloseTo(3.9, 2)
   })
 })
 
-describe('landed cost', () => {
-  it('carries goods and the supplier delivery charge, spread over the cadence', () => {
-    const c = cfg()
-    const monthly = landedMonthlyCost({ assetPrice: 12, unitsPerShipment: 1, shipEveryMonths: 1 }, c)
-    expect(monthly.goods).toBeCloseTo(12, 2)
-    expect(monthly.delivery).toBeCloseTo(3.9, 2) // £3.50 parcel + £0.40 unit
-    expect(monthly.total).toBeCloseTo(15.9, 2)
+describe('the unit-economics waterfall', () => {
+  const c = cfg()
 
-    const quarterly = landedMonthlyCost({ assetPrice: 12, unitsPerShipment: 1, shipEveryMonths: 3 }, c)
-    expect(quarterly.goods).toBeCloseTo(4, 2)
-    expect(quarterly.delivery).toBeCloseTo(1.3, 2)
+  it('sums every step exactly to the contribution', () => {
+    const e = unitEconomics({ shelfPrice: 30, supplierCost: 10, grams: 1000 }, c)
+    expect(e.steps[e.steps.length - 1].runningTotal).toBeCloseTo(e.contribution, 2)
+    const summed = e.steps.reduce((s, step) => s + step.amount, 0)
+    expect(summed).toBeCloseTo(e.contribution, 2)
+  })
+
+  it('takes VAT off the top — the error that made every old margin wrong', () => {
+    const e = unitEconomics({ shelfPrice: 30, supplierCost: 10, grams: 1000, chargeDelivery: false }, c)
+    expect(e.netRevenue).toBe(25)
+    expect(e.vat).toBe(5)
+    // Naive margin: (30 − 10) / 30 = 67%. Reality is far lower.
+    expect(e.marginPct).toBeLessThan(0.5)
+  })
+
+  it('counts postage the member pays as revenue, net of its own VAT', () => {
+    // £30 is under the £50 free-delivery threshold, so they pay £3.95.
+    const e = unitEconomics({ shelfPrice: 30, supplierCost: 10, grams: 1000 }, c)
+    expect(e.deliveryCharged).toBe(3.95)
+    expect(e.grossRevenue).toBe(33.95)
+    expect(e.netRevenue).toBeCloseTo(25 + 3.95 / 1.2, 2)
+  })
+
+  it('carries delivery, card fees and a returns provision', () => {
+    const e = unitEconomics({ shelfPrice: 60, supplierCost: 10, grams: 1000 }, c)
+    expect(e.deliveryCost).toBeGreaterThan(3)
+    expect(e.paymentFee).toBeCloseTo(60 * 0.015 + 0.2, 2)
+    expect(e.returnsProvision).toBeGreaterThan(0)
+    expect(e.contribution).toBeCloseTo(e.netRevenue - e.productCost - e.deliveryCost - e.paymentFee - e.returnsProvision, 2)
+  })
+
+  it('spreads delivery over a bundle, which is why bundles pay better', () => {
+    const single = unitEconomics({ shelfPrice: 60, supplierCost: 20, grams: 1000, quantity: 1 }, c)
+    const triple = unitEconomics({ shelfPrice: 60, supplierCost: 20, grams: 1000, quantity: 3 }, c)
+    // Three units, one delivery — so margin per pound improves.
+    expect(triple.marginPct).toBeGreaterThan(single.marginPct)
+  })
+
+  it('reports margin on net and on gross, so the two are never confused', () => {
+    const e = unitEconomics({ shelfPrice: 30, supplierCost: 10, grams: 1000 }, c)
+    expect(e.marginOfGrossPct).toBeLessThan(e.marginPct)
+  })
+
+  it('flags an estimated cost and an estimated weight', () => {
+    const e = unitEconomics({ shelfPrice: 30, grams: null }, c)
+    expect(e.assumptions.costKnown).toBe(false)
+    expect(e.assumptions.weightKnown).toBe(false)
+    expect(e.steps.find((s) => s.id === 'goods')?.estimated).toBe(true)
+    expect(e.steps.find((s) => s.id === 'delivery-cost')?.estimated).toBe(true)
+  })
+
+  it('solves for a price that hits the target margin exactly', () => {
+    const input = { supplierCost: 10, grams: 1000 }
+    const price = priceForMargin(0.35, input, c)!
+    expect(unitEconomics({ ...input, shelfPrice: price }, c).marginPct).toBeGreaterThanOrEqual(0.35)
+  })
+
+  it('breaks even where the contribution is zero', () => {
+    const input = { supplierCost: 10, grams: 1000 }
+    const price = priceForMargin(0, input, c)!
+    expect(unitEconomics({ ...input, shelfPrice: price }, c).contribution).toBeCloseTo(0, 1)
+  })
+
+  it('solves a price that agrees with its own delivery assumption', () => {
+    // The free-delivery threshold makes the equation piecewise. Whichever branch
+    // is returned, feeding it back through the waterfall must reproduce the
+    // margin it was solved for — that is the bug this guards.
+    for (const supplierCost of [3, 10, 25, 60]) {
+      const input = { supplierCost, grams: 1000 }
+      const price = priceForMargin(0.35, input, c)!
+      expect(unitEconomics({ ...input, shelfPrice: price }, c).marginPct).toBeGreaterThanOrEqual(0.35)
+    }
+  })
+
+  it('honours a pinned delivery assumption', () => {
+    const input = { supplierCost: 10, grams: 1000 }
+    const absorbed = priceForMargin(0.35, { ...input, chargeDelivery: false }, c)!
+    const collected = priceForMargin(0.35, { ...input, chargeDelivery: true }, c)!
+    // Collecting postage means we need less from the goods.
+    expect(collected).toBeLessThan(absorbed)
+  })
+
+  it('solves correctly when the cost itself is a share of the price', () => {
+    const price = priceForMargin(0.35, { grams: 1000 }, c)!
+    expect(unitEconomics({ shelfPrice: price, grams: 1000 }, c).marginPct).toBeGreaterThanOrEqual(0.35)
+  })
+
+  it('needs a higher price when we cannot reclaim the supplier’s VAT', () => {
+    const input = { supplierCost: 10, grams: 1000 }
+    expect(priceForMargin(0.35, input, unregistered())!).toBeGreaterThan(priceForMargin(0.35, input, cfg())! * 0.8)
+  })
+
+  it('grades a price against the target', () => {
+    // £14 on a £10 product looks like a 29% margin and is actually a loss once
+    // VAT, PowerBody's £3.25 delivery, card fees and returns come off.
+    const cheap = gradePrice({ shelfPrice: 14, supplierCost: 10, grams: 1000, chargeDelivery: false }, 0.35, c)
+    expect(cheap.profitable).toBe(false)
+    expect(cheap.meetsTarget).toBe(false)
+    expect(cheap.vsTarget).toBeLessThan(0)
   })
 })
 
 describe('the good price', () => {
-  it('breaks even exactly where the worst-case path stops losing money', () => {
-    const c = cfg()
-    const r = goodPriceFor({ assetPrice: 10 }, c)
+  const c = cfg()
 
-    // Deepest bundle rate 25%, average first month 18%, 1-month horizon.
-    expect(r.assumptions.subscriptionDiscount).toBeCloseTo(0.25, 4)
-    expect(r.assumptions.firstMonthDiscount).toBeCloseTo(0.18, 4)
-    expect(r.assumptions.horizonMonths).toBe(1)
-    expect(r.assumptions.absorbsDelivery).toBe(true)
-
-    // cost £13.90 ÷ ((1 − 0.25) × (1 − 0.18)) = £22.60
-    expect(r.horizonCost).toBeCloseTo(13.9, 2)
-    expect(r.breakEvenPrice).toBeCloseTo(22.6, 1)
-
-    // At break-even the worst case makes nothing at all — that is the definition.
-    const at = goodPriceFor({ assetPrice: 10, listPrice: r.breakEvenPrice }, c).atListPrice!
-    expect(at.profit).toBeCloseTo(0, 1)
-    expect(at.marginPct).toBeCloseTo(0, 2)
+  it('prices against the deepest discount any bundle can reach', () => {
+    expect(worstCaseSubscriptionRate(c)).toBeCloseTo(0.25, 4)
+    expect(worstCaseSubscriptionRate(cfg({ subscriptionTiers: [{ id: 't', label: 'Big', minSubtotal: 100, discountPct: 0.32 }] }))).toBeCloseTo(0.32, 4)
   })
 
-  it('recommends a price that hits the target margin on that worst case', () => {
-    const c = cfg()
-    const r = goodPriceFor({ assetPrice: 10, listPrice: undefined }, c)
-    expect(r.goodPrice).toBeGreaterThan(r.breakEvenPrice)
-
-    const at = goodPriceFor({ assetPrice: 10, listPrice: r.goodPrice }, c).atListPrice!
-    expect(at.marginPct).toBeCloseTo(c.goodPricing.targetMarginPct, 2)
-    expect(at.meetsTarget).toBe(true)
-    expect(at.profitable).toBe(true)
+  it('judges a price over the earliest a member can leave', () => {
+    expect(pricingHorizonMonths(cfg({ minSubscriptionMonths: 3 }))).toBe(3)
+    expect(pricingHorizonMonths(cfg({ goodPricing: { ...PRICING_CONFIG.goodPricing, horizonMonths: 6 } }))).toBe(6)
   })
 
-  it('calls out a price that loses money on the worst case even though it looks fine on list', () => {
-    const c = cfg()
-    // £20 list on a £10 asset looks like a 50% margin — and still loses money once
-    // the deepest bundle discount, the intro offer and the postage are applied.
-    const at = goodPriceFor({ assetPrice: 10, listPrice: 20 }, c).atListPrice!
-    expect(at.profitable).toBe(false)
-    expect(at.marginPct).toBeLessThan(0)
-    expect(at.vsGoodPrice).toBeLessThan(0)
+  it('recommends a price whose worst case still clears the target', () => {
+    const r = goodPriceFor({ assetPrice: 10, grams: 1000 }, c)
+    expect(r.goodPrice).not.toBeNull()
+    const graded = goodPriceFor({ assetPrice: 10, grams: 1000, listPrice: r.goodPrice! }, c)
+    expect(graded.atListPrice!.meetsTarget).toBe(true)
+    expect(graded.atListPrice!.profitable).toBe(true)
   })
 
-  it('needs a higher price as the first-month giveaway grows', () => {
-    const lean = goodPriceFor({ assetPrice: 10 }, cfg({ introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: 0.05 } }))
-    const rich = goodPriceFor({ assetPrice: 10 }, cfg({ introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: 0.4 } }))
-    expect(rich.goodPrice).toBeGreaterThan(lean.goodPrice)
+  it('breaks even where the worst case makes nothing', () => {
+    const r = goodPriceFor({ assetPrice: 10, grams: 1000 }, c)
+    const atBreakEven = goodPriceFor({ assetPrice: 10, grams: 1000, listPrice: r.breakEvenPrice! }, c)
+    expect(atBreakEven.scenarios[2].contribution).toBeCloseTo(0, 1)
+  })
+
+  it('shows the spread: one-off beats a typical subscriber beats the worst case', () => {
+    const r = goodPriceFor({ assetPrice: 10, grams: 1000, listPrice: 40 }, c)
+    const [oneOff, typical, worst] = r.scenarios
+    expect(oneOff.contribution).toBeGreaterThan(typical.contribution)
+    expect(typical.contribution).toBeGreaterThan(worst.contribution)
+    expect(r.scenarios.map((s) => s.id)).toEqual(['one-off', 'subscription-typical', 'subscription-worst'])
+  })
+
+  it('demands more price as the first-month giveaway grows', () => {
+    const lean = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: 0.05 } }))
+    const rich = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: 0.4 } }))
+    expect(rich.goodPrice!).toBeGreaterThan(lean.goodPrice!)
   })
 
   it('dilutes the first month over a longer commitment', () => {
-    const short = goodPriceFor({ assetPrice: 10 }, cfg({ minSubscriptionMonths: 1 }))
-    const long = goodPriceFor({ assetPrice: 10 }, cfg({ minSubscriptionMonths: 6 }))
-    // Same monthly cost, but one discounted month spread over six lowers the
-    // monthly price needed to clear it.
-    expect(long.goodPrice).toBeLessThan(short.goodPrice)
+    const short = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ minSubscriptionMonths: 1 }))
+    const long = goodPriceFor({ assetPrice: 10, grams: 1000 }, cfg({ minSubscriptionMonths: 6 }))
+    expect(long.goodPrice!).toBeLessThan(short.goodPrice!)
   })
 
-  it('drops the price when the member pays for postage instead of us', () => {
-    const absorbed = goodPriceFor({ assetPrice: 10 }, cfg())
-    const collected = goodPriceFor(
-      { assetPrice: 10 },
-      cfg({
-        goodPricing: { ...PRICING_CONFIG.goodPricing, assumeFreeDelivery: false },
-        freeDeliveryThreshold: 500, // nothing reaches free delivery, so it is always charged
-      }),
-    )
-    expect(collected.assumptions.absorbsDelivery).toBe(false)
-    expect(collected.horizonDeliveryCollected).toBeGreaterThan(0)
-    expect(collected.goodPrice).toBeLessThan(absorbed.goodPrice)
+  it('demands more price for a heavier product', () => {
+    const light = goodPriceFor({ assetPrice: 10, grams: 500 }, c)
+    const heavy = goodPriceFor({ assetPrice: 10, grams: 9000 }, c)
+    expect(heavy.goodPrice!).toBeGreaterThan(light.goodPrice!)
   })
 
-  it('audits a catalogue product, estimating the cost when none is set', () => {
-    const c = cfg()
-    const known = auditProductPrice({ title: 'Whey', basePrice: 45, cost: 15, servings: 30 }, c)
+  it('audits a catalogue product, estimating cost and weight when unset', () => {
+    const known = auditProductPrice({ title: 'Whey', basePrice: 45, cost: 15, servings: 30, weightGrams: 1000 }, c)
     expect(known.costEstimated).toBe(false)
-    expect(known.atListPrice).not.toBeNull()
+    expect(known.weightEstimated).toBe(false)
 
     const guessed = auditProductPrice({ title: 'Mystery', basePrice: 45, cost: null, servings: 30 }, c)
     expect(guessed.costEstimated).toBe(true)
-    expect(guessed.landedCost.goods).toBeCloseTo(45 * c.defaultCostRatio, 2)
+    expect(guessed.weightEstimated).toBe(true)
+  })
+
+  it('estimates an unknown cost off the NET price, not the VAT-inclusive one', () => {
+    const audit = auditProductPrice({ title: 'X', basePrice: 60, cost: null, servings: 30, weightGrams: 1000 }, c)
+    // 35% of the £50 net price, not of the £60 shelf price.
+    expect(audit.monthlyCost.goods).toBeCloseTo(50 * c.defaultCostRatio, 1)
   })
 
   it('never schedules a shipment further apart than the delivery cap allows', () => {
-    const c = cfg()
-    // 365 servings would be a yearly shipment; the cap keeps it at maxDeliveryMonths.
-    const yearly = auditProductPrice({ title: 'Huge tub', basePrice: 60, cost: 20, servings: 365 }, c)
-    expect(yearly.landedCost.goods).toBeCloseTo(20 / c.maxDeliveryMonths, 2)
+    const yearly = auditProductPrice({ title: 'Huge tub', basePrice: 60, cost: 20, servings: 365, weightGrams: 1000 }, c)
+    expect(yearly.monthlyCost.goods).toBeCloseTo(20 / c.maxDeliveryMonths, 2)
+  })
+
+  it('reports where our price sits against the supplier’s RRP', () => {
+    const under = auditProductPrice({ title: 'X', basePrice: 45, cost: 15, weightGrams: 1000, supplierRrp: 50 }, c)
+    expect(under.vsRrpPct).toBeCloseTo(0.1, 3) // 10% under RRP
+    const noRrp = auditProductPrice({ title: 'X', basePrice: 45, cost: 15, weightGrams: 1000 }, c)
+    expect(noRrp.vsRrpPct).toBeNull()
+  })
+})
+
+describe('the PowerBody account minimum', () => {
+  const c = cfg()
+
+  it('works out how many orders a month keep the account open', () => {
+    // £35 order at 40% cost = £14 of wholesale spend; £1000 ÷ £14 = 72 orders.
+    const check = supplierAccountCheck(35, 40, 0.4, c)
+    expect(check.minimumSpend).toBe(1000)
+    expect(check.ordersNeeded).toBe(72)
+    expect(check.meetsMinimum).toBe(false)
+  })
+
+  it('passes once the spend clears the minimum', () => {
+    expect(supplierAccountCheck(35, 100, 0.4, c).meetsMinimum).toBe(true)
+  })
+
+  it('compares our average order with the one PowerBody suggest', () => {
+    expect(supplierAccountCheck(50, 100, 0.4, c).vsTargetOrderValue).toBe(15)
   })
 })

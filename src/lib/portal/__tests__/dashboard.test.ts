@@ -59,20 +59,33 @@ const base = {
 }
 
 describe('money windows', () => {
-  it('counts revenue, goods and the postage we carry', () => {
+  it('separates the till total from what we actually keep after VAT', () => {
     const w = moneyWindow(ago(24), [order(), order()], PRICING_CONFIG)
     expect(w.orders).toBe(2)
+    // What customers paid…
     expect(w.revenue).toBe(80)
-    expect(w.cogs).toBe(24)
-    // One unit per order: £3.50 parcel + £0.40 unit, and the member paid nothing.
-    expect(w.delivery).toBeCloseTo(7.8, 2)
-    expect(w.grossProfit).toBeCloseTo(48.2, 2)
+    // …of which a fifth was never ours.
+    expect(w.netRevenue).toBeCloseTo(66.67, 2)
+    expect(w.vat).toBeCloseTo(13.33, 2)
     expect(w.aov).toBe(40)
   })
 
-  it('subtracts what the member paid for postage from what we carry', () => {
+  it('counts goods, PowerBody’s weight-banded delivery and card fees', () => {
+    const w = moneyWindow(ago(24), [order(), order()], PRICING_CONFIG)
+    expect(w.cogs).toBe(24)
+    // No weight on the lines, so the default 1kg — Royal Mail Tracked 48,
+    // blended across zones — on each of the two orders.
+    expect(w.delivery).toBeCloseTo(6.6, 1)
+    expect(w.paymentFees).toBeCloseTo(80 * 0.015 + 0.4, 2)
+    expect(w.grossProfit).toBeCloseTo(w.netRevenue - w.cogs - w.delivery - w.paymentFees, 1)
+    // The naive "£80 − £24 = 70% margin" is nowhere near the truth.
+    expect(w.marginPct).toBeLessThan(0.55)
+  })
+
+  it('subtracts what the member paid for postage, net of its own VAT', () => {
     const w = moneyWindow(ago(24), [order({ shipping: 3.95, total: 43.95 })], PRICING_CONFIG)
-    expect(w.delivery).toBe(0) // £3.90 cost, £3.95 collected — nothing carried
+    // £3.95 collected is £3.29 net against a ~£3.30 cost, so we carry ~nothing.
+    expect(w.delivery).toBeCloseTo(0, 1)
     expect(w.revenue).toBe(43.95)
   })
 
@@ -82,9 +95,19 @@ describe('money windows', () => {
     expect(w.orders).toBe(2)
     expect(w.revenue).toBe(80) // revenue still counts both
     expect(w.ordersWithUnknownCost).toBe(1)
-    // …but the margin is measured only against the £40 we could cost.
+    // …but the margin is measured only against the one order we could cost.
     expect(w.cogs).toBe(12)
-    expect(w.marginPct).toBeCloseTo((40 - 12 - 3.9) / 40, 2)
+    const costedNet = 40 / 1.2
+    expect(w.marginPct).toBeCloseTo((costedNet - 12 - w.delivery - w.paymentFees) / costedNet, 2)
+  })
+
+  it('costs the supplier’s VAT in when we cannot reclaim it', () => {
+    const unregistered = { ...PRICING_CONFIG, vat: { ...PRICING_CONFIG.vat, registered: false } }
+    const w = moneyWindow(ago(24), [order()], unregistered)
+    // Not registered: we keep the whole £40, but the £12 of goods costs £14.40.
+    expect(w.netRevenue).toBe(40)
+    expect(w.vat).toBe(0)
+    expect(w.cogs).toBeCloseTo(14.4, 2)
   })
 
   it('does not count money we gave back as revenue', () => {

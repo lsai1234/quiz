@@ -12,7 +12,39 @@ import type { SupplierProduct } from '../types'
 
 const UPDATED = '2026-07-20T09:00:00.000Z'
 
-type Seed = Omit<SupplierProduct, 'currency' | 'inStock' | 'updatedAt'>
+type Seed = Omit<SupplierProduct, 'currency' | 'inStock' | 'updatedAt' | 'weightGrams' | 'vatRate'> & {
+  /** Override when the name doesn't state a size (capsules, multipacks). */
+  weightGrams?: number
+}
+
+/**
+ * Shipped weight, parsed from the pack size in the product name.
+ *
+ * PowerBody charge delivery by weight band, so the mock feed has to carry a
+ * believable weight or the margin model is exercising a code path the real feed
+ * never will. Parsing the name is exactly what you'd do to backfill weights from
+ * a feed that omits them — sizes are in the title far more reliably than in any
+ * field — and the packaging allowance is why a 1kg tub ships at ~1.15kg.
+ */
+const PACKAGING_GRAMS = 150
+
+function weightFromName(name: string): number {
+  const kg = name.match(/([\d.]+)\s*kg/i)
+  if (kg) return Math.round(parseFloat(kg[1]) * 1000) + PACKAGING_GRAMS
+
+  // A multipack of drinks: 330ml × 12, roughly a gram per ml plus the can.
+  const pack = name.match(/([\d.]+)\s*ml.*?\((\d+)\s*pack\)/i)
+  if (pack) return Math.round(parseFloat(pack[1]) * parseInt(pack[2], 10) * 1.05) + PACKAGING_GRAMS
+
+  const g = name.match(/([\d.]+)\s*g\b/i)
+  if (g) return Math.round(parseFloat(g[1])) + PACKAGING_GRAMS
+
+  // Capsules and tablets: the bottle dominates, not the contents.
+  const caps = name.match(/\((\d+)\s*(?:caps|tabs|capsules|tablets)\)/i)
+  if (caps) return Math.round(parseInt(caps[1], 10) * 0.9) + PACKAGING_GRAMS
+
+  return 250 + PACKAGING_GRAMS
+}
 
 const SEED: Seed[] = [
   // ── Protein ──
@@ -58,5 +90,9 @@ export const POWERBODY_FIXTURES: SupplierProduct[] = SEED.map((s) => ({
   ...s,
   currency: 'GBP',
   inStock: s.stock > 0,
+  weightGrams: s.weightGrams ?? weightFromName(s.name),
+  // Sports nutrition is standard-rated in the UK; null defers to the standard
+  // rate rather than pinning 20% here, so changing the rate changes it once.
+  vatRate: null,
   updatedAt: UPDATED,
 }))

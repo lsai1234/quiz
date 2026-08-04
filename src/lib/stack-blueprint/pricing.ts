@@ -8,6 +8,26 @@ const DAYS_PER_MONTH = 30
 // All pricing rules live here so they can be changed without touching UI code.
 // The portal (final phase) will edit these — they're written as data, not logic.
 
+/**
+ * Where a parcel is going, for the purposes of the delivery rate card.
+ * PowerBody price UK mainland, the Scottish Highlands & Islands, and the EU
+ * differently — and a UK-based dropship account can only ship within the UK.
+ */
+export type DeliveryZone = 'uk-1' | 'uk-2' | 'eu'
+
+/** One line of the supplier's delivery rate card. Prices are ex VAT. */
+export interface DeliveryService {
+  id: string
+  name: string
+  zone: DeliveryZone
+  /** Inclusive lower bound of the weight band (g). */
+  minGrams: number
+  /** Inclusive upper bound of the weight band (g). */
+  maxGrams: number
+  /** What the supplier charges us, ex VAT (£). */
+  price: number
+}
+
 /** A volume/value discount tier. Qualifies when the order meets every set threshold. */
 export interface DiscountTier {
   id: string
@@ -99,27 +119,120 @@ export const PRICING_CONFIG = {
   freeDeliveryThreshold: 50,
 
   /**
-   * What dropship delivery costs us and what we charge for it.
+   * VAT. The single biggest thing a UK retail margin gets wrong.
    *
-   * These are OUR side of the supplier deal, so they belong with the pricing
-   * rules rather than in the supplier adapter: every price we set has to carry
-   * them, and the Good-price model below is wrong without them. The figures are
-   * placeholders until the PowerBody contract is signed — the shape is what
-   * matters, so plugging the real rate card in is an edit here and nothing else.
-   * See `lib/pricing/delivery.ts` for the maths that consumes them.
+   * Our shelf prices are quoted INCLUSIVE of VAT, because that is what UK
+   * consumer law requires a consumer-facing price to be. PowerBody quotes us
+   * EXCLUSIVE of VAT (their guide prints "£4.75 (+ VAT = £5.70)"). Subtract one
+   * from the other and you have overstated the margin by the whole VAT rate —
+   * on a £30 sale that is £5 of someone else's money counted as profit.
+   *
+   * So every margin in `lib/pricing/*` is computed on NET revenue
+   * (price ÷ 1 + rate) against NET costs. See `lib/pricing/vat.ts`.
+   */
+  vat: {
+    /** UK standard rate. Most sports nutrition is standard-rated; a few foods
+     *  (e.g. some flapjacks/shakes sold as food) are zero-rated — set those per
+     *  product with `CatalogueProduct.vatRate`. */
+    standardRate: 0.2,
+    /**
+     * Whether we are VAT-registered.
+     *
+     * Registered: we charge VAT on sales and hand it over, but reclaim the VAT
+     * on what PowerBody charges us — so costs are net.
+     * Not registered: we charge no VAT (keeping the whole shelf price) but
+     * CANNOT reclaim, so PowerBody's VAT is a real cost. These are genuinely
+     * different businesses, not a display toggle, which is why it lives here.
+     */
+    registered: true,
+  },
+
+  /**
+   * PowerBody's dropship delivery rate card — the real one, from their
+   * Dropshipping Guide (June 2026), ex VAT.
+   *
+   * Priced by WEIGHT and ZONE, not per parcel: a 500g tub and a 5kg order cost
+   * different amounts to send, and the Highlands cost more than London. The
+   * charge covers picking, packaging, invoice printing, labour, storage and
+   * shipping — it is a fulfilment fee, not postage, which is why it is
+   * substantial relative to a £20 tub.
+   *
+   * Note what is NOT here: there is no free-shipping threshold, because
+   * "Next Day Delivery and Free Delivery are not available to Dropshippers".
+   * Every single order carries one of these. See `lib/pricing/delivery.ts`.
    */
   delivery: {
-    /** What the supplier charges us to send one parcel to a member (£). */
-    supplierParcelCost: 3.5,
-    /** Extra per unit inside a parcel — weight-driven handling (£). */
-    supplierPerUnitCost: 0.4,
-    /** Units the supplier fits in one parcel before it splits into two. */
-    unitsPerParcel: 6,
-    /** Goods value (£) in a parcel at or above which the supplier ships it free.
-     *  0 = the supplier always charges. */
-    supplierFreeParcelThreshold: 0,
-    /** What we charge a member for delivery below `freeDeliveryThreshold` (£). */
+    /**
+     * Every service we can be charged for. The cheapest one that can carry the
+     * weight in the destination zone wins.
+     */
+    services: [
+      { id: 'rm48-z1', name: 'Royal Mail Tracked 48', zone: 'uk-1', minGrams: 0, maxGrams: 7000, price: 3.25 },
+      { id: 'dpd-z1-light', name: 'DPD Two Day', zone: 'uk-1', minGrams: 0, maxGrams: 1990, price: 4.75 },
+      { id: 'dpd-z1-heavy', name: 'DPD Two Day', zone: 'uk-1', minGrams: 1990, maxGrams: 30000, price: 5.17 },
+      { id: 'rm48-z2', name: 'Royal Mail Tracked 48', zone: 'uk-2', minGrams: 0, maxGrams: 7000, price: 4.49 },
+      { id: 'ups-eu', name: 'UPS International', zone: 'eu', minGrams: 0, maxGrams: 20000, price: 8.6 },
+    ] as DeliveryService[],
+    /**
+     * The zone to assume when we're pricing rather than shipping — i.e. on the
+     * Pricing page and in the margin model. Zone 1 is the overwhelming majority
+     * of UK addresses; Zone 2 is modelled by `zone2SharePct` below rather than
+     * by pricing everything at the worst zone.
+     */
+    defaultZone: 'uk-1' as DeliveryZone,
+    /** Share of orders going to a Highlands/Islands (Zone 2) address, 0–1.
+     *  Used to blend a realistic average delivery cost. */
+    zone2SharePct: 0.04,
+    /** What we charge a member for delivery below `freeDeliveryThreshold` (£, inc VAT). */
     customerDeliveryCharge: 3.95,
+    /** Assumed shipped weight when a product has none recorded (g). A 1kg tub
+     *  plus packaging is the typical single-item supplement parcel. */
+    defaultProductGrams: 1000,
+  },
+
+  /**
+   * What taking the money costs. Card fees are charged on the GROSS amount the
+   * customer pays (VAT included), and are exempt from VAT themselves, so there
+   * is nothing to reclaim — the whole fee is a cost. Small per order, but on a
+   * £25 subscription it is most of a percentage point of margin.
+   */
+  paymentFees: {
+    /** Percentage of the gross charge (0–1). Stripe UK standard is 1.5%. */
+    percent: 0.015,
+    /** Fixed fee per successful charge (£). */
+    fixed: 0.2,
+  },
+
+  /**
+   * Returns and failures. PowerBody refund the product value when an item comes
+   * back — but never the shipping, which on their rate card is the bigger
+   * number on a small order. Consumers have a 14-day right to return, so this
+   * is a cost of doing business rather than an exception.
+   */
+  returns: {
+    /** Share of orders returned or undelivered, 0–1. */
+    ratePct: 0.02,
+    /**
+     * What one return costs us beyond the refunded goods: the outbound delivery
+     * we never get back, plus getting it to the warehouse. Modelled as a
+     * multiple of the outbound delivery charge — 2 = out and back.
+     */
+    costMultipleOfDelivery: 2,
+  },
+
+  /**
+   * The supplier account itself. PowerBody require a minimum monthly spend to
+   * keep a dropshipping account open — miss it and the account can be closed,
+   * which is a pricing constraint as real as any margin floor.
+   */
+  supplierAccount: {
+    /** Minimum wholesale spend per month to keep the account (£). */
+    minimumMonthlySpend: 1000,
+    /** Months from signup to reach it. */
+    graceMonths: 2,
+    /** The average order value PowerBody suggest aiming for (£). A benchmark,
+     *  not a rule — shown next to ours so we can see how we compare. */
+    targetOrderValue: 35,
   },
 
   /**
@@ -132,9 +245,15 @@ export const PRICING_CONFIG = {
    * See `lib/pricing/good-price.ts`.
    */
   goodPricing: {
-    /** Gross margin we want on that worst case, as a share of revenue (0–1).
-     *  NOTE this is a MARGIN (profit ÷ revenue), not `marginFloorPct`, which is
-     *  a markup over cost used to floor the discount engine. */
+    /**
+     * Contribution margin we want on that worst case, as a share of NET (ex-VAT)
+     * revenue, 0–1.
+     *
+     * NOTE this is a MARGIN (contribution ÷ net revenue), not `marginFloorPct`,
+     * which is a markup over cost used to floor the discount engine. And it is
+     * measured after VAT, delivery, card fees and returns — so 35% here is a far
+     * stronger number than 35% of a gross price would be.
+     */
     targetMarginPct: 0.35,
     /**
      * Months of subscription revenue to judge a price over. null = the earliest
@@ -241,10 +360,10 @@ export type PricingConfig = typeof PRICING_CONFIG
  * partial (e.g. change just the flat discount, or just the scratch outcomes) —
  * recomputeConfig shallow-merges it onto the defaults.
  */
-export type PricingOverrides = Partial<Omit<PricingConfig, 'introOffer' | 'delivery' | 'goodPricing'>> & {
-  introOffer?: Partial<PricingConfig['introOffer']>
-  delivery?: Partial<PricingConfig['delivery']>
-  goodPricing?: Partial<PricingConfig['goodPricing']>
+type NestedKeys = 'introOffer' | 'delivery' | 'goodPricing' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount'
+
+export type PricingOverrides = Partial<Omit<PricingConfig, NestedKeys>> & {
+  [K in NestedKeys]?: Partial<PricingConfig[K]>
 }
 
 let _overrides: PricingOverrides = {}
@@ -255,8 +374,18 @@ function recomputeConfig() {
     ...PRICING_CONFIG,
     ..._overrides,
     introOffer: { ...PRICING_CONFIG.introOffer, ...(_overrides.introOffer ?? {}) },
-    delivery: { ...PRICING_CONFIG.delivery, ...(_overrides.delivery ?? {}) },
+    delivery: {
+      ...PRICING_CONFIG.delivery,
+      ...(_overrides.delivery ?? {}),
+      // A rate card is replaced wholesale or not at all — merging two lists of
+      // services by key would silently resurrect a carrier that was removed.
+      services: _overrides.delivery?.services ?? PRICING_CONFIG.delivery.services,
+    },
     goodPricing: { ...PRICING_CONFIG.goodPricing, ...(_overrides.goodPricing ?? {}) },
+    vat: { ...PRICING_CONFIG.vat, ...(_overrides.vat ?? {}) },
+    paymentFees: { ...PRICING_CONFIG.paymentFees, ...(_overrides.paymentFees ?? {}) },
+    returns: { ...PRICING_CONFIG.returns, ...(_overrides.returns ?? {}) },
+    supplierAccount: { ...PRICING_CONFIG.supplierAccount, ...(_overrides.supplierAccount ?? {}) },
     bundleTiers: _overrides.bundleTiers ?? PRICING_CONFIG.bundleTiers,
     subscriptionTiers: _overrides.subscriptionTiers ?? PRICING_CONFIG.subscriptionTiers,
     budgetCaps: _overrides.budgetCaps ?? PRICING_CONFIG.budgetCaps,

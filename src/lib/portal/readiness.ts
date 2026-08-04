@@ -82,5 +82,19 @@ export function productReadiness(p: CatalogueProduct, opts: { live: boolean }): 
     detail: p.cost == null ? 'Using estimated cost' : undefined,
   })
 
+  // 5. Shippable — weight is load-bearing twice over. PowerBody charge delivery
+  // by weight BAND, so without it the margin is a guess; and their `createOrder`
+  // call takes a weight, so without it a live order can't be placed correctly.
+  // That second reason is why this fails rather than warns once we're live.
+  checks.push({
+    id: 'shipping',
+    label: 'Shipping weight set',
+    status: p.weightGrams != null && p.weightGrams > 0 ? 'ok' : opts.live ? 'fail' : 'warn',
+    detail:
+      p.weightGrams != null && p.weightGrams > 0
+        ? undefined
+        : `No weight — delivery cost estimated at ${config.delivery.defaultProductGrams}g`,
+  })
+
   return { productId: p.id, overall: worst(checks.map((c) => c.status)), checks }
 }

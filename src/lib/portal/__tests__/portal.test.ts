@@ -15,7 +15,7 @@ const makeProduct = (o: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
   id: 'p', title: 'P', handle: 'p', description: '', imageUrl: 'https://img/x.jpg', category: 'Protein',
   stackSlots: ['protein'], goals: ['muscle'], dietaryTags: [], formats: ['powder'],
   variants: [{ id: 'v', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: 'gid://shopify/ProductVariant/1', sellingPlanId: 'gid://shopify/SellingPlan/1' }],
-  basePrice: 30, compareAtPrice: null, cost: 10, subscriptionEligible: true, servings: 30,
+  basePrice: 30, compareAtPrice: null, cost: 10, weightGrams: 1150, subscriptionEligible: true, servings: 30,
   swapGroup: 'protein-whey', recommendationPriority: 8, marginPriority: 7, isCoreEligible: true,
   isBoosterEligible: false, hasStimulants: false, shortReason: 'x', warnings: [],
   shopifyProductId: 'gid://shopify/Product/1', ...o,
@@ -79,6 +79,18 @@ describe('product readiness', () => {
     const r = productReadiness(makeProduct({ stackSlots: [], goals: [] }), { live: false })
     expect(r.checks.find((c) => c.id === 'classification')?.status).toBe('fail')
     expect(r.overall).toBe('fail')
+  })
+
+  it('blocks a live product with no shipping weight', () => {
+    // PowerBody price delivery by weight band AND require a weight to place the
+    // order, so going live without one is a hard stop, not a nag.
+    const live = productReadiness(makeProduct({ weightGrams: null }), { live: true })
+    expect(live.checks.find((c) => c.id === 'shipping')?.status).toBe('fail')
+    expect(live.overall).toBe('fail')
+
+    // On mock data it is only a warning — the margin is estimated, nothing ships.
+    const mock = productReadiness(makeProduct({ weightGrams: null }), { live: false })
+    expect(mock.checks.find((c) => c.id === 'shipping')?.status).toBe('warn')
   })
 })
 

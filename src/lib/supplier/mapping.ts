@@ -168,6 +168,12 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     basePrice: sp.rrp,
     compareAtPrice: null,
     cost: sp.wholesalePrice,
+    // Fulfilment economics. PowerBody charge delivery by weight band and their
+    // `createOrder` call needs a weight, so an added product without one can be
+    // neither priced nor shipped accurately — readiness flags it.
+    weightGrams: sp.weightGrams ?? null,
+    vatRate: sp.vatRate ?? null,
+    supplierRrp: sp.rrp,
     subscriptionEligible: true,
     subscriptionProductId: null,
     isSubscriptionOnly: false,

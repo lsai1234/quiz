@@ -14,7 +14,8 @@
  */
 import type { Order } from '@/lib/orders/types'
 import type { SubscriptionSummary } from '@/lib/changes/health'
-import { supplierDeliveryCost } from '@/lib/pricing/delivery'
+import { blendedDeliveryCost, shipmentWeight } from '@/lib/pricing/delivery'
+import { revenueFromShelfPrice, costFromSupplierPrice } from '@/lib/pricing/vat'
 import type { PricingConfig } from '@/lib/stack-blueprint/pricing'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -28,14 +29,21 @@ export interface MoneyWindow {
   /** ISO date the window starts (inclusive). */
   from: string
   orders: number
+  /** What customers paid, VAT included (£). The till total. */
   revenue: number
+  /** What we keep after VAT (£) — the only honest base for a margin. */
+  netRevenue: number
+  /** VAT collected on behalf of HMRC (£). Never ours. */
+  vat: number
   /** What the goods cost us, where every line's cost is known. */
   cogs: number
   /** What we expect to pay the supplier to deliver these orders. */
   delivery: number
-  /** revenue − cogs − delivery. */
+  /** Card fees on taking the money (£). */
+  paymentFees: number
+  /** netRevenue − cogs − delivery − fees. */
   grossProfit: number
-  /** grossProfit ÷ revenue (0–1). */
+  /** grossProfit ÷ netRevenue (0–1). */
   marginPct: number
   /** Average order value. */
   aov: number
@@ -76,12 +84,26 @@ export interface DashboardSummary {
 
 function orderCost(order: Order, config: PricingConfig): { cogs: number; delivery: number; known: boolean } {
   const known = order.lines.length > 0 && order.lines.every((l) => l.supplierCost != null)
-  const cogs = order.lines.reduce((s, l) => s + (l.supplierCost ?? 0) * l.quantity, 0)
-  const units = order.lines.reduce((s, l) => s + l.quantity, 0)
+  // Supplier prices are ex VAT; what they actually cost depends on whether we
+  // can reclaim (see lib/pricing/vat.ts).
+  const cogs = costFromSupplierPrice(
+    order.lines.reduce((s, l) => s + (l.supplierCost ?? 0) * l.quantity, 0),
+    config,
+  )
+  // PowerBody charge by weight band, so the shipped weight — not the unit count
+  // — is what sets the delivery cost.
+  const { grams } = shipmentWeight(
+    order.lines.map((l) => ({ weightGrams: l.weightGrams ?? null, quantity: l.quantity })),
+    config,
+  )
   // What the supplier charges us to ship it, less whatever the member paid for
-  // postage — the member's contribution is already inside `order.total`.
-  const supplier = supplierDeliveryCost({ units, goodsValue: cogs }, config)
-  return { cogs: round(cogs), delivery: round(Math.max(0, supplier - order.shipping)), known }
+  // postage net of VAT — their contribution is already inside `order.total`.
+  const collected = revenueFromShelfPrice(order.shipping, config.vat.standardRate, config)
+  return {
+    cogs: round(cogs),
+    delivery: round(Math.max(0, blendedDeliveryCost(grams, config) - collected)),
+    known,
+  }
 }
 
 /** Money over one window of orders. */
@@ -92,8 +114,9 @@ export function moneyWindow(from: string, orders: Order[], config: PricingConfig
 
   let cogs = 0
   let delivery = 0
+  let fees = 0
   let unknown = 0
-  let costedRevenue = 0
+  let costedNetRevenue = 0
   for (const o of earned) {
     const c = orderCost(o, config)
     if (!c.known) {
@@ -102,22 +125,29 @@ export function moneyWindow(from: string, orders: Order[], config: PricingConfig
     }
     cogs += c.cogs
     delivery += c.delivery
-    costedRevenue += o.total
+    fees += o.total * config.paymentFees.percent + config.paymentFees.fixed
+    costedNetRevenue += revenueFromShelfPrice(o.total, config.vat.standardRate, config)
   }
 
   const revenue = round(earned.reduce((s, o) => s + o.total, 0))
-  const grossProfit = round(costedRevenue - cogs - delivery)
+  // VAT is collected, not earned. Counting it as revenue and then taking costs
+  // off overstates the margin by the whole VAT rate.
+  const netRevenue = round(revenueFromShelfPrice(revenue, config.vat.standardRate, config))
+  const grossProfit = round(costedNetRevenue - cogs - delivery - fees)
 
   return {
     from,
     orders: earned.length,
     revenue,
+    netRevenue,
+    vat: round(revenue - netRevenue),
     cogs: round(cogs),
     delivery: round(delivery),
+    paymentFees: round(fees),
     grossProfit,
-    // Margin is measured against the revenue we could actually cost, so an
-    // uncosted order can't quietly inflate it.
-    marginPct: pct(grossProfit, round(costedRevenue)),
+    // Margin is measured against the NET revenue we could actually cost, so
+    // neither VAT nor an uncosted order can quietly inflate it.
+    marginPct: pct(grossProfit, round(costedNetRevenue)),
     aov: earned.length > 0 ? round(revenue / earned.length) : 0,
     ordersWithUnknownCost: unknown,
     refunded: given.length,

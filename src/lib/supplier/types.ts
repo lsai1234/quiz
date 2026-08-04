@@ -33,8 +33,18 @@ export interface SupplierProduct {
   barcode: string | null
   /** Variant flavours, when the product has them (empty for single-variant items). */
   flavours: string[]
-  /** Servings per unit, when the supplier reports it. */
+  /** Servings per unit, when the supplier reports it (`portion_count`). */
   servings: number | null
+  /**
+   * Shipped weight of one unit in grams.
+   *
+   * PowerBody price dropship delivery by weight band and their `createOrder`
+   * call takes a `weight` parameter, so this is load-bearing for both margin and
+   * fulfilment — not a nice-to-have. Null when the feed doesn't carry it.
+   */
+  weightGrams: number | null
+  /** VAT rate as a fraction (their `vat_rate`, a percentage, ÷ 100). Null = standard. */
+  vatRate: number | null
   updatedAt: string
 }
 

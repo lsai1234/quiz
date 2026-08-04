@@ -32,8 +32,15 @@ export interface OrderLine {
   quantity: number
   /** What the customer paid per unit. */
   unitPrice: number
-  /** What we pay the supplier per unit (margin tracking). Null if unknown. */
+  /** What we pay the supplier per unit, ex VAT (margin tracking). Null if unknown. */
   supplierCost?: number | null
+  /**
+   * Shipped weight of one unit (g). Snapshotted onto the line because
+   * PowerBody's delivery charge is weight-banded and their `createOrder` call
+   * requires a weight — and because a product's weight can change under us,
+   * while what we actually paid to ship this order cannot.
+   */
+  weightGrams?: number | null
 }
 
 /** An audit entry appended on every meaningful transition. */

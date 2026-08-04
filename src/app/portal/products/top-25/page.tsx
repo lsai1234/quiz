@@ -12,7 +12,12 @@ const AMBER = '#fbbf24'
 const RED = '#f87171'
 const DOT: Record<CheckStatus, string> = { ok: GREEN, warn: AMBER, fail: RED }
 
-type PriceAudit = GoodPriceResult & { title: string; costEstimated: boolean }
+type PriceAudit = GoodPriceResult & {
+  title: string
+  costEstimated: boolean
+  weightEstimated: boolean
+  vsRrpPct: number | null
+}
 
 interface Slot {
   rank: number
@@ -145,8 +150,9 @@ export default function TopProductsPage() {
                             {verdict.profitable
                               ? `${pct(verdict.marginPct)} margin on the worst case`
                               : 'Loses money on the worst case'}
-                            {' · good price '}{money(slot.price.goodPrice)}
-                            {slot.price.costEstimated && ' (cost estimated)'}
+                            {slot.price.goodPrice != null && <>{' · good price '}{money(slot.price.goodPrice)}</>}
+                            {slot.price.costEstimated && ' · cost estimated'}
+                            {slot.price.weightEstimated && ' · weight estimated'}
                           </p>
                         )}
                         {slot.readiness && slot.readiness.overall !== 'ok' && (

@@ -58,52 +58,100 @@ card odds, delivery, profit guardrails, one-off and subscription discount tiers,
 budget ceilings, and what happens when a supplier changes a product. Editing any
 of them applies everywhere — quiz, shop, hub and Stripe — on save.
 
-### The model
+The page has three tabs: **The model** (one worked product), **Every product**
+(the same maths over the catalogue), and **The rules** (every setting).
 
-`lib/pricing/good-price.ts` turns a supplier asset price into a sell price by
-pricing for the **least profitable path a member can take**, not the average one:
+### The unit-economics waterfall (`lib/pricing/unit-economics.ts`)
 
-1. They land on the **biggest bundle**, which carries the deepest
-   subscribe-&-save rate we offer (`worstCaseSubscriptionRate` — the max of the
-   base rate, every per-level bundle rate, and any subscription tier).
-2. They take the **average first-month discount**
-   (`introOffer.effectiveFirstMonthDiscount`) — the blended figure the business
-   actually gives away, not the headline 50% scratch card almost nobody wins.
-3. They **cancel at the earliest point** (`minSubscriptionMonths`, overridable
-   via `goodPricing.horizonMonths`).
-4. **We carry the delivery**, because a subscription that clears the
-   free-delivery threshold pays us nothing for postage.
+This is the centre of the pricing area. "Margin" used to be price minus supplier
+cost — one subtraction hiding four leaks, each of them real money:
 
-A price that profits under all four profits everywhere else by construction,
-which is what makes it safe to price a catalogue off.
+| Leak | Why it bites |
+| --- | --- |
+| **VAT** | Shelf prices are inc-VAT by law; PowerBody quote ex-VAT. Subtracting one from the other counts up to 20% of HMRC's money as profit. |
+| **Delivery** | PowerBody charge £3.25–£5.17 per order, by weight, with **no free-shipping threshold for dropshippers**. On a £20 tub that is a fifth of the price. |
+| **Card fees** | 1.5% + 20p of the gross, and VAT-exempt so there is nothing to reclaim. |
+| **Returns** | 14-day right to return. The goods are refunded to us; the shipping never is. |
 
-```
-r          = 1 − deepest subscribe-&-save
-H          = horizon in months
-dIntro     = average first-month discount
-cost       = H × (goods + supplier delivery), per month
-breakEven  = cost ÷ (r × (H − dIntro))
-goodPrice  = breakEven ÷ (1 − targetMarginPct)
-```
+Net all four off a £30 sale on a £10 product and an apparent 67% margin is
+closer to 30%. So the module emits an ordered, signed **waterfall** — every step
+named and summing exactly to the contribution — and the UI renders those steps
+rather than recomputing anything. There is nowhere for a number on the screen to
+come from except a row you can see.
 
-Both prices round **up** to the penny: rounding a floor down puts you under it.
+Margins are quoted on **net revenue** (the honest denominator) with the
+margin-of-gross shown beside it, so the two can't be confused.
 
-The page also runs the model over the whole catalogue, listing anything that
-loses money or sits under target on the worst case.
+`priceForMargin` solves the stack backwards. The free-delivery threshold makes
+the equation piecewise, so both branches are solved and the one consistent with
+its own answer wins; the result is then verified against the real (penny-rounded)
+waterfall and nudged up if rounding left it a hundredth under target. The solver
+and the display cannot disagree.
 
-### Delivery (`lib/pricing/delivery.ts`)
+### VAT (`lib/pricing/vat.ts`)
 
-Two different numbers hide behind "delivery" and confusing them is how a
-catalogue goes quietly unprofitable: what the **supplier charges us** and what
-we **charge the member**. On a subscription over the free-delivery threshold the
-second is zero, and the gap (`absorbed`) is a real cost the sell price must
-carry.
+`vat.registered` is a pricing rule, not a display toggle — registered and
+unregistered are genuinely different businesses. Registered: we hand VAT over on
+sales and reclaim what PowerBody charge us, so costs are net. Unregistered: we
+keep the whole shelf price but cannot reclaim, so their VAT is a permanent cost.
+Per-product `vatRate` covers the handful of zero-rated items.
 
-The rate card lives in `PRICING_CONFIG.delivery` — parcel cost, per-unit cost,
-units per parcel, the supplier's free-shipping threshold, and our customer
-charge. **The figures are placeholders until the PowerBody contract is signed.**
-The shape is what matters: plugging the real rate card in is an edit on the
-Pricing page and nothing else, and it reprices the whole model.
+### Delivery — PowerBody's real rate card (`lib/pricing/delivery.ts`)
+
+From their Dropshipping Guide (June 2026), ex VAT, priced by **weight and zone**:
+
+| Zone | Service | Band | Price |
+| --- | --- | --- | --- |
+| UK mainland | Royal Mail Tracked 48 | 0–7kg | £3.25 |
+| UK mainland | DPD Two Day | 0–1990g | £4.75 |
+| UK mainland | DPD Two Day | 1990g–30kg | £5.17 |
+| Highlands & Islands | Royal Mail Tracked 48 | 0–7kg | £4.49 |
+| EU | UPS International | 0–20kg | €10.00 |
+
+The cheapest service that can carry the weight is the one they use. Bands are
+`(min, max]` so a weight on a boundary lands in exactly one. Where nothing can
+carry it — over 7kg to the Highlands, which they simply don't list — the quote
+reports `unavailableReason` rather than pricing it at zero.
+
+Three things this encodes that the old placeholder model got wrong:
+
+- **There is no free supplier shipping.** Their guide: "Next Day Delivery and
+  Free Delivery are not available to Dropshippers." Our free-delivery offer to
+  the member does not reach PowerBody; we absorb their charge on every order.
+- **It is a fulfilment fee, not postage** — picking, packaging, invoice printing,
+  labour, storage and shipping. That is why it is so large next to a £20 tub.
+- **Zones are blended, not worst-cased.** `zone2SharePct` (default 4%) mixes
+  mainland and Highlands into one honest number rather than overpricing the 96%.
+
+Because the charge is weight-banded, **`CatalogueProduct.weightGrams` is
+load-bearing** — it also feeds PowerBody's `createOrder`, which requires a
+weight. Readiness warns on mock data and **fails when live**. Products added from
+the feed carry it; the mock fixtures parse it from the pack size in the name.
+
+### The account minimum
+
+PowerBody require **£1,000 of wholesale spend a month** (2 months' grace) to keep
+a dropshipping account open, and suggest aiming for a £35 average order. Losing
+the account is a bigger problem than any single price, so the model tab shows how
+many orders a month that works out to at our current average price and cost
+ratio.
+
+### The Good price
+
+`lib/pricing/good-price.ts` sits on the waterfall and prices for the **least
+profitable path a member can take**:
+
+1. The **biggest bundle's** subscribe-&-save rate (`worstCaseSubscriptionRate`).
+2. The **average first-month discount** — the blended figure actually given away,
+   not the headline 50% scratch card almost nobody wins.
+3. **Cancelling at the earliest point** (`minSubscriptionMonths`).
+4. **We carry the delivery.**
+
+It reports the **spread**, not one number: bought once / typical subscriber /
+worst case, side by side. One worst-case figure tells you whether a price is
+safe; three tell you what you are pricing into.
+
+Prices round **up** to the penny — rounding a floor down puts you under it.
 
 ---
 
@@ -154,10 +202,13 @@ the gate exists to demand. The gate itself stays.
 
 `lib/portal/dashboard.ts` reconciles rather than flatters:
 
-- Revenue counts orders that were **paid for and not given back** (refunded and
-  cancelled orders are reported separately, not netted silently).
-- Cost counts the **goods and the postage we carry** — the supplier's delivery
-  charge less whatever the member paid.
+- **Revenue** counts orders that were paid for and not given back (refunded and
+  cancelled orders are reported separately, not netted silently). The till total
+  and the **net-of-VAT** figure are both reported — VAT is collected, not earned.
+- **Cost** counts goods, the weight-banded delivery we carry (less whatever the
+  member paid for postage, net of its own VAT), and card fees.
+- **Margin is measured on net revenue**, so neither VAT nor an uncosted order can
+  inflate it.
 - An order whose supplier cost we don't fully know **counts towards revenue but
   is left out of the margin**, and the count of such orders is shown. A margin
   computed over half a catalogue is worse than no margin at all.
