@@ -76,11 +76,21 @@ describe('the settings that enforce them', () => {
   })
 
   it('catches a subscription minimum below what a plan needs to survive', () => {
-    // The regression this was built for: `minSubscriptionMonthly` sat at £25 for
-    // months, which does not cover the goods and postage on the deepest bundle
-    // rate — so we were offering, and honouring, loss-making subscriptions.
-    const t = at('lifetime', cfg({ minSubscriptionMonthly: 25 }))
+    const t = at('lifetime', cfg({ minSubscriptionMonthly: 5 }))
     expect(t.enforcedBy!.ok).toBe(false)
-    expect(t.value!).toBeGreaterThan(25)
+    expect(t.value!).toBeGreaterThan(5)
+  })
+
+  it('charges the member postage on a plan under the free-delivery line', () => {
+    // The bug this replaced: the subscription floors assumed we ABSORB postage
+    // on every plan. We don't — a plan under `freeDeliveryThreshold` is charged
+    // like any other order. Assuming the worst case on the wrong side of our own
+    // rule overstated the floor by most of a delivery.
+    const floor = at('lifetime').value!
+    expect(floor).toBeLessThan(PRICING_CONFIG.freeDeliveryThreshold)
+    // Turn the customer charge off and the floor has to rise — proving the
+    // charge is really being counted.
+    const absorbed = at('lifetime', cfg({ delivery: { ...PRICING_CONFIG.delivery, customerDeliveryCharge: 0 } })).value!
+    expect(absorbed).toBeGreaterThan(floor)
   })
 })

@@ -149,14 +149,19 @@ export function pricingThresholds(config: PricingConfig = getPricingConfig()): P
   })
 
   // ── 3. A subscription renewal ─────────────────────────────────────────────
-  // The deepest rate anyone can reach, no intro offer, postage absorbed. Every
-  // month after the first has to clear this on its own.
+  // The deepest rate anyone can reach, no intro offer, and OUR OWN DELIVERY RULE
+  // applied: a plan under `freeDeliveryThreshold` is charged postage like any
+  // other order; only plans above it ship free.
+  //
+  // This used to force `chargeDelivery: false` — "assume the worst, we absorb
+  // it". That is the worst case on the wrong side of our own rule: a £30/month
+  // plan does collect £3.95, so pretending otherwise overstated the floor by
+  // most of a delivery and turned away subscriptions that make money.
   const renewal = scan((listValue) =>
     unitEconomics(
       {
         shelfPrice: round(listValue * (1 - deepestRate)),
         supplierCost: round(listValue * costRatio),
-        chargeDelivery: false,
       },
       config,
     ).contribution,
@@ -168,11 +173,11 @@ export function pricingThresholds(config: PricingConfig = getPricingConfig()): P
   const lifetime = scan((listValue) => {
     const cost = round(listValue * costRatio)
     const first = unitEconomics(
-      { shelfPrice: round(listValue * (1 - deepestRate) * (1 - intro)), supplierCost: cost, chargeDelivery: false },
+      { shelfPrice: round(listValue * (1 - deepestRate) * (1 - intro)), supplierCost: cost },
       config,
     ).contribution
     const rest = unitEconomics(
-      { shelfPrice: round(listValue * (1 - deepestRate)), supplierCost: cost, chargeDelivery: false },
+      { shelfPrice: round(listValue * (1 - deepestRate)), supplierCost: cost },
       config,
     ).contribution
     return (first + rest * (months - 1)) / months

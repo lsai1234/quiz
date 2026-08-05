@@ -128,14 +128,18 @@ export const PRICING_CONFIG = {
   /**
    * Minimum flat monthly value for the subscription to be offered (£).
    *
-   * 40, not the 25 this sat at for months. At £25 a month on the deepest bundle
-   * rate the plan DOES NOT COVER ITS OWN GOODS AND POSTAGE — we were offering,
-   * and honouring, subscriptions that lose money on every renewal. £40 is where
-   * a plan breaks even across its whole life including the average scratch card;
-   * `lib/pricing/thresholds.ts` computes it and the hub flags this setting the
-   * moment it drops below.
+   * The real floor is about £21.60 — the point at which a plan covers its goods
+   * and postage across its whole life including the average scratch card.
+   * `lib/pricing/thresholds.ts` computes it and the hub flags this setting if it
+   * ever drops below.
+   *
+   * This briefly sat at 40, from a calculation that assumed we ABSORB the
+   * postage on every subscription. We don't: a plan under `freeDeliveryThreshold`
+   * is charged `delivery.customerDeliveryCharge` like any other order, and only
+   * plans above it ship free. Assuming the worst case on the wrong side of our
+   * own rule turned away subscriptions that make money.
    */
-  minSubscriptionMonthly: 40,
+  minSubscriptionMonthly: 25,
 
   /**
    * Smallest order we will take at all (£ inc VAT).
