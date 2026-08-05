@@ -125,13 +125,13 @@ describe('the catalogue audit, packed the way we actually sell', () => {
     expect(r.warning).toMatch(/best kept off subscription/i)
   })
 
-  it('flags a product priced noticeably above what the brand recommends', () => {
-    // RRP is a CHECK now, not the price rule — so a cheap-to-buy product whose
-    // brand recommends a low price gets a flag rather than a lower price.
+  it('prices from cost even when that lands well above the brand’s RRP', () => {
+    // RRP has no say at all. A product we happen to buy dearly still prices at
+    // the rule, and nothing flags it — a warning nobody acts on is noise.
     const r = priceProduct({ title: 'Dear', supplierRrp: 20, cost: 15, servings: 60 }, cfg())
     expect(r.listPrice).toBe(29.99)
-    expect(r.overRrp).toBe(true)
-    expect(r.warning).toMatch(/above what the brand recommends/)
+    expect(r.vsRrp).toBeGreaterThan(0)
+    expect(r.warning).toBeNull()
   })
 
   it('prices a product with no RRP exactly the same way', () => {

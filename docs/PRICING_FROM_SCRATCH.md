@@ -188,45 +188,64 @@ scratch card is *supposed* to lose on month one — that's rationed marketing.
 
 ---
 
-## Part 8 — A simple starting point
+## Part 8 — The rules, as shipped
 
-Six rules.
+Six rules. That's the whole model.
 
-1. **Price = what we pay × 2**, rounded down to .99.
-2. **Minimum order £12.** Below that no order carries its own parcel. Enforced at
-   checkout, not just advised.
-3. **Nothing under £8 in the quiz as a standalone line.** Cheaper products are
-   add-ons to a box already going out, never the whole order.
-4. **Delivery: £3.95 under £50, free at £50+** — *or move the free line to £100*
-   (see Part 2; worth ~£1.17 an order and closes the worst band).
-5. **Discounts unchanged:** 8% one-off, 13/15/20 subscribe, first-month card
-   averaging 15%. Protect the rule that subscribing always visibly wins.
-6. **Minimum subscription £25/month.** Comfortably above the £21.20 floor.
+| | |
+| --- | --- |
+| **1. Price** | what we pay **× 2**, rounded down to .99 |
+| **2. Minimum order** | **£15** — enforced at checkout and in the cart API |
+| **3. Quiz floor** | nothing under **£8** gets a slot in a stack; cheaper products are add-ons |
+| **4. Delivery** | **£3.95** under £60, **free** at £60+ — qualified on the subtotal, before any discount |
+| **5. Discounts** | 8% one-off over £50 · subscribe & save 13/15/20 · first-month card averaging 15% |
+| **6. Minimum subscription** | **£25/month** |
 
-### What I'd drop
+### Two tests, not one
 
-- **The 35% target margin.** Unreachable on resold brands; every screen comparing
-  against it just reads "everything is failing". Real margins are 10–25%.
-- **The average-order model, break-even sweeps and case tables.** Already hidden
-  behind "show the working" — delete rather than maintain.
-- **The RRP cross-check.** Useful when we priced off RRP. We don't any more.
+**A one-off must pay every time.** Nothing behind it. The £15 minimum is a hard
+refusal, not a warning — the checkout and the cart API both reject a smaller
+basket.
+
+**A subscription only has to pay over its life.** The scratch card is meant to
+lose on month one; the floor no longer caps it, so a 40% card really is 40% off
+and really does lose money. What has to hold is the six-month total.
+
+### A typical 3-item box (£76.85), every route
+
+| Route | They pay | We keep |
+| --- | --- | --- |
+| Bought on its own | £76.85 | **£21.17** |
+| In a basket over £50 (−8%) | £70.70 | **£15.11** |
+| Subscriber, months 2+ | £61.48 | **£6.03** |
+| First month, averaged across the card | £52.11 | −£3.20 *(allowed)* |
+| **A whole subscription, over 6 months** | £359.51 | **£26.95** |
+| Worst case: 40% card, 1 in 21 | £36.89 | −£18.19 *(allowed)* |
+
+### The floors, computed
+
+| | Floor | Enforced by |
+| --- | --- | --- |
+| Cheapest single thing we can sell | £12 | Minimum order (£15) |
+| Smallest one-off order worth taking | £12 | Minimum order (£15) |
+| Smallest monthly plan that pays for itself | £19.20 | — |
+| Smallest plan that survives the scratch card | £21.60 | Minimum to subscribe (£25) |
+
+---
+
+## What was dropped
+
+- **The 35% target margin.** Unreachable on resold brands, so every screen
+  comparing against it read "everything is failing". Real margins are 10–25%.
+- **The average-order model, break-even sweeps and case tables.** Replaced by the
+  scenario list above: same question, but you can read the answer instead of
+  reconstructing it.
+- **The RRP cross-check.** A flag nobody acted on.
+- **The cost-plus "good price" model.** Superseded by ×2.
 
 ---
 
 ## Zone 2 (Highlands & Islands)
 
 £7.99 flat, free over £300 of our spend — so effectively never free. About 4% of
-UK addresses. Everything above is Zone 1; blending Zone 2 in adds roughly **7p**
-to the average order's postage, which is small enough to ignore when setting
-rules and worth keeping in the model for accuracy.
-
----
-
-## Still needs a decision
-
-1. **Is ×2 right?** It gives 10–25% margin. ×1.9 is cheaper and thinner; ×2.1
-   dearer and fatter. Every floor above moves with it.
-2. **Move free delivery from £50 to £100?** Closes the −£7.80 band.
-3. **The top scratch card says 40%, but the floor only allows 42.5% in total**, so
-   a Complete subscriber winning it gets less than the card promises. Bring the
-   card to 25%, or lower the floor for month one only.
+UK addresses, adding roughly 7p to an average order's postage.

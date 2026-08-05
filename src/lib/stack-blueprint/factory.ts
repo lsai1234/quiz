@@ -477,8 +477,18 @@ export function buildStackBlueprint(
   // CHRGD LQD (drinks mode) sees only PRE-MADE drinks (zero-prep promise);
   // slots with no ready-to-drink candidate fall away via the same graceful
   // omission.
+  // Products too cheap to carry a slot of their own are also excluded.
+  //
+  // PowerBody charge per parcel, so even shared three ways a stack line carries
+  // ~£2.60 of postage, and below `minQuizProductPrice` there isn't the margin to
+  // cover it. Such products are still perfectly sellable — as an add-on to a box
+  // already going out — but giving one a slot in the recommendation means
+  // building a stack that loses money on that line every month.
+  const minLinePrice = getPricingConfig().minQuizProductPrice
   const effectiveCatalogue = lqdOnly(
-    (catalogue.length > 0 ? catalogue : MOCK_CATALOGUE).filter((p) => !p.isSubscriptionOnly),
+    (catalogue.length > 0 ? catalogue : MOCK_CATALOGUE).filter(
+      (p) => !p.isSubscriptionOnly && (minLinePrice <= 0 || p.basePrice >= minLinePrice),
+    ),
     answers.drinksMode,
   )
 

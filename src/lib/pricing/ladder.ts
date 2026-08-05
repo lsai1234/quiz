@@ -139,8 +139,11 @@ export function checkLadder(
     }
   })
 
+  // Only a real clip when the floor actually applies to the intro offer. With
+  // `respectMarginFloor` off the deep card is paid in full and simply loses
+  // money on purpose, which is the design rather than a broken promise.
   const clipped =
-    deepestOffered > deepestPossibleDiscount
+    config.introOffer.respectMarginFloor && deepestOffered > deepestPossibleDiscount
       ? { advertised: deepestOffered, delivered: deepestPossibleDiscount }
       : null
 

@@ -21,14 +21,16 @@
  * RRP is about 1.94× their wholesale, so doubling what we pay puts us within a
  * few percent of the market — we just get there by our own rule.
  *
- * RRP IS NOW THE CHECK, NOT THE DRIVER
- * ────────────────────────────────────
- * Where a product does have an RRP, `checkVsRrp` compares our price against it
- * and flags anything a customer would notice. A check that can only raise a flag
- * is far safer than a driver that silently sets every price.
+ * RRP PLAYS NO PART
+ * ─────────────────
+ * It is kept as a was-price and reported for interest, and nothing reads it. It
+ * was briefly retained as a cross-check that flagged prices drifting above the
+ * brand's own recommendation, but a flag nobody acts on is one more number on a
+ * screen that already had too many.
  *
- * And cost-plus (`./good-price.ts`) is still the floor: if the shelf price can't
- * cover what the product actually costs to sell, the hub says so.
+ * Whether a price WORKS is a separate question, answered by `./scenarios.ts` —
+ * it runs the product through every route a customer can take and says which,
+ * if any, lose money.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { unitEconomics } from './unit-economics'
@@ -59,7 +61,7 @@ export interface ProductPriceInput {
   title?: string
   /** What we pay the supplier, ex VAT (£). The only input the price depends on. */
   cost?: number | null
-  /** The supplier's RRP, when they publish one — used only as a cross-check. */
+  /** The supplier's RRP, when they publish one. Reported, never acted on. */
   supplierRrp?: number | null
   /** Servings per unit, for working out how often it ships. */
   servings?: number | null
@@ -93,10 +95,9 @@ export interface ProductPrice {
   sharedParcelItems: number
   /** The supplier's RRP, when there is one (£). */
   rrp: number | null
-  /** How far our list price sits above their RRP (0–1). Negative = below. */
+  /** How far our list price sits above their RRP (0–1). Negative = below.
+   *  Reported for interest; nothing acts on it. */
   vsRrp: number | null
-  /** True when we are far enough above RRP that a customer would notice. */
-  overRrp: boolean
   /** How far the current shelf price is from the rule (£). */
   vsCurrentPrice: number | null
   /** Set when something about this product needs a decision. */
@@ -131,7 +132,6 @@ export function priceProduct(
 
   const rrp = input.supplierRrp != null && input.supplierRrp > 0 ? round(input.supplierRrp) : null
   const vsRrp = rrp != null ? round4((listPrice - rrp) / rrp) : null
-  const overRrp = vsRrp != null && vsRrp > config.listPricing.rrpToleranceAbovePct
 
   const keeps = round(shipment.contribution / shipEveryMonths)
 
@@ -147,19 +147,15 @@ export function priceProduct(
     sharedParcelItems: parcelItems,
     rrp,
     vsRrp,
-    overRrp,
     vsCurrentPrice: input.currentPrice != null ? round(listPrice - input.currentPrice) : null,
-    warning: warningFor({ viable: keeps > 0, overRrp, vsRrp, hasCost: cost > 0 }),
+    warning: warningFor({ viable: keeps > 0, hasCost: cost > 0 }),
   }
 }
 
-function warningFor(p: { viable: boolean; overRrp: boolean; vsRrp: number | null; hasCost: boolean }): string | null {
+function warningFor(p: { viable: boolean; hasCost: boolean }): string | null {
   if (!p.hasCost) return 'No supplier price on file, so we cannot price this product at all.'
   if (!p.viable) {
     return 'Loses money once it has carried its share of the postage. Usually best kept off subscription.'
-  }
-  if (p.overRrp) {
-    return `We are ${Math.round((p.vsRrp ?? 0) * 100)}% above what the brand recommends — cheap enough to check, so worth a look.`
   }
   return null
 }
@@ -168,8 +164,6 @@ export interface CatalogueReview {
   rows: ProductPrice[]
   /** Products that lose money. */
   losing: number
-  /** Products priced noticeably above the brand's own RRP. */
-  overRrp: number
   /** Products with no supplier price, so no price at all. */
   uncosted: number
   /** What we keep on an average product, as a share of its price (0–1). */
@@ -187,7 +181,6 @@ export function reviewCatalogue(
   return {
     rows,
     losing: rows.filter((r) => !r.viable).length,
-    overRrp: rows.filter((r) => r.overRrp).length,
     uncosted: rows.filter((r) => r.cost <= 0).length,
     averageMargin: rows.length > 0 ? round4(rows.reduce((s, r) => s + r.marginPct, 0) / rows.length) : 0,
     markupOnCost: config.listPricing.markupOnCost,

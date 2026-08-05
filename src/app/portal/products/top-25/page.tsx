@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ProductEditor } from '@/components/portal/ProductEditor'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
-import type { GoodPriceResult } from '@/lib/pricing/good-price'
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -12,11 +11,14 @@ const AMBER = '#fbbf24'
 const RED = '#f87171'
 const DOT: Record<CheckStatus, string> = { ok: GREEN, warn: AMBER, fail: RED }
 
-type PriceAudit = GoodPriceResult & {
-  title: string
+/** What the roster API reports about a product's economics. */
+type PriceAudit = {
+  keeps: number
+  marginPct: number
+  viable: boolean
   costEstimated: boolean
-  weightEstimated: boolean
-  vsRrpPct: number | null
+  scenariosOk: boolean
+  problems: string[]
 }
 
 interface Slot {
@@ -90,7 +92,7 @@ export default function TopProductsPage() {
 
   const full = data.roster.length >= data.limit
   const problems = data.roster.filter((s) => !s.product || s.readiness?.overall === 'fail').length
-  const unprofitable = data.roster.filter((s) => s.price?.atListPrice && !s.price.atListPrice.profitable).length
+  const unprofitable = data.roster.filter((s) => s.price && !s.price.viable).length
 
   return (
     <div className="space-y-5 pb-10">
@@ -125,7 +127,7 @@ export default function TopProductsPage() {
         <div className="space-y-2">
           {data.roster.map((slot, i) => {
             const p = slot.product
-            const verdict = slot.price?.atListPrice
+            const verdict = slot.price
             return (
               <div key={slot.productId} className="rounded-2xl border p-3.5"
                 style={{ background: 'var(--color-surface)', borderColor: !p ? `color-mix(in srgb, ${RED} 40%, transparent)` : 'var(--color-border)' }}>
@@ -145,14 +147,13 @@ export default function TopProductsPage() {
                           {p.category} · {p.subscriptionEligible ? 'subscribable' : 'one-off'} · {p.servings} servings ·{' '}
                           {money(p.basePrice)}{p.cost != null ? ` · costs ${money(p.cost)}` : ' · no cost set'}
                         </p>
-                        {verdict && slot.price && (
-                          <p className="text-[11px] mt-1" style={{ color: !verdict.profitable ? RED : !verdict.meetsTarget ? AMBER : GREEN }}>
-                            {verdict.profitable
-                              ? `${pct(verdict.marginPct)} margin on the worst case`
-                              : 'Loses money on the worst case'}
-                            {slot.price.goodPrice != null && <>{' · good price '}{money(slot.price.goodPrice)}</>}
-                            {slot.price.costEstimated && ' · cost estimated'}
-                            {slot.price.weightEstimated && ' · weight estimated'}
+                        {verdict && (
+                          <p className="text-[11px] mt-1" style={{ color: !verdict.viable ? RED : !verdict.scenariosOk ? AMBER : GREEN }}>
+                            {verdict.viable
+                              ? `We keep ${money(verdict.keeps)} a month (${pct(verdict.marginPct)})`
+                              : 'Loses money as a stack line'}
+                            {!verdict.scenariosOk && verdict.problems.length > 0 && ` · loses on: ${verdict.problems.join(', ')}`}
+                            {verdict.costEstimated && ' · cost estimated'}
                           </p>
                         )}
                         {slot.readiness && slot.readiness.overall !== 'ok' && (

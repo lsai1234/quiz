@@ -100,6 +100,16 @@ export interface EconomicsInput {
    *  Defaults to applying the rule; pass false to model absorbing it. */
   chargeDelivery?: boolean
   /**
+   * The basket SUBTOTAL that free delivery qualifies on, before any bundle
+   * discount (£ inc VAT). Defaults to `shelfPrice`.
+   *
+   * They differ whenever a discount applies, and the difference matters: a £62
+   * basket earning 8% off pays £57, and qualifying on that would charge it
+   * postage it would have avoided by being cheaper. Both perks qualify on what
+   * the basket is worth — see `qualifiesForFreeDelivery`.
+   */
+  freeDeliveryBasis?: number
+  /**
    * How many products share the parcel this line ships in.
    *
    * PowerBody charge per parcel on its total wholesale value, so a product in a
@@ -130,7 +140,9 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
     config,
   )
   const deliveryCharged =
-    input.chargeDelivery === false ? 0 : customerDeliveryCharge(shelfPrice, config)
+    input.chargeDelivery === false
+      ? 0
+      : customerDeliveryCharge(input.freeDeliveryBasis ?? shelfPrice, config)
   const grossRevenue = round(shelfPrice + deliveryCharged)
   const netRevenue = round(
     revenueFromShelfPrice(shelfPrice, vatRate, config) +

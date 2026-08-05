@@ -141,9 +141,11 @@ export function pricingThresholds(config: PricingConfig = getPricingConfig()): P
   const oneOff = scan((listValue) => {
     const tier = resolveTier(config.bundleTiers, listValue, config.orderMix.itemsPerOrder).pct
     const paid = round(listValue * (1 - tier))
-    // The goods are costed on the LIST value; the discount comes out of us.
+    // The goods are costed on the LIST value; the discount comes out of us. Free
+    // delivery qualifies on that list value too, so a basket cannot lose the
+    // perk by earning a discount.
     return unitEconomics(
-      { shelfPrice: paid, supplierCost: round(listValue * costRatio) },
+      { shelfPrice: paid, supplierCost: round(listValue * costRatio), freeDeliveryBasis: listValue },
       config,
     ).contribution
   })

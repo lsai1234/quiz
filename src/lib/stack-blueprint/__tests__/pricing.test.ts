@@ -376,19 +376,13 @@ describe('consumption protocol & monthly quantities', () => {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a], null, undefined, { introDiscountOverride: TOP_CARD })
-    const rate = levelSubscriptionRate('essentials')
-    const monthly = Math.round(30 * (1 - rate) * 100) / 100
     expect(p.subscriptionIntroDiscountPct).toBe(Math.round(TOP_CARD * 100))
-    // The intro is FLOORED like every other discount — it used to be applied
-    // outside `discountWithFloor`, which let the deepest discount in the
-    // business walk past the guardrail built to bound it.
-    const cost = unitCostOf(a, 30)
-    expect(p.subscriptionFirstMonth).toBe(
-      Math.round(discountWithFloor(30 * (1 - rate), TOP_CARD, cost) * 100) / 100,
-    )
-    expect(p.subscriptionFirstMonth).toBeGreaterThan(Math.round(monthly * (1 - TOP_CARD) * 100) / 100)
+    // The intro offer is NOT capped by the margin floor — see
+    // `introOffer.respectMarginFloor`. The card pays out in full, so the first
+    // month is exactly the ongoing monthly less the card.
+    expect(p.subscriptionFirstMonth).toBe(round2(p.subscriptionTotal * (1 - TOP_CARD)))
     // Commitment = discounted first month + the remaining months at the flat rate.
-    const expectedTerm = Math.round((p.subscriptionFirstMonth + (p.subscriptionMinMonths - 1) * monthly) * 100) / 100
+    const expectedTerm = Math.round((p.subscriptionFirstMonth + (p.subscriptionMinMonths - 1) * p.subscriptionTotal) * 100) / 100
     expect(p.subscriptionMinTermTotal).toBe(expectedTerm)
   })
 })
@@ -540,24 +534,31 @@ describe('pricing rules — subscription profit guardrails', () => {
     expect(p.subscriptionProfitableOnCancel).toBe(false)
   })
 
-  it('will not let the intro discount sell below the margin floor', () => {
-    // The regression this guards. The intro used to be applied to the whole
-    // subscription total AFTER `buildSubscriptionPlan` had floored every line,
-    // so a 90% first month sailed straight past `marginFloorPct` and shipped
-    // goods at a fraction of what they cost. It is now floored per line, like
-    // the subscribe-&-save rate it stacks on.
+  it('floors the intro discount only when asked to', () => {
+    // The intro offer is a rationed acquisition cost the business signs off as
+    // loss-making, so by default it is NOT capped by `marginFloorPct` — capping
+    // it wouldn't prevent the loss, it would advertise a discount and hand back
+    // a smaller one. The switch still works for anyone who wants the guard.
     const a = makeProduct({ id: 'a', stackSlots: ['protein'], servings: 30, basePrice: 20, cost: 10, compareAtPrice: null, variants: oneVariant(20) })
-    const greedy = {
+    const bp = makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }])
+    const base = {
       ...PRICING_CONFIG,
       minSubscriptionMonths: 1,
       introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.9, scratchReveal: { enabled: false, outcomes: [] } },
     }
-    const p = calculatePricing(makeBlueprint([{ selectedProductId: 'a', selectedVariantId: 'v' }]), [a], null, greedy)
-    const floor = round2(10 * (1 + PRICING_CONFIG.marginFloorPct))
-    expect(p.subscriptionFirstMonth).toBe(floor)
-    // Unfloored it would have been £2.61 on £10 of goods.
-    expect(p.subscriptionFirstMonth).toBeGreaterThan(10)
-    expect(p.subscriptionProfitableOnCancel).toBe(true)
+
+    // Off (the shipped setting): the member gets the full 90% off.
+    expect(PRICING_CONFIG.introOffer.respectMarginFloor).toBe(false)
+    const paid = calculatePricing(bp, [a], null, base)
+    expect(paid.subscriptionFirstMonth).toBe(round2(paid.subscriptionTotal * 0.1))
+
+    // On: the floor caps it at cost plus the markup.
+    const floored = calculatePricing(bp, [a], null, {
+      ...base,
+      introOffer: { ...base.introOffer, respectMarginFloor: true },
+    })
+    expect(floored.subscriptionFirstMonth).toBe(round2(10 * (1 + PRICING_CONFIG.marginFloorPct)))
+    expect(floored.subscriptionFirstMonth).toBeGreaterThan(paid.subscriptionFirstMonth)
   })
 
   it('gates subscription on the minimum monthly order value', () => {

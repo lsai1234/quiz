@@ -5,7 +5,7 @@ import { getHubUser } from '@/lib/auth/session'
 import { getSubscription } from '@/lib/db/hub-data'
 import { createOrderFromCheckout, newOrderId } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
-import { priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
 
@@ -107,6 +107,26 @@ export async function POST(req: Request) {
 
   if (orderLines.length === 0) {
     return NextResponse.json({ error: 'None of the basket lines could be matched to a product.' }, { status: 400 })
+  }
+
+  // The minimum order, enforced SERVER-SIDE.
+  //
+  // PowerBody charge us per parcel whatever is in it, so below this there is no
+  // basket we can send without losing money — and a one-off has no renewal
+  // behind it to make it back. The basket UI blocks it too, but a UI check is a
+  // courtesy; this is the one that counts.
+  const config = getPricingConfig()
+  if (config.minOrderValue > 0 && priced.subtotal < config.minOrderValue) {
+    return NextResponse.json(
+      {
+        error: `Orders start at ${formatGBP(config.minOrderValue)} — add ${formatGBP(
+          Math.round((config.minOrderValue - priced.subtotal) * 100) / 100,
+        )} more to check out.`,
+        minimumOrderValue: config.minOrderValue,
+        subtotal: priced.subtotal,
+      },
+      { status: 400 },
+    )
   }
 
   const channel = channelFrom(lines)

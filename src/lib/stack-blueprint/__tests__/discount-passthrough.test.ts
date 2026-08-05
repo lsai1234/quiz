@@ -210,8 +210,11 @@ describe('an empty or single-line order still prices sanely', () => {
   })
 
   it('the shipped tiers still start at the free-delivery threshold', () => {
-    // Both perks should kick in together — no dead zone where delivery is free
-    // but the discount is not.
-    expect(PRICING_CONFIG.bundleTiers[0].minSubtotal).toBe(PRICING_CONFIG.freeDeliveryThreshold)
+    // The discount must not start ABOVE the free-delivery line — that would
+    // leave a band where postage is free but the basket has earned nothing,
+    // which reads as the offer going backwards. Starting BELOW is fine and is
+    // what we do now: 8% at £50, free delivery at £60, so growing the basket
+    // pays twice rather than once.
+    expect(PRICING_CONFIG.bundleTiers[0].minSubtotal).toBeLessThanOrEqual(PRICING_CONFIG.freeDeliveryThreshold)
   })
 })

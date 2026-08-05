@@ -62,32 +62,29 @@ describe('the discount ladder', () => {
     expect(check.deepestPossibleDiscount).toBeCloseTo(expected, 4)
   })
 
-  it('says out loud when the top card promises more than the floor allows', () => {
-    // The biggest bundle plus the best scratch card asks for more off than a
-    // price set at 2× cost can carry, so the margin floor clips it — and the
-    // member sees a smaller discount than the one they scratched. A promise we
-    // don't keep is worth surfacing rather than averaging away.
+  it('lets the intro offer pay out in full, loss and all', () => {
+    // The top card asks for more off than a 2× price can carry inside the margin
+    // floor — and that is fine, because the floor does not apply to the intro
+    // offer. The deep card is a rationed, deliberate loss; clipping it would
+    // advertise 40% and hand back less.
     const check = checkLadder(AVG, cfg())
-    expect(check.clipped).not.toBeNull()
-    expect(check.clipped!.advertised).toBeGreaterThan(check.clipped!.delivered)
-    expect(check.coherent).toBe(false)
-    expect(check.summary).toMatch(/can only carry/)
-    // Every rung is still individually healthy — this is about the combination.
-    for (const r of check.rungs) expect(r.warning).toBeNull()
+    expect(PRICING_CONFIG.introOffer.respectMarginFloor).toBe(false)
+    expect(check.deepestOffered).toBeGreaterThan(check.deepestPossibleDiscount)
+    expect(check.clipped).toBeNull()
+    expect(check.coherent).toBe(true)
   })
 
-  it('is clean once the top card fits inside the floor', () => {
-    const fits = checkLadder(
+  it('flags a clip only when the floor really does apply', () => {
+    const floored = checkLadder(
       AVG,
-      cfg({
-        introOffer: {
-          ...PRICING_CONFIG.introOffer,
-          scratchReveal: { enabled: true, outcomes: [{ discount: 0.25, weight: 1 }, { discount: 0.2, weight: 8 }, { discount: 0.1, weight: 12 }] },
-        },
-      }),
+      cfg({ introOffer: { ...PRICING_CONFIG.introOffer, respectMarginFloor: true } }),
     )
-    expect(fits.clipped).toBeNull()
-    expect(fits.coherent).toBe(true)
+    expect(floored.clipped).not.toBeNull()
+    expect(floored.clipped!.advertised).toBeGreaterThan(floored.clipped!.delivered)
+    expect(floored.coherent).toBe(false)
+    expect(floored.summary).toMatch(/can only carry/)
+    // Every rung is still individually healthy — this is about the combination.
+    for (const r of floored.rungs) expect(r.warning).toBeNull()
   })
 
   it('moves the ceiling when the markup moves', () => {

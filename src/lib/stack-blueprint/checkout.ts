@@ -12,7 +12,15 @@
 import type { StackBlueprint, StackSlotEntry } from './types'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { QuizAnswers } from '@/lib/types'
-import { buildSubscriptionPlan, calculatePricing, type SubscriptionPlanOptions } from './pricing'
+import {
+  buildSubscriptionPlan,
+  calculatePricing,
+  formatGBP,
+  getPricingConfig,
+  priceOneOffLines,
+  unitCostOf,
+  type SubscriptionPlanOptions,
+} from './pricing'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +39,15 @@ export type ValidationError =
   | { type: 'no-shopify-id'; slotId: string; slotTitle: string; variantTitle: string }
   | { type: 'unavailable'; slotId: string; slotTitle: string; variantTitle: string }
   | { type: 'no-selling-plan'; slotId: string; slotTitle: string }
+  /**
+   * The basket is too small to pay for its own parcel.
+   *
+   * PowerBody charge us per parcel regardless of what is in it, so below
+   * `minOrderValue` there is no basket we can send without losing money — and a
+   * one-off order has no renewal behind it to make that back. This is the only
+   * validation error that is about money rather than about data.
+   */
+  | { type: 'below-minimum'; subtotal: number; minimum: number; shortfall: number }
 
 export type CheckoutValidation =
   | { ok: true; lines: CheckoutLineItem[] }
@@ -169,6 +186,30 @@ export function validateCheckout(
     })
   }
 
+  // Priced with the same function the cart and the display use, so the number
+  // the customer is told they need matches the one they are charged.
+  const subtotal = priceOneOffLines(
+    blueprint.slots
+      .map((slot) => {
+        const product = catalogue.find((p) => p.id === slot.selectedProductId)
+        if (!product) return null
+        const variant = resolveVariant(slot, product)
+        const price = variant?.price ?? product.basePrice
+        return { price, cost: unitCostOf(product, price) }
+      })
+      .filter((l): l is { price: number; cost: number } => l != null),
+  ).subtotal
+
+  const minimum = getPricingConfig().minOrderValue
+  if (subtotal > 0 && minimum > 0 && subtotal < minimum) {
+    errors.push({
+      type: 'below-minimum',
+      subtotal,
+      minimum,
+      shortfall: Math.round((minimum - subtotal) * 100) / 100,
+    })
+  }
+
   if (errors.length > 0) return { ok: false, errors }
   return { ok: true, lines }
 }
@@ -248,5 +289,7 @@ export function validationErrorMessage(err: ValidationError): string {
       return `${err.slotTitle} isn't connected to the store yet. Try refreshing or contact support.`
     case 'no-selling-plan':
       return `${err.slotTitle} doesn't have a subscription plan set up yet. Try refreshing or contact support.`
+    case 'below-minimum':
+      return `Orders start at ${formatGBP(err.minimum)} — add ${formatGBP(err.shortfall)} more to check out.`
   }
 }

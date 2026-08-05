@@ -3,7 +3,8 @@ import { isPortalAuthed } from '@/lib/portal/guard'
 import { getTopProductIds, setTopProductIds, syncPortalRuntime } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { productReadiness } from '@/lib/portal/readiness'
-import { auditProductPrice } from '@/lib/pricing/good-price'
+import { priceProduct } from '@/lib/pricing/list-price'
+import { checkScenarios } from '@/lib/pricing/scenarios'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { TOP_PRODUCT_LIMIT, reorder, resolveRoster, normaliseRoster } from '@/lib/portal/top-products'
 
@@ -35,7 +36,37 @@ export async function GET() {
     productId: slot.productId,
     product: slot.product,
     readiness: slot.product ? productReadiness(slot.product, { live }) : null,
-    price: slot.product ? auditProductPrice(slot.product, config) : null,
+    // What the product makes, and whether every route a customer can take pays.
+    // Priced as one line of a quiz stack, because that is what a roster slot is.
+    price: slot.product
+      ? (() => {
+          const priced = priceProduct(
+            {
+              title: slot.product.title,
+              cost: slot.product.cost ?? null,
+              servings: slot.product.servings,
+              currentPrice: slot.product.basePrice,
+            },
+            config,
+          )
+          const check = checkScenarios(
+            {
+              listPrice: slot.product.basePrice,
+              supplierCost: slot.product.cost ?? slot.product.basePrice * config.defaultCostRatio,
+              sharedParcelItems: config.orderMix.itemsPerOrder,
+            },
+            config,
+          )
+          return {
+            keeps: priced.keeps,
+            marginPct: priced.marginPct,
+            viable: priced.viable,
+            costEstimated: slot.product.cost == null,
+            scenariosOk: check.ok,
+            problems: check.problems.map((s) => s.label),
+          }
+        })()
+      : null,
   }))
 
   return NextResponse.json({

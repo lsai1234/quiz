@@ -83,8 +83,11 @@ export function PlanReceipt({
   const hasOneOffSaving = oneOffSaving > 0.01
 
   const activeTotal = isSub ? subscriptionTotal : oneOffTotal
-  const freeDelivery = qualifiesForFreeDelivery(activeTotal, config)
-  const freeDeliveryRemaining = Math.max(0, Math.round((config.freeDeliveryThreshold - activeTotal) * 100) / 100)
+  // Free delivery qualifies on the SUBTOTAL, before the bundle discount — so a
+  // basket can't lose the perk by earning a discount. See qualifiesForFreeDelivery.
+  const deliveryBasis = isSub ? subscriptionTotal : oneOffSubtotal
+  const freeDelivery = qualifiesForFreeDelivery(deliveryBasis, config)
+  const freeDeliveryRemaining = Math.max(0, Math.round((config.freeDeliveryThreshold - deliveryBasis) * 100) / 100)
 
   const subTabLabel = canSubscribe
     ? `${formatGBP(subscriptionTotal)}/mo`

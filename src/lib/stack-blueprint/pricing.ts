@@ -89,8 +89,11 @@ export const PRICING_CONFIG = {
    * beats it by a widening margin (+4.5 / +7 / +12 points). See
    * docs/PRICING_STRATEGY.md §7.1.
    *
-   * Aligned to `freeDeliveryThreshold` so the discount and free delivery arrive
-   * together — no dead zone where one perk applies and the other doesn't.
+   * Set BELOW `freeDeliveryThreshold` on purpose, so growing a basket pays
+   * twice: 8% off at £50, then free delivery at £60. What must never happen is
+   * the discount starting ABOVE the free-delivery line, which would leave a band
+   * where postage is free but the basket has earned nothing — an offer that
+   * appears to go backwards.
    */
   bundleTiers: [
     { id: 'bundle-50', label: '£50+ bundle', minSubtotal: 50, discountPct: 0.08 },
@@ -146,11 +149,22 @@ export const PRICING_CONFIG = {
    *
    * A one-off order has nothing behind it — no renewal, no second chance — so if
    * the checkout lets someone buy a £6 tub we simply lose the difference between
-   * what they pay and what the parcel costs. Below roughly £12 no order can
-   * carry a £7.87 parcel, whatever it contains. Cheap products aren't banned;
-   * they just can't be the whole order.
+   * what they pay and what the parcel costs. The measured break-even is £11.50;
+   * £15 is that with a little headroom. Cheap products aren't banned — they just
+   * can't be the WHOLE order (see `minQuizProductPrice`).
    */
-  minOrderValue: 12,
+  minOrderValue: 15,
+
+  /**
+   * Cheapest a product may be and still be offered as a stack line in the quiz
+   * (£ inc VAT).
+   *
+   * Sharing a parcel three ways brings a product's postage share down to about
+   * £2.60, and below roughly £8 of shelf price there isn't enough margin to
+   * cover even that. Such products are still perfectly sellable — as an add-on
+   * to a box already going out — they just can't carry a slot of their own.
+   */
+  minQuizProductPrice: 8,
 
   // ── Subscription cadence / commitment ──
   /** Products with more servings than this are candidates for a monthly refill SKU. */
@@ -187,7 +201,7 @@ export const PRICING_CONFIG = {
    * discount we don't qualify for. Crossing them is how a margin model quietly
    * starts believing postage is free.
    */
-  freeDeliveryThreshold: 50,
+  freeDeliveryThreshold: 60,
 
   /**
    * VAT. The single biggest thing a UK retail margin gets wrong.
@@ -433,11 +447,9 @@ export const PRICING_CONFIG = {
    * puts us within a few percent of the market anyway — we just get there by a
    * rule we can explain in a sentence instead of by inheriting theirs.
    *
-   * RRP DOESN'T DISAPPEAR — IT BECOMES THE CHECK. `rrpToleranceAbovePct` below
-   * flags any product where our price has drifted far enough above the
-   * supplier's recommendation that a customer would notice. A check that can
-   * only ever raise a flag is much safer than a driver that silently sets every
-   * price in the shop.
+   * The supplier's RRP plays no part at all — it is stored as a was-price and
+   * nothing reads it. It was briefly kept as a cross-check, but a flag nobody
+   * acts on is just another number on a screen.
    */
   listPricing: {
     /**
@@ -456,12 +468,6 @@ export const PRICING_CONFIG = {
      * markup.
      */
     roundTo99: true,
-    /**
-     * Raise a flag when our price sits more than this above the supplier's RRP
-     * (0–1). Not a cap and not a price rule — purely a "someone might notice"
-     * warning on the products tab.
-     */
-    rrpToleranceAbovePct: 0.15,
   },
 
   /**
@@ -474,16 +480,6 @@ export const PRICING_CONFIG = {
    * See `lib/pricing/good-price.ts`.
    */
   goodPricing: {
-    /**
-     * Contribution margin we want on that worst case, as a share of NET (ex-VAT)
-     * revenue, 0–1.
-     *
-     * NOTE this is a MARGIN (contribution ÷ net revenue), not `marginFloorPct`,
-     * which is a markup over cost used to floor the discount engine. And it is
-     * measured after VAT, delivery, card fees and returns — so 35% here is a far
-     * stronger number than 35% of a gross price would be.
-     */
-    targetMarginPct: 0.35,
     /**
      * Months of subscription revenue to judge a price over. null = how long a
      * customer actually stays (`orderMix.averageRetentionMonths`).
@@ -551,6 +547,25 @@ export const PRICING_CONFIG = {
      * that outcome to everyone; at or below the bottom one, likewise.
      */
     effectiveFirstMonthDiscount: 0.15,
+    /**
+     * Whether the first-month discount is capped by `marginFloorPct`.
+     *
+     * FALSE, deliberately. The floor exists to stop the ONGOING price drifting
+     * below what a product costs; the intro offer is a different animal — a
+     * rationed, one-month acquisition cost the business has explicitly signed
+     * off as loss-making on the rare deep cards.
+     *
+     * Leaving the floor switched on here doesn't prevent the loss, it prevents
+     * the OFFER: a 40% card on the biggest bundle asks for 52% off, the floor
+     * allows 43%, and the member sees a smaller discount than the one they just
+     * scratched. Advertising a number and quietly delivering a smaller one is
+     * worse than either paying it or not offering it.
+     *
+     * What still has to hold is the WHOLE SUBSCRIPTION — see
+     * `lib/pricing/scenarios.ts`, where month one is promotional and the
+     * lifetime is the test.
+     */
+    respectMarginFloor: false,
     /**
      * Scratch-to-reveal intro: instead of one fixed first-month discount, the
      * member scratches a card to reveal theirs, drawn at random from these
@@ -1154,9 +1169,21 @@ export function levelForStackPreference(pref: StackPreference | null | undefined
   return pref === 'simple' ? 'essentials' : pref === 'complete' ? 'complete' : 'performance'
 }
 
-/** Whether an order total qualifies for free delivery (threshold > 0 and met). */
-export function qualifiesForFreeDelivery(total: number, config = getPricingConfig()): boolean {
-  return config.freeDeliveryThreshold > 0 && total >= config.freeDeliveryThreshold
+/**
+ * Whether an order qualifies for free delivery.
+ *
+ * **Pass the SUBTOTAL, before any bundle discount.** Qualifying on the
+ * discounted total creates a trap the customer cannot make sense of: a £62
+ * basket earns 8% off, drops to £57, and is then charged postage it would have
+ * avoided by being *cheaper*. From their side they spent over the threshold,
+ * were promised free delivery, and paid it anyway.
+ *
+ * The bundle tier already qualifies on the undiscounted subtotal
+ * (`priceOneOffLines`), so this puts both perks on the same basis: what the
+ * basket is worth, not what it costs after we have discounted it.
+ */
+export function qualifiesForFreeDelivery(subtotal: number, config = getPricingConfig()): boolean {
+  return config.freeDeliveryThreshold > 0 && subtotal >= config.freeDeliveryThreshold
 }
 
 /** The fixed subscribe-&-save rate for a bundle/level (before any tier upgrade). */
@@ -1450,11 +1477,16 @@ export function calculatePricing(
       // `unitsPerShipment` is always ≥ 1, so this recovers the subscribe-&-save
       // unit price without dividing by a fractional monthly quantity.
       const subscribedUnit = line.pricePerDelivery / line.unitsPerShipment
-      // Rounded PER LINE, exactly as `monthlyPrice` is, so that a first month
-      // carrying no intro discount comes to the same total as every month after
-      // it. Summing unrounded and rounding once lands a penny out, and "£53.24
-      // now, £53.25 thereafter" is the kind of detail that costs a checkout.
-      return s + round(line.monthlyUnits * discountWithFloor(subscribedUnit, introDiscount, line.unitCost, config))
+      // The intro offer is allowed below the margin floor by default — see
+      // `introOffer.respectMarginFloor`. Rounded PER LINE, exactly as
+      // `monthlyPrice` is, so a first month carrying no intro discount comes to
+      // the same total as every month after it; summing unrounded and rounding
+      // once lands a penny out, and "£53.24 now, £53.25 thereafter" is the kind
+      // of detail that costs a checkout.
+      const introUnit = config.introOffer.respectMarginFloor
+        ? discountWithFloor(subscribedUnit, introDiscount, line.unitCost, config)
+        : subscribedUnit * (1 - introDiscount)
+      return s + round(line.monthlyUnits * introUnit)
     }, 0),
   )
   const subscriptionMinTermTotal = round(
