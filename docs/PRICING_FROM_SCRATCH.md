@@ -10,13 +10,13 @@ end.
 
 ## The one thing to get straight first
 
-There are **two completely different £50s** in this business, and mixing them up
+Two thresholds, measured on two completely different things, and mixing them up
 is what went wrong in my last few write-ups.
 
 | | Measured on | Threshold |
 | --- | --- | --- |
 | **What PowerBody charge us** | what **we spend with them** in one parcel | £50 / £99 |
-| **What we charge the customer** | what **the customer spends** | £50 |
+| **What we charge the customer** | what **the customer spends** | £60 |
 
 Since we price at ×2, our spend is roughly **half** the retail price. So
 PowerBody's £50 and £99 bands land at **£100 and £198 of retail**, not £50 and
@@ -55,29 +55,32 @@ Two consequences, and they drive everything:
 
 | Their basket | They pay for delivery |
 | --- | --- |
-| Under £50 | **£3.95** |
-| £50 or more | **Free** |
+| Under £60 | **£3.95** |
+| £60 or more | **Free** |
+
+Qualified on the **subtotal, before any discount** — so a basket can't lose the
+perk by earning one. (It used to qualify on the discounted total: a £62 basket
+took 8% off, dropped to £57, and was then charged postage it would have avoided
+by being cheaper.)
 
 ### So what does delivery actually cost us?
 
 | Their basket | We collect | We pay | **Net** |
 | --- | --- | --- | --- |
-| Under £50 | £3.95 | £7.80 | **−£3.85** |
-| **£50 – £100** | **£0** | **£7.80** | **−£7.80** ← worst |
+| Under £60 | £3.95 | £7.80 | **−£3.85** |
+| **£60 – £100** | **£0** | **£7.80** | **−£7.80** ← worst |
 | £100 – £198 | £0 | £6.60 | **−£6.60** |
 | Over £198 | £0 | £0 | **£0** |
 
-> ### The £50–£100 band is the expensive one
+> ### The £60–£100 band is the expensive one
 >
-> Our free-delivery promise starts at **£50**, but our own cost doesn't drop
+> Our free-delivery promise starts at **£60**, but our own cost doesn't drop
 > until **£100**. So there's a band where we've stopped collecting anything and
-> are still paying the full £7.80 — the worst of both. And it's a band a lot of
-> orders will sit in.
+> are still paying the full £7.80.
 >
-> Moving our free-delivery line to £100 would line the two up. Across a spread of
-> basket sizes it's worth about **£1.17 more per order** (£30.62 → £31.79). Not
-> huge, but it's free money for a promise most customers wouldn't miss — a £75
-> basket paying £3.95 postage is a normal shopping experience.
+> It stays profitable — a £70 basket still keeps £13.12 — which is why £60 is
+> where the line sits. Pushing it to £100 would be worth about £1.17 an order,
+> and that isn't worth a worse-sounding offer.
 
 ---
 
@@ -103,7 +106,7 @@ all orders, roughly **30p each**.
 | --- | --- | --- | --- | --- | --- | --- |
 | £20 | £3.95 | £12.00 | £7.80 | £0.56 | £0.31 | **£3.28** |
 | £40 | £3.95 | £24.00 | £7.80 | £0.86 | £0.31 | **£10.98** |
-| £62 | £0 | £37.20 | £7.80 | £1.13 | £0.31 | **£15.56** |
+| £62 | £0 *(over £60)* | £37.20 | £7.80 | £1.13 | £0.31 | **£15.56** |
 | £120 | £0 | £72.00 | £6.60 | £2.00 | £0.26 | **£39.14** |
 
 ---
@@ -115,9 +118,9 @@ all orders, roughly **30p each**.
 | **Bundle** | 8% off | One-off orders over £50 |
 | **Subscribe & save** | 13% / 15% / 20% | By stack size (3 / 5 / 7 products) |
 | **First month** | Scratch card: 40% (1 in 21), 20% (1 in 3), 10% (1 in 2) — averages **15%** | New subscribers |
-| **Free delivery** | Worth £3.95 | Orders over £50 |
+| **Free delivery** | Worth £3.95 | Orders over £60 |
 | **Partner code** | At least 20% off month one | Influencer referrals |
-| **The floor** | Never below **cost + 15%**, whatever the discounts add up to | Everything |
+| **The floor** | Never below **cost + 15%** | The ongoing price — NOT the first-month card, which is allowed to lose |
 
 The rule tying them together: **subscribing always beats buying once**, by 5, 7
 and 12 points as the stack grows.
@@ -177,10 +180,10 @@ as standalone lines.
 
 | | Cheapest that works |
 | --- | --- |
-| A product sold **on its own** (also: the smallest one-off order) | **£11.50** |
+| A product sold **on its own** (also: the smallest one-off order) | **£12.00** |
 | A product as **one line in a 3-item box** | **£8.00** |
-| A **monthly plan**, renewals only | **£18.80/mo** |
-| A **monthly plan** across its whole life, including the scratch card | **£21.20/mo** |
+| A **monthly plan**, renewals only | **£19.20/mo** |
+| A **monthly plan** across its whole life, including the scratch card | **£21.60/mo** |
 
 The last two are gentler on purpose. A one-off has nothing behind it, so it has
 to pay every time. A subscription is judged over its life, because the top
