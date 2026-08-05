@@ -1,117 +1,130 @@
 # Pricing, from scratch
 
-Everything we pay, everything we charge, and a simple starting point. No jargon,
-no models — just the numbers and what they mean.
+Everything we pay, everything we charge, and a simple starting point.
+
+All figures are **UK mainland (Zone 1)** and assume prices at **double what we
+pay**. The Highlands & Islands cost a bit more and are handled separately at the
+end.
 
 ---
 
-## Part 1 — What an order actually costs us
+## The one thing to get straight first
 
-Four things. That's all there is.
+There are **two completely different £50s** in this business, and mixing them up
+is what went wrong in my last few write-ups.
 
-### 1. The goods
-
-PowerBody charge us a wholesale price, and they add 20% VAT on top. **We can't
-claim that VAT back** (we're not VAT-registered), so it's a real cost.
-
-> A product they charge us **£10** for actually costs us **£12**.
-
-### 2. The postage
-
-PowerBody charge us **once per parcel**, based on what we've spent with them in
-that box — not on weight, not on what the customer pays.
-
-| What we spend with them, in one box | They charge us | Real cost to us (+VAT) |
+| | Measured on | Threshold |
 | --- | --- | --- |
-| Up to £50 | £6.50 | **£7.87** |
-| £50 – £99 | £5.50 | **£6.60** |
-| Over £99 | free | **£0** |
+| **What PowerBody charge us** | what **we spend with them** in one parcel | £50 / £99 |
+| **What we charge the customer** | what **the customer spends** | £50 |
 
-Two things follow from this, and they drive nearly everything:
-
-- **Postage doesn't care how expensive the product is.** A £3 tub and a £40 tub
-  cost the same to send. That's why cheap products are hard.
-- **Three products in one box cost the same to send as one.** That's why the
-  quiz selling a stack is worth so much.
-
-### 3. Card fees
-
-Stripe take **1.5% + 20p** of whatever the customer pays. On a £50 order that's
-95p. No VAT to reclaim on it.
-
-### 4. Returns
-
-About **2 in 100** orders come back. We get the goods refunded but never the
-postage — out and back. Spread across all orders that's roughly **30p an order**.
-
-### Put together
-
-| A customer spends | They also pay postage | Goods cost us | Postage costs us | Card | Returns | **We keep** |
-| --- | --- | --- | --- | --- | --- | --- |
-| £20 (one item) | £3.95 | £12.00 | £7.87 | £0.56 | £0.31 | **£3.21** |
-| £40 (one item) | £3.95 | £24.00 | £7.87 | £0.86 | £0.31 | **£10.91** |
-| £80 (one item) | £0 *(over £50)* | £48.00 | £7.87 | £1.40 | £0.31 | **£22.42** |
-
-Note the middle column: the customer stops paying postage at £50, but our cost
-doesn't change — a £40 wholesale spend is still in PowerBody's cheapest band.
+Since we price at ×2, our spend is roughly **half** the retail price. So
+PowerBody's £50 and £99 bands land at **£100 and £198 of retail**, not £50 and
+£99. Everything below follows from that.
 
 ---
 
-## Part 2 — Shipping: both sides of it
+## Part 1 — What PowerBody charge us to ship
 
-These are two completely separate numbers and mixing them up is the single
-easiest way to get pricing wrong.
+Their Zone 1 standard delivery, banded on our order amount:
 
-### What we pay PowerBody
+| What we spend with them | They charge us | Inc. VAT we can't reclaim |
+| --- | --- | --- |
+| Up to £50 | £6.50 | **£7.80** |
+| Up to £99 | £5.50 | **£6.60** |
+| Over £99 | **free** | **£0** |
 
-Banded on **our wholesale spend in the box** — the table above. £7.87 for a small
-parcel, £6.60 for a medium one, free once we've spent £99 with them.
+### The same thing, in retail money
 
-### What we charge the customer
+| The customer's basket | We spend | We pay to ship |
+| --- | --- | --- |
+| Under £100 | under £50 | **£7.80** |
+| £100 – £198 | £50 – £99 | **£6.60** |
+| Over £198 | over £99 | **£0** |
 
-| Their order | They pay for delivery |
+Two consequences, and they drive everything:
+
+- **Postage doesn't care what the product costs.** A £3 tub and a £40 tub cost
+  the same to send. That's why cheap products are hard.
+- **Free shipping needs a ~£200 basket.** Not £99. It's reachable on a quarterly
+  stack shipment; it is essentially never reachable monthly.
+
+---
+
+## Part 2 — What we charge the customer
+
+| Their basket | They pay for delivery |
 | --- | --- |
 | Under £50 | **£3.95** |
 | £50 or more | **Free** |
 
-### So what does delivery really cost us?
+### So what does delivery actually cost us?
 
-| Their order | We collect | We pay | **Net** |
+| Their basket | We collect | We pay | **Net** |
 | --- | --- | --- | --- |
-| Under £50 | £3.95 | £7.87 | **−£3.92** |
-| £50 – ~£100 | £0 | £6.60 | **−£6.60** |
-| Big enough that we spend £99+ with PowerBody | £0 | £0 | **£0** |
+| Under £50 | £3.95 | £7.80 | **−£3.85** |
+| **£50 – £100** | **£0** | **£7.80** | **−£7.80** ← worst |
+| £100 – £198 | £0 | £6.60 | **−£6.60** |
+| Over £198 | £0 | £0 | **£0** |
 
-**Delivery always costs us something except on very big orders.** The £3.95 we
-charge covers about half of a small parcel. That's a deliberate choice — it keeps
-the price attractive — but it's worth knowing it isn't covering its cost.
-
-> ⚠️ **I got this wrong last time.** Some of the numbers I gave you assumed we
-> absorbed the postage even on orders under £50, where we actually charge £3.95.
-> That made small subscriptions look far worse than they are. Corrected figures
-> are in Part 5.
+> ### The £50–£100 band is the expensive one
+>
+> Our free-delivery promise starts at **£50**, but our own cost doesn't drop
+> until **£100**. So there's a band where we've stopped collecting anything and
+> are still paying the full £7.80 — the worst of both. And it's a band a lot of
+> orders will sit in.
+>
+> Moving our free-delivery line to £100 would line the two up. Across a spread of
+> basket sizes it's worth about **£1.17 more per order** (£30.62 → £31.79). Not
+> huge, but it's free money for a promise most customers wouldn't miss — a £75
+> basket paying £3.95 postage is a normal shopping experience.
 
 ---
 
-## Part 3 — Every discount we currently give
+## Part 3 — The other three costs
+
+### Goods
+
+PowerBody's wholesale price **plus 20% VAT we can't reclaim** (we're not
+registered). Their £10 costs us £12.
+
+### Card fees
+
+Stripe: **1.5% + 20p** of whatever the customer pays.
+
+### Returns
+
+About **2 in 100** orders come back. Goods refunded, postage never. Spread across
+all orders, roughly **30p each**.
+
+### Put together
+
+| Customer pays | They add postage | Goods | Postage | Card | Returns | **We keep** |
+| --- | --- | --- | --- | --- | --- | --- |
+| £20 | £3.95 | £12.00 | £7.80 | £0.56 | £0.31 | **£3.28** |
+| £40 | £3.95 | £24.00 | £7.80 | £0.86 | £0.31 | **£10.98** |
+| £62 | £0 | £37.20 | £7.80 | £1.13 | £0.31 | **£15.56** |
+| £120 | £0 | £72.00 | £6.60 | £2.00 | £0.26 | **£39.14** |
+
+---
+
+## Part 4 — Every discount we give
 
 | Discount | What it is | Applies to |
 | --- | --- | --- |
-| **Bundle** | 8% off | Any one-off order over £50 |
+| **Bundle** | 8% off | One-off orders over £50 |
 | **Subscribe & save** | 13% / 15% / 20% | By stack size (3 / 5 / 7 products) |
-| **First month** | Scratch card: 40% (1 in 21), 20% (1 in 3), 10% (1 in 2) — averages **15%** | New subscribers only |
+| **First month** | Scratch card: 40% (1 in 21), 20% (1 in 3), 10% (1 in 2) — averages **15%** | New subscribers |
 | **Free delivery** | Worth £3.95 | Orders over £50 |
-| **Partner code** | Guarantees at least 20% off month one | When someone uses an influencer's link |
-| **The floor** | Nothing is ever sold below **cost + 15%**, whatever the discounts add up to | Everything |
+| **Partner code** | At least 20% off month one | Influencer referrals |
+| **The floor** | Never below **cost + 15%**, whatever the discounts add up to | Everything |
 
-The one rule tying these together: **subscribing always beats buying once**, and
-by more as the stack gets bigger — 5, 7 and 12 points respectively.
+The rule tying them together: **subscribing always beats buying once**, by 5, 7
+and 12 points as the stack grows.
 
 ---
 
-## Part 4 — Bundles
-
-The quiz builds one of three stacks:
+## Part 5 — Bundles
 
 | Stack | Products | Subscribe & save |
 | --- | --- | --- |
@@ -119,127 +132,101 @@ The quiz builds one of three stacks:
 | Performance | 5 | 15% |
 | Complete | 7 | 20% |
 
-Plus a **budget cap** — if someone says "under £50" the quiz won't build them a
-stack that costs more than £50.
+Plus a **budget cap** — say "under £50" and the quiz won't build past £50.
 
-The important bit is the postage. Everything in a stack ships in **one box**, so
-a 3-item stack pays one £7.87 postage, not three. That's the whole reason the
-quiz model works and single-product sales struggle.
+Everything ships in **one box**, so a 3-item stack pays one postage, not three.
+That's the whole reason the quiz model works.
 
 ---
 
-## Part 5 — Should pricing be ×2, or "×something + a fixed amount"?
+## Part 6 — Should pricing be ×2, or "×something + a fixed amount"?
 
-This is the right question, because **our costs are two different shapes**:
+Our costs are two different shapes: **goods scale** with price, **postage
+doesn't**. A proportional markup only earns more on dearer products while
+postage stays flat — so cheap products can't cover it. A fixed adder fixes
+exactly that. Here's what each does:
 
-- The **goods** scale with price (a dearer product costs us more).
-- The **postage** doesn't (£7.87 whatever's in the box).
-
-A purely proportional markup only earns more on dearer products, while the
-postage stays flat — so cheap products can't cover it. A fixed adder would fix
-exactly that. Here's what each actually does:
-
-| We pay | ×2 → price | we keep | ×1.7 + £4 → price | we keep | Typical brand RRP | ×1.7+£4 vs RRP |
+| We pay | ×2 | we keep | ×1.7 + £4 | we keep | Brand RRP | Adder vs RRP |
 | --- | --- | --- | --- | --- | --- | --- |
-| £3 | £6.00 | **−£2.18** | £9.10 | +£0.87 | £5.82 | **+56%** |
-| £4 | £8.00 | **−£1.41** | £10.80 | +£1.35 | £7.76 | **+39%** |
-| £5 | £10.00 | **−£0.64** | £12.50 | +£1.82 | £9.70 | **+29%** |
-| £8 | £16.00 | +£1.67 | £17.60 | +£3.25 | £15.52 | +13% |
-| £12 | £24.00 | +£4.75 | £24.40 | +£5.14 | £23.28 | +5% |
-| £20 | £40.00 | +£10.91 | £38.00 | +£8.94 | £38.80 | −2% |
-| £31 | £62.00 | +£15.49 | £56.70 | +£10.27 | £60.14 | −6% |
-| £40 | £80.00 | +£22.42 | £72.00 | +£14.54 | £77.60 | −7% |
+| £3 | £6.00 | **−£2.11** | £9.10 | +£0.94 | £5.82 | **+56%** |
+| £4 | £8.00 | **−£1.34** | £10.80 | +£1.42 | £7.76 | **+39%** |
+| £5 | £10.00 | **−£0.57** | £12.50 | +£1.89 | £9.70 | **+29%** |
+| £8 | £16.00 | +£1.74 | £17.60 | +£3.32 | £15.52 | +13% |
+| £12 | £24.00 | +£4.82 | £24.40 | +£5.21 | £23.28 | +5% |
+| £20 | £40.00 | +£10.98 | £38.00 | +£9.01 | £38.80 | −2% |
+| £31 | £62.00 | +£15.56 | £56.70 | +£10.34 | £60.14 | −6% |
+| £40 | £80.00 | +£22.49 | £72.00 | +£14.61 | £77.60 | −7% |
 
-### The answer: stay proportional
+### Stay proportional
 
 The fixed adder **works on paper and fails in a shop.** It makes every product
-profitable — but it lands cheap products **29–56% above what the brand itself
-recommends**, which nobody will pay, while simultaneously giving away margin on
-the expensive products where we didn't need to.
+profitable — but lands cheap ones **29–56% above what the brand itself
+recommends**, while giving away margin on the dear ones where we didn't need to.
+It's biggest as a percentage exactly where the market is tightest. Nobody pays
+£9.10 for a £6 tub.
 
-That's the trap: the fixed adder is biggest as a *percentage* exactly where the
-market is tightest. A £3 tub has a £6-ish market price. You cannot charge £9.10
-for it, whatever the spreadsheet says.
+> **A cheap product cannot carry a £7.80 parcel at any price the market accepts.
+> No pricing formula fixes that — only not shipping it alone does.**
 
-**So the real conclusion isn't about the formula at all:**
+Which is your instinct: a minimum order, and keeping tiny items out of the quiz
+as standalone lines.
 
-> A cheap product cannot carry a £7.87 parcel at any price the market accepts.
-> No pricing rule fixes that. Only not shipping it alone does.
+---
 
-Which is exactly your instinct — a minimum order, and keeping tiny items out of
-the quiz as standalone lines.
-
-### The two floors, at ×2
+## Part 7 — The floors
 
 | | Cheapest that works |
 | --- | --- |
-| A product sold **on its own** | **£12** retail (£6 wholesale) |
-| A product as **one line in a 3-item stack** | **£8** retail (£4 wholesale) |
+| A product sold **on its own** (also: the smallest one-off order) | **£11.50** |
+| A product as **one line in a 3-item box** | **£8.00** |
+| A **monthly plan**, renewals only | **£18.80/mo** |
+| A **monthly plan** across its whole life, including the scratch card | **£21.20/mo** |
+
+The last two are gentler on purpose. A one-off has nothing behind it, so it has
+to pay every time. A subscription is judged over its life, because the top
+scratch card is *supposed* to lose on month one — that's rationed marketing.
 
 ---
 
-## Part 6 — A simple starting point
+## Part 8 — A simple starting point
 
-Six rules. That's the whole model.
+Six rules.
 
-### 1. Price = what we pay × 2, rounded down to .99
+1. **Price = what we pay × 2**, rounded down to .99.
+2. **Minimum order £12.** Below that no order carries its own parcel. Enforced at
+   checkout, not just advised.
+3. **Nothing under £8 in the quiz as a standalone line.** Cheaper products are
+   add-ons to a box already going out, never the whole order.
+4. **Delivery: £3.95 under £50, free at £50+** — *or move the free line to £100*
+   (see Part 2; worth ~£1.17 an order and closes the worst band).
+5. **Discounts unchanged:** 8% one-off, 13/15/20 subscribe, first-month card
+   averaging 15%. Protect the rule that subscribing always visibly wins.
+6. **Minimum subscription £25/month.** Comfortably above the £21.20 floor.
 
-A £10 product sells at £19.99. Nothing else feeds into it — not the brand's RRP,
-not a target margin. If we later want to be dearer or cheaper, we change one
-number.
+### What I'd drop
 
-### 2. Minimum order £12
-
-Below that, no order can carry its own parcel. Enforced at checkout, not just
-advised.
-
-### 3. Nothing under £8 goes in the quiz as a standalone line
-
-Products cheaper than that only work as an extra in a box already going out.
-They can still be sold — as add-ons, never alone.
-
-### 4. Delivery: £3.95 under £50, free at £50+
-
-Unchanged. Worth knowing it costs us £3.92–£6.60 an order either way; that's a
-marketing cost we're choosing.
-
-### 5. Discounts: 8% one-off, 13/15/20 subscribe, first-month card averaging 15%
-
-Unchanged, and the one thing to protect is that **subscribing always beats buying
-once** by a visible margin.
-
-### 6. Minimum subscription £25/month
-
-**Correction:** I raised this to £40 last time based on a calculation that
-wrongly assumed we absorbed postage on sub-£50 plans. The real floors are:
-
-| | Corrected | What I said before |
-| --- | --- | --- |
-| Renewals cover their costs from | **£19.20/month** | £36 |
-| Whole plan survives the scratch card from | **£21.60/month** | £40 |
-
-So £25 was fine all along and £40 is turning away subscriptions that would have
-made money. **This needs changing back.**
-
----
-
-## What I'd drop
-
-- **The 35% target margin.** It isn't reachable on resold branded goods and every
-  screen comparing against it just says "everything is failing", which is noise.
-  Real margins are 10–25% and that's the honest number.
+- **The 35% target margin.** Unreachable on resold brands; every screen comparing
+  against it just reads "everything is failing". Real margins are 10–25%.
 - **The average-order model, break-even sweeps and case tables.** Already hidden
-  behind "show the working" — I'd delete them rather than maintain them.
-- **The RRP cross-check.** Useful once, when we were pricing off RRP. Now that we
-  price from cost it's a column nobody acts on.
+  behind "show the working" — delete rather than maintain.
+- **The RRP cross-check.** Useful when we priced off RRP. We don't any more.
 
 ---
 
-## What still needs a decision from you
+## Zone 2 (Highlands & Islands)
 
-1. **Is ×2 the right multiple?** It gives 10–25% margin depending on the product.
-   ×1.9 is cheaper and thinner, ×2.1 dearer and fatter. The floors move with it.
-2. **The £40 subscription minimum** — confirm I should put it back to £25.
-3. **The top scratch card says 40% but the floor only allows 42.5% total**, so a
-   Complete subscriber winning it gets less than the card promises. Either bring
-   the card to 25% or accept selling that month nearer cost.
+£7.99 flat, free over £300 of our spend — so effectively never free. About 4% of
+UK addresses. Everything above is Zone 1; blending Zone 2 in adds roughly **7p**
+to the average order's postage, which is small enough to ignore when setting
+rules and worth keeping in the model for accuracy.
+
+---
+
+## Still needs a decision
+
+1. **Is ×2 right?** It gives 10–25% margin. ×1.9 is cheaper and thinner; ×2.1
+   dearer and fatter. Every floor above moves with it.
+2. **Move free delivery from £50 to £100?** Closes the −£7.80 band.
+3. **The top scratch card says 40%, but the floor only allows 42.5% in total**, so
+   a Complete subscriber winning it gets less than the card promises. Bring the
+   card to 25%, or lower the floor for month one only.

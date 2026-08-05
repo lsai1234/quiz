@@ -250,9 +250,17 @@ export const PRICING_CONFIG = {
      * weight in the destination zone wins.
      */
     services: [
-      // UK mainland, from powerbody.com. THE FREE BAND IS THE WHOLE GAME: an
-      // order where our wholesale cost clears £99 ships for nothing, which is
-      // worth more than any discount we could negotiate.
+      // UK mainland, from powerbody.com. BANDED ON WHAT WE SPEND WITH THEM in
+      // one parcel — not on weight, and NOT on what the customer pays us.
+      //
+      // Worth stating in retail money, because that is where this gets misread:
+      // pricing at ×2 makes our spend about half the shelf price, so their £50
+      // and £99 bands land at roughly £100 and £198 OF RETAIL. Free shipping
+      // needs a ~£200 basket, not a £99 one.
+      //
+      // Note our own `freeDeliveryThreshold` (£50 retail) starts well below the
+      // point our cost drops (£100 retail), so orders between the two collect
+      // nothing and still pay the full charge. See docs/PRICING_FROM_SCRATCH.md.
       { id: 'z1-50', name: 'Standard', zone: 'uk-1', maxOrderValue: 50, price: 6.5 },
       { id: 'z1-99', name: 'Standard', zone: 'uk-1', maxOrderValue: 99, price: 5.5 },
       { id: 'z1-free', name: 'Free over £99', zone: 'uk-1', maxOrderValue: null, price: 0 },
