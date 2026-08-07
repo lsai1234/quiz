@@ -209,6 +209,45 @@ export async function addImportedProducts(products: CatalogueProduct[]): Promise
   await writeJson(PRODUCTS_FILE, state)
 }
 
+/**
+ * Imported products still waiting on review.
+ *
+ * Read from the imported list directly rather than through the catalogue
+ * resolver, which filters them out on purpose — the hub is the one place they
+ * are supposed to be visible.
+ */
+export async function getPendingReviewProducts(): Promise<CatalogueProduct[]> {
+  const { imported, removedIds, overrides } = await loadProducts()
+  const removed = new Set(removedIds)
+  return applyProductOverrides(
+    imported.filter((p) => p.review?.status === 'pending' && !removed.has(p.id)),
+    overrides,
+  )
+}
+
+/** Replace one imported product wholesale (review edits, approval). */
+export async function saveImportedProduct(product: CatalogueProduct): Promise<void> {
+  const state = await loadProducts()
+  const index = state.imported.findIndex((p) => p.id === product.id)
+  if (index === -1) return
+  state.imported[index] = product
+  await writeJson(PRODUCTS_FILE, state)
+}
+
+/**
+ * Drop an imported product entirely.
+ *
+ * Distinct from `markProductRemoved`: discarding something that was never
+ * approved should leave no trace, not add it to a removed-ids list that would
+ * then block re-importing the same SKU after a second look.
+ */
+export async function discardImportedProduct(id: string): Promise<void> {
+  const state = await loadProducts()
+  state.imported = state.imported.filter((p) => p.id !== id)
+  delete state.overrides[id]
+  await writeJson(PRODUCTS_FILE, state)
+}
+
 // ── Top 25 roster (the products the quiz reaches for first) ──
 export async function getTopProductIds(): Promise<string[]> {
   return normaliseRoster((await loadProducts()).topProductIds ?? [])

@@ -25,6 +25,16 @@ type Row = SupplierRow
 /** How many SKUs one lookup call will take (`MAX_LOOKUP_SKUS` on the server). */
 const MAX_DETAIL_BATCH = 50
 
+/**
+ * Rows per page.
+ *
+ * The list is paginated so that "fill in the names on this page" is a bounded
+ * amount of work — one supplier call per product, and this many is a couple of
+ * seconds rather than the several minutes a whole feed would take. Detail is
+ * cached durably, so a page only ever costs that once.
+ */
+const PAGE_SIZE = 24
+
 const money = (n: number) => `£${n.toFixed(2)}`
 
 /** How much of the live feed has had its name/brand/RRP fetched. Null on the
@@ -44,6 +54,7 @@ export function SupplierBrowser() {
   const [loading, setLoading] = useState(true)
   const [slow, setSlow] = useState(false)
   const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
   const [category, setCategory] = useState('all')
   const [brand, setBrand] = useState('all')
   const [inStockOnly, setInStockOnly] = useState(false)
@@ -146,6 +157,19 @@ export function SupplierBrowser() {
     })
   }, [rows, query, category, brand, inStockOnly, hideAdded])
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  // Memoised because the auto-fill effect below depends on it — a fresh array
+  // every render would re-run it every render.
+  const visible = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage],
+  )
+
+  // Any change to the filters puts you back at the first page of the new result,
+  // rather than on page 7 of something that now has two pages.
+  useEffect(() => { setPage(1) }, [query, category, brand, inStockOnly, hideAdded])
+
   const selectable = filtered.filter((r) => !r.alreadyAdded)
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.sku))
   /** Selected rows still missing their name/RRP — what "Get details" would fetch. */
@@ -174,11 +198,11 @@ export function SupplierBrowser() {
    * fetched for the products actually being looked at. Cached server-side, so a
    * product is only ever fetched once however often it is browsed.
    */
-  const fetchDetails = useCallback(async (skus: string[]) => {
+  const fetchDetails = useCallback(async (skus: string[], quiet = false) => {
     const wanted = skus.slice(0, MAX_DETAIL_BATCH)
     if (wanted.length === 0) return
     setDetailing((prev) => new Set([...prev, ...wanted]))
-    setError(null)
+    if (!quiet) setError(null)
     try {
       const res = await fetch('/api/portal/supplier/lookup', {
         method: 'POST',
@@ -187,12 +211,15 @@ export function SupplierBrowser() {
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
+        // A background fill-in reports quietly: the rows simply stay as codes
+        // with their Details buttons, rather than a red banner appearing over a
+        // page the founder did not ask anything of.
         setError(d.error ?? 'Could not fetch those product details.')
         return
       }
       const fetched: Row[] = Array.isArray(d.products) ? d.products : []
       if (fetched.length === 0) {
-        setError(`PowerBody has no record for ${wanted.join(', ')}.`)
+        if (!quiet) setError(`PowerBody has no record for ${wanted.join(', ')}.`)
         return
       }
       const bySku = new Map(fetched.map((r) => [r.sku, r]))
@@ -201,14 +228,14 @@ export function SupplierBrowser() {
       setProgress((prev) => (prev ? { ...prev, detailed: Math.min(prev.total, prev.detailed + gained) } : prev))
       // A reply that arrives still nameless is a real outcome, not a no-op —
       // without this the button just appears to do nothing.
-      if (gained === 0) {
+      if (gained === 0 && !quiet) {
         setError(
           `PowerBody answered for ${wanted.join(', ')} but sent no name or RRP with it. ` +
             'Their detail call may not be enabled on this API account yet.',
         )
       }
     } catch {
-      setError('Could not fetch those product details.')
+      if (!quiet) setError('Could not fetch those product details.')
     } finally {
       setDetailing((prev) => {
         const next = new Set(prev)
@@ -217,6 +244,27 @@ export function SupplierBrowser() {
       })
     }
   }, [])
+
+  /**
+   * Fill in the page being looked at.
+   *
+   * A list of supplier codes is not a list you can shop from, and the reason it
+   * was one is that names cost a call each — so pay for the two dozen on screen
+   * rather than the three thousand that are not. Runs once per page: `attempted`
+   * remembers what has been asked for, so a supplier that returns nothing for a
+   * product is not asked again on every render.
+   */
+  const attempted = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (!rows) return
+    const needed = visible
+      .filter((r) => !r.detailed && !attempted.current.has(r.sku))
+      .map((r) => r.sku)
+      .slice(0, MAX_DETAIL_BATCH)
+    if (needed.length === 0) return
+    for (const sku of needed) attempted.current.add(sku)
+    fetchDetails(needed, true)
+  }, [rows, visible, fetchDetails])
 
   const add = useCallback(async (skus: string[]) => {
     if (skus.length === 0) return
@@ -231,7 +279,11 @@ export function SupplierBrowser() {
       setSelected(new Set())
       invalidateCatalogue() // shop/quiz pick up the new products on next mount
       const how = d.aiUsed ? 'AI-classified' : 'auto-classified'
-      setNotice(`Added ${d.added} product${d.added === 1 ? '' : 's'} — ${how}. Review and tweak them in Products before launch.`)
+      // Deliberately not "added to your shop": it isn't, until it is reviewed.
+      setNotice(
+        `${d.added} product${d.added === 1 ? '' : 's'} pulled in and ${how}, waiting in Products → Review. ` +
+          'Nothing is on sale until you approve it there.',
+      )
       load()
     } else {
       const d = await res.json().catch(() => ({}))
@@ -331,11 +383,10 @@ export function SupplierBrowser() {
               <strong style={{ color: 'var(--color-text-2)' }}>
                 {progress.detailed} of {progress.total} products have their names and images fetched.
               </strong>{' '}
-              PowerBody send those one product at a time and rate-limit us, so browsing doesn’t fetch them. The money is
-              all here regardless: we price from cost, so what you pay, what you’d charge and what you’d keep are live
-              and correct for all {progress.total} — only the shipping weight is assumed, which moves the margin by a
-              point or two. Press <strong>Details</strong> on a row for its name, tick a few and use{' '}
-              <strong>Get details</strong>, or just add a product: adding always fetches the full record first.
+              PowerBody send those one product at a time and rate-limit us, so they are fetched for the page you are
+              looking at rather than for the whole feed — page through and the rest fill in as you go, each one only
+              ever paid for once. The money is right on every row regardless, fetched or not: we price from cost, so
+              what you pay, what you’d charge and what you’d keep are live for all {progress.total}.
               {progress.listComplete === false &&
                 ' The feed is long enough that it is read a stretch at a time — press Load more of the feed for the next stretch; it carries on from where it stopped.'}
             </p>
@@ -366,15 +417,30 @@ export function SupplierBrowser() {
             </label>
           )}
 
-          {/* Rows */}
+          {/* Rows — one page at a time, which is what makes filling their names
+              in affordable: a couple of dozen calls, not a couple of thousand. */}
           <div className="space-y-2">
-            {filtered.map((r) => (
+            {visible.map((r) => (
               <div key={r.sku} className="rounded-2xl border p-3.5 flex items-center gap-3" style={{ background: 'var(--color-surface)', borderColor: r.alreadyAdded ? `color-mix(in srgb, ${ACCENT} 30%, transparent)` : 'var(--color-border)' }}>
                 <input type="checkbox" disabled={r.alreadyAdded} checked={selected.has(r.sku)} onChange={() => toggle(r.sku)} className="shrink-0" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {r.imageUrl ? (
+                  <img src={r.imageUrl} alt="" className="w-11 h-11 rounded-xl object-cover shrink-0" />
+                ) : (
+                  <div
+                    className="w-11 h-11 rounded-xl shrink-0 grid place-items-center text-[8px] text-[var(--color-muted)]"
+                    style={{ background: 'var(--color-surface-2)' }}
+                  >
+                    {detailing.has(r.sku) ? '…' : r.detailed ? 'no img' : ''}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.name}</span>
                     <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{r.brand}</span>
+                    {!r.detailed && detailing.has(r.sku) && (
+                      <span className="text-[10px] text-[var(--color-muted)]">fetching details…</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--color-muted)]">
                     {r.category && (
@@ -427,6 +493,28 @@ export function SupplierBrowser() {
               </p>
             )}
           </div>
+
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-30"
+              >
+                ← Previous
+              </button>
+              <p className="text-xs text-[var(--color-muted)]">
+                Page {currentPage} of {pageCount} · {filtered.length} products
+              </p>
+              <button
+                onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                disabled={currentPage >= pageCount}
+                className="text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-30"
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

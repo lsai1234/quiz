@@ -13,6 +13,9 @@ const ITEMS: SubNavItem[] = [
   { href: '/portal/products/top-25', label: 'Top 25' },
   { href: '/portal/products/bundles', label: 'Bundles' },
   { href: '/portal/products/powerbody', label: 'PowerBody' },
+  // Sits next to PowerBody because it is the second half of the same job:
+  // nothing imported there is on sale until it has been through here.
+  { href: '/portal/products/review', label: 'Review' },
   { href: '/portal/products/dashboard', label: 'Dashboard' },
   { href: '/portal/products/readiness', label: 'Readiness' },
   { href: '/portal/products/coverage', label: 'Coverage' },

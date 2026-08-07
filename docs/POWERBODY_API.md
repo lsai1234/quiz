@@ -318,6 +318,44 @@ for yet, and paging stops as soon as the requested SKUs have turned up. Running 
 time is reported as an error rather than a silent "not found" — a lookup that quietly
 loses a SKU would be worse than one that fails.
 
+## Import review — nothing is on sale until someone has looked
+
+Adding a product from PowerBody does **not** put it in the shop. It lands in
+**Products → Review** as `pending`, and `getResolvedCatalogue` filters pending
+products out, so the shop, the quiz and every recommendation are blind to it
+until a founder approves it.
+
+The reason is what an imported product actually is: three kinds of information
+wearing the same clothes.
+
+| Source | Fields | Trust |
+|---|---|---|
+| **PowerBody** | title, description, image, category, cost, weight, VAT, servings, variants | Facts. Shown for context, nothing to confirm. |
+| **Our rules** | list price (cost × 2 → .99), id, handle | Deterministic, but a price is worth a glance. |
+| **AI / keyword classifier** | stack slots, goals, dietary tags, formats, swap group, stimulants, card copy, warnings | Guesses. Confirm or correct each one. |
+
+The third row is the point. `autopopulate` gates copy against `APPROVED_CLAIMS`
+so a model cannot invent a health claim — but the model also picks the **stack
+slots, goals and dietary tags**, and none of that is claim-gated. Those fields
+decide *who gets recommended the product*: a wrong dietary tag sells someone
+something they cannot take, and a wrong stack slot puts a pre-workout in front
+of someone who asked for sleep. So they are the fields a human has to sign off.
+
+Supplier fields are deliberately **not** in the checklist. Putting eleven
+faithful copies between a founder and the two fields a model wrote is how a
+review becomes a rubber stamp.
+
+Provenance is recorded per field at import time (`review.sources`) and the
+screen labels every field with it, so "what did a machine decide here?" is
+answerable at a glance rather than by memory.
+
+One thing this fixed on the way in: the classifier supplies a `cost` estimated
+from the shelf price for products that arrive without one, and the import used
+to spread that over the real wholesale price — a £20.00 cost silently became
+£21.99, and every margin in the hub was then computed from a number PowerBody
+never sent. `withoutSupplierOwned` drops anything from the enrichment patch that
+the supplier already answered.
+
 ## The daily check
 
 `syncImportedProducts()` runs nightly (and on demand via **Check now**) over every product

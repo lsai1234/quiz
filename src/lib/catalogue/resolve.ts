@@ -6,6 +6,7 @@ import {
   syncPortalRuntime,
 } from '@/lib/portal/store'
 import { applyTopRanks } from '@/lib/portal/top-products'
+import { isPendingReview } from './review'
 import type { CatalogueProduct } from './types'
 
 /**
@@ -13,12 +14,21 @@ import type { CatalogueProduct } from './types'
  * overrides merged on, products added from the supplier feed appended, and any
  * products the founders removed filtered out. Applied to both branches so
  * removals/imports reflect everywhere (quiz, hub, dashboard).
+ *
+ * Products still awaiting import review are held out entirely. An imported
+ * product is part supplier data, part AI, and the AI half decides who gets
+ * recommended it — so it is not sellable until someone has looked. They are
+ * reachable in the hub through `getPendingReviewProducts`, and nowhere else.
  */
 async function composeCatalogue(base: CatalogueProduct[]): Promise<CatalogueProduct[]> {
   const { overrides, removedIds, imported, topProductIds } = await getPersistedProducts()
   const removed = new Set(removedIds)
-  const withImports = [...applyProductOverrides(base, overrides), ...imported]
-  const visible = removed.size === 0 ? withImports : withImports.filter((p) => !removed.has(p.id))
+  // Overrides apply to imported products too. They used to be merged onto the
+  // base only, which silently dropped every edit made to a product that came
+  // from the supplier feed — including the corrections made while reviewing it.
+  const withImports = applyProductOverrides([...base, ...imported], overrides)
+  const sellable = withImports.filter((p) => !isPendingReview(p))
+  const visible = removed.size === 0 ? sellable : sellable.filter((p) => !removed.has(p.id))
   // Last, so the Top 25 is stamped only onto products that actually survived —
   // a roster entry for a removed product simply doesn't apply.
   return applyTopRanks(visible, topProductIds ?? [])

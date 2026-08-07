@@ -3,6 +3,7 @@ import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
 import { toSupplierRow } from '@/lib/supplier/row'
+import { asPendingReview, sourcesForImport, withoutSupplierOwned } from '@/lib/catalogue/review'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
 import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
 
@@ -86,14 +87,24 @@ export async function POST(req: Request) {
     const mapped: import('@/lib/catalogue/types').CatalogueProduct[] = []
     for (const sp of toAdd) {
       let product = supplierProductToCatalogue(sp)
+      let aiFields: string[] = []
       if (autopopulate) {
-        // Enrich the CHRGD-only attributes (claim-safe). Founder reviews in the
-        // Products editor before launch — never blindly trusted.
+        // Enrich the CHRGD-only attributes (claim-safe). Nothing here is trusted
+        // blindly: the product lands as `pending` and a founder walks the fields
+        // a rule or a model decided before it can be sold.
         const { patch, source } = await autopopulateProduct(product)
         if (source === 'ai') aiUsed = true
-        product = { ...product, ...patch }
+        // Only the gaps. The classifier estimates a cost and a serving count for
+        // products that have neither, and applying that here overwrote what
+        // PowerBody actually charge us with a guess — which then flowed into
+        // every margin figure in the hub.
+        const enrichment = withoutSupplierOwned(patch)
+        aiFields = Object.keys(enrichment)
+        product = { ...product, ...enrichment }
       }
-      mapped.push(product)
+      // Held out of the shop and quiz until reviewed, carrying a record of which
+      // fields came from PowerBody, which from our rules, and which from a model.
+      mapped.push(asPendingReview(product, sourcesForImport(aiFields, aiUsed)))
     }
 
     await addImportedProducts(mapped)
@@ -102,6 +113,8 @@ export async function POST(req: Request) {
       added: mapped.length,
       autopopulated: autopopulate,
       aiUsed,
+      /** Nothing is sellable yet — the hub sends the founder to Review next. */
+      pendingReview: mapped.length,
       ids: mapped.map((p) => p.id),
       // Named explicitly so a typo'd SKU is reported rather than silently
       // dropped from a bulk paste.

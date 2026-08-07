@@ -1,7 +1,8 @@
 import { createMockSupplier } from '@/lib/supplier/powerbody/mock'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
-import { addImportedProducts } from '@/lib/portal/store'
+import { addImportedProducts, getPendingReviewProducts, saveImportedProduct } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { approved, asPendingReview, sourcesForImport } from '@/lib/catalogue/review'
 import { listPriceFor } from '@/lib/pricing/list-price'
 
 // Proves the Phase 1 "done when": a scanned PowerBody product, once added,
@@ -24,5 +25,27 @@ describe('adding a PowerBody product surfaces it in the catalogue', () => {
     expect(added?.basePrice).toBe(listPriceFor(sp.wholesalePrice))
     expect(added?.cost).toBe(sp.wholesalePrice)
     expect(added?.variants[0].sku).toBe(sp.sku)
+  })
+
+  it('keeps a product awaiting review out of the shop until it is approved', async () => {
+    const supplier = createMockSupplier()
+    const sp = (await supplier.listProducts()).find((p) => p.sku === 'APP-CREA-250')!
+    const mapped = supplierProductToCatalogue(sp)
+
+    await addImportedProducts([asPendingReview(mapped, sourcesForImport(['stackSlots', 'shortReason'], true))])
+
+    // The whole point of the gate: it is imported, it is visible in the hub's
+    // review queue, and it is NOT something a customer can be sold or
+    // recommended — the AI decided its stack slots and nobody has looked yet.
+    const held = await getResolvedCatalogue()
+    expect(held.products.some((p) => p.id === mapped.id)).toBe(false)
+    expect((await getPendingReviewProducts()).some((p) => p.id === mapped.id)).toBe(true)
+
+    const pending = (await getPendingReviewProducts()).find((p) => p.id === mapped.id)!
+    await saveImportedProduct(approved(pending, 'founder1@chrgd.dev'))
+
+    const live = await getResolvedCatalogue()
+    expect(live.products.some((p) => p.id === mapped.id)).toBe(true)
+    expect((await getPendingReviewProducts()).some((p) => p.id === mapped.id)).toBe(false)
   })
 })

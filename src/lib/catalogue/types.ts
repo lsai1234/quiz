@@ -352,6 +352,48 @@ export interface CatalogueProduct {
    */
   restockingSoon?: boolean
 
+  /**
+   * Set on products imported from the supplier, until a founder has checked
+   * them. See `ProductReview` — while this says `pending` the product is held
+   * out of the shop and the quiz entirely.
+   */
+  review?: ProductReview
+
+}
+
+// ─── Import review ────────────────────────────────────────────────────────────
+
+/**
+ * Where a field's value came from.
+ *
+ * Worth recording because an import is three different kinds of information
+ * wearing the same clothes: what the supplier actually sent, what our own rules
+ * computed, and what a language model wrote. Reviewing them as if they were
+ * equally trustworthy is how an invented claim reaches a customer, so the review
+ * screen labels every field with this.
+ */
+export type FieldSource =
+  /** Straight from the PowerBody feed. */
+  | 'supplier'
+  /** Computed by one of our own rules (e.g. list price = cost × 2). */
+  | 'rule'
+  /** Written by the AI classifier/copywriter. Needs a human before it goes live. */
+  | 'ai'
+  /** Our deterministic keyword classifier — no model involved. */
+  | 'heuristic'
+  /** Edited by a founder. */
+  | 'founder'
+
+export interface ProductReview {
+  /** `pending` products are invisible to the shop and quiz until approved. */
+  status: 'pending' | 'approved'
+  /** Per-field provenance, for the review screen. */
+  sources: Partial<Record<keyof CatalogueProduct, FieldSource>>
+  /** Fields a founder has explicitly confirmed or corrected. */
+  confirmed: string[]
+  importedAt: string
+  approvedAt?: string
+  approvedBy?: string
 }
 
 // ─── Catalogue query options ──────────────────────────────────────────────────
