@@ -220,6 +220,85 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX analytics_events_created_at ON analytics_events(created_at);
   CREATE INDEX analytics_events_session ON analytics_events(session_id);
   `,
+
+  // v9 — partner (influencer) programme: accounts, codes, effective-dated terms,
+  // the commission ledger and payouts. Attribution lands on the order itself.
+  `
+  CREATE TABLE partners (
+    id            TEXT PRIMARY KEY,
+    email         TEXT NOT NULL UNIQUE,
+    name          TEXT NOT NULL,
+    password_hash TEXT,
+    status        TEXT NOT NULL,
+    data          TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+  );
+  CREATE INDEX partners_status ON partners(status);
+
+  CREATE TABLE partner_codes (
+    code         TEXT PRIMARY KEY,
+    partner_id   TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    discount_pct TEXT NOT NULL,
+    terms        TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    created_at   TEXT NOT NULL
+  );
+  CREATE INDEX partner_codes_partner ON partner_codes(partner_id);
+
+  CREATE TABLE partner_terms (
+    id              TEXT PRIMARY KEY,
+    partner_id      TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    first_order_pct TEXT NOT NULL,
+    renewal_pct     TEXT NOT NULL,
+    renewal_months  TEXT NOT NULL,
+    payout          TEXT NOT NULL,
+    effective_from  TEXT NOT NULL,
+    note            TEXT,
+    created_by      TEXT,
+    created_at      TEXT NOT NULL
+  );
+  CREATE INDEX partner_terms_partner ON partner_terms(partner_id, effective_from);
+
+  CREATE TABLE partner_sessions (
+    token      TEXT PRIMARY KEY,
+    partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX partner_sessions_partner ON partner_sessions(partner_id);
+
+  CREATE TABLE partner_commissions (
+    id            TEXT PRIMARY KEY,
+    partner_id    TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    order_id      TEXT NOT NULL,
+    kind          TEXT NOT NULL,
+    net_basis     TEXT NOT NULL,
+    rate          TEXT NOT NULL,
+    amount        TEXT NOT NULL,
+    state         TEXT NOT NULL,
+    confirm_after TEXT NOT NULL,
+    payout_id     TEXT,
+    created_at    TEXT NOT NULL
+  );
+  CREATE INDEX partner_commissions_partner ON partner_commissions(partner_id);
+  CREATE INDEX partner_commissions_state ON partner_commissions(state);
+  CREATE UNIQUE INDEX partner_commissions_order_kind ON partner_commissions(order_id, kind);
+
+  CREATE TABLE partner_payouts (
+    id         TEXT PRIMARY KEY,
+    partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    period     TEXT NOT NULL,
+    amount     TEXT NOT NULL,
+    state      TEXT NOT NULL,
+    reference  TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX partner_payouts_partner ON partner_payouts(partner_id);
+
+  ALTER TABLE orders ADD COLUMN partner_code TEXT;
+  CREATE INDEX orders_partner_code ON orders(partner_code);
+  `,
 ]
 
 /**

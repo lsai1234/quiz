@@ -378,6 +378,26 @@ export const PRICING_CONFIG = {
      * their commission cost 20% more than the rate suggests.
      */
     partnersChargeVat: false,
+    /**
+     * Payout terms.
+     *
+     * These were prose in `docs/INFLUENCER_PROGRAMME.md` until a partner could
+     * read them. A `/partner` dashboard that states a cadence and a minimum has
+     * to state the ones actually in force, not the ones a markdown file
+     * remembers — and once a counterparty is relying on them they need to live
+     * somewhere a founder can change deliberately.
+     *
+     * Seeded onto each partner's first terms row and overridable per partner
+     * from there; this is the default a new partner starts on.
+     */
+    payout: {
+      /** How often a payout run happens. Monthly in arrears. */
+      cadence: 'monthly' as 'monthly' | 'quarterly',
+      /** Below this, the balance carries forward rather than being paid (£). */
+      minimum: 25,
+      /** We raise the invoice on the partner's behalf rather than chasing one. */
+      selfBilled: true,
+    },
   },
 
   /**

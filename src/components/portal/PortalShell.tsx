@@ -16,6 +16,7 @@ const NAV = [
   { href: '/portal/commerce', label: 'Commerce' },
   { href: '/portal/products', label: 'Products' },
   { href: '/portal/pricing', label: 'Pricing' },
+  { href: '/portal/partners', label: 'Partners' },
   { href: '/portal/actions', label: 'Requires action' },
   { href: '/portal/emails', label: 'Emails' },
   { href: '/portal/settings', label: 'Settings' },
