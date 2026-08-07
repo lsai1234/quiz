@@ -9,6 +9,16 @@ import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricin
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
 const at = (id: string, c = cfg()) => pricingThresholds(c).thresholds.find((t) => t.id === id)!
 
+/**
+ * The same config with the scratch card running.
+ *
+ * There is no site-wide first-month discount any more — a partner's code is the
+ * only extra discount — so the tests about what an intro offer *costs* need one
+ * to exist before they can measure it.
+ */
+const withCard = (): PricingConfig =>
+  cfg({ introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } } })
+
 describe('the cut-offs', () => {
   it('finds a floor for every question', () => {
     for (const t of pricingThresholds(cfg()).thresholds) {
@@ -30,19 +40,28 @@ describe('the cut-offs', () => {
 
   it('holds a subscription to a gentler test than a one-off', () => {
     // A one-off has to pay on the order in front of you. A subscription is
-    // judged across its life, because the scratch card is meant to lose on
+    // judged across its life, because a first-month offer is meant to lose on
     // month one. So the subscription floors sit ABOVE the one-off floor in
     // pounds-per-month terms, but they are measuring different things — the
     // point of the test is that they are computed separately at all.
-    const renewal = at('renewal').value!
-    const lifetime = at('lifetime').value!
+    const card = withCard()
+    const renewal = at('renewal', card).value!
+    const lifetime = at('lifetime', card).value!
     // Carrying an intro discount costs something, so the lifetime bar is higher.
     expect(lifetime).toBeGreaterThan(renewal)
   })
 
-  it('needs a bigger plan when the scratch card is more generous', () => {
-    const mean = at('lifetime', cfg({ introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: 0.05 } })).value!
-    const lavish = at('lifetime', cfg({ introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: 0.35 } })).value!
+  it('asks no more of a subscription than a renewal when there is no intro offer', () => {
+    // Which is where the live config now sits. The lifetime bar is only above
+    // the renewal bar because a first month is being given away; take the
+    // giveaway out and there is nothing left to carry.
+    expect(at('lifetime').value!).toBe(at('renewal').value!)
+  })
+
+  it('needs a bigger plan when the first month is more generous', () => {
+    const card = withCard()
+    const mean = at('lifetime', { ...card, introOffer: { ...card.introOffer, effectiveFirstMonthDiscount: 0.05 } }).value!
+    const lavish = at('lifetime', { ...card, introOffer: { ...card.introOffer, effectiveFirstMonthDiscount: 0.35 } }).value!
     expect(lavish).toBeGreaterThan(mean)
   })
 

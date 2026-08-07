@@ -549,9 +549,26 @@ export const PRICING_CONFIG = {
 
   /** First-cycle intro offer. */
   introOffer: {
-    /** Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it.
-     *  Used as the fallback when the scratch-to-reveal card is disabled. */
-    firstMonthDiscount: 0.5,
+    /**
+     * Discount on the first month, 0–1 (e.g. 0.5 = 50% off). 0 disables it.
+     * In force whenever the scratch-to-reveal card is off — which it now is.
+     *
+     * ZERO, and it has to be set deliberately alongside `scratchReveal.enabled`.
+     * This was 0.5 while the card ran, where it was unreachable. Switching the
+     * card off on its own would therefore not have removed the first-month
+     * discount — it would have replaced a rationed ~15% average with a flat 50%
+     * for everybody, and no check would have complained, because a loss-making
+     * first month is promotional by design and the lifetime figure still pays.
+     * Measured on a £90 three-item box: 15% card → we keep £5.78 on the first
+     * month; a flat 50% → we LOSE £18.88.
+     *
+     * Zero rather than a flat 15% because a partner's code is now meant to be
+     * the only extra discount on the site. That is a conversion change and not
+     * just a mechanic change: every first order used to carry ~15% off, and
+     * non-partner traffic no longer gets any of it. At 0% we keep £16.58 on that
+     * same first month, £10.80 more than the card was costing.
+     */
+    firstMonthDiscount: 0,
     /**
      * The blended first-month discount we're willing to give away, 0–1 — the
      * single number the business actually controls.
@@ -609,7 +626,19 @@ export const PRICING_CONFIG = {
      * Complete stack.
      */
     scratchReveal: {
-      enabled: true,
+      /**
+       * OFF. The partner programme replaces it: a partner's code is the only
+       * extra discount on the site, so a site-wide intro giveaway sitting behind
+       * it would both dilute what a partner can promise and stack on top of the
+       * commission we pay them for the same order.
+       *
+       * The outcomes below are kept, not deleted — they are the tuned shape
+       * (rare big prize, two everyday outcomes, profitable median) and rebuilding
+       * that from memory would be worse than leaving it switched off. Turning
+       * this back on restores exactly what ran before; check
+       * `firstMonthDiscount` is what you want when you turn it off again.
+       */
+      enabled: false,
       outcomes: [
         { discount: 0.4, weight: 1 },
         { discount: 0.2, weight: 8 },

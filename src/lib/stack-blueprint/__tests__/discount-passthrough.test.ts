@@ -168,6 +168,12 @@ describe('regime 3 — subscriptions carry subscribe-&-save into the billed amou
 describe('regime 4 — the first-month intro discount', () => {
   it('is a real reduction on the first month, passed to Stripe as a coupon', () => {
     const TOP = Math.max(...PRICING_CONFIG.introOffer.scratchReveal.outcomes.map((o) => o.discount))
+    // The card is off in the live config now — a partner's code is the only
+    // extra discount. The reveal path still has to pass a rate through to
+    // Stripe, so switch it on for this test (afterEach resets).
+    setPricingOverrides({
+      introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } },
+    })
     const pricing = calculatePricing(MOCK_BLUEPRINT, MOCK_CATALOGUE as CatalogueProduct[], null, undefined, {
       introDiscountOverride: TOP,
     })

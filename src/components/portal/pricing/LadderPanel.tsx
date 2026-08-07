@@ -89,11 +89,11 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
       {check.clipped && (
         <p className="text-[11px] mt-2.5 rounded-lg px-2.5 py-2 leading-relaxed"
           style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
-          <strong>The biggest bundle plus the top scratch card promises more than we can give.</strong> Together they
-          ask for {pct(check.clipped.advertised)} off, but a price set at {check.markupOnCost}× what we pay can only
-          go to {pct(check.clipped.delivered)} before it is below cost. Someone who scratches the top card on the
-          biggest bundle sees a smaller discount than the one on the card. Either bring the top card down, or accept
-          selling that first month nearer cost.
+          <strong>The biggest bundle plus the deepest first month promises more than we can give.</strong> Together
+          they ask for {pct(check.clipped.advertised)} off, but a price set at {check.markupOnCost}× what we pay can
+          only go to {pct(check.clipped.delivered)} before it is below cost. Someone taking the deepest first month
+          on the biggest bundle sees a smaller discount than the one advertised. Either bring the first-month offer
+          down, or accept selling that month nearer cost.
         </p>
       )}
       <p className="text-[10px] text-[var(--color-muted)] mt-2.5 leading-relaxed">

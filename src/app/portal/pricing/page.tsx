@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { formatGBP, type PricingConfig, type DiscountTier, type DeliveryService } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, effectiveIntroDiscount, type PricingConfig, type DiscountTier, type DeliveryService } from '@/lib/stack-blueprint/pricing'
 import { priceProduct, listPriceFor, reviewCatalogue, type CatalogueReview } from '@/lib/pricing/list-price'
 import { checkScenarios, type ScenarioCheck } from '@/lib/pricing/scenarios'
 import { pricingThresholds } from '@/lib/pricing/thresholds'
@@ -162,7 +162,7 @@ export default function PricingPage() {
       {/* ══ OVERVIEW ═══════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
         <div className="space-y-4">
-          <CutOffs thresholds={cutOffs} />
+          <CutOffs thresholds={cutOffs} introDiscount={effectiveIntroDiscount(draft)} />
           <ScenarioTable check={typicalBox} title="A typical quiz box, every way of buying it" />
           <LadderPanel check={ladder} />
         </div>
@@ -244,10 +244,28 @@ export default function PricingPage() {
               onRemove={(i) => set({ bundleTiers: draft.bundleTiers.filter((_, idx) => idx !== i) })} />
           </Section>
 
-          <Section title="First month" desc="The offer that gets people to start. The top card is MEANT to lose money — it is rationed marketing, and only the average has to pay.">
-            <Num label="Average we give away" value={pct(draft.introOffer.effectiveFirstMonthDiscount)} suffix="%" onChange={(n) => setNested('introOffer', { effectiveFirstMonthDiscount: n / 100 })}
-              help="Cards are allocated so the average across people who actually check out lands here, whatever the mix of outcomes." />
+          <Section
+            title="First month"
+            desc={
+              draft.introOffer.scratchReveal.enabled
+                ? 'The offer that gets people to start. The top card is MEANT to lose money — it is rationed marketing, and only the average has to pay.'
+                : 'No scratch card is running, so every first month gets the flat rate below. At 0% a partner’s code is the only extra discount on the site.'
+            }
+          >
             <Toggle label="Scratch-to-reveal" value={draft.introOffer.scratchReveal.enabled} onChange={(v) => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, enabled: v } })} />
+            {/* The flat rate is what takes over the instant the card is switched
+                off, and it used to have no field at all — so turning the card
+                off silently handed everybody whatever number was sitting behind
+                it (0.5, at one point). Showing it exactly when it is in force is
+                the fix. */}
+            {!draft.introOffer.scratchReveal.enabled && (
+              <Num label="Flat first-month discount" value={pct(draft.introOffer.firstMonthDiscount)} suffix="%" onChange={(n) => setNested('introOffer', { firstMonthDiscount: n / 100 })}
+                help="In force right now, for everyone. 0% means no site-wide first-month offer at all." />
+            )}
+            {draft.introOffer.scratchReveal.enabled && (
+              <Num label="Average we give away" value={pct(draft.introOffer.effectiveFirstMonthDiscount)} suffix="%" onChange={(n) => setNested('introOffer', { effectiveFirstMonthDiscount: n / 100 })}
+                help="Cards are allocated so the average across people who actually check out lands here, whatever the mix of outcomes." />
+            )}
             {draft.introOffer.scratchReveal.enabled && (
               <div className="pt-2 space-y-1.5">
                 {draft.introOffer.scratchReveal.outcomes.map((o, i) => {

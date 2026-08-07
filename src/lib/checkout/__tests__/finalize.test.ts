@@ -13,6 +13,21 @@ import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import { readIntroLedger, ledgerTotals } from '@/lib/stack-blueprint/intro-allocation'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
+import { setPortalPricingOverrides, resetPortalPricing } from '@/lib/portal/store'
+
+// The card is switched off in the live config — a partner's code is the only
+// extra discount now. These tests pin the BANKING of a claim, which still has to
+// work whenever a card runs, so they turn it on through the portal settings
+// (rather than in memory) because `finalizeCheckout` re-hydrates the config from
+// there on every call and would wipe an in-memory override.
+beforeEach(async () => {
+  await setPortalPricingOverrides({
+    introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } },
+  })
+})
+afterEach(async () => {
+  await resetPortalPricing()
+})
 
 // The scratch outcomes, from config — these tests pin the banking of a claim,
 // not which cards are on offer this month.

@@ -1,5 +1,18 @@
 # Pricing worked examples
 
+> ### ⚠️ The scratch card is switched off (2026-08)
+>
+> `introOffer.scratchReveal.enabled` is now `false` and `firstMonthDiscount` is
+> `0`. **There is no site-wide first-month discount.** A partner's code is the
+> only extra discount on the site, on top of the subscription and bundle rates,
+> which are unchanged.
+>
+> Anything below that describes a scratch card, its outcomes, its odds, or a
+> partner code as a *floor under* the card is history. The mechanism is still in
+> the code and switching it back on restores exactly what ran before — see
+> `docs/PARTNER_PROGRAMME_BUILD.md` §0 D1 for what that switch costs and why the
+> flat rate has to be set in the same breath.
+
 Every model, walked through with made-up products at made-up prices. **All the
 numbers below are produced by the real code** (`src/lib/pricing/*`) — nothing is
 hand-computed, so if a rule changes these change with it.

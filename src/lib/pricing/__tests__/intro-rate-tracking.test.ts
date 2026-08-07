@@ -5,9 +5,22 @@ import { checkLadder } from '@/lib/pricing/ladder'
 
 const clone = (): PricingConfig => JSON.parse(JSON.stringify(PRICING_CONFIG))
 
-/** The card switched off, with the flat fallback left where it is (0.5). */
-function cardOffNaive(): PricingConfig {
+/**
+ * The card switched back on.
+ *
+ * It is off in the live config now — a partner's code is the only extra discount
+ * — but the mechanism is still there and the model still has to describe it
+ * correctly for whenever it comes back, so these tests switch it on explicitly.
+ */
+function cardOn(): PricingConfig {
   const c = clone()
+  c.introOffer.scratchReveal.enabled = true
+  return c
+}
+
+/** The card switched off, with the flat fallback left wherever it was. */
+function cardOffNaive(): PricingConfig {
+  const c = cardOn()
   c.introOffer.scratchReveal.enabled = false
   return c
 }
@@ -31,7 +44,7 @@ function cardOffAt(rate: number): PricingConfig {
  */
 describe('the intro rate the model uses follows the one in force', () => {
   it('is the card’s budget while the card runs', () => {
-    expect(effectiveIntroDiscount(PRICING_CONFIG)).toBe(PRICING_CONFIG.introOffer.effectiveFirstMonthDiscount)
+    expect(effectiveIntroDiscount(cardOn())).toBe(PRICING_CONFIG.introOffer.effectiveFirstMonthDiscount)
   })
 
   it('is the flat rate the moment the card stops running', () => {
@@ -44,7 +57,7 @@ describe('the intro rate the model uses follows the one in force', () => {
 
   it('reports the deepest first month anyone can get', () => {
     const topCard = Math.max(...PRICING_CONFIG.introOffer.scratchReveal.outcomes.map((o) => o.discount))
-    expect(deepestIntroDiscount(PRICING_CONFIG)).toBe(topCard)
+    expect(deepestIntroDiscount(cardOn())).toBe(topCard)
     // Off, the flat rate IS the deepest — dropping it left the margin floor
     // checking a discount leg that no longer existed.
     expect(deepestIntroDiscount(cardOffAt(0.5))).toBe(0.5)
@@ -52,14 +65,14 @@ describe('the intro rate the model uses follows the one in force', () => {
   })
 
   it('models a certain flat outcome when there are no cards to deal', () => {
-    expect(introOutcomesForModelling(PRICING_CONFIG)).toEqual(PRICING_CONFIG.introOffer.scratchReveal.outcomes)
+    expect(introOutcomesForModelling(cardOn())).toEqual(PRICING_CONFIG.introOffer.scratchReveal.outcomes)
     expect(introOutcomesForModelling(cardOffAt(0.2))).toEqual([{ discount: 0.2, weight: 1 }])
   })
 })
 
 describe('the model notices when the card is switched off', () => {
   it('thresholds move with the real intro rate, not the card’s budget', () => {
-    const withCard = pricingThresholds(PRICING_CONFIG)
+    const withCard = pricingThresholds(cardOn())
     const atZero = pricingThresholds(cardOffAt(0))
     const atHalf = pricingThresholds(cardOffAt(0.5))
 

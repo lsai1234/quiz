@@ -1,4 +1,4 @@
-import { PRICING_CONFIG } from '../pricing'
+import { PRICING_CONFIG, setPricingOverrides, resetPricingOverrides } from '../pricing'
 import { validateCheckout, validationErrorMessage, buildSubscriptionCheckout } from '../checkout'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -210,6 +210,12 @@ describe('buildSubscriptionCheckout', () => {
     // The middle scratch outcome, read from config rather than typed in.
     const CARD = [...PRICING_CONFIG.introOffer.scratchReveal.outcomes]
       .sort((a, b) => b.discount - a.discount)[1].discount
+    // The card is off in the live config now — a partner's code is the only
+    // extra discount. The reveal path still has to reach the checkout.
+    setPricingOverrides({
+      introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } },
+    })
+    try {
     const result = buildSubscriptionCheckout(blueprint, [product], null, { introDiscountOverride: CARD })
     expect(result.ok).toBe(true)
     if (!result.ok) return
@@ -217,6 +223,9 @@ describe('buildSubscriptionCheckout', () => {
     expect(flatMonthly).toBe(MONTHLY)
     expect(introDiscountPct).toBe(Math.round(CARD * 100))
     expect(firstMonth).toBe(Math.round(MONTHLY * (1 - CARD) * 100) / 100)
+    } finally {
+      resetPricingOverrides()
+    }
   })
 
   it('ignores an invalid (non-outcome) revealed discount', () => {

@@ -1,3 +1,4 @@
+import { setPricingOverrides } from '../pricing'
 import { calculatePricing, formatGBP, formatSaving, qualifiesForSubscription, getSubscriptionProduct, buildSubscriptionPlan, workoutsPerMonth, resolveConsumption, resolveTier, discountWithFloor, unitCostOf, levelForStackPreference, levelSubscriptionRate, qualifiesForFreeDelivery, PRICING_CONFIG, rollScratchDiscount, resolveIntroDiscount, isValidScratchDiscount, scratchOutcomes, scratchRevealEnabled } from '../pricing'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -372,6 +373,13 @@ describe('consumption protocol & monthly quantities', () => {
   })
 
   it('applies a revealed scratch discount to the first month and commitment total', () => {
+    // `calculatePricing` reads the ambient config, and the card is switched off
+    // there now. The reveal path still has to work for whenever it comes back,
+    // so switch it on for the duration of this one test.
+    setPricingOverrides({
+      introOffer: { scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } },
+    } as never)
+    try {
     const a = makeProduct({ id: 'prod-a', stackSlots: ['protein'], servings: 30 })
     const bp = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
     const p = calculatePricing(bp, [a], null, undefined, { introDiscountOverride: TOP_CARD })
@@ -383,6 +391,9 @@ describe('consumption protocol & monthly quantities', () => {
     // Commitment = discounted first month + the remaining months at the flat rate.
     const expectedTerm = Math.round((p.subscriptionFirstMonth + (p.subscriptionMinMonths - 1) * p.subscriptionTotal) * 100) / 100
     expect(p.subscriptionMinTermTotal).toBe(expectedTerm)
+    } finally {
+      setPricingOverrides({})
+    }
   })
 })
 
@@ -583,9 +594,25 @@ describe('scratch-to-reveal intro discount', () => {
     introOffer: { ...PRICING_CONFIG.introOffer, firstMonthDiscount: 0.5, scratchReveal: { enabled: false, outcomes: [] } },
   }
 
-  it('is enabled by default with three weighted outcomes', () => {
-    expect(scratchRevealEnabled()).toBe(true)
-    expect(scratchOutcomes().map((o) => o.discount).sort()).toEqual([...CARDS].map((o) => o.discount).sort())
+  // The card is switched off in the live config — a partner's code is the only
+  // extra discount now. The mechanism is still here and still has to work, so
+  // these switch it on explicitly rather than depending on a commercial setting.
+  const CARD_ON = {
+    ...PRICING_CONFIG,
+    introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } },
+  }
+
+  it('is switched off, with its outcomes kept intact for switching back on', () => {
+    // Off, and nothing behind it: the flat rate that takes over is zero, so
+    // turning the card off genuinely removes the first-month discount rather
+    // than silently replacing it with a bigger one.
+    expect(scratchRevealEnabled()).toBe(false)
+    expect(scratchOutcomes()).toEqual([])
+    expect(PRICING_CONFIG.introOffer.firstMonthDiscount).toBe(0)
+
+    // The tuned shape survives the switch, so turning it back on restores the
+    // card that ran rather than something rebuilt from memory.
+    expect(scratchOutcomes(CARD_ON).map((o) => o.discount).sort()).toEqual([...CARDS].map((o) => o.discount).sort())
     // A rare top prize and two everyday outcomes is the shape the card depends
     // on — if the top one stops being rare it stops being a prize.
     expect(TOP_ODDS).toBeLessThan(0.1)
@@ -594,28 +621,28 @@ describe('scratch-to-reveal intro discount', () => {
   })
 
   it('rollScratchDiscount only ever returns a configured outcome', () => {
-    const valid = new Set(scratchOutcomes().map((o) => o.discount))
+    const valid = new Set(scratchOutcomes(CARD_ON).map((o) => o.discount))
     for (let i = 0; i < 500; i++) {
-      expect(valid.has(rollScratchDiscount())).toBe(true)
+      expect(valid.has(rollScratchDiscount(CARD_ON))).toBe(true)
     }
   })
 
   it('rollScratchDiscount draws each outcome in its declared band', () => {
     // The draw walks the outcomes in order, subtracting weights, so the
     // boundaries sit at the cumulative weight fractions.
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0)).toBe(TOP)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => TOP_ODDS - 0.001)).toBe(TOP)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => TOP_ODDS + 0.001)).toBe(MID)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => MID_BOUNDARY - 0.001)).toBe(MID)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => MID_BOUNDARY + 0.001)).toBe(BOTTOM)
-    expect(rollScratchDiscount(PRICING_CONFIG, () => 0.999)).toBe(BOTTOM)
+    expect(rollScratchDiscount(CARD_ON, () => 0)).toBe(TOP)
+    expect(rollScratchDiscount(CARD_ON, () => TOP_ODDS - 0.001)).toBe(TOP)
+    expect(rollScratchDiscount(CARD_ON, () => TOP_ODDS + 0.001)).toBe(MID)
+    expect(rollScratchDiscount(CARD_ON, () => MID_BOUNDARY - 0.001)).toBe(MID)
+    expect(rollScratchDiscount(CARD_ON, () => MID_BOUNDARY + 0.001)).toBe(BOTTOM)
+    expect(rollScratchDiscount(CARD_ON, () => 0.999)).toBe(BOTTOM)
   })
 
   it('keeps the top prize as rare as its weight says', () => {
     let tops = 0
     const N = 4200
     for (let i = 0; i < N; i++) {
-      if (rollScratchDiscount(PRICING_CONFIG, () => (i + 0.5) / N) === TOP) tops += 1
+      if (rollScratchDiscount(CARD_ON, () => (i + 0.5) / N) === TOP) tops += 1
     }
     expect(tops / N).toBeCloseTo(TOP_ODDS, 2)
   })
@@ -625,18 +652,18 @@ describe('scratch-to-reveal intro discount', () => {
   })
 
   it('isValidScratchDiscount accepts only configured outcomes', () => {
-    for (const c of CARDS) expect(isValidScratchDiscount(c.discount)).toBe(true)
-    expect(isValidScratchDiscount(0.9)).toBe(false)
-    expect(isValidScratchDiscount(0)).toBe(false)
+    for (const c of CARDS) expect(isValidScratchDiscount(c.discount, CARD_ON)).toBe(true)
+    expect(isValidScratchDiscount(0.9, CARD_ON)).toBe(false)
+    expect(isValidScratchDiscount(0, CARD_ON)).toBe(false)
   })
 
   it('resolveIntroDiscount honours a valid reveal and rejects anything else', () => {
-    expect(resolveIntroDiscount(null)).toBe(0)        // not scratched yet → nothing applied
-    expect(resolveIntroDiscount(undefined)).toBe(0)
-    expect(resolveIntroDiscount(0)).toBe(0)
-    expect(resolveIntroDiscount(MID)).toBe(MID)
-    expect(resolveIntroDiscount(TOP)).toBe(TOP)
-    expect(resolveIntroDiscount(0.9)).toBe(0)          // not a valid outcome → ignored
+    expect(resolveIntroDiscount(null, CARD_ON)).toBe(0)   // not scratched yet → nothing applied
+    expect(resolveIntroDiscount(undefined, CARD_ON)).toBe(0)
+    expect(resolveIntroDiscount(0, CARD_ON)).toBe(0)
+    expect(resolveIntroDiscount(MID, CARD_ON)).toBe(MID)
+    expect(resolveIntroDiscount(TOP, CARD_ON)).toBe(TOP)
+    expect(resolveIntroDiscount(0.9, CARD_ON)).toBe(0)    // not a valid outcome → ignored
   })
 
   it('resolveIntroDiscount applies the flat rate when scratch is disabled', () => {

@@ -6,6 +6,16 @@ import { checkLadder, HEALTHY_ADVANTAGE_PP } from '../ladder'
 import { PRICING_CONFIG, type PricingConfig, type DiscountTier } from '@/lib/stack-blueprint/pricing'
 
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
+
+/**
+ * The same config with the scratch card running.
+ *
+ * There is no site-wide first-month discount any more — a partner's code is the
+ * only extra discount — so the deepest thing on offer is just the biggest bundle.
+ * The two tests about how the ladder treats a deep intro leg need one to exist.
+ */
+const withCard = (): PricingConfig =>
+  cfg({ introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } } })
 // A representative shelf price per product, near the catalogue average.
 const AVG = 25
 
@@ -67,18 +77,25 @@ describe('the discount ladder', () => {
     // floor — and that is fine, because the floor does not apply to the intro
     // offer. The deep card is a rationed, deliberate loss; clipping it would
     // advertise 40% and hand back less.
-    const check = checkLadder(AVG, cfg())
+    const check = checkLadder(AVG, withCard())
     expect(PRICING_CONFIG.introOffer.respectMarginFloor).toBe(false)
     expect(check.deepestOffered).toBeGreaterThan(check.deepestPossibleDiscount)
     expect(check.clipped).toBeNull()
     expect(check.coherent).toBe(true)
   })
 
+  it('has nothing to clip once the first-month offer is gone', () => {
+    // Where the live config now sits: the deepest thing anyone is offered is
+    // the biggest bundle, which the markup carries comfortably.
+    const check = checkLadder(AVG, cfg())
+    expect(check.deepestOffered).toBeLessThan(check.deepestPossibleDiscount)
+    expect(check.clipped).toBeNull()
+    expect(check.coherent).toBe(true)
+  })
+
   it('flags a clip only when the floor really does apply', () => {
-    const floored = checkLadder(
-      AVG,
-      cfg({ introOffer: { ...PRICING_CONFIG.introOffer, respectMarginFloor: true } }),
-    )
+    const card = withCard()
+    const floored = checkLadder(AVG, { ...card, introOffer: { ...card.introOffer, respectMarginFloor: true } })
     expect(floored.clipped).not.toBeNull()
     expect(floored.clipped!.advertised).toBeGreaterThan(floored.clipped!.delivered)
     expect(floored.coherent).toBe(false)

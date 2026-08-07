@@ -1,5 +1,18 @@
 # Pricing strategy — analysis and recommendation
 
+> ### ⚠️ The scratch card is switched off (2026-08)
+>
+> `introOffer.scratchReveal.enabled` is now `false` and `firstMonthDiscount` is
+> `0`. **There is no site-wide first-month discount.** A partner's code is the
+> only extra discount on the site, on top of the subscription and bundle rates,
+> which are unchanged.
+>
+> Anything below that describes a scratch card, its outcomes, its odds, or a
+> partner code as a *floor under* the card is history. The mechanism is still in
+> the code and switching it back on restores exactly what ran before — see
+> `docs/PARTNER_PROGRAMME_BUILD.md` §0 D1 for what that switch costs and why the
+> flat rate has to be set in the same breath.
+
 > **Superseded in part.** §5 and §7.1's anchoring argument no longer applies —
 > prices are now set at a flat multiple of what we pay, with the supplier's RRP
 > kept only as a cross-check. The reasoning about the *ladder* (§2, §7.1) and the

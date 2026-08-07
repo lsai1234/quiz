@@ -6,7 +6,8 @@ partner, a `/partner` login where they track their own numbers and their terms,
 and management of all of it in the Founders Hub. Plus switching the scratch card
 off.
 
-This document is the **plan**. Nothing below is built yet.
+This document is the **plan**. **Phases 0 and 1 are now built** — see the status
+notes on each. Phases 2–6 are not.
 
 **Read §2A before touching the scratch card.** Switching it off is the smallest-
 looking change here and the most dangerous: the pricing model keeps reading the
@@ -23,6 +24,25 @@ Everything in phase 1 can be built without these. Phases 2+ cannot.
 > touches the pricing model in four places that will not warn you. See §2A.
 
 ### D1 — Switching the scratch card off gives everyone 50% (read this first)
+
+> **DECIDED: option A. Built.** `firstMonthDiscount: 0` and
+> `scratchReveal.enabled: false`, set together in one commit. The outcomes are
+> kept, not deleted, so switching the card back on restores what ran before.
+> Measured on a £90 three-item box, first month, after everything:
+>
+> | | keeps on the first month | lifetime |
+> |---|---|---|
+> | Card on (blended ~15%) — what ran before | £5.78 | £88.68 |
+> | **Off at 0% — now** | **£16.58** | **£99.48** |
+> | Off at 15% (option B) | £5.94 | £88.84 |
+> | Off at 50% (the naive flip) | **−£18.88** | £64.02 |
+>
+> The last row is the trap this decision exists to avoid, and note that
+> `checkScenarios().ok` stays `true` on it — a loss-making first month is
+> promotional by design and the lifetime figure still pays, so nothing would
+> have complained. The hub's pricing screen now shows the flat rate as a field
+> whenever the card is off, which is the durable fix: the number that takes over
+> is visible exactly when it is in force.
 
 `introOffer.scratchReveal.enabled` looks like the switch, and it is — but the
 fallback behind it is live and set high:
@@ -68,6 +88,34 @@ attributed one-off order makes money on its own".
 **Action: re-run the audit before phase 2 ships.** `lib/pricing/unit-economics.ts`
 already does the arithmetic; this is an afternoon with the existing tooling, not
 new modelling. Ship phases 1 and 5 (internal only) in the meantime.
+
+> **Audit run (2026-08). One open question, and it is about stacking.**
+> Measured on the same £90 three-item box, with the card off at 0%, a 20% code
+> and 15% commission on net:
+>
+> | Route | Discount | Customer pays | We keep | Commission | **After commission** |
+> |---|---|---|---|---|---|
+> | Code alone (one-off, or entry rung) | 20% | £72.00 | £16.58 | £10.80 | **£5.78** |
+> | Code **+ deepest subscription rung** | 36% | £57.60 | £2.40 | £8.64 | **−£6.24** |
+>
+> So the first row clears the bar the programme set itself — *an attributed
+> one-off order makes money on its own*. The second does not, because a partner
+> code and the biggest bundle's subscription discount currently compound.
+>
+> That is recoverable — a subscription keeps ~£99 across its life and month two
+> onwards pays no first-order commission — so it is an acquisition cost, not a
+> leak. But it should be a decision rather than an accident, and it is the one
+> thing phase 2 cannot be written without. Three ways to settle it:
+>
+> 1. **Allow the stack** and accept −£6.24 on the deepest attributed first
+>    order, recovered from month two.
+> 2. **Don't stack** — take the better of the partner code and the subscription
+>    rate, never both. Simplest to explain to a follower ("20% off, or your
+>    subscription rate, whichever is bigger").
+> 3. **Cap the combined discount** at whatever leaves the first order at or
+>    above zero after commission (~30% on these numbers).
+>
+> Nothing is built either way yet: codes are stored but nothing redeems them.
 
 ### D3 — Are partners customers?
 
@@ -307,7 +355,7 @@ a mechanic that no longer exists; §3 is the partner costing that D2 invalidates
 Mark them superseded rather than deleting — the reasoning is why the rates are
 what they are.
 
-### Phase 0 — do this first
+### Phase 0 — do this first  ·  **DONE**
 
 1. Add the effective-intro-rate accessor; point thresholds, scenarios and ladder
    at it. **No behaviour change** — the card is still on, the numbers are
@@ -316,8 +364,12 @@ what they are.
    `scratchReveal.enabled: false`, so the trap cannot be sprung by a half-applied
    change.
 3. Re-run the audit (D2) with the card gone, and reprice the partner rate against
-   the new baseline.
-4. Portal copy and the pricing screen.
+   the new baseline. **Run — figures in §0 D2.** The rate itself stands (an
+   attributed one-off clears £5.78); what is still open is whether a code stacks
+   with the subscription rate.
+4. Portal copy and the pricing screen. **The flat first-month rate now has a
+   field on the pricing screen, shown whenever the card is off** — it had none
+   before, which is how a number nobody could see came to be in force.
 5. Mark the superseded doc sections.
 
 *Done when:* the pricing model reports the discount customers actually get, the
@@ -331,7 +383,7 @@ that no longer exists.
 Each phase is shippable and useful on its own. Phases 1 and 5 are internal, so
 they can go live before D1/D2 are settled.
 
-### Phase 1 — Partner records, codes and terms (internal only)
+### Phase 1 — Partner records, codes and terms (internal only)  ·  **DONE**
 
 Migration; `lib/partners/` domain (create, suspend, generate code, set and
 supersede terms); founders API + UI at a new top-level **Partners** tab.
@@ -348,7 +400,7 @@ partner will be shown, so they need a real home first.
 discount and the commission terms, and suspend them; and a terms change leaves a
 dated row with a reason. Nothing customer-facing changes. Codes do nothing yet.
 
-### Phase 2 — Redeeming a code (needs D1 + D2)
+### Phase 2 — Redeeming a code (needs the D2 stacking answer)
 
 - Scratch card off; `firstMonthDiscount` set per D1.
 - A discount-code field at checkout — **new**, nothing like it exists today.

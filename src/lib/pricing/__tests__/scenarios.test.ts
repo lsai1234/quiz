@@ -6,6 +6,16 @@ import { unitEconomics } from '../unit-economics'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
+
+/**
+ * The same config with the scratch card switched on.
+ *
+ * The card is off in the live config — a partner's code is the only extra
+ * discount now — so the `top-card` scenario is not dealt. The two tests below
+ * are about how a card that IS running is judged, so they turn it on.
+ */
+const withCard = (): PricingConfig =>
+  cfg({ introOffer: { ...PRICING_CONFIG.introOffer, scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true } } })
 /** A typical three-item quiz box, priced by the rule. */
 const BOX = { listPrice: 90, supplierCost: 45, sharedParcelItems: 3 }
 
@@ -29,7 +39,7 @@ describe('the scenario check', () => {
   it('lets the rare top card lose without failing the product', () => {
     // The whole point: one scenario is MEANT to lose. Marking it promotional is
     // what stops "this product is broken" firing on a working intro offer.
-    const check = checkScenarios(BOX, cfg())
+    const check = checkScenarios(BOX, withCard())
     const top = check.scenarios.find((s) => s.id === 'top-card')!
     expect(top.promotional).toBe(true)
     expect(top.keeps).toBeLessThan(0)
@@ -40,7 +50,7 @@ describe('the scenario check', () => {
   it('averages the first month across the card, and lets it lose', () => {
     // The intro offer is acquisition cost by design, so even the AVERAGED first
     // month is promotional. Demanding it break even would mean not having one.
-    const check = checkScenarios(BOX, cfg())
+    const check = checkScenarios(BOX, withCard())
     const first = check.scenarios.find((s) => s.id === 'first-month')!
     const top = check.scenarios.find((s) => s.id === 'top-card')!
     expect(first.promotional).toBe(true)

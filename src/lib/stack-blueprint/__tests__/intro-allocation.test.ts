@@ -20,10 +20,21 @@ const CARDS = [...PRICING_CONFIG.introOffer.scratchReveal.outcomes].sort((a, b) 
 const [TOP, MID, BOTTOM] = CARDS.map((o) => o.discount)
 const TOP_ODDS = CARDS[0].weight / CARDS.reduce((s, o) => s + o.weight, 0)
 
+// The card is switched off in the live config — a partner's code is the only
+// extra discount now. These tests pin the allocation maths, which only runs when
+// there IS a card, so they switch it on explicitly rather than depending on a
+// setting that is a commercial decision and not theirs to make.
 const configWith = (effective: number) => ({
   ...PRICING_CONFIG,
-  introOffer: { ...PRICING_CONFIG.introOffer, effectiveFirstMonthDiscount: effective },
+  introOffer: {
+    ...PRICING_CONFIG.introOffer,
+    effectiveFirstMonthDiscount: effective,
+    scratchReveal: { ...PRICING_CONFIG.introOffer.scratchReveal, enabled: true },
+  },
 })
+
+/** The live config with the card switched on — what these maths need to exist. */
+const CARD_ON = configWith(PRICING_CONFIG.introOffer.effectiveFirstMonthDiscount)
 
 const meanOf = (odds: { rate: number; probability: number }[]) =>
   odds.reduce((s, o) => s + o.rate * o.probability, 0)
@@ -73,13 +84,13 @@ describe('tiltedOdds', () => {
     // Every reachable aim: the outcomes themselves and a spread between them.
     const spread = [BOTTOM, (BOTTOM + MID) / 2, MID, (MID + TOP) / 2, TOP]
     for (const aim of spread) {
-      expect(meanOf(tiltedOdds(aim))).toBeCloseTo(aim, 6)
+      expect(meanOf(tiltedOdds(aim, CARD_ON))).toBeCloseTo(aim, 6)
     }
   })
 
   it('always returns a real distribution', () => {
     for (const aim of [0.1, 0.2, 0.3, 0.4, 0.5]) {
-      const odds = tiltedOdds(aim)
+      const odds = tiltedOdds(aim, CARD_ON)
       expect(odds.reduce((s, o) => s + o.probability, 0)).toBeCloseTo(1, 10)
       for (const o of odds) expect(o.probability).toBeGreaterThan(0)
     }
@@ -88,18 +99,18 @@ describe('tiltedOdds', () => {
   it('keeps every outcome in play even when the aim sits exactly on one', () => {
     // The whole point of tilting rather than picking nearest: a 25% target must
     // still hand out 50s and 10s, not turn the card into a fixed prize.
-    const odds = tiltedOdds(0.25)
+    const odds = tiltedOdds(0.25, CARD_ON)
     expect(odds).toHaveLength(3)
     for (const o of odds) expect(o.probability).toBeGreaterThan(0.001)
   })
 
   it('saturates on the nearest outcome for an unreachable aim', () => {
-    expect(meanOf(tiltedOdds(0.9))).toBeCloseTo(TOP, 4)
-    expect(meanOf(tiltedOdds(0))).toBeCloseTo(0.1, 4)
+    expect(meanOf(tiltedOdds(0.9, CARD_ON))).toBeCloseTo(TOP, 4)
+    expect(meanOf(tiltedOdds(0, CARD_ON))).toBeCloseTo(0.1, 4)
   })
 
   it('shifts probability toward 50% as the aim rises', () => {
-    const p50 = (aim: number) => tiltedOdds(aim).find((o) => o.rate === TOP)!.probability
+    const p50 = (aim: number) => tiltedOdds(aim, CARD_ON).find((o) => o.rate === TOP)!.probability
     expect(p50(0.45)).toBeGreaterThan(p50(0.3))
     expect(p50(0.3)).toBeGreaterThan(p50(0.15))
     expect(p50(0.15)).toBeGreaterThan(0)
@@ -110,7 +121,7 @@ describe('tiltedOdds', () => {
     // should be tilted at all.
     const totalWeight = CARDS.reduce((s, o) => s + o.weight, 0)
     const natural = CARDS.reduce((s, o) => s + o.discount * o.weight, 0) / totalWeight
-    const odds = tiltedOdds(natural)
+    const odds = tiltedOdds(natural, CARD_ON)
     for (const c of CARDS) {
       expect(odds.find((o) => o.rate === c.discount)!.probability).toBeCloseTo(c.weight / totalWeight, 4)
     }
@@ -127,20 +138,20 @@ describe('tiltedOdds', () => {
 
 describe('correctedAim', () => {
   it('aims at the target itself on a fresh ledger', () => {
-    expect(correctedAim(EMPTY_LEDGER, 0.18)).toBeCloseTo(0.18, 10)
+    expect(correctedAim(EMPTY_LEDGER, 0.18, CARD_ON)).toBeCloseTo(0.18, 10)
   })
 
   it('aims cheap when claims have overspent the budget', () => {
-    expect(correctedAim({ claims: { '0.5': 10 } }, 0.18)).toBe(0.1)
+    expect(correctedAim({ claims: { '0.5': 10 } }, 0.18, CARD_ON)).toBe(0.1)
   })
 
   it('aims rich when claims have underspent it', () => {
-    expect(correctedAim({ claims: { [String(BOTTOM)]: 10 } }, (BOTTOM + TOP) / 2 + 0.05)).toBe(TOP)
+    expect(correctedAim({ claims: { [String(BOTTOM)]: 10 } }, (BOTTOM + TOP) / 2 + 0.05, CARD_ON)).toBe(TOP)
   })
 
   it('never aims outside the configured outcomes', () => {
-    expect(correctedAim({ claims: { '0.5': 500 } }, 0.18)).toBe(0.1)
-    expect(correctedAim({ claims: { [String(BOTTOM)]: 500 } }, TOP - 0.01)).toBe(TOP)
+    expect(correctedAim({ claims: { '0.5': 500 } }, 0.18, CARD_ON)).toBe(0.1)
+    expect(correctedAim({ claims: { [String(BOTTOM)]: 500 } }, TOP - 0.01, CARD_ON)).toBe(TOP)
   })
 })
 
@@ -190,8 +201,8 @@ describe('chooseIntroRate', () => {
   })
 
   it('reflects the ledger in the odds it draws against', () => {
-    const rich = introOdds({ claims: { '0.5': 10 } }, 0.18)
-    const fresh = introOdds(EMPTY_LEDGER, 0.18)
+    const rich = introOdds({ claims: { '0.5': 10 } }, 0.18, CARD_ON)
+    const fresh = introOdds(EMPTY_LEDGER, 0.18, CARD_ON)
     const p50 = (odds: { rate: number; probability: number }[]) =>
       odds.find((o) => o.rate === TOP)!.probability
     expect(p50(rich)).toBeLessThan(p50(fresh))

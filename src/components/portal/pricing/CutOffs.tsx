@@ -18,10 +18,14 @@ const money = (n: number) => `£${n.toFixed(2)}`
  * The two halves are deliberately different tests, and the panel says so,
  * because getting them the wrong way round is expensive in both directions. A
  * one-off has nothing behind it, so it has to pay every time. A subscription is
- * judged across its life, because the scratch card is *supposed* to lose money
- * on month one — that's rationed marketing, not a leak.
+ * judged across its life, because a first-month offer is *supposed* to lose
+ * money on month one — that's rationed marketing, not a leak.
+ *
+ * `introDiscount` is the rate actually in force, so the panel can stop
+ * explaining a giveaway that isn't running. It is currently zero: a partner's
+ * code is the only extra discount on the site.
  */
-export function CutOffs({ thresholds }: { thresholds: PricingThresholds }) {
+export function CutOffs({ thresholds, introDiscount }: { thresholds: PricingThresholds; introDiscount: number }) {
   const problems = thresholds.thresholds.filter((t) => t.enforcedBy != null && !t.enforcedBy.ok)
   const tone = problems.length > 0 ? RED : GREEN
 
@@ -45,8 +49,17 @@ export function CutOffs({ thresholds }: { thresholds: PricingThresholds }) {
         <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed">
           Two different tests, on purpose. <strong>A one-off has to pay every time</strong> — there is no renewal
           behind it, so if the checkout allows a losing basket we simply lose the money.{' '}
-          <strong>A subscription only has to pay across its life</strong>, because the scratch card is meant to lose
-          on month one. That is rationed marketing, not a leak.
+          {introDiscount > 0 ? (
+            <>
+              <strong>A subscription only has to pay across its life</strong>, because the first month is meant to
+              lose. That is rationed marketing, not a leak.
+            </>
+          ) : (
+            <>
+              <strong>A subscription is still judged across its life</strong>, but with no first-month offer running
+              there is nothing being given away up front, so the two bars currently sit together.
+            </>
+          )}
         </p>
       </div>
 
