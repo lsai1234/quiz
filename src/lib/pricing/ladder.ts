@@ -24,7 +24,7 @@
  *
  * Pure. Takes its config, so the hub previews unsaved rules.
  */
-import { getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { deepestIntroDiscount, getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import type { StackLevel } from '@/lib/types'
 
 
@@ -109,9 +109,12 @@ export function checkLadder(
   const markup = Math.max(0.01, config.listPricing.markupOnCost)
   const deepestPossibleDiscount = round4(Math.max(0, 1 - (1 + config.marginFloorPct) / markup))
 
-  // The deepest thing we actually offer: biggest bundle, then the best card on
-  // top of it.
-  const bestCard = Math.max(0, ...config.introOffer.scratchReveal.outcomes.map((o) => o.discount))
+  // The deepest thing we actually offer: biggest bundle, then the deepest first
+  // month on top of it — the top card while the card runs, the flat rate once it
+  // doesn't. Reading the outcomes directly dropped the intro leg entirely the
+  // moment the card was switched off, so the check stopped seeing the discount
+  // that had replaced it.
+  const bestCard = deepestIntroDiscount(config)
   const deepestRung = Math.max(...Object.values(config.levelSubscriptionDiscount))
   const deepestOffered = round4(1 - (1 - deepestRung) * (1 - bestCard))
 

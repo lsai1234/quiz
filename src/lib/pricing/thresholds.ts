@@ -32,7 +32,7 @@
  * first break-even point. An algebraic floor would miss that entirely and report
  * a number that is true and useless. The scan finds every band.
  */
-import { getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { effectiveIntroDiscount, getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { unitEconomics } from './unit-economics'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -116,7 +116,7 @@ export function pricingThresholds(config: PricingConfig = getPricingConfig()): P
   const costRatio = 1 / Math.max(0.01, config.listPricing.markupOnCost)
   const months = Math.max(1, config.orderMix.averageRetentionMonths)
   const deepestRate = Math.max(...Object.values(config.levelSubscriptionDiscount))
-  const intro = config.introOffer.effectiveFirstMonthDiscount
+  const intro = effectiveIntroDiscount(config)
 
   /** One order at a shelf price, with the goods costed by our own pricing rule. */
   const order = (shelfPrice: number, opts: { chargeDelivery?: boolean; items?: number } = {}) =>

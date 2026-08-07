@@ -260,9 +260,19 @@ returning the card's budget when the card is on and `firstMonthDiscount` when it
 is off, and point all three at it. Small, mechanical, and it is what makes the
 card removable without quietly corrupting every floor in the business.
 
-Do this **before** flipping anything. With it in place the existing safety net
-does its job: turn the card off with the rate still at 0.5 and the scenario check
-should be the thing that tells you.
+Do this **before** flipping anything.
+
+**It does not make the check hard-fail, and it should not.** An intro discount is
+acquisition cost by design — `first-month` is marked promotional and the scenario
+that has to pay is `lifetime`. At a flat 50% the lifetime still pays, so the
+verdict stays green. What changes is that the numbers become **true**: lifetime
+contribution on a representative subscriber reads £209.54 today, £221.94 with no
+intro offer, and £181.25 at a flat 50% — a £28 swing per subscriber that the
+model previously could not see at all, reporting identical figures for all three.
+
+One behaviour does change: with the card off, the deepest first month is no
+longer treated as promotional. A rare card that loses money is the design; a flat
+rate *everybody* gets is not, so it counts toward the verdict.
 
 ### Everything else the removal touches
 
@@ -311,8 +321,8 @@ what they are.
 5. Mark the superseded doc sections.
 
 *Done when:* the pricing model reports the discount customers actually get, the
-scenario check fails loudly if the intro rate is set somewhere unaffordable, and
-no screen describes a card that no longer exists.
+lifetime figure moves when the intro rate moves, and no screen describes a card
+that no longer exists.
 
 ---
 

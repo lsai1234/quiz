@@ -25,7 +25,7 @@
  * month one pays kills the offer, and letting the lifetime slide bleeds money
  * quietly.
  */
-import { getPricingConfig, resolveTier, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { getPricingConfig, introOutcomesForModelling, resolveTier, scratchRevealEnabled, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { unitEconomics } from './unit-economics'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -74,7 +74,13 @@ export function checkScenarios(
   const { listPrice, supplierCost } = input
   const items = Math.max(1, input.sharedParcelItems ?? 1)
   const deepest = Math.max(...Object.values(config.levelSubscriptionDiscount))
-  const cards = [...config.introOffer.scratchReveal.outcomes].sort((a, b) => b.discount - a.discount)
+  // The outcomes actually in force — the card's while it runs, a single certain
+  // outcome at the flat rate once it doesn't. Reading the card's config directly
+  // meant these scenarios went on modelling cards that were never dealt.
+  const cards = [...introOutcomesForModelling(config)].sort((a, b) => b.discount - a.discount)
+  // Whether a *card* is actually being dealt, as opposed to one certain rate.
+  // Drives the wording, and whether the worst case counts as promotional.
+  const cardsAreDealt = scratchRevealEnabled(config)
   const totalWeight = cards.reduce((s, c) => s + c.weight, 0) || 1
 
   const run = (id: string, label: string, discount: number, promotional = false): Scenario => {
@@ -120,7 +126,9 @@ export function checkScenarios(
   const avgCardDiscount = round4(1 - (1 - deepest) * (1 - cards.reduce((s, c) => s + (c.weight / totalWeight) * c.discount, 0)))
   scenarios.push({
     id: 'first-month',
-    label: 'First month, averaged across the scratch card',
+    label: cardsAreDealt
+      ? 'First month, averaged across the scratch card'
+      : 'First month',
     discount: avgCardDiscount,
     paid: round(listPrice * (1 - avgCardDiscount)),
     keeps: round(first),
@@ -144,10 +152,12 @@ export function checkScenarios(
     promotional: false,
   })
 
-  // …and the top card on its own, so the worst case is visible rather than
-  // hidden inside an average. Allowed to lose.
+  // …and the deepest first month on its own, so the worst case is visible rather
+  // than hidden inside an average. Allowed to lose while it is a rare card; a
+  // flat rate everybody gets is not promotional and is not allowed to lose,
+  // which is the whole reason the model has to know which one is running.
   const top = cards[0]
-  if (top) {
+  if (top && cardsAreDealt) {
     scenarios.push(
       run('top-card', `Worst case: ${Math.round(top.discount * 100)}% card (1 in ${Math.round(totalWeight / top.weight)})`,
         1 - (1 - deepest) * (1 - top.discount), true),

@@ -725,6 +725,51 @@ export function isValidScratchDiscount(rate: number, config = getPricingConfig()
 }
 
 /**
+ * The first-month discount actually in force, whatever mechanism is running.
+ *
+ * READ THIS RATHER THAN THE CONFIG FIELDS. `effectiveFirstMonthDiscount` is the
+ * *scratch card's budget* — the average the rationed draw aims at — and it stays
+ * set whether or not the card is switched on. The pricing model used to read it
+ * directly, which meant every floor and scenario went on assuming a ~15% first
+ * month after the card was turned off, in whichever direction the flat rate had
+ * been left. With the flat fallback at 50% that understated the giveaway by 35
+ * points and nothing warned about it.
+ *
+ * Card on → the budget the draw is aimed at. Card off → the flat rate.
+ */
+export function effectiveIntroDiscount(config = getPricingConfig()): number {
+  return scratchRevealEnabled(config)
+    ? config.introOffer.effectiveFirstMonthDiscount
+    : config.introOffer.firstMonthDiscount
+}
+
+/**
+ * The deepest first month anyone can actually get — the worst case the margin
+ * floor has to survive. The top card while the card runs; the flat rate once it
+ * doesn't.
+ */
+export function deepestIntroDiscount(config = getPricingConfig()): number {
+  const outcomes = scratchOutcomes(config)
+  return outcomes.length > 0
+    ? Math.max(0, ...outcomes.map((o) => o.discount))
+    : Math.max(0, config.introOffer.firstMonthDiscount)
+}
+
+/**
+ * The first-month outcomes to model, as {discount, weight} pairs.
+ *
+ * The card's outcomes when it runs, and a single certain outcome at the flat
+ * rate when it doesn't — so anything reasoning about "what do first months look
+ * like" keeps working across the switch instead of silently modelling a deal
+ * that is no longer offered.
+ */
+export function introOutcomesForModelling(config = getPricingConfig()): ScratchOutcome[] {
+  const outcomes = scratchOutcomes(config)
+  if (outcomes.length > 0) return outcomes
+  return [{ discount: config.introOffer.firstMonthDiscount, weight: 1 }]
+}
+
+/**
  * The first-month discount to actually apply. A member-revealed `override` is
  * honoured only when it's a valid scratch outcome; anything else falls back to
  * the flat `firstMonthDiscount`. Pass `override: 0` to explicitly apply no intro
