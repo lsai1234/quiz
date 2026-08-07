@@ -14,7 +14,7 @@ function p(over: Partial<CatalogueProduct> & { id: string }): CatalogueProduct {
     goals: [],
     dietaryTags: [],
     formats: ['liquid'],
-    variants: [{ id: `${over.id}-v`, title: 'v', flavour: null, size: null, price: 3, compareAtPrice: null, available: true, shopifyVariantId: null }],
+    variants: [{ id: `${over.id}-v`, title: 'v', flavour: null, size: null, price: 3, compareAtPrice: null, available: true }],
     basePrice: 3,
     compareAtPrice: null,
     subscriptionEligible: true,
@@ -27,7 +27,6 @@ function p(over: Partial<CatalogueProduct> & { id: string }): CatalogueProduct {
     hasStimulants: false,
     shortReason: '',
     warnings: [],
-    shopifyProductId: null,
     ...over,
   }
 }
@@ -135,8 +134,8 @@ describe('drinks-mode pace scaling', () => {
 describe('defaultVariantId', () => {
   it('honours the product default, else the first available variant', () => {
     const withDefault = p({ id: 'x', defaultVariantId: 'x-berry', variants: [
-      { id: 'x-orig', title: 'o', flavour: null, size: null, price: 3, compareAtPrice: null, available: true, shopifyVariantId: null },
-      { id: 'x-berry', title: 'b', flavour: 'Berry', size: null, price: 3, compareAtPrice: null, available: true, shopifyVariantId: null },
+      { id: 'x-orig', title: 'o', flavour: null, size: null, price: 3, compareAtPrice: null, available: true },
+      { id: 'x-berry', title: 'b', flavour: 'Berry', size: null, price: 3, compareAtPrice: null, available: true },
     ] })
     expect(defaultVariantId(withDefault)).toBe('x-berry')
     expect(defaultVariantId(vits)).toBe('vits-v')

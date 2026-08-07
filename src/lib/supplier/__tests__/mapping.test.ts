@@ -16,7 +16,6 @@ describe('supplier → catalogue mapping', () => {
     expect(cp.compareAtPrice).toBe(sp.rrp)
     expect(cp.cost).toBe(sp.wholesalePrice)
     expect(cp.title).toBe(sp.name)
-    expect(cp.shopifyProductId).toBeNull()
   })
 
   it('creates one variant per flavour, each carrying the supplier SKU + stock', () => {

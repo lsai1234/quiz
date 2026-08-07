@@ -9,11 +9,10 @@ export interface CheckoutPayload {
   subscription: MemberSubscription
   /** Their quiz answers + stack context, for "see your answers" in the hub. */
   quiz?: { answers: QuizAnswers; level?: StackLevel } | null
-  // NOTE: this used to carry `lines: SubscriptionCheckoutLine[]` for the Shopify
-  // cart. Nothing ever read it — `finalizeCheckout` builds the Stripe session
-  // from the subscription's own flat monthly — and payment no longer goes near
-  // Shopify, so it has been removed rather than left as a field the client
-  // populates and the server ignores.
+  // NOTE: this used to carry `lines: SubscriptionCheckoutLine[]` for the old
+  // storefront cart. Nothing ever read it — `finalizeCheckout` builds the Stripe
+  // session from the subscription's own flat monthly — so it has been removed
+  // rather than left as a field the client populates and the server ignores.
   /**
    * The member ticking the terms + health box at the gate. Required — the
    * server refuses to finalize without it, and records its own view of which

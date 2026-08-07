@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
-import { useShopifyCart } from '@/hooks/useShopifyCart'
+import { useLocalCart } from '@/hooks/useLocalCart'
 import { isLiveCatalogue } from '@/lib/data-source'
 import { levelSubscriptionRate } from '@/lib/stack-blueprint/pricing'
 import type { Product } from '@/lib/types'
@@ -58,7 +58,7 @@ function ProductBundleCard({
 
 export function Act5Bundle({ reducedMotion }: Props) {
   const { selectedProducts, answers, identity, stackLevel } = useQuizStore()
-  const shopify = useShopifyCart()
+  const cart = useLocalCart()
   const isLive = isLiveCatalogue()
   const containerRef = useRef<HTMLDivElement>(null)
   const successRef = useRef<HTMLDivElement>(null)
@@ -66,7 +66,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
   // Local qty map: variantId → quantity
   const [quantities, setQuantities] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {}
-    selectedProducts.forEach((p) => { init[p.shopifyVariantId] = 1 })
+    selectedProducts.forEach((p) => { init[p.variantId] = 1 })
     return init
   })
 
@@ -87,13 +87,13 @@ export function Act5Bundle({ reducedMotion }: Props) {
     if (hasInitialisedCart || selectedProducts.length === 0) return
     setHasInitialisedCart(true)
     selectedProducts.forEach((p) => {
-      shopify.addItem(p.shopifyVariantId, 1, `Selected based on your ${p.goalTags[0] ?? 'goals'} profile`)
+      cart.addItem(p.variantId, 1, `Selected based on your ${p.goalTags[0] ?? 'goals'} profile`)
     })
   }, [selectedProducts]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Confetti burst
   useEffect(() => {
-    if (!shopify.isCheckoutSuccess) return
+    if (!cart.isCheckoutSuccess) return
 
     if (!reducedMotion) {
       confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 }, colors: ['#00D4FF', '#ffffff', '#111111'] })
@@ -104,10 +104,10 @@ export function Act5Bundle({ reducedMotion }: Props) {
     if (successRef.current) {
       gsap.fromTo(successRef.current, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(1.4)' })
     }
-  }, [shopify.isCheckoutSuccess, reducedMotion])
+  }, [cart.isCheckoutSuccess, reducedMotion])
 
-  const total = selectedProducts.reduce((s, p) => s + p.price * (quantities[p.shopifyVariantId] ?? 1), 0)
-  const activeItems = selectedProducts.filter((p) => (quantities[p.shopifyVariantId] ?? 1) > 0)
+  const total = selectedProducts.reduce((s, p) => s + p.price * (quantities[p.variantId] ?? 1), 0)
+  const activeItems = selectedProducts.filter((p) => (quantities[p.variantId] ?? 1) > 0)
   // Subscribe & save rate is fixed per bundle (stack level), the same rate the
   // stack-review flow uses, so the legacy bundle screen advertises it consistently.
   const subRate = levelSubscriptionRate(stackLevel)
@@ -117,15 +117,15 @@ export function Act5Bundle({ reducedMotion }: Props) {
   const discountedTotal = total - discount
 
   function handleQtyChange(product: Product, newQty: number) {
-    setQuantities((q) => ({ ...q, [product.shopifyVariantId]: newQty }))
-    const line = shopify.cart?.lines.find((l) => l.variantId === product.shopifyVariantId)
-    if (newQty === 0 && line) shopify.removeItem(line.id)
-    else if (line) shopify.updateQty(line.id, newQty)
+    setQuantities((q) => ({ ...q, [product.variantId]: newQty }))
+    const line = cart.cart?.lines.find((l) => l.variantId === product.variantId)
+    if (newQty === 0 && line) cart.removeItem(line.id)
+    else if (line) cart.updateQty(line.id, newQty)
   }
 
   // ─── Success screen ───────────────────────────────────────────────────────
 
-  if (shopify.isCheckoutSuccess) {
+  if (cart.isCheckoutSuccess) {
     return (
       <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-6 text-center">
         <div ref={successRef} style={{ opacity: 0 }}>
@@ -136,18 +136,12 @@ export function Act5Bundle({ reducedMotion }: Props) {
           <p className="text-sm text-white/50 max-w-xs mx-auto leading-relaxed">
             {isLive
               ? 'Check your inbox for your order confirmation. Your getCHRGD stack will be with you soon.'
-              : 'This is a demo — in live mode your Shopify checkout would open here. Set NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN to go live.'}
+              : 'This is a demo — the real purchase flows are the shop and the quiz stack builder.'}
           </p>
           {identity && (
             <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-xs text-white/40">
               <span className="w-2 h-2 rounded-full bg-[#00D4FF]" />
               {identity.name} stack confirmed
-            </div>
-          )}
-          {!isLive && (
-            <div className="mt-6 px-4 py-3 rounded-xl bg-[#00D4FF]/10 border border-[#00D4FF]/20 text-xs text-[#00D4FF]/80 max-w-sm mx-auto text-left leading-relaxed">
-              <strong>To go live:</strong> add <code>NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN</code> and{' '}
-              <code>NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN</code> to <code>.env.local</code>
             </div>
           )}
         </div>
@@ -171,7 +165,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
           Adjust quantities, then head to checkout.
           {!isLive && (
             <span className="ml-1 text-[#00D4FF]">
-              (Mock mode — add Shopify credentials to go live)
+              (Demo — checkout here is a preview)
             </span>
           )}
         </p>
@@ -187,7 +181,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
           <div key={product.id} data-bundle-card style={{ scrollSnapAlign: 'start', opacity: reducedMotion ? 1 : 0 }}>
             <ProductBundleCard
               product={product}
-              qty={quantities[product.shopifyVariantId] ?? 1}
+              qty={quantities[product.variantId] ?? 1}
               onQtyChange={(n) => handleQtyChange(product, n)}
               accentColor={product.accentColor}
             />
@@ -216,7 +210,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
             Order summary
           </p>
           {activeItems.map((p) => {
-            const qty = quantities[p.shopifyVariantId] ?? 1
+            const qty = quantities[p.variantId] ?? 1
             return (
               <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-[#0A0A0A]/4 last:border-0">
                 <span className="text-xs text-[#0A0A0A]/60">{p.name} × {qty}</span>
@@ -267,8 +261,8 @@ export function Act5Bundle({ reducedMotion }: Props) {
             </div>
           </div>
           <button
-            onClick={shopify.checkout}
-            disabled={shopify.isLoading || activeItems.length === 0}
+            onClick={cart.checkout}
+            disabled={cart.isLoading || activeItems.length === 0}
             className={`flex-1 py-4 rounded-2xl text-sm font-bold tracking-wide transition-all active:scale-95 ${
               activeItems.length > 0
                 ? 'bg-[#00D4FF] text-[#0A0A0A]'
@@ -276,7 +270,7 @@ export function Act5Bundle({ reducedMotion }: Props) {
             }`}
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            {shopify.isLoading ? 'Loading…' : isLive ? 'Checkout →' : 'Demo checkout →'}
+            {cart.isLoading ? 'Loading…' : isLive ? 'Checkout →' : 'Demo checkout →'}
           </button>
         </div>
       </div>

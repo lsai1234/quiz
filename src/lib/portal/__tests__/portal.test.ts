@@ -14,11 +14,10 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 const makeProduct = (o: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
   id: 'p', title: 'P', handle: 'p', description: '', imageUrl: 'https://img/x.jpg', category: 'Protein',
   stackSlots: ['protein'], goals: ['muscle'], dietaryTags: [], formats: ['powder'],
-  variants: [{ id: 'v', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: 'gid://shopify/ProductVariant/1', sellingPlanId: 'gid://shopify/SellingPlan/1' }],
+  variants: [{ id: 'v', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, sku: 'PB-1' }],
   basePrice: 30, compareAtPrice: null, cost: 10, weightGrams: 1150, subscriptionEligible: true, servings: 30,
   swapGroup: 'protein-whey', recommendationPriority: 8, marginPriority: 7, isCoreEligible: true,
-  isBoosterEligible: false, hasStimulants: false, shortReason: 'x', warnings: [],
-  shopifyProductId: 'gid://shopify/Product/1', ...o,
+  isBoosterEligible: false, hasStimulants: false, shortReason: 'x', warnings: [], ...o,
 })
 
 afterEach(() => {
@@ -69,8 +68,10 @@ describe('product readiness', () => {
     expect(r.overall).toBe('ok')
   })
 
-  it('flags a mock product (no Shopify id) and a missing cost', () => {
-    const r = productReadiness(makeProduct({ shopifyProductId: null, cost: undefined }), { live: false })
+  it('flags a product with no supplier SKU and a missing cost', () => {
+    const noSku = makeProduct({ cost: undefined })
+    noSku.variants = noSku.variants.map((v) => ({ ...v, sku: null }))
+    const r = productReadiness(noSku, { live: false })
     expect(r.checks.find((c) => c.id === 'identity')?.status).not.toBe('ok')
     expect(r.checks.find((c) => c.id === 'pricing')?.status).toBe('warn')
   })

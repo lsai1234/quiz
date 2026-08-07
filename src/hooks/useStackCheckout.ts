@@ -102,9 +102,8 @@ export function useStackCheckout() {
 
       // ── Subscription ── (account-gated; bundle + quiz persist to the account)
       if (planType === 'subscription') {
-        // No Shopify id / selling-plan requirements: payment goes through Stripe
-        // from server-resolved prices, so a variant needs nothing from Shopify to
-        // be sellable.
+        // Payment goes through Stripe from server-resolved prices, so a variant
+        // needs nothing beyond its own id to be sellable.
         const result = buildSubscriptionCheckout(blueprint, catalogue, answers, {
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
@@ -139,7 +138,7 @@ export function useStackCheckout() {
       // stock); the SERVER prices it and decides Stripe-vs-mock. The old
       // `if (!live) return mock` short-circuit here is what made one-off Stripe
       // checkout unreachable under the shipping default.
-      const validation = validateCheckout(blueprint, catalogue, { requireShopifyIds: false })
+      const validation = validateCheckout(blueprint, catalogue)
       if (!validation.ok) {
         setState({ status: 'error', messages: validation.errors.map(validationErrorMessage) })
         return

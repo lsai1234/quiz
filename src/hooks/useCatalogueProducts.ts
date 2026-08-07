@@ -44,7 +44,7 @@ export function useCatalogueProducts(): UseCatalogueProductsReturn {
         if (data.error) throw new Error(data.error)
         if (Array.isArray(data.products) && data.products.length > 0) {
           setCatalogueProducts(data.products)
-          setIsLive(data.source === 'shopify')
+          setIsLive(data.source === 'real')
         }
       })
       .catch((err: Error) => {

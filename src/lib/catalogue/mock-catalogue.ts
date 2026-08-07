@@ -1,16 +1,14 @@
 /**
  * CHRGD Mock Product Catalogue
  *
- * This file is the source of truth when the resolved data source is 'mock'
- * (see src/lib/data-source.ts) — i.e. local dev / CI, or when DATA_SOURCE=mock.
- * When the data source is 'shopify', this is replaced by live data fetched via
- * mapShopifyToCatalogueProduct() in src/lib/shopify/catalogue.ts.
+ * The sample catalogue served when the data source is 'mock' (see
+ * src/lib/data-source.ts) — local dev, CI, and the default everywhere else.
+ * It exists so every journey works before a single supplier product has been
+ * added.
  *
- * HOW TO CONNECT SHOPIFY DATA:
- * 1. Set NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN and NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
- * 2. In Shopify admin, set product tags (goal:*, stack:*, vegan, stimulant, beginner)
- *    and product metafields (chrgd.safe_wording, chrgd.accent_color, etc.)
- * 3. /api/catalogue will automatically serve live data instead of this file
+ * The real catalogue is not a different version of this file: it is whatever
+ * has been curated from the PowerBody feed in the Founders Hub. Switch the
+ * data source to 'real' and this file stops being read.
  */
 
 import type { CatalogueProduct } from './types'
@@ -32,10 +30,10 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['gluten-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-whey-choc-1kg', title: 'Chocolate Fudge / 1kg', flavour: 'Chocolate Fudge', size: '1kg', price: 34.99, compareAtPrice: 44.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-whey-vanilla-1kg', title: 'Vanilla Ice Cream / 1kg', flavour: 'Vanilla Ice Cream', size: '1kg', price: 34.99, compareAtPrice: 44.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-whey-straw-1kg', title: 'Strawberry Milkshake / 1kg', flavour: 'Strawberry Milkshake', size: '1kg', price: 34.99, compareAtPrice: 44.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-whey-choc-2kg', title: 'Chocolate Fudge / 2kg', flavour: 'Chocolate Fudge', size: '2kg', price: 59.99, compareAtPrice: 74.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-whey-choc-1kg', title: 'Chocolate Fudge / 1kg', flavour: 'Chocolate Fudge', size: '1kg', price: 34.99, compareAtPrice: 44.99, available: true },
+      { id: 'chrgd-whey-vanilla-1kg', title: 'Vanilla Ice Cream / 1kg', flavour: 'Vanilla Ice Cream', size: '1kg', price: 34.99, compareAtPrice: 44.99, available: true },
+      { id: 'chrgd-whey-straw-1kg', title: 'Strawberry Milkshake / 1kg', flavour: 'Strawberry Milkshake', size: '1kg', price: 34.99, compareAtPrice: 44.99, available: true },
+      { id: 'chrgd-whey-choc-2kg', title: 'Chocolate Fudge / 2kg', flavour: 'Chocolate Fudge', size: '2kg', price: 59.99, compareAtPrice: 74.99, available: true },
     ],
     basePrice: 34.99,
     compareAtPrice: 44.99,
@@ -51,7 +49,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Fast-absorbing protein to build and repair muscle after training.',
     warnings: ['Contains milk (dairy). Not suitable for lactose intolerance.'],
-    shopifyProductId: null,
   },
 
   {
@@ -66,9 +63,9 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'dairy-free', 'gluten-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-plant-choc-1kg', title: 'Chocolate Brownie / 1kg', flavour: 'Chocolate Brownie', size: '1kg', price: 36.99, compareAtPrice: 46.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-plant-vanilla-1kg', title: 'Vanilla Creme / 1kg', flavour: 'Vanilla Creme', size: '1kg', price: 36.99, compareAtPrice: 46.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-plant-unflavoured-1kg', title: 'Unflavoured / 1kg', flavour: 'Unflavoured', size: '1kg', price: 34.99, compareAtPrice: null, available: true, shopifyVariantId: null },
+      { id: 'chrgd-plant-choc-1kg', title: 'Chocolate Brownie / 1kg', flavour: 'Chocolate Brownie', size: '1kg', price: 36.99, compareAtPrice: 46.99, available: true },
+      { id: 'chrgd-plant-vanilla-1kg', title: 'Vanilla Creme / 1kg', flavour: 'Vanilla Creme', size: '1kg', price: 36.99, compareAtPrice: 46.99, available: true },
+      { id: 'chrgd-plant-unflavoured-1kg', title: 'Unflavoured / 1kg', flavour: 'Unflavoured', size: '1kg', price: 34.99, compareAtPrice: null, available: true },
     ],
     basePrice: 36.99,
     compareAtPrice: 46.99,
@@ -84,7 +81,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'A complete plant-based protein that covers all essential amino acids.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -99,8 +95,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['gluten-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-mass-choc-4kg', title: 'Chocolate / 4kg', flavour: 'Chocolate', size: '4kg', price: 42.99, compareAtPrice: 54.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-mass-vanilla-4kg', title: 'Vanilla / 4kg', flavour: 'Vanilla', size: '4kg', price: 42.99, compareAtPrice: 54.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-mass-choc-4kg', title: 'Chocolate / 4kg', flavour: 'Chocolate', size: '4kg', price: 42.99, compareAtPrice: 54.99, available: true },
+      { id: 'chrgd-mass-vanilla-4kg', title: 'Vanilla / 4kg', flavour: 'Vanilla', size: '4kg', price: 42.99, compareAtPrice: 54.99, available: true },
     ],
     basePrice: 42.99,
     compareAtPrice: 54.99,
@@ -116,7 +112,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'High-calorie shake for people trying to gain size and mass.',
     warnings: ['High in calories — only suitable for a calorie surplus phase.'],
-    shopifyProductId: null,
   },
 
   // ─── PERFORMANCE SLOT ────────────────────────────────────────────────────────
@@ -133,8 +128,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-creatine-unflavoured-500g', title: 'Unflavoured / 500g', flavour: 'Unflavoured', size: '500g', price: 19.99, compareAtPrice: 24.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-creatine-berry-500g', title: 'Mixed Berry / 500g', flavour: 'Mixed Berry', size: '500g', price: 21.99, compareAtPrice: 26.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-creatine-unflavoured-500g', title: 'Unflavoured / 500g', flavour: 'Unflavoured', size: '500g', price: 19.99, compareAtPrice: 24.99, available: true },
+      { id: 'chrgd-creatine-berry-500g', title: 'Mixed Berry / 500g', flavour: 'Mixed Berry', size: '500g', price: 21.99, compareAtPrice: 26.99, available: true },
     ],
     basePrice: 19.99,
     compareAtPrice: 24.99,
@@ -151,7 +146,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'The most researched strength supplement in sport — a daily 5g dose keeps your levels topped up.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── ENERGY SLOT ─────────────────────────────────────────────────────────────
@@ -168,9 +162,9 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-preworkout-blue-raz-300g', title: 'Blue Raspberry / 300g', flavour: 'Blue Raspberry', size: '300g', price: 29.99, compareAtPrice: 39.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-preworkout-watermelon-300g', title: 'Watermelon / 300g', flavour: 'Watermelon', size: '300g', price: 29.99, compareAtPrice: 39.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-preworkout-tropical-300g', title: 'Tropical / 300g', flavour: 'Tropical', size: '300g', price: 29.99, compareAtPrice: 39.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-preworkout-blue-raz-300g', title: 'Blue Raspberry / 300g', flavour: 'Blue Raspberry', size: '300g', price: 29.99, compareAtPrice: 39.99, available: true },
+      { id: 'chrgd-preworkout-watermelon-300g', title: 'Watermelon / 300g', flavour: 'Watermelon', size: '300g', price: 29.99, compareAtPrice: 39.99, available: true },
+      { id: 'chrgd-preworkout-tropical-300g', title: 'Tropical / 300g', flavour: 'Tropical', size: '300g', price: 29.99, compareAtPrice: 39.99, available: true },
     ],
     basePrice: 29.99,
     compareAtPrice: 39.99,
@@ -189,7 +183,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'caffeine', mg: 200 }, { name: 'beta-alanine' }, { name: 'citrulline' }],
     shortReason: 'Boosts energy, focus and blood flow before training.',
     warnings: ['Contains 200mg caffeine per serving. Not suitable for under 18s or those sensitive to caffeine.', 'Do not exceed one serving in 24 hours.'],
-    shopifyProductId: null,
   },
 
   {
@@ -204,8 +197,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-stimfree-cherry-300g', title: 'Cherry Cola / 300g', flavour: 'Cherry Cola', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-stimfree-lemon-300g', title: 'Lemon Sherbet / 300g', flavour: 'Lemon Sherbet', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-stimfree-cherry-300g', title: 'Cherry Cola / 300g', flavour: 'Cherry Cola', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true },
+      { id: 'chrgd-stimfree-lemon-300g', title: 'Lemon Sherbet / 300g', flavour: 'Lemon Sherbet', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true },
     ],
     basePrice: 27.99,
     compareAtPrice: 34.99,
@@ -221,7 +214,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Improves blood flow and pump during training — no caffeine.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── HYDRATION SLOT ──────────────────────────────────────────────────────────
@@ -238,9 +230,9 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-elec-citrus-300g', title: 'Citrus Burst / 300g', flavour: 'Citrus Burst', size: '300g', price: 17.99, compareAtPrice: 22.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-elec-berry-300g', title: 'Mixed Berry / 300g', flavour: 'Mixed Berry', size: '300g', price: 17.99, compareAtPrice: 22.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-elec-unflavoured-300g', title: 'Unflavoured / 300g', flavour: 'Unflavoured', size: '300g', price: 15.99, compareAtPrice: null, available: true, shopifyVariantId: null },
+      { id: 'chrgd-elec-citrus-300g', title: 'Citrus Burst / 300g', flavour: 'Citrus Burst', size: '300g', price: 17.99, compareAtPrice: 22.99, available: true },
+      { id: 'chrgd-elec-berry-300g', title: 'Mixed Berry / 300g', flavour: 'Mixed Berry', size: '300g', price: 17.99, compareAtPrice: 22.99, available: true },
+      { id: 'chrgd-elec-unflavoured-300g', title: 'Unflavoured / 300g', flavour: 'Unflavoured', size: '300g', price: 15.99, compareAtPrice: null, available: true },
     ],
     basePrice: 17.99,
     compareAtPrice: 22.99,
@@ -256,7 +248,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Replaces the salts you sweat out to support hydration — made for long or sweaty sessions.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── RECOVERY SLOT ───────────────────────────────────────────────────────────
@@ -273,8 +264,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-bcaa-passion-390g', title: 'Passion Fruit / 390g', flavour: 'Passion Fruit', size: '390g', price: 24.99, compareAtPrice: 31.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-bcaa-peach-390g', title: 'Peach Mango / 390g', flavour: 'Peach Mango', size: '390g', price: 24.99, compareAtPrice: 31.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-bcaa-passion-390g', title: 'Passion Fruit / 390g', flavour: 'Passion Fruit', size: '390g', price: 24.99, compareAtPrice: 31.99, available: true },
+      { id: 'chrgd-bcaa-peach-390g', title: 'Peach Mango / 390g', flavour: 'Peach Mango', size: '390g', price: 24.99, compareAtPrice: 31.99, available: true },
     ],
     basePrice: 24.99,
     compareAtPrice: 31.99,
@@ -290,7 +281,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Amino acids and electrolytes to sip through training and support recovery.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -305,8 +295,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-collagen-unflavoured-300g', title: 'Unflavoured / 300g', flavour: 'Unflavoured', size: '300g', price: 22.99, compareAtPrice: 29.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-collagen-peach-300g', title: 'Peach / 300g', flavour: 'Peach', size: '300g', price: 22.99, compareAtPrice: 29.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-collagen-unflavoured-300g', title: 'Unflavoured / 300g', flavour: 'Unflavoured', size: '300g', price: 22.99, compareAtPrice: 29.99, available: true },
+      { id: 'chrgd-collagen-peach-300g', title: 'Peach / 300g', flavour: 'Peach', size: '300g', price: 22.99, compareAtPrice: 29.99, available: true },
     ],
     basePrice: 22.99,
     compareAtPrice: 29.99,
@@ -323,7 +313,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Supports joint, tendon and skin health — especially for high-frequency training.',
     warnings: ['Contains bovine collagen. Not suitable for vegans or vegetarians.'],
-    shopifyProductId: null,
   },
 
   // ─── HEALTH SLOT ─────────────────────────────────────────────────────────────
@@ -340,8 +329,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-omega3-90', title: '90 Softgels', flavour: null, size: '90 softgels', price: 14.99, compareAtPrice: 19.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-omega3-180', title: '180 Softgels', flavour: null, size: '180 softgels', price: 26.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-omega3-90', title: '90 Softgels', flavour: null, size: '90 softgels', price: 14.99, compareAtPrice: 19.99, available: true },
+      { id: 'chrgd-omega3-180', title: '180 Softgels', flavour: null, size: '180 softgels', price: 26.99, compareAtPrice: 34.99, available: true },
     ],
     basePrice: 14.99,
     compareAtPrice: 19.99,
@@ -358,7 +347,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Supports heart, brain and joint health — one of the most recommended daily supplements.',
     warnings: ['Contains fish. Not suitable for vegans, vegetarians or those with fish allergies.'],
-    shopifyProductId: null,
   },
 
   {
@@ -373,8 +361,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-vitd3k2-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 12.99, compareAtPrice: 17.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-vitd3k2-120', title: '120 Capsules', flavour: null, size: '120 caps', price: 22.99, compareAtPrice: 29.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-vitd3k2-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 12.99, compareAtPrice: 17.99, available: true },
+      { id: 'chrgd-vitd3k2-120', title: '120 Capsules', flavour: null, size: '120 caps', price: 22.99, compareAtPrice: 29.99, available: true },
     ],
     basePrice: 12.99,
     compareAtPrice: 17.99,
@@ -390,7 +378,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Supports immunity, bone health and energy — especially important for people who train indoors.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -405,7 +392,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-multi-60', title: '60 Capsules (1 month)', flavour: null, size: '60 caps', price: 16.99, compareAtPrice: 22.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-multi-60', title: '60 Capsules (1 month)', flavour: null, size: '60 caps', price: 16.99, compareAtPrice: 22.99, available: true },
     ],
     basePrice: 16.99,
     compareAtPrice: 22.99,
@@ -421,7 +408,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Covers everyday vitamin and mineral gaps to keep you performing at your best.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── SLEEP SLOT ──────────────────────────────────────────────────────────────
@@ -438,7 +424,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-mag-90', title: '90 Capsules', flavour: null, size: '90 caps', price: 14.99, compareAtPrice: 19.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-mag-90', title: '90 Capsules', flavour: null, size: '90 caps', price: 14.99, compareAtPrice: 19.99, available: true },
     ],
     basePrice: 14.99,
     compareAtPrice: 19.99,
@@ -455,7 +441,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'magnesium', mg: 400 }],
     shortReason: 'Magnesium glycinate to help you wind down and support overnight recovery. Take before bed.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -470,7 +455,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-sleep-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 19.99, compareAtPrice: 26.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-sleep-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 19.99, compareAtPrice: 26.99, available: true },
     ],
     basePrice: 19.99,
     compareAtPrice: 26.99,
@@ -488,7 +473,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'magnesium', mg: 60 }, { name: 'theanine', mg: 200 }, { name: 'ashwagandha', mg: 300 }],
     shortReason: 'A blend to support deeper sleep and overnight recovery — take 30 mins before bed.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -503,7 +487,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-ashwa-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 18.99, compareAtPrice: 24.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-ashwa-60', title: '60 Capsules', flavour: null, size: '60 caps', price: 18.99, compareAtPrice: 24.99, available: true },
     ],
     basePrice: 18.99,
     compareAtPrice: 24.99,
@@ -521,7 +505,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'ashwagandha', mg: 600 }],
     shortReason: 'An adaptogen that helps your body handle stress and wind down in the evening.',
     warnings: ['Not suitable during pregnancy or breastfeeding.'],
-    shopifyProductId: null,
   },
 
   {
@@ -536,7 +519,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-vitc-zinc-90', title: '90 Tablets', flavour: null, size: '90 tabs', price: 11.99, compareAtPrice: 15.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-vitc-zinc-90', title: '90 Tablets', flavour: null, size: '90 tabs', price: 11.99, compareAtPrice: 15.99, available: true },
     ],
     basePrice: 11.99,
     compareAtPrice: 15.99,
@@ -554,7 +537,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'vitamin-c', mg: 1000 }, { name: 'zinc', mg: 15 }],
     shortReason: 'A daily immune top-up — Vitamin C and Zinc both support normal immune function.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── GUT HEALTH SLOT ─────────────────────────────────────────────────────────
@@ -571,8 +553,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-probiotic-30', title: '30 Capsules (1 month)', flavour: null, size: '30 caps', price: 21.99, compareAtPrice: 28.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-probiotic-60', title: '60 Capsules (2 months)', flavour: null, size: '60 caps', price: 38.99, compareAtPrice: 49.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-probiotic-30', title: '30 Capsules (1 month)', flavour: null, size: '30 caps', price: 21.99, compareAtPrice: 28.99, available: true },
+      { id: 'chrgd-probiotic-60', title: '60 Capsules (2 months)', flavour: null, size: '60 caps', price: 38.99, compareAtPrice: 49.99, available: true },
     ],
     basePrice: 21.99,
     compareAtPrice: 28.99,
@@ -588,7 +570,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Multi-strain live cultures to support digestion, gut balance and immunity.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -603,8 +584,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-greens-300g', title: 'Apple & Mint / 300g', flavour: 'Apple & Mint', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-greens-berry-300g', title: 'Mixed Berry / 300g', flavour: 'Mixed Berry', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-greens-300g', title: 'Apple & Mint / 300g', flavour: 'Apple & Mint', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true },
+      { id: 'chrgd-greens-berry-300g', title: 'Mixed Berry / 300g', flavour: 'Mixed Berry', size: '300g', price: 27.99, compareAtPrice: 34.99, available: true },
     ],
     basePrice: 27.99,
     compareAtPrice: 34.99,
@@ -620,7 +601,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Fibre, greens and digestive enzymes to fill nutritional gaps and support gut health.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── MENOPAUSE SUPPORT SLOT ──────────────────────────────────────────────────
@@ -637,7 +617,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-meno-60', title: '60 Capsules (1 month)', flavour: null, size: '60 caps', price: 24.99, compareAtPrice: 32.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-meno-60', title: '60 Capsules (1 month)', flavour: null, size: '60 caps', price: 24.99, compareAtPrice: 32.99, available: true },
     ],
     basePrice: 24.99,
     compareAtPrice: 32.99,
@@ -655,7 +635,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'sage' }, { name: 'red-clover' }, { name: 'vitamin-b6' }, { name: 'magnesium', mg: 50 }],
     shortReason: 'Botanicals and key nutrients to help with hormonal balance, hot flushes and energy through menopause.',
     warnings: ['Consult your GP before use if you are on hormone-related medication.'],
-    shopifyProductId: null,
   },
 
   {
@@ -670,7 +649,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['capsules'],
     variants: [
-      { id: 'chrgd-meno-bone-90', title: '90 Tablets', flavour: null, size: '90 tabs', price: 17.99, compareAtPrice: 23.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-meno-bone-90', title: '90 Tablets', flavour: null, size: '90 tabs', price: 17.99, compareAtPrice: 23.99, available: true },
     ],
     basePrice: 17.99,
     compareAtPrice: 23.99,
@@ -686,7 +665,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Bone-supporting nutrients that become especially important as oestrogen declines.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── MIXABLE DRINKS ──────────────────────────────────────────────────────────
@@ -707,8 +685,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder', 'effervescent'],
     variants: [
-      { id: 'chrgd-lqd-daily-berry-300g', title: 'Sparkling Berry / 300g', flavour: 'Sparkling Berry', size: '300g', price: 18.99, compareAtPrice: 24.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-lqd-daily-citrus-300g', title: 'Citrus Spritz / 300g', flavour: 'Citrus Spritz', size: '300g', price: 18.99, compareAtPrice: 24.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-daily-berry-300g', title: 'Sparkling Berry / 300g', flavour: 'Sparkling Berry', size: '300g', price: 18.99, compareAtPrice: 24.99, available: true },
+      { id: 'chrgd-lqd-daily-citrus-300g', title: 'Citrus Spritz / 300g', flavour: 'Citrus Spritz', size: '300g', price: 18.99, compareAtPrice: 24.99, available: true },
     ],
     basePrice: 18.99,
     compareAtPrice: 24.99,
@@ -724,7 +702,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Covers your daily vitamin and mineral bases in one easy glass — no pills.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -739,9 +716,9 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['gluten-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-clear-tropical-500g', title: 'Tropical Punch / 500g', flavour: 'Tropical Punch', size: '500g', price: 29.99, compareAtPrice: 37.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-clear-applejuice-500g', title: 'Apple Juice / 500g', flavour: 'Apple Juice', size: '500g', price: 29.99, compareAtPrice: 37.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-clear-lemonade-500g', title: 'Pink Lemonade / 500g', flavour: 'Pink Lemonade', size: '500g', price: 29.99, compareAtPrice: 37.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-clear-tropical-500g', title: 'Tropical Punch / 500g', flavour: 'Tropical Punch', size: '500g', price: 29.99, compareAtPrice: 37.99, available: true },
+      { id: 'chrgd-clear-applejuice-500g', title: 'Apple Juice / 500g', flavour: 'Apple Juice', size: '500g', price: 29.99, compareAtPrice: 37.99, available: true },
+      { id: 'chrgd-clear-lemonade-500g', title: 'Pink Lemonade / 500g', flavour: 'Pink Lemonade', size: '500g', price: 29.99, compareAtPrice: 37.99, available: true },
     ],
     basePrice: 29.99,
     compareAtPrice: 37.99,
@@ -757,7 +734,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'All the protein, none of the milkshake — like juice, great if shakes feel heavy.',
     warnings: ['Contains milk (dairy). Not suitable for lactose intolerance.'],
-    shopifyProductId: null,
   },
 
   {
@@ -772,8 +748,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder'],
     variants: [
-      { id: 'chrgd-nightpour-honeyvanilla-300g', title: 'Honey & Vanilla / 300g', flavour: 'Honey & Vanilla', size: '300g', price: 21.99, compareAtPrice: 27.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-nightpour-cocoa-300g', title: 'Calm Cocoa / 300g', flavour: 'Calm Cocoa', size: '300g', price: 21.99, compareAtPrice: 27.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-nightpour-honeyvanilla-300g', title: 'Honey & Vanilla / 300g', flavour: 'Honey & Vanilla', size: '300g', price: 21.99, compareAtPrice: 27.99, available: true },
+      { id: 'chrgd-nightpour-cocoa-300g', title: 'Calm Cocoa / 300g', flavour: 'Calm Cocoa', size: '300g', price: 21.99, compareAtPrice: 27.99, available: true },
     ],
     basePrice: 21.99,
     compareAtPrice: 27.99,
@@ -792,7 +768,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Make the last drink of the day the one that helps you switch off and sleep deeper.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -809,8 +784,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['powder', 'effervescent'],
     variants: [
-      { id: 'chrgd-immunityfizz-elderberry-30', title: 'Elderberry / 30 servings', flavour: 'Elderberry', size: '30 servings', price: 13.99, compareAtPrice: 17.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-immunityfizz-orange-30', title: 'Blood Orange / 30 servings', flavour: 'Blood Orange', size: '30 servings', price: 13.99, compareAtPrice: 17.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-immunityfizz-elderberry-30', title: 'Elderberry / 30 servings', flavour: 'Elderberry', size: '30 servings', price: 13.99, compareAtPrice: 17.99, available: true },
+      { id: 'chrgd-immunityfizz-orange-30', title: 'Blood Orange / 30 servings', flavour: 'Blood Orange', size: '30 servings', price: 13.99, compareAtPrice: 17.99, available: true },
     ],
     basePrice: 13.99,
     compareAtPrice: 17.99,
@@ -827,7 +802,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'vitamin-c', mg: 1000 }, { name: 'zinc', mg: 10 }, { name: 'vitamin-d' }],
     shortReason: 'Daily immune cover — vitamin C, zinc and D — that tastes like a fizzy elderberry drink.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   // ─── CHRGD LQD — READY-TO-DRINK RANGE ────────────────────────────────────────
@@ -849,8 +823,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['gluten-free'],
     formats: ['rtd', 'drink'],
     variants: [
-      { id: 'chrgd-lqd-protein-choc-30', title: 'Chocolate / 30 bottles', flavour: 'Chocolate', size: '30 x 330ml', price: 49.99, compareAtPrice: 62.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-lqd-protein-vanilla-30', title: 'Vanilla / 30 bottles', flavour: 'Vanilla', size: '30 x 330ml', price: 49.99, compareAtPrice: 62.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-protein-choc-30', title: 'Chocolate / 30 bottles', flavour: 'Chocolate', size: '30 x 330ml', price: 49.99, compareAtPrice: 62.99, available: true },
+      { id: 'chrgd-lqd-protein-vanilla-30', title: 'Vanilla / 30 bottles', flavour: 'Vanilla', size: '30 x 330ml', price: 49.99, compareAtPrice: 62.99, available: true },
     ],
     basePrice: 49.99,
     compareAtPrice: 62.99,
@@ -868,7 +842,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Your protein, already made — crack the cap and drink it.',
     warnings: ['Contains milk (dairy). Not suitable for lactose intolerance.'],
-    shopifyProductId: null,
   },
 
   {
@@ -887,8 +860,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink'],
     variants: [
-      { id: 'chrgd-lqd-hydrate-citrus-30', title: 'Citrus / 30 bottles', flavour: 'Citrus', size: '30 x 500ml', price: 24.99, compareAtPrice: 32.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-lqd-hydrate-berry-30', title: 'Berry / 30 bottles', flavour: 'Berry', size: '30 x 500ml', price: 24.99, compareAtPrice: 32.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-hydrate-citrus-30', title: 'Citrus / 30 bottles', flavour: 'Citrus', size: '30 x 500ml', price: 24.99, compareAtPrice: 32.99, available: true },
+      { id: 'chrgd-lqd-hydrate-berry-30', title: 'Berry / 30 bottles', flavour: 'Berry', size: '30 x 500ml', price: 24.99, compareAtPrice: 32.99, available: true },
     ],
     basePrice: 24.99,
     compareAtPrice: 32.99,
@@ -904,7 +877,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Hydration already bottled — one for the gym bag, one for the desk.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -921,8 +893,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink', 'can'],
     variants: [
-      { id: 'chrgd-lqd-charge-blueraz-24', title: 'Blue Razz / 24 cans', flavour: 'Blue Razz', size: '24 x 330ml', price: 34.99, compareAtPrice: 44.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-lqd-charge-tropical-24', title: 'Tropical Storm / 24 cans', flavour: 'Tropical Storm', size: '24 x 330ml', price: 34.99, compareAtPrice: 44.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-charge-blueraz-24', title: 'Blue Razz / 24 cans', flavour: 'Blue Razz', size: '24 x 330ml', price: 34.99, compareAtPrice: 44.99, available: true },
+      { id: 'chrgd-lqd-charge-tropical-24', title: 'Tropical Storm / 24 cans', flavour: 'Tropical Storm', size: '24 x 330ml', price: 34.99, compareAtPrice: 44.99, available: true },
     ],
     basePrice: 34.99,
     compareAtPrice: 44.99,
@@ -941,7 +913,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'caffeine', mg: 150 }, { name: 'beta-alanine' }, { name: 'citrulline' }],
     shortReason: 'Pre-workout you can hold — cold, carbonated and ready before training.',
     warnings: ['Contains caffeine (150mg per can). Not recommended after mid-afternoon.'],
-    shopifyProductId: null,
   },
 
   {
@@ -956,7 +927,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink', 'can'],
     variants: [
-      { id: 'chrgd-lqd-charge-zero-cherry-24', title: 'Cherry Cola / 24 cans', flavour: 'Cherry Cola', size: '24 x 330ml', price: 32.99, compareAtPrice: 41.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-charge-zero-cherry-24', title: 'Cherry Cola / 24 cans', flavour: 'Cherry Cola', size: '24 x 330ml', price: 32.99, compareAtPrice: 41.99, available: true },
     ],
     basePrice: 32.99,
     compareAtPrice: 41.99,
@@ -973,7 +944,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Stim-free training can — evening sessions without wrecking your sleep.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -990,8 +960,8 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink'],
     variants: [
-      { id: 'chrgd-lqd-vits-berry-30', title: 'Sparkling Berry / 30 bottles', flavour: 'Sparkling Berry', size: '30 x 250ml', price: 29.99, compareAtPrice: 37.99, available: true, shopifyVariantId: null },
-      { id: 'chrgd-lqd-vits-citrus-30', title: 'Citrus Spritz / 30 bottles', flavour: 'Citrus Spritz', size: '30 x 250ml', price: 29.99, compareAtPrice: 37.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-vits-berry-30', title: 'Sparkling Berry / 30 bottles', flavour: 'Sparkling Berry', size: '30 x 250ml', price: 29.99, compareAtPrice: 37.99, available: true },
+      { id: 'chrgd-lqd-vits-citrus-30', title: 'Citrus Spritz / 30 bottles', flavour: 'Citrus Spritz', size: '30 x 250ml', price: 29.99, compareAtPrice: 37.99, available: true },
     ],
     basePrice: 29.99,
     compareAtPrice: 37.99,
@@ -1007,7 +977,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'A whole vitamin routine in one daily bottle — drink it and you\'re covered.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -1024,7 +993,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink'],
     variants: [
-      { id: 'chrgd-lqd-night-honey-30', title: 'Honey & Vanilla / 30 bottles', flavour: 'Honey & Vanilla', size: '30 x 250ml', price: 27.99, compareAtPrice: 34.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-night-honey-30', title: 'Honey & Vanilla / 30 bottles', flavour: 'Honey & Vanilla', size: '30 x 250ml', price: 27.99, compareAtPrice: 34.99, available: true },
     ],
     basePrice: 27.99,
     compareAtPrice: 34.99,
@@ -1040,7 +1009,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'The last drink of the day, already made — sip it and switch off.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -1055,7 +1023,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'shot'],
     variants: [
-      { id: 'chrgd-lqd-immunity-elderberry-30', title: 'Elderberry / 30 shots', flavour: 'Elderberry', size: '30 x 60ml', price: 24.99, compareAtPrice: 31.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-immunity-elderberry-30', title: 'Elderberry / 30 shots', flavour: 'Elderberry', size: '30 x 60ml', price: 24.99, compareAtPrice: 31.99, available: true },
     ],
     basePrice: 24.99,
     compareAtPrice: 31.99,
@@ -1072,7 +1040,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     actives: [{ name: 'vitamin-c', mg: 1000 }, { name: 'zinc', mg: 10 }, { name: 'vitamin-d' }],
     shortReason: 'Immune support as a 10-second shot — no tablets to remember.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -1087,7 +1054,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink'],
     variants: [
-      { id: 'chrgd-lqd-greens-applemint-30', title: 'Apple & Mint / 30 bottles', flavour: 'Apple & Mint', size: '30 x 250ml', price: 34.99, compareAtPrice: 42.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-greens-applemint-30', title: 'Apple & Mint / 30 bottles', flavour: 'Apple & Mint', size: '30 x 250ml', price: 34.99, compareAtPrice: 42.99, available: true },
     ],
     basePrice: 34.99,
     compareAtPrice: 42.99,
@@ -1103,7 +1070,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Greens with breakfast, already blended — no scoops, no blender, no grit.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -1119,7 +1085,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'drink'],
     variants: [
-      { id: 'chrgd-lqd-recover-cherry-24', title: 'Tart Cherry / 24 bottles', flavour: 'Tart Cherry', size: '24 x 330ml', price: 36.99, compareAtPrice: 45.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-recover-cherry-24', title: 'Tart Cherry / 24 bottles', flavour: 'Tart Cherry', size: '24 x 330ml', price: 36.99, compareAtPrice: 45.99, available: true },
     ],
     basePrice: 36.99,
     compareAtPrice: 45.99,
@@ -1137,7 +1103,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Recovery already bottled — drink it on the way out of the gym.',
     warnings: [],
-    shopifyProductId: null,
   },
 
   {
@@ -1152,7 +1117,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
     formats: ['rtd', 'shot'],
     variants: [
-      { id: 'chrgd-lqd-creatine-citrus-30', title: 'Citrus / 30 shots', flavour: 'Citrus', size: '30 x 60ml', price: 29.99, compareAtPrice: 37.99, available: true, shopifyVariantId: null },
+      { id: 'chrgd-lqd-creatine-citrus-30', title: 'Citrus / 30 shots', flavour: 'Citrus', size: '30 x 60ml', price: 29.99, compareAtPrice: 37.99, available: true },
     ],
     basePrice: 29.99,
     compareAtPrice: 37.99,
@@ -1169,7 +1134,6 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     hasStimulants: false,
     shortReason: 'Daily creatine as a 10-second shot — the results without the routine.',
     warnings: [],
-    shopifyProductId: null,
   },
 ]
 
@@ -1177,7 +1141,7 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
  * The mock catalogue, with representative demo ratings and inventory attached
  * (seeded by id, so stable across reloads). Both are demo data — the same character
  * as the mock prices above — present only so the shop's social-proof and low-stock
- * UI are visible without a live source. Live Shopify products get real ratings from
+ * UI are visible without a live source. Real products get their ratings from
  * review metafields and real stock from `quantityAvailable`.
  */
 export const MOCK_CATALOGUE: CatalogueProduct[] = RAW_MOCK_CATALOGUE.map((p) => ({

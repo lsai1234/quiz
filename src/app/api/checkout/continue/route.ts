@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/checkout/continue — the OAuth return target for the checkout gate.
  * After the provider round-trip the member is signed in; here we read the
  * stashed order, save their bundle + quiz, clear the stash, and redirect on to
- * the Shopify checkout (live) or the hub (mock). Any miss lands on /hub.
+ * the Stripe checkout (live) or the hub (mock). Any miss lands on /hub.
  */
 export async function GET(req: Request) {
   const origin = resolveOrigin(req.url)

@@ -16,10 +16,10 @@ import type { QuizAnswers, StackLevel } from '@/lib/types'
 const daily = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
   id: 'whey', title: 'Whey', handle: 'whey', description: '', imageUrl: null, category: 'Protein',
   stackSlots: ['protein'], goals: ['muscle'], dietaryTags: [], formats: ['powder'],
-  variants: [{ id: 'v', title: 'Choc', flavour: 'Choc', size: '1kg', price: 40, compareAtPrice: 50, available: true, shopifyVariantId: null }],
+  variants: [{ id: 'v', title: 'Choc', flavour: 'Choc', size: '1kg', price: 40, compareAtPrice: 50, available: true }],
   basePrice: 40, compareAtPrice: 50, cost: 12, subscriptionEligible: true, servings: 30,
   swapGroup: 'protein-whey', recommendationPriority: 8, marginPriority: 7, isCoreEligible: true,
-  isBoosterEligible: false, hasStimulants: false, shortReason: '', warnings: [], shopifyProductId: null,
+  isBoosterEligible: false, hasStimulants: false, shortReason: '', warnings: [],
   ...overrides,
 })
 
@@ -109,7 +109,7 @@ describe('usage clamp keeps the plan profitable', () => {
   it('disallows usage levels that would drop the plan below the minimum monthly', () => {
     // A low-priced single product: at light usage it ships rarely → flat monthly
     // can fall under minSubscriptionMonthly, which the clamp forbids.
-    const cheap = daily({ id: 'cheap', servings: 90, basePrice: 12, cost: 4, variants: [{ id: 'cv', title: 'x', flavour: null, size: null, price: 12, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const cheap = daily({ id: 'cheap', servings: 90, basePrice: 12, cost: 4, variants: [{ id: 'cv', title: 'x', flavour: null, size: null, price: 12, compareAtPrice: null, available: true }] })
     const bp = blueprintOf(['cheap'], 'essentials')
     const allowed = allowedUsageLevels(bp, [cheap], answers('daily'), 'cheap', {})
     expect(allowed).toContain('standard')

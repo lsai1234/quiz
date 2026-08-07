@@ -28,7 +28,6 @@ function makeProduct(overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
     hasStimulants: false,
     shortReason: '',
     warnings: [],
-    shopifyProductId: null,
     ...overrides,
   }
 }

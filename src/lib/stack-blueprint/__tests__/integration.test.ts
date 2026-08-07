@@ -449,7 +449,7 @@ describe('Feature 8: dynamic pricing', () => {
 describe('Feature 9: checkout validation', () => {
   it('validateCheckout succeeds in mock mode for a generated blueprint', () => {
     const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
-    const result = validateCheckout(bp, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const result = validateCheckout(bp, MOCK_CATALOGUE)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.lines.length).toBeGreaterThan(0)
@@ -457,7 +457,7 @@ describe('Feature 9: checkout validation', () => {
 
   it('each line item has the required source attribute', () => {
     const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
-    const result = validateCheckout(bp, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const result = validateCheckout(bp, MOCK_CATALOGUE)
     if (!result.ok) return
     for (const line of result.lines) {
       const sourceAttr = line.attributes.find((a) => a.key === 'source')
@@ -467,7 +467,7 @@ describe('Feature 9: checkout validation', () => {
 
   it('each line item carries the stackName attribute', () => {
     const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
-    const result = validateCheckout(bp, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const result = validateCheckout(bp, MOCK_CATALOGUE)
     if (!result.ok) return
     for (const line of result.lines) {
       const nameAttr = line.attributes.find((a) => a.key === 'stackName')
@@ -493,7 +493,7 @@ describe('Feature 9: checkout validation', () => {
       reason: 'Recovery support',
       confidenceScore: 70,
     })
-    const result = validateCheckout(withBooster, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const result = validateCheckout(withBooster, MOCK_CATALOGUE)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.lines.length).toBe(withBooster.slots.length)
@@ -505,8 +505,8 @@ describe('Feature 9: checkout validation', () => {
     if (!optionalSlot) return
 
     const reduced = removeOptionalSlot(bp, optionalSlot.slotId)
-    const original = validateCheckout(bp, MOCK_CATALOGUE, { requireShopifyIds: false })
-    const trimmed = validateCheckout(reduced, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const original = validateCheckout(bp, MOCK_CATALOGUE)
+    const trimmed = validateCheckout(reduced, MOCK_CATALOGUE)
     if (!original.ok || !trimmed.ok) return
     expect(trimmed.lines.length).toBe(original.lines.length - 1)
   })
@@ -522,23 +522,21 @@ describe('Feature 9: checkout validation', () => {
     let swapped = updateStackSlotProduct(bp, proteinSlot.slotId, newProduct.id)
     if (firstVariant) swapped = updateStackSlotVariant(swapped, proteinSlot.slotId, firstVariant.id)
 
-    const result = validateCheckout(swapped, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const result = validateCheckout(swapped, MOCK_CATALOGUE)
     if (!result.ok) return
     const proteinLine = result.lines.find((l) => {
       const attr = l.attributes.find((a) => a.key === 'slotType')
       return attr?.value === 'protein'
     })
-    expect(proteinLine?.merchandiseId).toBe(firstVariant?.id ?? newProduct.id)
+    expect(proteinLine?.variantId).toBe(firstVariant?.id ?? newProduct.id)
   })
 
-  it('fails validation in live mode when shopifyVariantId is null', () => {
+  it('validates the mock catalogue — every variant carries its own id', () => {
     const bp = buildStackBlueprint(BASE_ANSWERS, MOCK_CATALOGUE)
-    // MOCK_CATALOGUE products all have shopifyVariantId: null
-    const result = validateCheckout(bp, MOCK_CATALOGUE, { requireShopifyIds: true })
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.errors.length).toBeGreaterThan(0)
-    expect(result.errors[0].type).toBe('no-shopify-id')
+    const result = validateCheckout(bp, MOCK_CATALOGUE)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.lines.every((l) => !!l.variantId)).toBe(true)
   })
 })
 
@@ -600,7 +598,7 @@ describe('Full stack mutation cycle', () => {
     expect(pricing.subscriptionTotal).toBeLessThanOrEqual(pricing.oneOffTotal)
 
     // Verify checkout lines match current slot count
-    const result = validateCheckout(bp, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const result = validateCheckout(bp, MOCK_CATALOGUE)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.lines.length).toBe(bp.slots.length)

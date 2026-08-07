@@ -24,8 +24,8 @@ const mockProductA: CatalogueProduct = {
   dietaryTags: ['gluten-free'],
   formats: ['powder'],
   variants: [
-    { id: 'variant-a1', title: 'Choc / 1kg', flavour: 'Chocolate', size: '1kg', price: 35.00, compareAtPrice: null, available: true, shopifyVariantId: null },
-    { id: 'variant-a2', title: 'Vanilla / 1kg', flavour: 'Vanilla', size: '1kg', price: 36.00, compareAtPrice: null, available: true, shopifyVariantId: null },
+    { id: 'variant-a1', title: 'Choc / 1kg', flavour: 'Chocolate', size: '1kg', price: 35.00, compareAtPrice: null, available: true },
+    { id: 'variant-a2', title: 'Vanilla / 1kg', flavour: 'Vanilla', size: '1kg', price: 36.00, compareAtPrice: null, available: true },
   ],
   basePrice: 35.00,
   compareAtPrice: null,
@@ -39,7 +39,6 @@ const mockProductA: CatalogueProduct = {
   hasStimulants: false,
   shortReason: 'Great for building muscle.',
   warnings: [],
-  shopifyProductId: null,
 }
 
 const mockProductB: CatalogueProduct = {
@@ -54,7 +53,7 @@ const mockProductB: CatalogueProduct = {
   dietaryTags: ['vegan'],
   formats: ['powder'],
   variants: [
-    { id: 'variant-b1', title: 'Unflavoured / 500g', flavour: null, size: '500g', price: 20.00, compareAtPrice: null, available: true, shopifyVariantId: null },
+    { id: 'variant-b1', title: 'Unflavoured / 500g', flavour: null, size: '500g', price: 20.00, compareAtPrice: null, available: true },
   ],
   basePrice: 20.00,
   compareAtPrice: null,
@@ -68,7 +67,6 @@ const mockProductB: CatalogueProduct = {
   hasStimulants: false,
   shortReason: 'Boosts power output.',
   warnings: [],
-  shopifyProductId: null,
 }
 
 const mockProductC: CatalogueProduct = {
@@ -95,7 +93,6 @@ const mockProductC: CatalogueProduct = {
   hasStimulants: false,
   shortReason: 'Also great for muscle.',
   warnings: [],
-  shopifyProductId: null,
 }
 
 const catalogue = [mockProductA, mockProductB, mockProductC]

@@ -22,7 +22,7 @@ const product = (id: string, price: number): CatalogueProduct => ({
   title: id,
   basePrice: price,
   cost: price / 2,
-  variants: [{ id: `${id}-v`, title: '', flavour: null, size: null, price, compareAtPrice: null, available: true, shopifyVariantId: `gid://x/${id}` }],
+  variants: [{ id: `${id}-v`, title: '', flavour: null, size: null, price, compareAtPrice: null, available: true }],
 })
 
 const blueprintOf = (ids: string[]): StackBlueprint => ({
@@ -75,7 +75,7 @@ describe('the minimum order', () => {
   it('is off entirely when the minimum is zero', () => {
     setPricingOverrides({ minOrderValue: 0 })
     const p = product('tiny', 3)
-    expect(validateCheckout(blueprintOf(['tiny']), [p], { requireShopifyIds: false }).ok).toBe(true)
+    expect(validateCheckout(blueprintOf(['tiny']), [p]).ok).toBe(true)
   })
 })
 

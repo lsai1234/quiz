@@ -38,7 +38,6 @@ export function product(over: {
         compareAtPrice: null,
         available: true,
         sku: `SKU-${over.id}`,
-        shopifyVariantId: null,
       },
     ],
     stackSlots: ['protein'],

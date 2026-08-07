@@ -469,7 +469,7 @@ export function buildStackBlueprint(
   catalogue: CatalogueProduct[]
 ): StackBlueprint {
   // Use the live catalogue directly — no mock fallback.
-  // The Shopify mapper derives goals/slots for all products so stacks are
+  // The supplier mapper derives goals/slots for all products so stacks are
   // always built from real inventory. If a goal has no matching product,
   // that slot is simply omitted (handled gracefully below).
   // Subscription-only refills never enter the quiz recommendation — they only

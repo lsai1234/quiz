@@ -1,12 +1,12 @@
 /**
- * Maps a StackBlueprint to validated Shopify cart line items.
+ * Maps a StackBlueprint to validated cart line items.
  *
  * Each slot must have:
  *   - a resolved CatalogueProduct
- *   - a CatalogueVariant with a shopifyVariantId (when Shopify is live)
+ *   - a CatalogueVariant, identified by its own id
  *
  * Returns a typed result so callers can surface specific errors to the user
- * without any Shopify-specific code leaking into UI components.
+ * without any supplier-specific code leaking into UI components.
  */
 
 import type { StackBlueprint, StackSlotEntry } from './types'
@@ -25,20 +25,16 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CheckoutLineItem {
-  /** Shopify merchandiseId (GID) — e.g. "gid://shopify/ProductVariant/1234567" */
-  merchandiseId: string
+  /** The catalogue variant being bought. */
+  variantId: string
   quantity: number
-  /** Shopify selling-plan GID — present on subscription lines, null for one-off. */
-  sellingPlanId?: string | null
-  /** Shopify cart line attributes — surfaced in the order for ops/personalisation */
+  /** Line attributes — surfaced in the order for ops/personalisation. */
   attributes: { key: string; value: string }[]
 }
 
 export type ValidationError =
   | { type: 'no-variant'; slotId: string; slotTitle: string }
-  | { type: 'no-shopify-id'; slotId: string; slotTitle: string; variantTitle: string }
   | { type: 'unavailable'; slotId: string; slotTitle: string; variantTitle: string }
-  | { type: 'no-selling-plan'; slotId: string; slotTitle: string }
   /**
    * The basket is too small to pay for its own parcel.
    *
@@ -57,10 +53,9 @@ export type CheckoutValidation =
 export interface SubscriptionCheckoutLine {
   productId: string
   productTitle: string
-  /** Cart merchandiseId (Shopify GID when live, internal variant id in mock). */
-  merchandiseId: string
+  /** The catalogue variant being subscribed to. */
+  variantId: string
   /** Selling plan that makes this line recurring (null until configured). */
-  sellingPlanId: string | null
   /** Units sent each delivery. */
   quantity: number
   /** Delivery cadence in months. */
@@ -70,7 +65,7 @@ export interface SubscriptionCheckoutLine {
   attributes: { key: string; value: string }[]
 }
 
-/** Everything needed to start a subscription — the payload handed to Shopify/Recharge. */
+/** Everything needed to start a subscription — the payload handed to Stripe. */
 export interface SubscriptionCheckout {
   lines: SubscriptionCheckoutLine[]
   /** Flat amount billed every month. */
@@ -87,26 +82,6 @@ export interface SubscriptionCheckout {
 export type SubscriptionCheckoutResult =
   | { ok: true; checkout: SubscriptionCheckout }
   | { ok: false; errors: ValidationError[] }
-
-// ─── Cart permalink (fallback when Storefront API is not live) ────────────────
-
-/**
- * Builds a Shopify cart permalink from variant IDs and quantities.
- * Format: /cart/VAR_ID:QTY,VAR_ID:QTY
- * Requires numeric Shopify variant IDs (not GIDs).
- */
-export function buildCartPermalink(
-  domain: string,
-  lines: { numericVariantId: string; quantity: number }[],
-): string {
-  const items = lines.map((l) => `${l.numericVariantId}:${l.quantity}`).join(',')
-  return `https://${domain}/cart/${items}`
-}
-
-/** Extract numeric ID from a Shopify GID ("gid://shopify/ProductVariant/123" → "123") */
-export function gidToNumeric(gid: string): string {
-  return gid.split('/').pop() ?? gid
-}
 
 // ─── Validation + line-item builder ──────────────────────────────────────────
 
@@ -128,17 +103,16 @@ function resolveVariant(
 }
 
 /**
- * Validate the blueprint and convert to Shopify cart line items.
+ * Validate the blueprint and convert it to cart line items.
  *
- * When `requireShopifyIds` is false (mock/dev mode), lines are still returned
- * but merchandiseId will be the internal variant id — useful for mock checkout.
+ * Every catalogue variant carries its own id, so there is nothing to gate on
+ * beyond the product existing and being in stock — the old "is it connected to
+ * the store yet?" check went with the old storefront integration.
  */
 export function validateCheckout(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
-  options: { requireShopifyIds?: boolean } = {},
 ): CheckoutValidation {
-  const { requireShopifyIds = true } = options
   const errors: ValidationError[] = []
   const lines: CheckoutLineItem[] = []
 
@@ -163,24 +137,14 @@ export function validateCheckout(
       continue
     }
 
-    if (requireShopifyIds && !variant.shopifyVariantId) {
-      errors.push({
-        type: 'no-shopify-id',
-        slotId: slot.slotId,
-        slotTitle: slot.title,
-        variantTitle: variant.title,
-      })
-      continue
-    }
-
     lines.push({
-      merchandiseId: variant.shopifyVariantId ?? variant.id,
+      variantId: variant.id,
       quantity: 1,
       attributes: [
         { key: 'stackId', value: blueprint.id },
         { key: 'stackName', value: blueprint.stackName },
         { key: 'slotType', value: slot.slotType },
-        { key: 'reason', value: slot.reason.slice(0, 255) }, // Shopify attribute limit
+        { key: 'reason', value: slot.reason.slice(0, 255) }, // keep attributes short
         { key: 'source', value: 'quiz-stack-builder' },
       ],
     })
@@ -219,16 +183,16 @@ export function validateCheckout(
 /**
  * Build the subscription checkout payload from a blueprint: the deduplicated,
  * quantity-aware plan lines plus the flat monthly / intro / commitment figures.
- * This is exactly what gets handed to Shopify (cart lines with selling plans)
+ * This is exactly what gets handed to Stripe (recurring lines)
  * or Recharge at checkout.
  */
 export function buildSubscriptionCheckout(
   blueprint: StackBlueprint,
   catalogue: CatalogueProduct[],
   answers?: QuizAnswers | null,
-  options: { requireShopifyIds?: boolean; requireSellingPlans?: boolean } & SubscriptionPlanOptions = {},
+  options: SubscriptionPlanOptions = {},
 ): SubscriptionCheckoutResult {
-  const { requireShopifyIds = false, requireSellingPlans = false, usageByProductId, level, introDiscountOverride } = options
+  const { usageByProductId, level, introDiscountOverride } = options
   const planOpts = { usageByProductId, level, introDiscountOverride }
   const plan = buildSubscriptionPlan(blueprint, catalogue, answers, undefined, planOpts)
   const pricing = calculatePricing(blueprint, catalogue, answers, undefined, planOpts)
@@ -236,20 +200,10 @@ export function buildSubscriptionCheckout(
   const lines: SubscriptionCheckoutLine[] = []
 
   for (const line of plan) {
-    const slotId = line.coversSlotIds[0] ?? line.product.id
-    if (requireShopifyIds && !line.variantId.startsWith('gid://')) {
-      errors.push({ type: 'no-shopify-id', slotId, slotTitle: line.product.title, variantTitle: '' })
-      continue
-    }
-    if (requireSellingPlans && !line.sellingPlanId) {
-      errors.push({ type: 'no-selling-plan', slotId, slotTitle: line.product.title })
-      continue
-    }
     lines.push({
       productId: line.product.id,
       productTitle: line.product.title,
-      merchandiseId: line.variantId,
-      sellingPlanId: line.sellingPlanId,
+      variantId: line.variantId,
       quantity: line.unitsPerShipment,
       deliveryIntervalMonths: line.shipEveryMonths,
       pricePerDelivery: line.pricePerDelivery,
@@ -285,10 +239,6 @@ export function validationErrorMessage(err: ValidationError): string {
       return `Please choose a flavour or size for your ${err.slotTitle} before checking out.`
     case 'unavailable':
       return `${err.slotTitle} — ${err.variantTitle} is currently out of stock. Please swap to a different option.`
-    case 'no-shopify-id':
-      return `${err.slotTitle} isn't connected to the store yet. Try refreshing or contact support.`
-    case 'no-selling-plan':
-      return `${err.slotTitle} doesn't have a subscription plan set up yet. Try refreshing or contact support.`
     case 'below-minimum':
       return `Orders start at ${formatGBP(err.minimum)} — add ${formatGBP(err.shortfall)} more to check out.`
   }

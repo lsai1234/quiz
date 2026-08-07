@@ -186,7 +186,7 @@ export interface StackIdentity {
 }
 
 export interface ProductVariant {
-  id: string           // Shopify GID e.g. gid://shopify/ProductVariant/123
+  id: string           // catalogue variant id
   title: string        // e.g. "Chocolate Fudge / 500g"
   price: number
   compareAtPrice: number | null
@@ -195,8 +195,7 @@ export interface ProductVariant {
 }
 
 export interface Product {
-  id: string                  // internal slug (Shopify handle)
-  shopifyProductId: string    // Shopify GID
+  id: string                  // internal slug
   handle: string
   name: string
   category: string
@@ -210,7 +209,7 @@ export interface Product {
   beginner: boolean
   stackPriority: number
   stackLevels: StackLevel[]
-  shopifyVariantId: string    // default variant ID
+  variantId: string    // default variant ID
   accentColor: string
   image: string | null
   variants: ProductVariant[]

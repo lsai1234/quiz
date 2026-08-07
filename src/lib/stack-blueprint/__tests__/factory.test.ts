@@ -369,7 +369,7 @@ describe('buildStackBlueprint — eligibility gates', () => {
         basePrice: 29.99, compareAtPrice: null, subscriptionEligible: false, servings: 30,
         swapGroup: 'fat-burner', recommendationPriority: 7, marginPriority: 5,
         isCoreEligible: false, isBoosterEligible: false, hasStimulants: true,
-        shortReason: 'Supports fat loss.', warnings: [], shopifyProductId: null,
+        shortReason: 'Supports fat loss.', warnings: [],
       },
     ] as typeof base
     const blueprint = buildStackBlueprint(

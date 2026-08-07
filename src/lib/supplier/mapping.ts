@@ -135,7 +135,6 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           // Keep the supplier SKU on every variant so a product resolves back to
           // one supplier item for stock re-sync.
           sku: sp.sku,
-          shopifyVariantId: null,
         }))
       : [{
           id,
@@ -147,7 +146,6 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           available,
           inventory: sp.stock,
           sku: sp.sku,
-          shopifyVariantId: null,
         }]
 
   const servingsPerUnit = sp.servings ?? 30
@@ -203,6 +201,5 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     hasStimulants: c.hasStimulants,
     shortReason: '',
     warnings: c.hasStimulants ? ['Contains caffeine'] : [],
-    shopifyProductId: null,
   }
 }

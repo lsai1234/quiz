@@ -1096,10 +1096,8 @@ export interface SubscriptionLine {
   shipEveryMonths: number
   /** Average units consumed per month (unitsPerShipment / shipEveryMonths). */
   monthlyUnits: number
-  /** The variant id that will be billed/shipped (internal id, or Shopify GID when live). */
+  /** The catalogue variant that will be billed and shipped. */
   variantId: string
-  /** Shopify selling-plan GID for this line, when configured. */
-  sellingPlanId: string | null
   /** Undiscounted price of one unit. */
   unitPrice: number
   /** Cost of goods for one unit. */
@@ -1297,8 +1295,7 @@ export function buildSubscriptionPlan(
       unitsPerShipment: r.unitsPerShipment,
       shipEveryMonths: r.shipEveryMonths,
       monthlyUnits: r.monthlyUnits,
-      variantId: r.variant?.shopifyVariantId ?? r.variant?.id ?? r.product.id,
-      sellingPlanId: r.variant?.sellingPlanId ?? null,
+      variantId: r.variant?.id ?? r.product.id,
       unitPrice: round(r.unitPrice),
       unitCost: round(unitCost),
       pricePerDelivery: round(r.unitsPerShipment * discountedUnit),

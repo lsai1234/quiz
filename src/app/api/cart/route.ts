@@ -23,7 +23,7 @@ import type { OrderChannel, OrderLine } from '@/lib/orders/types'
  * — a signed-in hub user is attached when present.
  */
 interface IncomingLine {
-  merchandiseId?: string
+  variantId?: string
   quantity?: number
   attributes?: { key: string; value: string }[]
 }
@@ -50,21 +50,20 @@ export async function POST(req: Request) {
   }
   const lines = body.lines as IncomingLine[]
   for (const line of lines) {
-    if (!line.merchandiseId || typeof line.quantity !== 'number' || line.quantity <= 0) {
-      return NextResponse.json({ error: 'Each line must have merchandiseId and a positive quantity' }, { status: 400 })
+    if (!line.variantId || typeof line.quantity !== 'number' || line.quantity <= 0) {
+      return NextResponse.json({ error: 'Each line must have variantId and a positive quantity' }, { status: 400 })
     }
   }
 
   await syncPortalRuntime()
   const { products } = await getResolvedCatalogue()
 
-  // Resolve each merchandiseId to a catalogue variant (by internal id, or the
-  // Shopify variant id if one is ever attached) so the price is authoritative.
+  // Resolve each variantId to a catalogue variant (by internal id, or the
+  // catalogue variant id) so the price is authoritative.
   const byMerchId = new Map<string, { product: CatalogueProduct; variant: CatalogueVariant }>()
   for (const product of products) {
     for (const variant of product.variants) {
       byMerchId.set(variant.id, { product, variant })
-      if (variant.shopifyVariantId) byMerchId.set(variant.shopifyVariantId, { product, variant })
     }
   }
 
@@ -73,7 +72,7 @@ export async function POST(req: Request) {
   // cannot be priced in isolation.
   const matched: { product: CatalogueProduct; variant: CatalogueVariant; quantity: number }[] = []
   for (const line of lines) {
-    const match = byMerchId.get(line.merchandiseId!)
+    const match = byMerchId.get(line.variantId!)
     if (!match) continue // stale/unknown line — drop it
     matched.push({ ...match, quantity: line.quantity! })
   }

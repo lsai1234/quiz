@@ -35,7 +35,7 @@ export function variantStock(v: Pick<CatalogueVariant, 'available' | 'inventory'
  * A stable, representative inventory count for a mock variant, seeded by its id.
  * Roughly one variant in four runs low (1–9 left, triggering "Only N left"); the
  * rest are comfortably stocked. Demo data only — live variants use the real
- * Shopify `quantityAvailable`.
+ * the supplier's reported stock level.
  */
 export function demoInventory(variantId: string): number {
   const h = hashString(`${variantId}:stock`)

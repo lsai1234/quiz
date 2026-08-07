@@ -56,8 +56,9 @@ NEXT_PUBLIC_DATA_SOURCE=mock   # mock | real
   you actually sell, and it starts empty: add products in Hub → Products → PowerBody.
 
 No credentials are involved, so this can't silently fall back. Flip it at runtime in the
-Founders Hub (Settings → Data source). Shopify was the old "live" side of this switch and
-has been retired — a stale `shopify` or `auto` value reads as `mock`.
+Founders Hub (Settings → Data source). A previous storefront integration was the old
+"live" side of this switch and has been removed — a stale `shopify` or `auto` value reads
+as `mock`, so an old deploy degrades quietly.
 
 ## Add the PowerBody supplier (dropship)
 

@@ -8,7 +8,7 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
   return {
     id: 'v1', title: 'Default', flavour: null, size: null, price: 30,
-    compareAtPrice: null, available: true, shopifyVariantId: null, ...over,
+    compareAtPrice: null, available: true, ...over,
   }
 }
 
@@ -19,8 +19,7 @@ function makeProduct(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
     formats: ['powder'], variants: [variant()], basePrice: 30, compareAtPrice: null,
     subscriptionEligible: true, servings: 30, swapGroup: 'protein-whey',
     recommendationPriority: 7, marginPriority: 5, isCoreEligible: true,
-    isBoosterEligible: false, hasStimulants: false, shortReason: '', warnings: [],
-    shopifyProductId: null, ...over,
+    isBoosterEligible: false, hasStimulants: false, shortReason: '', warnings: [], ...over,
   }
 }
 
@@ -104,10 +103,10 @@ describe('resolveBasket + pricing', () => {
 })
 
 describe('basketToCheckoutLines', () => {
-  it('uses the Shopify variant id when present, else the internal id', () => {
+  it('uses the catalogue variant id for each line', () => {
     const products = [
-      makeProduct({ id: 'p1', variants: [variant({ id: 'v1', shopifyVariantId: 'gid://shopify/ProductVariant/1' })] }),
-      makeProduct({ id: 'p2', variants: [variant({ id: 'v2', shopifyVariantId: null })] }),
+      makeProduct({ id: 'p1', variants: [variant({ id: 'v1' })] }),
+      makeProduct({ id: 'p2', variants: [variant({ id: 'v2' })] }),
     ]
     const resolved = resolveBasket(
       [
@@ -117,8 +116,8 @@ describe('basketToCheckoutLines', () => {
       products,
     )
     const lines = basketToCheckoutLines(resolved)
-    expect(lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/1')
-    expect(lines[1].merchandiseId).toBe('v2')
+    expect(lines[0].variantId).toBe('v1')
+    expect(lines[1].variantId).toBe('v2')
     expect(lines[1].quantity).toBe(3)
     expect(lines[0].attributes).toEqual([
       { key: 'source', value: 'shop' },

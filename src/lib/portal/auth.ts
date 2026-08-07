@@ -11,7 +11,7 @@
  * credentials) rather than the password itself, and the token maps back to the
  * signed-in founder for display/attribution. Server-only (uses node crypto).
  *
- * Upgrade path: Shopify staff OAuth / SSO at integration time.
+ * Upgrade path: SSO, if the team ever outgrows per-founder accounts.
  */
 import crypto from 'crypto'
 

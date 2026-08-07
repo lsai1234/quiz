@@ -86,14 +86,13 @@ export function priceBasket(resolved: ResolvedBasketLine[], config = getPricingC
 }
 
 /**
- * Map a resolved basket to Shopify cart line items. Mirrors the stack
- * checkout's mapping: `merchandiseId` is the Shopify variant GID when live,
- * else the internal variant id (so mock checkout still returns the right
- * shape). Every line is tagged so ops can tell shop orders from quiz orders.
+ * Map a resolved basket to checkout line items. Mirrors the stack
+ * checkout's mapping: `variantId` is the catalogue variant's own id. Every line
+ * is tagged so ops can tell shop orders from quiz orders.
  */
 export function basketToCheckoutLines(resolved: ResolvedBasketLine[]): CheckoutLineItem[] {
   return resolved.map(({ product, variant, quantity }) => ({
-    merchandiseId: variant.shopifyVariantId ?? variant.id,
+    variantId: variant.id,
     quantity,
     attributes: [
       { key: 'source', value: 'shop' },

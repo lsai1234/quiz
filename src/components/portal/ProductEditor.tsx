@@ -47,7 +47,7 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
     const res = await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id, patch }) })
     const data = await res.json()
     setSaving(false)
-    setResult(res.ok ? (data.shopify?.written ? 'Saved & pushed to Shopify ✓' : data.shopify?.error ? `Saved · Shopify: ${data.shopify.error}` : 'Saved ✓') : 'Save failed')
+    setResult(res.ok ? 'Saved ✓' : 'Save failed')
     if (res.ok) onSaved()
   }
 

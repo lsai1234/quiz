@@ -54,13 +54,10 @@ describe('Big Night, Big Morning bundle', () => {
   })
 
   it('passes checkout validation for both plans (mock mode)', () => {
-    const oneOff = validateCheckout(bundle.blueprint, MOCK_CATALOGUE, { requireShopifyIds: false })
+    const oneOff = validateCheckout(bundle.blueprint, MOCK_CATALOGUE)
     expect(oneOff.ok).toBe(true)
 
-    const sub = buildSubscriptionCheckout(bundle.blueprint, MOCK_CATALOGUE, null, {
-      requireShopifyIds: false,
-      requireSellingPlans: false,
-    })
+    const sub = buildSubscriptionCheckout(bundle.blueprint, MOCK_CATALOGUE, null)
     expect(sub.ok).toBe(true)
   })
 

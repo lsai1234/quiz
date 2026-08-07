@@ -106,12 +106,9 @@ describe('launch bundles', () => {
     })
 
     it('passes checkout validation for both plans (mock mode)', () => {
-      expect(validateCheckout(bundle.blueprint, MOCK_CATALOGUE, { requireShopifyIds: false }).ok).toBe(true)
+      expect(validateCheckout(bundle.blueprint, MOCK_CATALOGUE).ok).toBe(true)
       expect(
-        buildSubscriptionCheckout(bundle.blueprint, MOCK_CATALOGUE, null, {
-          requireShopifyIds: false,
-          requireSellingPlans: false,
-        }).ok,
+        buildSubscriptionCheckout(bundle.blueprint, MOCK_CATALOGUE, null).ok,
       ).toBe(true)
     })
 

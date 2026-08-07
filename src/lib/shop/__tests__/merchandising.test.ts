@@ -2,7 +2,7 @@ import { dealInfo, dealsProducts, maxDealPct, productBadge, defaultVariant, vari
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
-  return { id: 'v', title: 'V', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null, ...over }
+  return { id: 'v', title: 'V', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, ...over }
 }
 
 function makeProduct(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
@@ -12,7 +12,7 @@ function makeProduct(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
     variants: [variant()], basePrice: 30, compareAtPrice: null, subscriptionEligible: true,
     servings: 30, swapGroup: 'protein-whey', recommendationPriority: 5, marginPriority: 5,
     isCoreEligible: true, isBoosterEligible: false, hasStimulants: false, shortReason: '',
-    warnings: [], shopifyProductId: null, ...over,
+    warnings: [], ...over,
   }
 }
 

@@ -193,7 +193,7 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
 
               {mockDone && (
                 <p className="text-[10px] text-center" style={{ color: 'var(--color-muted)' }}>
-                  Shopify isn’t connected — this is a demo checkout.
+                  Payments aren’t live — this is a demo checkout.
                 </p>
               )}
             </div>

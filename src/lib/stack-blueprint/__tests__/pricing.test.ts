@@ -20,8 +20,8 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   dietaryTags: [],
   formats: ['powder'],
   variants: [
-    { id: 'v1', title: 'Chocolate', flavour: 'Chocolate', size: '500g', price: 30, compareAtPrice: 40, available: true, shopifyVariantId: null },
-    { id: 'v2', title: 'Vanilla', flavour: 'Vanilla', size: '500g', price: 32, compareAtPrice: 42, available: true, shopifyVariantId: null },
+    { id: 'v1', title: 'Chocolate', flavour: 'Chocolate', size: '500g', price: 30, compareAtPrice: 40, available: true },
+    { id: 'v2', title: 'Vanilla', flavour: 'Vanilla', size: '500g', price: 32, compareAtPrice: 42, available: true },
   ],
   basePrice: 30,
   compareAtPrice: 40,
@@ -35,7 +35,6 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   hasStimulants: false,
   shortReason: 'Builds muscle',
   warnings: [],
-  shopifyProductId: null,
   ...overrides,
 })
 
@@ -118,7 +117,7 @@ describe('calculatePricing', () => {
     const product = makeProduct({
       compareAtPrice: null,
       variants: [
-        { id: 'v1', title: 'Choc', flavour: 'Chocolate', size: '500g', price: 30, compareAtPrice: null, available: true, shopifyVariantId: null },
+        { id: 'v1', title: 'Choc', flavour: 'Chocolate', size: '500g', price: 30, compareAtPrice: null, available: true },
       ],
     })
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'v1' }])
@@ -151,11 +150,11 @@ describe('calculatePricing', () => {
   it('flips a long-lasting product to its mapped monthly subscription product', () => {
     const longProduct = makeProduct({
       id: 'creatine', basePrice: 20, servings: 90, subscriptionProductId: 'creatine-monthly',
-      variants: [{ id: 'cv', title: '500g', flavour: null, size: '500g', price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }],
+      variants: [{ id: 'cv', title: '500g', flavour: null, size: '500g', price: 20, compareAtPrice: null, available: true }],
     })
     const monthly = makeProduct({
       id: 'creatine-monthly', basePrice: 9, isSubscriptionOnly: true,
-      variants: [{ id: 'cmv', title: '150g', flavour: null, size: '150g', price: 9, compareAtPrice: null, available: true, shopifyVariantId: null }],
+      variants: [{ id: 'cmv', title: '150g', flavour: null, size: '150g', price: 9, compareAtPrice: null, available: true }],
     })
     const blueprint = makeBlueprint([{ selectedProductId: 'creatine', selectedVariantId: 'cv' }])
     const p = calculatePricing(blueprint, [longProduct, monthly])
@@ -170,15 +169,15 @@ describe('calculatePricing', () => {
   it('deduplicates when two slots resolve to the same subscription product', () => {
     const vitD = makeProduct({
       id: 'vit-d', basePrice: 13, servings: 60, subscriptionProductId: 'vit-d-monthly', stackSlots: ['health'],
-      variants: [{ id: 'vdv', title: '', flavour: null, size: null, price: 13, compareAtPrice: null, available: true, shopifyVariantId: null }],
+      variants: [{ id: 'vdv', title: '', flavour: null, size: null, price: 13, compareAtPrice: null, available: true }],
     })
     const bone = makeProduct({
       id: 'bone', basePrice: 18, servings: 45, subscriptionProductId: 'vit-d-monthly', stackSlots: ['menopause'],
-      variants: [{ id: 'bv', title: '', flavour: null, size: null, price: 18, compareAtPrice: null, available: true, shopifyVariantId: null }],
+      variants: [{ id: 'bv', title: '', flavour: null, size: null, price: 18, compareAtPrice: null, available: true }],
     })
     const monthly = makeProduct({
       id: 'vit-d-monthly', basePrice: 8, isSubscriptionOnly: true,
-      variants: [{ id: 'vdm', title: '', flavour: null, size: null, price: 8, compareAtPrice: null, available: true, shopifyVariantId: null }],
+      variants: [{ id: 'vdm', title: '', flavour: null, size: null, price: 8, compareAtPrice: null, available: true }],
     })
     const blueprint = makeBlueprint([
       { selectedProductId: 'vit-d', selectedVariantId: 'vdv' },
@@ -193,8 +192,8 @@ describe('calculatePricing', () => {
   })
 
   it('sums correctly across multiple slots, excluding non-qualifying products from the subscription', () => {
-    const prodA = makeProduct({ id: 'prod-a', basePrice: 30, subscriptionEligible: true, servings: 30, variants: [{ id: 'va', title: 'A', flavour: null, size: null, price: 30, compareAtPrice: 40, available: true, shopifyVariantId: null }] })
-    const prodB = makeProduct({ id: 'prod-b', basePrice: 20, compareAtPrice: null, subscriptionEligible: false, variants: [{ id: 'vb', title: 'B', flavour: null, size: null, price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const prodA = makeProduct({ id: 'prod-a', basePrice: 30, subscriptionEligible: true, servings: 30, variants: [{ id: 'va', title: 'A', flavour: null, size: null, price: 30, compareAtPrice: 40, available: true }] })
+    const prodB = makeProduct({ id: 'prod-b', basePrice: 20, compareAtPrice: null, subscriptionEligible: false, variants: [{ id: 'vb', title: 'B', flavour: null, size: null, price: 20, compareAtPrice: null, available: true }] })
     const blueprint = makeBlueprint([
       { selectedProductId: 'prod-a', selectedVariantId: 'va' },
       { selectedProductId: 'prod-b', selectedVariantId: 'vb', slotType: 'performance' } as never,
@@ -260,7 +259,7 @@ describe('buildSubscriptionPlan', () => {
   it('merges slots that share a subscription product into one line', () => {
     const a = makeProduct({ id: 'a', subscriptionProductId: 'shared', stackSlots: ['health'] })
     const b = makeProduct({ id: 'b', subscriptionProductId: 'shared', stackSlots: ['menopause'] })
-    const shared = makeProduct({ id: 'shared', basePrice: 8, isSubscriptionOnly: true, variants: [{ id: 'sv', title: '', flavour: null, size: null, price: 8, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const shared = makeProduct({ id: 'shared', basePrice: 8, isSubscriptionOnly: true, variants: [{ id: 'sv', title: '', flavour: null, size: null, price: 8, compareAtPrice: null, available: true }] })
     const blueprint = makeBlueprint([
       { selectedProductId: 'a', selectedVariantId: 'sv' },
       { selectedProductId: 'b', selectedVariantId: 'sv', slotType: 'menopause' } as never,
@@ -296,7 +295,7 @@ describe('consumption protocol & monthly quantities', () => {
 
   it('keeps a daily product at one unit per month', () => {
     const daily = makeProduct({ id: 'd', stackSlots: ['health'], servings: 30, basePrice: 20,
-      variants: [{ id: 'dv', title: '', flavour: null, size: null, price: 20, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+      variants: [{ id: 'dv', title: '', flavour: null, size: null, price: 20, compareAtPrice: null, available: true }] })
     const bp = makeBlueprint([{ selectedProductId: 'd', selectedVariantId: 'dv', slotType: 'health' } as never])
     const [line] = buildSubscriptionPlan(bp, [daily], answersWith('1-2x'))
     expect(line.cadence).toBe('daily')
@@ -306,7 +305,7 @@ describe('consumption protocol & monthly quantities', () => {
 
   it('scales a per-workout product to training frequency', () => {
     const pre = makeProduct({ id: 'pre', stackSlots: ['energy'], servings: 30, basePrice: 30,
-      variants: [{ id: 'pv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+      variants: [{ id: 'pv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true }] })
     const bp = makeBlueprint([{ selectedProductId: 'pre', selectedVariantId: 'pv', slotType: 'energy' } as never])
 
     // 3-4×/week → 15 workouts/month, 30 doses → a tub lasts ~2 months
@@ -327,7 +326,7 @@ describe('consumption protocol & monthly quantities', () => {
 
   it('keeps a long-lasting daily product as itself and ships it every few months', () => {
     const creatine = makeProduct({ id: 'cr', stackSlots: ['performance'], servings: 100, basePrice: 19.99,
-      variants: [{ id: 'cv', title: '', flavour: null, size: null, price: 19.99, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+      variants: [{ id: 'cv', title: '', flavour: null, size: null, price: 19.99, compareAtPrice: null, available: true }] })
     const bp = makeBlueprint([{ selectedProductId: 'cr', selectedVariantId: 'cv', slotType: 'performance' } as never])
     const [line] = buildSubscriptionPlan(bp, [creatine], answersWith('3-4x'))
     expect(line.product.id).toBe('cr')        // not swapped to a refill
@@ -342,7 +341,7 @@ describe('consumption protocol & monthly quantities', () => {
 
   it('caps the delivery interval at maxDeliveryMonths', () => {
     const longLife = makeProduct({ id: 'x', stackSlots: ['health'], servings: 300, basePrice: 30,
-      variants: [{ id: 'xv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+      variants: [{ id: 'xv', title: '', flavour: null, size: null, price: 30, compareAtPrice: null, available: true }] })
     const bp = makeBlueprint([{ selectedProductId: 'x', selectedVariantId: 'xv', slotType: 'health' } as never])
     const [line] = buildSubscriptionPlan(bp, [longLife])
     expect(line.shipEveryMonths).toBe(PRICING_CONFIG.maxDeliveryMonths)  // 300/30 = 10 → capped to 6
@@ -412,7 +411,7 @@ describe('formatSaving', () => {
 // ─── Pricing rules: tiers, margin floor, profit guardrails ────────────────────
 
 const round2 = (n: number) => Math.round(n * 100) / 100
-const oneVariant = (price: number) => [{ id: 'v', title: '', flavour: null, size: null, price, compareAtPrice: null, available: true, shopifyVariantId: null }]
+const oneVariant = (price: number) => [{ id: 'v', title: '', flavour: null, size: null, price, compareAtPrice: null, available: true }]
 
 describe('pricing rules — discount tiers', () => {
   it('resolveTier picks the highest qualifying tier', () => {
@@ -427,7 +426,7 @@ describe('pricing rules — discount tiers', () => {
 
   it('applies the one-off bundle tier to a qualifying stack', () => {
     const a = makeProduct({ id: 'a', basePrice: 70, compareAtPrice: null, variants: oneVariant(70) })
-    const b = makeProduct({ id: 'b', basePrice: 70, compareAtPrice: null, variants: [{ id: 'v2', title: '', flavour: null, size: null, price: 70, compareAtPrice: null, available: true, shopifyVariantId: null }] })
+    const b = makeProduct({ id: 'b', basePrice: 70, compareAtPrice: null, variants: [{ id: 'v2', title: '', flavour: null, size: null, price: 70, compareAtPrice: null, available: true }] })
     const bp = makeBlueprint([
       { selectedProductId: 'a', selectedVariantId: 'v' },
       { selectedProductId: 'b', selectedVariantId: 'v2', slotType: 'performance' } as never,

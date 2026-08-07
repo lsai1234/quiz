@@ -13,7 +13,7 @@ function makeProduct(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
     variants: [], basePrice: 30, compareAtPrice: null, subscriptionEligible: true,
     servings: 30, swapGroup: 'protein-whey', recommendationPriority: 5, marginPriority: 5,
     isCoreEligible: true, isBoosterEligible: false, hasStimulants: false, shortReason: '',
-    warnings: [], shopifyProductId: null, ...over,
+    warnings: [], ...over,
   }
 }
 

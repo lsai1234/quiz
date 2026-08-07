@@ -3,7 +3,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 /**
  * Shop section = a product category. A curated order gives the shop a sensible
  * retail flow (the everyday performance staples first, wellbeing after);
- * anything not in the list is appended alphabetically so a new Shopify category
+ * anything not in the list is appended alphabetically so a new supplier category
  * still shows up, just at the end.
  */
 const CATEGORY_ORDER: string[] = [

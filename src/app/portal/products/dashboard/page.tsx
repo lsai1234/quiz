@@ -16,7 +16,7 @@ function priceLabel(p: CatalogueProduct): string {
 
 export default function DashboardPage() {
   const [rows, setRows] = useState<Row[] | null>(null)
-  const [source, setSource] = useState<'mock' | 'shopify'>('mock')
+  const [source, setSource] = useState<'mock' | 'real'>('mock')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
   const [removing, setRemoving] = useState<string | null>(null)
@@ -68,12 +68,12 @@ export default function DashboardPage() {
     <div>
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Product dashboard</h2>
-        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full" style={{ color: source === 'shopify' ? ACCENT : 'var(--color-muted)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-          {source === 'shopify' ? '● Live Shopify' : '● Mock data'}
+        <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full" style={{ color: source === 'real' ? ACCENT : 'var(--color-muted)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+          {source === 'real' ? '● Real catalogue' : '● Mock catalogue'}
         </span>
       </div>
       <p className="text-sm text-[var(--color-muted)] mb-4">
-        Browse the catalogue and remove products. When live, removing deletes the product from Shopify.
+        Browse the catalogue and remove products. Removing hides a product everywhere — the shop, the quiz and the hub.
       </p>
 
       {error && (

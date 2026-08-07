@@ -1,7 +1,6 @@
 import type { Product } from './types'
 
 const D = {
-  shopifyProductId: '',
   image: null,
   variants: [],
 } satisfies Partial<Product>
@@ -23,7 +22,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 10,
     stackLevels: ['essentials', 'performance', 'complete'],
-    shopifyVariantId: 'mock-001',
+    variantId: 'mock-001',
     accentColor: '#cfff32',
   },
   {
@@ -42,7 +41,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 10,
     stackLevels: ['essentials', 'performance', 'complete'],
-    shopifyVariantId: 'mock-002',
+    variantId: 'mock-002',
     accentColor: '#86efac',
   },
   {
@@ -61,7 +60,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 9,
     stackLevels: ['essentials', 'performance', 'complete'],
-    shopifyVariantId: 'mock-003',
+    variantId: 'mock-003',
     accentColor: '#cfff32',
   },
   {
@@ -80,7 +79,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: false,
     stackPriority: 8,
     stackLevels: ['performance', 'complete'],
-    shopifyVariantId: 'mock-004',
+    variantId: 'mock-004',
     accentColor: '#f97316',
   },
   {
@@ -99,7 +98,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 7,
     stackLevels: ['performance', 'complete'],
-    shopifyVariantId: 'mock-005',
+    variantId: 'mock-005',
     accentColor: '#38bdf8',
   },
   {
@@ -118,7 +117,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 6,
     stackLevels: ['performance', 'complete'],
-    shopifyVariantId: 'mock-006',
+    variantId: 'mock-006',
     accentColor: '#818cf8',
   },
   {
@@ -137,7 +136,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 7,
     stackLevels: ['essentials', 'performance', 'complete'],
-    shopifyVariantId: 'mock-007',
+    variantId: 'mock-007',
     accentColor: '#38bdf8',
   },
   {
@@ -156,7 +155,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 6,
     stackLevels: ['essentials', 'performance', 'complete'],
-    shopifyVariantId: 'mock-008',
+    variantId: 'mock-008',
     accentColor: '#fbbf24',
   },
   {
@@ -175,7 +174,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 5,
     stackLevels: ['essentials', 'performance', 'complete'],
-    shopifyVariantId: 'mock-009',
+    variantId: 'mock-009',
     accentColor: '#fde68a',
   },
   {
@@ -194,7 +193,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 5,
     stackLevels: ['performance', 'complete'],
-    shopifyVariantId: 'mock-010',
+    variantId: 'mock-010',
     accentColor: '#c4b5fd',
   },
   {
@@ -213,7 +212,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: false,
     stackPriority: 7,
     stackLevels: ['performance', 'complete'],
-    shopifyVariantId: 'mock-011',
+    variantId: 'mock-011',
     accentColor: '#f87171',
   },
   {
@@ -232,7 +231,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: false,
     stackPriority: 8,
     stackLevels: ['performance', 'complete'],
-    shopifyVariantId: 'mock-012',
+    variantId: 'mock-012',
     accentColor: '#fb923c',
   },
   {
@@ -251,7 +250,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 5,
     stackLevels: ['complete'],
-    shopifyVariantId: 'mock-013',
+    variantId: 'mock-013',
     accentColor: '#fdba74',
   },
   {
@@ -270,7 +269,7 @@ export const MOCK_PRODUCTS: Product[] = [
     beginner: true,
     stackPriority: 4,
     stackLevels: ['complete'],
-    shopifyVariantId: 'mock-014',
+    variantId: 'mock-014',
     accentColor: '#818cf8',
   },
 ]

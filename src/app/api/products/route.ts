@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
  * The quiz's product list, in the legacy `Product` shape.
  *
  * Now served from the resolved catalogue — the same source the shop and hub
- * read — rather than from Shopify, so all three agree on what exists. The
+ * read — rather than from a separate store, so all three agree on what exists. The
  * adapter in `catalogue/adapter.ts` does the shape conversion.
  */
 export async function GET(request: Request) {

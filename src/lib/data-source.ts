@@ -23,10 +23,9 @@
  *     `auto` mode and no credentials check: unlike the supplier and payment
  *     resolvers, this one cannot silently fall back, so it doesn't pretend to.
  *
- * Shopify used to be the "live" side of this switch. It no longer is: PowerBody
- * is the catalogue source and Stripe takes payment. The `lib/shopify/*` modules
- * are no longer read by the catalogue and can be deleted once nothing else
- * imports them.
+ * A previous storefront integration used to be the "live" side of this switch.
+ * It has been removed: PowerBody is the catalogue source and Stripe takes
+ * payment.
  *
  * NOTE: this module is isomorphic — it runs on the server and in the browser.
  * For the browser build to see the override, the var must be `NEXT_PUBLIC_*`

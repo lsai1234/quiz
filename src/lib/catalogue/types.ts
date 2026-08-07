@@ -77,7 +77,7 @@ export type SwapGroup =
 // ─── Variant ──────────────────────────────────────────────────────────────────
 
 export interface CatalogueVariant {
-  /** Stable internal ID — Shopify GID once connected, otherwise a slug */
+  /** Stable internal ID — a slug derived from the product name. */
   id: string
   /** Display title shown in flavour/size picker, e.g. "Chocolate Fudge / 500g" */
   title: string
@@ -89,25 +89,14 @@ export interface CatalogueVariant {
   compareAtPrice: number | null
   available: boolean
   /**
-   * Real remaining units when the store tracks inventory (Shopify
+   * Real remaining units when the supplier reports them (
    * `quantityAvailable`). Null/undefined when untracked or unknown — the shop then
    * shows no count. Drives the honest "Only N left" low-stock chip; never invented.
    */
   inventory?: number | null
-  /** Supplier/Shopify SKU for this variant. Null when not tracked. */
+  /** Supplier SKU for this variant — how it maps back to PowerBody. Null when
+   *  not tracked (a variant we made up rather than one they carry). */
   sku?: string | null
-  /**
-   * Shopify variant GID — populated when connected to live Storefront API.
-   * Null in mock/development mode.
-   */
-  shopifyVariantId: string | null
-  /**
-   * Shopify selling-plan GID for this variant's subscription, read from the
-   * variant's selling-plan allocations. Null until Recharge/selling plans are
-   * configured. Attached to the cart line so Shopify checkout creates the
-   * subscription (and Recharge picks it up).
-   */
-  sellingPlanId?: string | null
 }
 
 // ─── Consumption protocol ─────────────────────────────────────────────────────
@@ -172,7 +161,7 @@ export type EffectOnset =
 
 // ─── Social proof ───────────────────────────────────────────────────────────────
 // Aggregate customer rating shown on shop cards and the product sheet. Only ever
-// derived from real review data — the live Shopify mapper reads it from a review
+// derived from real review data — read from a review
 // app's rating metafields, and it stays absent when a product has no reviews (the
 // UI then shows no stars). The mock catalogue attaches representative demo ratings
 // so the feature is visible in local/dev.
@@ -188,7 +177,7 @@ export interface ProductRating {
 
 export interface CatalogueProduct {
   // ── Identity ────────────────────────────────────────────────────────────────
-  /** Unique internal slug — matches Shopify handle when live */
+  /** Unique internal slug, used in URLs. */
   id: string
   title: string
   handle: string
@@ -363,12 +352,6 @@ export interface CatalogueProduct {
    */
   restockingSoon?: boolean
 
-  // ── Shopify connection ────────────────────────────────────────────────────────
-  /**
-   * Shopify product GID — null until connected to live Storefront API.
-   * When set, the variants[].shopifyVariantId fields are used for cart line items.
-   */
-  shopifyProductId: string | null
 }
 
 // ─── Catalogue query options ──────────────────────────────────────────────────

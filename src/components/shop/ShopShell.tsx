@@ -76,7 +76,7 @@ function TrustChip({ children }: { children: React.ReactNode }) {
 
 /**
  * A short, honest trust strip: only facts we can stand behind — the real free
- * delivery threshold, Shopify's secure checkout, and (when the catalogue carries
+ * delivery threshold, secure Stripe checkout, and (when the catalogue carries
  * real ratings) the aggregate customer rating. No invented numbers.
  */
 function TrustStrip({ products }: { products: CatalogueProduct[] }) {

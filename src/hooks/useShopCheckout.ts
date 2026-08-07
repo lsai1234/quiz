@@ -34,8 +34,8 @@ export type ShopCheckoutState =
  * The SERVER decides whether that's a real Stripe Checkout Session or the
  * `#mock-checkout` placeholder — it re-prices every line from the catalogue and
  * reads the payments resolver, neither of which the browser can be trusted with.
- * This hook used to short-circuit to the placeholder whenever Shopify wasn't
- * live, which meant that with the shipping default (Shopify off, as it always
+ * This hook used to short-circuit to the placeholder whenever the old Shopify
+ * integration wasn't live, which meant that with the shipping default (it always
  * is) the request was never made at all and Stripe could not be reached however
  * it was configured. Deciding here is what broke it; the fix is to stop.
  */

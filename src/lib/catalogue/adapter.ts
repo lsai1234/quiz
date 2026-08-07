@@ -3,7 +3,7 @@ import type { Product, ProductVariant, StackLevel } from '@/lib/types'
 
 function catalogueVariantToProductVariant(cv: CatalogueVariant): ProductVariant {
   return {
-    id: cv.shopifyVariantId ?? cv.id,
+    id: cv.id,
     title: cv.title,
     price: cv.price,
     compareAtPrice: cv.compareAtPrice,
@@ -26,7 +26,6 @@ function deriveStackLevels(cp: CatalogueProduct): StackLevel[] {
 export function catalogueToProduct(cp: CatalogueProduct): Product {
   return {
     id: cp.id,
-    shopifyProductId: cp.shopifyProductId ?? '',
     handle: cp.handle,
     name: cp.title,
     category: cp.category,
@@ -40,7 +39,7 @@ export function catalogueToProduct(cp: CatalogueProduct): Product {
     beginner: cp.recommendationPriority >= 7,
     stackPriority: cp.recommendationPriority,
     stackLevels: deriveStackLevels(cp),
-    shopifyVariantId: cp.variants[0]?.shopifyVariantId ?? '',
+    variantId: cp.variants[0]?.id ?? '',
     accentColor: '#00E5FF',
     image: cp.imageUrl,
     variants: cp.variants.map(catalogueVariantToProductVariant),

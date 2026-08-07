@@ -19,7 +19,7 @@ const makeProduct = (o: Partial<CatalogueProduct> = {}): CatalogueProduct => ({
   basePrice: 30, compareAtPrice: null, subscriptionEligible: true, servings: 30,
   swapGroup: 'protein-whey', recommendationPriority: 5, marginPriority: 5,
   isCoreEligible: true, isBoosterEligible: false, hasStimulants: false, shortReason: '',
-  warnings: [], shopifyProductId: null, ...o,
+  warnings: [], ...o,
 })
 
 const line = (o: Partial<MemberSubscriptionLine>): MemberSubscriptionLine => ({

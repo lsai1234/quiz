@@ -52,11 +52,11 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
             {source && (
               <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 rounded-full"
                 style={{
-                  color: source.effective === 'shopify' ? ACCENT : 'var(--color-muted)',
-                  background: source.effective === 'shopify' ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'var(--color-surface-2)',
+                  color: source.effective === 'real' ? ACCENT : 'var(--color-muted)',
+                  background: source.effective === 'real' ? `color-mix(in srgb, ${ACCENT} 14%, transparent)` : 'var(--color-surface-2)',
                   border: '1px solid var(--color-border)',
                 }}>
-                {source.effective === 'shopify' ? '● Live Shopify' : '● Mock data'}
+                {source.effective === 'real' ? '● Real catalogue' : '● Mock catalogue'}
               </span>
             )}
             <button onClick={logout} className="text-xs font-semibold text-[var(--color-muted)] underline">Sign out</button>

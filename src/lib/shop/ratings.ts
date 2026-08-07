@@ -63,7 +63,7 @@ export function hashString(s: string): number {
  * A stable, representative rating for a mock product, seeded by its id. Ratings
  * land in a believable 4.2–4.9 band with review counts from ~40 to ~600 — plainly
  * example data, in the same spirit as the mock catalogue's invented prices. Real
- * (live Shopify) products never use this; their ratings come from review data.
+ * Real products never use this; their ratings come from review data.
  */
 export function demoRating(id: string): ProductRating {
   const h = hashString(id)

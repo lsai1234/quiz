@@ -28,10 +28,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'lines must be a non-empty array' }, { status: 400 })
   }
 
-  const lines = body.lines as { merchandiseId?: string; quantity?: number }[]
+  const lines = body.lines as { variantId?: string; quantity?: number }[]
   for (const line of lines) {
-    if (!line.merchandiseId || typeof line.quantity !== 'number') {
-      return NextResponse.json({ error: 'Each line must have merchandiseId and quantity' }, { status: 400 })
+    if (!line.variantId || typeof line.quantity !== 'number') {
+      return NextResponse.json({ error: 'Each line must have variantId and quantity' }, { status: 400 })
     }
   }
 

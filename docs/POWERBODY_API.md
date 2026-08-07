@@ -30,9 +30,9 @@ They are deliberately independent, which gives you a safe path in:
 
 Only step 4 can ship a parcel.
 
-Both can be flipped at runtime from the Founders Hub (**Settings → Supplier** and
-**Settings → Order sending**) without a redeploy; the portal choice is persisted in the
-database and wins over the environment variables.
+All three can be flipped at runtime from the Founders Hub (**Settings → Data source**,
+**Settings → Supplier**, **Settings → Order sending**) without a redeploy; the portal
+choice is persisted in the database and wins over the environment variables.
 
 Two safety properties are enforced in code, not by convention:
 
@@ -232,6 +232,32 @@ you until the supplier refuses them.
 
 ---
 
+## Finding and importing specific SKUs
+
+The browse list can only search products it has details for, and on a large feed that is
+a fraction of it at first. **Find by SKU** (Products → PowerBody) goes straight at named
+SKUs instead: paste them in any format — commas, spaces, newlines — and it fetches their
+details on demand, shows cost/stock/margin, and imports them.
+
+This deliberately bypasses `POWERBODY_DETAIL_BUDGET`: that budget stops a *full* build
+timing out, and a handful of named SKUs is not that. Every SKU in the cheap list feed is
+reachable this way, even one nothing has been detailed for yet.
+
+## The daily check
+
+`syncImportedProducts()` runs nightly (and on demand via **Check now**) over every product
+you have imported, and records what moved:
+
+- **Cost changes**, with the margin impact on our current retail price. We hold retail
+  steady on purpose, so a supplier increase comes straight out of margin — anything pushed
+  under `marginFloorPct` is flagged as needing a reprice or a delisting.
+- **Stock flips** — what went out, what came back.
+- **Delistings** — imported SKUs no longer in the feed at all.
+
+This is separate from the change detection in `lib/changes`, which walks *subscriptions*.
+That only raises an event when a moved SKU sits in someone's plan, so a cost rise on a shop
+product nobody subscribes to would otherwise go unnoticed.
+
 ## Not implemented
 
 Available in their API, no caller yet — add when there is a reason:
@@ -259,6 +285,7 @@ Available in their API, no caller yet — add when there is a reason:
 | `src/lib/supplier/powerbody/wire.ts` | Their shapes ↔ ours (pure) |
 | `src/lib/supplier/powerbody/live.ts` | The live adapter |
 | `src/lib/supplier/powerbody/mock.ts` | The mock, also used as the order simulator |
+| `src/lib/supplier/sku-input.ts` | Parsing a pasted list of SKUs |
 | `src/lib/orders/service.ts` | Approval gate + the ordering gate |
 | `src/app/api/portal/ordering-mode/route.ts` | Read/set the ordering switch |
 | `src/app/api/portal/supplier-sync/route.ts` | "Sync now" |

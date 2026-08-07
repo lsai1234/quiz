@@ -1,5 +1,5 @@
 import { PRICING_CONFIG } from '../pricing'
-import { validateCheckout, validationErrorMessage, buildCartPermalink, gidToNumeric, buildSubscriptionCheckout } from '../checkout'
+import { validateCheckout, validationErrorMessage, buildSubscriptionCheckout } from '../checkout'
 import type { StackBlueprint } from '../types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -16,7 +16,6 @@ const makeVariant = (overrides: Partial<CatalogueProduct['variants'][number]> = 
   price: 30,
   compareAtPrice: 40,
   available: true,
-  shopifyVariantId: 'gid://shopify/ProductVariant/111',
   ...overrides,
 })
 
@@ -44,7 +43,6 @@ const makeProduct = (overrides: Partial<CatalogueProduct> = {}): CatalogueProduc
   hasStimulants: false,
   shortReason: 'Builds muscle',
   warnings: [],
-  shopifyProductId: null,
   ...overrides,
 })
 
@@ -92,7 +90,7 @@ describe('validateCheckout', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.lines).toHaveLength(1)
-    expect(result.lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/111')
+    expect(result.lines[0].variantId).toBe('var-1')
     expect(result.lines[0].quantity).toBe(1)
     expect(result.lines[0].attributes).toEqual(
       expect.arrayContaining([
@@ -105,13 +103,13 @@ describe('validateCheckout', () => {
 
   it('falls back to first available variant when selectedVariantId is null', () => {
     const product = makeProduct({
-      variants: [makeVariant({ id: 'v-first', available: true, shopifyVariantId: 'gid://shopify/ProductVariant/999' })],
+      variants: [makeVariant({ id: 'v-first', available: true })],
     })
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: null }])
     const result = validateCheckout(blueprint, [product])
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/999')
+    expect(result.lines[0].variantId).toBe('v-first')
   })
 
   it('returns unavailable error when the selected variant is sold out', () => {
@@ -125,27 +123,16 @@ describe('validateCheckout', () => {
     expect(result.errors[0].type).toBe('unavailable')
   })
 
-  it('returns no-shopify-id error when shopifyVariantId is null and requireShopifyIds is true', () => {
+  it('uses the catalogue variant id on the line', () => {
     const product = makeProduct({
-      variants: [makeVariant({ shopifyVariantId: null })],
+      variants: [makeVariant({ })],
     })
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
-    const result = validateCheckout(blueprint, [product], { requireShopifyIds: true })
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.errors[0].type).toBe('no-shopify-id')
-  })
-
-  it('allows null shopifyVariantId when requireShopifyIds is false (mock mode)', () => {
-    const product = makeProduct({
-      variants: [makeVariant({ shopifyVariantId: null })],
-    })
-    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
-    const result = validateCheckout(blueprint, [product], { requireShopifyIds: false })
+    const result = validateCheckout(blueprint, [product])
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    // merchandiseId should fall back to internal variant id
-    expect(result.lines[0].merchandiseId).toBe('var-1')
+    // variantId should fall back to internal variant id
+    expect(result.lines[0].variantId).toBe('var-1')
   })
 
   it('skips slots whose product is missing from the catalogue', () => {
@@ -159,12 +146,12 @@ describe('validateCheckout', () => {
 
   it('returns multiple errors for multiple invalid slots', () => {
     const prodA = makeProduct({ id: 'prod-a', variants: [makeVariant({ available: false })] })
-    const prodB = makeProduct({ id: 'prod-b', variants: [makeVariant({ id: 'v2', shopifyVariantId: null })] })
+    const prodB = makeProduct({ id: 'prod-b', variants: [makeVariant({ id: 'v2', available: false })] })
     const blueprint = makeBlueprint([
       { selectedProductId: 'prod-a', selectedVariantId: 'var-1' },
       { selectedProductId: 'prod-b', selectedVariantId: 'v2' },
     ])
-    const result = validateCheckout(blueprint, [prodA, prodB], { requireShopifyIds: true })
+    const result = validateCheckout(blueprint, [prodA, prodB])
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.errors).toHaveLength(2)
@@ -184,31 +171,6 @@ describe('validationErrorMessage', () => {
     expect(msg).toMatch(/out of stock/)
     expect(msg).toMatch(/Chocolate/)
   })
-  it('returns user-friendly message for no-shopify-id', () => {
-    const msg = validationErrorMessage({ type: 'no-shopify-id', slotId: 's1', slotTitle: 'Protein', variantTitle: 'Chocolate' })
-    expect(msg).toMatch(/connected/)
-  })
-})
-
-// ─── buildCartPermalink ───────────────────────────────────────────────────────
-
-describe('buildCartPermalink', () => {
-  it('builds a valid Shopify cart URL', () => {
-    const url = buildCartPermalink('store.myshopify.com', [
-      { numericVariantId: '123', quantity: 1 },
-      { numericVariantId: '456', quantity: 2 },
-    ])
-    expect(url).toBe('https://store.myshopify.com/cart/123:1,456:2')
-  })
-})
-
-describe('gidToNumeric', () => {
-  it('extracts numeric ID from GID', () => {
-    expect(gidToNumeric('gid://shopify/ProductVariant/123456')).toBe('123456')
-  })
-  it('returns original when not a GID', () => {
-    expect(gidToNumeric('simple-id')).toBe('simple-id')
-  })
 })
 
 // ─── buildSubscriptionCheckout ────────────────────────────────────────────────
@@ -222,7 +184,7 @@ describe('buildSubscriptionCheckout', () => {
     if (!result.ok) return
     const { lines, flatMonthly, firstMonth, introDiscountPct, minMonths, minTermTotal } = result.checkout
     expect(lines).toHaveLength(1)
-    expect(lines[0].merchandiseId).toBe('gid://shopify/ProductVariant/111')
+    expect(lines[0].variantId).toBe('var-1')
     expect(lines[0].quantity).toBe(1)                 // daily → 1 unit / month
     expect(lines[0].deliveryIntervalMonths).toBe(1)
     // Read the rate from config — the ladder is a commercial lever that gets
@@ -268,30 +230,12 @@ describe('buildSubscriptionCheckout', () => {
     expect(result.checkout.firstMonth).toBe(MONTHLY)
   })
 
-  it('rejects when Shopify IDs are required but missing (mock variant)', () => {
-    const product = makeProduct({ variants: [makeVariant({ shopifyVariantId: null })] })
+  it('builds a subscription line from the catalogue variant id', () => {
+    const product = makeProduct({ variants: [makeVariant({ })] })
     const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
-    const result = buildSubscriptionCheckout(blueprint, [product], null, { requireShopifyIds: true })
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.errors[0].type).toBe('no-shopify-id')
-  })
-
-  it('rejects when selling plans are required but missing', () => {
-    const product = makeProduct() // GID present, but no sellingPlanId
-    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
-    const result = buildSubscriptionCheckout(blueprint, [product], null, { requireSellingPlans: true })
-    expect(result.ok).toBe(false)
-    if (result.ok) return
-    expect(result.errors[0].type).toBe('no-selling-plan')
-  })
-
-  it('carries the selling plan id onto the line when present', () => {
-    const product = makeProduct({ variants: [makeVariant({ sellingPlanId: 'gid://shopify/SellingPlan/999' })] })
-    const blueprint = makeBlueprint([{ selectedProductId: 'prod-a', selectedVariantId: 'var-1' }])
-    const result = buildSubscriptionCheckout(blueprint, [product], null, { requireSellingPlans: true })
+    const result = buildSubscriptionCheckout(blueprint, [product], null)
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.checkout.lines[0].sellingPlanId).toBe('gid://shopify/SellingPlan/999')
+    expect(result.checkout.lines[0].variantId).toBe('var-1')
   })
 })

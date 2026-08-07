@@ -29,14 +29,16 @@ export function productReadiness(p: CatalogueProduct, opts: { live: boolean }): 
   const config = getPricingConfig()
   const checks: ReadinessCheck[] = []
 
-  // 1. Identity — real Shopify product + image, vs mock placeholder.
-  const realId = !!p.shopifyProductId && p.shopifyProductId.startsWith('gid://')
+  // 1. Identity — a real supplier product we can actually order, plus an image.
+  // The supplier SKU is what makes it orderable: without one it cannot be
+  // dropshipped, however complete the rest of the record looks.
+  const realId = p.variants.some((v) => !!v.sku)
   const hasImage = !!p.imageUrl
   checks.push({
     id: 'identity',
     label: 'Real product & image',
     status: realId && hasImage ? 'ok' : realId ? 'warn' : opts.live ? 'fail' : 'warn',
-    detail: !realId ? 'Mock product — no Shopify id' : !hasImage ? 'No image set' : undefined,
+    detail: !realId ? 'No supplier SKU — can’t be ordered' : !hasImage ? 'No image set' : undefined,
   })
 
   // 2. Classification — tagged correctly.
@@ -67,9 +69,6 @@ export function productReadiness(p: CatalogueProduct, opts: { live: boolean }): 
     if (longLasting && lastsTooLong && !p.subscriptionProductId) {
       subStatus = 'warn'
       subDetail = `${p.servings} servings — map a monthly refill`
-    } else if (opts.live && !p.variants.some((v) => v.sellingPlanId)) {
-      subStatus = 'warn'
-      subDetail = 'No selling plan configured'
     }
   }
   checks.push({ id: 'subscription', label: 'Subscription-ready', status: subStatus, detail: subDetail })

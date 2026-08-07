@@ -108,8 +108,8 @@ export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto
       {mock && (
         <div className="mt-6 px-4 py-3 rounded-xl text-xs leading-relaxed max-w-sm"
           style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
-          <strong>Demo mode.</strong> No payment was taken. Connect Shopify + Recharge and set{' '}
-          <code>NEXT_PUBLIC_DATA_SOURCE=shopify</code> to take real {isSub ? 'subscriptions' : 'orders'}.
+          <strong>Demo mode.</strong> No payment was taken. Add your Stripe keys and switch Payments to
+          live in the Founders Hub to take real {isSub ? 'subscriptions' : 'orders'}.
         </div>
       )}
 
