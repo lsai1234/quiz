@@ -13,6 +13,7 @@
  */
 import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
+import { getOrderingSource } from '@/lib/supplier/ordering'
 import type { SupplierOrderStatus, SupplierAddress } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -255,7 +256,32 @@ export async function rejectOrderForFulfilment(id: string, by?: string | null, n
 
 const SUBMITTABLE: OrderStatus[] = ['paid', 'failed']
 
-/** Send the order to PowerBody for dropship fulfilment. Requires approval. */
+/**
+ * The provider to place this order against.
+ *
+ * In `simulate` mode the order goes to the MOCK supplier rather than being
+ * short-circuited. That is deliberate: the mock records the order and answers
+ * status and tracking for it, so a simulated order can be walked all the way
+ * through the lifecycle — submit, sync, ship — which is the whole reason to run
+ * a dry run instead of just not pressing the button. Nothing leaves the process
+ * either way.
+ */
+async function supplierForOrdering(simulated: boolean) {
+  if (!simulated) return getSupplier()
+  const { createMockSupplier } = await import('@/lib/supplier/powerbody/mock')
+  return createMockSupplier()
+}
+
+/**
+ * Send the order to PowerBody for dropship fulfilment. Requires approval.
+ *
+ * Whether this actually reaches PowerBody depends on the ordering mode
+ * (`SUPPLIER_ORDERING`, or Settings → Order sending in the hub). In `simulate`
+ * — the default — the order walks the exact same states and writes the same
+ * audit trail against the mock supplier, but nothing reaches PowerBody and
+ * nothing ships. The gate lives HERE rather than in the route so that a cron, a
+ * webhook or a future caller cannot bypass it.
+ */
 export async function submitOrderToSupplier(id: string): Promise<Order | null> {
   const order = await getOrder(id)
   if (!order) return null
@@ -272,7 +298,10 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
     throw new Error(`Order ${id} has no lines with a supplier SKU to fulfil.`)
   }
 
-  const supplier = await getSupplier()
+  // Resolved once, before the call, and then recorded on the order — so an order
+  // sent as a simulation stays a simulation even after the switch is flipped.
+  const simulated = getOrderingSource() === 'simulate'
+  const supplier = await supplierForOrdering(simulated)
   try {
     const result = await supplier.placeOrder({
       reference: order.id,
@@ -283,8 +312,14 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
     return updateOrder(id, (o) => {
       o.supplierOrderId = result.supplierOrderId
       o.supplierStatus = result.status
+      o.supplierSimulated = simulated
       o.status = 'submitted_to_supplier'
-      o.events.push(event('submitted_to_supplier', `supplierOrderId=${result.supplierOrderId}`))
+      o.events.push(
+        event(
+          'submitted_to_supplier',
+          `${simulated ? 'SIMULATED — not sent to PowerBody · ' : ''}supplierOrderId=${result.supplierOrderId}`,
+        ),
+      )
     })
   } catch (err) {
     await updateOrder(id, (o) => {
@@ -312,7 +347,12 @@ export async function syncSupplierStatus(id: string): Promise<Order | null> {
   if (!order) return null
   if (!order.supplierOrderId) throw new Error(`Order ${id} has not been submitted to the supplier yet.`)
 
-  const supplier = await getSupplier()
+  // A simulated order is synced against the same mock that accepted it. Asking
+  // PowerBody about it would at best 404 and at worst match somebody else's
+  // order id — and the flag is read from the ORDER, not from the current
+  // setting, so flipping the switch to live cannot retarget yesterday's
+  // simulations at the real API.
+  const supplier = await supplierForOrdering(order.supplierSimulated === true)
   const supplierOrder = await supplier.getOrder(order.supplierOrderId)
   if (!supplierOrder) return order
 

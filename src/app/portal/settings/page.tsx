@@ -1,5 +1,6 @@
 import { DataSourceToggle } from '@/components/portal/DataSourceToggle'
 import { IntegrationToggle } from '@/components/portal/IntegrationToggle'
+import { OrderSendingToggle } from '@/components/portal/OrderSendingToggle'
 
 const SUPPLIER_OPTIONS = [
   { mode: 'mock', label: 'Mock supplier', desc: 'Use the built-in PowerBody sample feed. Best while building.' },
@@ -30,13 +31,22 @@ export default function SettingsPage() {
 
       <section>
         <h2 className="text-sm font-bold mb-2" style={heading}>Supplier (PowerBody)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-2">Where the catalogue, live stock/prices and dropship orders come from.</p>
+        <p className="text-xs text-[var(--color-muted)] mb-2">Where the catalogue and live stock/prices are read from. Reading only — whether orders are actually placed is the separate switch below.</p>
         <IntegrationToggle
           endpoint="/api/portal/supplier-source"
           options={SUPPLIER_OPTIONS}
           liveLabel="Live PowerBody"
-          credentialsHint={<><strong>Can’t switch to PowerBody yet.</strong> No API credentials are set — add <code>POWERBODY_API_URL</code> and <code>POWERBODY_API_KEY</code>, then switch. Still serving the mock feed.</>}
+          credentialsHint={<><strong>Can’t switch to PowerBody yet.</strong> No API credentials are set — add <code>POWERBODY_API_URL</code>, <code>POWERBODY_API_USER</code> and <code>POWERBODY_API_KEY</code>, then switch. Still serving the mock feed.</>}
         />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Order sending</h2>
+        <p className="text-xs text-[var(--color-muted)] mb-2">
+          What the Send button in the fulfilment queue actually does. Deliberately separate from the supplier
+          setting above, so the catalogue can run fully live while orders are still simulated.
+        </p>
+        <OrderSendingToggle />
       </section>
 
       <section>

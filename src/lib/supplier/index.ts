@@ -24,9 +24,21 @@
 export type SupplierSource = 'mock' | 'powerbody'
 export type SupplierMode = 'auto' | 'mock' | 'powerbody'
 
-/** True when the PowerBody API credentials are configured. */
+// Whether a send actually reaches PowerBody is a SEPARATE switch, in
+// `./ordering.ts` — import it from there. It reads this module (live ordering
+// needs the live supplier), so it is deliberately not re-exported here: that
+// would make the two files circular for no gain.
+
+/**
+ * True when the PowerBody API credentials are configured.
+ *
+ * All three are required: their SOAP endpoint authenticates with
+ * `login(username, apiKey)`, so a key on its own cannot open a session.
+ */
 export function hasPowerBodyCredentials(): boolean {
-  return Boolean(process.env.POWERBODY_API_URL && process.env.POWERBODY_API_KEY)
+  return Boolean(
+    process.env.POWERBODY_API_URL && process.env.POWERBODY_API_USER && process.env.POWERBODY_API_KEY,
+  )
 }
 
 // Runtime override set by the portal (server in-memory, hydrated from the DB by

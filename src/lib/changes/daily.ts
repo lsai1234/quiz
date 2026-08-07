@@ -9,6 +9,7 @@
  */
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { sweepStalePendingOrders } from '@/lib/orders/service'
+import { syncImportedProducts } from '@/lib/supplier/sync'
 import { applyDueChanges, flushChangeNotifications, runChangeDetection } from './service'
 
 export interface DailyRunResult {
@@ -28,6 +29,10 @@ export interface DailyRunResult {
   awaitingSend?: number
   /** Abandoned checkouts closed off (see `sweepStalePendingOrders`). */
   staleOrdersClosed?: number
+  /** Imported products whose stock/cost was refreshed from the supplier. */
+  productsRefreshed?: number
+  /** Imported products whose SKU is no longer in the supplier feed. */
+  productsMissing?: number
   note?: string
 }
 
@@ -71,6 +76,11 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
   const dueNow = await applyDueChanges()
   const outbox = await flushChangeNotifications()
   const staleOrdersClosed = await sweepStalePendingOrders()
+  // Refresh the stock and cost stored against imported products. Detection above
+  // works off snapshots of the feed; this is what writes today's numbers onto the
+  // products the shop actually sells, so an item that went out of stock at the
+  // supplier stops being buyable here.
+  const productSync = await syncImportedProducts()
 
   return {
     dryRun: false,
@@ -83,6 +93,8 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     notifyFailed: outbox.failed,
     awaitingSend: outbox.awaitingSend,
     staleOrdersClosed,
+    productsRefreshed: productSync.updated,
+    productsMissing: productSync.missing.length,
   }
 }
 

@@ -42,6 +42,23 @@ Share your Sheet with the service account email.
 7. Claim safety — flags risky supplement/health language
 8. TikTok preview + Export review — append to Google Sheets as queued
 
+## Add the PowerBody supplier (dropship)
+
+Reading products and writing orders are **two separate switches**, so the catalogue can run
+fully live while every order is still simulated:
+
+```bash
+SUPPLIER_SOURCE=powerbody        # mock | auto | powerbody  — catalogue, stock, prices
+POWERBODY_API_URL=https://www.powerbody.co.uk/api/soap/
+POWERBODY_API_USER=...           # all three are required
+POWERBODY_API_KEY=...
+SUPPLIER_ORDERING=simulate       # simulate | live — does "Send" really place an order?
+```
+
+Both default to the safe option and can be flipped at runtime from the Founders Hub
+(Settings → Supplier, Settings → Order sending). `live` ordering also requires the live
+supplier — mock SKUs are sample data. See `docs/POWERBODY_API.md`.
+
 ## Accounts & database
 
 Customer accounts (hub sign-in), sessions, subscriptions, feedback and portal

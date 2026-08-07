@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import type { FulfilmentQueue as Queue, QueueKind, QueueOrder } from '@/lib/orders/queue'
+import { OrderingModeBanner } from './OrderSendingToggle'
+
+/** The queue endpoint adds the current ordering mode to the queue payload. */
+type QueueWithOrdering = Queue & { ordering?: 'simulate' | 'live' }
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -36,7 +40,7 @@ function blockedReason(o: QueueOrder): string | null {
 }
 
 export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
-  const [queue, setQueue] = useState<Queue | null>(null)
+  const [queue, setQueue] = useState<QueueWithOrdering | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -68,7 +72,14 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
         if (!res.ok) {
           setError(d.error ?? 'Action failed')
         } else {
-          setMessage(`${d.done} order${d.done === 1 ? '' : 's'} ${PAST[action] ?? 'updated'}.`)
+          // "Sent to PowerBody" and "simulated" are the same click with very
+          // different consequences, so the confirmation says which one happened.
+          const simulated = d.ordering === 'simulate'
+          const verb =
+            simulated && (action === 'send' || action === 'approve-and-send')
+              ? SIMULATED_PAST[action]
+              : (PAST[action] ?? 'updated')
+          setMessage(`${d.done} order${d.done === 1 ? '' : 's'} ${verb}.`)
           if (d.failures?.length) {
             setError(d.failures.map((f: { id: string; error: string }) => `${f.id}: ${f.error}`).join(' · '))
           }
@@ -112,6 +123,8 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
         <Stat n={queue.held + queue.rejected} label="Held / rejected" colour={queue.held + queue.rejected > 0 ? RED : 'var(--color-muted)'} />
       </div>
 
+      <OrderingModeBanner ordering={queue.ordering} />
+
       {queue.undeliverable > 0 && (
         <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${RED} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 40%, transparent)`, color: '#fca5a5' }}>
           <strong>{queue.undeliverable} order{queue.undeliverable === 1 ? '' : 's'} PowerBody will not ship to.</strong>{' '}
@@ -143,7 +156,11 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
         </button>
         <span className="flex-1" />
         <button onClick={() => act(readyIds, 'send')} disabled={busy || readyIds.length === 0} className={BTN} style={{ background: ACCENT, borderColor: ACCENT, color: '#001018' }}>
-          {busy ? 'Working…' : `Send ${readyIds.length} approved to PowerBody`}
+          {busy
+            ? 'Working…'
+            : queue.ordering === 'simulate'
+              ? `Simulate sending ${readyIds.length} approved`
+              : `Send ${readyIds.length} approved to PowerBody`}
         </button>
       </div>
 
@@ -233,6 +250,12 @@ const PAST: Record<string, string> = {
   return: 'returned to the queue',
   send: 'sent to PowerBody',
   'approve-and-send': 'approved and sent',
+}
+
+/** What actually happened when ordering is in simulate mode. */
+const SIMULATED_PAST: Record<string, string> = {
+  send: 'simulated — nothing was sent to PowerBody',
+  'approve-and-send': 'approved and simulated — nothing was sent to PowerBody',
 }
 
 function Stat({ n, label, colour }: { n: number; label: string; colour: string }) {

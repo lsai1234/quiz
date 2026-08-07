@@ -114,6 +114,17 @@ export interface Order {
   review?: OrderReview
   supplierOrderId: string | null
   supplierStatus: string | null
+  /**
+   * True when this order was "sent" with ordering in simulate mode — it walked
+   * the whole flow but never reached PowerBody, and its `supplierOrderId` is a
+   * local `SIM-…` handle rather than one of theirs.
+   *
+   * Absent on orders raised before the simulate/live switch existed, and on
+   * orders not yet submitted. Recorded per-order rather than inferred from the
+   * current setting because the setting changes and history must not: an order
+   * simulated last week is still simulated after the switch is flipped to live.
+   */
+  supplierSimulated?: boolean
   trackingNumber: string | null
   // ── Audit ──
   events: OrderEvent[]

@@ -6,10 +6,16 @@ import {
   setSupplierOverride,
 } from '@/lib/supplier'
 
-const ENV_KEYS = ['SUPPLIER_SOURCE', 'POWERBODY_API_URL', 'POWERBODY_API_KEY'] as const
+const ENV_KEYS = [
+  'SUPPLIER_SOURCE',
+  'POWERBODY_API_URL',
+  'POWERBODY_API_USER',
+  'POWERBODY_API_KEY',
+] as const
 
 function setCredentials() {
   process.env.POWERBODY_API_URL = 'https://www.powerbody.co.uk/api/soap/'
+  process.env.POWERBODY_API_USER = 'test-user'
   process.env.POWERBODY_API_KEY = 'test-key'
 }
 
@@ -33,13 +39,16 @@ describe('supplier resolver', () => {
   })
 
   describe('hasPowerBodyCredentials', () => {
-    it('is false without both url and key', () => {
+    it('is false until url, user and key are all set', () => {
       expect(hasPowerBodyCredentials()).toBe(false)
       process.env.POWERBODY_API_URL = 'https://www.powerbody.co.uk/api/soap/'
       expect(hasPowerBodyCredentials()).toBe(false)
+      // The key without a username cannot open a SOAP session — login() takes both.
+      process.env.POWERBODY_API_KEY = 'test-key'
+      expect(hasPowerBodyCredentials()).toBe(false)
     })
 
-    it('is true when both are set', () => {
+    it('is true when all three are set', () => {
       setCredentials()
       expect(hasPowerBodyCredentials()).toBe(true)
     })

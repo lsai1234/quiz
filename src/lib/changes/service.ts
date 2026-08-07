@@ -712,15 +712,25 @@ function describeResolution(
 
 // ─── Sources ──────────────────────────────────────────────────────────────────
 
+/**
+ * Today's stock and price for every SKU the supplier carries.
+ *
+ * Uses `getStockLevels()` rather than `listProducts()` on purpose. Against live
+ * PowerBody the two are wildly different calls: stock levels are a handful of
+ * paged requests, while the full product list additionally fetches descriptive
+ * detail one product at a time — thousands of requests for fields (name, image,
+ * description) that change detection never looks at. `SupplierStockLevel` is
+ * exactly `FeedEntry`, so nothing downstream notices.
+ */
 async function readFeed(): Promise<FeedEntry[]> {
   const supplier = await getSupplier()
-  const products = await supplier.listProducts()
-  return products.map((p) => ({
-    sku: p.sku,
-    stock: p.stock,
-    inStock: p.inStock,
-    wholesalePrice: p.wholesalePrice,
-    rrp: p.rrp,
+  const levels = await supplier.getStockLevels()
+  return levels.map((l) => ({
+    sku: l.sku,
+    stock: l.stock,
+    inStock: l.inStock,
+    wholesalePrice: l.wholesalePrice,
+    rrp: l.rrp,
   }))
 }
 

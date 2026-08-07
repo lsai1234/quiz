@@ -19,6 +19,8 @@ import type { DataSourceMode } from '@/lib/data-source'
 import { getDataSourceMode, setDataSourceOverride } from '@/lib/data-source'
 import type { SupplierMode } from '@/lib/supplier'
 import { getSupplierMode, setSupplierOverride } from '@/lib/supplier'
+import type { OrderingMode } from '@/lib/supplier/ordering'
+import { getOrderingMode, setOrderingOverride } from '@/lib/supplier/ordering'
 import type { PaymentMode } from '@/lib/payments'
 import { getPaymentMode, setPaymentOverride } from '@/lib/payments'
 import {
@@ -46,6 +48,9 @@ interface PersistedProducts {
 interface PersistedSettings {
   dataSourceMode?: DataSourceMode
   supplierMode?: SupplierMode
+  /** Whether a queue "Send" really reaches PowerBody. Separate from
+   *  `supplierMode` on purpose — see `lib/supplier/ordering.ts`. */
+  orderingMode?: OrderingMode
   paymentMode?: PaymentMode
   pricingOverrides?: Partial<PricingConfig>
 }
@@ -85,6 +90,7 @@ export async function syncPortalRuntime(force = false): Promise<void> {
     setPricingOverrides(settings.pricingOverrides ?? {})
     setDataSourceOverride(settings.dataSourceMode ?? null)
     setSupplierOverride(settings.supplierMode ?? null)
+    setOrderingOverride(settings.orderingMode ?? null)
     setPaymentOverride(settings.paymentMode ?? null)
     lastSyncedAt = Date.now()
   } catch {
@@ -112,6 +118,17 @@ export async function getSupplierSetting(): Promise<SupplierMode> {
 export async function setSupplierSetting(mode: SupplierMode): Promise<void> {
   await saveSettings({ supplierMode: mode })
   setSupplierOverride(mode)
+  lastSyncedAt = Date.now()
+}
+
+// ── Order sending (simulate vs live PowerBody) ──
+export async function getOrderingSetting(): Promise<OrderingMode> {
+  const settings = await loadSettings()
+  return settings.orderingMode ?? getOrderingMode()
+}
+export async function setOrderingSetting(mode: OrderingMode): Promise<void> {
+  await saveSettings({ orderingMode: mode })
+  setOrderingOverride(mode)
   lastSyncedAt = Date.now()
 }
 

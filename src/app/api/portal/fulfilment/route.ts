@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed, getFounder } from '@/lib/portal/guard'
 import { listAwaitingFulfilment } from '@/lib/orders/repo'
 import { buildFulfilmentQueue, type QueueKind } from '@/lib/orders/queue'
+import { syncPortalRuntime } from '@/lib/portal/store'
+import { getOrderingSource } from '@/lib/supplier/ordering'
 import {
   approveOrderForSupplier,
   holdOrder,
@@ -25,13 +27,19 @@ export const dynamic = 'force-dynamic'
  */
 export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Hydrate the runtime settings so `ordering` below reflects the portal's
+  // current choice on this instance, not whatever it booted with.
+  await syncPortalRuntime()
   const kind = new URL(req.url).searchParams.get('kind')
   const orders = await listAwaitingFulfilment()
   const queue = buildFulfilmentQueue(
     orders,
     kind === 'one-off' || kind === 'subscription' ? (kind as QueueKind) : undefined,
   )
-  return NextResponse.json(queue)
+  // The queue's Send button is the one place a real parcel gets triggered, so it
+  // says which mode it is about to send in rather than making the founder
+  // remember what Settings is set to.
+  return NextResponse.json({ ...queue, ordering: getOrderingSource() })
 }
 
 type Action = 'approve' | 'hold' | 'reject' | 'return' | 'send' | 'approve-and-send'
@@ -93,5 +101,13 @@ export async function POST(req: Request) {
   }
 
   const queue = buildFulfilmentQueue(await listAwaitingFulfilment())
-  return NextResponse.json({ ok: failures.length === 0, done, failures, queue })
+  return NextResponse.json({
+    ok: failures.length === 0,
+    done,
+    failures,
+    queue: { ...queue, ordering: getOrderingSource() },
+    // So the UI can say "3 orders simulated" rather than "3 orders sent" — the
+    // difference matters more than any other word in this screen.
+    ordering: getOrderingSource(),
+  })
 }
