@@ -10,7 +10,7 @@ built and how to switch it on.
 
 ## The three switches
 
-The single most important thing to understand: **browsing the supplier, selling the
+The single most important thing to understand: **reading the supplier, selling the
 products, and placing orders are three separate settings.**
 
 | | Setting | Values | Default | Controls |
@@ -21,7 +21,7 @@ products, and placing orders are three separate settings.**
 
 They are deliberately independent, which gives you a safe path in:
 
-1. Point **Read** at live PowerBody and browse the real feed in the hub, while the shop
+1. Point **Read** at live PowerBody and pull real products in by SKU, while the shop
    still serves the mock catalogue and orders are still pretend.
 2. Add the products you want (Hub → Products → PowerBody). They land in *our* catalogue —
    ours is the curated subset; customers only ever see what has been added.
@@ -87,9 +87,9 @@ thousand requests.
 
 Three things deal with it:
 
-- **Never detailing in bulk.** The expensive call is only made for products someone opens
-  or adds (see below), so the request count follows what you are actually doing rather
-  than the size of the feed.
+- **Never detailing in bulk.** The expensive call is only made for the SKUs actually being
+  imported (see below), so the request count follows what you are doing rather than the
+  size of the feed.
 - **Throttling.** At most `POWERBODY_MAX_CONCURRENT` (default 2) requests in flight, and
   at least `POWERBODY_MIN_INTERVAL_MS` (default 150ms) between starts.
 - **Retry with backoff.** 429 and gateway errors are retried up to 4 times, honouring
@@ -106,54 +106,44 @@ same status as a genuine server wobble. The body is therefore read before the st
 judged, so "Invalid product data" surfaces immediately instead of being retried five
 times and buried.
 
-### Browsing never pays for detail
+### There is no browse list — products come in by SKU
 
-Nothing fetches detail in bulk. Browsing reads the cheap list feed only — a few paged
-calls whatever the catalogue's size — so the PowerBody page loads in well under a second
-on a feed of thousands. `getProductInfo` is called for the products that actually need it:
+The hub used to try to pull PowerBody's whole catalogue through into a browsable
+list. That was the wrong shape for the API underneath, and no amount of caching
+fixed it: the cheap call carries no names, and the call that does is one
+throttled request per product. So a browsable list was either a page of bare
+supplier codes, or thousands of requests to make it readable. Neither is a way
+to choose what to sell.
 
-- **Press Details on a row**, or tick some and press **Get details** (up to 50 a go).
-- **Add a product.** Importing always fetches the full record first, so what lands in the
-  catalogue is never a half-populated row.
-- **Find by SKU.** Looking a SKU up fetches its detail on the spot.
+**Products → PowerBody** is now a SKU box. Paste the codes — off their site, a
+spreadsheet, an email — and each one comes back whole: picture, name, brand,
+category, live stock, their RRP, what we pay, what we would charge and what we
+would keep. Then **Add**, which sends it to Review.
 
-Detail is cached durably for 7 days, so a product is fetched once however often it is
-browsed, and the list gets richer as you work through it. The hub reports `detailed` /
-`total` so a list of bare SKUs reads as "not fetched yet" rather than "broken".
+The cost of that is exactly the products you asked about: a few paged calls to
+map SKU → product id, then one `getProductInfo` each. `getProductsBySku()` is the
+only thing in the adapter that calls it. Detail is cached durably for 7 days, and
+the SKU → row index for 10 minutes, so looking a product up and then adding it
+does not read the feed twice.
 
-**The money column does not depend on any of that.** A browse row shows what we pay, what
-we would charge and what we would keep — for every product, with no detail call — because
-we price from cost (`pricing/list-price.ts`: cost × 2 → .99, and explicit that RRP plays
-no part). The margin is the real one from `unitEconomics` (net of VAT, dropship delivery,
-card fees and returns), not price minus cost.
+**The money column does not depend on PowerBody's RRP.** We price from cost
+(`pricing/list-price.ts`: cost × 2 → .99, and explicit that RRP plays no part),
+so what a founder decides on is what we pay → what we would charge → what we
+would keep. The margin is the real one from `unitEconomics` (net of VAT, dropship
+delivery, card fees and returns), not price minus cost. Their RRP is carried as
+the was-price it is. What is deliberately *not* done is fall back to the list
+feed's `price_tax` as an RRP: it is wholesale-including-VAT, so it would render
+as a ~17% margin — a number that looks like a fact and isn't.
 
-The one thing detail buys you here is **shipping weight**, which sets the delivery band. An
-undetailed row assumes it, so its margin renders as `≈32%` rather than `32%` and
-`marginEstimated` says why. PowerBody's own RRP is carried when known and null until then —
-it is a was-price, and nothing prices off it. `SupplierProduct.detailed` is where the flag
-comes from.
+`POWERBODY_BUILD_DEADLINE_MS` (default 20s) bounds a lookup end to end and must
+stay under the route's `maxDuration` (60s): a single wire call can otherwise run
+for over two minutes on its own (30s per attempt, retried four times), and a
+request that outlives its own timeout is delivered to nobody.
 
-What is deliberately *not* done is fall back to the list feed's `price_tax` as an RRP: it
-is wholesale-including-VAT, so it would render as a ~17% margin. A number that looks like
-a fact and isn't has no business in front of a pricing decision.
+### If a lookup comes back without a name
 
-Two backstops remain, because a supplier that stops answering must not hang the page.
-`POWERBODY_BUILD_DEADLINE_MS` (default 20s) bounds a build end to end, paging included,
-and must stay under the route's `maxDuration` (60s) — a single wire call can otherwise
-run for over two minutes on its own (30s per attempt, retried four times), which is how
-the hub used to end up stuck on "Loading the PowerBody feed…" forever. When the clock is
-spent the build returns what has landed; `listComplete: false` says the feed was only
-partly paged, and a catalogue cut short is cached for 30 seconds rather than 10 minutes so
-the next load carries on. On the client the feed request has its own timeout and fails
-loudly rather than spinning, and the **SKU lookup sits above the browse list** so it works
-whatever the feed is doing.
-
-### If the browse list shows product codes instead of names
-
-That means no detail has been fetched for those rows, which is normal — press
-**Details** on one and it will either fill in or tell you why not. The reason now
-reaches the screen in PowerBody's own words rather than being swallowed, so the
-message is the diagnosis:
+The reason reaches the screen in PowerBody's own words rather than being
+swallowed, so the message is the diagnosis:
 
 | What it says | What it means |
 |---|---|
@@ -175,15 +165,6 @@ accepting one as detail is what silently blocked the fallback and left products
 named after their codes. The same test is applied to the durable cache on read,
 so entries written by a bad run are treated as absent and re-fetched rather than
 sitting there for their full 7 days.
-
-### The feed is read a stretch at a time
-
-A long feed cannot always be paged inside one request. When the clock stops it
-part-way, the run records the page it reached and the rows it had, and the next
-build **continues from there** rather than starting at page one — otherwise
-"more will appear on a refresh" is a promise that can never be kept, because
-every refresh hits the same wall in the same place. The button says **Load more
-of the feed** while that is the case, and `listComplete` is how it knows.
 
 ### Transport — `powerbody/soap.ts`
 
@@ -232,10 +213,10 @@ The critical design point is that **the feed is split in two**:
 - `getProductInfo` — one call **per product**, and the only source of name, brand, image
   and description.
 
-So `listProducts()` and `getStockLevels()` use the cheap call alone (catalogue cached 10
-minutes), and `getProductsBySku()` is the **only** thing that calls `getProductInfo` —
-which is what makes the expensive half affordable: it is paid for one product at a time,
-for the products being opened or added. Getting this backwards turns a browse or a nightly
+So `getStockLevels()` uses the cheap call alone, and `getProductsBySku()` is the **only**
+thing that calls `getProductInfo` — which is what makes the expensive half affordable: it
+is paid for one product at a time, for the products actually being imported. There is
+deliberately no "list the whole catalogue" call; getting this backwards turns a nightly
 stock check into thousands of API calls, which is also why change detection was moved onto
 `getStockLevels()`.
 
@@ -308,10 +289,9 @@ you until the supplier refuses them.
 
 ## Finding and importing specific SKUs
 
-The browse list is built from the cheap feed, which carries no names — so searching it by
-name finds only products already detailed. **Find by SKU** (Products → PowerBody) goes
-straight at named SKUs instead: paste them in any format — commas, spaces, newlines — and
-it fetches their full records on the spot, shows cost/stock/margin, and imports them.
+**Products → PowerBody** takes SKUs in any format — commas, spaces, newlines — fetches
+their full records on the spot, shows what each one is and what it would make us, and
+imports the ones you pick.
 
 Every SKU in the list feed is reachable this way, including ones nothing has been fetched
 for yet, and paging stops as soon as the requested SKUs have turned up. Running out of

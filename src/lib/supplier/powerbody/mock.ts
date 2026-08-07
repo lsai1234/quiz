@@ -1,7 +1,7 @@
 /**
  * Mock PowerBody supplier — stands in for the real API until access lands.
  *
- * `listProducts` / `getProduct` / `getStockLevels` read the fixtures; stock
+ * `getProduct` / `getProductsBySku` / `getStockLevels` read the fixtures; stock
  * drifts by a small, deterministic amount per day so "live stock" visibly moves
  * between days without being random inside a single request (keeps tests
  * stable). Out-of-stock fixtures stay at zero so the stock-alerts journey always
@@ -84,10 +84,6 @@ const orders = new Map<string, SupplierOrder>()
 export function createMockSupplier(): SupplierProvider {
   return {
     name: 'mock',
-
-    async listProducts() {
-      return POWERBODY_FIXTURES.map(withCurrentStock)
-    },
 
     async getProduct(sku) {
       const found = POWERBODY_FIXTURES.find((p) => p.sku === sku)

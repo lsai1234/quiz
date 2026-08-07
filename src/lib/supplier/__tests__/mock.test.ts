@@ -8,7 +8,7 @@ describe('mock PowerBody supplier', () => {
 
   it('lists every fixture product', async () => {
     const supplier = createMockSupplier()
-    const products = await supplier.listProducts()
+    const products = await supplier.getProductsBySku(POWERBODY_FIXTURES.map((p) => p.sku))
     expect(products).toHaveLength(POWERBODY_FIXTURES.length)
     expect(products.every((p) => p.sku && p.rrp > 0 && p.wholesalePrice > 0)).toBe(true)
   })

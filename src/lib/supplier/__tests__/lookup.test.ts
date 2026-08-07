@@ -112,21 +112,14 @@ describe('getProductsBySku — live', () => {
     expect(calls.filter((c) => c.path === 'dropshipping.getProductList')).toHaveLength(2)
   })
 
-  it('reaches a product that browsing has not detailed yet', async () => {
-    // The whole point: browsing details nothing, but every SKU in the cheap feed
-    // is still reachable by name.
+  it('reaches a SKU deep in the feed, not just the first page', async () => {
     const feed = feedOf(100)
     const { client } = fakeClient(feed.handlers)
-    const store = createMemoryDetailStore()
 
-    await createPowerBodyProvider({ client, detailStore: store }).listProducts()
-    feed.reset()
-    __resetPowerBodyCache()
-
-    const [found] = await createPowerBodyProvider({ client, detailStore: store })
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
       .getProductsBySku(['PB-90'])
 
-    expect(found).toMatchObject({ sku: 'PB-90', name: 'Product 90' })
+    expect(found).toMatchObject({ sku: 'PB-90', name: 'Product 90', detailed: true })
   })
 
   it('asks by named argument, and falls back to a bare id', async () => {
@@ -241,20 +234,19 @@ describe('getProductsBySku — live', () => {
     expect(found.map((p) => p.name)).toEqual(['Whey 1kg', 'PB-2'])
   })
 
-  it('does not re-read the feed for a product browsing just listed', async () => {
-    // Pressing Details on a row should cost the one call it needs, not a walk
-    // back through every page to rediscover the id we are already holding.
+  it('does not re-read the feed for a SKU it has already resolved', async () => {
+    // Looking a SKU up and then adding it are two requests needing the same
+    // SKU → product-id mapping. The second should not re-page the feed for it.
     const feed = feedOf(100)
     const { client, calls } = fakeClient(feed.handlers)
-    const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const provider = () => createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
 
-    await provider.listProducts()
-    const listCallsAfterBrowse = calls.filter((c) => c.path === 'dropshipping.getProductList').length
+    await provider().getProductsBySku(['PB-90'])
+    const afterFirst = calls.filter((c) => c.path === 'dropshipping.getProductList').length
 
-    await provider.getProductsBySku(['PB-90'])
+    await provider().getProductsBySku(['PB-90'])
 
-    expect(calls.filter((c) => c.path === 'dropshipping.getProductList')).toHaveLength(listCallsAfterBrowse)
-    expect(feed.infoCalls()).toEqual(['90'])
+    expect(calls.filter((c) => c.path === 'dropshipping.getProductList')).toHaveLength(afterFirst)
   })
 
   it('reuses cached detail rather than re-fetching', async () => {

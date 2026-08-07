@@ -2,56 +2,18 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
-import { toSupplierRow } from '@/lib/supplier/row'
 import { asPendingReview, sourcesForImport, withoutSupplierOwned } from '@/lib/catalogue/review'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
-import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { addImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
 /**
- * The live feed is paged and rate-limited, so a first build takes tens of
- * seconds. The platform default (10–15s) cuts that off mid-flight and answers
- * with a gateway error page, which is what left the hub stuck on "Loading the
- * PowerBody feed…". The adapter keeps itself under its own wall-clock budget
- * (`POWERBODY_BUILD_DEADLINE_MS`); this is the outer limit that must sit above it.
+ * Resolving named SKUs pages the (rate-limited) list feed and then makes one
+ * detail call per product, so give it room — the platform default would cut it
+ * off and answer with an error page the browser cannot read.
  */
 export const maxDuration = 60
-
-/**
- * GET — the full PowerBody feed with mapping preview + "already added" flags.
- *
- * Cheap by construction: this is the list half of their feed only, so it costs a
- * few paged calls whatever the catalogue's size. Rows come back with cost and
- * stock correct and `detailed: false` where the descriptive half has not been
- * fetched — that happens per product, when one is opened or added.
- */
-export async function GET() {
-  if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  // Inside the try with everything else: resolving the supplier can throw on a
-  // half-configured environment, and an unhandled throw here answers with an
-  // HTML error page the browser cannot read as an error.
-  try {
-    await syncPortalRuntime()
-    const supplier = await getSupplier()
-    const [products, imported] = await Promise.all([supplier.listProducts(), getImportedProducts()])
-    const addedIds = new Set(imported.map((p) => p.id))
-    const { getPowerBodyCatalogueProgress } = await import('@/lib/supplier/powerbody/live')
-    return NextResponse.json({
-      source: supplier.name,
-      count: products.length,
-      // How much of the list already carries detail. Reporting it means a list
-      // of bare SKUs reads as "not fetched yet", not "broken".
-      progress: supplier.name === 'powerbody' ? getPowerBodyCatalogueProgress() : null,
-      products: products.map((sp) => toSupplierRow(sp, addedIds)),
-    })
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load the supplier feed.' },
-      { status: 502 },
-    )
-  }
-}
 
 /** POST { skus, autopopulate? } — map the chosen supplier products, AI-fill the
  *  CHRGD attributes PowerBody doesn't send (claim-safe), and add them. */
@@ -72,10 +34,8 @@ export async function POST(req: Request) {
   try {
     await syncPortalRuntime()
     const supplier = await getSupplier()
-    // Resolve the named SKUs directly rather than scanning the full catalogue:
-    // the live supplier only details part of its feed per request, so going via
-    // `listProducts` would import whichever ones happened to be detailed and
-    // give the rest no name. This fetches detail for exactly what was asked for.
+    // Fetches full detail for exactly the SKUs asked for — so what lands in the
+    // catalogue is a whole product, never a half-populated row.
     const toAdd = await supplier.getProductsBySku(skus)
     if (toAdd.length === 0) {
       return NextResponse.json({ error: 'None of the given SKUs were found in the supplier feed.' }, { status: 404 })

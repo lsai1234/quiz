@@ -14,11 +14,11 @@ export const maxDuration = 60
 /**
  * POST { skus } — resolve specific SKUs against the supplier, with detail.
  *
- * Browsing reads PowerBody's cheap list feed, which has no names or RRP in it.
- * This is where the expensive half is bought: given SKUs it fetches their full
- * records, so it backs both "look this code up" and the Details button on a
- * browse row. Rate-limited by the transport and capped at `MAX_LOOKUP_SKUS`,
- * because it is one supplier call per product asked for.
+ * The way in. PowerBody's cheap feed has no names or RRP in it; this buys the
+ * expensive half for the SKUs actually being considered, so what comes back is
+ * a whole product — picture, name, brand, real RRP, live stock. Rate-limited by
+ * the transport and capped at `MAX_LOOKUP_SKUS`, because it is one supplier call
+ * per product asked for.
  *
  * Read-only — resolving a SKU adds nothing. `POST /api/portal/supplier` does the
  * importing.
@@ -53,9 +53,8 @@ export async function POST(req: Request) {
     const found = new Set(products.map((p) => p.sku))
 
     return NextResponse.json({
-      // Same row shape as the browse feed, so the page can drop these straight
-      // into the list it is already showing. These are always fully detailed —
-      // fetching that detail is what this endpoint is for.
+      // Always fully detailed — fetching that detail is what this endpoint is
+      // for, and it is what makes an imported product a whole product.
       products: products.map((sp) => toSupplierRow(sp, addedIds)),
       source: supplier.name,
       notFound: skus.filter((sku) => !found.has(sku)),

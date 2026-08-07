@@ -15,12 +15,10 @@
  *     a whole catalogue is thousands of throttled calls: minutes of work that no
  *     request can wait for.
  *
- *     So nothing here details products in bulk. `listProducts()` and
- *     `getStockLevels()` use the cheap call alone, and detail is fetched for the
- *     products that actually need it — the one being opened, or the ones being
- *     added to our catalogue — through `getProductsBySku()`. It is cached
- *     durably, so a product is detailed once and browsing gets richer over time
- *     without ever paying for it up front.
+ *     So nothing here pulls a catalogue through. `getStockLevels()` uses the
+ *     cheap call alone, and `getProductsBySku()` — the only thing that calls
+ *     `getProductInfo` — fetches full detail for the handful of SKUs actually
+ *     being imported. Detail is cached durably, so a product is fetched once.
  *
  *  2. **Placing an order is not idempotent.** `createOrder` errors on a repeat,
  *     so our own order id goes in as `id` and `ALREADY_EXISTS` is read as
@@ -60,77 +58,30 @@ const MAX_PAGES = 200
 const DETAIL_CONCURRENCY = 6
 
 /**
- * Wall-clock budget for one catalogue build, and for a SKU lookup.
+ * Wall-clock budget for one SKU lookup.
  *
- * Nothing here fetches detail in bulk any more, so a build is just the cheap
- * paged feed and should be quick. This is the backstop for when it isn't: a
+ * Resolving a SKU means paging the cheap feed to find its product id, then one
+ * detail call — quick, normally. This is the backstop for when it is not: a
  * single wire call can hang for over two minutes on its own (30s per attempt,
- * retried), and a request that outlives its own timeout is delivered to nobody —
- * the hub sits on "Loading the PowerBody feed…" forever. When the clock is spent
- * we return what has landed rather than waiting for an answer no one will see.
+ * retried four times), and a request that outlives its own timeout is delivered
+ * to nobody. When the clock is spent we stop waiting and say so.
  *
  * Keep this comfortably under the route's `maxDuration`.
  */
 const DEFAULT_BUILD_DEADLINE_MS = 20_000
 
-/** How long a built catalogue is reused in memory. Stock is NOT served from
- *  here — `getStockLevels` always goes to the wire. */
-const CATALOGUE_TTL_MS = 10 * 60 * 1000
-
-/** A catalogue the deadline cut short is held only briefly, so the next load
- *  carries on instead of serving the same short list for ten minutes. */
-const PARTIAL_TTL_MS = 30 * 1000
-
-interface Cached {
-  at: number
-  products: SupplierProduct[]
-  /** False when the deadline stopped us mid-feed, so this is not the whole thing. */
-  complete: boolean
-}
-
-let catalogueCache: Cached | null = null
-
-/** The build currently running, if any. Two founders hitting Refresh at the same
- *  time (or one page mounting twice) must not start two builds against a
- *  supplier that is already rate-limiting us — they wait on the same one. */
-let inFlightBuild: Promise<SupplierProduct[]> | null = null
-
 /**
- * The list rows the last paging run read, by SKU.
+ * How long the SKU → list-row index is reused.
  *
- * Pressing Details on a row should not re-read the entire feed to find out what
- * the browse list already knows — that is several throttled calls to save one,
- * and on a slow feed it is what puts a lookup near its own deadline. Held to the
- * same clock as the catalogue cache, so a row it serves is exactly as fresh as
- * the one on screen that was clicked.
+ * Looking up three SKUs and then adding them is two requests that need the same
+ * mapping, and re-paging a long feed for the second is several throttled calls
+ * to save none. Prices and stock come from the same rows, so this doubles as
+ * how stale a looked-up row may be.
  */
+const LIST_INDEX_TTL_MS = 10 * 60 * 1000
+
+/** The list rows the last paging run read, by SKU. */
 let listIndex: { at: number; bySku: Map<string, PbProductListItem> } | null = null
-
-/**
- * Where a paging run the clock cut short got to.
- *
- * Without this, "the feed was only partly paged, more will appear on a refresh"
- * is a promise the code cannot keep: every build restarted at page one and hit
- * the same wall at the same place, so the far end of a big feed was unreachable
- * no matter how many times you pressed refresh. Each run now continues from
- * where the last stopped and keeps what it already had.
- */
-const PAGING_RESUME_TTL_MS = 30 * 60 * 1000
-let pagingCursor: { at: number; nextPage: number; items: PbProductListItem[] } | null = null
-
-/** De-dupe merged pages: a resumed run can overlap when the feed shifts under
- *  us, and the same product twice in a browse list is its own bug. */
-function dedupeItems(items: PbProductListItem[]): PbProductListItem[] {
-  const seen = new Set<string>()
-  const out: PbProductListItem[] = []
-  for (const item of items) {
-    const key = `${item.product_id ?? ''}:${item.sku ?? ''}`
-    if (key === ':' || seen.has(key)) continue
-    seen.add(key)
-    out.push(item)
-  }
-  return out
-}
 
 function rememberListItems(items: PbProductListItem[]): void {
   const bySku = new Map<string, PbProductListItem>()
@@ -141,35 +92,9 @@ function rememberListItems(items: PbProductListItem[]): void {
   listIndex = { at: Date.now(), bySku }
 }
 
-/** How the last catalogue build went — surfaced in the hub so a list of
- *  bare SKUs explains itself instead of looking broken. */
-export interface CatalogueProgress {
-  total: number
-  /** How many carry full detail already, from the durable cache. Detail is
-   *  fetched per product on demand, so this grows as products are opened and
-   *  added rather than being filled in up front. */
-  detailed: number
-  /** False when the time budget stopped us part-way through the list feed, so
-   *  `total` is a floor rather than the size of the catalogue. */
-  listComplete: boolean
-  /** True when the build ran out of time before it ran out of work. */
-  timeBudgetSpent: boolean
-  at: string
-}
-
-let lastProgress: CatalogueProgress | null = null
-
-export function getPowerBodyCatalogueProgress(): CatalogueProgress | null {
-  return lastProgress
-}
-
-/** Drop the cached catalogue (tests, and after an explicit resync). */
+/** Drop the cached SKU index (tests, and after an explicit resync). */
 export function __resetPowerBodyCache(): void {
-  catalogueCache = null
-  lastProgress = null
-  inFlightBuild = null
   listIndex = null
-  pagingCursor = null
 }
 
 /**
@@ -244,15 +169,6 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** Rows are appended here as they arrive, so a caller that stops waiting can
      *  still use the pages that did land. */
     into?: PbProductListItem[]
-    /** Page to start from. Lets a run the clock cut short be continued. */
-    startPage?: number
-    /**
-     * Updated after every page read, so a caller that stops WAITING on this run
-     * still knows where it got to. `nextPage` on the returned value only exists
-     * when the run finished; the deadline race means the common cut-short case
-     * never sees it.
-     */
-    reached?: { nextPage: number }
   }
 
   interface ListFeed {
@@ -260,31 +176,23 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** False when we stopped early (deadline or page cap) rather than reaching
      *  the end of the feed. */
     complete: boolean
-    /** The page to ask for next, so a run cut short can be continued. */
-    nextPage: number
   }
 
   /** Page through `getProductList` until a page comes back empty — or until the
    *  caller has enough, or the clock runs out. */
   async function fetchListItems(listOptions: ListFeedOptions = {}): Promise<ListFeed> {
     const all: PbProductListItem[] = listOptions.into ?? []
-    const from = listOptions.startPage ?? 1
-    let page = from
-    for (; page < from + MAX_PAGES; page++) {
+    for (let page = 1; page <= MAX_PAGES; page++) {
       const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, nextPage: page }
+      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true }
       all.push(...rows)
-      if (listOptions.reached) listOptions.reached.nextPage = page + 1
-      if (listOptions.enough?.(all)) return { items: all, complete: true, nextPage: page + 1 }
-      // Out of time: hand back a short catalogue rather than a request that
-      // never answers, and say where to resume so the next call gets FURTHER
-      // rather than reading the same first pages again.
+      if (listOptions.enough?.(all)) return { items: all, complete: true }
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
-        return { items: all, complete: false, nextPage: page + 1 }
+        return { items: all, complete: false }
       }
     }
     // Hit the page cap — a feed that never returns an empty page.
-    return { items: all, complete: false, nextPage: page }
+    return { items: all, complete: false }
   }
 
   /**
@@ -387,136 +295,8 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   const idOf = (item: PbProductListItem): string =>
     item.product_id === undefined || item.product_id === null ? '' : String(item.product_id)
 
-  /**
-   * The full catalogue from the cheap list feed, wearing whatever detail the
-   * cache already holds. Named rather than reached through `this`, so the
-   * provider survives being destructured.
-   *
-   * No `getProductInfo` calls happen here, by design. Detailing a whole feed is
-   * one throttled call per product, which is minutes of work for names nobody
-   * has asked to see — and it is the browse list, so it has to be fast. Rows
-   * come back with SKU, cost, stock and VAT (all correct, all from today's
-   * feed), and `detailed: false` marks the ones whose descriptive fields are
-   * placeholders. `getProductsBySku` fills those in for the product being opened
-   * or added, and the cache means each product is only ever fetched once.
-   */
-  function cachedCatalogue(): SupplierProduct[] | null {
-    if (!catalogueCache) return null
-    const ttl = catalogueCache.complete ? CATALOGUE_TTL_MS : PARTIAL_TTL_MS
-    return Date.now() - catalogueCache.at < ttl ? catalogueCache.products : null
-  }
-
-  async function listProducts(): Promise<SupplierProduct[]> {
-    const cached = cachedCatalogue()
-    if (cached) return cached
-    if (!inFlightBuild) {
-      inFlightBuild = buildCatalogue().finally(() => {
-        inFlightBuild = null
-      })
-    }
-    return inFlightBuild
-  }
-
-  async function buildCatalogue(): Promise<SupplierProduct[]> {
-    const deadline = Date.now() + buildDeadlineMs
-
-    // Carry on from where a cut-short run stopped, keeping what it had, so each
-    // refresh reaches further into the feed instead of re-reading page one.
-    const resume = pagingCursor && Date.now() - pagingCursor.at < PAGING_RESUME_TTL_MS ? pagingCursor : null
-
-    // Pages land in `paged` as they arrive, so if the supplier stops answering
-    // mid-feed we still have the ones that did.
-    const paged: PbProductListItem[] = resume ? [...resume.items] : []
-    const startPage = resume?.nextPage ?? 1
-    const reached = { nextPage: startPage }
-    const listing = await untilDeadline(
-      fetchListItems({ deadline, into: paged, startPage, reached }),
-      deadline,
-    )
-    const items = dedupeItems(listing?.items ?? paged)
-    const listComplete = listing?.complete ?? false
-
-    // Remember where to carry on — and stop remembering once the feed is whole.
-    pagingCursor = listComplete
-      ? null
-      : { at: Date.now(), nextPage: listing?.nextPage ?? reached.nextPage, items }
-
-    // Pressing Details on one of these rows should not have to read the feed
-    // again to find the product id we are holding right here.
-    if (items.length > 0) rememberListItems(items)
-
-    if (items.length === 0) {
-      // Nothing at all, and the clock is gone: say so. An empty catalogue would
-      // read as "PowerBody carry no products", which is a very different thing.
-      if (!listing) {
-        throw new Error(
-          `PowerBody did not answer within ${Math.round(buildDeadlineMs / 1000)}s. Their feed may be slow or ` +
-            'rate-limiting us — try again, or look a product up by SKU.',
-        )
-      }
-      lastProgress = {
-        total: 0,
-        detailed: 0,
-        listComplete,
-        timeBudgetSpent: false,
-        at: new Date().toISOString(),
-      }
-      catalogueCache = { at: Date.now(), products: [], complete: listComplete }
-      return []
-    }
-
-    // Read-only: whatever has already been fetched for other reasons dresses the
-    // list up for free. Nothing is fetched or written here.
-    const cache = await detailStore.load()
-    const now = Date.now()
-
-    const updatedAt = new Date().toISOString()
-    const products = items
-      .map((item) => {
-        const entry = usableEntry(idOf(item), cache, now)
-        // The FRESH list row goes on top of cached detail, never underneath:
-        // price, qty and VAT must come from today's feed even when the name and
-        // image came from a cache written a week ago.
-        return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
-      })
-      .filter((p) => p.sku !== '')
-
-    lastProgress = {
-      total: products.length,
-      // Counted off the products themselves, not off cache entries. A cached
-      // record that came back without a name leaves the row showing its code, so
-      // counting the entry would claim names had been fetched while the list
-      // plainly shows otherwise.
-      detailed: products.filter((p) => p.detailed).length,
-      listComplete,
-      timeBudgetSpent: !listComplete,
-      at: updatedAt,
-    }
-    catalogueCache = { at: Date.now(), products, complete: listComplete }
-    return products
-  }
-
-  /**
-   * Detail for specific SKUs, fetched on demand.
-   *
-   * This is the *only* thing that calls `getProductInfo`, and it is what makes
-   * the split affordable: the expensive half of the feed is paid for one product
-   * at a time, when someone opens it or adds it, instead of thousands of calls
-   * up front for a catalogue nobody has looked at. The list feed maps SKU → their
-   * numeric product id and is always complete (it is the cheap call), so any SKU
-   * that exists is reachable here even when nothing about it has been fetched.
-   *
-   * What comes back is always whole — name, brand, category, image, real RRP —
-   * which is why importing goes through here rather than through the browse list.
-   */
-  /**
-   * The list rows for `wanted`, from the index the browse list built — but only
-   * when EVERY one of them is in there. A partial hit is not good enough: the
-   * missing one might be on a page that was never read, and "not in the feed"
-   * has to be a fact rather than an artefact of what happened to be cached.
-   */
   function matchesFromIndex(wanted: Set<string>): PbProductListItem[] {
-    if (!listIndex || Date.now() - listIndex.at >= CATALOGUE_TTL_MS) return []
+    if (!listIndex || Date.now() - listIndex.at >= LIST_INDEX_TTL_MS) return []
     const hits: PbProductListItem[] = []
     for (const sku of wanted) {
       const item = listIndex.bySku.get(sku)
@@ -602,16 +382,14 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const updatedAt = new Date().toISOString()
     return matches.map((item) => {
       const entry = usableEntry(idOf(item), cache, now)
-      // Fresh list row on top, exactly as in `listProducts` — cached detail must
-      // never supply today's price or stock.
+      // Fresh list row on top: cached detail must never supply today's price
+      // or stock.
       return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
     })
   }
 
   return {
     name: 'powerbody',
-
-    listProducts,
 
     async getProduct(sku: string): Promise<SupplierProduct | null> {
       const [found] = await getProductsBySku([sku])

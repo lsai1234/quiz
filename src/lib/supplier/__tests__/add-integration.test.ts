@@ -1,4 +1,4 @@
-import { createMockSupplier } from '@/lib/supplier/powerbody/mock'
+import { POWERBODY_FIXTURES } from '@/lib/supplier/powerbody/fixtures'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
 import { addImportedProducts, getPendingReviewProducts, saveImportedProduct } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
@@ -10,8 +10,7 @@ import { listPriceFor } from '@/lib/pricing/list-price'
 // seam), carrying supplier price + stock.
 describe('adding a PowerBody product surfaces it in the catalogue', () => {
   it('appears in the resolved catalogue after being added', async () => {
-    const supplier = createMockSupplier()
-    const sp = (await supplier.listProducts()).find((p) => p.sku === 'ON-CREA-634')!
+    const sp = POWERBODY_FIXTURES.find((p) => p.sku === 'ON-CREA-634')!
     const mapped = supplierProductToCatalogue(sp)
 
     const before = await getResolvedCatalogue()
@@ -28,8 +27,7 @@ describe('adding a PowerBody product surfaces it in the catalogue', () => {
   })
 
   it('keeps a product awaiting review out of the shop until it is approved', async () => {
-    const supplier = createMockSupplier()
-    const sp = (await supplier.listProducts()).find((p) => p.sku === 'APP-CREA-250')!
+    const sp = POWERBODY_FIXTURES.find((p) => p.sku === 'APP-CREA-250')!
     const mapped = supplierProductToCatalogue(sp)
 
     await addImportedProducts([asPendingReview(mapped, sourcesForImport(['stackSlots', 'shortReason'], true))])

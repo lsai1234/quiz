@@ -49,12 +49,12 @@ export interface SupplierProduct {
    * Whether the descriptive half of this product has actually been fetched.
    *
    * PowerBody split their feed in two: the cheap paged list carries SKU, price
-   * and stock for everything, and `getProductInfo` — one call per product — is
-   * the only source of name, brand, category, image and RRP. Browsing therefore
-   * shows list-feed rows, and detail is fetched for a product when someone opens
-   * it or adds it. False means the descriptive fields are placeholders and the
-   * RRP is a fallback, so nothing downstream should present them as the
-   * supplier's own figures. Always true on the mock, whose fixtures are whole.
+   * and stock, and `getProductInfo` — one call per product — is the only source
+   * of name, brand, category, image and RRP. A lookup fetches both, so this is
+   * normally true; false means the detail call could not be answered for this
+   * one, its descriptive fields are placeholders and its RRP is a fallback, so
+   * nothing downstream should present them as the supplier's own figures.
+   * Always true on the mock, whose fixtures are whole.
    */
   detailed: boolean
   updatedAt: string
@@ -117,18 +117,17 @@ export interface SupplierOrder extends SupplierOrderResult {
 
 export interface SupplierProvider {
   readonly name: 'mock' | 'powerbody'
-  /** The full supplier catalogue (for the "scan & add" page). */
-  listProducts(): Promise<SupplierProduct[]>
   getProduct(sku: string): Promise<SupplierProduct | null>
   /**
-   * Fully-detailed products for specific SKUs, fetched on demand.
+   * Fully-detailed products for specific SKUs.
    *
-   * Distinct from `listProducts()` because the live supplier can only afford to
-   * detail part of its catalogue per request (see `powerbody/live.ts`), which
-   * would otherwise make "import this exact product" depend on having already
-   * paged through everything. Given a handful of SKUs it fetches exactly those,
-   * so a targeted import always gets a complete product. Unknown SKUs are
-   * omitted rather than erroring — the caller reports which were not found.
+   * The only way products enter our catalogue. There is deliberately no "list
+   * the whole supplier catalogue" call: PowerBody's cheap feed carries no names,
+   * and the one that does is a throttled request per product, so pulling a
+   * browsable catalogue through means either a list of bare supplier codes or
+   * thousands of requests. Importing by SKU costs exactly the products asked
+   * for, and every one of them arrives complete. Unknown SKUs are omitted rather
+   * than erroring — the caller reports which were not found.
    */
   getProductsBySku(skus: string[]): Promise<SupplierProduct[]>
   /** Live stock + price. Pass SKUs to narrow it; omit for everything. */

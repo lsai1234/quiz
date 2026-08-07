@@ -19,7 +19,6 @@ const getSupplierOrder = jest.fn()
 jest.mock('@/lib/supplier/powerbody/live', () => ({
   createPowerBodyProvider: () => ({
     name: 'powerbody',
-    listProducts: async () => [],
     getProduct: async () => null,
     getStockLevels: async () => [],
     placeOrder,
