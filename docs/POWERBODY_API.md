@@ -62,7 +62,6 @@ NEXT_PUBLIC_DATA_SOURCE=mock     # the shop still serves the sample catalogue
 # Rate-limit tuning — only touch these if you see HTTP 429.
 POWERBODY_MAX_CONCURRENT=2
 POWERBODY_MIN_INTERVAL_MS=150
-POWERBODY_DETAIL_BUDGET=250
 POWERBODY_BUILD_DEADLINE_MS=20000
 ```
 
@@ -82,20 +81,22 @@ default.
 
 ### Rate limiting (HTTP 429)
 
-PowerBody answer **429** when asked too fast, and building the catalogue is the easiest
-way to trip it — `getProductInfo` is one call per product, so a few thousand products is
-a few thousand requests.
+PowerBody answer **429** when asked too fast, and `getProductInfo` is the easiest way to
+trip it — one call per product, so detailing a few thousand products would be a few
+thousand requests.
 
-Three things deal with it, all in the transport so every caller benefits:
+Three things deal with it:
 
+- **Never detailing in bulk.** The expensive call is only made for products someone opens
+  or adds (see below), so the request count follows what you are actually doing rather
+  than the size of the feed.
 - **Throttling.** At most `POWERBODY_MAX_CONCURRENT` (default 2) requests in flight, and
   at least `POWERBODY_MIN_INTERVAL_MS` (default 150ms) between starts.
 - **Retry with backoff.** 429 and gateway errors are retried up to 4 times, honouring
   their `Retry-After` header when they send one, with jittered exponential backoff when
   they don't. After the budget it fails with a message naming the two knobs to turn.
 - **A durable detail cache.** Detail is fetched **once per product** and kept in the
-  database for 7 days, so throttling costs you a slow first build rather than a slow
-  every-build.
+  database for 7 days, so a product you have already looked at costs nothing again.
 
 If you still see 429s: lower `POWERBODY_MAX_CONCURRENT` first, then raise
 `POWERBODY_MIN_INTERVAL_MS`. Their actual limit isn't documented.
@@ -105,31 +106,38 @@ same status as a genuine server wobble. The body is therefore read before the st
 judged, so "Invalid product data" surfaces immediately instead of being retried five
 times and buried.
 
-### The first catalogue load is partial, on purpose
+### Browsing never pays for detail
 
-Because the transport is deliberately slow, one request cannot fetch detail for a large
-catalogue without running past the timeout. So each load tops up the cache by at most
-`POWERBODY_DETAIL_BUDGET` products (default 250) and **returns the whole catalogue
-regardless** — products without detail yet carry their list-feed data (SKU, price, stock),
-so they are accurate and sellable, just unnamed.
+Nothing fetches detail in bulk. Browsing reads the cheap list feed only — a few paged
+calls whatever the catalogue's size — so the PowerBody page loads in well under a second
+on a feed of thousands. `getProductInfo` is called for the products that actually need it:
 
-Load the page again, or let the nightly job run, and it fills in further. The hub reports
-progress (`detailed` / `pending`) so a half-named list reads as "still loading" rather
-than "broken".
+- **Press Details on a row**, or tick some and press **Get details** (up to 50 a go).
+- **Add a product.** Importing always fetches the full record first, so what lands in the
+  catalogue is never a half-populated row.
+- **Find by SKU.** Looking a SKU up fetches its detail on the spot.
 
-The build also works to a **clock**, not just a count: `POWERBODY_BUILD_DEADLINE_MS`
-(default 20s) bounds the whole thing, paging included, and must stay under the route's
-`maxDuration` (60s). A count budget alone is not enough — 250 detail fetches two-at-a-time
-is minutes of work, and paging a large feed adds more. Past the request timeout the answer
-reaches nobody: the hub sits on "Loading the PowerBody feed…" forever, and the whole
-supplier page including the SKU lookup is unusable. So when the clock is spent the build
-stops where it is and returns what it has; `listComplete: false` in the progress report
-says the feed itself was only partly paged, and a catalogue cut short is cached for 30
-seconds rather than 10 minutes so the next load carries on.
+Detail is cached durably for 7 days, so a product is fetched once however often it is
+browsed, and the list gets richer as you work through it. The hub reports `detailed` /
+`total` so a list of bare SKUs reads as "not fetched yet" rather than "broken".
 
-The browser reflects that on the client side too: the feed request has its own timeout and
-fails loudly rather than spinning, and the **SKU lookup sits above the browse list** so it
-works whatever the feed is doing.
+This is why a browse row shows **cost and stock but no RRP or margin**: RRP lives in the
+detail half of the feed, and the fallback for a missing one is wholesale-including-VAT,
+which would render as a ~17% margin. A number that looks like a fact and isn't has no
+business in front of a pricing decision, so the row says `RRP not fetched` instead.
+`detailed: false` on the row is the flag; `SupplierProduct.detailed` is where it comes
+from.
+
+Two backstops remain, because a supplier that stops answering must not hang the page.
+`POWERBODY_BUILD_DEADLINE_MS` (default 20s) bounds a build end to end, paging included,
+and must stay under the route's `maxDuration` (60s) — a single wire call can otherwise
+run for over two minutes on its own (30s per attempt, retried four times), which is how
+the hub used to end up stuck on "Loading the PowerBody feed…" forever. When the clock is
+spent the build returns what has landed; `listComplete: false` says the feed was only
+partly paged, and a catalogue cut short is cached for 30 seconds rather than 10 minutes so
+the next load carries on. On the client the feed request has its own timeout and fails
+loudly rather than spinning, and the **SKU lookup sits above the browse list** so it works
+whatever the feed is doing.
 
 ### Transport — `powerbody/soap.ts`
 
@@ -178,10 +186,15 @@ The critical design point is that **the feed is split in two**:
 - `getProductInfo` — one call **per product**, and the only source of name, brand, image
   and description.
 
-So `getStockLevels()` uses the cheap call alone and `listProducts()` is the only thing that
-pays for detail (bounded to 6 concurrent, catalogue cached 10 minutes). Getting this
-backwards turns a nightly stock check into thousands of API calls — which is also why
-change detection was moved onto `getStockLevels()`.
+So `listProducts()` and `getStockLevels()` use the cheap call alone (catalogue cached 10
+minutes), and `getProductsBySku()` is the **only** thing that calls `getProductInfo` —
+which is what makes the expensive half affordable: it is paid for one product at a time,
+for the products being opened or added. Getting this backwards turns a browse or a nightly
+stock check into thousands of API calls, which is also why change detection was moved onto
+`getStockLevels()`.
+
+`SupplierProduct.detailed` carries the distinction outward, so a caller can tell a
+fully-fetched product from a list-feed row instead of guessing from a blank brand.
 
 ### Keeping products up to date — `supplier/sync.ts`
 
@@ -249,14 +262,15 @@ you until the supplier refuses them.
 
 ## Finding and importing specific SKUs
 
-The browse list can only search products it has details for, and on a large feed that is
-a fraction of it at first. **Find by SKU** (Products → PowerBody) goes straight at named
-SKUs instead: paste them in any format — commas, spaces, newlines — and it fetches their
-details on demand, shows cost/stock/margin, and imports them.
+The browse list is built from the cheap feed, which carries no names — so searching it by
+name finds only products already detailed. **Find by SKU** (Products → PowerBody) goes
+straight at named SKUs instead: paste them in any format — commas, spaces, newlines — and
+it fetches their full records on the spot, shows cost/stock/margin, and imports them.
 
-This deliberately bypasses `POWERBODY_DETAIL_BUDGET`: that budget stops a *full* build
-timing out, and a handful of named SKUs is not that. Every SKU in the cheap list feed is
-reachable this way, even one nothing has been detailed for yet.
+Every SKU in the list feed is reachable this way, including ones nothing has been fetched
+for yet, and paging stops as soon as the requested SKUs have turned up. Running out of
+time is reported as an error rather than a silent "not found" — a lookup that quietly
+loses a SKU would be worse than one that fails.
 
 ## The daily check
 

@@ -12,7 +12,10 @@ import type { SupplierProduct } from '../types'
 
 const UPDATED = '2026-07-20T09:00:00.000Z'
 
-type Seed = Omit<SupplierProduct, 'currency' | 'inStock' | 'updatedAt' | 'weightGrams' | 'vatRate'> & {
+type Seed = Omit<
+  SupplierProduct,
+  'currency' | 'inStock' | 'updatedAt' | 'weightGrams' | 'vatRate' | 'detailed'
+> & {
   /** Override when the name doesn't state a size (capsules, multipacks). */
   weightGrams?: number
 }
@@ -94,5 +97,7 @@ export const POWERBODY_FIXTURES: SupplierProduct[] = SEED.map((s) => ({
   // Sports nutrition is standard-rated in the UK; null defers to the standard
   // rate rather than pinning 20% here, so changing the rate changes it once.
   vatRate: null,
+  // The mock has no two-call split to model: every fixture is whole.
+  detailed: true,
   updatedAt: UPDATED,
 }))

@@ -147,6 +147,11 @@ export function toSupplierProduct(info: PbProductInfo, updatedAt = new Date().to
   const wholesale = round(num(info.price))
   const rrp = round(num(info.detail_price, num(info.price_tax)))
   const sellable = isSellableStatus(info.status)
+  // `name` is the tell: only `getProductInfo` carries one, so its presence is
+  // what separates a fully-fetched product from a bare list-feed row. Everything
+  // descriptive below falls back when it is absent, and `detailed` is how a
+  // caller knows those are placeholders rather than what PowerBody say.
+  const detailed = str(info.name).trim() !== ''
 
   return {
     sku: str(info.sku),
@@ -167,6 +172,7 @@ export function toSupplierProduct(info: PbProductInfo, updatedAt = new Date().to
     servings: numOrNull(info.portion_count),
     weightGrams: weightToGrams(info.weight),
     vatRate: vatFraction(info.vat_rate),
+    detailed,
     updatedAt,
   }
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
+import { toSupplierRow } from '@/lib/supplier/row'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
 import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
 
@@ -16,33 +17,14 @@ export const dynamic = 'force-dynamic'
  */
 export const maxDuration = 60
 
-/** One browsable row: the supplier product + how it maps + margin + whether it's
- *  already in our curated catalogue. */
-function toRow(sp: import('@/lib/supplier/types').SupplierProduct, addedIds: Set<string>) {
-  const mapped = supplierProductToCatalogue(sp)
-  const margin = Math.round((sp.rrp - sp.wholesalePrice) * 100) / 100
-  const marginPct = sp.rrp > 0 ? Math.round((margin / sp.rrp) * 100) : 0
-  return {
-    sku: sp.sku,
-    name: sp.name,
-    brand: sp.brand,
-    category: sp.category,
-    imageUrl: sp.imageUrl,
-    wholesalePrice: sp.wholesalePrice,
-    rrp: sp.rrp,
-    currency: sp.currency,
-    stock: sp.stock,
-    inStock: sp.inStock,
-    margin,
-    marginPct,
-    mappedId: mapped.id,
-    stackSlots: mapped.stackSlots,
-    hasStimulants: mapped.hasStimulants,
-    alreadyAdded: addedIds.has(mapped.id),
-  }
-}
-
-/** GET — the full PowerBody feed with mapping preview + "already added" flags. */
+/**
+ * GET — the full PowerBody feed with mapping preview + "already added" flags.
+ *
+ * Cheap by construction: this is the list half of their feed only, so it costs a
+ * few paged calls whatever the catalogue's size. Rows come back with cost and
+ * stock correct and `detailed: false` where the descriptive half has not been
+ * fetched — that happens per product, when one is opened or added.
+ */
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   // Inside the try with everything else: resolving the supplier can throw on a
@@ -57,11 +39,10 @@ export async function GET() {
     return NextResponse.json({
       source: supplier.name,
       count: products.length,
-      // Detail is fetched under a per-request budget (PowerBody rate-limit us),
-      // so a big catalogue fills in over several loads. Reporting it means a
-      // partially-named list reads as "still loading", not "broken".
+      // How much of the list already carries detail. Reporting it means a list
+      // of bare SKUs reads as "not fetched yet", not "broken".
       progress: supplier.name === 'powerbody' ? getPowerBodyCatalogueProgress() : null,
-      products: products.map((sp) => toRow(sp, addedIds)),
+      products: products.map((sp) => toSupplierRow(sp, addedIds)),
     })
   } catch (err) {
     return NextResponse.json(

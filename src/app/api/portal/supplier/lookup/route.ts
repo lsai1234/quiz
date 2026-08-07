@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
-import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
+import { toSupplierRow } from '@/lib/supplier/row'
 import { getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
 import { MAX_LOOKUP_SKUS, readSkuList } from '@/lib/supplier/sku-input'
 
@@ -14,11 +14,11 @@ export const maxDuration = 60
 /**
  * POST { skus } — resolve specific SKUs against the supplier, with detail.
  *
- * The browse page can only show what has been detailed so far (the live feed is
- * rate-limited, so it fills in over several loads). This is the way to reach a
- * product you already know the SKU of without waiting for that: it fetches
- * exactly those SKUs, so you can check what you're about to import and then add
- * it in one go.
+ * Browsing reads PowerBody's cheap list feed, which has no names or RRP in it.
+ * This is where the expensive half is bought: given SKUs it fetches their full
+ * records, so it backs both "look this code up" and the Details button on a
+ * browse row. Rate-limited by the transport and capped at `MAX_LOOKUP_SKUS`,
+ * because it is one supplier call per product asked for.
  *
  * Read-only — resolving a SKU adds nothing. `POST /api/portal/supplier` does the
  * importing.
@@ -53,29 +53,11 @@ export async function POST(req: Request) {
     const found = new Set(products.map((p) => p.sku))
 
     return NextResponse.json({
+      // Same row shape as the browse feed, so the page can drop these straight
+      // into the list it is already showing. These are always fully detailed —
+      // fetching that detail is what this endpoint is for.
+      products: products.map((sp) => toSupplierRow(sp, addedIds)),
       source: supplier.name,
-      products: products.map((sp) => {
-        const mapped = supplierProductToCatalogue(sp)
-        const margin = Math.round((sp.rrp - sp.wholesalePrice) * 100) / 100
-        return {
-          sku: sp.sku,
-          name: sp.name,
-          brand: sp.brand,
-          category: sp.category,
-          imageUrl: sp.imageUrl,
-          wholesalePrice: sp.wholesalePrice,
-          rrp: sp.rrp,
-          currency: sp.currency,
-          stock: sp.stock,
-          inStock: sp.inStock,
-          margin,
-          marginPct: sp.rrp > 0 ? Math.round((margin / sp.rrp) * 100) : 0,
-          mappedId: mapped.id,
-          stackSlots: mapped.stackSlots,
-          hasStimulants: mapped.hasStimulants,
-          alreadyAdded: addedIds.has(mapped.id),
-        }
-      }),
       notFound: skus.filter((sku) => !found.has(sku)),
     })
   } catch (err) {

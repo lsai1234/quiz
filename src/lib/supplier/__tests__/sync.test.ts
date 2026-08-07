@@ -18,6 +18,7 @@ const BASE: SupplierProduct = {
   barcode: null,
   flavours: [],
   servings: 30,
+  detailed: true,
   weightGrams: 1150,
   vatRate: 0.2,
   updatedAt: '2026-08-01T00:00:00.000Z',

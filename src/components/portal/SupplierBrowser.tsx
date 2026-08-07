@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
+import type { SupplierRow } from '@/lib/supplier/row'
 
 const ACCENT = '#00D4FF'
 
@@ -18,32 +19,19 @@ const FEED_TIMEOUT_MS = 45_000
 /** When to admit the feed is taking a while, rather than looking frozen. */
 const SLOW_AFTER_MS = 6_000
 
-interface Row {
-  sku: string
-  name: string
-  brand: string
-  category: string
-  wholesalePrice: number
-  rrp: number
-  currency: string
-  stock: number
-  inStock: boolean
-  margin: number
-  marginPct: number
-  mappedId: string
-  stackSlots: string[]
-  hasStimulants: boolean
-  alreadyAdded: boolean
-}
+/** The shape both supplier endpoints answer with — see `lib/supplier/row.ts`. */
+type Row = SupplierRow
+
+/** How many SKUs one lookup call will take (`MAX_LOOKUP_SKUS` on the server). */
+const MAX_DETAIL_BATCH = 50
 
 const money = (n: number) => `£${n.toFixed(2)}`
 
-/** How much of the live feed has had its name/brand/image fetched. Null on the
- *  mock supplier, which is always complete. */
+/** How much of the live feed has had its name/brand/RRP fetched. Null on the
+ *  mock supplier, whose fixtures are always whole. */
 interface Progress {
   total: number
   detailed: number
-  pending: number
   /** False when the feed was only partly paged inside the time budget. */
   listComplete?: boolean
 }
@@ -61,6 +49,8 @@ export function SupplierBrowser() {
   const [inStockOnly, setInStockOnly] = useState(false)
   const [hideAdded, setHideAdded] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  /** SKUs whose detail is being fetched right now. */
+  const [detailing, setDetailing] = useState<Set<string>>(new Set())
   const [adding, setAdding] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -158,6 +148,11 @@ export function SupplierBrowser() {
 
   const selectable = filtered.filter((r) => !r.alreadyAdded)
   const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.sku))
+  /** Selected rows still missing their name/RRP — what "Get details" would fetch. */
+  const undetailedSelected = (rows ?? [])
+    .filter((r) => selected.has(r.sku) && !r.detailed)
+    .map((r) => r.sku)
+    .slice(0, MAX_DETAIL_BATCH)
 
   function toggle(sku: string) {
     setSelected((prev) => {
@@ -170,6 +165,48 @@ export function SupplierBrowser() {
   function toggleAll() {
     setSelected(allSelected ? new Set() : new Set(selectable.map((r) => r.sku)))
   }
+
+  /**
+   * Fetch the descriptive half of specific products and fold it into the list.
+   *
+   * Browsing costs nothing because it reads only PowerBody's cheap list feed;
+   * names, brands and RRPs are one throttled call per product, so they are
+   * fetched for the products actually being looked at. Cached server-side, so a
+   * product is only ever fetched once however often it is browsed.
+   */
+  const fetchDetails = useCallback(async (skus: string[]) => {
+    const wanted = skus.slice(0, MAX_DETAIL_BATCH)
+    if (wanted.length === 0) return
+    setDetailing((prev) => new Set([...prev, ...wanted]))
+    setError(null)
+    try {
+      const res = await fetch('/api/portal/supplier/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus: wanted }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d.error ?? 'Could not fetch those product details.')
+        return
+      }
+      const detailed: Row[] = Array.isArray(d.products) ? d.products : []
+      if (detailed.length === 0) return
+      const bySku = new Map(detailed.map((r) => [r.sku, r]))
+      setRows((prev) => (prev ? prev.map((r) => bySku.get(r.sku) ?? r) : prev))
+      setProgress((prev) =>
+        prev ? { ...prev, detailed: Math.min(prev.total, prev.detailed + bySku.size) } : prev,
+      )
+    } catch {
+      setError('Could not fetch those product details.')
+    } finally {
+      setDetailing((prev) => {
+        const next = new Set(prev)
+        for (const sku of wanted) next.delete(sku)
+        return next
+      })
+    }
+  }, [])
 
   const add = useCallback(async (skus: string[]) => {
     if (skus.length === 0) return
@@ -250,6 +287,16 @@ export function SupplierBrowser() {
               <button onClick={load} disabled={loading} className="text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40">
                 {loading ? 'Refreshing…' : 'Refresh stock'}
               </button>
+              {undetailedSelected.length > 0 && (
+                <button
+                  onClick={() => fetchDetails(undetailedSelected)}
+                  disabled={detailing.size > 0}
+                  className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
+                  style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+                >
+                  {detailing.size > 0 ? 'Fetching…' : `Get details for ${undetailedSelected.length}`}
+                </button>
+              )}
               <button
                 onClick={() => add([...selected])}
                 disabled={adding || selected.size === 0}
@@ -261,16 +308,17 @@ export function SupplierBrowser() {
             </div>
           </div>
 
-          {/* Still filling in names/images for the rest of the feed. */}
-          {progress && progress.pending > 0 && (
+          {/* Why most rows are bare SKUs, and what to do about it. */}
+          {progress && progress.detailed < progress.total && (
             <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
               <strong style={{ color: 'var(--color-text-2)' }}>
-                {progress.detailed} of {progress.total} products have full details.
+                {progress.detailed} of {progress.total} products have their names and RRP fetched.
               </strong>{' '}
-              PowerBody rate-limit us, so names and images fill in a batch at a time — refresh to fetch more, or leave it
-              to the nightly job. Prices and stock are already correct for all {progress.total}, and you can pull in any
-              product right now by SKU above.
-              {progress.listComplete === false && ' The feed itself is still being paged, so more products will appear too.'}
+              PowerBody send names, brands and RRP one product at a time and rate-limit us, so browsing doesn’t fetch
+              them — cost and stock below are live and correct for all {progress.total}. Press <strong>Details</strong>
+              {' '}on a row to fill one in, tick a few and use <strong>Get details</strong>, or just add a product: adding
+              always fetches the full record first.
+              {progress.listComplete === false && ' The feed itself was only partly paged, so more products will appear on a refresh.'}
             </p>
           )}
 
@@ -310,25 +358,49 @@ export function SupplierBrowser() {
                     <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{r.brand}</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--color-muted)]">
-                    <span>{r.category}</span>
-                    <span>·</span>
+                    {r.category && (
+                      <>
+                        <span>{r.category}</span>
+                        <span>·</span>
+                      </>
+                    )}
                     <span style={{ color: r.inStock ? 'var(--color-text-2)' : 'var(--color-red)' }}>{r.inStock ? `${r.stock} in stock` : 'Out of stock'}</span>
                     <span>·</span>
-                    <span>Cost {money(r.wholesalePrice)} → RRP {money(r.rrp)}</span>
-                    <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
+                    {/* Cost is always real. RRP and margin only exist once the
+                        product's detail has been fetched — a guess there would
+                        read as a fact and put a wrong margin in front of a
+                        pricing decision. */}
+                    <span>Cost {money(r.wholesalePrice)}{r.rrp !== null ? ` → RRP ${money(r.rrp)}` : ''}</span>
+                    {r.marginPct !== null ? (
+                      <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
+                    ) : (
+                      <span className="italic">RRP not fetched</span>
+                    )}
                   </div>
                 </div>
-                {r.alreadyAdded ? (
-                  <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: ACCENT }}>Added</span>
-                ) : (
-                  <button onClick={() => add([r.sku])} disabled={adding} className="text-xs font-bold px-3 py-1.5 rounded-xl border shrink-0 disabled:opacity-40" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}>Add</button>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {!r.detailed && (
+                    <button
+                      onClick={() => fetchDetails([r.sku])}
+                      disabled={detailing.has(r.sku)}
+                      className="text-xs font-bold px-3 py-1.5 rounded-xl border disabled:opacity-40"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+                    >
+                      {detailing.has(r.sku) ? 'Fetching…' : 'Details'}
+                    </button>
+                  )}
+                  {r.alreadyAdded ? (
+                    <span className="text-[10px] font-bold uppercase" style={{ color: ACCENT }}>Added</span>
+                  ) : (
+                    <button onClick={() => add([r.sku])} disabled={adding} className="text-xs font-bold px-3 py-1.5 rounded-xl border disabled:opacity-40" style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}>Add</button>
+                  )}
+                </div>
               </div>
             ))}
             {filtered.length === 0 && (
               <p className="text-sm text-[var(--color-muted)] py-6 text-center">
                 No products match those filters.
-                {progress && progress.pending > 0 && ' Products still waiting on details can only be matched by SKU — try the SKU box above.'}
+                {progress && progress.detailed < progress.total && ' Products whose details have not been fetched can only be matched by SKU — try the SKU box above.'}
               </p>
             )}
           </div>
@@ -341,12 +413,12 @@ export function SupplierBrowser() {
 /**
  * Pull in specific products by SKU.
  *
- * The browse list above can only search what has been detailed so far, and on a
- * large feed that is a fraction of it for a while. This goes straight at named
- * SKUs — it fetches their details on demand — so a product you already know the
- * code for is always reachable, whatever the browse list is showing. Takes a
- * pasted blob (commas, spaces or newlines) because that is how SKUs arrive:
- * out of a spreadsheet or an email from the supplier.
+ * The browse list below shows PowerBody's cheap list feed, which carries no
+ * names — so searching it by name finds nothing until products have been
+ * detailed. This goes straight at named SKUs and fetches their full record on
+ * the spot, which makes it the fastest route to "I know exactly what I want".
+ * Takes a pasted blob (commas, spaces or newlines) because that is how SKUs
+ * arrive: out of a spreadsheet or an email from the supplier.
  */
 function SkuLookup({ onAdd, adding }: { onAdd: (skus: string[]) => Promise<void>; adding: boolean }) {
   const [input, setInput] = useState('')
@@ -387,7 +459,8 @@ function SkuLookup({ onAdd, adding }: { onAdd: (skus: string[]) => Promise<void>
           Find by SKU
         </p>
         <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
-          Paste one or more SKUs — commas, spaces or new lines. Works for any product in the feed, detailed or not.
+          Paste one or more SKUs — commas, spaces or new lines. Fetches the full record for each: name, brand, RRP and
+          margin.
         </p>
       </div>
 
@@ -445,8 +518,12 @@ function SkuLookup({ onAdd, adding }: { onAdd: (skus: string[]) => Promise<void>
                     {r.inStock ? `${r.stock} in stock` : 'Out of stock'}
                   </span>
                   <span>·</span>
-                  <span>Cost {money(r.wholesalePrice)} → RRP {money(r.rrp)}</span>
-                  <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
+                  {/* A looked-up product is always fully detailed, so the RRP is
+                      real — the fallbacks are here only to stay total. */}
+                  <span>Cost {money(r.wholesalePrice)}{r.rrp !== null ? ` → RRP ${money(r.rrp)}` : ''}</span>
+                  {r.marginPct !== null && (
+                    <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
+                  )}
                 </div>
               </div>
               {r.alreadyAdded ? (

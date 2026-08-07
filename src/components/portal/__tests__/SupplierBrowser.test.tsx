@@ -1,11 +1,51 @@
 import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { SupplierBrowser } from '../SupplierBrowser'
 
 jest.mock('@/hooks/useCatalogueProducts', () => ({ invalidateCatalogue: jest.fn() }))
 
-/** A `fetch` reply shaped the way the component reads one: text, then parsed. */
+/** A `fetch` reply. The feed reads `text()` (so an HTML error page is legible);
+ *  the lookup and add calls read `json()`. */
 function reply(body: string, { ok = true, status = 200 } = {}) {
-  return Promise.resolve({ ok, status, text: async () => body } as Response)
+  return Promise.resolve({
+    ok,
+    status,
+    text: async () => body,
+    json: async () => JSON.parse(body),
+  } as Response)
+}
+
+/** A row as the cheap list feed gives it: real money, no description, no RRP. */
+const bareRow = {
+  sku: 'PB-1',
+  name: 'PB-1',
+  brand: '',
+  category: '',
+  imageUrl: null,
+  wholesalePrice: 10,
+  rrp: null,
+  currency: 'GBP',
+  stock: 5,
+  inStock: true,
+  margin: null,
+  marginPct: null,
+  detailed: false,
+  mappedId: 'pb-1',
+  stackSlots: [],
+  hasStimulants: false,
+  alreadyAdded: false,
+}
+
+/** The same product once `getProductInfo` has been paid for. */
+const detailedRow = {
+  ...bareRow,
+  name: 'Whey 1kg',
+  brand: 'PB',
+  category: 'Protein',
+  rrp: 19.99,
+  margin: 9.99,
+  marginPct: 50,
+  detailed: true,
 }
 
 const originalFetch = global.fetch
@@ -65,32 +105,53 @@ describe('SupplierBrowser', () => {
   })
 
   it('lists the feed once it arrives', async () => {
-    const products = [
-      {
-        sku: 'PB-1',
-        name: 'Whey 1kg',
-        brand: 'PB',
-        category: 'Protein',
-        wholesalePrice: 10,
-        rrp: 19.99,
-        currency: 'GBP',
-        stock: 5,
-        inStock: true,
-        margin: 9.99,
-        marginPct: 50,
-        mappedId: 'pb-1',
-        stackSlots: [],
-        hasStimulants: false,
-        alreadyAdded: false,
-      },
-    ]
     global.fetch = jest
       .fn()
-      .mockReturnValue(reply(JSON.stringify({ source: 'powerbody', products }))) as unknown as typeof fetch
+      .mockReturnValue(
+        reply(JSON.stringify({ source: 'powerbody', products: [detailedRow] })),
+      ) as unknown as typeof fetch
 
     render(<SupplierBrowser />)
 
     expect(await screen.findByText('Whey 1kg')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByText(/1 products in the feed/i)).toBeInTheDocument())
+  })
+
+  it('says the RRP is unfetched rather than showing a margin it cannot know', async () => {
+    // A list-feed row has no RRP. The fallback is wholesale-including-VAT, which
+    // would render as a ~17% margin — a number that looks like a fact and isn't.
+    global.fetch = jest
+      .fn()
+      .mockReturnValue(
+        reply(JSON.stringify({ source: 'powerbody', products: [bareRow] })),
+      ) as unknown as typeof fetch
+
+    render(<SupplierBrowser />)
+
+    expect(await screen.findByText(/RRP not fetched/i)).toBeInTheDocument()
+    expect(screen.getByText(/Cost £10\.00/)).toBeInTheDocument()
+    expect(screen.queryByText(/% margin/)).not.toBeInTheDocument()
+  })
+
+  it('fetches one product’s detail on demand and fills its row in', async () => {
+    const fetchMock = jest.fn((url: string, init?: RequestInit) =>
+      url === '/api/portal/supplier/lookup'
+        ? reply(JSON.stringify({ products: [detailedRow], notFound: [] }))
+        : reply(JSON.stringify({ source: 'powerbody', products: [bareRow] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierBrowser />)
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: /^details$/i }))
+
+    // The row now carries the name and margin that only getProductInfo knows.
+    expect(await screen.findByText('Whey 1kg')).toBeInTheDocument()
+    expect(screen.getByText(/50% margin/)).toBeInTheDocument()
+    // And it cost exactly one lookup — for that SKU alone.
+    const lookups = fetchMock.mock.calls.filter(([url]) => url === '/api/portal/supplier/lookup')
+    expect(lookups).toHaveLength(1)
+    expect(JSON.parse(String(lookups[0][1]?.body))).toEqual({ skus: ['PB-1'] })
   })
 })

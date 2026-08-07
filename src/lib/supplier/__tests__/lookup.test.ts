@@ -68,14 +68,13 @@ describe('getProductsBySku — live', () => {
   beforeEach(() => __resetPowerBodyCache())
   afterEach(() => __resetPowerBodyCache())
 
-  it('details exactly the requested SKUs, ignoring the catalogue budget', async () => {
+  it('details exactly the requested SKUs and nothing else', async () => {
     const feed = feedOf(500)
     const { client } = fakeClient(feed.handlers)
-    // A budget far smaller than the feed: a named lookup must not be limited by it.
+    // 500 products in the feed, two asked for: two detail calls, no more.
     const provider = createPowerBodyProvider({
       client,
       detailStore: createMemoryDetailStore(),
-      detailBudget: 1,
     })
 
     const products = await provider.getProductsBySku(['PB-400', 'PB-401'])
@@ -108,17 +107,17 @@ describe('getProductsBySku — live', () => {
   })
 
   it('reaches a product that browsing has not detailed yet', async () => {
-    // The whole point: the browse list only details a slice, but every SKU in
-    // the cheap feed is findable by name.
+    // The whole point: browsing details nothing, but every SKU in the cheap feed
+    // is still reachable by name.
     const feed = feedOf(100)
     const { client } = fakeClient(feed.handlers)
     const store = createMemoryDetailStore()
 
-    await createPowerBodyProvider({ client, detailStore: store, detailBudget: 5 }).listProducts()
+    await createPowerBodyProvider({ client, detailStore: store }).listProducts()
     feed.reset()
     __resetPowerBodyCache()
 
-    const [found] = await createPowerBodyProvider({ client, detailStore: store, detailBudget: 5 })
+    const [found] = await createPowerBodyProvider({ client, detailStore: store })
       .getProductsBySku(['PB-90'])
 
     expect(found).toMatchObject({ sku: 'PB-90', name: 'Product 90' })

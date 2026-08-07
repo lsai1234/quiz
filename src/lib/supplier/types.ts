@@ -45,6 +45,18 @@ export interface SupplierProduct {
   weightGrams: number | null
   /** VAT rate as a fraction (their `vat_rate`, a percentage, ÷ 100). Null = standard. */
   vatRate: number | null
+  /**
+   * Whether the descriptive half of this product has actually been fetched.
+   *
+   * PowerBody split their feed in two: the cheap paged list carries SKU, price
+   * and stock for everything, and `getProductInfo` — one call per product — is
+   * the only source of name, brand, category, image and RRP. Browsing therefore
+   * shows list-feed rows, and detail is fetched for a product when someone opens
+   * it or adds it. False means the descriptive fields are placeholders and the
+   * RRP is a fallback, so nothing downstream should present them as the
+   * supplier's own figures. Always true on the mock, whose fixtures are whole.
+   */
+  detailed: boolean
   updatedAt: string
 }
 

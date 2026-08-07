@@ -8,12 +8,19 @@
  *
  * Two things shape the design:
  *
- *  1. **The feed is split in two.** `getProductList` is cheap, paged, and
- *     carries sku/price/qty — everything a stock-and-price refresh needs.
- *     `getProductInfo` is one call *per product* and is the only source of name,
- *     brand, image and description. So `getStockLevels()` uses the cheap call
- *     alone, and only `listProducts()` pays for detail. Getting this backwards
- *     turns a nightly stock check into thousands of API calls.
+ *  1. **The feed is split in two, and only one half is affordable in bulk.**
+ *     `getProductList` is cheap, paged, and carries sku/price/qty — everything a
+ *     stock-and-price refresh needs. `getProductInfo` is one call *per product*
+ *     and is the only source of name, brand, image and description, so detailing
+ *     a whole catalogue is thousands of throttled calls: minutes of work that no
+ *     request can wait for.
+ *
+ *     So nothing here details products in bulk. `listProducts()` and
+ *     `getStockLevels()` use the cheap call alone, and detail is fetched for the
+ *     products that actually need it — the one being opened, or the ones being
+ *     added to our catalogue — through `getProductsBySku()`. It is cached
+ *     durably, so a product is detailed once and browsing gets richer over time
+ *     without ever paying for it up front.
  *
  *  2. **Placing an order is not idempotent.** `createOrder` errors on a repeat,
  *     so our own order id goes in as `id` and `ALREADY_EXISTS` is read as
@@ -53,26 +60,14 @@ const MAX_PAGES = 200
 const DETAIL_CONCURRENCY = 6
 
 /**
- * How many products one `listProducts()` call will fetch detail for.
+ * Wall-clock budget for one catalogue build, and for a SKU lookup.
  *
- * The transport is deliberately slow — it has to be, or PowerBody return 429 —
- * so an unbounded build would run past the request timeout and deliver nothing.
- * Instead each call tops up the persistent cache by at most this much and
- * returns the whole catalogue regardless, with the not-yet-detailed products
- * carrying their list-feed data. Call it again (or let the nightly job run) and
- * it fills in further. Progress beats an all-or-nothing build that never lands.
- */
-const DEFAULT_DETAIL_BUDGET = 250
-
-/**
- * Wall-clock budget for one `listProducts()` build.
- *
- * A count-based budget is not enough on its own: the transport is deliberately
- * slow, so 250 detail fetches at two-at-a-time is minutes of work, and a page
- * loop on a big feed adds more. Anything past the request timeout is delivered
- * to nobody — the hub just sits on "Loading the PowerBody feed…" forever. So the
- * build works to a clock as well as a count: whatever is finished when the time
- * is up is what comes back, and the rest fills in on the next call.
+ * Nothing here fetches detail in bulk any more, so a build is just the cheap
+ * paged feed and should be quick. This is the backstop for when it isn't: a
+ * single wire call can hang for over two minutes on its own (30s per attempt,
+ * retried), and a request that outlives its own timeout is delivered to nobody —
+ * the hub sits on "Loading the PowerBody feed…" forever. When the clock is spent
+ * we return what has landed rather than waiting for an answer no one will see.
  *
  * Keep this comfortably under the route's `maxDuration`.
  */
@@ -100,14 +95,14 @@ let catalogueCache: Cached | null = null
  *  supplier that is already rate-limiting us — they wait on the same one. */
 let inFlightBuild: Promise<SupplierProduct[]> | null = null
 
-/** How the last catalogue build went — surfaced in the hub so a partially
- *  detailed catalogue explains itself instead of looking broken. */
+/** How the last catalogue build went — surfaced in the hub so a list of
+ *  bare SKUs explains itself instead of looking broken. */
 export interface CatalogueProgress {
   total: number
+  /** How many carry full detail already, from the durable cache. Detail is
+   *  fetched per product on demand, so this grows as products are opened and
+   *  added rather than being filled in up front. */
   detailed: number
-  /** Products still to fetch detail for. Zero means the catalogue is complete. */
-  pending: number
-  fetchedThisRun: number
   /** False when the time budget stopped us part-way through the list feed, so
    *  `total` is a floor rather than the size of the catalogue. */
   listComplete: boolean
@@ -180,9 +175,7 @@ export interface PowerBodyProviderOptions {
   client?: PowerBodySoapClient
   /** Where fetched product detail is kept between requests. */
   detailStore?: DetailStore
-  /** Detail fetches allowed in one `listProducts()` call. */
-  detailBudget?: number
-  /** Wall-clock budget for one `listProducts()` call, in ms. */
+  /** Wall-clock budget for one `listProducts()` or `getProductsBySku()` call, in ms. */
   buildDeadlineMs?: number
   /** Extra fields for `createOrder` that only the caller knows (weight, our
    *  shipping charge, per-line prices for their invoice). */
@@ -192,8 +185,6 @@ export interface PowerBodyProviderOptions {
 export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}): SupplierProvider {
   const client = options.client ?? clientFromEnv()
   const detailStore = options.detailStore ?? createKvDetailStore()
-  const detailBudget =
-    options.detailBudget ?? envInt('POWERBODY_DETAIL_BUDGET', DEFAULT_DETAIL_BUDGET)
   const buildDeadlineMs =
     options.buildDeadlineMs ?? envInt('POWERBODY_BUILD_DEADLINE_MS', DEFAULT_BUILD_DEADLINE_MS)
 
@@ -248,9 +239,17 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     item.product_id === undefined || item.product_id === null ? '' : String(item.product_id)
 
   /**
-   * The full catalogue, with as much detail as the cache holds plus whatever
-   * this run could afford to fetch. Named rather than reached through `this`, so
-   * the provider survives being destructured.
+   * The full catalogue from the cheap list feed, wearing whatever detail the
+   * cache already holds. Named rather than reached through `this`, so the
+   * provider survives being destructured.
+   *
+   * No `getProductInfo` calls happen here, by design. Detailing a whole feed is
+   * one throttled call per product, which is minutes of work for names nobody
+   * has asked to see — and it is the browse list, so it has to be fast. Rows
+   * come back with SKU, cost, stock and VAT (all correct, all from today's
+   * feed), and `detailed: false` marks the ones whose descriptive fields are
+   * placeholders. `getProductsBySku` fills those in for the product being opened
+   * or added, and the cache means each product is only ever fetched once.
    */
   function cachedCatalogue(): SupplierProduct[] | null {
     if (!catalogueCache) return null
@@ -291,8 +290,6 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       lastProgress = {
         total: 0,
         detailed: 0,
-        pending: 0,
-        fetchedThisRun: 0,
         listComplete,
         timeBudgetSpent: false,
         at: new Date().toISOString(),
@@ -301,59 +298,30 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       return []
     }
 
+    // Read-only: whatever has already been fetched for other reasons dresses the
+    // list up for free. Nothing is fetched or written here.
     const cache = await detailStore.load()
     const now = Date.now()
-
-    // Spend the budget on what's missing or stale, in feed order so repeated
-    // calls march through the catalogue rather than re-rolling the same subset.
-    const toFetch = items
-      .map(idOf)
-      .filter((id) => id !== '' && isStale(cache[id], now))
-      .slice(0, Math.max(0, detailBudget))
-
-    let timeBudgetSpent = !listComplete
-    // Collected as they land rather than returned in a batch, so giving up on a
-    // slow fetch still keeps every detail already paid for.
-    const fetched: { id: string; info: PbProductInfo | null }[] = []
-    const detailing = mapLimit(toFetch, DETAIL_CONCURRENCY, async (id) => {
-      // Past the deadline the rest are simply left for the next call. An
-      // unfinished catalogue that arrives beats a complete one that times out.
-      if (Date.now() >= deadline) {
-        timeBudgetSpent = true
-        return
-      }
-      fetched.push({ id, info: await fetchDetail(id) })
-    })
-    if ((await untilDeadline(detailing, deadline)) === null) timeBudgetSpent = true
-
-    let fetchedThisRun = 0
-    for (const { id, info } of fetched) {
-      if (!info) continue
-      cache[id] = { info, at: now }
-      fetchedThisRun += 1
-    }
-    if (fetchedThisRun > 0) await detailStore.save(cache)
 
     const updatedAt = new Date().toISOString()
     let detailed = 0
     const products = items
       .map((item) => {
         const entry = cache[idOf(item)]
-        if (entry) detailed += 1
+        const fresh = entry && !isStale(entry, now)
+        if (fresh) detailed += 1
         // The FRESH list row goes on top of cached detail, never underneath:
         // price, qty and VAT must come from today's feed even when the name and
         // image came from a cache written a week ago.
-        return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
+        return toSupplierProduct(fresh ? { ...entry.info, ...item } : item, updatedAt)
       })
       .filter((p) => p.sku !== '')
 
     lastProgress = {
       total: products.length,
       detailed,
-      pending: Math.max(0, items.filter((i) => idOf(i) !== '' && isStale(cache[idOf(i)], now)).length),
-      fetchedThisRun,
       listComplete,
-      timeBudgetSpent,
+      timeBudgetSpent: !listComplete,
       at: updatedAt,
     }
     catalogueCache = { at: Date.now(), products, complete: listComplete }
@@ -361,15 +329,17 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   }
 
   /**
-   * Detail for specific SKUs, fetched on demand and outside the catalogue
-   * budget.
+   * Detail for specific SKUs, fetched on demand.
    *
-   * The budget exists to stop a full build running past the request timeout; a
-   * handful of named SKUs is not that, and refusing to detail them would make
-   * "import this exact product" impossible until the whole catalogue had been
-   * paged. The list feed is what maps SKU → their numeric product id, and it is
-   * always complete (it is the cheap call), so any SKU that exists is findable
-   * here even when nothing about it has been detailed yet.
+   * This is the *only* thing that calls `getProductInfo`, and it is what makes
+   * the split affordable: the expensive half of the feed is paid for one product
+   * at a time, when someone opens it or adds it, instead of thousands of calls
+   * up front for a catalogue nobody has looked at. The list feed maps SKU → their
+   * numeric product id and is always complete (it is the cheap call), so any SKU
+   * that exists is reachable here even when nothing about it has been fetched.
+   *
+   * What comes back is always whole — name, brand, category, image, real RRP —
+   * which is why importing goes through here rather than through the browse list.
    */
   async function getProductsBySku(skus: string[]): Promise<SupplierProduct[]> {
     const wanted = new Set(skus.filter(Boolean))
