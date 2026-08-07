@@ -5,7 +5,7 @@ import confetti from 'canvas-confetti'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
 import { useShopifyCart } from '@/hooks/useShopifyCart'
-import { isShopifyLive } from '@/lib/data-source'
+import { isLiveCatalogue } from '@/lib/data-source'
 import { levelSubscriptionRate } from '@/lib/stack-blueprint/pricing'
 import type { Product } from '@/lib/types'
 
@@ -59,7 +59,7 @@ function ProductBundleCard({
 export function Act5Bundle({ reducedMotion }: Props) {
   const { selectedProducts, answers, identity, stackLevel } = useQuizStore()
   const shopify = useShopifyCart()
-  const isLive = isShopifyLive()
+  const isLive = isLiveCatalogue()
   const containerRef = useRef<HTMLDivElement>(null)
   const successRef = useRef<HTMLDivElement>(null)
 

@@ -41,9 +41,14 @@ export async function GET() {
   try {
     const [products, imported] = await Promise.all([supplier.listProducts(), getImportedProducts()])
     const addedIds = new Set(imported.map((p) => p.id))
+    const { getPowerBodyCatalogueProgress } = await import('@/lib/supplier/powerbody/live')
     return NextResponse.json({
       source: supplier.name,
       count: products.length,
+      // Detail is fetched under a per-request budget (PowerBody rate-limit us),
+      // so a big catalogue fills in over several loads. Reporting it means a
+      // partially-named list reads as "still loading", not "broken".
+      progress: supplier.name === 'powerbody' ? getPowerBodyCatalogueProgress() : null,
       products: products.map((sp) => toRow(sp, addedIds)),
     })
   } catch (err) {

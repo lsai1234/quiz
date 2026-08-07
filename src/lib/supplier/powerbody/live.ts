@@ -30,6 +30,7 @@ import type {
   SupplierStockLevel,
 } from '../types'
 import { createSoapClient, type PowerBodySoapClient } from './soap'
+import { createKvDetailStore, isStale, type DetailStore } from './detail-cache'
 import {
   readOrderAck,
   toCreateOrderPayload,
@@ -47,13 +48,24 @@ import {
  *  guard against a feed that never returns an empty page, not a real limit. */
 const MAX_PAGES = 200
 
-/** Concurrent `getProductInfo` calls during a full catalogue build. Enough to
- *  make a few thousand products tolerable, low enough to stay a polite client. */
+/** In-flight `getProductInfo` calls we queue up. The transport is what actually
+ *  paces them (see `soap.ts`); this only bounds how many promises exist at once. */
 const DETAIL_CONCURRENCY = 6
 
-/** How long a built catalogue is reused. `listProducts` is expensive; the pages
- *  that call it (the hub's "scan & add" browser) are read-repeatedly. Stock is
- *  NOT served from here — `getStockLevels` always goes to the wire. */
+/**
+ * How many products one `listProducts()` call will fetch detail for.
+ *
+ * The transport is deliberately slow — it has to be, or PowerBody return 429 —
+ * so an unbounded build would run past the request timeout and deliver nothing.
+ * Instead each call tops up the persistent cache by at most this much and
+ * returns the whole catalogue regardless, with the not-yet-detailed products
+ * carrying their list-feed data. Call it again (or let the nightly job run) and
+ * it fills in further. Progress beats an all-or-nothing build that never lands.
+ */
+const DEFAULT_DETAIL_BUDGET = 250
+
+/** How long a built catalogue is reused in memory. Stock is NOT served from
+ *  here — `getStockLevels` always goes to the wire. */
 const CATALOGUE_TTL_MS = 10 * 60 * 1000
 
 interface Cached {
@@ -63,9 +75,27 @@ interface Cached {
 
 let catalogueCache: Cached | null = null
 
+/** How the last catalogue build went — surfaced in the hub so a partially
+ *  detailed catalogue explains itself instead of looking broken. */
+export interface CatalogueProgress {
+  total: number
+  detailed: number
+  /** Products still to fetch detail for. Zero means the catalogue is complete. */
+  pending: number
+  fetchedThisRun: number
+  at: string
+}
+
+let lastProgress: CatalogueProgress | null = null
+
+export function getPowerBodyCatalogueProgress(): CatalogueProgress | null {
+  return lastProgress
+}
+
 /** Drop the cached catalogue (tests, and after an explicit resync). */
 export function __resetPowerBodyCache(): void {
   catalogueCache = null
+  lastProgress = null
 }
 
 /** Run `worker` over `items` with a bounded number in flight. */
@@ -86,6 +116,10 @@ async function mapLimit<T, R>(items: T[], limit: number, worker: (item: T) => Pr
 export interface PowerBodyProviderOptions {
   /** Injected by tests; otherwise built from the environment. */
   client?: PowerBodySoapClient
+  /** Where fetched product detail is kept between requests. */
+  detailStore?: DetailStore
+  /** Detail fetches allowed in one `listProducts()` call. */
+  detailBudget?: number
   /** Extra fields for `createOrder` that only the caller knows (weight, our
    *  shipping charge, per-line prices for their invoice). */
   orderContext?: (order: SupplierOrderInput) => CreateOrderContext
@@ -93,6 +127,9 @@ export interface PowerBodyProviderOptions {
 
 export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}): SupplierProvider {
   const client = options.client ?? clientFromEnv()
+  const detailStore = options.detailStore ?? createKvDetailStore()
+  const detailBudget =
+    options.detailBudget ?? envInt('POWERBODY_DETAIL_BUDGET', DEFAULT_DETAIL_BUDGET)
 
   /** Page through `getProductList` until a page comes back empty. */
   async function fetchAllListItems(): Promise<PbProductListItem[]> {
@@ -105,33 +142,73 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     return all
   }
 
-  async function fetchDetail(item: PbProductListItem): Promise<PbProductInfo | null> {
-    const id = item.product_id
-    if (id === undefined || id === null || id === '') return null
+  async function fetchDetail(id: string): Promise<PbProductInfo | null> {
     try {
-      const info = await client.call<PbProductInfo | null>('dropshipping.getProductInfo', id)
-      // getProductInfo omits the list-only fields (qty is the one that matters),
-      // so the list row stays underneath rather than being replaced by it.
-      return info ? { ...item, ...info } : null
+      return await client.call<PbProductInfo | null>('dropshipping.getProductInfo', id)
     } catch {
-      // One unreadable product must not sink a whole catalogue sync. It simply
-      // maps from its list row, which is enough to keep stock accurate.
+      // One unreadable product must not sink a whole catalogue build. It simply
+      // maps from its list row, which is enough to keep stock and price right.
       return null
     }
   }
 
-  /** The full catalogue, detail included. Named rather than reached through
-   *  `this`, so the provider survives being destructured. */
+  const idOf = (item: PbProductListItem): string =>
+    item.product_id === undefined || item.product_id === null ? '' : String(item.product_id)
+
+  /**
+   * The full catalogue, with as much detail as the cache holds plus whatever
+   * this run could afford to fetch. Named rather than reached through `this`, so
+   * the provider survives being destructured.
+   */
   async function listProducts(): Promise<SupplierProduct[]> {
     if (catalogueCache && Date.now() - catalogueCache.at < CATALOGUE_TTL_MS) {
       return catalogueCache.products
     }
+
     const items = await fetchAllListItems()
-    const detailed = await mapLimit(items, DETAIL_CONCURRENCY, fetchDetail)
+    const cache = await detailStore.load()
+    const now = Date.now()
+
+    // Spend the budget on what's missing or stale, in feed order so repeated
+    // calls march through the catalogue rather than re-rolling the same subset.
+    const toFetch = items
+      .map(idOf)
+      .filter((id) => id !== '' && isStale(cache[id], now))
+      .slice(0, Math.max(0, detailBudget))
+
+    const fetched = await mapLimit(toFetch, DETAIL_CONCURRENCY, async (id) => ({
+      id,
+      info: await fetchDetail(id),
+    }))
+
+    let fetchedThisRun = 0
+    for (const { id, info } of fetched) {
+      if (!info) continue
+      cache[id] = { info, at: now }
+      fetchedThisRun += 1
+    }
+    if (fetchedThisRun > 0) await detailStore.save(cache)
+
     const updatedAt = new Date().toISOString()
+    let detailed = 0
     const products = items
-      .map((item, i) => toSupplierProduct(detailed[i] ?? item, updatedAt))
+      .map((item) => {
+        const entry = cache[idOf(item)]
+        if (entry) detailed += 1
+        // The FRESH list row goes on top of cached detail, never underneath:
+        // price, qty and VAT must come from today's feed even when the name and
+        // image came from a cache written a week ago.
+        return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
+      })
       .filter((p) => p.sku !== '')
+
+    lastProgress = {
+      total: products.length,
+      detailed,
+      pending: Math.max(0, items.filter((i) => idOf(i) !== '' && isStale(cache[idOf(i)], now)).length),
+      fetchedThisRun,
+      at: updatedAt,
+    }
     catalogueCache = { at: Date.now(), products }
     return products
   }
@@ -198,6 +275,13 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       return Array.isArray(rows) ? rows.map((r) => toSupplierOrder(r)) : []
     },
   }
+}
+
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name]
+  if (!raw) return fallback
+  const parsed = Number.parseInt(raw, 10)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }
 
 function clientFromEnv(): PowerBodySoapClient {

@@ -1,21 +1,11 @@
 import {
   getDataSource,
   getDataSourceMode,
-  hasShopifyCredentials,
-  isShopifyLive,
+  isLiveCatalogue,
+  setDataSourceOverride,
 } from '@/lib/data-source'
 
-const ENV_KEYS = [
-  'DATA_SOURCE',
-  'NEXT_PUBLIC_DATA_SOURCE',
-  'NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN',
-  'NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN',
-] as const
-
-function setCredentials() {
-  process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN = 'example.myshopify.com'
-  process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN = 'test-token'
-}
+const ENV_KEYS = ['DATA_SOURCE', 'NEXT_PUBLIC_DATA_SOURCE'] as const
 
 describe('data-source resolver', () => {
   const original: Record<string, string | undefined> = {}
@@ -25,6 +15,7 @@ describe('data-source resolver', () => {
       original[key] = process.env[key]
       delete process.env[key]
     }
+    setDataSourceOverride(null)
   })
 
   afterEach(() => {
@@ -32,91 +23,72 @@ describe('data-source resolver', () => {
       if (original[key] === undefined) delete process.env[key]
       else process.env[key] = original[key]
     }
-  })
-
-  describe('hasShopifyCredentials', () => {
-    it('is false without both domain and token', () => {
-      expect(hasShopifyCredentials()).toBe(false)
-      process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN = 'example.myshopify.com'
-      expect(hasShopifyCredentials()).toBe(false)
-    })
-
-    it('is true when both are set', () => {
-      setCredentials()
-      expect(hasShopifyCredentials()).toBe(true)
-    })
+    setDataSourceOverride(null)
   })
 
   describe('default (mock-first)', () => {
-    it('resolves to mock when no override and no credentials', () => {
+    it('resolves to mock when nothing is set', () => {
       expect(getDataSourceMode()).toBe('mock')
       expect(getDataSource()).toBe('mock')
-      expect(isShopifyLive()).toBe(false)
-    })
-
-    it('stays on mock even when credentials are present (no override)', () => {
-      setCredentials()
-      expect(getDataSourceMode()).toBe('mock')
-      expect(getDataSource()).toBe('mock')
-      expect(isShopifyLive()).toBe(false)
+      expect(isLiveCatalogue()).toBe(false)
     })
   })
 
-  describe('auto mode (explicit)', () => {
-    it('uses shopify when credentials are present', () => {
-      setCredentials()
-      process.env.DATA_SOURCE = 'auto'
-      expect(getDataSourceMode()).toBe('auto')
-      expect(getDataSource()).toBe('shopify')
-      expect(isShopifyLive()).toBe(true)
+  describe('explicit env', () => {
+    it('serves the real catalogue on "real"', () => {
+      process.env.DATA_SOURCE = 'real'
+      expect(getDataSourceMode()).toBe('real')
+      expect(getDataSource()).toBe('real')
+      expect(isLiveCatalogue()).toBe(true)
     })
 
-    it('falls back to mock without credentials', () => {
-      process.env.DATA_SOURCE = 'auto'
-      expect(getDataSource()).toBe('mock')
-    })
-  })
-
-  describe('explicit override', () => {
-    it('forces mock even when credentials are present', () => {
-      setCredentials()
-      process.env.DATA_SOURCE = 'mock'
-      expect(getDataSourceMode()).toBe('mock')
-      expect(getDataSource()).toBe('mock')
+    it('is case- and whitespace-insensitive', () => {
+      process.env.DATA_SOURCE = '  REAL '
+      expect(getDataSource()).toBe('real')
     })
 
-    it('uses shopify when forced and credentials are present', () => {
-      setCredentials()
-      process.env.DATA_SOURCE = 'shopify'
-      expect(getDataSource()).toBe('shopify')
+    it('treats unrecognised values as mock', () => {
+      for (const value of ['nonsense', 'true', '1', '']) {
+        process.env.DATA_SOURCE = value
+        expect(getDataSource()).toBe('mock')
+      }
     })
 
-    it('falls back to mock when forced to shopify but credentials are missing', () => {
-      process.env.DATA_SOURCE = 'shopify'
-      expect(getDataSourceMode()).toBe('shopify')
-      expect(getDataSource()).toBe('mock')
-    })
-
-    it('ignores unrecognised values and treats them as mock', () => {
-      setCredentials()
-      process.env.DATA_SOURCE = 'nonsense'
-      expect(getDataSourceMode()).toBe('mock')
-      expect(getDataSource()).toBe('mock')
-    })
-
-    it('is case-insensitive', () => {
-      setCredentials()
-      process.env.DATA_SOURCE = 'MOCK'
-      expect(getDataSource()).toBe('mock')
+    it('treats the retired shopify and auto settings as mock', () => {
+      // An old deploy still carrying DATA_SOURCE=shopify must land on the
+      // sample catalogue, not on an empty shop or a crash.
+      for (const value of ['shopify', 'auto']) {
+        process.env.DATA_SOURCE = value
+        expect(getDataSourceMode()).toBe('mock')
+        expect(getDataSource()).toBe('mock')
+      }
     })
   })
 
   describe('NEXT_PUBLIC_DATA_SOURCE precedence', () => {
-    it('wins over DATA_SOURCE', () => {
-      setCredentials()
-      process.env.DATA_SOURCE = 'shopify'
+    it('wins over DATA_SOURCE, so client and server agree', () => {
+      process.env.DATA_SOURCE = 'real'
       process.env.NEXT_PUBLIC_DATA_SOURCE = 'mock'
       expect(getDataSource()).toBe('mock')
+    })
+  })
+
+  describe('runtime override', () => {
+    it('wins over env in both directions', () => {
+      process.env.DATA_SOURCE = 'mock'
+      setDataSourceOverride('real')
+      expect(getDataSource()).toBe('real')
+
+      process.env.DATA_SOURCE = 'real'
+      setDataSourceOverride('mock')
+      expect(getDataSource()).toBe('mock')
+    })
+
+    it('falls back to env once cleared', () => {
+      process.env.DATA_SOURCE = 'real'
+      setDataSourceOverride('mock')
+      setDataSourceOverride(null)
+      expect(getDataSource()).toBe('real')
     })
   })
 })

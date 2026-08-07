@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { setDataSourceOverride } from '@/lib/data-source'
+import { setDataSourceOverride, type DataSourceMode } from '@/lib/data-source'
 import { setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 
 /**
@@ -13,7 +13,7 @@ export function PortalSync() {
   useEffect(() => {
     fetch('/api/config')
       .then((r) => r.json())
-      .then((data: { dataSourceMode?: 'auto' | 'mock' | 'shopify'; pricingOverrides?: Record<string, unknown> }) => {
+      .then((data: { dataSourceMode?: DataSourceMode; pricingOverrides?: Record<string, unknown> }) => {
         if (data.dataSourceMode) setDataSourceOverride(data.dataSourceMode)
         if (data.pricingOverrides) setPricingOverrides(data.pricingOverrides)
       })

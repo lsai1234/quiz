@@ -25,21 +25,45 @@ function faultResponse(code: string, message: string) {
 }
 
 function ok(body: string) {
-  return { ok: true, status: 200, text: async () => body } as Response
+  return { ok: true, status: 200, text: async () => body, headers: new Headers() } as unknown as Response
 }
+/** A SOAP fault — Magento returns these with HTTP 500. */
 function serverError(body: string) {
-  return { ok: false, status: 500, text: async () => body } as Response
+  return { ok: false, status: 500, text: async () => body, headers: new Headers() } as unknown as Response
+}
+/** A bare status with no SOAP body, as rate limiting and gateway errors arrive. */
+function status(code: number, headers: Record<string, string> = {}) {
+  return {
+    ok: false,
+    status: code,
+    text: async () => '<html>Too Many Requests</html>',
+    headers: new Headers(headers),
+  } as unknown as Response
 }
 
 describe('PowerBody SOAP client', () => {
   let fetchMock: jest.Mock
+  let slept: number[]
 
   beforeEach(() => {
     fetchMock = jest.fn()
     global.fetch = fetchMock as unknown as typeof fetch
+    slept = []
   })
 
-  const client = () => createSoapClient({ url: URL, username: 'user', apiKey: 'key' })
+  /** Backoff and throttling are recorded rather than actually waited out, so the
+   *  suite exercises the real timing logic without spending the time. */
+  const client = (over: Partial<Parameters<typeof createSoapClient>[0]> = {}) =>
+    createSoapClient({
+      url: URL,
+      username: 'user',
+      apiKey: 'key',
+      minIntervalMs: 0,
+      sleep: async (ms: number) => {
+        slept.push(ms)
+      },
+      ...over,
+    })
 
   it('logs in once and reuses the session across calls', async () => {
     fetchMock
@@ -142,7 +166,9 @@ describe('PowerBody SOAP client', () => {
   })
 
   it('wraps a transport failure rather than leaking a raw fetch error', async () => {
-    fetchMock.mockRejectedValueOnce(new Error('ECONNREFUSED'))
+    // Persistent, not `…Once`: a transport failure is retried, so every attempt
+    // must fail for the error to surface.
+    fetchMock.mockRejectedValue(new Error('ECONNREFUSED'))
     await expect(client().call('dropshipping.getProductList', {})).rejects.toBeInstanceOf(PowerBodySoapError)
   })
 
@@ -167,6 +193,96 @@ describe('PowerBody SOAP client', () => {
     await client().call('dropshipping.getComments')
     const body = fetchMock.mock.calls[1][1].body as string
     expect(body).toContain('<args xsi:type="xsd:string"></args>')
+  })
+
+  describe('rate limiting', () => {
+    it('retries a 429 and succeeds', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(status(429))
+        .mockResolvedValueOnce(ok(callResponse([{ sku: 'PB-1' }])))
+
+      const result = await client().call('dropshipping.getProductList', {})
+
+      expect(result).toEqual([{ sku: 'PB-1' }])
+      expect(slept.length).toBeGreaterThan(0)
+    })
+
+    it('honours Retry-After given in seconds', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(status(429, { 'retry-after': '3' }))
+        .mockResolvedValueOnce(ok(callResponse([])))
+
+      await client().call('dropshipping.getProductList', {})
+
+      // Their number, not our backoff curve.
+      expect(slept).toContain(3000)
+    })
+
+    it('gives up after the retry budget and says how to fix it', async () => {
+      fetchMock.mockImplementation(async (_url: string, init: { body: string }) =>
+        init.body.includes('<urn:login') ? ok(loginResponse()) : status(429),
+      )
+
+      await expect(
+        client({ maxRetries: 2 }).call('dropshipping.getProductList', {}),
+      ).rejects.toThrow(/rate limiting[\s\S]*POWERBODY_MAX_CONCURRENT/)
+    })
+
+    it('retries a gateway error with no SOAP body', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(status(503))
+        .mockResolvedValueOnce(ok(callResponse([])))
+
+      await expect(client().call('dropshipping.getProductList', {})).resolves.toEqual([])
+    })
+
+    it('does NOT retry an application fault returned with HTTP 500', async () => {
+      // Magento sends faults with a 500, so a status-first check would bury the
+      // real reason under pointless retries.
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(serverError(faultResponse('4', 'Invalid product data')))
+
+      await expect(client().call('dropshipping.createOrder', {})).rejects.toThrow('Invalid product data')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('caps how many requests are in flight at once', async () => {
+      let inFlight = 0
+      let peak = 0
+      fetchMock.mockImplementation(async (_url: string, init: { body: string }) => {
+        if (init.body.includes('<urn:login')) return ok(loginResponse())
+        inFlight += 1
+        peak = Math.max(peak, inFlight)
+        await new Promise((r) => setTimeout(r, 5))
+        inFlight -= 1
+        return ok(callResponse([]))
+      })
+
+      const c = client({ maxConcurrent: 2 })
+      await Promise.all(
+        Array.from({ length: 8 }, (_, i) => c.call('dropshipping.getProductInfo', i)),
+      )
+
+      expect(peak).toBeLessThanOrEqual(2)
+    })
+
+    it('spaces request starts by the minimum interval', async () => {
+      fetchMock.mockImplementation(async (_url: string, init: { body: string }) =>
+        init.body.includes('<urn:login') ? ok(loginResponse()) : ok(callResponse([])),
+      )
+
+      const c = client({ maxConcurrent: 1, minIntervalMs: 200 })
+      await c.call('dropshipping.getProductInfo', 1)
+      slept.length = 0
+      await c.call('dropshipping.getProductInfo', 2)
+
+      // The second request waited out the remainder of the interval.
+      expect(slept.some((ms) => ms > 0 && ms <= 200)).toBe(true)
+    })
   })
 
   it('closes the session on endSession and logs in again afterwards', async () => {

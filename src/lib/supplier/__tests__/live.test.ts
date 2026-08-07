@@ -1,5 +1,10 @@
-import { createPowerBodyProvider, __resetPowerBodyCache } from '@/lib/supplier/powerbody/live'
+import {
+  createPowerBodyProvider,
+  getPowerBodyCatalogueProgress,
+  __resetPowerBodyCache,
+} from '@/lib/supplier/powerbody/live'
 import type { PowerBodySoapClient } from '@/lib/supplier/powerbody/soap'
+import { createMemoryDetailStore, DETAIL_TTL_MS } from '@/lib/supplier/powerbody/detail-cache'
 
 /** A fake SOAP client driven by a per-method handler map. */
 function fakeClient(handlers: Record<string, (args: unknown) => unknown>) {
@@ -44,7 +49,7 @@ describe('live PowerBody adapter', () => {
   describe('listProducts', () => {
     it('pages the list feed and enriches each row with its detail', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())
-      const products = await createPowerBodyProvider({ client }).listProducts()
+      const products = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).listProducts()
 
       expect(products).toHaveLength(2)
       expect(products[0]).toMatchObject({
@@ -70,7 +75,7 @@ describe('live PowerBody adapter', () => {
           throw new Error('boom')
         },
       })
-      const products = await createPowerBodyProvider({ client }).listProducts()
+      const products = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).listProducts()
 
       // Stock and price survive, which is what keeps the catalogue sellable.
       expect(products).toHaveLength(2)
@@ -79,7 +84,7 @@ describe('live PowerBody adapter', () => {
 
     it('serves a second call from the cache', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())
-      const provider = createPowerBodyProvider({ client })
+      const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
       await provider.listProducts()
       const before = calls.length
       await provider.listProducts()
@@ -92,7 +97,146 @@ describe('live PowerBody adapter', () => {
           (args as { page: number }).page === 1 ? [{ product_id: '9', price: '1.00', qty: '1' }] : [],
         'dropshipping.getProductInfo': () => null,
       })
-      expect(await createPowerBodyProvider({ client }).listProducts()).toEqual([])
+      expect(await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).listProducts()).toEqual([])
+    })
+  })
+
+  describe('detail budget and persistent cache', () => {
+    /** A feed of `n` products, so the budget has something to run out against. */
+    function bigFeed(n: number) {
+      const rows = Array.from({ length: n }, (_, i) => ({
+        product_id: String(i + 1),
+        sku: `PB-${i + 1}`,
+        price: '10.00',
+        qty: '5',
+      }))
+      let infoCalls = 0
+      const handlers = {
+        'dropshipping.getProductList': (args: unknown) =>
+          (args as { page: number }).page === 1 ? rows : [],
+        'dropshipping.getProductInfo': (id: unknown) => {
+          infoCalls += 1
+          return { name: `Product ${id}`, manufacturer: 'PB', category: 'Protein' }
+        },
+      }
+      return { handlers, infoCalls: () => infoCalls }
+    }
+
+    it('never exceeds the detail budget in one call', async () => {
+      const feed = bigFeed(100)
+      const { client } = fakeClient(feed.handlers)
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        detailBudget: 10,
+      }).listProducts()
+
+      expect(feed.infoCalls()).toBe(10)
+      // The whole catalogue still comes back — undetailed rows carry list data.
+      expect(products).toHaveLength(100)
+    })
+
+    it('returns undetailed products with their list-feed data intact', async () => {
+      const feed = bigFeed(5)
+      const { client } = fakeClient(feed.handlers)
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        detailBudget: 2,
+      }).listProducts()
+
+      const undetailed = products[4]
+      // No name yet, but price and stock are correct — so it is still sellable
+      // and still counted, rather than vanishing until detail arrives.
+      expect(undetailed).toMatchObject({ sku: 'PB-5', wholesalePrice: 10, stock: 5, inStock: true })
+    })
+
+    it('reports progress so a partial catalogue explains itself', async () => {
+      const feed = bigFeed(20)
+      const { client } = fakeClient(feed.handlers)
+      await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        detailBudget: 8,
+      }).listProducts()
+
+      expect(getPowerBodyCatalogueProgress()).toMatchObject({
+        total: 20,
+        detailed: 8,
+        pending: 12,
+        fetchedThisRun: 8,
+      })
+    })
+
+    it('picks up where it left off on the next call', async () => {
+      const feed = bigFeed(10)
+      const store = createMemoryDetailStore()
+      const { client } = fakeClient(feed.handlers)
+
+      await createPowerBodyProvider({ client, detailStore: store, detailBudget: 4 }).listProducts()
+      __resetPowerBodyCache() // simulate a later request / cold instance
+      await createPowerBodyProvider({ client, detailStore: store, detailBudget: 4 }).listProducts()
+
+      // 4 then 4 more — not the same 4 twice.
+      expect(feed.infoCalls()).toBe(8)
+      expect(getPowerBodyCatalogueProgress()).toMatchObject({ detailed: 8, pending: 2 })
+    })
+
+    it('does not re-fetch detail it already holds', async () => {
+      const feed = bigFeed(3)
+      const store = createMemoryDetailStore()
+      const { client } = fakeClient(feed.handlers)
+
+      await createPowerBodyProvider({ client, detailStore: store, detailBudget: 50 }).listProducts()
+      __resetPowerBodyCache()
+      await createPowerBodyProvider({ client, detailStore: store, detailBudget: 50 }).listProducts()
+
+      expect(feed.infoCalls()).toBe(3)
+    })
+
+    it('re-fetches detail once it has gone stale', async () => {
+      const feed = bigFeed(2)
+      const stale = {
+        '1': { info: { name: 'Old name' }, at: Date.now() - DETAIL_TTL_MS - 1 },
+      }
+      const { client } = fakeClient(feed.handlers)
+      await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(stale),
+        detailBudget: 50,
+      }).listProducts()
+
+      // Both: the stale one and the one never fetched.
+      expect(feed.infoCalls()).toBe(2)
+    })
+
+    it('takes price and stock from today’s feed, never from cached detail', async () => {
+      // The one thing a detail cache must never do is serve a stale price.
+      const cached = {
+        '1': {
+          info: { name: 'Whey', manufacturer: 'PB', price: '999.00', qty: '999', detail_price: '19.99' },
+          at: Date.now(),
+        },
+      }
+      const { client } = fakeClient({
+        'dropshipping.getProductList': (args: unknown) =>
+          (args as { page: number }).page === 1
+            ? [{ product_id: '1', sku: 'PB-1', price: '11.50', qty: '7' }]
+            : [],
+        'dropshipping.getProductInfo': () => null,
+      })
+
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(cached),
+      }).listProducts()
+
+      expect(products[0]).toMatchObject({
+        name: 'Whey', // from the cache
+        wholesalePrice: 11.5, // from today's feed
+        stock: 7,
+        rrp: 19.99, // detail-only field survives
+      })
     })
   })
 

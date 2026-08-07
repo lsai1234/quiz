@@ -36,7 +36,7 @@ interface QuizStore {
   stackReady: boolean
   // Product catalogue — single source of truth, hydrated from /api/products
   catalogue: Product[]
-  catalogueSource: 'mock' | 'shopify'
+  catalogueSource: 'mock' | 'real'
   stackBlueprint: StackBlueprint | null
   // CatalogueProduct[] — richer type used by the stack review page, blueprint
   // factory, swap modal, and boosters. Fetched from /api/catalogue on mount.
@@ -70,7 +70,7 @@ interface QuizStore {
   setAiStackMeta: (reasons: Record<string, string>, personalised: boolean) => void
   setStackReady: (ready: boolean) => void
   toggleProduct: (product: Product) => void
-  setCatalogue: (products: Product[], source: 'mock' | 'shopify') => void
+  setCatalogue: (products: Product[], source: 'mock' | 'real') => void
   setStackBlueprint: (blueprint: StackBlueprint) => void
   reset: () => void
 }

@@ -28,7 +28,7 @@ export async function GET() {
 
   const [ids, catalogue] = await Promise.all([getTopProductIds(), getResolvedCatalogue()])
   const config = getPricingConfig()
-  const live = catalogue.source === 'shopify'
+  const live = catalogue.source === 'real'
   const onRoster = new Set(ids)
 
   const roster = resolveRoster(ids, catalogue.products).map((slot) => ({

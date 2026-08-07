@@ -20,7 +20,7 @@ export function useProducts(): UseProductsReturn {
   const catalogueSource = useQuizStore((s) => s.catalogueSource)
   const setCatalogue = useQuizStore((s) => s.setCatalogue)
 
-  const [isLoading, setIsLoading] = useState(catalogueSource !== 'shopify')
+  const [isLoading, setIsLoading] = useState(catalogueSource !== 'real')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -34,10 +34,12 @@ export function useProducts(): UseProductsReturn {
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error)
-        if (data.source === 'shopify' && Array.isArray(data.products)) {
-          useQuizStore.getState().setCatalogue(data.products, 'shopify')
-        } else if (data.shopifyError) {
-          throw new Error(data.shopifyError)
+        if (Array.isArray(data.products)) {
+          // Both sources are first-class now: mock is the sample catalogue and
+          // real is what we curated from PowerBody. Neither is an error state.
+          useQuizStore.getState().setCatalogue(data.products, data.source === 'real' ? 'real' : 'mock')
+        } else if (data.error) {
+          throw new Error(data.error)
         }
       })
       .catch((err) => {
@@ -52,7 +54,7 @@ export function useProducts(): UseProductsReturn {
   return {
     products: catalogue,
     isLoading,
-    isLive: catalogueSource === 'shopify',
+    isLive: catalogueSource === 'real',
     error,
   }
 }

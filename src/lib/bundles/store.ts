@@ -11,6 +11,7 @@
  * Server-only. Reads degrade to the shipped seeds if the database is
  * unreachable rather than crashing.
  */
+import type { DataSource } from '@/lib/data-source'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { readJson, writeJson } from '@/lib/portal/persist'
@@ -98,7 +99,7 @@ export interface PortalBundle {
 }
 
 /** Every bundle (including removed/unpublished) with pricing + readiness, for the portal. */
-export async function getPortalBundles(): Promise<{ bundles: PortalBundle[]; source: 'mock' | 'shopify' }> {
+export async function getPortalBundles(): Promise<{ bundles: PortalBundle[]; source: DataSource }> {
   const [all, { products, source }] = await Promise.all([
     getResolvedBundles({ includeRemoved: true }),
     getResolvedCatalogue(),

@@ -8,20 +8,27 @@ built and how to switch it on.
 
 ---
 
-## The two switches
+## The three switches
 
-The single most important thing to understand: **reading and writing are separate
-settings.**
+The single most important thing to understand: **browsing the supplier, selling the
+products, and placing orders are three separate settings.**
 
 | | Setting | Values | Default | Controls |
 |---|---|---|---|---|
-| **Read** | `SUPPLIER_SOURCE` | `mock` · `auto` · `powerbody` | `mock` | Where the catalogue, stock and prices come from |
+| **Shop** | `NEXT_PUBLIC_DATA_SOURCE` | `mock` · `real` | `mock` | Which catalogue customers see |
+| **Read** | `SUPPLIER_SOURCE` | `mock` · `auto` · `powerbody` | `mock` | Where supplier products, stock and prices come from |
 | **Write** | `SUPPLIER_ORDERING` | `simulate` · `live` | `simulate` | Whether "Send" in the fulfilment queue really places an order |
 
-They are deliberately independent so you can run the **catalogue fully live** — real
-products, real stock, refreshed daily — while **every order is still pretend**. That is
-the state to sit in while the integration is being proven, and it is where the app lands
-by default the moment you add credentials.
+They are deliberately independent, which gives you a safe path in:
+
+1. Point **Read** at live PowerBody and browse the real feed in the hub, while the shop
+   still serves the mock catalogue and orders are still pretend.
+2. Add the products you want (Hub → Products → PowerBody). They land in *our* catalogue —
+   ours is the curated subset; customers only ever see what has been added.
+3. Flip **Shop** to `real` when you are happy with what is in it.
+4. Flip **Write** to `live` last, once you have worked a day's queue as a dry run.
+
+Only step 4 can ship a parcel.
 
 Both can be flipped at runtime from the Founders Hub (**Settings → Supplier** and
 **Settings → Order sending**) without a redeploy; the portal choice is persisted in the
@@ -48,8 +55,14 @@ POWERBODY_API_URL=https://www.powerbody.co.uk/api/soap/
 POWERBODY_API_USER=<your API username>
 POWERBODY_API_KEY=<your API key>
 
-# Leave this alone until you are ready to ship real parcels.
-SUPPLIER_ORDERING=simulate
+# Leave these alone until you are ready.
+SUPPLIER_ORDERING=simulate       # no order reaches PowerBody
+NEXT_PUBLIC_DATA_SOURCE=mock     # the shop still serves the sample catalogue
+
+# Rate-limit tuning — only touch these if you see HTTP 429.
+POWERBODY_MAX_CONCURRENT=2
+POWERBODY_MIN_INTERVAL_MS=150
+POWERBODY_DETAIL_BUDGET=250
 ```
 
 All three credentials are required: their API authenticates with
@@ -65,6 +78,43 @@ default.
 ---
 
 ## How it works
+
+### Rate limiting (HTTP 429)
+
+PowerBody answer **429** when asked too fast, and building the catalogue is the easiest
+way to trip it — `getProductInfo` is one call per product, so a few thousand products is
+a few thousand requests.
+
+Three things deal with it, all in the transport so every caller benefits:
+
+- **Throttling.** At most `POWERBODY_MAX_CONCURRENT` (default 2) requests in flight, and
+  at least `POWERBODY_MIN_INTERVAL_MS` (default 150ms) between starts.
+- **Retry with backoff.** 429 and gateway errors are retried up to 4 times, honouring
+  their `Retry-After` header when they send one, with jittered exponential backoff when
+  they don't. After the budget it fails with a message naming the two knobs to turn.
+- **A durable detail cache.** Detail is fetched **once per product** and kept in the
+  database for 7 days, so throttling costs you a slow first build rather than a slow
+  every-build.
+
+If you still see 429s: lower `POWERBODY_MAX_CONCURRENT` first, then raise
+`POWERBODY_MIN_INTERVAL_MS`. Their actual limit isn't documented.
+
+One subtlety worth knowing: Magento returns **application faults with HTTP 500** — the
+same status as a genuine server wobble. The body is therefore read before the status is
+judged, so "Invalid product data" surfaces immediately instead of being retried five
+times and buried.
+
+### The first catalogue load is partial, on purpose
+
+Because the transport is deliberately slow, one request cannot fetch detail for a large
+catalogue without running past the timeout. So each load tops up the cache by at most
+`POWERBODY_DETAIL_BUDGET` products (default 250) and **returns the whole catalogue
+regardless** — products without detail yet carry their list-feed data (SKU, price, stock),
+so they are accurate and sellable, just unnamed.
+
+Load the page again, or let the nightly job run, and it fills in further. The hub reports
+progress (`detailed` / `pending`) so a half-named list reads as "still loading" rather
+than "broken".
 
 ### Transport — `powerbody/soap.ts`
 
@@ -203,7 +253,9 @@ Available in their API, no caller yet — add when there is a reason:
 | `src/lib/supplier/index.ts` | Mock ↔ live resolver + credential check |
 | `src/lib/supplier/ordering.ts` | The simulate ↔ live ordering switch |
 | `src/lib/supplier/sync.ts` | Refresh imported products from the feed |
-| `src/lib/supplier/powerbody/soap.ts` | SOAP transport + session handling |
+| `src/lib/supplier/powerbody/soap.ts` | SOAP transport, session handling, throttling + 429 retry |
+| `src/lib/supplier/powerbody/detail-cache.ts` | Durable per-product detail cache |
+| `src/lib/data-source.ts` | Which catalogue the shop serves (mock ↔ real) |
 | `src/lib/supplier/powerbody/wire.ts` | Their shapes ↔ ours (pure) |
 | `src/lib/supplier/powerbody/live.ts` | The live adapter |
 | `src/lib/supplier/powerbody/mock.ts` | The mock, also used as the order simulator |

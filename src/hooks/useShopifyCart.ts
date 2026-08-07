@@ -6,7 +6,6 @@ import {
   createCart, addCartLines, updateCartLines, removeCartLines,
   buildMockCart,
 } from '@/lib/shopify/operations'
-import { getDataSource } from '@/lib/data-source'
 
 interface UseShopifyCartReturn {
   cart: ShopifyCart | null
@@ -26,7 +25,16 @@ export function useShopifyCart(): UseShopifyCartReturn {
   const [isCheckoutSuccess, setIsCheckoutSuccess] = useState(false)
   const [pendingReasons, setPendingReasons] = useState<Record<string, string>>({})
 
-  const isMockMode = getDataSource() === 'mock'
+  // Always the local cart now.
+  //
+  // This used to follow the data source: mock built a cart in memory, "live"
+  // created a Shopify cart and handed off to Shopify checkout. Shopify is no
+  // longer the catalogue or the checkout — products come from PowerBody and
+  // payment goes through Stripe (`useShopCheckout` / `useStackCheckout`) — so
+  // the Shopify branches below are unreachable and the local cart is the only
+  // one. Pinned here rather than deleted piecemeal so the hook keeps one
+  // obvious seam when this component is moved onto the Stripe basket.
+  const isMockMode = true
 
   // ─── Mock helpers ──────────────────────────────────────────────────────────
 

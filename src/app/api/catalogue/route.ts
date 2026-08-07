@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
+import { getDataSource, getDataSourceMode } from '@/lib/data-source'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { syncPortalRuntime } from '@/lib/portal/store'
 
@@ -12,20 +12,18 @@ export async function GET(request: Request) {
 
   if (debug) {
     await syncPortalRuntime()
-    const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
-    const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
+    const { products, source, error } = await getResolvedCatalogue()
     return NextResponse.json({
       dataSource: getDataSource(),
       mode: getDataSourceMode(),
-      hasCredentials: hasShopifyCredentials(),
-      domainSet: !!domain,
-      domainValue: domain ?? null,
-      tokenSet: !!token,
-      tokenPreview: token ? `${token.slice(0, 6)}...${token.slice(-4)}` : null,
-      apiVersion: process.env.NEXT_PUBLIC_SHOPIFY_API_VERSION ?? '2024-10 (default)',
+      source,
+      count: products.length,
+      // Set when `real` is selected but nothing has been imported yet — the one
+      // way this can look broken without being broken.
+      error: error ?? null,
     })
   }
 
-  const { products, source } = await getResolvedCatalogue()
-  return NextResponse.json({ products, source, count: products.length })
+  const { products, source, error } = await getResolvedCatalogue()
+  return NextResponse.json({ products, source, count: products.length, ...(error ? { error } : {}) })
 }

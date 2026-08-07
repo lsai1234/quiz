@@ -55,9 +55,9 @@ describe('product overrides store', () => {
 
 describe('data-source setting', () => {
   it('flips the resolved mode via the portal override', async () => {
-    await setDataSourceSetting('shopify')
-    expect(getDataSourceMode()).toBe('shopify')
-    expect(await getDataSourceSetting()).toBe('shopify')
+    await setDataSourceSetting('real')
+    expect(getDataSourceMode()).toBe('real')
+    expect(await getDataSourceSetting()).toBe('real')
     await setDataSourceSetting('mock')
     expect(getDataSourceMode()).toBe('mock')
   })

@@ -1,45 +1,32 @@
 import { NextResponse } from 'next/server'
-import { fetchCatalogue } from '@/lib/shopify/catalogue'
-import { getDataSource, getDataSourceMode, hasShopifyCredentials } from '@/lib/data-source'
+import { getDataSource, getDataSourceMode } from '@/lib/data-source'
+import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { catalogueToProducts } from '@/lib/catalogue/adapter'
 import { syncPortalRuntime } from '@/lib/portal/store'
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url)
-  const debug = searchParams.has('debug')
-  await syncPortalRuntime()
+// The portal can flip the data source / edit products at runtime.
+export const dynamic = 'force-dynamic'
 
-  // Debug mode: expose env var state without leaking full token
-  if (debug) {
-    const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
-    const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
+/**
+ * The quiz's product list, in the legacy `Product` shape.
+ *
+ * Now served from the resolved catalogue — the same source the shop and hub
+ * read — rather than from Shopify, so all three agree on what exists. The
+ * adapter in `catalogue/adapter.ts` does the shape conversion.
+ */
+export async function GET(request: Request) {
+  await syncPortalRuntime()
+  const { products: catalogue, source, error } = await getResolvedCatalogue()
+  const products = catalogueToProducts(catalogue)
+
+  if (new URL(request.url).searchParams.has('debug')) {
     return NextResponse.json({
       dataSource: getDataSource(),
       mode: getDataSourceMode(),
-      hasCredentials: hasShopifyCredentials(),
-      domainSet: !!domain,
-      domainValue: domain ?? null,
-      tokenSet: !!token,
-      tokenPreview: token ? `${token.slice(0, 6)}...${token.slice(-4)}` : null,
-      apiVersion: process.env.NEXT_PUBLIC_SHOPIFY_API_VERSION ?? '2024-10 (default)',
+      count: products.length,
+      error: error ?? null,
     })
   }
 
-  try {
-    const products = await fetchCatalogue()
-    return NextResponse.json({ products, source: getDataSource(), count: products.length })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[api/products] Shopify error:', message)
-    // Return mocks so the UI never breaks, but surface the error for debugging
-    const { MOCK_PRODUCTS } = await import('@/lib/mock-products')
-    return NextResponse.json({
-      products: MOCK_PRODUCTS,
-      source: 'mock',
-      count: MOCK_PRODUCTS.length,
-      shopifyError: message,
-    })
-  }
+  return NextResponse.json({ products, source, count: products.length, ...(error ? { error } : {}) })
 }
-
-// Revalidate every 5 minutes so the Next.js cache stays fresh
-export const revalidate = 300

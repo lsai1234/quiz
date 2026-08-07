@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   )
 
   const queue = buildFulfilmentQueue(unfulfilled)
-  const live = catalogue.source === 'shopify'
+  const live = catalogue.source === 'real'
   const notReady = catalogue.products.filter((p) => productReadiness(p, { live }).overall !== 'ok').length
   const config = getPricingConfig()
 

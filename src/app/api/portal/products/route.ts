@@ -9,7 +9,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { products, source, error } = await getResolvedCatalogue()
-  const live = source === 'shopify'
+  const live = source === 'real'
   return NextResponse.json({
     source,
     error,
@@ -29,30 +29,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'id and patch required' }, { status: 400 })
   }
 
-  // Resolve the product (for its Shopify id) before recording the override.
-  const { products } = await getResolvedCatalogue()
-  const existing = products.find((p) => p.id === body.id)
-
-  // Always record the override (so the app reflects it immediately, in either mode).
+  // The override IS the edit. Our catalogue is ours: products come in from the
+  // PowerBody feed and are curated here, so there is no upstream store to push
+  // a change back to — PowerBody's own product data is theirs and read-only.
+  await syncPortalRuntime()
   await setProductOverride(body.id, body.patch)
 
-  // When live, also push the change to Shopify (tags + metafields).
-  await syncPortalRuntime()
-  let shopify: { written: boolean; error?: string } = { written: false }
-  if (getDataSource() === 'shopify' && existing) {
-    try {
-      const { writeProductConfig } = await import('@/lib/shopify/admin')
-      await writeProductConfig({ ...existing, ...body.patch })
-      shopify = { written: true }
-    } catch (err) {
-      shopify = { written: false, error: err instanceof Error ? err.message : String(err) }
-    }
-  }
-
-  return NextResponse.json({ ok: true, shopify })
+  return NextResponse.json({ ok: true })
 }
 
-/** Remove a product from the catalogue (and from Shopify when live). */
+/** Remove a product from the catalogue. */
 export async function DELETE(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   let body: { id?: string }
@@ -63,26 +49,8 @@ export async function DELETE(req: Request) {
   }
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
-  const { products } = await getResolvedCatalogue()
-  const existing = products.find((p) => p.id === body.id)
-
-  // When live, delete from Shopify first so we don't hide a product we failed to remove.
-  await syncPortalRuntime()
-  let shopify: { deleted: boolean; error?: string } = { deleted: false }
-  if (getDataSource() === 'shopify' && existing?.shopifyProductId) {
-    try {
-      const { deleteProduct } = await import('@/lib/shopify/admin')
-      await deleteProduct(existing.shopifyProductId)
-      shopify = { deleted: true }
-    } catch (err) {
-      return NextResponse.json(
-        { error: 'Failed to delete from Shopify', detail: err instanceof Error ? err.message : String(err) },
-        { status: 502 },
-      )
-    }
-  }
-
   // Hide it from the catalogue everywhere (covers mock + imported products too).
+  await syncPortalRuntime()
   await markProductRemoved(body.id)
-  return NextResponse.json({ ok: true, shopify })
+  return NextResponse.json({ ok: true })
 }

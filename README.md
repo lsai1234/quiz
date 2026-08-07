@@ -42,6 +42,23 @@ Share your Sheet with the service account email.
 7. Claim safety — flags risky supplement/health language
 8. TikTok preview + Export review — append to Google Sheets as queued
 
+## Catalogue: mock or real
+
+Which products the shop, quiz and hub serve:
+
+```bash
+NEXT_PUBLIC_DATA_SOURCE=mock   # mock | real
+```
+
+- `mock` (default) — the built-in sample catalogue, plus anything added from PowerBody.
+  Every journey works without adding a single product.
+- `real` — **only** the products you have added from the PowerBody feed. This is the shop
+  you actually sell, and it starts empty: add products in Hub → Products → PowerBody.
+
+No credentials are involved, so this can't silently fall back. Flip it at runtime in the
+Founders Hub (Settings → Data source). Shopify was the old "live" side of this switch and
+has been retired — a stale `shopify` or `auto` value reads as `mock`.
+
 ## Add the PowerBody supplier (dropship)
 
 Reading products and writing orders are **two separate switches**, so the catalogue can run
@@ -70,4 +87,4 @@ SQLite doesn't persist). Email + password works out of the box; add
 
 ## Stack
 
-Next.js 15 · App Router · TypeScript · Tailwind CSS v4 · SQLite / Postgres · OpenAI API · Google Sheets API
+Next.js 16 · App Router · TypeScript · Tailwind CSS v4 · SQLite / Postgres · PowerBody dropship API · Stripe · OpenAI API · Google Sheets API
