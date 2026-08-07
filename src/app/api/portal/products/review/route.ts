@@ -1,12 +1,15 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed, getFounder } from '@/lib/portal/guard'
 import {
+  getImportedProducts,
   getPendingReviewProducts,
   saveImportedProduct,
   discardImportedProduct,
   syncPortalRuntime,
 } from '@/lib/portal/store'
 import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed } from '@/lib/catalogue/review'
+import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
+import { uniqueProductId } from '@/lib/supplier/mapping'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 export const dynamic = 'force-dynamic'
@@ -39,7 +42,11 @@ interface ReviewBody {
   patch?: Partial<CatalogueProduct>
   /** Fields being ticked off as checked. */
   confirm?: string[]
-  action?: 'save' | 'approve' | 'discard'
+  action?: 'save' | 'approve' | 'discard' | 'combine'
+  /** For `combine`: the products to fold into one. */
+  ids?: string[]
+  /** For `combine`: what to call the result. Defaults to what the titles share. */
+  title?: string
 }
 
 export async function POST(req: Request) {
@@ -51,9 +58,44 @@ export async function POST(req: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
   }
-  if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
-
   await syncPortalRuntime()
+
+  if (body.action === 'combine') {
+    const ids = (body.ids ?? []).filter((id): id is string => typeof id === 'string')
+    const pending = await getPendingReviewProducts()
+    const chosen = ids.map((id) => pending.find((p) => p.id === id)).filter((p): p is CatalogueProduct => Boolean(p))
+    if (chosen.length !== ids.length) {
+      return NextResponse.json({ error: 'Some of those products are not waiting for review.' }, { status: 404 })
+    }
+
+    // Refused rather than half-supported when the variant model cannot carry the
+    // difference — see `canMerge`.
+    const check = canMerge(chosen)
+    if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 400 })
+
+    const merged = mergeProducts(chosen, { title: body.title })
+    // The merged name can slug to something another product already owns —
+    // combining two products called "Product 20"/"Product 21" yields "product".
+    // Checked against everything EXCEPT the ones being replaced, which are about
+    // to stop existing.
+    const others = (await getImportedProducts()).filter((p) => !ids.includes(p.id))
+    const id = uniqueProductId(merged, others)
+    // Whatever any of them still needed checking, the combined product needs:
+    // its review starts from the primary's.
+    const combined: CatalogueProduct = {
+      ...merged,
+      id,
+      handle: id,
+      review: chosen[0].review,
+    }
+
+    // Replace the sources with the combined product: discarding first means a
+    // failure part-way cannot leave the originals gone and nothing in their place.
+    await saveImportedProduct(combined, { replacing: ids })
+    return NextResponse.json({ ok: true, id: combined.id, variants: combined.variants.length })
+  }
+
+  if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   if (body.action === 'discard') {
     await discardImportedProduct(body.id)

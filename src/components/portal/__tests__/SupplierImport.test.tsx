@@ -104,6 +104,49 @@ describe('SupplierImport', () => {
     expect(screen.getByText(/Codes only/)).toBeInTheDocument()
   })
 
+  it('can add several SKUs as one product with a variant each', async () => {
+    // PowerBody sell every flavour as its own SKU, so this is the only way four
+    // codes become one product with a flavour picker rather than four listings.
+    const choc = { ...ROW, sku: 'W-CHOC', name: 'Whey 1kg Chocolate' }
+    const van = { ...ROW, sku: 'W-VAN', name: 'Whey 1kg Vanilla' }
+    const fetchMock = jest.fn((url: string, _init?: RequestInit) =>
+      url === '/api/portal/supplier'
+        ? reply(JSON.stringify({ ok: true, added: 1, combined: true, skusAdded: 2, aiUsed: false }))
+        : reply(JSON.stringify({ products: [choc, van], notFound: [] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/ON-GOLD-WHEY-2270/), 'W-CHOC, W-VAN')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+    await user.click(await screen.findByRole('button', { name: /Add as ONE product/i }))
+
+    const add = fetchMock.mock.calls.find(([url]) => url === '/api/portal/supplier')
+    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: ['W-CHOC', 'W-VAN'], combine: true })
+    expect(await screen.findByText(/2 SKUs combined into one product/)).toBeInTheDocument()
+  })
+
+  it('adds them separately when that is what was asked for', async () => {
+    const choc = { ...ROW, sku: 'W-CHOC', name: 'Whey 1kg Chocolate' }
+    const van = { ...ROW, sku: 'W-VAN', name: 'Whey 1kg Vanilla' }
+    const fetchMock = jest.fn((url: string, _init?: RequestInit) =>
+      url === '/api/portal/supplier'
+        ? reply(JSON.stringify({ ok: true, added: 2, combined: false, skusAdded: 2, aiUsed: false }))
+        : reply(JSON.stringify({ products: [choc, van], notFound: [] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/ON-GOLD-WHEY-2270/), 'W-CHOC, W-VAN')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+    await user.click(await screen.findByRole('button', { name: /Add all 2 separately/i }))
+
+    const add = fetchMock.mock.calls.find(([url]) => url === '/api/portal/supplier')
+    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: ['W-CHOC', 'W-VAN'], combine: false })
+  })
+
   it('surfaces the supplier’s own error', async () => {
     global.fetch = jest
       .fn()

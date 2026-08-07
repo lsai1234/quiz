@@ -343,6 +343,45 @@ to spread that over the real wholesale price — a £20.00 cost silently became
 never sent. `withoutSupplierOwned` drops anything from the enrichment patch that
 the supplier already answered.
 
+## Flavours and sizes — one product, many SKUs
+
+PowerBody have no concept of a variant: **every flavour and every size is its own
+SKU**, with its own name. Imported one at a time, "Whey 1kg Chocolate" and "Whey
+1kg Vanilla" become two unrelated products, and a customer is offered the same
+tub twice instead of one product with a flavour picker.
+
+Everything downstream was already built for the grouped shape — order lines take
+`variant.sku`, the daily sync applies stock per variant and rolls availability up
+to the product, and both the shop sheet and the Pour Plan render a flavour/size
+picker. The only missing step was saying "these SKUs are one product". There are
+two places to say it:
+
+- **At import.** Look several SKUs up, then **Add as ONE product** instead of
+  *Add all separately*.
+- **After the fact.** Tick them in **Products → Review** and **Combine into one
+  product** — for when they were added separately, or arrived days apart.
+
+Either way each variant keeps its own supplier SKU, which is what keeps it
+orderable and separately stock-tracked. The combined product is named after what
+the titles share ("Whey Protein 1kg"), and each variant is labelled with what is
+left ("Chocolate", "Vanilla").
+
+### Why sizes are refused
+
+`CatalogueVariant` carries a price and a SKU, and nothing else commercial: cost,
+servings and shipped weight live on the **product**. That is right for flavours
+of one tub, which share all three. It is wrong for sizes — a 2.27kg tub costs
+more, holds more servings and ships in a heavier band.
+
+So `canMerge` refuses when cost, servings or weight differ, and says which:
+
+> These cost different amounts (£20.00 vs £38.50), so they are different sizes
+> rather than flavours. […] Keep them as separate products.
+
+Half-supporting it would silently attach the first size's economics to every
+other size, and their margins, subscription quantities and delivery estimates
+would all be wrong. Grouping sizes needs per-variant cost/servings/weight first.
+
 ## The daily check
 
 `syncImportedProducts()` runs nightly (and on demand via **Check now**) over every product

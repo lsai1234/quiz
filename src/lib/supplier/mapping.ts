@@ -115,11 +115,39 @@ export function classifySupplierProduct(sp: SupplierProduct): Classification {
  * (drives margin guardrails). Every variant carries the supplier SKU so stock can
  * be re-synced against the supplier later (daily check / stock-alerts).
  */
+/**
+ * An id that doesn't collide with a DIFFERENT supplier product.
+ *
+ * The id is a slug of the supplier's name, and imports de-dupe by id — which is
+ * right for re-importing the same product and wrong for two SKUs that happen to
+ * share a name. PowerBody do that whenever the size is not in the title
+ * ("Creatine Monohydrate" at 250g and 500g), and the second import silently
+ * replaced the first. Same SKU keeps the same id (so a re-import still updates
+ * in place); a different one gets its SKU appended.
+ */
+export function uniqueProductId(product: CatalogueProduct, existing: CatalogueProduct[]): string {
+  const skus = new Set(product.variants.map((v) => v.sku).filter(Boolean))
+  const clash = existing.find(
+    (p) => p.id === product.id && !p.variants.some((v) => v.sku && skus.has(v.sku)),
+  )
+  if (!clash) return product.id
+  const suffix = slugify([...skus][0] ?? '')
+  return suffix ? `${product.id}-${suffix}` : product.id
+}
+
 export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduct {
   const id = slugify(sp.name)
   const c = classifySupplierProduct(sp)
   const formats = formatsFor(`${sp.category} ${sp.name}`.toLowerCase(), c.isReadyToDrink)
   const available = sp.inStock
+
+  // OUR price, not their RRP. The shop charges `variant.price` (see
+  // `shop/merchandising.dealInfo`), so setting it from `sp.rrp` meant the hub
+  // said "sell £39.99, 25% margin" while the shop rang up £24.99 — roughly
+  // break-even once VAT, delivery and card fees came out. Their RRP is the
+  // was-price, which is what `compareAtPrice` is for.
+  const sellPrice = listPriceFor(sp.wholesalePrice)
+  const wasPrice = sp.rrp > sellPrice ? sp.rrp : null
 
   const variants: CatalogueVariant[] =
     sp.flavours.length > 0
@@ -128,8 +156,8 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           title: flavour,
           flavour,
           size: null,
-          price: sp.rrp,
-          compareAtPrice: null,
+          price: sellPrice,
+          compareAtPrice: wasPrice,
           available,
           inventory: sp.stock,
           // Keep the supplier SKU on every variant so a product resolves back to
@@ -141,8 +169,8 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           title: sp.name,
           flavour: null,
           size: null,
-          price: sp.rrp,
-          compareAtPrice: null,
+          price: sellPrice,
+          compareAtPrice: wasPrice,
           available,
           inventory: sp.stock,
           sku: sp.sku,
@@ -169,7 +197,7 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     // some products don't carry one, so hanging every price in the shop off it
     // means a feed update can silently reprice the catalogue.
     // See `lib/pricing/list-price.ts`.
-    basePrice: listPriceFor(sp.wholesalePrice),
+    basePrice: sellPrice,
     // Their RRP becomes the was-price, which is exactly what it is — and the
     // number the hub cross-checks us against.
     compareAtPrice: sp.rrp,

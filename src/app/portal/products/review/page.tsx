@@ -50,6 +50,8 @@ export default function ReviewPage() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Products ticked in the queue, for combining flavours into one product. */
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setError(null)
@@ -101,6 +103,24 @@ export default function ReviewPage() {
     invalidateCatalogue() // it is sellable from this moment
     setNotice(`${title} is approved and on sale.`)
     setOpenId(null)
+    load()
+  }
+
+  /**
+   * Fold the ticked products into one with a variant each.
+   *
+   * PowerBody have no variant concept — every flavour is its own SKU with its
+   * own name — so without this a four-flavour product is four products in the
+   * shop and a customer is offered the same tub four times.
+   */
+  async function combine() {
+    const ids = [...picked]
+    if (ids.length < 2) return
+    const d = await send('', { action: 'combine', ids })
+    if (!d) return
+    setPicked(new Set())
+    setNotice(`Combined into one product with ${d.variants} variants. Check it over, then approve.`)
+    setOpenId(d.id)
     load()
   }
 
@@ -170,13 +190,50 @@ export default function ReviewPage() {
         />
       ) : (
         <div className="space-y-2">
+          {picked.size > 0 && (
+            <div className="rounded-2xl border p-3 flex flex-wrap items-center gap-2" style={{ background: 'var(--color-surface-2)', borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}>
+              <p className="text-xs text-[var(--color-muted)] flex-1 min-w-[180px]">
+                {picked.size} ticked. Combine them when they are flavours of the same product — each keeps its own
+                supplier SKU and becomes a variant.
+              </p>
+              <button
+                onClick={combine}
+                disabled={busy || picked.size < 2}
+                className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
+                style={{ background: ACCENT, color: '#001018' }}
+              >
+                Combine into one product
+              </button>
+              <button
+                onClick={() => setPicked(new Set())}
+                className="text-xs font-bold px-3 py-2 rounded-xl border"
+                style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
           {rows.map(({ product, remaining, complete }) => (
-            <button
+            <div
               key={product.id}
-              onClick={() => setOpenId(product.id)}
               className="w-full text-left rounded-2xl border p-3.5 flex items-center gap-3"
               style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
             >
+              <input
+                type="checkbox"
+                aria-label={`Select ${product.title}`}
+                checked={picked.has(product.id)}
+                onChange={() =>
+                  setPicked((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(product.id)) next.delete(product.id)
+                    else next.add(product.id)
+                    return next
+                  })
+                }
+                className="shrink-0"
+              />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
@@ -185,14 +242,15 @@ export default function ReviewPage() {
                   No image
                 </div>
               )}
-              <div className="min-w-0 flex-1">
+              <button onClick={() => setOpenId(product.id)} className="min-w-0 flex-1 text-left">
                 <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>
                   {product.title}
                 </p>
                 <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
                   {product.category || 'Uncategorised'} · {money(product.cost)} → {money(product.basePrice)}
+                  {product.variants.length > 1 && ` · ${product.variants.length} variants`}
                 </p>
-              </div>
+              </button>
               <span
                 className="text-[10px] font-bold uppercase shrink-0 px-2 py-1 rounded-lg"
                 style={{
@@ -202,7 +260,7 @@ export default function ReviewPage() {
               >
                 {complete ? 'Ready to approve' : `${remaining.length} to check`}
               </span>
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -261,6 +319,34 @@ function ProductReview({
         <strong style={{ color: AMBER }}>Keyword match</strong> were worked out here — confirm or correct each before
         approving.
       </p>
+
+      {/* What the customer will actually be able to pick, and which supplier SKU
+          each choice orders. The only place a combine can be checked. */}
+      <div className="rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <div className="flex items-center gap-2 flex-wrap mb-1.5">
+          <span className="text-xs font-bold text-[var(--color-text)]">
+            {product.variants.length === 1 ? 'One variant' : `${product.variants.length} variants`}
+          </span>
+          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: GREEN, background: `color-mix(in srgb, ${GREEN} 12%, transparent)` }}>
+            PowerBody
+          </span>
+        </div>
+        <div className="space-y-1">
+          {product.variants.map((v) => (
+            <div key={v.id} className="flex items-center gap-2 flex-wrap text-[11px]">
+              <span className="text-[var(--color-text-2)] font-semibold">{v.flavour || v.size || v.title}</span>
+              <span className="text-[var(--color-muted)]">{v.sku ?? 'no SKU'}</span>
+              <span className="text-[var(--color-muted)]">{money(v.price)}</span>
+              <span style={{ color: v.available ? 'var(--color-muted)' : 'var(--color-red)' }}>
+                {v.available ? `${v.inventory ?? '—'} in stock` : 'Out of stock'}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="text-[10px] text-[var(--color-muted)] mt-1.5">
+          Each variant orders its own SKU, and stock is tracked per variant.
+        </p>
+      </div>
 
       <div className="space-y-2">
         {REVIEW_FIELDS.map((field) => {

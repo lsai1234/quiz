@@ -79,7 +79,7 @@ export function SupplierImport() {
     }
   }, [input])
 
-  const add = useCallback(async (skus: string[]) => {
+  const add = useCallback(async (skus: string[], combine = false) => {
     if (skus.length === 0) return
     setAdding(true)
     setError(null)
@@ -87,7 +87,7 @@ export function SupplierImport() {
       const res = await fetch('/api/portal/supplier', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus }),
+        body: JSON.stringify({ skus, combine }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -102,8 +102,11 @@ export function SupplierImport() {
       const how = d.aiUsed ? 'AI-classified' : 'auto-classified'
       // Deliberately not "added to your shop": it isn't, until it is reviewed.
       setNotice(
-        `${d.added} product${d.added === 1 ? '' : 's'} pulled in and ${how}, waiting in Products → Review. ` +
-          'Nothing is on sale until you approve it there.',
+        d.combined
+          ? `${d.skusAdded} SKUs combined into one product with ${d.skusAdded} variants and ${how}, waiting in ` +
+            'Products → Review. Nothing is on sale until you approve it there.'
+          : `${d.added} product${d.added === 1 ? '' : 's'} pulled in and ${how}, waiting in Products → Review. ` +
+            'Nothing is on sale until you approve it there.',
       )
     } catch {
       setError('Failed to add products.')
@@ -230,14 +233,32 @@ export function SupplierImport() {
           ))}
 
           {addable.length > 1 && (
-            <button
-              onClick={() => add(addable.map((r) => r.sku))}
-              disabled={adding}
-              className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
-              style={{ background: ACCENT, color: '#001018' }}
-            >
-              {adding ? 'Adding…' : `Add all ${addable.length} to review`}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => add(addable.map((r) => r.sku))}
+                disabled={adding}
+                className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
+                style={{ background: ACCENT, color: '#001018' }}
+              >
+                {adding ? 'Adding…' : `Add all ${addable.length} separately`}
+              </button>
+              {/* PowerBody sell each flavour as its own SKU, so this is how four
+                  codes become one product with a flavour picker. */}
+              <button
+                onClick={() => add(addable.map((r) => r.sku), true)}
+                disabled={adding}
+                className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
+                style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+              >
+                Add as ONE product ({addable.length} variants)
+              </button>
+            </div>
+          )}
+          {addable.length > 1 && (
+            <p className="text-[10px] text-[var(--color-muted)]">
+              Combine when these are flavours of the same tub. Different sizes stay separate — a variant carries its own
+              price and SKU but not its own cost, servings or weight.
+            </p>
           )}
         </div>
       )}

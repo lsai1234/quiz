@@ -225,9 +225,29 @@ export async function getPendingReviewProducts(): Promise<CatalogueProduct[]> {
   )
 }
 
-/** Replace one imported product wholesale (review edits, approval). */
-export async function saveImportedProduct(product: CatalogueProduct): Promise<void> {
+/**
+ * Replace one imported product wholesale (review edits, approval).
+ *
+ * `replacing` swaps several products for this one — combining flavours into a
+ * single product with variants. Done in one write on purpose: deleting the
+ * sources and adding the combined product separately would, if the second half
+ * failed, leave a founder with neither.
+ */
+export async function saveImportedProduct(
+  product: CatalogueProduct,
+  options: { replacing?: string[] } = {},
+): Promise<void> {
   const state = await loadProducts()
+  const replacing = new Set(options.replacing ?? [])
+
+  if (replacing.size > 0) {
+    state.imported = state.imported.filter((p) => !replacing.has(p.id))
+    for (const id of replacing) delete state.overrides[id]
+    state.imported.push(product)
+    await writeJson(PRODUCTS_FILE, state)
+    return
+  }
+
   const index = state.imported.findIndex((p) => p.id === product.id)
   if (index === -1) return
   state.imported[index] = product

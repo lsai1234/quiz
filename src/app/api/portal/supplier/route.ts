@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
-import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
+import { supplierProductToCatalogue, uniqueProductId } from '@/lib/supplier/mapping'
 import { asPendingReview, sourcesForImport, withoutSupplierOwned } from '@/lib/catalogue/review'
+import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
-import { addImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,11 +16,18 @@ export const dynamic = 'force-dynamic'
  */
 export const maxDuration = 60
 
-/** POST { skus, autopopulate? } — map the chosen supplier products, AI-fill the
- *  CHRGD attributes PowerBody doesn't send (claim-safe), and add them. */
+/**
+ * POST { skus, combine?, title?, autopopulate? } — map the chosen supplier
+ * products, AI-fill the CHRGD attributes PowerBody doesn't send (claim-safe),
+ * and add them for review.
+ *
+ * `combine` turns the SKUs into ONE product with a variant each, which is how a
+ * product that PowerBody sell as four flavours becomes one thing in the shop
+ * with a flavour picker. Every variant keeps its own SKU, so it stays orderable.
+ */
 export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  let body: { skus?: unknown; autopopulate?: boolean }
+  let body: { skus?: unknown; autopopulate?: boolean; combine?: boolean; title?: string }
   try {
     body = await req.json()
   } catch {
@@ -45,6 +53,7 @@ export async function POST(req: Request) {
 
     let aiUsed = false
     const mapped: import('@/lib/catalogue/types').CatalogueProduct[] = []
+    const sourcesById = new Map<string, ReturnType<typeof sourcesForImport>>()
     for (const sp of toAdd) {
       let product = supplierProductToCatalogue(sp)
       let aiFields: string[] = []
@@ -62,20 +71,41 @@ export async function POST(req: Request) {
         aiFields = Object.keys(enrichment)
         product = { ...product, ...enrichment }
       }
-      // Held out of the shop and quiz until reviewed, carrying a record of which
-      // fields came from PowerBody, which from our rules, and which from a model.
-      mapped.push(asPendingReview(product, sourcesForImport(aiFields, aiUsed)))
+      mapped.push(product)
+      sourcesById.set(product.id, sourcesForImport(aiFields, aiUsed))
     }
 
-    await addImportedProducts(mapped)
+    let toStore = mapped
+    if (body.combine) {
+      const check = canMerge(mapped)
+      if (!check.ok) return NextResponse.json({ error: check.reason }, { status: 400 })
+      toStore = [mergeProducts(mapped, { title: body.title })]
+    }
+
+    // Held out of the shop and quiz until reviewed, carrying a record of which
+    // fields came from PowerBody, which from our rules, and which from a model.
+    // `taken` grows as we go, so two SKUs sharing a name inside ONE paste
+    // disambiguate against each other and not just against what is already here.
+    const taken = [...(await getImportedProducts())]
+    const pending = toStore.map((product) => {
+      const id = uniqueProductId(product, taken)
+      const sources = sourcesById.get(product.id) ?? sourcesForImport([], aiUsed)
+      const stored = asPendingReview({ ...product, id, handle: id }, sources)
+      taken.push(stored)
+      return stored
+    })
+
+    await addImportedProducts(pending)
     return NextResponse.json({
       ok: true,
-      added: mapped.length,
+      added: pending.length,
+      combined: Boolean(body.combine),
+      skusAdded: mapped.length,
       autopopulated: autopopulate,
       aiUsed,
       /** Nothing is sellable yet — the hub sends the founder to Review next. */
-      pendingReview: mapped.length,
-      ids: mapped.map((p) => p.id),
+      pendingReview: pending.length,
+      ids: pending.map((p) => p.id),
       // Named explicitly so a typo'd SKU is reported rather than silently
       // dropped from a bulk paste.
       notFound,

@@ -24,7 +24,20 @@ describe('supplier → catalogue mapping', () => {
     expect(cp.variants).toHaveLength(3)
     expect(cp.variants.every((v) => v.sku === sp.sku)).toBe(true)
     expect(cp.variants.every((v) => v.inventory === sp.stock)).toBe(true)
-    expect(cp.variants.every((v) => v.price === sp.rrp)).toBe(true)
+    // OUR price, not their RRP. The shop charges `variant.price`, so taking it
+    // from `sp.rrp` sold the product at the supplier's suggestion while the hub
+    // reported the margin on ours.
+    expect(cp.variants.every((v) => v.price === cp.basePrice)).toBe(true)
+  })
+
+  it('charges our list price and keeps their RRP as the was-price', () => {
+    const sp = { ...bySku('ON-CREA-634'), wholesalePrice: 20, rrp: 24.99 }
+    const cp = supplierProductToCatalogue(sp)
+
+    expect(cp.basePrice).toBe(39.99)
+    expect(cp.variants[0].price).toBe(39.99)
+    // Their RRP is below what we charge here, so it is not shown as a saving.
+    expect(cp.variants[0].compareAtPrice).toBeNull()
   })
 
   it('makes a single variant for products without flavours', () => {
