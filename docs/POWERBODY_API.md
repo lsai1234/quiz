@@ -148,6 +148,26 @@ the next load carries on. On the client the feed request has its own timeout and
 loudly rather than spinning, and the **SKU lookup sits above the browse list** so it works
 whatever the feed is doing.
 
+### If the browse list shows product codes instead of names
+
+That means no detail has been fetched for those rows, which is normal — press
+**Details** on one and it will either fill in or tell you why not. The reason now
+reaches the screen in PowerBody's own words rather than being swallowed, so the
+message is the diagnosis:
+
+| What it says | What it means |
+|---|---|
+| *Resource path is not callable* / *Access denied* | `getProductInfo` is not enabled on this API account. New accounts start in PowerBody's **DEMO/sandbox** — placeholder products (`P64`, uniform prices, stock 10/100), no detail, orders auto-fail. Ask your account manager to enable API access and permissions. |
+| *…answered but sent no name or RRP with it* | The call worked and came back empty — again typical of the sandbox. |
+| *…did not answer within 20s* | Their feed is slow or rate-limiting; try again. |
+| *…sent these products without a product id* | The list feed changed shape. `product_id` is what `getProductInfo` is keyed on. |
+
+`getProductInfo` is asked with a named argument (`{product_id}`) first, matching
+`getProductList`'s `{page}`, and retried with a bare id if that comes back empty —
+their guide reads both ways and which one an account answers to is not something
+the code can settle in advance. The second call only happens when the first shape
+is wrong.
+
 ### Transport — `powerbody/soap.ts`
 
 PowerBody run Magento's classic SOAP v1 endpoint, whose entire surface is three calls:

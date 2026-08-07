@@ -95,6 +95,26 @@ let catalogueCache: Cached | null = null
  *  supplier that is already rate-limiting us — they wait on the same one. */
 let inFlightBuild: Promise<SupplierProduct[]> | null = null
 
+/**
+ * The list rows the last paging run read, by SKU.
+ *
+ * Pressing Details on a row should not re-read the entire feed to find out what
+ * the browse list already knows — that is several throttled calls to save one,
+ * and on a slow feed it is what puts a lookup near its own deadline. Held to the
+ * same clock as the catalogue cache, so a row it serves is exactly as fresh as
+ * the one on screen that was clicked.
+ */
+let listIndex: { at: number; bySku: Map<string, PbProductListItem> } | null = null
+
+function rememberListItems(items: PbProductListItem[]): void {
+  const bySku = new Map<string, PbProductListItem>()
+  for (const item of items) {
+    const sku = String(item.sku ?? '')
+    if (sku !== '') bySku.set(sku, item)
+  }
+  listIndex = { at: Date.now(), bySku }
+}
+
 /** How the last catalogue build went — surfaced in the hub so a list of
  *  bare SKUs explains itself instead of looking broken. */
 export interface CatalogueProgress {
@@ -122,6 +142,7 @@ export function __resetPowerBodyCache(): void {
   catalogueCache = null
   lastProgress = null
   inFlightBuild = null
+  listIndex = null
 }
 
 /**
@@ -225,14 +246,44 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     return { items: all, complete: false }
   }
 
-  async function fetchDetail(id: string): Promise<PbProductInfo | null> {
-    try {
-      return await client.call<PbProductInfo | null>('dropshipping.getProductInfo', id)
-    } catch {
-      // One unreadable product must not sink a whole catalogue build. It simply
-      // maps from its list row, which is enough to keep stock and price right.
-      return null
+  /** A `getProductInfo` reply, if it looks like one. Magento wraps single
+   *  results in an array as readily as it returns them bare. */
+  function readInfo(reply: unknown): PbProductInfo | null {
+    const value = Array.isArray(reply) ? reply[0] : reply
+    return value && typeof value === 'object' ? (value as PbProductInfo) : null
+  }
+
+  /**
+   * Detail for one product id.
+   *
+   * Two things here are deliberate.
+   *
+   * **Both argument shapes are tried.** Their methods take a JSON string, and
+   * `getProductList` takes a named argument (`{page}`) — so `{product_id}` is
+   * the shape that matches. A bare id is the other reading of their guide, and
+   * which one an account answers to is not something we can settle from here.
+   * The named form goes first; a null or a fault falls through to the bare id
+   * before giving up. That costs a second call only when the first shape is
+   * wrong, and the failure mode it replaces — every product silently unnamed —
+   * is far worse than an extra request.
+   *
+   * **Errors are NOT swallowed.** This is only ever called because someone asked
+   * for this exact product, so "PowerBody said X" has to reach them. Returning
+   * null on a fault is what made a broken detail call look like a page that
+   * simply would not fill in.
+   */
+  async function fetchDetail(id: string): Promise<PbProductInfo> {
+    let firstFailure: unknown = null
+    for (const args of [{ product_id: id }, id]) {
+      try {
+        const info = readInfo(await client.call<unknown>('dropshipping.getProductInfo', args))
+        if (info) return info
+      } catch (err) {
+        firstFailure ??= err
+      }
     }
+    if (firstFailure) throw firstFailure
+    throw new Error(`PowerBody returned no details for product ${id}.`)
   }
 
   const idOf = (item: PbProductListItem): string =>
@@ -277,6 +328,9 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const listing = await untilDeadline(fetchListItems({ deadline, into: paged }), deadline)
     const items = listing?.items ?? paged
     const listComplete = listing?.complete ?? false
+    // Pressing Details on one of these rows should not have to read the feed
+    // again to find the product id we are holding right here.
+    if (items.length > 0) rememberListItems(items)
 
     if (items.length === 0) {
       // Nothing at all, and the clock is gone: say so. An empty catalogue would
@@ -341,40 +395,79 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    * What comes back is always whole — name, brand, category, image, real RRP —
    * which is why importing goes through here rather than through the browse list.
    */
+  /**
+   * The list rows for `wanted`, from the index the browse list built — but only
+   * when EVERY one of them is in there. A partial hit is not good enough: the
+   * missing one might be on a page that was never read, and "not in the feed"
+   * has to be a fact rather than an artefact of what happened to be cached.
+   */
+  function matchesFromIndex(wanted: Set<string>): PbProductListItem[] {
+    if (!listIndex || Date.now() - listIndex.at >= CATALOGUE_TTL_MS) return []
+    const hits: PbProductListItem[] = []
+    for (const sku of wanted) {
+      const item = listIndex.bySku.get(sku)
+      if (!item) return []
+      hits.push(item)
+    }
+    return hits
+  }
+
   async function getProductsBySku(skus: string[]): Promise<SupplierProduct[]> {
     const wanted = new Set(skus.filter(Boolean))
     if (wanted.size === 0) return []
 
-    // Paging is not cut short here the way a catalogue build is: a SKU that
-    // exists but sits on a later page must be findable, and "not in the feed"
-    // has to mean it. It does stop as soon as every requested SKU has turned up,
-    // so the common case — a handful of known codes — costs a page or two rather
-    // than the whole feed. The clock only decides when to stop *waiting*, and
-    // running out of it is an error, never a silent "no such SKU".
     const deadline = Date.now() + buildDeadlineMs
-    const countMatches = (rows: PbProductListItem[]) =>
-      rows.reduce((n, item) => (wanted.has(String(item.sku ?? '')) ? n + 1 : n), 0)
-    const listing = await untilDeadline(
-      fetchListItems({ enough: (rows) => countMatches(rows) >= wanted.size }),
-      deadline,
-    )
-    if (!listing) {
-      throw new Error(
-        `PowerBody did not answer within ${Math.round(buildDeadlineMs / 1000)}s, so these SKUs could not be ` +
-          'checked. Their feed may be slow or rate-limiting us — try again in a moment.',
+    let matches = matchesFromIndex(wanted)
+
+    if (matches.length === 0) {
+      // Paging is not cut short here the way a catalogue build is: a SKU that
+      // exists but sits on a later page must be findable, and "not in the feed"
+      // has to mean it. It does stop as soon as every requested SKU has turned
+      // up, so the common case — a handful of known codes — costs a page or two
+      // rather than the whole feed. The clock only decides when to stop
+      // *waiting*, and running out of it is an error, never a silent "no such
+      // SKU".
+      const countMatches = (rows: PbProductListItem[]) =>
+        rows.reduce((n, item) => (wanted.has(String(item.sku ?? '')) ? n + 1 : n), 0)
+      const listing = await untilDeadline(
+        fetchListItems({ enough: (rows) => countMatches(rows) >= wanted.size }),
+        deadline,
       )
+      if (!listing) {
+        throw new Error(
+          `PowerBody did not answer within ${Math.round(buildDeadlineMs / 1000)}s, so these SKUs could not be ` +
+            'checked. Their feed may be slow or rate-limiting us — try again in a moment.',
+        )
+      }
+      rememberListItems(listing.items)
+      matches = listing.items.filter((item) => wanted.has(String(item.sku ?? '')))
     }
-    const matches = listing.items.filter((item) => wanted.has(String(item.sku ?? '')))
     if (matches.length === 0) return []
 
     const cache = await detailStore.load()
     const now = Date.now()
     const missing = matches.map(idOf).filter((id) => id !== '' && isStale(cache[id], now))
 
-    const fetched = await mapLimit(missing, DETAIL_CONCURRENCY, async (id) => ({
-      id,
-      info: await fetchDetail(id),
-    }))
+    // A product with no id in the list row can never be detailed — say so rather
+    // than returning a nameless row and letting it look like a failed fetch.
+    if (missing.length === 0 && matches.some((item) => idOf(item) === '')) {
+      throw new Error(
+        'PowerBody sent these products without a product id, so their details cannot be fetched. ' +
+          'The list feed may have changed shape.',
+      )
+    }
+
+    const failures: unknown[] = []
+    const fetched = await mapLimit(missing, DETAIL_CONCURRENCY, async (id) => {
+      try {
+        return { id, info: await fetchDetail(id) }
+      } catch (err) {
+        // Collected rather than thrown: one unreadable product in a batch of
+        // fifty should not lose the other forty-nine.
+        failures.push(err)
+        return { id, info: null }
+      }
+    })
 
     let added = 0
     for (const { id, info } of fetched) {
@@ -383,6 +476,11 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       added += 1
     }
     if (added > 0) await detailStore.save(cache)
+
+    // Nothing at all came back and something went wrong: report the supplier's
+    // own words. Answering with nameless rows here is what turned a broken
+    // detail call into a page that just would not fill in.
+    if (added === 0 && failures.length > 0) throw failures[0]
 
     const updatedAt = new Date().toISOString()
     return matches.map((item) => {

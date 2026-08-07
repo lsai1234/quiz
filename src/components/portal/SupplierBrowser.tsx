@@ -190,13 +190,23 @@ export function SupplierBrowser() {
         setError(d.error ?? 'Could not fetch those product details.')
         return
       }
-      const detailed: Row[] = Array.isArray(d.products) ? d.products : []
-      if (detailed.length === 0) return
-      const bySku = new Map(detailed.map((r) => [r.sku, r]))
+      const fetched: Row[] = Array.isArray(d.products) ? d.products : []
+      if (fetched.length === 0) {
+        setError(`PowerBody has no record for ${wanted.join(', ')}.`)
+        return
+      }
+      const bySku = new Map(fetched.map((r) => [r.sku, r]))
       setRows((prev) => (prev ? prev.map((r) => bySku.get(r.sku) ?? r) : prev))
-      setProgress((prev) =>
-        prev ? { ...prev, detailed: Math.min(prev.total, prev.detailed + bySku.size) } : prev,
-      )
+      const gained = fetched.filter((r) => r.detailed).length
+      setProgress((prev) => (prev ? { ...prev, detailed: Math.min(prev.total, prev.detailed + gained) } : prev))
+      // A reply that arrives still nameless is a real outcome, not a no-op —
+      // without this the button just appears to do nothing.
+      if (gained === 0) {
+        setError(
+          `PowerBody answered for ${wanted.join(', ')} but sent no name or RRP with it. ` +
+            'Their detail call may not be enabled on this API account yet.',
+        )
+      }
     } catch {
       setError('Could not fetch those product details.')
     } finally {

@@ -21,6 +21,11 @@ function fakeClient(handlers: Record<string, (args: unknown) => unknown>) {
   return { client, calls }
 }
 
+/** The product id out of either argument shape the adapter may send. */
+function detailId(args: unknown): string {
+  return String(args && typeof args === 'object' ? (args as { product_id?: unknown }).product_id : args)
+}
+
 const LIST_PAGE_1 = [
   { product_id: '1', sku: 'PB-1', price: '10.00', price_tax: '12.00', qty: '5', vat_rate: '20' },
   { product_id: '2', sku: 'PB-2', price: '20.00', price_tax: '24.00', qty: '0', vat_rate: '20' },
@@ -38,7 +43,7 @@ function catalogueHandlers() {
       const page = (args as { page: number }).page
       return page === 1 ? LIST_PAGE_1 : []
     },
-    'dropshipping.getProductInfo': (id: unknown) => INFO[String(id)] ?? null,
+    'dropshipping.getProductInfo': (args: unknown) => INFO[detailId(args)] ?? null,
   }
 }
 
@@ -100,9 +105,9 @@ describe('live PowerBody adapter', () => {
       const handlers = {
         'dropshipping.getProductList': (args: unknown) =>
           (args as { page: number }).page === 1 ? rows : [],
-        'dropshipping.getProductInfo': (id: unknown) => {
+        'dropshipping.getProductInfo': (args: unknown) => {
           infoCalls += 1
-          return { name: `Product ${id}`, manufacturer: 'PB', category: 'Protein' }
+          return { name: `Product ${detailId(args)}`, manufacturer: 'PB', category: 'Protein' }
         },
       }
       return { handlers, infoCalls: () => infoCalls }

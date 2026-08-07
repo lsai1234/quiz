@@ -5,6 +5,11 @@ import { POWERBODY_FIXTURES } from '@/lib/supplier/powerbody/fixtures'
 import { parseSkuInput, readSkuList } from '@/lib/supplier/sku-input'
 import type { PowerBodySoapClient } from '@/lib/supplier/powerbody/soap'
 
+/** The product id out of either argument shape the adapter may send. */
+function detailId(args: unknown): string {
+  return String(args && typeof args === 'object' ? (args as { product_id?: unknown }).product_id : args)
+}
+
 function fakeClient(handlers: Record<string, (args: unknown) => unknown>) {
   const calls: { path: string; args: unknown }[] = []
   const client: PowerBodySoapClient = {
@@ -31,8 +36,9 @@ function feedOf(n: number) {
   return {
     handlers: {
       'dropshipping.getProductList': (args: unknown) => ((args as { page: number }).page === 1 ? rows : []),
-      'dropshipping.getProductInfo': (id: unknown) => {
-        infoCalls.push(String(id))
+      'dropshipping.getProductInfo': (args: unknown) => {
+        const id = detailId(args)
+        infoCalls.push(id)
         return { name: `Product ${id}`, manufacturer: 'PB', category: 'Protein', detail_price: '19.99' }
       },
     },
@@ -95,7 +101,7 @@ describe('getProductsBySku — live', () => {
     }
     const { client, calls } = fakeClient({
       'dropshipping.getProductList': (args: unknown) => pages[(args as { page: number }).page] ?? [],
-      'dropshipping.getProductInfo': (id: unknown) => ({ name: `Product ${id}` }),
+      'dropshipping.getProductInfo': (args: unknown) => ({ name: `Product ${detailId(args)}` }),
     })
 
     const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
@@ -121,6 +127,83 @@ describe('getProductsBySku — live', () => {
       .getProductsBySku(['PB-90'])
 
     expect(found).toMatchObject({ sku: 'PB-90', name: 'Product 90' })
+  })
+
+  it('asks by named argument, and falls back to a bare id', async () => {
+    // Their guide reads both ways and `getProductList` takes a named argument,
+    // so {product_id} goes first — but an account that only answers to the bare
+    // id must still work, because the alternative is every product unnamed.
+    const seen: unknown[] = []
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
+      'dropshipping.getProductInfo': (args: unknown) => {
+        seen.push(args)
+        // Only understands the bare id.
+        return typeof args === 'string' ? { name: 'Whey 1kg', manufacturer: 'PB' } : null
+      },
+    })
+
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+      .getProductsBySku(['PB-7'])
+
+    expect(seen).toEqual([{ product_id: '7' }, '7'])
+    expect(found).toMatchObject({ sku: 'PB-7', name: 'Whey 1kg', detailed: true })
+  })
+
+  it('reports the supplier’s own error instead of a nameless row', async () => {
+    // Swallowing this is what turned a broken detail call into a page that just
+    // would not fill in: the row came back, silently missing the one thing that
+    // was asked for.
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
+      'dropshipping.getProductInfo': () => {
+        throw new Error('Resource path is not callable.')
+      },
+    })
+
+    await expect(
+      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsBySku(['PB-7']),
+    ).rejects.toThrow(/Resource path is not callable/)
+  })
+
+  it('keeps the products it could detail when one of a batch fails', async () => {
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1
+          ? [
+              { product_id: '1', sku: 'PB-1', price: '10.00', qty: '5' },
+              { product_id: '2', sku: 'PB-2', price: '10.00', qty: '5' },
+            ]
+          : [],
+      'dropshipping.getProductInfo': (args: unknown) => {
+        if (detailId(args) === '2') throw new Error('Invalid product data.')
+        return { name: 'Whey 1kg', manufacturer: 'PB' }
+      },
+    })
+
+    const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+      .getProductsBySku(['PB-1', 'PB-2'])
+
+    // One bad product in a batch must not lose the good ones.
+    expect(found.map((p) => p.name)).toEqual(['Whey 1kg', 'PB-2'])
+  })
+
+  it('does not re-read the feed for a product browsing just listed', async () => {
+    // Pressing Details on a row should cost the one call it needs, not a walk
+    // back through every page to rediscover the id we are already holding.
+    const feed = feedOf(100)
+    const { client, calls } = fakeClient(feed.handlers)
+    const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+
+    await provider.listProducts()
+    const listCallsAfterBrowse = calls.filter((c) => c.path === 'dropshipping.getProductList').length
+
+    await provider.getProductsBySku(['PB-90'])
+
+    expect(calls.filter((c) => c.path === 'dropshipping.getProductList')).toHaveLength(listCallsAfterBrowse)
+    expect(feed.infoCalls()).toEqual(['90'])
   })
 
   it('reuses cached detail rather than re-fetching', async () => {

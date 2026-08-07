@@ -157,6 +157,39 @@ describe('SupplierBrowser', () => {
     expect(screen.getByText(/RRP £24\.99/)).toBeInTheDocument()
   })
 
+  it('says why a detail fetch failed, in the supplier’s own words', async () => {
+    const fetchMock = jest.fn((url: string) =>
+      url === '/api/portal/supplier/lookup'
+        ? reply(JSON.stringify({ error: 'PowerBody: Resource path is not callable.' }), {
+            ok: false,
+            status: 502,
+          })
+        : reply(JSON.stringify({ source: 'powerbody', products: [bareRow] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierBrowser />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /^details$/i }))
+
+    expect(await screen.findByText(/Resource path is not callable/)).toBeInTheDocument()
+  })
+
+  it('does not look like a no-op when detail comes back with no name in it', async () => {
+    const fetchMock = jest.fn((url: string) =>
+      url === '/api/portal/supplier/lookup'
+        ? reply(JSON.stringify({ products: [bareRow], notFound: [] })) // still undetailed
+        : reply(JSON.stringify({ source: 'powerbody', products: [bareRow] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierBrowser />)
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /^details$/i }))
+
+    expect(await screen.findByText(/sent no name or RRP/i)).toBeInTheDocument()
+  })
+
   it('fetches one product’s detail on demand and fills its row in', async () => {
     const fetchMock = jest.fn((url: string, init?: RequestInit) =>
       url === '/api/portal/supplier/lookup'
