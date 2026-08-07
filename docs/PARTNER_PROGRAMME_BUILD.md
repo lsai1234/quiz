@@ -37,7 +37,7 @@ So "turn the card off" is really two changes, and the second is the decision:
 | **A — no baseline intro offer** (recommended) | `0` | The only first-order discount anyone can get is a partner's code. Matches "the only extra discount will be the influencer ones". |
 | B — flat rate replacing the card | `0.15` | Same average giveaway as today, minus the game. Keeps a site-wide offer as a conversion lever. |
 
-**Recommend A**, on the user's own framing — but flag it plainly: today every
+**Recommend A**, on your own framing — but worth saying plainly: today every
 first order carries an average 15% off, and A removes that for non-partner
 traffic. That is a conversion change, not just a mechanic change.
 
@@ -123,6 +123,22 @@ CREATE TABLE partner_codes (
 );
 CREATE INDEX partner_codes_partner ON partner_codes(partner_id);
 
+-- The deal a partner is on, effective-dated and APPEND-ONLY. Changing terms
+-- inserts a row; the current terms are the latest one that has taken effect.
+CREATE TABLE partner_terms (
+  id             TEXT PRIMARY KEY,
+  partner_id     TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+  first_order_pct TEXT NOT NULL,
+  renewal_pct    TEXT NOT NULL,
+  renewal_months TEXT NOT NULL,
+  payout         TEXT NOT NULL,         -- JSON: cadence, minimum, selfBilled, chargesVat
+  effective_from TEXT NOT NULL,
+  note           TEXT,                  -- why it changed, shown to the partner
+  created_by     TEXT,                  -- founder email
+  created_at     TEXT NOT NULL
+);
+CREATE INDEX partner_terms_partner ON partner_terms(partner_id, effective_from);
+
 CREATE TABLE partner_sessions (
   token      TEXT PRIMARY KEY,
   partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
@@ -164,7 +180,7 @@ ALTER TABLE orders ADD COLUMN partner_code TEXT;
 CREATE INDEX orders_partner_code ON orders(partner_code);
 ```
 
-Two choices worth defending:
+Three choices worth defending:
 
 - **`partner_commissions.rate` is stored, not looked up.** Change the rate next
   quarter and last quarter's ledger must not silently restate. Same reason
@@ -172,6 +188,17 @@ Two choices worth defending:
 - **`UNIQUE (order_id, kind)`** makes accrual idempotent. Stripe delivers
   webhooks more than once; without this, a retried `invoice.paid` pays a partner
   twice.
+- **`partner_terms` is append-only and effective-dated**, rather than columns on
+  `partners` that get updated in place. Once a partner can *read* their terms,
+  those terms are a statement we are making to a counterparty, and "you changed
+  my rate and didn't tell me" needs an answer better than our word. An update
+  destroys the evidence; an insert keeps it, gives the partner a dated history,
+  and makes a terms change something a founder has to write a reason for.
+
+  This also means **rates become per-partner**. They live in
+  `PRICING_CONFIG.partners` today, which is fine while everyone is on the same
+  deal and impossible the moment someone negotiates. The config becomes the
+  *default* a new partner's first terms row is seeded from.
 
 ---
 
@@ -180,17 +207,22 @@ Two choices worth defending:
 Each phase is shippable and useful on its own. Phases 1 and 5 are internal, so
 they can go live before D1/D2 are settled.
 
-### Phase 1 — Partner records and codes (internal only)
+### Phase 1 — Partner records, codes and terms (internal only)
 
-Migration; `lib/partners/` domain (create, suspend, generate code, set terms);
-founders API + UI at **Products → Partners** or a new top-level **Partners** tab.
+Migration; `lib/partners/` domain (create, suspend, generate code, set and
+supersede terms); founders API + UI at a new top-level **Partners** tab.
 
 Creating a partner generates a code from their name with a collision check
-(`SARAH20`, `SARAH20-2`), defaulted to `partners.introFloorPct` and editable.
+(`SARAH20`, `SARAH20-2`), defaulted to `partners.introFloorPct` and editable, and
+seeds a first `partner_terms` row from `PRICING_CONFIG.partners` so every partner
+has a dated deal from the moment they exist.
+
+Payout terms move from prose into config in this phase — they are part of what a
+partner will be shown, so they need a real home first.
 
 *Done when:* a founder can create a partner, see the generated code, change the
-discount and terms, and suspend them. Nothing customer-facing changes. Codes do
-nothing yet.
+discount and the commission terms, and suspend them; and a terms change leaves a
+dated row with a reason. Nothing customer-facing changes. Codes do nothing yet.
 
 ### Phase 2 — Redeeming a code (needs D1 + D2)
 
@@ -227,30 +259,64 @@ against a deliberately marginal order.
 
 ### Phase 4 — `/partner`
 
-Auth realm (login, logout, set-password-by-invite, reset) and a dashboard:
+Auth realm (login, logout, set-password-by-invite, reset), and two things behind
+it: **how you're doing** and **what your deal is**.
+
+**Performance**
 
 - Orders attributed, this month and all time
 - Revenue driven (net)
 - Commission **pending / confirmed / paid**, with the confirmation date visible
   so "why isn't this payable yet" answers itself
 - Payout history
-- Their code, its terms, and a copyable `?ref=` link
+- Their code and a copyable `?ref=` link
 
-*Done when:* a partner logs in, sees their own numbers and nobody else's, and
-cannot reach `/portal` or `/hub`.
+**Terms** — the whole deal, in their own words, with nothing they have to email
+to find out:
+
+| | |
+|---|---|
+| **Their code** | The code itself, the discount it gives a follower, and every restriction on it — first order only, usage cap and how much of it is used, start/end dates, minimum spend |
+| **What they earn** | First-order rate, renewal rate, and how many months renewals run from a customer's signup |
+| **When it becomes payable** | Accrues on order → confirms after the 14-day return window → reverses on refund. With the actual dates on their own pending rows, not a generic policy line |
+| **How they get paid** | Cadence, the £25 minimum and what happens below it, self-billing, and the VAT treatment |
+| **History** | Every previous version of the above, dated, with the reason a founder gave for the change |
+
+The history row is the point of `partner_terms` being append-only. A partner who
+can see that their renewal rate changed on 1 March, and why, does not have to
+take our word for anything — and a founder cannot change a deal without leaving
+a record of having done it.
+
+*Done when:* a partner logs in, sees their own numbers and nobody else's, can
+answer "what am I on, what am I owed, and when do I get it" without contacting
+anyone, and cannot reach `/portal` or `/hub`.
 
 *Note:* "clicks" are not in this phase. Click tracking needs its own storage and
 a bot-filtering story, and checkouts are the number that matters. Add later if
 partners ask.
 
+*Prerequisite:* payout terms (cadence, £25 minimum, self-billing) exist only as
+prose in `INFLUENCER_PROGRAMME.md` today. They have to become real config before
+a screen can state them — otherwise the dashboard is quoting a document.
+
 ### Phase 5 — Founders management
 
-List every partner with performance side by side; open one to edit terms,
-suspend, see their orders and ledger; a payouts view showing what is due this
-month.
+List every partner with performance side by side; open one to see their orders
+and ledger, change their terms, or suspend them; a payouts view showing what is
+due this month.
+
+**Changing terms is an insert, not an edit.** The form takes an effective date
+and a reason, writes a new `partner_terms` row, and the partner sees both on
+their own Terms tab. Two consequences worth stating:
+
+- A rate change **cannot be backdated over a paid commission** — the ledger
+  stores the rate that applied and must not restate. Backdating is allowed only
+  as far as the oldest still-`accrued` row.
+- The reason field is not optional. It is the thing the partner reads.
 
 *Done when:* a founder can answer "who is working, what do we owe, and to whom"
-without a database client.
+without a database client, and can change someone's deal in a way that partner
+can see and date.
 
 ### Phase 6 — Payouts
 
@@ -277,6 +343,11 @@ dashboard.
   refunds are manual today, reversal is manual too — worth confirming in phase 3.
 - **The economics are unverified post-card.** D2. Do not launch partner traffic
   until the audit is re-run.
+- **Published terms are a commitment.** Once `/partner` states a rate, a payout
+  cadence and a minimum, those stop being internal settings and become something
+  a counterparty is relying on. Worth a read by whoever would answer a partner
+  disputing a payment, before it ships — the append-only history makes us
+  answerable, which is the point, but it also means sloppy defaults are visible.
 
 ---
 
