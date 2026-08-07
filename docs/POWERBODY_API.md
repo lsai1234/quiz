@@ -121,12 +121,21 @@ Detail is cached durably for 7 days, so a product is fetched once however often 
 browsed, and the list gets richer as you work through it. The hub reports `detailed` /
 `total` so a list of bare SKUs reads as "not fetched yet" rather than "broken".
 
-This is why a browse row shows **cost and stock but no RRP or margin**: RRP lives in the
-detail half of the feed, and the fallback for a missing one is wholesale-including-VAT,
-which would render as a ~17% margin. A number that looks like a fact and isn't has no
-business in front of a pricing decision, so the row says `RRP not fetched` instead.
-`detailed: false` on the row is the flag; `SupplierProduct.detailed` is where it comes
-from.
+**The money column does not depend on any of that.** A browse row shows what we pay, what
+we would charge and what we would keep — for every product, with no detail call — because
+we price from cost (`pricing/list-price.ts`: cost × 2 → .99, and explicit that RRP plays
+no part). The margin is the real one from `unitEconomics` (net of VAT, dropship delivery,
+card fees and returns), not price minus cost.
+
+The one thing detail buys you here is **shipping weight**, which sets the delivery band. An
+undetailed row assumes it, so its margin renders as `≈32%` rather than `32%` and
+`marginEstimated` says why. PowerBody's own RRP is carried when known and null until then —
+it is a was-price, and nothing prices off it. `SupplierProduct.detailed` is where the flag
+comes from.
+
+What is deliberately *not* done is fall back to the list feed's `price_tax` as an RRP: it
+is wholesale-including-VAT, so it would render as a ~17% margin. A number that looks like
+a fact and isn't has no business in front of a pricing decision.
 
 Two backstops remain, because a supplier that stops answering must not hang the page.
 `POWERBODY_BUILD_DEADLINE_MS` (default 20s) bounds a build end to end, paging included,

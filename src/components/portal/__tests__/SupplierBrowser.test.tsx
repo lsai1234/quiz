@@ -15,7 +15,10 @@ function reply(body: string, { ok = true, status = 200 } = {}) {
   } as Response)
 }
 
-/** A row as the cheap list feed gives it: real money, no description, no RRP. */
+/**
+ * A row as the cheap list feed gives it: no name and no supplier RRP, but the
+ * whole money column — because we price from cost, not from their RRP.
+ */
 const bareRow = {
   sku: 'PB-1',
   name: 'PB-1',
@@ -23,12 +26,14 @@ const bareRow = {
   category: '',
   imageUrl: null,
   wholesalePrice: 10,
+  sellPrice: 19.99,
+  contribution: 5.4,
+  marginPct: 32,
+  marginEstimated: true,
   rrp: null,
   currency: 'GBP',
   stock: 5,
   inStock: true,
-  margin: null,
-  marginPct: null,
   detailed: false,
   mappedId: 'pb-1',
   stackSlots: [],
@@ -36,15 +41,17 @@ const bareRow = {
   alreadyAdded: false,
 }
 
-/** The same product once `getProductInfo` has been paid for. */
+/** The same product once `getProductInfo` has been paid for: a name, an image,
+ *  a known shipping weight (so the margin firms up) and their RRP. */
 const detailedRow = {
   ...bareRow,
   name: 'Whey 1kg',
   brand: 'PB',
   category: 'Protein',
-  rrp: 19.99,
-  margin: 9.99,
-  marginPct: 50,
+  contribution: 5.85,
+  marginPct: 35,
+  marginEstimated: false,
+  rrp: 24.99,
   detailed: true,
 }
 
@@ -117,9 +124,10 @@ describe('SupplierBrowser', () => {
     await waitFor(() => expect(screen.getByText(/1 products in the feed/i)).toBeInTheDocument())
   })
 
-  it('says the RRP is unfetched rather than showing a margin it cannot know', async () => {
-    // A list-feed row has no RRP. The fallback is wholesale-including-VAT, which
-    // would render as a ~17% margin — a number that looks like a fact and isn't.
+  it('shows what we would charge and keep on a row with no supplier RRP', async () => {
+    // The decision a founder is making — pay this, charge that, keep the rest —
+    // is answerable from the cheap feed alone, because our price comes from cost
+    // rather than from PowerBody's RRP.
     global.fetch = jest
       .fn()
       .mockReturnValue(
@@ -128,9 +136,25 @@ describe('SupplierBrowser', () => {
 
     render(<SupplierBrowser />)
 
-    expect(await screen.findByText(/RRP not fetched/i)).toBeInTheDocument()
-    expect(screen.getByText(/Cost £10\.00/)).toBeInTheDocument()
-    expect(screen.queryByText(/% margin/)).not.toBeInTheDocument()
+    expect(await screen.findByText(/Cost £10\.00 → sell £19\.99/)).toBeInTheDocument()
+    // Marked as an estimate: the shipping weight is unknown until detail is
+    // fetched, so the delivery band behind the margin is assumed.
+    expect(screen.getByText(/≈32% margin/)).toBeInTheDocument()
+    expect(screen.queryByText(/RRP £/)).not.toBeInTheDocument()
+  })
+
+  it('firms the margin up and shows their RRP once detail arrives', async () => {
+    global.fetch = jest
+      .fn()
+      .mockReturnValue(
+        reply(JSON.stringify({ source: 'powerbody', products: [detailedRow] })),
+      ) as unknown as typeof fetch
+
+    render(<SupplierBrowser />)
+
+    expect(await screen.findByText(/35% margin/)).toBeInTheDocument()
+    expect(screen.queryByText(/≈/)).not.toBeInTheDocument()
+    expect(screen.getByText(/RRP £24\.99/)).toBeInTheDocument()
   })
 
   it('fetches one product’s detail on demand and fills its row in', async () => {
@@ -146,9 +170,10 @@ describe('SupplierBrowser', () => {
 
     await user.click(await screen.findByRole('button', { name: /^details$/i }))
 
-    // The row now carries the name and margin that only getProductInfo knows.
+    // The row now carries the name and the firmed-up margin that only
+    // getProductInfo could supply.
     expect(await screen.findByText('Whey 1kg')).toBeInTheDocument()
-    expect(screen.getByText(/50% margin/)).toBeInTheDocument()
+    expect(screen.getByText(/35% margin/)).toBeInTheDocument()
     // And it cost exactly one lookup — for that SKU alone.
     const lookups = fetchMock.mock.calls.filter(([url]) => url === '/api/portal/supplier/lookup')
     expect(lookups).toHaveLength(1)

@@ -312,12 +312,13 @@ export function SupplierBrowser() {
           {progress && progress.detailed < progress.total && (
             <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
               <strong style={{ color: 'var(--color-text-2)' }}>
-                {progress.detailed} of {progress.total} products have their names and RRP fetched.
+                {progress.detailed} of {progress.total} products have their names and images fetched.
               </strong>{' '}
-              PowerBody send names, brands and RRP one product at a time and rate-limit us, so browsing doesn’t fetch
-              them — cost and stock below are live and correct for all {progress.total}. Press <strong>Details</strong>
-              {' '}on a row to fill one in, tick a few and use <strong>Get details</strong>, or just add a product: adding
-              always fetches the full record first.
+              PowerBody send those one product at a time and rate-limit us, so browsing doesn’t fetch them. The money is
+              all here regardless: we price from cost, so what you pay, what you’d charge and what you’d keep are live
+              and correct for all {progress.total} — only the shipping weight is assumed, which moves the margin by a
+              point or two. Press <strong>Details</strong> on a row for its name, tick a few and use{' '}
+              <strong>Get details</strong>, or just add a product: adding always fetches the full record first.
               {progress.listComplete === false && ' The feed itself was only partly paged, so more products will appear on a refresh.'}
             </p>
           )}
@@ -366,16 +367,20 @@ export function SupplierBrowser() {
                     )}
                     <span style={{ color: r.inStock ? 'var(--color-text-2)' : 'var(--color-red)' }}>{r.inStock ? `${r.stock} in stock` : 'Out of stock'}</span>
                     <span>·</span>
-                    {/* Cost is always real. RRP and margin only exist once the
-                        product's detail has been fetched — a guess there would
-                        read as a fact and put a wrong margin in front of a
-                        pricing decision. */}
-                    <span>Cost {money(r.wholesalePrice)}{r.rrp !== null ? ` → RRP ${money(r.rrp)}` : ''}</span>
-                    {r.marginPct !== null ? (
-                      <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
-                    ) : (
-                      <span className="italic">RRP not fetched</span>
-                    )}
+                    {/* What we pay → what we would charge → what we would keep.
+                        All three come from the cheap feed, because we price from
+                        cost rather than off PowerBody's RRP. */}
+                    <span>Cost {money(r.wholesalePrice)} → sell {money(r.sellPrice)}</span>
+                    <span
+                      className="font-bold"
+                      style={{ color: r.marginPct > 0 ? ACCENT : 'var(--color-red)' }}
+                      title={`Keeps ${money(r.contribution)} a unit after VAT, delivery, card fees and returns.${
+                        r.marginEstimated ? ' Shipping weight not fetched yet, so the delivery band is assumed.' : ''
+                      }`}
+                    >
+                      {r.marginEstimated ? '≈' : ''}{r.marginPct}% margin
+                    </span>
+                    {r.rrp !== null && <span>RRP {money(r.rrp)}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -518,12 +523,11 @@ function SkuLookup({ onAdd, adding }: { onAdd: (skus: string[]) => Promise<void>
                     {r.inStock ? `${r.stock} in stock` : 'Out of stock'}
                   </span>
                   <span>·</span>
-                  {/* A looked-up product is always fully detailed, so the RRP is
-                      real — the fallbacks are here only to stay total. */}
-                  <span>Cost {money(r.wholesalePrice)}{r.rrp !== null ? ` → RRP ${money(r.rrp)}` : ''}</span>
-                  {r.marginPct !== null && (
-                    <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
-                  )}
+                  <span>Cost {money(r.wholesalePrice)} → sell {money(r.sellPrice)}</span>
+                  <span className="font-bold" style={{ color: r.marginPct > 0 ? ACCENT : 'var(--color-red)' }}>
+                    {r.marginPct}% margin
+                  </span>
+                  {r.rrp !== null && <span>RRP {money(r.rrp)}</span>}
                 </div>
               </div>
               {r.alreadyAdded ? (
