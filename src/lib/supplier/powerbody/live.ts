@@ -388,6 +388,38 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     })
   }
 
+  /**
+   * A handful of SKUs that exist, so you have something to type into the box.
+   *
+   * Deliberately not a catalogue: no detail is fetched, nothing is named, and it
+   * stops as soon as it has `limit` codes. Importing goes by SKU precisely
+   * because pulling a browsable feed through is not worth what it costs — but
+   * that leaves nowhere to find a code when you have not got one to hand,
+   * particularly on a sandbox account whose products exist only in the API.
+   * This is that, and nothing more.
+   */
+  async function sampleSkus(limit: number): Promise<string[]> {
+    const wanted = Math.max(1, Math.min(limit, 200))
+    const deadline = Date.now() + buildDeadlineMs
+    const collected: PbProductListItem[] = []
+    const listing = await untilDeadline(
+      fetchListItems({
+        deadline,
+        into: collected,
+        enough: (rows) => rows.filter((r) => String(r.sku ?? '') !== '').length >= wanted,
+      }),
+      deadline,
+    )
+    const items = listing?.items ?? collected
+    // Whatever we read is worth keeping — a lookup straight after this then
+    // costs no paging at all.
+    if (items.length > 0) rememberListItems(items)
+    return items
+      .map((item) => String(item.sku ?? ''))
+      .filter((sku) => sku !== '')
+      .slice(0, wanted)
+  }
+
   return {
     name: 'powerbody',
 
@@ -397,6 +429,8 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     },
 
     getProductsBySku,
+
+    sampleSkus,
 
     async getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]> {
       // Always live — this is the call the daily check exists to make.

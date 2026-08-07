@@ -29,6 +29,27 @@ export function SupplierImport() {
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  /** Codes sampled from the feed, for when you haven't got one to hand. */
+  const [samples, setSamples] = useState<string[] | null>(null)
+  const [sampling, setSampling] = useState(false)
+
+  const loadSamples = useCallback(async () => {
+    setSampling(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/portal/supplier/skus?limit=40', { cache: 'no-store' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d.error ?? 'Could not read the supplier feed.')
+        return
+      }
+      setSamples(d.skus ?? [])
+    } catch {
+      setError('Could not read the supplier feed.')
+    } finally {
+      setSampling(false)
+    }
+  }, [])
 
   const lookup = useCallback(async () => {
     if (!input.trim()) return
@@ -129,7 +150,7 @@ export function SupplierImport() {
               }
             }}
             rows={2}
-            placeholder="e.g. PB-WHEY-1KG, PB-CREA-500"
+            placeholder="e.g. ON-GOLD-WHEY-2270, APP-CREA-250"
             className="flex-1 min-w-[220px] text-sm rounded-xl px-3 py-2 border resize-y"
             style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
           />
@@ -143,8 +164,52 @@ export function SupplierImport() {
           </button>
         </div>
 
-        {source && results && (
-          <p className="text-[10px] text-[var(--color-muted)]">Answered by the {source} supplier.</p>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={loadSamples}
+            disabled={sampling}
+            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-40"
+            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+          >
+            {sampling ? 'Reading the feed…' : 'Show me some SKUs'}
+          </button>
+          {source && results && (
+            <span className="text-[10px] text-[var(--color-muted)]">Answered by the {source} supplier.</span>
+          )}
+        </div>
+
+        {samples && (
+          <div className="rounded-xl p-2.5 space-y-2" style={{ background: 'var(--color-surface-2)' }}>
+            {samples.length === 0 ? (
+              <p className="text-[11px] text-[var(--color-muted)]">The feed came back empty.</p>
+            ) : (
+              <>
+                <p className="text-[10px] text-[var(--color-muted)]">
+                  {samples.length} codes from the feed — tap to add one to the box. Codes only: names and prices come
+                  from looking them up.
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {samples.map((sku) => (
+                    <button
+                      key={sku}
+                      onClick={() => setInput((v) => (v.trim() ? `${v.trim()}, ${sku}` : sku))}
+                      className="text-[10px] font-semibold px-2 py-1 rounded-md border"
+                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+                    >
+                      {sku}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setInput(samples.join(', '))}
+                  className="text-[10px] font-bold underline"
+                  style={{ color: ACCENT }}
+                >
+                  Put all {samples.length} in the box
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
 

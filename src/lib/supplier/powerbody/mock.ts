@@ -90,6 +90,10 @@ export function createMockSupplier(): SupplierProvider {
       return found ? withCurrentStock(found) : null
     },
 
+    async sampleSkus(limit: number) {
+      return POWERBODY_FIXTURES.slice(0, Math.max(1, limit)).map((p) => p.sku)
+    },
+
     async getProductsBySku(skus) {
       // The fixtures are always fully detailed, so this is just a lookup. Order
       // follows the request, and unknown SKUs simply drop out.

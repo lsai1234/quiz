@@ -130,6 +130,15 @@ export interface SupplierProvider {
    * than erroring — the caller reports which were not found.
    */
   getProductsBySku(skus: string[]): Promise<SupplierProduct[]>
+  /**
+   * A few SKUs that exist, for when you haven't got a code to hand.
+   *
+   * Codes only — no names, no detail, capped. Not a catalogue and not meant to
+   * become one: it is there so "import by SKU" is usable against a feed you
+   * cannot otherwise see, such as a sandbox account whose products exist only
+   * in the API.
+   */
+  sampleSkus(limit: number): Promise<string[]>
   /** Live stock + price. Pass SKUs to narrow it; omit for everything. */
   getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]>
   /** Place a dropship order (Phase 3 wires this to the orders domain). */

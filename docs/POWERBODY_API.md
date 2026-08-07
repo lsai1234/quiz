@@ -140,6 +140,13 @@ stay under the route's `maxDuration` (60s): a single wire call can otherwise run
 for over two minutes on its own (30s per attempt, retried four times), and a
 request that outlives its own timeout is delivered to nobody.
 
+**Where do you get a SKU from?** Off their site, a spreadsheet, an email — or
+**Show me some SKUs** on the page, which reads one page of the cheap feed and
+lists the codes in it. Codes only: no detail is fetched and nothing is named,
+because that is what makes it cheap. It exists because a sandbox account's
+products exist only in the API, so without it there is nowhere to find a code to
+try. `sampleSkus()` on the provider, `GET /api/portal/supplier/skus?limit=n`.
+
 ### If a lookup comes back without a name
 
 The reason reaches the screen in PowerBody's own words rather than being
