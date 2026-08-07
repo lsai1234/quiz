@@ -339,6 +339,43 @@ describe('live PowerBody adapter', () => {
       ).rejects.toThrow(/did not answer within/i)
     })
 
+    it('carries on from where the clock stopped it, instead of re-reading page one', async () => {
+      // "The feed was only partly paged, more will appear on a refresh" was a
+      // promise the code could not keep: every build restarted at page one and
+      // hit the same wall in the same place, so the far end of a big feed was
+      // unreachable however many times you refreshed.
+      const clock = fakeClock()
+      const seen: number[] = []
+      const { client } = fakeClient({
+        'dropshipping.getProductList': (args: unknown) => {
+          const page = (args as { page: number }).page
+          seen.push(page)
+          clock.advance(15_000)
+          if (page > 4) return []
+          return [{ product_id: String(page), sku: `PB-${page}`, price: '10.00', qty: '5' }]
+        },
+        'dropshipping.getProductInfo': () => null,
+      })
+      const provider = () =>
+        createPowerBodyProvider({
+          client,
+          detailStore: createMemoryDetailStore(),
+          buildDeadlineMs: 20_000,
+        })
+
+      const first = await provider().listProducts()
+      expect(first.map((p) => p.sku)).toEqual(['PB-1', 'PB-2'])
+      expect(getPowerBodyCatalogueProgress()).toMatchObject({ listComplete: false })
+
+      // A later load (the cached partial has expired) resumes at page 3 and
+      // keeps what page 1 and 2 gave — the list grows rather than repeating.
+      clock.advance(60_000)
+      const second = await provider().listProducts()
+
+      expect(seen).toEqual([1, 2, 3, 4])
+      expect(second.map((p) => p.sku)).toEqual(['PB-1', 'PB-2', 'PB-3', 'PB-4'])
+    })
+
     it('shares one build between callers that arrive together', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())
       const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })

@@ -294,8 +294,15 @@ export function SupplierBrowser() {
               <strong style={{ color: 'var(--color-text)' }}>{addedCount}</strong> in your catalogue
             </p>
             <div className="flex items-center gap-2">
+              {/* When the feed was cut short, this button's real job is to read
+                  the next stretch of it — which it now genuinely does, picking
+                  up where the last run stopped. */}
               <button onClick={load} disabled={loading} className="text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-40">
-                {loading ? 'Refreshing…' : 'Refresh stock'}
+                {loading
+                  ? 'Loading…'
+                  : progress?.listComplete === false
+                    ? 'Load more of the feed'
+                    : 'Refresh stock'}
               </button>
               {undetailedSelected.length > 0 && (
                 <button
@@ -329,7 +336,8 @@ export function SupplierBrowser() {
               and correct for all {progress.total} — only the shipping weight is assumed, which moves the margin by a
               point or two. Press <strong>Details</strong> on a row for its name, tick a few and use{' '}
               <strong>Get details</strong>, or just add a product: adding always fetches the full record first.
-              {progress.listComplete === false && ' The feed itself was only partly paged, so more products will appear on a refresh.'}
+              {progress.listComplete === false &&
+                ' The feed is long enough that it is read a stretch at a time — press Load more of the feed for the next stretch; it carries on from where it stopped.'}
             </p>
           )}
 

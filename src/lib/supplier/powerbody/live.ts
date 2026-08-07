@@ -106,6 +106,32 @@ let inFlightBuild: Promise<SupplierProduct[]> | null = null
  */
 let listIndex: { at: number; bySku: Map<string, PbProductListItem> } | null = null
 
+/**
+ * Where a paging run the clock cut short got to.
+ *
+ * Without this, "the feed was only partly paged, more will appear on a refresh"
+ * is a promise the code cannot keep: every build restarted at page one and hit
+ * the same wall at the same place, so the far end of a big feed was unreachable
+ * no matter how many times you pressed refresh. Each run now continues from
+ * where the last stopped and keeps what it already had.
+ */
+const PAGING_RESUME_TTL_MS = 30 * 60 * 1000
+let pagingCursor: { at: number; nextPage: number; items: PbProductListItem[] } | null = null
+
+/** De-dupe merged pages: a resumed run can overlap when the feed shifts under
+ *  us, and the same product twice in a browse list is its own bug. */
+function dedupeItems(items: PbProductListItem[]): PbProductListItem[] {
+  const seen = new Set<string>()
+  const out: PbProductListItem[] = []
+  for (const item of items) {
+    const key = `${item.product_id ?? ''}:${item.sku ?? ''}`
+    if (key === ':' || seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+  }
+  return out
+}
+
 function rememberListItems(items: PbProductListItem[]): void {
   const bySku = new Map<string, PbProductListItem>()
   for (const item of items) {
@@ -143,6 +169,7 @@ export function __resetPowerBodyCache(): void {
   lastProgress = null
   inFlightBuild = null
   listIndex = null
+  pagingCursor = null
 }
 
 /**
@@ -217,6 +244,15 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** Rows are appended here as they arrive, so a caller that stops waiting can
      *  still use the pages that did land. */
     into?: PbProductListItem[]
+    /** Page to start from. Lets a run the clock cut short be continued. */
+    startPage?: number
+    /**
+     * Updated after every page read, so a caller that stops WAITING on this run
+     * still knows where it got to. `nextPage` on the returned value only exists
+     * when the run finished; the deadline race means the common cut-short case
+     * never sees it.
+     */
+    reached?: { nextPage: number }
   }
 
   interface ListFeed {
@@ -224,33 +260,84 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** False when we stopped early (deadline or page cap) rather than reaching
      *  the end of the feed. */
     complete: boolean
+    /** The page to ask for next, so a run cut short can be continued. */
+    nextPage: number
   }
 
   /** Page through `getProductList` until a page comes back empty — or until the
    *  caller has enough, or the clock runs out. */
   async function fetchListItems(listOptions: ListFeedOptions = {}): Promise<ListFeed> {
     const all: PbProductListItem[] = listOptions.into ?? []
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    const from = listOptions.startPage ?? 1
+    let page = from
+    for (; page < from + MAX_PAGES; page++) {
       const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true }
+      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, nextPage: page }
       all.push(...rows)
-      if (listOptions.enough?.(all)) return { items: all, complete: true }
+      if (listOptions.reached) listOptions.reached.nextPage = page + 1
+      if (listOptions.enough?.(all)) return { items: all, complete: true, nextPage: page + 1 }
       // Out of time: hand back a short catalogue rather than a request that
-      // never answers. The next call picks up from page one and gets further,
-      // because the detail it already paid for is cached.
+      // never answers, and say where to resume so the next call gets FURTHER
+      // rather than reading the same first pages again.
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
-        return { items: all, complete: false }
+        return { items: all, complete: false, nextPage: page + 1 }
       }
     }
     // Hit the page cap — a feed that never returns an empty page.
-    return { items: all, complete: false }
+    return { items: all, complete: false, nextPage: page }
   }
 
-  /** A `getProductInfo` reply, if it looks like one. Magento wraps single
-   *  results in an array as readily as it returns them bare. */
+  /**
+   * The fields only `getProductInfo` carries. One of them has to be present for
+   * a reply to be product detail rather than an echo, an empty object or an
+   * error envelope — all of which are objects, and accepting them as detail is
+   * what produced products that "answered" but had no name.
+   */
+  const DETAIL_FIELDS = ['name', 'manufacturer', 'category', 'detail_price', 'description_en', 'image'] as const
+
+  /** True when this record actually carries the descriptive half. */
+  function carriesDetail(info: PbProductInfo | undefined | null): boolean {
+    if (!info || typeof info !== 'object') return false
+    const row = info as Record<string, unknown>
+    return DETAIL_FIELDS.some((field) => {
+      const v = row[field]
+      return v !== undefined && v !== null && v !== ''
+    })
+  }
+
+  /**
+   * A cached entry worth using: present, unexpired, and actually detail.
+   *
+   * The last clause is what stops a bad run poisoning the cache for a week. An
+   * earlier version stored whatever came back, so an account answering
+   * `getProductInfo` with an empty record filled the cache with entries that
+   * showed no name and — because they were not stale — were never re-fetched.
+   * Treating them as absent means the cache heals itself the next time someone
+   * presses Details, with no purge and no deploy.
+   */
+  function usableEntry(id: string, cache: Record<string, { info: PbProductInfo; at: number }>, now: number) {
+    const entry = cache[id]
+    return entry && !isStale(entry, now) && carriesDetail(entry.info) ? entry : null
+  }
+
+  /** A `getProductInfo` reply, if it actually looks like one. Magento wraps
+   *  single results in an array as readily as it returns them bare. */
   function readInfo(reply: unknown): PbProductInfo | null {
     const value = Array.isArray(reply) ? reply[0] : reply
-    return value && typeof value === 'object' ? (value as PbProductInfo) : null
+    if (!value || typeof value !== 'object') return null
+    return carriesDetail(value as PbProductInfo) ? (value as PbProductInfo) : null
+  }
+
+  /** What came back, trimmed to something a person can read in an error. */
+  function describeReply(reply: unknown): string {
+    const value = Array.isArray(reply) ? reply[0] : reply
+    if (value === null || value === undefined) return 'nothing'
+    if (typeof value === 'object') {
+      const keys = Object.keys(value as object)
+      if (keys.length === 0) return 'an empty record'
+      return `a record with only: ${keys.slice(0, 12).join(', ')}${keys.length > 12 ? '…' : ''}`
+    }
+    return JSON.stringify(value)?.slice(0, 120) ?? String(value)
   }
 
   /**
@@ -274,15 +361,26 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    */
   async function fetchDetail(id: string): Promise<PbProductInfo> {
     let firstFailure: unknown = null
+    let lastReply: unknown = undefined
     for (const args of [{ product_id: id }, id]) {
       try {
-        const info = readInfo(await client.call<unknown>('dropshipping.getProductInfo', args))
+        const reply = await client.call<unknown>('dropshipping.getProductInfo', args)
+        const info = readInfo(reply)
         if (info) return info
+        lastReply = reply
       } catch (err) {
         firstFailure ??= err
       }
     }
     if (firstFailure) throw firstFailure
+    // Say what they actually sent. Guessing at this from the outside is what
+    // cost a round of "it still doesn't work" — the reply is the diagnosis.
+    if (lastReply !== undefined) {
+      throw new Error(
+        `PowerBody answered for product ${id} with no product detail in it — they sent ${describeReply(lastReply)}. ` +
+          'getProductInfo may not be enabled on this API account (new accounts start in their DEMO sandbox).',
+      )
+    }
     throw new Error(`PowerBody returned no details for product ${id}.`)
   }
 
@@ -322,12 +420,27 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   async function buildCatalogue(): Promise<SupplierProduct[]> {
     const deadline = Date.now() + buildDeadlineMs
 
+    // Carry on from where a cut-short run stopped, keeping what it had, so each
+    // refresh reaches further into the feed instead of re-reading page one.
+    const resume = pagingCursor && Date.now() - pagingCursor.at < PAGING_RESUME_TTL_MS ? pagingCursor : null
+
     // Pages land in `paged` as they arrive, so if the supplier stops answering
     // mid-feed we still have the ones that did.
-    const paged: PbProductListItem[] = []
-    const listing = await untilDeadline(fetchListItems({ deadline, into: paged }), deadline)
-    const items = listing?.items ?? paged
+    const paged: PbProductListItem[] = resume ? [...resume.items] : []
+    const startPage = resume?.nextPage ?? 1
+    const reached = { nextPage: startPage }
+    const listing = await untilDeadline(
+      fetchListItems({ deadline, into: paged, startPage, reached }),
+      deadline,
+    )
+    const items = dedupeItems(listing?.items ?? paged)
     const listComplete = listing?.complete ?? false
+
+    // Remember where to carry on — and stop remembering once the feed is whole.
+    pagingCursor = listComplete
+      ? null
+      : { at: Date.now(), nextPage: listing?.nextPage ?? reached.nextPage, items }
+
     // Pressing Details on one of these rows should not have to read the feed
     // again to find the product id we are holding right here.
     if (items.length > 0) rememberListItems(items)
@@ -358,22 +471,23 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const now = Date.now()
 
     const updatedAt = new Date().toISOString()
-    let detailed = 0
     const products = items
       .map((item) => {
-        const entry = cache[idOf(item)]
-        const fresh = entry && !isStale(entry, now)
-        if (fresh) detailed += 1
+        const entry = usableEntry(idOf(item), cache, now)
         // The FRESH list row goes on top of cached detail, never underneath:
         // price, qty and VAT must come from today's feed even when the name and
         // image came from a cache written a week ago.
-        return toSupplierProduct(fresh ? { ...entry.info, ...item } : item, updatedAt)
+        return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
       })
       .filter((p) => p.sku !== '')
 
     lastProgress = {
       total: products.length,
-      detailed,
+      // Counted off the products themselves, not off cache entries. A cached
+      // record that came back without a name leaves the row showing its code, so
+      // counting the entry would claim names had been fetched while the list
+      // plainly shows otherwise.
+      detailed: products.filter((p) => p.detailed).length,
       listComplete,
       timeBudgetSpent: !listComplete,
       at: updatedAt,
@@ -446,7 +560,10 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     const cache = await detailStore.load()
     const now = Date.now()
-    const missing = matches.map(idOf).filter((id) => id !== '' && isStale(cache[id], now))
+    // `usableEntry`, not `isStale`: an entry cached from a reply that carried no
+    // detail must be re-fetched, or a single bad run means seven days of a row
+    // that quietly refuses to fill in.
+    const missing = matches.map(idOf).filter((id) => id !== '' && !usableEntry(id, cache, now))
 
     // A product with no id in the list row can never be detailed — say so rather
     // than returning a nameless row and letting it look like a failed fetch.
@@ -484,7 +601,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     const updatedAt = new Date().toISOString()
     return matches.map((item) => {
-      const entry = cache[idOf(item)]
+      const entry = usableEntry(idOf(item), cache, now)
       // Fresh list row on top, exactly as in `listProducts` — cached detail must
       // never supply today's price or stock.
       return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)

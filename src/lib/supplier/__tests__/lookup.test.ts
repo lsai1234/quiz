@@ -151,6 +151,57 @@ describe('getProductsBySku — live', () => {
     expect(found).toMatchObject({ sku: 'PB-7', name: 'Whey 1kg', detailed: true })
   })
 
+  it('does not accept an empty record as detail, and tries the other shape', async () => {
+    // The trap: an account that answers {product_id} with an echo or an empty
+    // record still answers with an OBJECT. Taking that as detail blocked the
+    // fallback and produced products that "answered" but had no name.
+    const seen: unknown[] = []
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
+      'dropshipping.getProductInfo': (args: unknown) => {
+        seen.push(args)
+        return typeof args === 'string' ? { name: 'Whey 1kg' } : { product_id: '7', success: false }
+      },
+    })
+
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+      .getProductsBySku(['PB-7'])
+
+    expect(seen).toHaveLength(2)
+    expect(found).toMatchObject({ name: 'Whey 1kg', detailed: true })
+  })
+
+  it('says what they actually sent when no shape yields detail', async () => {
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
+      'dropshipping.getProductInfo': () => ({ product_id: '7', status: 'denied' }),
+    })
+
+    // Naming the keys they did send is the difference between "it doesn't work"
+    // and knowing why.
+    await expect(
+      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsBySku(['PB-7']),
+    ).rejects.toThrow(/a record with only: product_id, status/)
+  })
+
+  it('re-fetches a cached record that carries no detail', async () => {
+    // A bad run must not poison the cache for its full 7-day life: entries with
+    // nothing in them are treated as absent, so the cache heals itself.
+    const junk = { '7': { info: { product_id: '7' }, at: Date.now() } }
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
+      'dropshipping.getProductInfo': () => ({ name: 'Whey 1kg', manufacturer: 'PB' }),
+    })
+
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(junk) })
+      .getProductsBySku(['PB-7'])
+
+    expect(found).toMatchObject({ name: 'Whey 1kg', detailed: true })
+  })
+
   it('reports the supplier’s own error instead of a nameless row', async () => {
     // Swallowing this is what turned a broken detail call into a page that just
     // would not fill in: the row came back, silently missing the one thing that

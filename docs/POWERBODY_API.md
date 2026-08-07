@@ -158,7 +158,7 @@ message is the diagnosis:
 | What it says | What it means |
 |---|---|
 | *Resource path is not callable* / *Access denied* | `getProductInfo` is not enabled on this API account. New accounts start in PowerBody's **DEMO/sandbox** — placeholder products (`P64`, uniform prices, stock 10/100), no detail, orders auto-fail. Ask your account manager to enable API access and permissions. |
-| *…answered but sent no name or RRP with it* | The call worked and came back empty — again typical of the sandbox. |
+| *…with no product detail in it — they sent a record with only: x, y* | Both argument shapes were answered, neither with a product in it. The named keys are the clue: an echo of the request means the method is refusing rather than failing. |
 | *…did not answer within 20s* | Their feed is slow or rate-limiting; try again. |
 | *…sent these products without a product id* | The list feed changed shape. `product_id` is what `getProductInfo` is keyed on. |
 
@@ -167,6 +167,23 @@ message is the diagnosis:
 their guide reads both ways and which one an account answers to is not something
 the code can settle in advance. The second call only happens when the first shape
 is wrong.
+
+A reply only counts as detail if it actually carries one of `name`,
+`manufacturer`, `category`, `detail_price`, `description_en` or `image`. An echo
+of the request, an empty record and an error envelope are all *objects*, and
+accepting one as detail is what silently blocked the fallback and left products
+named after their codes. The same test is applied to the durable cache on read,
+so entries written by a bad run are treated as absent and re-fetched rather than
+sitting there for their full 7 days.
+
+### The feed is read a stretch at a time
+
+A long feed cannot always be paged inside one request. When the clock stops it
+part-way, the run records the page it reached and the rows it had, and the next
+build **continues from there** rather than starting at page one — otherwise
+"more will appear on a refresh" is a promise that can never be kept, because
+every refresh hits the same wall in the same place. The button says **Load more
+of the feed** while that is the case, and `listComplete` is how it knows.
 
 ### Transport — `powerbody/soap.ts`
 
