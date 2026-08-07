@@ -7,6 +7,10 @@ import { MAX_LOOKUP_SKUS, readSkuList } from '@/lib/supplier/sku-input'
 
 export const dynamic = 'force-dynamic'
 
+/** Resolving a SKU pages the (rate-limited) list feed, so give it room — the
+ *  platform default would cut it off and answer with an unreadable error page. */
+export const maxDuration = 60
+
 /**
  * POST { skus } — resolve specific SKUs against the supplier, with detail.
  *
@@ -41,9 +45,9 @@ export async function POST(req: Request) {
     )
   }
 
-  await syncPortalRuntime()
-  const supplier = await getSupplier()
   try {
+    await syncPortalRuntime()
+    const supplier = await getSupplier()
     const [products, imported] = await Promise.all([supplier.getProductsBySku(skus), getImportedProducts()])
     const addedIds = new Set(imported.map((p) => p.id))
     const found = new Set(products.map((p) => p.sku))

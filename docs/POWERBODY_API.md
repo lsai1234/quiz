@@ -63,6 +63,7 @@ NEXT_PUBLIC_DATA_SOURCE=mock     # the shop still serves the sample catalogue
 POWERBODY_MAX_CONCURRENT=2
 POWERBODY_MIN_INTERVAL_MS=150
 POWERBODY_DETAIL_BUDGET=250
+POWERBODY_BUILD_DEADLINE_MS=20000
 ```
 
 All three credentials are required: their API authenticates with
@@ -115,6 +116,20 @@ so they are accurate and sellable, just unnamed.
 Load the page again, or let the nightly job run, and it fills in further. The hub reports
 progress (`detailed` / `pending`) so a half-named list reads as "still loading" rather
 than "broken".
+
+The build also works to a **clock**, not just a count: `POWERBODY_BUILD_DEADLINE_MS`
+(default 20s) bounds the whole thing, paging included, and must stay under the route's
+`maxDuration` (60s). A count budget alone is not enough — 250 detail fetches two-at-a-time
+is minutes of work, and paging a large feed adds more. Past the request timeout the answer
+reaches nobody: the hub sits on "Loading the PowerBody feed…" forever, and the whole
+supplier page including the SKU lookup is unusable. So when the clock is spent the build
+stops where it is and returns what it has; `listComplete: false` in the progress report
+says the feed itself was only partly paged, and a catalogue cut short is cached for 30
+seconds rather than 10 minutes so the next load carries on.
+
+The browser reflects that on the client side too: the feed request has its own timeout and
+fails loudly rather than spinning, and the **SKU lookup sits above the browse list** so it
+works whatever the feed is doing.
 
 ### Transport — `powerbody/soap.ts`
 

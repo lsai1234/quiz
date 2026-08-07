@@ -85,6 +85,28 @@ describe('getProductsBySku — live', () => {
     expect(products[0]).toMatchObject({ sku: 'PB-400', name: 'Product 400', brand: 'PB', rrp: 19.99 })
   })
 
+  it('stops paging once every requested SKU has turned up', async () => {
+    // A lookup is the fast path into the feed, so it must not walk pages it has
+    // no reason to read — that is what made "add this one SKU" feel as slow as
+    // building the whole catalogue.
+    const pages: Record<number, { product_id: string; sku: string; price: string; qty: string }[]> = {
+      1: [{ product_id: '1', sku: 'PB-1', price: '10.00', qty: '5' }],
+      2: [{ product_id: '2', sku: 'PB-2', price: '10.00', qty: '5' }],
+      3: [{ product_id: '3', sku: 'PB-3', price: '10.00', qty: '5' }],
+    }
+    const { client, calls } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => pages[(args as { page: number }).page] ?? [],
+      'dropshipping.getProductInfo': (id: unknown) => ({ name: `Product ${id}` }),
+    })
+
+    const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+      .getProductsBySku(['PB-2'])
+
+    expect(found.map((p) => p.sku)).toEqual(['PB-2'])
+    // Pages 1 and 2 — page 3 was never asked for.
+    expect(calls.filter((c) => c.path === 'dropshipping.getProductList')).toHaveLength(2)
+  })
+
   it('reaches a product that browsing has not detailed yet', async () => {
     // The whole point: the browse list only details a slice, but every SKU in
     // the cheap feed is findable by name.

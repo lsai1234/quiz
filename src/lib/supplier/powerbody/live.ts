@@ -64,16 +64,41 @@ const DETAIL_CONCURRENCY = 6
  */
 const DEFAULT_DETAIL_BUDGET = 250
 
+/**
+ * Wall-clock budget for one `listProducts()` build.
+ *
+ * A count-based budget is not enough on its own: the transport is deliberately
+ * slow, so 250 detail fetches at two-at-a-time is minutes of work, and a page
+ * loop on a big feed adds more. Anything past the request timeout is delivered
+ * to nobody — the hub just sits on "Loading the PowerBody feed…" forever. So the
+ * build works to a clock as well as a count: whatever is finished when the time
+ * is up is what comes back, and the rest fills in on the next call.
+ *
+ * Keep this comfortably under the route's `maxDuration`.
+ */
+const DEFAULT_BUILD_DEADLINE_MS = 20_000
+
 /** How long a built catalogue is reused in memory. Stock is NOT served from
  *  here — `getStockLevels` always goes to the wire. */
 const CATALOGUE_TTL_MS = 10 * 60 * 1000
 
+/** A catalogue the deadline cut short is held only briefly, so the next load
+ *  carries on instead of serving the same short list for ten minutes. */
+const PARTIAL_TTL_MS = 30 * 1000
+
 interface Cached {
   at: number
   products: SupplierProduct[]
+  /** False when the deadline stopped us mid-feed, so this is not the whole thing. */
+  complete: boolean
 }
 
 let catalogueCache: Cached | null = null
+
+/** The build currently running, if any. Two founders hitting Refresh at the same
+ *  time (or one page mounting twice) must not start two builds against a
+ *  supplier that is already rate-limiting us — they wait on the same one. */
+let inFlightBuild: Promise<SupplierProduct[]> | null = null
 
 /** How the last catalogue build went — surfaced in the hub so a partially
  *  detailed catalogue explains itself instead of looking broken. */
@@ -83,6 +108,11 @@ export interface CatalogueProgress {
   /** Products still to fetch detail for. Zero means the catalogue is complete. */
   pending: number
   fetchedThisRun: number
+  /** False when the time budget stopped us part-way through the list feed, so
+   *  `total` is a floor rather than the size of the catalogue. */
+  listComplete: boolean
+  /** True when the build ran out of time before it ran out of work. */
+  timeBudgetSpent: boolean
   at: string
 }
 
@@ -96,6 +126,38 @@ export function getPowerBodyCatalogueProgress(): CatalogueProgress | null {
 export function __resetPowerBodyCache(): void {
   catalogueCache = null
   lastProgress = null
+  inFlightBuild = null
+}
+
+/**
+ * Resolve as soon as `work` settles — or give up at `deadline` and resolve null.
+ *
+ * Checking the clock between calls is not enough on its own: one wire call can
+ * outlast the whole budget by itself (the transport allows 30s per attempt and
+ * retries a timeout four times), which is exactly the case that leaves a request
+ * hanging for minutes. The call in flight cannot be cancelled from here, but
+ * nothing good comes of waiting for an answer nobody is going to see — it is
+ * dropped, and whatever was finished by then is used instead.
+ *
+ * A rejection still propagates when it arrives before the deadline, so a real
+ * failure (bad credentials, a fault) is reported rather than timed out.
+ */
+function untilDeadline<T>(work: Promise<T>, deadline: number): Promise<T | null> {
+  const remaining = deadline - Date.now()
+  if (remaining <= 0) return Promise.resolve(null)
+  return new Promise<T | null>((resolve, reject) => {
+    const timer = setTimeout(() => resolve(null), remaining)
+    work.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        clearTimeout(timer)
+        reject(err)
+      },
+    )
+  })
 }
 
 /** Run `worker` over `items` with a bounded number in flight. */
@@ -120,6 +182,8 @@ export interface PowerBodyProviderOptions {
   detailStore?: DetailStore
   /** Detail fetches allowed in one `listProducts()` call. */
   detailBudget?: number
+  /** Wall-clock budget for one `listProducts()` call, in ms. */
+  buildDeadlineMs?: number
   /** Extra fields for `createOrder` that only the caller knows (weight, our
    *  shipping charge, per-line prices for their invoice). */
   orderContext?: (order: SupplierOrderInput) => CreateOrderContext
@@ -130,16 +194,44 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   const detailStore = options.detailStore ?? createKvDetailStore()
   const detailBudget =
     options.detailBudget ?? envInt('POWERBODY_DETAIL_BUDGET', DEFAULT_DETAIL_BUDGET)
+  const buildDeadlineMs =
+    options.buildDeadlineMs ?? envInt('POWERBODY_BUILD_DEADLINE_MS', DEFAULT_BUILD_DEADLINE_MS)
 
-  /** Page through `getProductList` until a page comes back empty. */
-  async function fetchAllListItems(): Promise<PbProductListItem[]> {
-    const all: PbProductListItem[] = []
+  interface ListFeedOptions {
+    /** Epoch ms to stop paging at, returning what has been read so far. */
+    deadline?: number
+    /** Checked after each page — true means we already have what we came for. */
+    enough?: (rowsSoFar: PbProductListItem[]) => boolean
+    /** Rows are appended here as they arrive, so a caller that stops waiting can
+     *  still use the pages that did land. */
+    into?: PbProductListItem[]
+  }
+
+  interface ListFeed {
+    items: PbProductListItem[]
+    /** False when we stopped early (deadline or page cap) rather than reaching
+     *  the end of the feed. */
+    complete: boolean
+  }
+
+  /** Page through `getProductList` until a page comes back empty — or until the
+   *  caller has enough, or the clock runs out. */
+  async function fetchListItems(listOptions: ListFeedOptions = {}): Promise<ListFeed> {
+    const all: PbProductListItem[] = listOptions.into ?? []
     for (let page = 1; page <= MAX_PAGES; page++) {
       const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-      if (!Array.isArray(rows) || rows.length === 0) break
+      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true }
       all.push(...rows)
+      if (listOptions.enough?.(all)) return { items: all, complete: true }
+      // Out of time: hand back a short catalogue rather than a request that
+      // never answers. The next call picks up from page one and gets further,
+      // because the detail it already paid for is cached.
+      if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
+        return { items: all, complete: false }
+      }
     }
-    return all
+    // Hit the page cap — a feed that never returns an empty page.
+    return { items: all, complete: false }
   }
 
   async function fetchDetail(id: string): Promise<PbProductInfo | null> {
@@ -160,12 +252,55 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    * this run could afford to fetch. Named rather than reached through `this`, so
    * the provider survives being destructured.
    */
+  function cachedCatalogue(): SupplierProduct[] | null {
+    if (!catalogueCache) return null
+    const ttl = catalogueCache.complete ? CATALOGUE_TTL_MS : PARTIAL_TTL_MS
+    return Date.now() - catalogueCache.at < ttl ? catalogueCache.products : null
+  }
+
   async function listProducts(): Promise<SupplierProduct[]> {
-    if (catalogueCache && Date.now() - catalogueCache.at < CATALOGUE_TTL_MS) {
-      return catalogueCache.products
+    const cached = cachedCatalogue()
+    if (cached) return cached
+    if (!inFlightBuild) {
+      inFlightBuild = buildCatalogue().finally(() => {
+        inFlightBuild = null
+      })
+    }
+    return inFlightBuild
+  }
+
+  async function buildCatalogue(): Promise<SupplierProduct[]> {
+    const deadline = Date.now() + buildDeadlineMs
+
+    // Pages land in `paged` as they arrive, so if the supplier stops answering
+    // mid-feed we still have the ones that did.
+    const paged: PbProductListItem[] = []
+    const listing = await untilDeadline(fetchListItems({ deadline, into: paged }), deadline)
+    const items = listing?.items ?? paged
+    const listComplete = listing?.complete ?? false
+
+    if (items.length === 0) {
+      // Nothing at all, and the clock is gone: say so. An empty catalogue would
+      // read as "PowerBody carry no products", which is a very different thing.
+      if (!listing) {
+        throw new Error(
+          `PowerBody did not answer within ${Math.round(buildDeadlineMs / 1000)}s. Their feed may be slow or ` +
+            'rate-limiting us — try again, or look a product up by SKU.',
+        )
+      }
+      lastProgress = {
+        total: 0,
+        detailed: 0,
+        pending: 0,
+        fetchedThisRun: 0,
+        listComplete,
+        timeBudgetSpent: false,
+        at: new Date().toISOString(),
+      }
+      catalogueCache = { at: Date.now(), products: [], complete: listComplete }
+      return []
     }
 
-    const items = await fetchAllListItems()
     const cache = await detailStore.load()
     const now = Date.now()
 
@@ -176,10 +311,20 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       .filter((id) => id !== '' && isStale(cache[id], now))
       .slice(0, Math.max(0, detailBudget))
 
-    const fetched = await mapLimit(toFetch, DETAIL_CONCURRENCY, async (id) => ({
-      id,
-      info: await fetchDetail(id),
-    }))
+    let timeBudgetSpent = !listComplete
+    // Collected as they land rather than returned in a batch, so giving up on a
+    // slow fetch still keeps every detail already paid for.
+    const fetched: { id: string; info: PbProductInfo | null }[] = []
+    const detailing = mapLimit(toFetch, DETAIL_CONCURRENCY, async (id) => {
+      // Past the deadline the rest are simply left for the next call. An
+      // unfinished catalogue that arrives beats a complete one that times out.
+      if (Date.now() >= deadline) {
+        timeBudgetSpent = true
+        return
+      }
+      fetched.push({ id, info: await fetchDetail(id) })
+    })
+    if ((await untilDeadline(detailing, deadline)) === null) timeBudgetSpent = true
 
     let fetchedThisRun = 0
     for (const { id, info } of fetched) {
@@ -207,9 +352,11 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       detailed,
       pending: Math.max(0, items.filter((i) => idOf(i) !== '' && isStale(cache[idOf(i)], now)).length),
       fetchedThisRun,
+      listComplete,
+      timeBudgetSpent,
       at: updatedAt,
     }
-    catalogueCache = { at: Date.now(), products }
+    catalogueCache = { at: Date.now(), products, complete: listComplete }
     return products
   }
 
@@ -228,8 +375,26 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const wanted = new Set(skus.filter(Boolean))
     if (wanted.size === 0) return []
 
-    const items = await fetchAllListItems()
-    const matches = items.filter((item) => wanted.has(String(item.sku ?? '')))
+    // Paging is not cut short here the way a catalogue build is: a SKU that
+    // exists but sits on a later page must be findable, and "not in the feed"
+    // has to mean it. It does stop as soon as every requested SKU has turned up,
+    // so the common case — a handful of known codes — costs a page or two rather
+    // than the whole feed. The clock only decides when to stop *waiting*, and
+    // running out of it is an error, never a silent "no such SKU".
+    const deadline = Date.now() + buildDeadlineMs
+    const countMatches = (rows: PbProductListItem[]) =>
+      rows.reduce((n, item) => (wanted.has(String(item.sku ?? '')) ? n + 1 : n), 0)
+    const listing = await untilDeadline(
+      fetchListItems({ enough: (rows) => countMatches(rows) >= wanted.size }),
+      deadline,
+    )
+    if (!listing) {
+      throw new Error(
+        `PowerBody did not answer within ${Math.round(buildDeadlineMs / 1000)}s, so these SKUs could not be ` +
+          'checked. Their feed may be slow or rate-limiting us — try again in a moment.',
+      )
+    }
+    const matches = listing.items.filter((item) => wanted.has(String(item.sku ?? '')))
     if (matches.length === 0) return []
 
     const cache = await detailStore.load()
@@ -272,7 +437,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     async getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]> {
       // Always live — this is the call the daily check exists to make.
-      const items = await fetchAllListItems()
+      const { items } = await fetchListItems()
       const updatedAt = new Date().toISOString()
       const wanted = skus && skus.length > 0 ? new Set(skus) : null
       return items

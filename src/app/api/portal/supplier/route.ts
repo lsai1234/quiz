@@ -7,6 +7,15 @@ import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/l
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * The live feed is paged and rate-limited, so a first build takes tens of
+ * seconds. The platform default (10–15s) cuts that off mid-flight and answers
+ * with a gateway error page, which is what left the hub stuck on "Loading the
+ * PowerBody feed…". The adapter keeps itself under its own wall-clock budget
+ * (`POWERBODY_BUILD_DEADLINE_MS`); this is the outer limit that must sit above it.
+ */
+export const maxDuration = 60
+
 /** One browsable row: the supplier product + how it maps + margin + whether it's
  *  already in our curated catalogue. */
 function toRow(sp: import('@/lib/supplier/types').SupplierProduct, addedIds: Set<string>) {
@@ -36,9 +45,12 @@ function toRow(sp: import('@/lib/supplier/types').SupplierProduct, addedIds: Set
 /** GET — the full PowerBody feed with mapping preview + "already added" flags. */
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  await syncPortalRuntime()
-  const supplier = await getSupplier()
+  // Inside the try with everything else: resolving the supplier can throw on a
+  // half-configured environment, and an unhandled throw here answers with an
+  // HTML error page the browser cannot read as an error.
   try {
+    await syncPortalRuntime()
+    const supplier = await getSupplier()
     const [products, imported] = await Promise.all([supplier.listProducts(), getImportedProducts()])
     const addedIds = new Set(imported.map((p) => p.id))
     const { getPowerBodyCatalogueProgress } = await import('@/lib/supplier/powerbody/live')
@@ -75,9 +87,9 @@ export async function POST(req: Request) {
   const skus = body.skus.filter((s): s is string => typeof s === 'string')
   const autopopulate = body.autopopulate !== false
 
-  await syncPortalRuntime()
-  const supplier = await getSupplier()
   try {
+    await syncPortalRuntime()
+    const supplier = await getSupplier()
     // Resolve the named SKUs directly rather than scanning the full catalogue:
     // the live supplier only details part of its feed per request, so going via
     // `listProducts` would import whichever ones happened to be detailed and

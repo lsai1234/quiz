@@ -240,6 +240,160 @@ describe('live PowerBody adapter', () => {
     })
   })
 
+  describe('time budget', () => {
+    /** A clock we control, so "slow supplier" is testable without being slow. */
+    function fakeClock() {
+      let now = 1_000_000
+      jest.spyOn(Date, 'now').mockImplementation(() => now)
+      return { advance: (ms: number) => (now += ms) }
+    }
+
+    afterEach(() => jest.restoreAllMocks())
+
+    /** `pages` pages of `perPage` rows, with a hook to burn time per page. */
+    function pagedFeed(pages: number, perPage: number, onCall: () => void = () => {}) {
+      return {
+        'dropshipping.getProductList': (args: unknown) => {
+          const page = (args as { page: number }).page
+          onCall()
+          if (page > pages) return []
+          return Array.from({ length: perPage }, (_, i) => {
+            const n = (page - 1) * perPage + i + 1
+            return { product_id: String(n), sku: `PB-${n}`, price: '10.00', qty: '5' }
+          })
+        },
+        'dropshipping.getProductInfo': () => null,
+      }
+    }
+
+    it('stops paging when the budget is spent and returns what it has', async () => {
+      const clock = fakeClock()
+      const { client } = fakeClient(pagedFeed(5, 10, () => clock.advance(15_000)))
+
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        buildDeadlineMs: 20_000,
+      }).listProducts()
+
+      // Two pages in, the clock is past the budget. A short catalogue that
+      // arrives is the whole point — the alternative is a request that never
+      // answers and a hub stuck on "Loading…".
+      expect(products).toHaveLength(20)
+      expect(getPowerBodyCatalogueProgress()).toMatchObject({ listComplete: false, timeBudgetSpent: true })
+    })
+
+    it('stops fetching detail when the budget is spent, keeping the catalogue', async () => {
+      const clock = fakeClock()
+      let infoCalls = 0
+      const { client } = fakeClient({
+        ...pagedFeed(1, 20),
+        'dropshipping.getProductInfo': (id: unknown) => {
+          infoCalls += 1
+          clock.advance(3_000)
+          return { name: `Product ${id}`, manufacturer: 'PB' }
+        },
+      })
+
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        buildDeadlineMs: 10_000,
+      }).listProducts()
+
+      expect(products).toHaveLength(20)
+      expect(infoCalls).toBeGreaterThan(0)
+      expect(infoCalls).toBeLessThan(20)
+      expect(getPowerBodyCatalogueProgress()).toMatchObject({ timeBudgetSpent: true })
+    })
+
+    it('holds a cut-short catalogue only briefly, so the next load gets further', async () => {
+      const clock = fakeClock()
+      const { client, calls } = fakeClient(pagedFeed(5, 10, () => clock.advance(15_000)))
+      const provider = createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        buildDeadlineMs: 20_000,
+      })
+
+      await provider.listProducts()
+      const afterFirst = calls.length
+      await provider.listProducts()
+      expect(calls.length).toBe(afterFirst) // still cached
+
+      clock.advance(60_000)
+      await provider.listProducts()
+      expect(calls.length).toBeGreaterThan(afterFirst) // and now it tries again
+    })
+
+    it('gives up on a call that never answers, rather than hanging the request', async () => {
+      // The case that matters most: one wire call can outlast the whole budget
+      // by itself (30s per attempt, retried), so checking the clock only between
+      // calls would still leave the hub on a spinner for minutes.
+      const { client } = fakeClient({
+        'dropshipping.getProductList': () => new Promise(() => {}),
+        'dropshipping.getProductInfo': () => null,
+      })
+
+      await expect(
+        createPowerBodyProvider({
+          client,
+          detailStore: createMemoryDetailStore(),
+          buildDeadlineMs: 40,
+        }).listProducts(),
+      ).rejects.toThrow(/did not answer within/i)
+    })
+
+    it('keeps the pages that did land when the supplier stalls mid-feed', async () => {
+      let page = 0
+      const { client } = fakeClient({
+        'dropshipping.getProductList': () => {
+          page += 1
+          // First page answers; the second never does.
+          if (page > 1) return new Promise(() => {})
+          return [{ product_id: '1', sku: 'PB-1', price: '10.00', qty: '5' }]
+        },
+        'dropshipping.getProductInfo': () => null,
+      })
+
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+        buildDeadlineMs: 60,
+      }).listProducts()
+
+      expect(products.map((p) => p.sku)).toEqual(['PB-1'])
+      expect(getPowerBodyCatalogueProgress()).toMatchObject({ listComplete: false })
+    })
+
+    it('a SKU lookup against a silent supplier fails loudly, not as "not found"', async () => {
+      const { client } = fakeClient({
+        'dropshipping.getProductList': () => new Promise(() => {}),
+        'dropshipping.getProductInfo': () => null,
+      })
+
+      await expect(
+        createPowerBodyProvider({
+          client,
+          detailStore: createMemoryDetailStore(),
+          buildDeadlineMs: 40,
+        }).getProductsBySku(['PB-1']),
+      ).rejects.toThrow(/did not answer within/i)
+    })
+
+    it('shares one build between callers that arrive together', async () => {
+      const { client, calls } = fakeClient(catalogueHandlers())
+      const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+
+      // Two founders hitting Refresh at once must not double the load on a
+      // supplier that is already rate-limiting us.
+      const [a, b] = await Promise.all([provider.listProducts(), provider.listProducts()])
+
+      expect(a).toEqual(b)
+      expect(calls.filter((c) => c.path === 'dropshipping.getProductList')).toHaveLength(2)
+    })
+  })
+
   describe('getStockLevels', () => {
     it('uses only the cheap list feed — never the per-product detail call', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())
