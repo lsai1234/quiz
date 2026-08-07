@@ -138,6 +138,45 @@ describe('applyStockLevels', () => {
     expect(result.products[0].defaultVariantId).toBe(multi.variants[0].id)
   })
 
+  describe('margin impact of a cost change', () => {
+    // basePrice is cost x2 rounded to .99 — a £10 cost lists at £19.99, so the
+    // starting margin is ~50%.
+    it('reports what a cost rise did to the margin on our retail price', () => {
+      const before = product()
+      const result = applyStockLevels([before], [level({ wholesalePrice: 14 })], { marginFloorPct: 0.15 })
+      const change = result.changes[0]
+
+      expect(change).toMatchObject({ costWas: 10, costNow: 14, title: 'Whey Protein 1kg' })
+      expect(change.costDeltaPct).toBeCloseTo(0.4, 4)
+      // Retail is untouched, so the whole rise lands on margin.
+      expect(change.marginPctWas).toBeCloseTo((before.basePrice - 10) / before.basePrice, 4)
+      expect(change.marginPctNow).toBeCloseTo((before.basePrice - 14) / before.basePrice, 4)
+      expect(change.belowFloor).toBe(false)
+    })
+
+    it('flags a product pushed under the margin floor', () => {
+      const before = product()
+      // Cost almost at retail: margin collapses to a few percent.
+      const result = applyStockLevels([before], [level({ wholesalePrice: before.basePrice - 1 })], {
+        marginFloorPct: 0.15,
+      })
+      expect(result.changes[0].belowFloor).toBe(true)
+    })
+
+    it('treats a cost fall as a margin gain, not a warning', () => {
+      const result = applyStockLevels([product()], [level({ wholesalePrice: 6 })], { marginFloorPct: 0.15 })
+      expect(result.changes[0].costDeltaPct).toBeCloseTo(-0.4, 4)
+      expect(result.changes[0].belowFloor).toBe(false)
+    })
+
+    it('reports no margin figures when only stock moved', () => {
+      const change = applyStockLevels([product()], [level({ stock: 0, inStock: false })]).changes[0]
+      expect(change.marginPctNow).toBeUndefined()
+      expect(change.belowFloor).toBeUndefined()
+      expect(change.nowInStock).toBe(false)
+    })
+  })
+
   it('handles an empty catalogue and an empty feed', () => {
     expect(applyStockLevels([], [level()])).toMatchObject({ scanned: 0, updated: 0, changes: [] })
     expect(applyStockLevels([product()], [])).toMatchObject({ updated: 0, missing: ['whey-protein-1kg'] })

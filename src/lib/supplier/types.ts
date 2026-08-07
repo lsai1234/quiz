@@ -108,6 +108,17 @@ export interface SupplierProvider {
   /** The full supplier catalogue (for the "scan & add" page). */
   listProducts(): Promise<SupplierProduct[]>
   getProduct(sku: string): Promise<SupplierProduct | null>
+  /**
+   * Fully-detailed products for specific SKUs, fetched on demand.
+   *
+   * Distinct from `listProducts()` because the live supplier can only afford to
+   * detail part of its catalogue per request (see `powerbody/live.ts`), which
+   * would otherwise make "import this exact product" depend on having already
+   * paged through everything. Given a handful of SKUs it fetches exactly those,
+   * so a targeted import always gets a complete product. Unknown SKUs are
+   * omitted rather than erroring — the caller reports which were not found.
+   */
+  getProductsBySku(skus: string[]): Promise<SupplierProduct[]>
   /** Live stock + price. Pass SKUs to narrow it; omit for everything. */
   getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]>
   /** Place a dropship order (Phase 3 wires this to the orders domain). */

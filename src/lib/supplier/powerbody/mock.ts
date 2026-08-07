@@ -94,6 +94,13 @@ export function createMockSupplier(): SupplierProvider {
       return found ? withCurrentStock(found) : null
     },
 
+    async getProductsBySku(skus) {
+      // The fixtures are always fully detailed, so this is just a lookup. Order
+      // follows the request, and unknown SKUs simply drop out.
+      const wanted = new Set(skus)
+      return POWERBODY_FIXTURES.filter((p) => wanted.has(p.sku)).map(withCurrentStock)
+    },
+
     async getStockLevels(skus) {
       const wanted = skus && skus.length > 0 ? new Set(skus) : null
       return POWERBODY_FIXTURES.filter((p) => !wanted || wanted.has(p.sku)).map((p) => {

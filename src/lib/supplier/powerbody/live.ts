@@ -213,18 +213,62 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     return products
   }
 
+  /**
+   * Detail for specific SKUs, fetched on demand and outside the catalogue
+   * budget.
+   *
+   * The budget exists to stop a full build running past the request timeout; a
+   * handful of named SKUs is not that, and refusing to detail them would make
+   * "import this exact product" impossible until the whole catalogue had been
+   * paged. The list feed is what maps SKU → their numeric product id, and it is
+   * always complete (it is the cheap call), so any SKU that exists is findable
+   * here even when nothing about it has been detailed yet.
+   */
+  async function getProductsBySku(skus: string[]): Promise<SupplierProduct[]> {
+    const wanted = new Set(skus.filter(Boolean))
+    if (wanted.size === 0) return []
+
+    const items = await fetchAllListItems()
+    const matches = items.filter((item) => wanted.has(String(item.sku ?? '')))
+    if (matches.length === 0) return []
+
+    const cache = await detailStore.load()
+    const now = Date.now()
+    const missing = matches.map(idOf).filter((id) => id !== '' && isStale(cache[id], now))
+
+    const fetched = await mapLimit(missing, DETAIL_CONCURRENCY, async (id) => ({
+      id,
+      info: await fetchDetail(id),
+    }))
+
+    let added = 0
+    for (const { id, info } of fetched) {
+      if (!info) continue
+      cache[id] = { info, at: now }
+      added += 1
+    }
+    if (added > 0) await detailStore.save(cache)
+
+    const updatedAt = new Date().toISOString()
+    return matches.map((item) => {
+      const entry = cache[idOf(item)]
+      // Fresh list row on top, exactly as in `listProducts` — cached detail must
+      // never supply today's price or stock.
+      return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
+    })
+  }
+
   return {
     name: 'powerbody',
 
     listProducts,
 
     async getProduct(sku: string): Promise<SupplierProduct | null> {
-      // getProductInfo is keyed by their numeric product id, not by SKU, so the
-      // list feed is what resolves one to the other. The cached catalogue makes
-      // this a single call in the common case.
-      const products = await listProducts()
-      return products.find((p) => p.sku === sku) ?? null
+      const [found] = await getProductsBySku([sku])
+      return found ?? null
     },
+
+    getProductsBySku,
 
     async getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]> {
       // Always live — this is the call the daily check exists to make.

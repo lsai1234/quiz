@@ -25,8 +25,17 @@ interface Row {
 
 const money = (n: number) => `£${n.toFixed(2)}`
 
+/** How much of the live feed has had its name/brand/image fetched. Null on the
+ *  mock supplier, which is always complete. */
+interface Progress {
+  total: number
+  detailed: number
+  pending: number
+}
+
 export function SupplierBrowser() {
   const [rows, setRows] = useState<Row[] | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
@@ -41,7 +50,11 @@ export function SupplierBrowser() {
     setError(null)
     fetch('/api/portal/supplier')
       .then((r) => r.json())
-      .then((d) => (d.error ? setError(d.error) : setRows(d.products)))
+      .then((d) => {
+        if (d.error) return setError(d.error)
+        setRows(d.products)
+        setProgress(d.progress ?? null)
+      })
       .catch(() => setError('Could not load the PowerBody feed.'))
   }, [])
 
@@ -130,6 +143,22 @@ export function SupplierBrowser() {
         </p>
       )}
 
+      {/* Still filling in names/images for the rest of the feed. */}
+      {progress && progress.pending > 0 && (
+        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+          <strong style={{ color: 'var(--color-text-2)' }}>
+            {progress.detailed} of {progress.total} products have full details.
+          </strong>{' '}
+          PowerBody rate-limit us, so names and images fill in a batch at a time — refresh to fetch more, or leave it
+          to the nightly job. Prices and stock are already correct for all {progress.total}, and you can pull in any
+          product right now by SKU below.
+        </p>
+      )}
+
+      <SkuLookup onAdd={add} adding={adding} />
+
+      <div className="h-px" style={{ background: 'var(--color-border)' }} />
+
       {/* Filters */}
       <div className="flex flex-wrap gap-2">
         <input
@@ -181,8 +210,155 @@ export function SupplierBrowser() {
             )}
           </div>
         ))}
-        {filtered.length === 0 && <p className="text-sm text-[var(--color-muted)] py-6 text-center">No products match those filters.</p>}
+        {filtered.length === 0 && (
+          <p className="text-sm text-[var(--color-muted)] py-6 text-center">
+            No products match those filters.
+            {progress && progress.pending > 0 && ' Products still waiting on details can only be matched by SKU — try the SKU box above.'}
+          </p>
+        )}
       </div>
+    </div>
+  )
+}
+
+/**
+ * Pull in specific products by SKU.
+ *
+ * The browse list above can only search what has been detailed so far, and on a
+ * large feed that is a fraction of it for a while. This goes straight at named
+ * SKUs — it fetches their details on demand — so a product you already know the
+ * code for is always reachable, whatever the browse list is showing. Takes a
+ * pasted blob (commas, spaces or newlines) because that is how SKUs arrive:
+ * out of a spreadsheet or an email from the supplier.
+ */
+function SkuLookup({ onAdd, adding }: { onAdd: (skus: string[]) => Promise<void>; adding: boolean }) {
+  const [input, setInput] = useState('')
+  const [results, setResults] = useState<Row[] | null>(null)
+  const [notFound, setNotFound] = useState<string[]>([])
+  const [looking, setLooking] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function lookup() {
+    if (!input.trim()) return
+    setLooking(true)
+    setErr(null)
+    try {
+      const res = await fetch('/api/portal/supplier/lookup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ skus: input }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setErr(d.error ?? 'Lookup failed.')
+        setResults(null)
+        return
+      }
+      setResults(d.products ?? [])
+      setNotFound(d.notFound ?? [])
+    } finally {
+      setLooking(false)
+    }
+  }
+
+  const addable = (results ?? []).filter((r) => !r.alreadyAdded)
+
+  return (
+    <div className="rounded-2xl border p-3.5 space-y-2.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      <div>
+        <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+          Find by SKU
+        </p>
+        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+          Paste one or more SKUs — commas, spaces or new lines. Works for any product in the feed, detailed or not.
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter looks up; Shift+Enter keeps a multi-line paste editable.
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              lookup()
+            }
+          }}
+          rows={2}
+          placeholder="e.g. PB-WHEY-1KG, PB-CREA-500"
+          className="flex-1 min-w-[220px] text-sm rounded-xl px-3 py-2 border resize-y"
+          style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        />
+        <button
+          onClick={lookup}
+          disabled={looking || !input.trim()}
+          className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40 self-start"
+          style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+        >
+          {looking ? 'Looking…' : 'Look up'}
+        </button>
+      </div>
+
+      {err && <p className="text-xs" style={{ color: 'var(--color-red)' }}>{err}</p>}
+
+      {notFound.length > 0 && (
+        <p className="text-xs" style={{ color: 'var(--color-red)' }}>
+          Not in the feed: {notFound.join(', ')}
+        </p>
+      )}
+
+      {results && results.length === 0 && notFound.length === 0 && (
+        <p className="text-xs text-[var(--color-muted)]">Nothing found for those SKUs.</p>
+      )}
+
+      {results && results.length > 0 && (
+        <div className="space-y-2">
+          {results.map((r) => (
+            <div key={r.sku} className="rounded-xl border p-3 flex items-center gap-3" style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)' }}>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.name}</span>
+                  <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{r.brand}</span>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--color-muted)]">
+                  <span>{r.sku}</span>
+                  <span>·</span>
+                  <span style={{ color: r.inStock ? 'var(--color-text-2)' : 'var(--color-red)' }}>
+                    {r.inStock ? `${r.stock} in stock` : 'Out of stock'}
+                  </span>
+                  <span>·</span>
+                  <span>Cost {money(r.wholesalePrice)} → RRP {money(r.rrp)}</span>
+                  <span className="font-bold" style={{ color: ACCENT }}>{r.marginPct}% margin</span>
+                </div>
+              </div>
+              {r.alreadyAdded ? (
+                <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: ACCENT }}>Added</span>
+              ) : (
+                <button
+                  onClick={() => onAdd([r.sku])}
+                  disabled={adding}
+                  className="text-xs font-bold px-3 py-1.5 rounded-xl border shrink-0 disabled:opacity-40"
+                  style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          ))}
+
+          {addable.length > 1 && (
+            <button
+              onClick={() => onAdd(addable.map((r) => r.sku))}
+              disabled={adding}
+              className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
+              style={{ background: ACCENT, color: '#001018' }}
+            >
+              {adding ? 'Adding…' : `Add all ${addable.length} to catalogue`}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { syncPortalRuntime } from '@/lib/portal/store'
-import { syncImportedProducts } from '@/lib/supplier/sync'
-import { getSupplierSource } from '@/lib/supplier'
+import { getLastSyncReport, syncImportedProducts } from '@/lib/supplier/sync'
 
 export const dynamic = 'force-dynamic'
 /** A refresh pages the whole supplier feed; give it room on a slow supplier. */
@@ -20,12 +19,17 @@ export async function POST() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await syncPortalRuntime()
   try {
-    const result = await syncImportedProducts()
-    return NextResponse.json({ ok: true, source: getSupplierSource(), ...result })
+    return NextResponse.json({ ok: true, ...(await syncImportedProducts()) })
   } catch (err) {
     return NextResponse.json(
       { ok: false, error: err instanceof Error ? err.message : 'Supplier sync failed.' },
       { status: 502 },
     )
   }
+}
+
+/** The last run, without triggering a new one — what the hub shows on load. */
+export async function GET() {
+  if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  return NextResponse.json({ ok: true, report: await getLastSyncReport() })
 }

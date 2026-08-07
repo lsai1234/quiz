@@ -26,6 +26,7 @@ import type { SupplierStockLevel } from './types'
 
 export interface ProductSyncChange {
   productId: string
+  title: string
   sku: string
   /** Set when availability flipped — the change that matters most. */
   wasInStock?: boolean
@@ -33,6 +34,19 @@ export interface ProductSyncChange {
   /** Set when our cost moved. */
   costWas?: number
   costNow?: number
+  /** Cost movement as a fraction (+0.08 = 8% dearer). */
+  costDeltaPct?: number
+  /**
+   * What the cost move did to the margin on our CURRENT retail price.
+   *
+   * This is the number that matters and the reason a cost rise can't just be
+   * absorbed silently: we hold `basePrice` steady (repricing is a decision, not
+   * a sync), so every penny the supplier adds comes straight out of margin.
+   */
+  marginPctWas?: number
+  marginPctNow?: number
+  /** True when the new margin sits under the configured floor. */
+  belowFloor?: boolean
 }
 
 export interface ProductSyncResult {
@@ -46,7 +60,23 @@ export interface ProductSyncResult {
   products: CatalogueProduct[]
 }
 
+/** A run, as stored for the hub to show. `products` is deliberately absent —
+ *  this is the summary, not a second copy of the catalogue. */
+export interface SupplierSyncReport extends Omit<ProductSyncResult, 'products'> {
+  at: string
+  /** Which supplier answered — a mock run shouldn't be mistaken for a real one. */
+  source: string
+}
+
 const round = (n: number) => Math.round(n * 100) / 100
+const round4 = (n: number) => Math.round(n * 10000) / 10000
+
+/** Margin on our own retail price, as a fraction. Null when we don't sell it at
+ *  a price yet (nothing to measure against). */
+function marginPct(retail: number | undefined, cost: number): number | null {
+  if (!retail || retail <= 0) return null
+  return round4((retail - cost) / retail)
+}
 
 /**
  * Merge live stock levels into imported products.
@@ -58,7 +88,9 @@ const round = (n: number) => Math.round(n * 100) / 100
 export function applyStockLevels(
   products: CatalogueProduct[],
   levels: SupplierStockLevel[],
+  opts: { marginFloorPct?: number } = {},
 ): ProductSyncResult {
+  const marginFloor = opts.marginFloorPct ?? 0.15
   const bySku = new Map(levels.map((l) => [l.sku, l]))
   const changes: ProductSyncChange[] = []
   const missing: string[] = []
@@ -97,11 +129,28 @@ export function applyStockLevels(
     if (!costChanged && !variantsChanged && !rrpChanged) return product
 
     updated += 1
+
+    // Margin is measured against OUR retail price, which this job never moves —
+    // so a cost rise shows up here as exactly the margin it just cost us.
+    const wasMargin = costChanged ? marginPct(product.basePrice, product.cost ?? 0) : null
+    const nowMargin = costChanged ? marginPct(product.basePrice, cost) : null
+
     changes.push({
       productId: product.id,
+      title: product.title,
       sku: skus[0],
       ...(wasInStock !== nowInStock ? { wasInStock, nowInStock } : {}),
-      ...(costChanged ? { costWas: product.cost, costNow: cost } : {}),
+      ...(costChanged
+        ? {
+            costWas: product.cost,
+            costNow: cost,
+            ...(product.cost && product.cost > 0
+              ? { costDeltaPct: round4((cost - product.cost) / product.cost) }
+              : {}),
+            ...(wasMargin !== null ? { marginPctWas: wasMargin } : {}),
+            ...(nowMargin !== null ? { marginPctNow: nowMargin, belowFloor: nowMargin < marginFloor } : {}),
+          }
+        : {}),
     })
 
     return {
@@ -122,19 +171,51 @@ export function applyStockLevels(
   return { scanned: products.length, updated, missing, changes, products: next }
 }
 
-/**
- * Refresh every imported product against the supplier's live stock and prices.
- *
- * Safe to run often and safe to run twice — it writes only when something moved.
- * Called by the daily cron and by the hub's "Sync now" button.
- */
-export async function syncImportedProducts(): Promise<Omit<ProductSyncResult, 'products'>> {
-  const { getSupplier } = await import('./index')
-  const { getImportedProducts, addImportedProducts } = await import('@/lib/portal/store')
+const REPORT_KEY = 'powerbody:last-sync'
 
+/** The most recent run, for the hub. Null before the first one. */
+export async function getLastSyncReport(): Promise<SupplierSyncReport | null> {
+  try {
+    const { kvGet } = await import('@/lib/db/kv')
+    return (await kvGet<SupplierSyncReport>(REPORT_KEY)) ?? null
+  } catch {
+    return null
+  }
+}
+
+async function saveReport(report: SupplierSyncReport): Promise<void> {
+  try {
+    const { kvSet } = await import('@/lib/db/kv')
+    await kvSet(REPORT_KEY, report)
+  } catch {
+    /* unreachable database — the refresh itself still counted */
+  }
+}
+
+/**
+ * Check every imported product against the supplier and refresh what moved.
+ *
+ * This is the daily "did anything change under us?" pass over the products we
+ * actually sell. It is deliberately separate from the change detection in
+ * `lib/changes`, which walks SUBSCRIPTIONS: that only raises an event when a
+ * moved SKU is in somebody's plan, so a cost rise on a shop product nobody
+ * subscribes to would otherwise go unnoticed until someone read a margin report.
+ *
+ * The result is stored so the hub can show what happened without re-running it.
+ * Safe to run often and safe to run twice — it writes only when something moved.
+ */
+export async function syncImportedProducts(): Promise<SupplierSyncReport> {
+  const { getSupplier, getSupplierSource } = await import('./index')
+  const { getImportedProducts, addImportedProducts } = await import('@/lib/portal/store')
+  const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
+
+  const at = new Date().toISOString()
+  const source = getSupplierSource()
   const imported = await getImportedProducts()
   if (imported.length === 0) {
-    return { scanned: 0, updated: 0, missing: [], changes: [] }
+    const empty: SupplierSyncReport = { at, source, scanned: 0, updated: 0, missing: [], changes: [] }
+    await saveReport(empty)
+    return empty
   }
 
   const supplier = await getSupplier()
@@ -142,7 +223,12 @@ export async function syncImportedProducts(): Promise<Omit<ProductSyncResult, 'p
   // The cheap call: stock and price only, no per-product detail fetch.
   const levels = await supplier.getStockLevels(skus)
 
-  const { products, ...summary } = applyStockLevels(imported, levels)
+  const { products, ...summary } = applyStockLevels(imported, levels, {
+    marginFloorPct: getPricingConfig().marginFloorPct,
+  })
   if (summary.updated > 0) await addImportedProducts(products)
-  return summary
+
+  const report: SupplierSyncReport = { at, source, ...summary }
+  await saveReport(report)
+  return report
 }

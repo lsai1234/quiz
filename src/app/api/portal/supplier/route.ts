@@ -78,12 +78,16 @@ export async function POST(req: Request) {
   await syncPortalRuntime()
   const supplier = await getSupplier()
   try {
-    const all = await supplier.listProducts()
-    const bySku = new Map(all.map((p) => [p.sku, p]))
-    const toAdd = skus.map((sku) => bySku.get(sku)).filter((p): p is NonNullable<typeof p> => Boolean(p))
+    // Resolve the named SKUs directly rather than scanning the full catalogue:
+    // the live supplier only details part of its feed per request, so going via
+    // `listProducts` would import whichever ones happened to be detailed and
+    // give the rest no name. This fetches detail for exactly what was asked for.
+    const toAdd = await supplier.getProductsBySku(skus)
     if (toAdd.length === 0) {
       return NextResponse.json({ error: 'None of the given SKUs were found in the supplier feed.' }, { status: 404 })
     }
+    const found = new Set(toAdd.map((p) => p.sku))
+    const notFound = skus.filter((sku) => !found.has(sku))
 
     let aiUsed = false
     const mapped: import('@/lib/catalogue/types').CatalogueProduct[] = []
@@ -106,6 +110,9 @@ export async function POST(req: Request) {
       autopopulated: autopopulate,
       aiUsed,
       ids: mapped.map((p) => p.id),
+      // Named explicitly so a typo'd SKU is reported rather than silently
+      // dropped from a bulk paste.
+      notFound,
     })
   } catch (err) {
     return NextResponse.json(

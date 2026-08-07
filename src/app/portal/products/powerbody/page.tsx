@@ -1,4 +1,5 @@
 import { SupplierBrowser } from '@/components/portal/SupplierBrowser'
+import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,6 +13,10 @@ export default function SupplierPage() {
           Live stock, wholesale cost and margin are shown for each item.
         </p>
       </div>
+
+      {/* What moved under us since yesterday — read before adding anything new. */}
+      <SupplierSyncPanel />
+
       <SupplierBrowser />
     </div>
   )
