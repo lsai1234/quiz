@@ -2,16 +2,25 @@
 
 Turning `INFLUENCER_PROGRAMME.md` (a costed proposal, no plumbing) into working
 software: partner accounts a founder creates, a personal discount code per
-partner, a `/partner` login where they track their own numbers, and management of
-all of it in the Founders Hub. Plus switching the scratch card off.
+partner, a `/partner` login where they track their own numbers and their terms,
+and management of all of it in the Founders Hub. Plus switching the scratch card
+off.
 
 This document is the **plan**. Nothing below is built yet.
+
+**Read §2A before touching the scratch card.** Switching it off is the smallest-
+looking change here and the most dangerous: the pricing model keeps reading the
+card's numbers after the card is gone, and none of the existing safety checks
+fire. Measured figures are in that section.
 
 ---
 
 ## 0. Three decisions needed before phase 2
 
 Everything in phase 1 can be built without these. Phases 2+ cannot.
+
+> **Phase 0 exists because of these.** Removing the card is not a toggle — it
+> touches the pricing model in four places that will not warn you. See §2A.
 
 ### D1 — Switching the scratch card off gives everyone 50% (read this first)
 
@@ -202,6 +211,111 @@ Three choices worth defending:
 
 ---
 
+## 2A. Removing the scratch card — the full blast radius
+
+This is the part that needs doing carefully. The card is not a self-contained
+feature: **the pricing model reads the card's numbers to decide what every price
+and floor should be**, and it goes on reading them after the card is switched
+off. Nothing warns you.
+
+### What the model does when you flip the switch
+
+Measured, not guessed — running `pricingThresholds`, `checkScenarios` and
+`checkLadder` against each configuration:
+
+| | What a customer gets | What the model thinks | Warnings raised |
+|---|---|---|---|
+| Card on (today) | ~15% (rationed average) | 15% | none |
+| **Naive flip** (`enabled: false`) | **50%** | **15%** | **none** |
+| Card off + rate set to 0 | 0% | **15%** | none |
+
+Two separate failures, both silent:
+
+1. **The naive flip.** `firstMonthDiscount: 0.5` is the fallback, so every first
+   month goes to half price. On a representative subscribed first month (list
+   £103.26, cost £30): today the member pays £70.22 and we keep **£30.64**;
+   after the flip they pay £41.30 and we keep **£2.15**. That is **£28.49 an
+   order**, and `checkScenarios` still reports nothing losing money — because it
+   models the card outcomes, which are still sitting in the config, rather than
+   the flat rate that is now actually being applied.
+
+2. **The model never notices either way.** `thresholds.ts` reads
+   `introOffer.effectiveFirstMonthDiscount` directly — the *card's budget* — so
+   with the card off it keeps modelling a 15% first month that no longer happens
+   in either direction. Set the rate to 0 and every floor it computes is
+   pessimistic; leave it at 0.5 and every floor is dangerously optimistic.
+
+### The fix: one function, three call sites
+
+Three places reach past the config into card internals:
+
+| File | Line | Reads | Wrong when the card is off |
+|---|---|---|---|
+| `pricing/thresholds.ts` | ~119 | `effectiveFirstMonthDiscount` | Models a discount that isn't given |
+| `pricing/scenarios.ts` | ~77 | `scratchReveal.outcomes` | Models cards that are never dealt; misses the flat rate |
+| `pricing/ladder.ts` | ~114 | `scratchReveal.outcomes` | "Deepest offered" drops the intro leg entirely |
+
+Add **one** accessor — the effective first-month discount *actually in force* —
+returning the card's budget when the card is on and `firstMonthDiscount` when it
+is off, and point all three at it. Small, mechanical, and it is what makes the
+card removable without quietly corrupting every floor in the business.
+
+Do this **before** flipping anything. With it in place the existing safety net
+does its job: turn the card off with the rate still at 0.5 and the scenario check
+should be the thing that tells you.
+
+### Everything else the removal touches
+
+**Code that goes quiet on its own** (gated on `scratchRevealAvailable()`, so it
+degrades rather than breaking): `ScratchToReveal.tsx`, and the card blocks in
+`StackReviewPage.tsx` and `BundleLandingPage.tsx`. `/api/intro-offer` already
+returns `{ rate: 0 }`.
+
+- **UX gap to decide:** with the card gone, is there still a first-month offer to
+  *communicate*? If D1 → 0, those blocks simply disappear and the stack review
+  page loses its offer moment entirely. If D1 → flat 15%, something has to state
+  it, and nothing does today — the reveal *was* the statement.
+
+**Code that becomes dead weight:** `intro-allocation.ts` (the whole rationing
+ledger and its feedback loop), `recordIntroClaim` in `checkout/finalize.ts`, and
+the `intro-allocation` KV key. Leave the module in place but stop calling it —
+deleting it is a separate tidy-up, and it is the thing to restore if the card
+ever comes back.
+
+**Code that is still needed:** the Stripe one-cycle coupon path in
+`payments/stripe.ts`. A partner code needs exactly the same mechanism.
+
+**Portal screens that will lie:** `app/portal/pricing/page.tsx` still renders the
+scratch outcome editor, and its partner help text reads *"Keep it near the
+average card (15%)"* — meaningless once there is no card. `CutOffs.tsx` and
+`LadderPanel.tsx` both explain themselves in terms of the card.
+
+**Docs that go stale:** `PRICING_STRATEGY.md` §4 ("The scratch card loses money
+on half of all first months"), §7.3 ("Recut the scratch card") and §7.4 are about
+a mechanic that no longer exists; §3 is the partner costing that D2 invalidates.
+`INFLUENCER_PROGRAMME.md` describes a partner code as raising the card's floor.
+Mark them superseded rather than deleting — the reasoning is why the rates are
+what they are.
+
+### Phase 0 — do this first
+
+1. Add the effective-intro-rate accessor; point thresholds, scenarios and ladder
+   at it. **No behaviour change** — the card is still on, the numbers are
+   identical, and the tests prove it.
+2. Decide D1. Set `firstMonthDiscount` deliberately, in the same commit that sets
+   `scratchReveal.enabled: false`, so the trap cannot be sprung by a half-applied
+   change.
+3. Re-run the audit (D2) with the card gone, and reprice the partner rate against
+   the new baseline.
+4. Portal copy and the pricing screen.
+5. Mark the superseded doc sections.
+
+*Done when:* the pricing model reports the discount customers actually get, the
+scenario check fails loudly if the intro rate is set somewhere unaffordable, and
+no screen describes a card that no longer exists.
+
+---
+
 ## 3. Phases
 
 Each phase is shippable and useful on its own. Phases 1 and 5 are internal, so
@@ -343,6 +457,16 @@ dashboard.
   refunds are manual today, reversal is manual too — worth confirming in phase 3.
 - **The economics are unverified post-card.** D2. Do not launch partner traffic
   until the audit is re-run.
+- **The pricing model does not currently notice the card being switched off.**
+  §2A, measured. Until the effective-intro-rate accessor lands, the scenario and
+  threshold checks will report healthy numbers for a configuration that is losing
+  £28 an order. This is the single highest-risk item in the plan, and it is also
+  the cheapest to fix.
+- **Removing the intro offer is a conversion change, not a mechanic change.**
+  Every first order carries an average 15% off today. Nobody has measured what
+  that discount is buying, and D1 option A removes it for all non-partner
+  traffic on the same day partner codes appear. If both land together and orders
+  move, there is no way to tell which change did it. Consider staging them.
 - **Published terms are a commitment.** Once `/partner` states a rate, a payout
   cadence and a minimum, those stop being internal settings and become something
   a counterparty is relying on. Worth a read by whoever would answer a partner
@@ -353,10 +477,36 @@ dashboard.
 
 ## 5. Suggested order
 
-1. **Phase 1** — no decisions needed, unblocks everything.
-2. **D1 + D2**, and re-run the audit.
-3. **Phase 2 + 3** together (a code that discounts but never pays is worse than
+1. **Phase 0 step 1** — the effective-intro-rate accessor. No behaviour change,
+   no decisions needed, and it is what makes every later step safe to verify.
+2. **Phase 1** — partner records, codes and terms. Internal only, no decisions
+   needed, unblocks everything else.
+3. **D1 + D2**, then the rest of **Phase 0**: set the rate deliberately, switch
+   the card off, re-run the audit, fix the portal copy.
+4. **Phase 2 + 3** together (a code that discounts but never pays is worse than
    neither).
-4. **Phase 5** before **Phase 4** — founders need to see it before partners are
-   invited to.
-5. **Phase 6** before the first month closes.
+5. **Phase 5** before **Phase 4** — founders need to see the numbers before
+   partners are invited to look at them.
+6. **Phase 6** before the first month closes.
+
+Steps 1 and 2 need nothing from you and can start now. Everything from step 3
+onwards waits on D1/D2.
+
+---
+
+## 6. What I have not verified
+
+Stated plainly, because a plan that hides its gaps is worse than one that has
+them:
+
+- **Whether refunds are recorded automatically.** `status: 'refunded'` exists;
+  the path that sets it does not obviously.
+- **What the intro discount is worth in conversion.** No data was consulted —
+  the recommendation for D1 option A rests on your framing, not on evidence that
+  removing it is safe.
+- **Whether every checkout path can carry attribution.** I enumerated the order
+  paths but did not trace each one end to end.
+- **Stripe's promotion-code feature.** The plan uses our own codes plus generated
+  coupons, matching the existing intro-discount mechanism, on the grounds that we
+  need our own terms and reporting anyway. Stripe's native promotion codes might
+  do some of this; not investigated.
