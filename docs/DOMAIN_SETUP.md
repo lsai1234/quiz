@@ -386,6 +386,8 @@ broken.
 | What you see | What it usually means |
 |---|---|
 | "An A, AAAA, or CNAME record with that host already exists" | Something is already on `@`. Edit that row instead of adding a new one — see the box in Step 2. |
+| `/founderhub` says "No founder accounts are configured" | Set `FOUNDER_1_EMAIL` and `FOUNDER_1_PASSWORD` in Vercel (Production) and **redeploy**. The built-in demo logins are development-only and a deployed build refuses them on purpose. |
+| Your founder password is rejected at `/founderhub` | Same cause — the deployment has no `FOUNDER_*` set, or has them but wasn't redeployed since. |
 | Vercel stuck on "Invalid Configuration" | The Cloudflare proxy is orange. Turn it grey (Step 2). |
 | Site loads but shows a security warning | The padlock hasn't finished setting up. Grey cloud, then wait — it can take up to an hour. |
 | The page keeps reloading over and over | If you turned the proxy orange, go to Cloudflare **SSL/TLS** → **Overview** and set it to **Full (strict)**. Anything else causes exactly this. |

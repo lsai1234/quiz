@@ -1,16 +1,21 @@
 'use client'
 
 import { useState } from 'react'
+import type { FounderAuthMode } from '@/lib/portal/auth'
 
 const ACCENT = '#00D4FF'
 
-export function PortalLogin() {
+export function PortalLogin({ mode = 'demo' }: { mode?: FounderAuthMode }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
-  const valid = /\S+@\S+\.\S+/.test(email) && password.length > 0
+  // Nothing is configured on a production deploy: no credentials exist, so the
+  // form can only ever reject you. Say that instead of letting someone hunt for
+  // a password problem that is really a missing environment variable.
+  const unconfigured = mode === 'unconfigured'
+  const valid = !unconfigured && /\S+@\S+\.\S+/.test(email) && password.length > 0
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -68,11 +73,30 @@ export function PortalLogin() {
         </button>
       </form>
 
-      <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-muted)]"
-        style={{ background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`, borderRadius: 12, padding: '10px 14px' }}>
-        <strong>Founders only.</strong> Accounts are configured via the <code>FOUNDER_*</code> env vars.
-        In dev, <code>founder1@chrgd.dev</code> / <code>chrgd-founder-1</code> works out of the box.
-      </p>
+      {/* The demo credentials are only ever printed on a build that accepts
+          them. On production this reads as a configuration notice instead. */}
+      {mode === 'demo' ? (
+        <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-muted)]"
+          style={{ background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`, borderRadius: 12, padding: '10px 14px' }}>
+          <strong>Development build.</strong> No <code>FOUNDER_*</code> accounts are set, so
+          <code> founder1@chrgd.dev</code> / <code>chrgd-founder-1</code> works. These never
+          work on a deployed build.
+        </p>
+      ) : unconfigured ? (
+        <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-muted)]"
+          style={{ background: 'color-mix(in srgb, var(--color-amber) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-amber) 30%, transparent)', borderRadius: 12, padding: '10px 14px' }}>
+          <strong>No founder accounts are configured.</strong> Nobody can sign in until
+          <code> FOUNDER_1_EMAIL</code> and <code>FOUNDER_1_PASSWORD</code> are set in the
+          deployment&rsquo;s environment variables — <em>and the app is redeployed</em>, since
+          new variables don&rsquo;t reach a deployment that is already running.
+        </p>
+      ) : (
+        <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-muted)]"
+          style={{ background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`, borderRadius: 12, padding: '10px 14px' }}>
+          <strong>Founders only.</strong> Accounts are configured via the <code>FOUNDER_*</code>
+          {' '}environment variables.
+        </p>
+      )}
     </div>
   )
 }

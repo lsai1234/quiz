@@ -106,6 +106,17 @@ a random token whose hash is stored in `sessions` — revocable server-side,
 The founders' portal keeps its own separate realm (`portal_session`,
 env-configured founder accounts) — customers can never reach `/founderhub`.
 
+**The demo founders are development-only, and that is enforced.** With no
+`FOUNDER_*` (or `ADMIN_PASSWORD`) configured, `npm run dev` accepts
+`founder1@chrgd.dev` / `chrgd-founder-1` so the hub works out of the box. A
+production build refuses them: their passwords are in this repo and printed on
+the sign-in screen, so honouring them would leave the whole business — the
+fulfilment queue, the subscriber list, the switch that arms real supplier
+ordering — open to anyone who loaded the page. An unconfigured production deploy
+therefore admits *nobody*, and the sign-in screen says so instead of answering a
+missing environment variable with "Incorrect email or password".
+`founderAuthMode()` is the single source of that state.
+
 ### Account gate before subscription checkout
 
 Subscribing requires an account, so the bundle can be saved and managed. When a
