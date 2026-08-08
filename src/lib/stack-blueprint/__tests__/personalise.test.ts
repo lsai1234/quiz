@@ -118,6 +118,30 @@ describe('applyBlueprintAIResult', () => {
     })
     expect(out.slots.find(s => s.slotId === 'slot-protein')!.selectedProductId).toBe('a')
   })
+
+  it('drops the reason for a choice it rejected, rather than captioning the wrong product', () => {
+    // The AI wanted 'c' here and wrote its sentence about 'c'. 'c' is already in
+    // the performance slot, so the pick is refused — and the sentence has to go
+    // with it. Keeping it is how the detail sheet ends up headed "Plant Protein"
+    // over a paragraph explaining why you need Vitamin C + Zinc.
+    const out = applyBlueprintAIResult(blueprint, {
+      choices: { 'slot-protein': 'c' },
+      reasons: { 'slot-protein': 'Creatine saturates your muscles for strength' },
+    })
+    const slot = out.slots.find(s => s.slotId === 'slot-protein')!
+    expect(slot.selectedProductId).toBe('a')
+    expect(slot.reason).toBe('old')
+  })
+
+  it('keeps the reason when the choice it describes was applied', () => {
+    const out = applyBlueprintAIResult(blueprint, {
+      choices: { 'slot-protein': 'b' },
+      reasons: { 'slot-protein': 'Whey hits your protein target on training days' },
+    })
+    const slot = out.slots.find(s => s.slotId === 'slot-protein')!
+    expect(slot.selectedProductId).toBe('b')
+    expect(slot.reason).toBe('Whey hits your protein target on training days')
+  })
 })
 
 describe('parseBlueprintResult', () => {
