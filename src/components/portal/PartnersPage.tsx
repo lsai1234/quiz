@@ -6,6 +6,7 @@ import { suggestCode } from '@/lib/partners/codes'
 import { describeTerms } from '@/lib/partners/terms'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { PartnerRecord } from '@/lib/partners/types'
+import type { PartnerPerformance } from '@/lib/partners/performance'
 
 const ACCENT = '#00D4FF'
 
@@ -13,6 +14,22 @@ const STATUS_COLOUR: Record<string, string> = {
   active: '#34d399',
   invited: '#fbbf24',
   suspended: '#f87171',
+}
+
+interface PerfRow { partnerId: string; codes: PartnerPerformance[] }
+
+/** One partner's codes added together. */
+function totals(rows: PartnerPerformance[] | undefined) {
+  if (!rows?.length) return null
+  return rows.reduce(
+    (t, r) => ({
+      orders: t.orders + r.orders,
+      revenue: Math.round((t.revenue + r.revenue) * 100) / 100,
+      subscriptions: t.subscriptions + r.subscriptions,
+      reversed: t.reversed + r.reversed,
+    }),
+    { orders: 0, revenue: 0, subscriptions: 0, reversed: 0 },
+  )
 }
 
 /**
@@ -26,6 +43,7 @@ const STATUS_COLOUR: Record<string, string> = {
  */
 export function PartnersPage() {
   const [records, setRecords] = useState<PartnerRecord[] | null>(null)
+  const [performance, setPerformance] = useState<PerfRow[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [query, setQuery] = useState('')
@@ -35,6 +53,7 @@ export function PartnersPage() {
       const res = await fetch('/api/portal/partners', { cache: 'no-store' })
       const d = await res.json().catch(() => ({}))
       setRecords(d.partners ?? [])
+      setPerformance(d.performance ?? [])
     } catch {
       setRecords([])
     }
@@ -125,6 +144,19 @@ export function PartnersPage() {
                     <p className="text-[11px] text-[var(--color-muted)] mt-0.5 truncate">
                       {code ? `${Math.round(code.discountPct * 100)}% off` : 'no code'} · {describeTerms(r.terms)}
                     </p>
+                    {(() => {
+                      const t = totals(performance.find((p) => p.partnerId === r.partner.id)?.codes)
+                      if (!t) return null
+                      return (
+                        <p className="text-[11px] mt-1 font-semibold" style={{ color: t.orders > 0 ? ACCENT : 'var(--color-muted)' }}>
+                          {t.orders === 0
+                            ? 'No orders yet'
+                            : `${t.orders} order${t.orders === 1 ? '' : 's'} · £${t.revenue.toFixed(2)}` +
+                              (t.subscriptions > 0 ? ` · ${t.subscriptions} subscribed` : '') +
+                              (t.reversed > 0 ? ` · ${t.reversed} refunded` : '')}
+                        </p>
+                      )
+                    })()}
                   </div>
                   <span className="text-xs font-bold text-[var(--color-muted)] flex-shrink-0">Manage →</span>
                 </div>

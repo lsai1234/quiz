@@ -171,7 +171,21 @@ export interface MemberSubscription {
    * rate, not the one the browser asked for. 0 = none claimed.
    */
   introDiscountRate?: number
-  /** Amount actually billed for the first month, after `introDiscountRate`. */
+  /**
+   * The partner's code this subscription came in on, normalised (`SARAH20`).
+   *
+   * Kept on the subscription and not only on the first order, because renewals
+   * earn commission too and every renewal raises a fresh order months later.
+   * Snapshotted, like `introDiscountRate`: a code can be paused or reissued, and
+   * the member who signed up on it stays that partner's.
+   */
+  partnerCode?: string | null
+  /** What the partner's code took off the first month, 0–1. */
+  partnerDiscountPct?: number | null
+  /**
+   * Amount actually billed for the first month, after `introDiscountRate` AND
+   * any partner code.
+   */
   firstMonth?: number
   /** Months the subscription has been active (drives the min-term guard). */
   monthsActive: number

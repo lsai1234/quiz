@@ -126,6 +126,21 @@ export interface Order {
    */
   supplierSimulated?: boolean
   trackingNumber: string | null
+  /**
+   * The partner code this order came in on, normalised (`SARAH20`), or absent.
+   *
+   * Snapshotted here rather than looked up later for the same reason
+   * `supplierSimulated` is: a partner's code can be paused, retired or reissued,
+   * and an order that came in on it stays theirs. This is what commission is
+   * calculated from, so it is also what has to survive the code changing.
+   */
+  partnerCode?: string | null
+  /**
+   * What the partner's code took off this order, 0–1 — the code's own rate, not
+   * the combined discount. Recorded because the rate on a code is editable and
+   * the amount a customer actually got is not open to later revision.
+   */
+  partnerDiscountPct?: number | null
   // ── Audit ──
   events: OrderEvent[]
   createdAt: string
@@ -152,4 +167,7 @@ export interface CreateOrderInput {
   status?: OrderStatus
   stripeSessionId?: string | null
   stripePaymentIntentId?: string | null
+  /** Attribution, when the buyer used a partner's code. Already validated. */
+  partnerCode?: string | null
+  partnerDiscountPct?: number | null
 }

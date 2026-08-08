@@ -7,6 +7,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
+import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { resolveBasket, basketSubtotal, basketItemCount, priceBasket } from '@/lib/basket/helpers'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
@@ -180,8 +181,12 @@ export function ShopShell() {
 
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
-  // What they'll actually be charged — the same computation /api/cart bills from.
-  const pricedBasket = priceBasket(resolved)
+  // A partner's code, once validated. Held here rather than in the drawer so it
+  // survives the drawer closing and reopening mid-shop.
+  const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
+  // What they'll actually be charged — the same computation /api/cart bills from,
+  // including the code, so the total on screen is the total on the card.
+  const pricedBasket = priceBasket(resolved, undefined, partnerCode?.discountPct ?? 0)
   const count = basketItemCount(lines)
 
   // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
@@ -205,7 +210,7 @@ export function ShopShell() {
   const handleBuyNow = () => {
     setExpanded(null)
     setDrawerOpen(true)
-    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now')
+    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now', partnerCode?.code ?? null)
   }
 
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
@@ -333,7 +338,9 @@ export function ShopShell() {
           subtotal={subtotal}
           priced={pricedBasket}
           checkoutState={state}
-          onCheckout={() => checkout(resolved)}
+          partnerCode={partnerCode}
+          onPartnerCode={setPartnerCode}
+          onCheckout={() => checkout(resolved, 'basket', partnerCode?.code ?? null)}
           onClose={closeDrawer}
         />
       )}

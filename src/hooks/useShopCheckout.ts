@@ -47,7 +47,12 @@ export function useShopCheckout() {
   // Survives re-renders, unlike state, so a double-tap can't slip between them.
   const inFlight = useRef(false)
 
-  const checkout = useCallback(async (resolved: ResolvedBasketLine[], source: 'basket' | 'buy_now' = 'basket') => {
+  const checkout = useCallback(async (
+    resolved: ResolvedBasketLine[],
+    source: 'basket' | 'buy_now' = 'basket',
+    /** A partner's code, as applied in the basket. Re-validated by the server. */
+    partnerCode: string | null = null,
+  ) => {
     if (resolved.length === 0) {
       setState({ status: 'error', message: 'Your basket is empty.' })
       return
@@ -77,7 +82,7 @@ export function useShopCheckout() {
       const res = await fetch('/api/cart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines }),
+        body: JSON.stringify({ lines, partnerCode }),
       })
       const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string } = await res.json()
       if (!res.ok || !data.checkoutUrl) {

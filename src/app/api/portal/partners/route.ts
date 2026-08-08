@@ -12,6 +12,7 @@ import {
   type PartnerStatus,
   type PayoutTerms,
 } from '@/lib/partners'
+import { performanceForCodes } from '@/lib/partners/performance'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,7 +26,19 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await syncPortalRuntime()
-  return NextResponse.json({ partners: await listPartnerRecords() })
+  const partners = await listPartnerRecords()
+
+  // What each of them has actually brought in. Counted from the orders rather
+  // than a stored tally, so a refund stops counting without anything having to
+  // remember to decrement. Not commission — that needs the ledger (phase 3).
+  const performance = await Promise.all(
+    partners.map(async (p) => ({
+      partnerId: p.partner.id,
+      codes: await performanceForCodes(p.codes.map((c) => c.code)),
+    })),
+  )
+
+  return NextResponse.json({ partners, performance })
 }
 
 interface Body {

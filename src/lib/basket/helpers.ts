@@ -74,7 +74,12 @@ export function basketSubtotal(resolved: ResolvedBasketLine[]): number {
  * at all, so customers who had earned "£90+ bundle, 15% off" were quietly
  * charged full price.
  */
-export function priceBasket(resolved: ResolvedBasketLine[], config = getPricingConfig()): OneOffPricing {
+export function priceBasket(
+  resolved: ResolvedBasketLine[],
+  config = getPricingConfig(),
+  /** A validated partner code rate, 0–1 — stacks on top of the bundle tier. */
+  partnerPct = 0,
+): OneOffPricing {
   return priceOneOffLines(
     resolved.map(({ product, variant, quantity }) => ({
       price: variant.price,
@@ -82,6 +87,7 @@ export function priceBasket(resolved: ResolvedBasketLine[], config = getPricingC
       quantity,
     })),
     config,
+    partnerPct,
   )
 }
 

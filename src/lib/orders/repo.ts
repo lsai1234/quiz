@@ -28,8 +28,8 @@ export async function saveOrder(order: Order): Promise<void> {
   const db = await getEngine()
   await db.run(
     `INSERT INTO orders
-       (id, user_id, email, channel, status, data, stripe_session_id, stripe_payment_id, supplier_order_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, user_id, email, channel, status, data, stripe_session_id, stripe_payment_id, supplier_order_id, partner_code, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id,
        email = excluded.email,
@@ -39,6 +39,7 @@ export async function saveOrder(order: Order): Promise<void> {
        stripe_session_id = excluded.stripe_session_id,
        stripe_payment_id = excluded.stripe_payment_id,
        supplier_order_id = excluded.supplier_order_id,
+       partner_code = excluded.partner_code,
        updated_at = excluded.updated_at`,
     [
       order.id,
@@ -50,6 +51,7 @@ export async function saveOrder(order: Order): Promise<void> {
       order.stripeSessionId,
       order.stripePaymentIntentId,
       order.supplierOrderId,
+      order.partnerCode ?? null,
       order.createdAt,
       order.updatedAt,
     ],
@@ -90,6 +92,38 @@ export async function getOrderByReference(reference: string): Promise<Order | nu
 export async function getOrderByPaymentIntent(paymentIntentId: string): Promise<Order | null> {
   const db = await getEngine()
   return parse(await db.get<Row>('SELECT data FROM orders WHERE stripe_payment_id = ?', [paymentIntentId]))
+}
+
+/**
+ * Whether this email has ever bought before.
+ *
+ * The question a first-order-only partner code has to answer. Deliberately
+ * counts anything past `pending_payment`: an abandoned checkout is not a
+ * purchase, and holding it against someone would refuse a genuine new customer
+ * their discount because they once got as far as the payment page.
+ *
+ * Matched on the indexed `email` column, lower-cased on both sides — Stripe
+ * hands back whatever casing the customer typed.
+ */
+export async function hasOrdered(email: string): Promise<boolean> {
+  const trimmed = email.trim().toLowerCase()
+  if (!trimmed) return false
+  const db = await getEngine()
+  const row = await db.get<{ id: string }>(
+    "SELECT id FROM orders WHERE LOWER(email) = ? AND status <> 'pending_payment' LIMIT 1",
+    [trimmed],
+  )
+  return row != null
+}
+
+/** Every order attributed to a partner's code. The raw material of the ledger. */
+export async function listOrdersByPartnerCode(code: string): Promise<Order[]> {
+  const db = await getEngine()
+  const rows = await db.all<Row>(
+    'SELECT data FROM orders WHERE partner_code = ? ORDER BY created_at DESC LIMIT 1000',
+    [code],
+  )
+  return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
 }
 
 /**

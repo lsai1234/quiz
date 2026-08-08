@@ -848,6 +848,12 @@ export function resolveTier(
   return { pct: best?.discountPct ?? 0, tier: best }
 }
 
+/** A rate from anywhere, forced into 0–1. Anything else reads as no discount. */
+export function clampRate(pct: number | null | undefined): number {
+  if (pct == null || !Number.isFinite(pct)) return 0
+  return Math.min(1, Math.max(0, pct))
+}
+
 /** Cost of one unit — explicit, or estimated from price. */
 export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>, unitPrice: number, config = getPricingConfig()): number {
   if (product.cost != null) return product.cost
@@ -912,6 +918,13 @@ export interface OneOffPricing {
   /** The qualifying tier rate, 0–1. */
   tierPct: number
   tierLabel: string | null
+  /** The partner code's own rate, 0–1. Zero when no code was used. */
+  partnerPct: number
+  /**
+   * Tier and partner code combined, 0–1 — what actually comes off each line
+   * before the floor. Multiplicative: 20% then 20% is 36%, not 40%.
+   */
+  combinedPct: number
 }
 
 /**
@@ -934,19 +947,33 @@ export interface OneOffPricing {
 export function priceOneOffLines(
   lines: { price: number; cost: number; quantity?: number }[],
   config = getPricingConfig(),
+  /**
+   * A partner code's rate, 0–1, already validated by `redeemPartnerCode`.
+   *
+   * Stacks on top of the bundle tier deliberately — see
+   * `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. The margin floor below still
+   * applies, so however the two add up nothing is sold under cost.
+   */
+  partnerPct = 0,
 ): OneOffPricing {
   const round = (n: number) => Math.round(n * 100) / 100
   const qtyOf = (l: { quantity?: number }) => Math.max(1, Math.round(l.quantity ?? 1))
 
   // Qualification is measured on the UNDISCOUNTED order — the tier is what the
-  // basket has earned, not what it costs after earning it.
+  // basket has earned, not what it costs after earning it. A partner's code does
+  // not change what the basket earned, so it plays no part here either.
   const subtotal = lines.reduce((s, l) => s + l.price * qtyOf(l), 0)
   const itemCount = lines.reduce((n, l) => n + qtyOf(l), 0)
   const { pct, tier } = resolveTier(config.bundleTiers, subtotal, itemCount)
 
+  const partner = Number.isFinite(partnerPct) ? Math.min(1, Math.max(0, partnerPct)) : 0
+  // Multiplicative, not additive: adding them would overstate what comes off at
+  // every rung and could ask for more than the price can carry.
+  const combined = Math.round((1 - (1 - pct) * (1 - partner)) * 10000) / 10000
+
   const priced: OneOffPricedLine[] = lines.map((l) => {
     const quantity = qtyOf(l)
-    const discountedUnitPrice = round(discountWithFloor(l.price, pct, l.cost, config))
+    const discountedUnitPrice = round(discountWithFloor(l.price, combined, l.cost, config))
     return {
       unitPrice: round(l.price),
       discountedUnitPrice,
@@ -963,6 +990,8 @@ export function priceOneOffLines(
     discount: round(subtotal - total),
     tierPct: pct,
     tierLabel: tier?.label ?? null,
+    partnerPct: partner,
+    combinedPct: combined,
   }
 }
 
@@ -1238,6 +1267,15 @@ export interface SubscriptionPlanOptions {
    * hasn't scratched yet, so nothing is auto-applied. See `resolveIntroDiscount`.
    */
   introDiscountOverride?: number | null
+  /**
+   * A partner's code rate (0–1), already validated by `redeemPartnerCode`.
+   *
+   * Applied to the first month alongside the intro offer, and to the one-off
+   * total alongside the bundle tier — so the receipt on screen shows what the
+   * card will actually be charged. Stacks multiplicatively; see
+   * `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2.
+   */
+  partnerDiscountPct?: number | null
 }
 
 /**
@@ -1517,7 +1555,7 @@ export function calculatePricing(
   const rrpTotal = oneOffLines.reduce((s, l) => s + l.rrp, 0)
   // Delegated so the price shown here and the price billed to Stripe come from
   // one implementation and cannot drift apart — see `priceOneOffLines`.
-  const oneOff = priceOneOffLines(oneOffLines, config)
+  const oneOff = priceOneOffLines(oneOffLines, config, clampRate(opts.partnerDiscountPct))
   const oneOffSubtotal = oneOff.subtotal
   const bundleTier = { pct: oneOff.tierPct, tier: oneOff.tierLabel ? { label: oneOff.tierLabel } : null }
   const oneOffTotal = oneOff.total
@@ -1562,7 +1600,11 @@ export function calculatePricing(
   // with the old 25% card came to 40% off against a floor set at ~37%. Applying
   // it line by line puts the intro under the same rule as the subscribe-&-save
   // rate, and the two now compound against one floor rather than around it.
-  const introDiscount = subPlan.length > 0 ? resolveIntroDiscount(opts.introDiscountOverride, config) : 0
+  const introRate = subPlan.length > 0 ? resolveIntroDiscount(opts.introDiscountOverride, config) : 0
+  // A partner's code rides on the same leg. Multiplicative, so 20% then 20% is
+  // 36% and not 40% — and it goes through the same per-line floor above.
+  const partnerRate = clampRate(opts.partnerDiscountPct)
+  const introDiscount = 1 - (1 - introRate) * (1 - partnerRate)
   const subscriptionFirstMonth = round(
     subPlan.reduce((s, line) => {
       // `unitsPerShipment` is always ≥ 1, so this recovers the subscribe-&-save

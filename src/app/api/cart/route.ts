@@ -6,6 +6,7 @@ import { getSubscription } from '@/lib/db/hub-data'
 import { createOrderFromCheckout, newOrderId } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
+import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
 
@@ -38,7 +39,7 @@ function originFrom(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  let body: { lines?: unknown }
+  let body: { lines?: unknown; partnerCode?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -77,6 +78,33 @@ export async function POST(req: Request) {
     matched.push({ ...match, quantity: line.quantity! })
   }
 
+  const pricedLines = matched.map((m) => ({
+    price: m.variant.price,
+    cost: unitCostOf(m.product, m.variant.price),
+    quantity: m.quantity,
+  }))
+
+  const user = await getHubUser().catch(() => null)
+
+  /**
+   * Re-validate the partner code HERE, against the undiscounted subtotal.
+   *
+   * `/api/partner-code` already checked it while they were typing, but that was
+   * advisory: between then and now the code can be paused, capped out or its
+   * partner suspended, and the browser is free to send whatever it likes. A bad
+   * code is not a failed checkout — it silently bills full price would be worse,
+   * so the response says so and the basket can show it.
+   */
+  const undiscountedSubtotal = pricedLines.reduce((s, l) => s + l.price * Math.max(1, l.quantity), 0)
+  const typedCode = typeof body.partnerCode === 'string' ? body.partnerCode : null
+  const redemption = typedCode
+    ? await redeemPartnerCode(typedCode, { subtotal: undiscountedSubtotal, email: user?.email ?? null })
+    : null
+  if (redemption && !redemption.ok) {
+    return NextResponse.json({ error: redemption.reason, codeRejected: true }, { status: 400 })
+  }
+  const partnerPct = redemption?.ok ? redemption.discountPct : 0
+
   /**
    * The discount, applied server-side, from the same function the storefront
    * displays (`priceOneOffLines`).
@@ -86,13 +114,7 @@ export async function POST(req: Request) {
    * shop never applied the configured tiers at all. Both the number on screen
    * and the number on the card now come from here.
    */
-  const priced = priceOneOffLines(
-    matched.map((m) => ({
-      price: m.variant.price,
-      cost: unitCostOf(m.product, m.variant.price),
-      quantity: m.quantity,
-    })),
-  )
+  const priced = priceOneOffLines(pricedLines, getPricingConfig(), partnerPct)
 
   const orderLines: OrderLine[] = matched.map((m, i) => ({
     sku: m.variant.sku ?? null,
@@ -129,7 +151,6 @@ export async function POST(req: Request) {
   }
 
   const channel = channelFrom(lines)
-  const user = await getHubUser().catch(() => null)
 
   // A signed-in member who already has a Stripe customer (from subscribing)
   // should buy one-offs against the SAME customer, so their orders, cards and
@@ -147,7 +168,12 @@ export async function POST(req: Request) {
       lines: orderLines,
       userId: user?.id ?? null,
       email: user?.email ?? null,
+      partnerCode: redemption?.ok ? redemption.code.code : null,
+      partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
     })
+    // The code is spent when an order exists, not when someone types it — a cap
+    // that counted attempts would exhaust itself on people who never bought.
+    if (redemption?.ok) await recordCodeUse(redemption.code.code)
     try {
       const { createCheckoutSession } = await import('@/lib/payments/stripe')
       const origin = originFrom(req)
@@ -182,6 +208,9 @@ export async function POST(req: Request) {
     userId: user?.id ?? null,
     email: user?.email ?? null,
     status: 'paid',
+    partnerCode: redemption?.ok ? redemption.code.code : null,
+    partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
   })
+  if (redemption?.ok) await recordCodeUse(redemption.code.code)
   return NextResponse.json({ checkoutUrl: '#mock-checkout', mock: true, orderId: order.id })
 }

@@ -202,6 +202,8 @@ function CodePanel({ code, busy, onSave }: { code: PartnerCode; busy: boolean; o
 
   return (
     <Group title={code.code} desc={`Used ${code.terms.uses} time${code.terms.uses === 1 ? '' : 's'}. Created ${code.createdAt.slice(0, 10)}.`}>
+      <ShareLink code={code.code} />
+
       <Field label="Discount (%)" hint="What a follower gets off. This is the only extra discount on the site.">
         <input className={INPUT} style={inputStyle} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
       </Field>
@@ -246,6 +248,54 @@ function CodePanel({ code, busy, onSave }: { code: PartnerCode; busy: boolean; o
         {busy ? 'Saving…' : 'Save code'}
       </button>
     </Group>
+  )
+}
+
+/**
+ * The link a partner actually posts.
+ *
+ * A code typed at checkout works, but expecting someone's followers to remember
+ * it three screens later is where attribution goes missing. `?ref=` banks it in
+ * a cookie on arrival (see `middleware.ts`) and the basket applies it by itself.
+ */
+function ShareLink({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false)
+  // Read at render rather than hard-coded: the hub runs on preview domains too,
+  // and a link to the wrong host is worse than no link.
+  const url = typeof window === 'undefined' ? `/?ref=${code}` : `${window.location.origin}/?ref=${code}`
+
+  return (
+    <div className="mb-3">
+      <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Their link</span>
+      <div className="flex gap-2">
+        <input
+          readOnly
+          value={url}
+          onFocus={(e) => e.currentTarget.select()}
+          className={INPUT}
+          style={{ ...inputStyle, fontSize: '11px' }}
+        />
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(url)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1500)
+            } catch {
+              /* clipboard blocked — the field is selectable, which is the fallback */
+            }
+          }}
+          className={BTN}
+          style={{ background: 'var(--color-surface)', color: ACCENT, border: '1px solid var(--color-border)' }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <span className="text-[10px] text-[var(--color-muted)] block mt-1 leading-snug">
+        Anyone following this gets the code applied at checkout without typing it. Lasts 30 days.
+      </span>
+    </div>
   )
 }
 

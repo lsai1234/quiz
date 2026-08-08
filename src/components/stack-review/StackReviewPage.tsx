@@ -24,6 +24,7 @@ import { StackDeck } from './StackDeck'
 import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
+import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { ProductSwapModal } from './ProductSwapModal'
@@ -240,6 +241,10 @@ export function StackReviewPage() {
 
   const { state: checkoutState, checkout, resume: resumeCheckout, reset: resetCheckout } = useStackCheckout()
 
+  // A partner's code, once validated. Feeds both the receipt and the checkout,
+  // so what is shown and what is charged come from the same number.
+  const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
+
   const subOpts = useMemo(
     () => ({
       usageByProductId: subscriptionUsage,
@@ -247,8 +252,10 @@ export function StackReviewPage() {
       introDiscountOverride: revealedIntroDiscount,
       defaultChangePolicy: changePolicy.default,
       changePolicyByProductId: changePolicy.byProductId,
+      partnerDiscountPct: partnerCode?.discountPct ?? null,
+      partnerCode: partnerCode?.code ?? null,
     }),
-    [subscriptionUsage, stackLevel, revealedIntroDiscount, changePolicy],
+    [subscriptionUsage, stackLevel, revealedIntroDiscount, changePolicy, partnerCode],
   )
 
   const sortedSlots = useMemo(
@@ -507,6 +514,15 @@ export function StackReviewPage() {
               onReveal={setRevealedIntroDiscount}
             />
           )}
+
+          {/* Above the receipt, so the totals below already include it. */}
+          <div className="mb-3 flex flex-col">
+            <PartnerCodeBox
+              subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}
+              applied={partnerCode}
+              onChange={setPartnerCode}
+            />
+          </div>
 
           {/* The high-level receipt — what you're buying, discounts, total */}
           <PlanReceipt

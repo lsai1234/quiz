@@ -192,8 +192,8 @@ export function buildSubscriptionCheckout(
   answers?: QuizAnswers | null,
   options: SubscriptionPlanOptions = {},
 ): SubscriptionCheckoutResult {
-  const { usageByProductId, level, introDiscountOverride } = options
-  const planOpts = { usageByProductId, level, introDiscountOverride }
+  const { usageByProductId, level, introDiscountOverride, partnerDiscountPct } = options
+  const planOpts = { usageByProductId, level, introDiscountOverride, partnerDiscountPct }
   const plan = buildSubscriptionPlan(blueprint, catalogue, answers, undefined, planOpts)
   const pricing = calculatePricing(blueprint, catalogue, answers, undefined, planOpts)
   const errors: ValidationError[] = []

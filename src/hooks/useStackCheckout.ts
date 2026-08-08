@@ -96,6 +96,10 @@ export function useStackCheckout() {
         /** The member's "what if this becomes unavailable?" answer from the journey. */
         defaultChangePolicy?: ChangePolicy
         changePolicyByProductId?: Record<string, ChangePolicy>
+        /** A partner's code, as applied on the review screen. Re-validated server-side. */
+        partnerCode?: string | null
+        /** Its rate, for the displayed totals only. The server decides the real one. */
+        partnerDiscountPct?: number | null
       } = {},
     ) => {
       setState({ status: 'loading' })
@@ -108,6 +112,9 @@ export function useStackCheckout() {
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
           introDiscountOverride: subOpts.introDiscountOverride,
+          // Display only — the server re-validates the code and recomputes the
+          // first month from its own numbers in `finalizeCheckout`.
+          partnerDiscountPct: subOpts.partnerDiscountPct,
         })
         if (!result.ok) {
           setState({ status: 'error', messages: result.errors.map(validationErrorMessage) })
@@ -117,6 +124,7 @@ export function useStackCheckout() {
           usageByProductId: subOpts.usageByProductId,
           level: subOpts.level,
           introDiscountOverride: subOpts.introDiscountOverride,
+          partnerDiscountPct: subOpts.partnerDiscountPct,
           defaultChangePolicy: subOpts.defaultChangePolicy,
           changePolicyByProductId: subOpts.changePolicyByProductId,
           // Snapshot the member's hard exclusions with the plan. The server
@@ -128,6 +136,7 @@ export function useStackCheckout() {
         const payload: CheckoutPayload = {
           subscription: memberSubscription,
           quiz: answers ? { answers, level: subOpts.level } : null,
+          partnerCode: subOpts.partnerCode ?? null,
         }
         await runFinalize(payload, result.checkout)
         return
@@ -147,7 +156,7 @@ export function useStackCheckout() {
         const res = await fetch('/api/cart', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lines: validation.lines }),
+          body: JSON.stringify({ lines: validation.lines, partnerCode: subOpts.partnerCode ?? null }),
         })
         const data: { checkoutUrl?: string; mock?: boolean; error?: string } = await res.json()
         if (!res.ok || !data.checkoutUrl) {

@@ -33,6 +33,8 @@ interface Order {
   supplierOrderId: string | null
   supplierStatus: string | null
   trackingNumber: string | null
+  partnerCode?: string | null
+  partnerDiscountPct?: number | null
   events: OrderEvent[]
   createdAt: string
   updatedAt: string
@@ -155,6 +157,15 @@ export function OrderDetail({ id }: { id: string }) {
               <span className="text-sm text-[var(--color-text)] shrink-0">{money(l.unitPrice * l.quantity, order.currency)}</span>
             </div>
           ))}
+          {order.partnerCode && (
+            <div className="p-3 flex items-center justify-between">
+              <span className="text-xs text-[var(--color-muted)]">
+                Came in on <span className="font-bold" style={{ color: ACCENT }}>{order.partnerCode}</span>
+                {order.partnerDiscountPct ? ` · ${Math.round(order.partnerDiscountPct * 100)}% off` : ''}
+              </span>
+              <span className="text-[11px] text-[var(--color-muted)]">partner order</span>
+            </div>
+          )}
           <div className="p-3 flex items-center justify-between">
             <span className="text-sm font-bold text-[var(--color-text)]">Total</span>
             <span className="text-sm font-bold text-[var(--color-text)]">{money(order.total, order.currency)}</span>

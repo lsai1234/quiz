@@ -14,6 +14,7 @@ import { readIntroLedger, ledgerTotals } from '@/lib/stack-blueprint/intro-alloc
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
 import { setPortalPricingOverrides, resetPortalPricing } from '@/lib/portal/store'
+import { createPartner, setPartnerStatus } from '@/lib/partners'
 
 // The card is switched off in the live config — a partner's code is the only
 // extra discount now. These tests pin the BANKING of a claim, which still has to
@@ -84,6 +85,60 @@ describe('finalizeCheckout', () => {
     const stored = await getSubscription(user.id)
     expect(stored?.introDiscountRate).toBe(TOP)
     expect(stored?.firstMonth).toBe(Math.round(42 * (1 - TOP) * 100) / 100)
+  })
+
+  it('applies a partner code to the first month, and remembers whose it was', async () => {
+    const partner = await createPartner({ email: 'code-sub@example.com', name: 'Sub Partner', discountPct: 0.2 })
+    const user = await createUser({ email: 'referred@example.com', passwordHash: 'h' })
+
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      consent,
+      partnerCode: partner.codes[0].code,
+    })
+
+    const stored = await getSubscription(user.id)
+    // The code lives on the SUBSCRIPTION, not just the first order: renewals
+    // earn commission too, and each one raises a fresh order months later.
+    expect(stored?.partnerCode).toBe(partner.codes[0].code)
+    expect(stored?.partnerDiscountPct).toBe(0.2)
+    expect(stored?.firstMonth).toBe(33.6) // 42 less 20%
+    // Month two onwards is untouched — a first-order code is not a standing rate.
+    expect(stored?.flatMonthly).toBe(42)
+  })
+
+  it('carries the attribution onto every order the subscription raises', async () => {
+    const partner = await createPartner({ email: 'renewals@example.com', name: 'Renewals Partner' })
+    const user = await createUser({ email: 'renewer@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      consent,
+      partnerCode: partner.codes[0].code,
+    })
+
+    const { listOrdersByPartnerCode } = await import('@/lib/orders/repo')
+    const orders = await listOrdersByPartnerCode(partner.codes[0].code)
+    expect(orders.length).toBeGreaterThan(0)
+    expect(orders[0].partnerCode).toBe(partner.codes[0].code)
+  })
+
+  it('takes nothing off for a code that no longer works, rather than failing', async () => {
+    // Someone mid-purchase should not be bounced out of a checkout because a
+    // code went stale between the basket and the payment.
+    const partner = await createPartner({ email: 'gone@example.com', name: 'Gone Partner' })
+    await setPartnerStatus(partner.partner.id, 'suspended')
+
+    const user = await createUser({ email: 'unlucky@example.com', passwordHash: 'h' })
+    const result = await finalizeCheckout(user.id, user.email, {
+      subscription,
+      consent,
+      partnerCode: partner.codes[0].code,
+    })
+
+    expect(result.mock).toBe(true)
+    const stored = await getSubscription(user.id)
+    expect(stored?.partnerCode).toBeNull()
+    expect(stored?.firstMonth).toBe(42)
   })
 
   it('refuses a discount the client made up, without failing the checkout', async () => {

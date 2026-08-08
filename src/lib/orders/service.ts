@@ -88,7 +88,13 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     supplierOrderId: null,
     supplierStatus: null,
     trackingNumber: null,
-    events: [event('created', `channel=${input.channel}`), ...(status === 'paid' ? [event('paid')] : [])],
+    partnerCode: input.partnerCode ?? null,
+    partnerDiscountPct: input.partnerDiscountPct ?? null,
+    events: [
+      event('created', `channel=${input.channel}`),
+      ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),
+      ...(status === 'paid' ? [event('paid')] : []),
+    ],
     createdAt: now(),
     updatedAt: now(),
   }
@@ -145,6 +151,11 @@ export async function createSubscriptionOrder(input: {
     shippingAddress: input.shippingAddress ?? input.sub.shippingAddress ?? null,
     stripePaymentIntentId: input.stripePaymentIntentId ?? null,
     status: 'paid',
+    // Carried from the subscription onto every delivery it raises, first box and
+    // renewals alike — a partner earns on renewals for a fixed window, and the
+    // order is where that gets counted.
+    partnerCode: input.sub.partnerCode ?? null,
+    partnerDiscountPct: input.sub.partnerDiscountPct ?? null,
   })
 }
 

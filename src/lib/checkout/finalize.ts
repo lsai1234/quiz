@@ -21,6 +21,7 @@ import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
 import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
+import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
 import { consentErrorMessage, recordConsent, validateConsent } from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
 
@@ -63,13 +64,37 @@ export class CheckoutRejected extends Error {
 export function claimIntroDiscount(
   sub: MemberSubscription,
   config = getPricingConfig(),
+  /**
+   * A partner's code rate, 0–1, already validated. Stacks with the intro rate
+   * multiplicatively — see `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. With the
+   * scratch card off the intro rate is 0, so in practice this IS the first
+   * month's discount; the stacking maths is here so it stays correct if a
+   * site-wide first-month offer ever comes back.
+   */
+  partnerPct = 0,
 ): MemberSubscription {
   const rate = resolveIntroDiscount(sub.introDiscountRate ?? null, config)
+  const partner = Number.isFinite(partnerPct) ? Math.min(1, Math.max(0, partnerPct)) : 0
+  const combined = 1 - (1 - rate) * (1 - partner)
   return {
     ...sub,
     introDiscountRate: rate,
-    firstMonth: Math.round(sub.flatMonthly * (1 - rate) * 100) / 100,
+    partnerDiscountPct: partner > 0 ? partner : null,
+    firstMonth: Math.round(sub.flatMonthly * (1 - combined) * 100) / 100,
   }
+}
+
+/**
+ * The whole first-month discount, intro offer and partner code combined.
+ *
+ * Derived rather than stored so it can never disagree with the two rates it
+ * comes from — this is what Stripe's one-cycle coupon is created at, and what
+ * the member is actually charged.
+ */
+export function firstMonthDiscountOf(sub: MemberSubscription): number {
+  const intro = sub.introDiscountRate ?? 0
+  const partner = sub.partnerDiscountPct ?? 0
+  return Math.round((1 - (1 - intro) * (1 - partner)) * 10000) / 10000
 }
 
 export interface FinalizeOptions {
@@ -98,17 +123,37 @@ export async function finalizeCheckout(
   const consent = validateConsent(payload.consent)
   if (!consent.ok) throw new CheckoutRejected(consentErrorMessage(consent.error))
 
-  // 3. Store the member's bundle + quiz answers on their account, banking the
+  // 3. The partner code, re-validated here against OUR monthly total. What the
+  //    browser sent is a string; the discount is decided on this side. A code
+  //    that no longer works does not fail the checkout — it takes nothing off
+  //    and attributes nothing, which is the honest outcome for someone who is
+  //    mid-purchase.
+  const redemption = payload.partnerCode
+    ? await redeemPartnerCode(payload.partnerCode, {
+        subtotal: payload.subscription.flatMonthly,
+        email: email || payload.subscription.customerEmail || null,
+      })
+    : null
+  if (redemption && !redemption.ok) {
+    console.warn(`[finalizeCheckout] partner code refused: ${redemption.reason}`)
+  }
+
+  // 4. Store the member's bundle + quiz answers on their account, banking the
   //    first-month discount they revealed as we go.
-  const subscription = claimIntroDiscount({
-    ...payload.subscription,
-    customerEmail: email || payload.subscription.customerEmail,
-    // Snapshot the hard dietary/stimulant exclusions now, so a substitution
-    // months from now is judged against what they told us at the point of sale
-    // rather than whatever their answers happen to say later.
-    safetyConstraints:
-      payload.subscription.safetyConstraints ?? safetyConstraintsFrom(payload.quiz?.answers),
-  })
+  const subscription = claimIntroDiscount(
+    {
+      ...payload.subscription,
+      customerEmail: email || payload.subscription.customerEmail,
+      partnerCode: redemption?.ok ? redemption.code.code : null,
+      // Snapshot the hard dietary/stimulant exclusions now, so a substitution
+      // months from now is judged against what they told us at the point of sale
+      // rather than whatever their answers happen to say later.
+      safetyConstraints:
+        payload.subscription.safetyConstraints ?? safetyConstraintsFrom(payload.quiz?.answers),
+    },
+    getPricingConfig(),
+    redemption?.ok ? redemption.discountPct : 0,
+  )
   await saveSubscription(userId, subscription)
   if (payload.quiz) await saveQuiz(userId, payload.quiz)
 
@@ -132,14 +177,20 @@ export async function finalizeCheckout(
     console.error('[finalizeCheckout] intro-discount ledger write failed:', err)
   }
 
-  // 4. Start payment.
+  // Spend the code now the subscription exists, not while it was being typed.
+  if (redemption?.ok) await recordCodeUse(redemption.code.code)
+
+  // 5. Start payment.
   if (getPaymentSource() === 'stripe') {
     const base = origin || process.env.APP_URL || ''
     const { createSubscriptionSession } = await import('@/lib/payments/stripe')
     const { url } = await createSubscriptionSession({
       monthlyTotal: subscription.flatMonthly,
-      // The rate validated above, not the one the browser sent.
-      introDiscountRate: subscription.introDiscountRate,
+      // Intro offer and partner code as one coupon — Stripe applies a single
+      // `duration: 'once'` discount, and two separate ones would compound in a
+      // way neither rate describes. Both rates validated above, neither taken
+      // from the browser.
+      introDiscountRate: firstMonthDiscountOf(subscription),
       clientReferenceId: userId,
       // Reuse the Stripe customer if this member has subscribed before, so their
       // cards and billing history stay on one record.
@@ -153,7 +204,7 @@ export async function finalizeCheckout(
     // No URL back — fall through to the mock confirmation rather than dead-ending.
   }
 
-  // 5. Mock mode: raise the first subscription order now so the hub + fulfilment
+  // 6. Mock mode: raise the first subscription order now so the hub + fulfilment
   //    flow can be exercised without Stripe, then show the confirmation.
   try {
     const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')

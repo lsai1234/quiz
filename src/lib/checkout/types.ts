@@ -19,4 +19,9 @@ export interface CheckoutPayload {
    * documents that means rather than trusting this.
    */
   consent?: ConsentSubmission
+  /**
+   * A partner's code, as typed. Re-validated server-side in `finalizeCheckout`
+   * — what the browser sends is a string, never a discount.
+   */
+  partnerCode?: string | null
 }

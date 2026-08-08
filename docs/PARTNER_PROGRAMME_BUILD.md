@@ -6,8 +6,8 @@ partner, a `/partner` login where they track their own numbers and their terms,
 and management of all of it in the Founders Hub. Plus switching the scratch card
 off.
 
-This document is the **plan**. **Phases 0 and 1 are now built** — see the status
-notes on each. Phases 2–6 are not.
+This document is the **plan**. **Phases 0, 1 and 2 are now built** — see the
+status notes on each. Phases 3–6 are not.
 
 **Read §2A before touching the scratch card.** Switching it off is the smallest-
 looking change here and the most dangerous: the pricing model keeps reading the
@@ -108,14 +108,15 @@ new modelling. Ship phases 1 and 5 (internal only) in the meantime.
 > thing phase 2 cannot be written without. Three ways to settle it:
 >
 > 1. **Allow the stack** and accept −£6.24 on the deepest attributed first
->    order, recovered from month two.
+>    order, recovered from month two. ← **CHOSEN, and built in phase 2.**
 > 2. **Don't stack** — take the better of the partner code and the subscription
 >    rate, never both. Simplest to explain to a follower ("20% off, or your
 >    subscription rate, whichever is bigger").
 > 3. **Cap the combined discount** at whatever leaves the first order at or
 >    above zero after commission (~30% on these numbers).
 >
-> Nothing is built either way yet: codes are stored but nothing redeems them.
+> Settled on option 1. Multiplicative stacking, with the margin floor still
+> applied per line underneath so nothing is ever sold below cost.
 
 ### D3 — Are partners customers?
 
@@ -400,7 +401,7 @@ partner will be shown, so they need a real home first.
 discount and the commission terms, and suspend them; and a terms change leaves a
 dated row with a reason. Nothing customer-facing changes. Codes do nothing yet.
 
-### Phase 2 — Redeeming a code (needs the D2 stacking answer)
+### Phase 2 — Redeeming a code  ·  **DONE**
 
 - Scratch card off; `firstMonthDiscount` set per D1.
 - A discount-code field at checkout — **new**, nothing like it exists today.
@@ -416,6 +417,54 @@ it, and an expired/suspended code is refused with a reason.
 
 *Watch:* every order path must carry attribution — quiz checkout, shop, bundles,
 subscription first order. Missing one means silent under-payment.
+
+> **Built. D2 settled: codes stack.** Option 1 — a code comes off on top of the
+> bundle or subscription rate, and an attributed order on the deepest rung loses
+> a few pounds on month one, recovered from month two. Accepted as an
+> acquisition cost.
+>
+> Stacking is **multiplicative**, never additive: 20% then 20% is 36%, not 40%.
+> Adding them would overstate what comes off at every rung and, at the deep end,
+> ask for more than a 2× price can carry. Verified end to end on a £316.92
+> basket — £291.56 with the bundle tier alone (8%), £233.23 with `SARAH20` on
+> top (26.4%, which is exactly `1 − 0.92 × 0.8`).
+>
+> The margin floor still applies **per line, under the combined rate**, so
+> however the discounts add up nothing is sold below cost.
+>
+> How it hangs together:
+>
+> | Piece | Where |
+> |---|---|
+> | The one place a code becomes money off | `lib/partners/redeem.ts` |
+> | Live check while typing (advisory) | `POST /api/partner-code` |
+> | Re-validation at purchase (authoritative) | `/api/cart`, `finalizeCheckout` |
+> | One-off pricing, code included | `priceOneOffLines(lines, config, partnerPct)` |
+> | Subscription first month, one Stripe coupon | `claimIntroDiscount` + `firstMonthDiscountOf` |
+> | Attribution, written at order-write time | `orders.partner_code`, `Order.partnerCode` |
+> | `?ref=CODE` → 30-day cookie | `src/middleware.ts` |
+> | The box itself | `components/checkout/PartnerCodeBox.tsx` |
+> | What a partner has brought in | `lib/partners/performance.ts` |
+>
+> Three things worth knowing:
+>
+> - **The typing check is advisory.** Between it and the payment a code can be
+>   paused, capped out or its partner suspended, so every checkout re-validates
+>   through the same function. The browser sends a string; the discount is always
+>   decided on this side.
+> - **A stale code never fails a checkout.** On the subscription path it takes
+>   nothing off and attributes nothing rather than bouncing someone out
+>   mid-purchase; on the one-off path the response says so, because that basket
+>   is still on screen and can be fixed.
+> - **The code is spent when an order exists**, not when someone types it. A cap
+>   counting attempts would exhaust itself on people who never bought — the same
+>   mistake the intro-allocation ledger exists to avoid.
+>
+> Still open, and phase 3's job: nothing here is money **owed**. Commission needs
+> the return window, a `confirmed` state and the rate stored on the day. What the
+> hub shows now is orders and revenue per partner, counted from the orders
+> themselves so a refund stops counting without anything having to remember to
+> decrement a tally.
 
 ### Phase 3 — The commission ledger
 
