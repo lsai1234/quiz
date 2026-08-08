@@ -86,9 +86,35 @@ Do this one first. Vercel will hand you the exact information Step 2 needs.
 > ever specifically need Cloudflare's firewall, but read the "If you ever want
 > the orange cloud" note at the bottom first.
 
-**Also check:** if you see any existing record with the name `@` pointing
-somewhere else, delete it. Two records fighting over the same name is a
-guaranteed outage.
+### If you get "a record with that host already exists"
+
+This is the most common first stumble, and it's harmless. Something is already
+sitting on `@` — usually a leftover from an older setup, a parking page, or
+something Cloudflare added when you bought the domain. DNS won't allow two
+records on the same name, so you have to **replace** it rather than add
+alongside it.
+
+1. Close the error and go back to the **Records** list.
+2. Find the row whose **Name** is `getchrgd.co.uk` — that's how `@` is shown in
+   the list. It'll be type **A**, **AAAA** or **CNAME**.
+3. **Note what it currently points to** before you touch it, so you can put it
+   back if you need to.
+4. Tap **Edit** on that row and change it to the values above.
+5. If Cloudflare won't let you change the Type of an existing record, **delete**
+   that row and add yours fresh.
+
+**Only touch that one row.** Leave these alone:
+
+- **`quiz`** — that's your live site right now, and it keeps working throughout.
+  You deal with it in Step 5.
+- **MX records** — your email. Different type, they coexist with this fine.
+- **TXT records** — verification codes and email security. Don't delete these.
+- **`www`** — separate name, separate record, handled in Step 4.
+
+> **A CNAME on `@` looks wrong if you know DNS** — normally it isn't allowed at
+> the top level of a domain. Cloudflare handles it with CNAME flattening, and it
+> works correctly with Vercel. If Vercel gave you a CNAME target rather than an
+> IP address, use the CNAME.
 
 ---
 
@@ -359,6 +385,7 @@ broken.
 
 | What you see | What it usually means |
 |---|---|
+| "An A, AAAA, or CNAME record with that host already exists" | Something is already on `@`. Edit that row instead of adding a new one — see the box in Step 2. |
 | Vercel stuck on "Invalid Configuration" | The Cloudflare proxy is orange. Turn it grey (Step 2). |
 | Site loads but shows a security warning | The padlock hasn't finished setting up. Grey cloud, then wait — it can take up to an hour. |
 | The page keeps reloading over and over | If you turned the proxy orange, go to Cloudflare **SSL/TLS** → **Overview** and set it to **Full (strict)**. Anything else causes exactly this. |
