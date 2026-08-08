@@ -65,6 +65,9 @@ export function buildSlotOptions(
  * Applies validated AI choices + reasons onto a blueprint. Choices are only
  * applied when they differ from the current pick and don't duplicate a product
  * already used in another slot. Returns a new blueprint marked personalised.
+ *
+ * A reason is only kept when the slot ends up holding the product that reason
+ * was written about — see `reasonAppliesTo`.
  */
 export function applyBlueprintAIResult(
   blueprint: StackBlueprint,
@@ -82,11 +85,31 @@ export function applyBlueprintAIResult(
       used.add(choice)
       next = { ...next, selectedProductId: choice, selectedVariantId: null }
     }
-    if (reason) next = { ...next, reason }
+    if (reason && reasonAppliesTo(choice, next.selectedProductId)) next = { ...next, reason }
     return next
   })
 
   return { ...blueprint, slots, personalised: true }
+}
+
+/**
+ * Whether the AI's reason for a slot describes the product the slot actually
+ * ended up with.
+ *
+ * The AI answers per slot with a product *and* the sentence explaining why that
+ * product suits this person. The two are one answer, not two: "a budget-friendly
+ * choice that supports Lewis's immune resilience" is only true of the product it
+ * was written for. When we reject the AI's pick — because it duplicates another
+ * slot, or because it would break the budget cap — its sentence has to go with
+ * it, or the sheet shows one product's name above another product's
+ * justification. The slot keeps the engine's own reason, which is always about
+ * the product that's actually there.
+ *
+ * No choice for the slot means the AI was writing about the current pick, so the
+ * reason stands.
+ */
+function reasonAppliesTo(choice: string | undefined, selectedProductId: string): boolean {
+  return !choice || choice === selectedProductId
 }
 
 /** The discounted one-off (price, cost) lines for a blueprint — mirrors how
@@ -112,9 +135,10 @@ function oneOffLinesForBlueprint(
  * Applies AI choices + reasons like `applyBlueprintAIResult`, but GATES every
  * product swap against the bundle's hard price cap: a swap is only kept if the
  * stack's discounted one-off total stays within the cap. Over-budget swaps are
- * dropped (the engine's affordable pick is retained); the AI's reason is always
- * applied. The engine blueprint is already within budget, so the result always
- * is too. With no cap (top tier) this behaves exactly like the ungated apply.
+ * dropped (the engine's affordable pick is retained), and the AI's reason for
+ * that slot is dropped with it — it describes the product we didn't take. The
+ * engine blueprint is already within budget, so the result always is too. With
+ * no cap (top tier) this behaves exactly like the ungated apply.
  */
 export function applyBlueprintAIResultWithinBudget(
   blueprint: StackBlueprint,
@@ -143,7 +167,9 @@ export function applyBlueprintAIResultWithinBudget(
       }
     }
     const reason = result.reasons[slot.slotId]
-    if (reason) working[i] = { ...working[i], reason }
+    if (reason && reasonAppliesTo(choice, working[i].selectedProductId)) {
+      working[i] = { ...working[i], reason }
+    }
   }
 
   return { ...blueprint, slots: working, personalised: true }
