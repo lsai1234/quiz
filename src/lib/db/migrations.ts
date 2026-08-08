@@ -299,6 +299,40 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE orders ADD COLUMN partner_code TEXT;
   CREATE INDEX orders_partner_code ON orders(partner_code);
   `,
+  // v10 — partner sessions store a token HASH, not the token.
+  //
+  // v9 created `partner_sessions(token TEXT PRIMARY KEY)`, which would have put
+  // live session tokens in the database in plain text: anyone who read a backup
+  // could replay them as logged-in partners. The customer realm has always
+  // hashed (`sessions.token_hash`) and this now matches it.
+  //
+  // Dropped and recreated rather than migrated, because the table has never held
+  // a row — nothing could log in until this phase. If it ever does hold rows, a
+  // future change here has to preserve them.
+  `
+  DROP TABLE partner_sessions;
+
+  CREATE TABLE partner_sessions (
+    token_hash TEXT PRIMARY KEY,
+    partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX partner_sessions_partner ON partner_sessions(partner_id);
+
+  -- A one-time invite/reset token, also stored as a hash. Separate from the
+  -- session table because it is single-use and short-lived, and mixing the two
+  -- lifetimes in one table is how a used invite ends up still working.
+  CREATE TABLE partner_invites (
+    token_hash TEXT PRIMARY KEY,
+    partner_id TEXT NOT NULL REFERENCES partners(id) ON DELETE CASCADE,
+    kind       TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX partner_invites_partner ON partner_invites(partner_id);
+  `,
 ]
 
 /**

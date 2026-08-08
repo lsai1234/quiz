@@ -6,8 +6,8 @@ partner, a `/partner` login where they track their own numbers and their terms,
 and management of all of it in the Founders Hub. Plus switching the scratch card
 off.
 
-This document is the **plan**. **Phases 0, 1, 2 and 3 are now built** — see the
-status notes on each. Phases 4–6 are not.
+This document is the **plan**. **Phases 0–4 are now built** — see the status
+notes on each. Phases 5 and 6 are not.
 
 **Read §2A before touching the scratch card.** Switching it off is the smallest-
 looking change here and the most dangerous: the pricing model keeps reading the
@@ -146,7 +146,7 @@ new modelling. Ship phases 1 and 5 (internal only) in the meantime.
 > cost of the channel. Phase 3's contribution guard stops the commission making
 > it worse, but it cannot make a loss-making order profitable.
 
-### D3 — Are partners customers?
+### D3 — Are partners customers?  ·  **BUILT AS RECOMMENDED (phase 4)**
 
 Three auth realms is a lot, but the alternative is worse.
 
@@ -550,7 +550,7 @@ against a deliberately marginal order.
 > the wrong `sharedParcelItems` shape and are corrected above. The same mistake
 > is live in `lib/pricing/scenarios.ts` — see §4.
 
-### Phase 4 — `/partner`
+### Phase 4 — `/partner`  ·  **DONE**
 
 Auth realm (login, logout, set-password-by-invite, reset), and two things behind
 it: **how you're doing** and **what your deal is**.
@@ -591,6 +591,46 @@ partners ask.
 *Prerequisite:* payout terms (cadence, £25 minimum, self-billing) exist only as
 prose in `INFLUENCER_PROGRAMME.md` today. They have to become real config before
 a screen can state them — otherwise the dashboard is quoting a document.
+✅ Done in phase 1 (`PRICING_CONFIG.partners.payout`), seeded onto each partner's
+opening terms row, so the dashboard quotes the terms IN FORCE FOR THEM rather
+than a programme-wide default.
+
+> **Built.** `lib/partners/auth.ts` (the realm), `lib/partners/dashboard.ts`
+> (what they can see), and two screens behind one login.
+>
+> **The third realm, and why it is a third realm.** A partner holds their own
+> cookie (`partner_session`) and their own table. Not a role flag on `users`:
+> if a partner held a customer session, one wrong guard lands them on `/hub`
+> looking at somebody's subscription, or a member on `/partner` looking at
+> commission. The blast radius of a single mistaken check is another person's
+> data, and a third cookie is a cheap price for making that impossible rather
+> than unlikely. A partner who also wants to buy signs up as a customer
+> separately; the records are unrelated.
+>
+> | Decision | Why |
+> |---|---|
+> | Migration **v10** rewrites `partner_sessions` to store `token_hash` | v9 stored the token itself. Anyone reading a backup could have replayed live logins. The table had never held a row, so it was dropped and recreated. |
+> | The dashboard takes **no id from the browser** | It is built from the session. There is no shape of request to `/api/partner/me` that reads another partner's numbers — that is structural, not a check somebody has to remember. |
+> | The gate is a **layout**, and set-password sits in a different route group | A new screen added under `(partner-gated)` cannot ship unguarded by being forgotten. `/partner/set-password` opts out because someone on an invite has no session yet — which is the entire point of the link. |
+> | Login answers **identically** for a wrong password and an unknown email | Otherwise anyone can enumerate which of our partners exist. Suspension is the one exception: they know they have an account, so a generic refusal just sends them to support to be told this anyway. |
+> | Invites are **single-use, hashed, 7 days** | Looking up whose link it is does NOT spend it — a preview fetch in an email client would otherwise lock a partner out before they clicked. Only the winner of the burn proceeds, so two tabs cannot both set a password. |
+> | Suspension **deletes their sessions** | Not just refused at the door. A live-looking dashboard must not survive on a screen that forgot to check. |
+> | Setting a password **drops every session** | That is the entire reason to change one. |
+>
+> **What the two tabs answer.** *How you're doing*: ready to pay, still in the
+> window, paid, reversed — plus orders and spend, all time and this month. Every
+> earning row carries **its own clearing date**, so "why isn't this payable yet"
+> answers itself on the row that raises the question rather than in a policy
+> line elsewhere. *Your deal*: the code and every restriction on it, what they
+> earn, the four steps from order to payment, how they get paid, and the full
+> dated history with the reason a founder gave for each change.
+>
+> Verified in a browser: invite link greets by name without spending itself,
+> sets a password and signs straight in; the partner sees 1 order and £18.21
+> accrued while another partner's 2 orders are invisible to them;
+> `/api/portal/partners` answers 401; `/portal` shows the founder login; the
+> invite cannot be replayed; and suspending them from the hub signs them out.
+> The raw invite token is confirmed absent from the database.
 
 ### Phase 5 — Founders management
 

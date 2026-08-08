@@ -9,6 +9,7 @@
  *
  * Server-only.
  */
+import crypto from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
 import type {
   CodeStatus,
@@ -495,4 +496,93 @@ export async function oldestUnsettledCommission(partnerId: string): Promise<stri
     [partnerId],
   )
   return row?.created_at ?? null
+}
+
+// ─── Sessions & invites ───────────────────────────────────────────────────────
+// The browser holds a random opaque token; only its SHA-256 hash is stored, so
+// a leaked database cannot be replayed as live logins. Same shape as the
+// customer realm (`lib/db/sessions.ts`), deliberately.
+
+export async function insertSession(input: {
+  tokenHash: string
+  partnerId: string
+  expiresAt: string
+}): Promise<void> {
+  const db = await getEngine()
+  await db.run(
+    'INSERT INTO partner_sessions (token_hash, partner_id, expires_at, created_at) VALUES (?, ?, ?, ?)',
+    [input.tokenHash, input.partnerId, input.expiresAt, now()],
+  )
+}
+
+/** Resolve a session hash to its partner, sweeping expired rows on the way. */
+export async function partnerIdForSession(tokenHash: string): Promise<string | null> {
+  const db = await getEngine()
+  await db.run('DELETE FROM partner_sessions WHERE expires_at < ?', [now()])
+  const row = await db.get<{ partner_id: string }>(
+    'SELECT partner_id FROM partner_sessions WHERE token_hash = ? AND expires_at >= ?',
+    [tokenHash, now()],
+  )
+  return row?.partner_id ?? null
+}
+
+export async function deleteSessionByHash(tokenHash: string): Promise<void> {
+  const db = await getEngine()
+  await db.run('DELETE FROM partner_sessions WHERE token_hash = ?', [tokenHash])
+}
+
+/** Drop every session a partner holds — on suspension, or a password change. */
+export async function deleteSessionsFor(partnerId: string): Promise<void> {
+  const db = await getEngine()
+  await db.run('DELETE FROM partner_sessions WHERE partner_id = ?', [partnerId])
+}
+
+export async function insertInvite(input: {
+  tokenHash: string
+  partnerId: string
+  kind: 'invite' | 'reset'
+  expiresAt: string
+}): Promise<void> {
+  const db = await getEngine()
+  await db.run(
+    'INSERT INTO partner_invites (token_hash, partner_id, kind, expires_at, used_at, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [input.tokenHash, input.partnerId, input.kind, input.expiresAt, null, now()],
+  )
+}
+
+/** An unused, unexpired invite, or null. Single-use is enforced by `used_at`. */
+export async function findUsableInvite(
+  tokenHash: string,
+): Promise<{ partnerId: string; kind: string } | null> {
+  const db = await getEngine()
+  const row = await db.get<{ partner_id: string; kind: string }>(
+    'SELECT partner_id, kind FROM partner_invites WHERE token_hash = ? AND used_at IS NULL AND expires_at >= ?',
+    [tokenHash, now()],
+  )
+  return row ? { partnerId: row.partner_id, kind: row.kind } : null
+}
+
+/**
+ * Burn an invite, and report whether THIS caller was the one that burnt it.
+ *
+ * `WHERE used_at IS NULL` is what makes it single-use, and that guard is in SQL
+ * because two tabs submitting the same link at once must not both succeed.
+ * The engine reports no row count, so the winner is identified by stamping a
+ * value unique to this call and reading back whose stamp survived — otherwise
+ * both callers would see a non-null `used_at` and both believe they won.
+ */
+export async function consumeInvite(tokenHash: string): Promise<boolean> {
+  const db = await getEngine()
+  // Unique per call, and still a readable timestamp — the suffix is only there
+  // to tell two simultaneous callers apart.
+  const stamp = `${now()}#${crypto.randomUUID()}`
+  await db.run('UPDATE partner_invites SET used_at = ? WHERE token_hash = ? AND used_at IS NULL', [
+    stamp,
+    tokenHash,
+  ])
+  const row = await db.get<{ used_at: string | null }>(
+    'SELECT used_at FROM partner_invites WHERE token_hash = ?',
+    [tokenHash],
+  )
+  return row?.used_at === stamp
 }

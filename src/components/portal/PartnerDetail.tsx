@@ -119,6 +119,7 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
               <AccountPanel
                 status={partner.status}
                 busy={busy}
+                partnerId={partner.id}
                 onStatus={(status) => post({ action: 'status', status }, status === 'suspended' ? 'Suspended — their code stops working now.' : 'Reinstated.')}
               />
               {codes.map((code) => (
@@ -187,7 +188,17 @@ const inputStyle = {
 const INPUT = 'w-full px-3 py-2 rounded-xl text-sm outline-none'
 const BTN = 'text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all disabled:opacity-40'
 
-function AccountPanel({ status, busy, onStatus }: { status: PartnerRecord['partner']['status']; busy: boolean; onStatus: (s: 'active' | 'suspended') => void }) {
+function AccountPanel({
+  status,
+  busy,
+  partnerId,
+  onStatus,
+}: {
+  status: PartnerRecord['partner']['status']
+  busy: boolean
+  partnerId: string
+  onStatus: (s: 'active' | 'suspended') => void
+}) {
   return (
     <Group
       title="Account"
@@ -195,20 +206,107 @@ function AccountPanel({ status, busy, onStatus }: { status: PartnerRecord['partn
         status === 'invited'
           ? 'Created but never signed in — they hold no password yet. Their code still works.'
           : status === 'suspended'
-            ? 'Suspended. Their code is refused at checkout and no new commission accrues.'
+            ? 'Suspended. Their code is refused at checkout, no new commission accrues, and they are signed out.'
             : 'Active.'
       }
     >
-      {status === 'suspended' ? (
-        <button disabled={busy} onClick={() => onStatus('active')} className={BTN} style={{ background: ACCENT, color: 'var(--color-bg)' }}>
-          Reinstate
-        </button>
-      ) : (
-        <button disabled={busy} onClick={() => onStatus('suspended')} className={BTN} style={{ background: 'var(--color-surface)', color: '#f87171', border: '1px solid var(--color-border)' }}>
-          Suspend
-        </button>
-      )}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {status === 'suspended' ? (
+          <button disabled={busy} onClick={() => onStatus('active')} className={BTN} style={{ background: ACCENT, color: 'var(--color-bg)' }}>
+            Reinstate
+          </button>
+        ) : (
+          <button disabled={busy} onClick={() => onStatus('suspended')} className={BTN} style={{ background: 'var(--color-surface)', color: '#f87171', border: '1px solid var(--color-border)' }}>
+            Suspend
+          </button>
+        )}
+      </div>
+      <InviteLink partnerId={partnerId} isNew={status === 'invited'} />
     </Group>
+  )
+}
+
+/**
+ * Mint a single-use link for a partner to set their password.
+ *
+ * Shown once and never recoverable — the store keeps only a hash, so nobody
+ * including us can read an outstanding invite back out of the database. Losing
+ * it means issuing another, which is the right trade: an invite that could be
+ * looked up later would be a standing key to somebody's account.
+ */
+function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean }) {
+  const [link, setLink] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  async function mint() {
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/portal/partners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'invite', id: partnerId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d.error ?? 'Could not create a link.')
+        return
+      }
+      setLink(`${window.location.origin}/partner/set-password?token=${encodeURIComponent(d.token)}`)
+    } catch {
+      setError('Could not reach the hub.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!link) {
+    return (
+      <div>
+        <button
+          disabled={busy}
+          onClick={mint}
+          className={BTN}
+          style={{ background: 'var(--color-surface)', color: ACCENT, border: '1px solid var(--color-border)' }}
+        >
+          {busy ? 'Creating…' : isNew ? 'Create sign-in link' : 'Create a password-reset link'}
+        </button>
+        {error && <p className="text-[11px] mt-1.5" style={{ color: '#f87171' }}>{error}</p>}
+        <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-1.5">
+          Send it to them yourself. It works once and expires in 7 days.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Send them this — you won’t see it again</span>
+      <div className="flex gap-2">
+        <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className={INPUT} style={{ ...inputStyle, fontSize: '11px' }} />
+        <button
+          type="button"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(link)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 1500)
+            } catch {
+              /* clipboard blocked — the field is selectable, which is the fallback */
+            }
+          }}
+          className={BTN}
+          style={{ background: ACCENT, color: 'var(--color-bg)' }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-1.5">
+        Only a hash is stored, so this cannot be looked up later — if it goes missing, issue another.
+      </p>
+    </div>
   )
 }
 

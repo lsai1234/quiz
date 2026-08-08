@@ -15,6 +15,7 @@ import {
 import { performanceForCodes } from '@/lib/partners/performance'
 import { balanceFor, settle } from '@/lib/partners/ledger'
 import { markPayoutPaid, oldestUnsettledCommission } from '@/lib/partners/repo'
+import { createInviteToken } from '@/lib/partners/auth'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,7 +49,7 @@ export async function GET() {
 }
 
 interface Body {
-  action?: 'create' | 'status' | 'terms' | 'code' | 'settle' | 'mark-paid'
+  action?: 'create' | 'status' | 'terms' | 'code' | 'settle' | 'mark-paid' | 'invite'
   id?: string
   // create
   email?: string
@@ -139,6 +140,17 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, reason: result.reason })
         }
         return NextResponse.json({ ok: true, payout: result, partner: await getPartnerRecord(body.id) })
+      }
+
+      case 'invite': {
+        if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+        const record = await getPartnerRecord(body.id)
+        if (!record) return NextResponse.json({ error: 'No such partner.' }, { status: 404 })
+        // Returned once, in readable form, and never recoverable afterwards —
+        // only reissued. The store keeps a hash, so nobody including us can
+        // read an outstanding invite back out of the database.
+        const token = await createInviteToken(body.id, record.partner.status === 'invited' ? 'invite' : 'reset')
+        return NextResponse.json({ ok: true, token, kind: record.partner.status === 'invited' ? 'invite' : 'reset' })
       }
 
       case 'mark-paid': {

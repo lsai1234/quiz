@@ -134,9 +134,16 @@ export async function changeTerms(
   })
 }
 
-/** Suspend or reinstate. A suspended partner's codes stop working immediately. */
+/**
+ * Suspend or reinstate. A suspended partner's codes stop working immediately.
+ *
+ * Suspension also ends every session they hold. Leaving them signed in would
+ * show a live-looking dashboard for an account that no longer earns, and the
+ * request-side check alone would depend on every screen remembering to make it.
+ */
 export async function setPartnerStatus(id: string, status: PartnerStatus): Promise<void> {
   await repo.updatePartner(id, { status })
+  if (status === 'suspended') await repo.deleteSessionsFor(id)
 }
 
 export async function updateCodeTerms(
