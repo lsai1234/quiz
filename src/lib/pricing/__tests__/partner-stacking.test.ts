@@ -98,10 +98,18 @@ describe('a partner code on a subscription', () => {
 })
 
 describe('what the stack actually costs us', () => {
-  /** The measured figures the D2 decision was taken on. */
+  /**
+   * What a £90 three-item box at £45 cost keeps, at a given discount.
+   *
+   * `sharedParcelItems: 1` — the order IS the parcel. An earlier version of this
+   * passed the item count here, which is the per-LINE shape: it divides one
+   * parcel's delivery across the lines sharing it. Applied to a whole-order call
+   * it collapsed £7.87 of delivery into £0.13 and made every figure below look
+   * about £7.74 healthier than it is.
+   */
   const keeps = (discount: number) =>
     unitEconomics(
-      { shelfPrice: 90 * (1 - discount), supplierCost: 45, sharedParcelItems: 3, freeDeliveryBasis: 90 },
+      { shelfPrice: 90 * (1 - discount), supplierCost: 45, sharedParcelItems: 1, freeDeliveryBasis: 90 },
       cfg(),
     ).contribution
 
@@ -111,16 +119,39 @@ describe('what the stack actually costs us', () => {
     return net * PRICING_CONFIG.partners.firstOrderPct
   }
 
-  it('clears on a code alone, and loses on the deepest rung — knowingly', () => {
+  it('costs us money on an attributed order, at both rungs', () => {
     // Pinned because it is the trade the programme was signed off on. If either
     // number moves materially, the D2 decision deserves revisiting rather than
     // a quiet test update.
+    //
+    // Both are negative on this box once the parcel's real delivery is counted.
+    // That is an acquisition cost taken knowingly (D2, option 1), recovered from
+    // month two on a subscription — but it is NOT "an attributed one-off makes
+    // money on its own", which is what the first pass of this modelling said.
     const codeOnly = keeps(0.2) - commission(0.2)
     const deepest = keeps(0.36) - commission(0.36)
 
-    expect(codeOnly).toBeGreaterThan(0)
-    expect(codeOnly).toBeCloseTo(5.78, 1)
-    expect(deepest).toBeLessThan(0)
-    expect(deepest).toBeCloseTo(-6.24, 1)
+    expect(codeOnly).toBeCloseTo(-2.26, 1)
+    expect(deepest).toBeCloseTo(-14.28, 1)
+
+    // Undiscounted and unattributed, the same box pays perfectly well — so the
+    // cost is the programme's, not the product's.
+    expect(keeps(0)).toBeGreaterThan(20)
+  })
+
+  it('never lets the COMMISSION be what pushes an order under', () => {
+    // The contribution guard. It does not rescue the rows above — those were
+    // already losing before any commission — but it stops a thin-but-positive
+    // order being turned into a loss by the payment itself.
+    const { commissionFor } = jest.requireActual<typeof import('@/lib/partners/commission')>(
+      '@/lib/partners/commission',
+    )
+    const thin = {
+      lines: [{ sku: 's', productId: 'p', title: 'T', quantity: 1, unitPrice: 60, supplierCost: 40 }],
+      subtotal: 60,
+    } as never
+    const calc = commissionFor(thin, PRICING_CONFIG.partners.firstOrderPct, cfg())
+    expect(calc.capped).toBe(true)
+    expect(calc.contribution - calc.amount).toBeGreaterThan(0)
   })
 })

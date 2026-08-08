@@ -106,6 +106,59 @@ export interface PartnerTerms {
   createdAt: string
 }
 
+/**
+ * One earned commission, on one order.
+ *
+ * `rate` and `netBasis` are STORED, not looked up. Change a partner's rate next
+ * quarter and last quarter's ledger must not silently restate — the same reason
+ * `supplierSimulated` is recorded per order rather than read from the setting.
+ */
+export interface PartnerCommission {
+  id: string
+  partnerId: string
+  orderId: string
+  kind: 'first' | 'renewal'
+  /** Net revenue the rate applied to (£, ex VAT, ex delivery). */
+  netBasis: number
+  /** The rate that applied ON THE DAY (0–1). */
+  rate: number
+  /** What the partner earns (£), after the contribution guard. */
+  amount: number
+  state: 'accrued' | 'confirmed' | 'reversed' | 'paid'
+  /** When it stops being reversible and becomes payable (ISO). */
+  confirmAfter: string
+  /** The payout run that settled it, once paid. */
+  payoutId: string | null
+  createdAt: string
+}
+
+/** A settled batch of commission for one partner and one period. */
+export interface PartnerPayout {
+  id: string
+  partnerId: string
+  /** `YYYY-MM` — the period being settled. */
+  period: string
+  amount: number
+  state: 'due' | 'paid'
+  /** Bank reference, once it has actually been sent. */
+  reference: string | null
+  createdAt: string
+}
+
+/** What a partner is owed, split by how settled it is. */
+export interface PartnerBalance {
+  /** Earned but still inside the return window (£). */
+  accrued: number
+  /** Past the window, payable in the next run (£). */
+  confirmed: number
+  /** Already sent (£). */
+  paid: number
+  /** Reversed by a refund (£) — shown, never hidden. */
+  reversed: number
+  /** `confirmed`, which is the only figure that is actually owed today. */
+  payableNow: number
+}
+
 /** A partner with everything a founder or the partner themselves needs to see. */
 export interface PartnerRecord {
   partner: Partner

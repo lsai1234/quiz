@@ -6,8 +6,8 @@ partner, a `/partner` login where they track their own numbers and their terms,
 and management of all of it in the Founders Hub. Plus switching the scratch card
 off.
 
-This document is the **plan**. **Phases 0, 1 and 2 are now built** — see the
-status notes on each. Phases 3–6 are not.
+This document is the **plan**. **Phases 0, 1, 2 and 3 are now built** — see the
+status notes on each. Phases 4–6 are not.
 
 **Read §2A before touching the scratch card.** Switching it off is the smallest-
 looking change here and the most dangerous: the pricing model keeps reading the
@@ -28,14 +28,23 @@ Everything in phase 1 can be built without these. Phases 2+ cannot.
 > **DECIDED: option A. Built.** `firstMonthDiscount: 0` and
 > `scratchReveal.enabled: false`, set together in one commit. The outcomes are
 > kept, not deleted, so switching the card back on restores what ran before.
-> Measured on a £90 three-item box, first month, after everything:
+> Measured on a £90 three-item box costing £45, on the deepest subscription
+> rung, after everything. **These figures were corrected during phase 3** — the
+> first pass called `unitEconomics` with the per-line `sharedParcelItems` shape
+> on a whole-order input and dropped most of the parcel's delivery cost. The
+> comparison between the rows, and therefore this decision, is unchanged: every
+> row moved by the same amount.
 >
-> | | keeps on the first month | lifetime |
+> | | keeps on the first month | over a 6-month life |
 > |---|---|---|
-> | Card on (blended ~15%) — what ran before | £5.78 | £88.68 |
-> | **Off at 0% — now** | **£16.58** | **£99.48** |
-> | Off at 15% (option B) | £5.94 | £88.84 |
-> | Off at 50% (the naive flip) | **−£18.88** | £64.02 |
+> | Card on (blended ~15%) — what ran before | −£2.10 | £40.60 |
+> | **Off at 0% — now** | **£8.54** | **£51.24** |
+> | Off at 15% (option B) | −£2.10 | £40.60 |
+> | Off at 50% (the naive flip) | **−£26.92** | £15.78 |
+>
+> Note what the corrected numbers show that the first pass hid: the scratch card
+> was costing us **£10.64 a signup**, not £10.80 of forgone profit on a
+> profitable month — month one was actually underwater while it ran.
 >
 > The last row is the trap this decision exists to avoid, and note that
 > `checkScenarios().ok` stays `true` on it — a loss-making first month is
@@ -89,23 +98,35 @@ attributed one-off order makes money on its own".
 already does the arithmetic; this is an afternoon with the existing tooling, not
 new modelling. Ship phases 1 and 5 (internal only) in the meantime.
 
-> **Audit run (2026-08). One open question, and it is about stacking.**
-> Measured on the same £90 three-item box, with the card off at 0%, a 20% code
-> and 15% commission on net:
+> **Audit run (2026-08), then CORRECTED during phase 3.**
+>
+> ⚠️ **The first pass of these figures was wrong and is superseded.** It called
+> `unitEconomics` with `sharedParcelItems: 3` on a whole-ORDER input. That
+> parameter apportions one parcel's delivery across the lines sharing it — the
+> per-LINE shape — so applied to a whole order it divided the parcel cost by
+> three and collapsed £7.87 of delivery into £0.13. Every figure came out about
+> £7.74 too healthy. `sharedParcelItems: 1` is correct for a whole order,
+> because the order **is** the parcel.
+>
+> Corrected, on a £90 three-item box costing £45, card off, 20% code, 15%
+> commission on net:
 >
 > | Route | Discount | Customer pays | We keep | Commission | **After commission** |
 > |---|---|---|---|---|---|
-> | Code alone (one-off, or entry rung) | 20% | £72.00 | £16.58 | £10.80 | **£5.78** |
-> | Code **+ deepest subscription rung** | 36% | £57.60 | £2.40 | £8.64 | **−£6.24** |
+> | No code, no discount | 0% | £90.00 | £26.27 | — | **£26.27** |
+> | Code alone (one-off, or entry rung) | 20% | £72.00 | £8.54 | £10.80 | **−£2.26** |
+> | Code **+ deepest subscription rung** | 36% | £57.60 | −£5.64 | £8.64 | **−£14.28** |
 >
-> So the first row clears the bar the programme set itself — *an attributed
-> one-off order makes money on its own*. The second does not, because a partner
-> code and the biggest bundle's subscription discount currently compound.
+> **Both attributed rows lose money on month one.** The bar the programme set
+> itself — *an attributed one-off order makes money on its own* — is NOT met at
+> the current rates. The undiscounted box pays perfectly well (£26.27), so this
+> is the programme's cost, not the product's.
 >
-> That is recoverable — a subscription keeps ~£99 across its life and month two
-> onwards pays no first-order commission — so it is an acquisition cost, not a
-> leak. But it should be a decision rather than an accident, and it is the one
-> thing phase 2 cannot be written without. Three ways to settle it:
+> On a subscription it is recovered: month two onwards carries no first-order
+> commission and no code discount. On a genuine ONE-OFF there is no month two,
+> and an attributed one-off is a straight ~£2 loss at these rates.
+>
+> Three ways to settle it:
 >
 > 1. **Allow the stack** and accept −£6.24 on the deepest attributed first
 >    order, recovered from month two. ← **CHOSEN, and built in phase 2.**
@@ -117,6 +138,13 @@ new modelling. Ship phases 1 and 5 (internal only) in the meantime.
 >
 > Settled on option 1. Multiplicative stacking, with the margin floor still
 > applied per line underneath so nothing is ever sold below cost.
+>
+> **Still worth revisiting** now the corrected figures are in: at a 20% code and
+> 15% first-order commission, an attributed ONE-OFF loses ~£2.26 with no
+> subscription behind it to recover from. Options if that matters: drop the
+> first-order rate, restrict codes to subscription signups, or accept it as the
+> cost of the channel. Phase 3's contribution guard stops the commission making
+> it worse, but it cannot make a loss-making order profitable.
 
 ### D3 — Are partners customers?
 
@@ -466,7 +494,7 @@ subscription first order. Missing one means silent under-payment.
 > themselves so a refund stops counting without anything having to remember to
 > decrement a tally.
 
-### Phase 3 — The commission ledger
+### Phase 3 — The commission ledger  ·  **DONE**
 
 - Accrue on payment: `first` for a first order, `renewal` from the existing
   `invoice.paid` handler, capped at `renewalMonths` from signup.
@@ -481,6 +509,46 @@ subscription first order. Missing one means silent under-payment.
 *Done when:* a paid attributed order produces exactly one accrual, a refund
 reverses it, a duplicate webhook does not double-pay, and the guard is unit-tested
 against a deliberately marginal order.
+
+> **Built.** `lib/partners/commission.ts` (pure arithmetic) and
+> `lib/partners/ledger.ts` (states and settlement), with the hub's Money tab on
+> each partner.
+>
+> States walk one way, with one exception:
+>
+> ```
+> accrued ──(window passes)──▶ confirmed ──(payout run)──▶ paid
+>    └──────(refund)──▶ reversed ◀──(refund)──┘
+> ```
+>
+> A `paid` row can still be reversed — money has left, and a later refund must be
+> visible rather than quietly absent. What it must never do is drop back into the
+> payable balance, so every transition names the states it may leave, in SQL.
+>
+> | Decision | Why |
+> |---|---|
+> | `rate` and `netBasis` **stored** on the row | Change a rate next quarter and last quarter must not silently restate. |
+> | Idempotency from `UNIQUE(order_id, kind)` | Stripe redelivers, and two can land at once — a read-then-write would still double-pay under a race. Only the database can decide this. |
+> | Accrual funnelled through the order service | One path for shop, quiz, mock, subscription first box and renewals. Missing one means silent under-payment. |
+> | Accrual never throws | A checkout that already took money must not fail over a bookkeeping row. The order keeps `partnerCode`, so a failed accrual is replayable. |
+> | Only `confirmed` is "owed" | An accrual can still be refunded away; showing it as owed promises a partner money that may never be theirs. |
+> | Renewal window counted from **signup** | A property of the relationship, so a delayed delivery cannot extend it. |
+>
+> **The contribution guard** (`partners.maxShareOfContribution: 0.95`) caps a
+> payment at 95% of what the order actually made. Measured: a £60 order costing
+> £40 keeps £2.72 once delivery, card fees and the returns provision are out,
+> while 15% of net is £9.00 — three times the margin. Without the cap the
+> difference comes out of our own pocket with nothing to say so. On an order
+> already losing money the ceiling is zero: it does not rescue a bad order (see
+> D2), it refuses to make it worse.
+>
+> The daily job (`runDailyJob`) confirms whatever has passed its window. The
+> `oldestUnsettled` guard on terms changes — written in phase 1 with nothing to
+> guard — is now fed the real earliest unpaid commission.
+>
+> **Found while building this:** the D1 and D2 figures in §0 were computed with
+> the wrong `sharedParcelItems` shape and are corrected above. The same mistake
+> is live in `lib/pricing/scenarios.ts` — see §4.
 
 ### Phase 4 — `/partner`
 
@@ -563,11 +631,34 @@ dashboard.
   match at minimum.
 - **Attribution gaps.** Every checkout path must write the code. Enumerate them
   in phase 2 and test each.
-- **Reversal depends on refunds being recorded.** `status: 'refunded'` exists on
-  orders, but I have not verified there is an automated path that sets it. If
-  refunds are manual today, reversal is manual too — worth confirming in phase 3.
-- **The economics are unverified post-card.** D2. Do not launch partner traffic
-  until the audit is re-run.
+- **Reversal depends on refunds being recorded.** ✅ Confirmed in phase 3: there
+  is an automated path. `charge.refunded` from Stripe reaches `refundOrder`,
+  which now reverses the commission, and the same function backs a refund
+  started in the hub. Both ends agree.
+
+- 🔴 **`lib/pricing/scenarios.ts` understates delivery on every basket.** Found
+  while building phase 3, and NOT fixed — it changes numbers on a screen
+  founders price from, which should be a deliberate change rather than a side
+  effect of a commissions commit.
+
+  `checkScenarios` passes `sharedParcelItems: items` with a whole-basket
+  `shelfPrice` and `supplierCost`. That parameter apportions **one parcel's**
+  delivery across the lines sharing it, so it belongs on a per-LINE call. On a
+  whole-order call it divides the parcel cost by the item count: on a
+  three-item box, £7.87 of delivery becomes **£0.13**.
+
+  Effect: every scenario on the Pricing screen reads roughly £7.74 healthier
+  than it is on a three-item box, and the "typical quiz box" panel is the main
+  one. `thresholds.ts` and `list-price.ts` use the parameter correctly and are
+  unaffected; `lib/partners/commission.ts` deliberately passes `1`.
+
+  The fix is one argument. The consequence is that several screens will show
+  materially worse — and correct — numbers.
+- **The economics are verified and thin.** D2, corrected in phase 3: at a 20%
+  code and 15% first-order commission, an attributed order loses ~£2.26 on a
+  one-off and ~£14.28 on the deepest subscription rung. Recovered from month two
+  on a subscription; not recovered at all on a one-off. Accepted deliberately,
+  but revisit the rates before running volume through the channel.
 - **The pricing model does not currently notice the card being switched off.**
   §2A, measured. Until the effective-intro-rate accessor lands, the scenario and
   threshold checks will report healthy numbers for a configuration that is losing

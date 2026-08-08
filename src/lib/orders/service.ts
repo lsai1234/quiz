@@ -99,7 +99,43 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     updatedAt: now(),
   }
   await saveOrder(order)
+  // An order raised already paid (mock checkout, subscription deliveries) earns
+  // its commission here; one that starts pending earns it in `markOrderPaid`.
+  if (status === 'paid') await accrueCommission(order)
   return order
+}
+
+/**
+ * Record what a partner earned on an order that has just been paid.
+ *
+ * One funnel for every path — Stripe one-off, mock, subscription first box and
+ * renewals — so no route can quietly skip attribution. Missing one means a
+ * partner is under-paid and nothing says so.
+ *
+ * NEVER throws and never blocks the order. A commission is a bookkeeping entry;
+ * a checkout that already took money must not fail because of one, and the
+ * order carries `partnerCode` regardless, so a failed accrual can be replayed
+ * from the orders themselves rather than being lost.
+ */
+async function accrueCommission(order: Order): Promise<void> {
+  if (!order.partnerCode) return
+  try {
+    const { accrueForOrder } = await import('@/lib/partners/ledger')
+
+    let signupAt: string | null = null
+    let isFirstForMember = true
+
+    if (order.channel === 'subscription' && order.userId) {
+      const { hasEarlierSubscriptionOrder } = await import('./repo')
+      isFirstForMember = !(await hasEarlierSubscriptionOrder(order.userId, order.createdAt))
+      const { getSubscription } = await import('@/lib/db/hub-data')
+      signupAt = (await getSubscription(order.userId))?.startedAt ?? null
+    }
+
+    await accrueForOrder(order, { signupAt, isFirstForMember })
+  } catch (err) {
+    console.error('[orders] commission accrual failed:', err)
+  }
 }
 
 /** Turn a member's subscription bundle into order lines, resolving supplier SKUs
@@ -190,8 +226,10 @@ export async function markOrderPaid(
     shippingAddress?: SupplierAddress | null
   },
 ): Promise<Order | null> {
-  return updateOrder(id, (o) => {
+  let becamePaid = false
+  const order = await updateOrder(id, (o) => {
     if (o.status !== 'pending_payment') return // idempotent — already progressed
+    becamePaid = true
     o.status = 'paid'
     if (payment.stripeSessionId) o.stripeSessionId = payment.stripeSessionId
     if (payment.stripePaymentIntentId) o.stripePaymentIntentId = payment.stripePaymentIntentId
@@ -199,6 +237,10 @@ export async function markOrderPaid(
     if (payment.shippingAddress && !o.shippingAddress) o.shippingAddress = payment.shippingAddress
     o.events.push(event('paid'))
   })
+  // Only on the transition. The accrual is idempotent anyway, but a redelivered
+  // webhook should not be doing lookups it does not need.
+  if (becamePaid && order) await accrueCommission(order)
+  return order
 }
 
 // ─── Daily fulfilment review ──────────────────────────────────────────────────
@@ -379,10 +421,21 @@ export async function syncSupplierStatus(id: string): Promise<Order | null> {
 }
 
 export async function refundOrder(id: string, detail?: string): Promise<Order | null> {
-  return updateOrder(id, (o) => {
+  const order = await updateOrder(id, (o) => {
     o.status = 'refunded'
     o.events.push(event('refunded', detail))
   })
+  // The money went back, so the commission does too — including one already
+  // paid, which becomes a visible reversal rather than quietly vanishing.
+  if (order?.partnerCode) {
+    try {
+      const { reverseForOrder } = await import('@/lib/partners/ledger')
+      await reverseForOrder(order.id)
+    } catch (err) {
+      console.error('[orders] commission reversal failed:', err)
+    }
+  }
+  return order
 }
 
 /**

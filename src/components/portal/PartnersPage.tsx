@@ -7,6 +7,7 @@ import { describeTerms } from '@/lib/partners/terms'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { PartnerRecord } from '@/lib/partners/types'
 import type { PartnerPerformance } from '@/lib/partners/performance'
+import type { PartnerBalance } from '@/lib/partners/types'
 
 const ACCENT = '#00D4FF'
 
@@ -16,7 +17,7 @@ const STATUS_COLOUR: Record<string, string> = {
   suspended: '#f87171',
 }
 
-interface PerfRow { partnerId: string; codes: PartnerPerformance[] }
+interface PerfRow { partnerId: string; codes: PartnerPerformance[]; balance?: PartnerBalance }
 
 /** One partner's codes added together. */
 function totals(rows: PartnerPerformance[] | undefined) {
@@ -145,7 +146,9 @@ export function PartnersPage() {
                       {code ? `${Math.round(code.discountPct * 100)}% off` : 'no code'} · {describeTerms(r.terms)}
                     </p>
                     {(() => {
-                      const t = totals(performance.find((p) => p.partnerId === r.partner.id)?.codes)
+                      const perf = performance.find((p) => p.partnerId === r.partner.id)
+                      const t = totals(perf?.codes)
+                      const owed = perf?.balance
                       if (!t) return null
                       return (
                         <p className="text-[11px] mt-1 font-semibold" style={{ color: t.orders > 0 ? ACCENT : 'var(--color-muted)' }}>
@@ -154,6 +157,14 @@ export function PartnersPage() {
                             : `${t.orders} order${t.orders === 1 ? '' : 's'} · £${t.revenue.toFixed(2)}` +
                               (t.subscriptions > 0 ? ` · ${t.subscriptions} subscribed` : '') +
                               (t.reversed > 0 ? ` · ${t.reversed} refunded` : '')}
+                          {/* Owed is a different question from brought in — only
+                              money past the return window is actually payable. */}
+                          {owed && owed.payableNow > 0 && (
+                            <span style={{ color: '#34d399' }}> · £{owed.payableNow.toFixed(2)} owed</span>
+                          )}
+                          {owed && owed.payableNow === 0 && owed.accrued > 0 && (
+                            <span style={{ color: 'var(--color-muted)' }}> · £{owed.accrued.toFixed(2)} in the window</span>
+                          )}
                         </p>
                       )
                     })()}

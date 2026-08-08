@@ -116,6 +116,25 @@ export async function hasOrdered(email: string): Promise<boolean> {
   return row != null
 }
 
+/**
+ * Whether this member had a subscription order before the given moment.
+ *
+ * Decides whether an attributed subscription order earns the first-order rate
+ * or the renewal rate. Asked of the ORDERS rather than the subscription's own
+ * `monthsActive`, because that counter advances on a webhook and webhooks do
+ * not promise order — the orders themselves are the record of what happened.
+ */
+export async function hasEarlierSubscriptionOrder(userId: string, before: string): Promise<boolean> {
+  const db = await getEngine()
+  const row = await db.get<{ id: string }>(
+    `SELECT id FROM orders
+      WHERE user_id = ? AND channel = 'subscription' AND created_at < ? AND status <> 'pending_payment'
+      LIMIT 1`,
+    [userId, before],
+  )
+  return row != null
+}
+
 /** Every order attributed to a partner's code. The raw material of the ledger. */
 export async function listOrdersByPartnerCode(code: string): Promise<Order[]> {
   const db = await getEngine()

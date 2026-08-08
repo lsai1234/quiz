@@ -1,9 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { describePayout, describeTerms } from '@/lib/partners/terms'
-import type { CodeTerms, PartnerCode, PartnerRecord, PartnerTerms } from '@/lib/partners/types'
+import type {
+  CodeTerms,
+  PartnerBalance,
+  PartnerCode,
+  PartnerCommission,
+  PartnerPayout,
+  PartnerRecord,
+  PartnerTerms,
+} from '@/lib/partners/types'
+
+const money = (n: number) => `£${n.toFixed(2)}`
 
 const ACCENT = '#00D4FF'
 
@@ -32,7 +42,7 @@ function toDateInput(iso: string | null): string {
  * permanent, dated, partner-visible record.
  */
 export function PartnerDetail({ record, onClose, onSaved }: Props) {
-  const [tab, setTab] = useState<'code' | 'terms' | 'history'>('code')
+  const [tab, setTab] = useState<'code' | 'money' | 'terms' | 'history'>('code')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -84,7 +94,7 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
         </div>
 
         <div className="px-5 pt-3 flex gap-1">
-          {(['code', 'terms', 'history'] as const).map((t) => (
+          {(['code', 'money', 'terms', 'history'] as const).map((t) => (
             <button
               key={t}
               onClick={() => { setTab(t); setError(null); setNotice(null) }}
@@ -95,7 +105,7 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
                 border: '1px solid var(--color-border)',
               }}
             >
-              {t === 'code' ? 'Code' : t === 'terms' ? 'Their deal' : `History (${termsHistory.length})`}
+              {t === 'code' ? 'Code' : t === 'money' ? 'Money' : t === 'terms' ? 'Their deal' : `History (${termsHistory.length})`}
             </button>
           ))}
         </div>
@@ -120,6 +130,16 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
                 />
               ))}
             </>
+          )}
+
+          {tab === 'money' && (
+            <MoneyPanel
+              partnerId={partner.id}
+              busy={busy}
+              onSettle={(ignoreMinimum) =>
+                post({ action: 'settle', ignoreMinimum }, 'Payout raised. Mark it paid once the money has gone.')
+              }
+            />
           )}
 
           {tab === 'terms' && (
@@ -413,6 +433,141 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
         </button>
       </Group>
     </>
+  )
+}
+
+/**
+ * What a partner has earned, and how settled it is.
+ *
+ * The split is the whole point. Money brought in is not money owed: an accrual
+ * inside the return window can still be refunded away, so only `confirmed` is
+ * ever presented as payable. Reversals are shown rather than netted off in
+ * silence — a founder asking "why is this smaller than last month" deserves the
+ * answer on the same screen.
+ */
+function MoneyPanel({
+  partnerId,
+  busy,
+  onSettle,
+}: {
+  partnerId: string
+  busy: boolean
+  onSettle: (ignoreMinimum: boolean) => Promise<boolean>
+}) {
+  const [data, setData] = useState<{
+    balance: PartnerBalance
+    commissions: PartnerCommission[]
+    payouts: PartnerPayout[]
+  } | null>(null)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/portal/partners/${partnerId}`, { cache: 'no-store' })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok) setData({ balance: d.balance, commissions: d.commissions ?? [], payouts: d.payouts ?? [] })
+    } catch {
+      /* the panel simply stays on its loading line */
+    }
+  }, [partnerId])
+
+  useEffect(() => { void load() }, [load])
+
+  if (!data) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+
+  const { balance, commissions, payouts } = data
+
+  return (
+    <>
+      <Group
+        title="Owed"
+        desc="Only money past the return window is payable. Anything newer could still be refunded away."
+      >
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <Figure label="Payable now" value={balance.payableNow} tone={balance.payableNow > 0 ? ACCENT : undefined} />
+          <Figure label="In the window" value={balance.accrued} />
+          <Figure label="Paid to date" value={balance.paid} />
+          <Figure label="Reversed" value={balance.reversed} tone={balance.reversed > 0 ? '#f87171' : undefined} />
+        </div>
+        <div className="flex gap-2">
+          <button
+            disabled={busy || balance.payableNow <= 0}
+            onClick={async () => { if (await onSettle(false)) await load() }}
+            className={BTN}
+            style={{ background: ACCENT, color: 'var(--color-bg)' }}
+          >
+            {busy ? 'Working…' : 'Raise a payout'}
+          </button>
+          <button
+            disabled={busy || balance.payableNow <= 0}
+            onClick={async () => { if (await onSettle(true)) await load() }}
+            className={BTN}
+            style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            title="Pay it even though it is under their agreed minimum"
+          >
+            Ignore the minimum
+          </button>
+        </div>
+      </Group>
+
+      <Group title={`Payouts (${payouts.length})`} desc="Raised here; marked paid once the money has actually gone.">
+        {payouts.length === 0 ? (
+          <p className="text-[11px] text-[var(--color-muted)]">None yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {payouts.map((p) => (
+              <div key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-[var(--color-text-2)]">{p.period} · {money(p.amount)}</span>
+                <span
+                  className="font-bold px-2 py-0.5 rounded-full"
+                  style={{
+                    color: p.state === 'paid' ? '#34d399' : '#fbbf24',
+                    background: `color-mix(in srgb, ${p.state === 'paid' ? '#34d399' : '#fbbf24'} 14%, transparent)`,
+                  }}
+                >
+                  {p.state === 'paid' ? 'paid' : 'due'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Group>
+
+      <Group title={`Commissions (${commissions.length})`} desc="The rate stored is the one that applied on the day, not today's.">
+        {commissions.length === 0 ? (
+          <p className="text-[11px] text-[var(--color-muted)]">Nothing earned yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {commissions.slice(0, 40).map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="text-[var(--color-text-2)] truncate">
+                  {c.createdAt.slice(0, 10)} · {c.kind} · {Math.round(c.rate * 100)}% of {money(c.netBasis)}
+                </span>
+                <span className="flex items-center gap-2 flex-shrink-0">
+                  <span
+                    className="font-semibold"
+                    style={{ color: c.state === 'reversed' ? '#f87171' : 'var(--color-text)', textDecoration: c.state === 'reversed' ? 'line-through' : undefined }}
+                  >
+                    {money(c.amount)}
+                  </span>
+                  <span className="text-[10px] text-[var(--color-muted)]">{c.state}</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Group>
+    </>
+  )
+}
+
+function Figure({ label, value, tone }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">{label}</p>
+      <p className="text-sm font-black" style={{ color: tone ?? 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        {money(value)}
+      </p>
+    </div>
   )
 }
 

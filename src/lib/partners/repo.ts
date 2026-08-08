@@ -15,7 +15,9 @@ import type {
   CodeTerms,
   Partner,
   PartnerCode,
+  PartnerCommission,
   PartnerData,
+  PartnerPayout,
   PartnerStatus,
   PartnerTerms,
   PayoutTerms,
@@ -270,4 +272,227 @@ export async function listTerms(partnerId: string): Promise<PartnerTerms[]> {
     [partnerId],
   )
   return rows.map(toTerms)
+}
+
+// ─── Commissions ──────────────────────────────────────────────────────────────
+
+interface CommissionRow {
+  id: string
+  partner_id: string
+  order_id: string
+  kind: string
+  net_basis: string
+  rate: string
+  amount: string
+  state: string
+  confirm_after: string
+  payout_id: string | null
+  created_at: string
+}
+
+function toCommission(row: CommissionRow): PartnerCommission {
+  return {
+    id: row.id,
+    partnerId: row.partner_id,
+    orderId: row.order_id,
+    kind: row.kind as PartnerCommission['kind'],
+    netBasis: num(row.net_basis),
+    rate: num(row.rate),
+    amount: num(row.amount),
+    state: row.state as PartnerCommission['state'],
+    confirmAfter: row.confirm_after,
+    payoutId: row.payout_id,
+    createdAt: row.created_at,
+  }
+}
+
+/**
+ * Insert one accrual, or do nothing if this order already has one of this kind.
+ *
+ * Returns null when it was already there. Idempotency is enforced by the unique
+ * index on `(order_id, kind)` rather than by checking first: Stripe delivers
+ * webhooks more than once and two of them can land at the same moment, so a
+ * read-then-write would still double-pay under a race. The database is the only
+ * thing that can decide this.
+ */
+export async function insertCommission(
+  input: Omit<PartnerCommission, 'id' | 'createdAt'>,
+): Promise<PartnerCommission | null> {
+  const db = await getEngine()
+  const at = now()
+  const row: PartnerCommission = { ...input, id: newId('pcom'), createdAt: at }
+  try {
+    await db.run(
+      `INSERT INTO partner_commissions
+         (id, partner_id, order_id, kind, net_basis, rate, amount, state, confirm_after, payout_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.partnerId,
+        row.orderId,
+        row.kind,
+        String(row.netBasis),
+        String(row.rate),
+        String(row.amount),
+        row.state,
+        row.confirmAfter,
+        row.payoutId,
+        at,
+      ],
+    )
+    return row
+  } catch (err) {
+    // A unique-constraint violation is the expected outcome of a redelivered
+    // webhook, not a fault. Anything else is.
+    if (isUniqueViolation(err)) return null
+    throw err
+  }
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err)
+  return /unique|duplicate key/i.test(message)
+}
+
+export async function listCommissions(partnerId: string, limit = 500): Promise<PartnerCommission[]> {
+  const db = await getEngine()
+  const rows = await db.all<CommissionRow>(
+    `SELECT * FROM partner_commissions WHERE partner_id = ? ORDER BY created_at DESC LIMIT ${clampLimit(limit)}`,
+    [partnerId],
+  )
+  return rows.map(toCommission)
+}
+
+export async function listCommissionsForOrder(orderId: string): Promise<PartnerCommission[]> {
+  const db = await getEngine()
+  const rows = await db.all<CommissionRow>('SELECT * FROM partner_commissions WHERE order_id = ?', [orderId])
+  return rows.map(toCommission)
+}
+
+/** Accruals whose return window has passed — the daily job's work list. */
+export async function listDueForConfirmation(asOf: string, limit = 500): Promise<PartnerCommission[]> {
+  const db = await getEngine()
+  const rows = await db.all<CommissionRow>(
+    `SELECT * FROM partner_commissions WHERE state = 'accrued' AND confirm_after <= ?
+      ORDER BY confirm_after ASC LIMIT ${clampLimit(limit)}`,
+    [asOf],
+  )
+  return rows.map(toCommission)
+}
+
+export async function listConfirmed(partnerId: string): Promise<PartnerCommission[]> {
+  const db = await getEngine()
+  const rows = await db.all<CommissionRow>(
+    "SELECT * FROM partner_commissions WHERE partner_id = ? AND state = 'confirmed' ORDER BY created_at ASC",
+    [partnerId],
+  )
+  return rows.map(toCommission)
+}
+
+/**
+ * Move a commission to a new state, but only from the state it is allowed to
+ * leave.
+ *
+ * Guarded in SQL rather than by reading first, for the same reason the insert
+ * is: two webhooks can arrive together. A `paid` row must never be quietly
+ * reversed back into the balance, and a `reversed` one must never be confirmed.
+ */
+export async function setCommissionState(
+  id: string,
+  from: PartnerCommission['state'][],
+  to: PartnerCommission['state'],
+  payoutId: string | null = null,
+): Promise<boolean> {
+  if (from.length === 0) return false
+  const db = await getEngine()
+  const placeholders = from.map(() => '?').join(', ')
+  await db.run(
+    `UPDATE partner_commissions SET state = ?, payout_id = COALESCE(?, payout_id)
+      WHERE id = ? AND state IN (${placeholders})`,
+    [to, payoutId, id, ...from],
+  )
+  // The engine's `run` reports no row count, so read the state back. The GUARD
+  // is in the WHERE clause above and holds regardless — this is only how the
+  // caller finds out whether it was the one that moved it, for reporting.
+  const row = await db.get<{ state: string }>('SELECT state FROM partner_commissions WHERE id = ?', [id])
+  return row?.state === to
+}
+
+// ─── Payouts ──────────────────────────────────────────────────────────────────
+
+interface PayoutRow {
+  id: string
+  partner_id: string
+  period: string
+  amount: string
+  state: string
+  reference: string | null
+  created_at: string
+}
+
+function toPayout(row: PayoutRow): PartnerPayout {
+  return {
+    id: row.id,
+    partnerId: row.partner_id,
+    period: row.period,
+    amount: num(row.amount),
+    state: row.state as PartnerPayout['state'],
+    reference: row.reference,
+    createdAt: row.created_at,
+  }
+}
+
+export async function createPayout(input: {
+  partnerId: string
+  period: string
+  amount: number
+}): Promise<PartnerPayout> {
+  const db = await getEngine()
+  const at = now()
+  const payout: PartnerPayout = { ...input, id: newId('ppay'), state: 'due', reference: null, createdAt: at }
+  await db.run(
+    'INSERT INTO partner_payouts (id, partner_id, period, amount, state, reference, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    [payout.id, payout.partnerId, payout.period, String(payout.amount), payout.state, null, at],
+  )
+  return payout
+}
+
+export async function markPayoutPaid(id: string, reference: string | null): Promise<void> {
+  const db = await getEngine()
+  await db.run("UPDATE partner_payouts SET state = 'paid', reference = ? WHERE id = ?", [reference, id])
+}
+
+export async function listPayouts(partnerId: string): Promise<PartnerPayout[]> {
+  const db = await getEngine()
+  const rows = await db.all<PayoutRow>(
+    'SELECT * FROM partner_payouts WHERE partner_id = ? ORDER BY created_at DESC LIMIT 200',
+    [partnerId],
+  )
+  return rows.map(toPayout)
+}
+
+function clampLimit(n: number): number {
+  return Math.min(Math.max(1, Math.round(n)), 1000)
+}
+
+/**
+ * The earliest commission a partner has that has not been paid out yet.
+ *
+ * What `changeTerms` needs: new terms must not start before it, or the rate
+ * stored on the ledger row and the terms the partner can read would disagree,
+ * and they would be told they were on a rate they were never paid.
+ *
+ * Paid rows are excluded because they are settled — restating a rate behind
+ * money that has already moved changes nothing about the money. Reversed rows
+ * likewise: nobody is owed for them.
+ */
+export async function oldestUnsettledCommission(partnerId: string): Promise<string | null> {
+  const db = await getEngine()
+  const row = await db.get<{ created_at: string }>(
+    `SELECT created_at FROM partner_commissions
+      WHERE partner_id = ? AND state IN ('accrued', 'confirmed')
+      ORDER BY created_at ASC LIMIT 1`,
+    [partnerId],
+  )
+  return row?.created_at ?? null
 }

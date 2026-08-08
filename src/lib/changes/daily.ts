@@ -33,6 +33,8 @@ export interface DailyRunResult {
   productsRefreshed?: number
   /** Imported products whose SKU is no longer in the supplier feed. */
   productsMissing?: number
+  /** Partner commissions whose return window passed, now payable. */
+  commissionsConfirmed?: number
   note?: string
 }
 
@@ -81,6 +83,16 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
   // products the shop actually sells, so an item that went out of stock at the
   // supplier stops being buyable here.
   const productSync = await syncImportedProducts()
+  // Commission past its return window becomes payable. Idempotent — a row
+  // already confirmed is no longer `accrued`, so a second run today moves
+  // nothing. Never allowed to fail the rest of the job.
+  let commissionsConfirmed = 0
+  try {
+    const { confirmDue } = await import('@/lib/partners/ledger')
+    commissionsConfirmed = await confirmDue()
+  } catch (err) {
+    console.error('[daily] commission confirmation failed:', err)
+  }
 
   return {
     dryRun: false,
@@ -95,6 +107,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     staleOrdersClosed,
     productsRefreshed: productSync.updated,
     productsMissing: productSync.missing.length,
+    commissionsConfirmed,
   }
 }
 

@@ -398,6 +398,31 @@ export const PRICING_CONFIG = {
       /** We raise the invoice on the partner's behalf rather than chasing one. */
       selfBilled: true,
     },
+    /**
+     * Days a commission sits unconfirmed before it can be paid.
+     *
+     * 14, matching the statutory distance-selling cancellation window. Paying
+     * on the day an order lands means paying out on orders that come straight
+     * back, and clawing money back from someone who has already been paid is a
+     * conversation nobody wins. Waiting the window out means a reversal is a
+     * ledger row, not a debt.
+     */
+    confirmAfterDays: 14,
+    /**
+     * The most of an order's own contribution that may go to a partner, 0–1.
+     *
+     * 0.95 — a partner can be paid up to 95% of what an order actually makes,
+     * never more. Commission is a percentage of NET REVENUE, and on a deeply
+     * discounted order net revenue and contribution come apart: 15% of net can
+     * exceed the whole margin, and the difference comes out of our own pocket
+     * without anything saying so. This floors it so an attributed order can be
+     * thin but never turns into a loss THROUGH THE COMMISSION.
+     *
+     * It does not rescue an order that was already losing money before any
+     * commission — see D2; the deepest stacked rung is a known acquisition
+     * cost. What it stops is the commission being what pushed it under.
+     */
+    maxShareOfContribution: 0.95,
   },
 
   /**
