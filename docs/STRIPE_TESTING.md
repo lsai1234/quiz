@@ -58,7 +58,7 @@ Keep `stripe listen` running while you test.
 
 ### Deployed (Vercel etc.)
 Stripe **Developers → Webhooks → Add endpoint**:
-- URL: `https://<your-domain>/api/webhooks/stripe`
+- URL: `https://getchrgd.co.uk/api/webhooks/stripe`
 - Events — **all seven matter**, and the app handles each:
 
   | Event | What it does here |
@@ -108,14 +108,14 @@ Run the quiz → choose the one-off plan → checkout. Same as above, order `cha
 1. Quiz → **subscribe** (you'll be asked to create/sign in to an account).
 2. On the confirmation, set the **out-of-stock preferences** per line (allow / decline).
 3. Pay in Stripe (subscription mode). Back in the app you're subscribed.
-4. **Hub (`/hub`)**: your bundle shows; open a line → the substitution toggle
+4. **Hub (`/myhub`)**: your bundle shows; open a line → the substitution toggle
    reflects your choice. **Orders** shows a `subscription` order for the first invoice.
 5. Cancelling the subscription in Stripe (or the billing portal) flips the stored
    subscription to cancelled via the `customer.subscription.deleted` webhook.
 
 ### C2. Changing a live subscription (the hub → Stripe path)
 
-1. In `/hub`, **add a product**. Watch Stripe → the subscription's amount changes
+1. In `/myhub`, **add a product**. Watch Stripe → the subscription's amount changes
    from the next cycle (`proration_behavior: 'none'`, so no mid-cycle top-up).
 2. **Pause**. Stripe shows `pause_collection` with behaviour *void* — invoices
    raised while paused are voided, never banked as a debt. **Resume** clears it.

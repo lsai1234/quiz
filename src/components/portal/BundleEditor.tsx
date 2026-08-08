@@ -92,7 +92,7 @@ export function BundleEditor({ initial, isNew }: Props) {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? 'Save failed'); return }
-      router.push('/portal/products/bundles')
+      router.push('/founderhub/products/bundles')
     } catch {
       setError('Unable to reach the server')
     } finally {
@@ -106,7 +106,7 @@ export function BundleEditor({ initial, isNew }: Props) {
     <div className="space-y-4 pb-24">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <button onClick={() => router.push('/portal/products/bundles')} className="text-[11px] font-semibold text-[var(--color-muted)] mb-1">← Bundles</button>
+          <button onClick={() => router.push('/founderhub/products/bundles')} className="text-[11px] font-semibold text-[var(--color-muted)] mb-1">← Bundles</button>
           <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
             {isNew ? 'New bundle' : `Edit — ${initial?.name}`}
           </h1>

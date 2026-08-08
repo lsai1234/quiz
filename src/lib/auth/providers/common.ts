@@ -46,7 +46,7 @@ export function pkcePair(): { verifier: string; challenge: string } {
 }
 
 /** Only allow same-site relative return paths (blocks open-redirects). */
-export function safeReturnPath(raw: string | null | undefined, fallback = '/hub'): string {
+export function safeReturnPath(raw: string | null | undefined, fallback = '/myhub'): string {
   if (!raw) return fallback
   if (raw.startsWith('/') && !raw.startsWith('//')) return raw
   return fallback

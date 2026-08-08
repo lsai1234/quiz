@@ -124,7 +124,7 @@ describe('a removal reaches the member', () => {
 
     expect(queued!.status).toBe('queued')
     expect(queued!.rendered.text).toContain('£30.00') // what they now pay
-    expect(queued!.rendered.text).toContain('/hub?add=protein-whey')
+    expect(queued!.rendered.text).toContain('/myhub?add=protein-whey')
   })
 
   it('tells a member with dietary needs the honest reason a swap did not happen', async () => {
@@ -184,7 +184,7 @@ describe('what does not get an email', () => {
 
 describe('hub deep links', () => {
   it('point at the flow that can act, with the target encoded', () => {
-    expect(hubLinks.change('https://chrgd.dev', 'line 1')).toBe('https://chrgd.dev/hub?change=line%201')
-    expect(hubLinks.add('https://chrgd.dev', 'protein-whey')).toBe('https://chrgd.dev/hub?add=protein-whey')
+    expect(hubLinks.change('https://chrgd.dev', 'line 1')).toBe('https://chrgd.dev/myhub?change=line%201')
+    expect(hubLinks.add('https://chrgd.dev', 'protein-whey')).toBe('https://chrgd.dev/myhub?add=protein-whey')
   })
 })

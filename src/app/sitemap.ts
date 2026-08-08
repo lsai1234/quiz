@@ -5,7 +5,7 @@ import { getShopBundles } from '@/lib/bundles/store'
 // than baked at build time.
 export const dynamic = 'force-dynamic'
 
-const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://getchrgd.com').replace(/\/$/, '')
+const BASE = (process.env.NEXT_PUBLIC_SITE_URL ?? 'https://getchrgd.co.uk').replace(/\/$/, '')
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [

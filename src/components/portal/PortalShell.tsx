@@ -12,13 +12,13 @@ const ACCENT = '#00D4FF'
  * everything about money under Commerce, each with its own sub-nav.
  */
 const NAV = [
-  { href: '/portal', label: 'Dashboard' },
-  { href: '/portal/commerce', label: 'Commerce' },
-  { href: '/portal/products', label: 'Products' },
-  { href: '/portal/pricing', label: 'Pricing' },
-  { href: '/portal/actions', label: 'Requires action' },
-  { href: '/portal/emails', label: 'Emails' },
-  { href: '/portal/settings', label: 'Settings' },
+  { href: '/founderhub', label: 'Dashboard' },
+  { href: '/founderhub/commerce', label: 'Commerce' },
+  { href: '/founderhub/products', label: 'Products' },
+  { href: '/founderhub/pricing', label: 'Pricing' },
+  { href: '/founderhub/actions', label: 'Requires action' },
+  { href: '/founderhub/emails', label: 'Emails' },
+  { href: '/founderhub/settings', label: 'Settings' },
 ]
 
 export function PortalShell({ children }: { children: React.ReactNode }) {
@@ -36,7 +36,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
 
   async function logout() {
     await fetch('/api/portal/logout', { method: 'POST' })
-    window.location.href = '/portal'
+    window.location.href = '/founderhub'
   }
 
   return (
@@ -64,7 +64,7 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
         </div>
         <nav className="max-w-3xl mx-auto px-5 flex gap-1 overflow-x-auto">
           {NAV.map((n) => {
-            const active = n.href === '/portal' ? pathname === '/portal' : pathname.startsWith(n.href)
+            const active = n.href === '/founderhub' ? pathname === '/founderhub' : pathname.startsWith(n.href)
             return (
               <Link
                 key={n.href}

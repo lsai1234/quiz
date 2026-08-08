@@ -510,7 +510,7 @@ async function queuePriceNotice(
         monthlyAfter: member.monthlyAfter,
         effectiveFrom,
         noticeDays: config.priceChangeNoticeDays,
-        hubUrl: `${appBaseUrl()}/hub`,
+        hubUrl: `${appBaseUrl()}/myhub`,
       }),
     })
   } catch (err) {

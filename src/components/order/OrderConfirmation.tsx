@@ -397,7 +397,7 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
       )}
 
       {isSub ? (
-        <PrimaryCta href="/hub" label="Manage your subscription" cta="manage_subscription" />
+        <PrimaryCta href="/myhub" label="Manage your subscription" cta="manage_subscription" />
       ) : (
         <PrimaryCta href="/shop" label="Continue shopping" cta="continue_shopping" />
       )}

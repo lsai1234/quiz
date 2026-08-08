@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/checkout/continue — the OAuth return target for the checkout gate.
  * After the provider round-trip the member is signed in; here we read the
  * stashed order, save their bundle + quiz, clear the stash, and redirect on to
- * the Stripe checkout (live) or the hub (mock). Any miss lands on /hub.
+ * the Stripe checkout (live) or the hub (mock). Any miss lands on /myhub.
  */
 export async function GET(req: Request) {
   const origin = resolveOrigin(req.url)
@@ -22,11 +22,11 @@ export async function GET(req: Request) {
   jar.delete(PENDING_COOKIE)
 
   const user = await getHubUser()
-  if (!user || !token) return NextResponse.redirect(`${origin}/hub`)
+  if (!user || !token) return NextResponse.redirect(`${origin}/myhub`)
 
   const stored = await kvGet<{ payload: CheckoutPayload }>(PENDING_KEY_PREFIX + token)
   await kvDelete(PENDING_KEY_PREFIX + token)
-  if (!stored?.payload) return NextResponse.redirect(`${origin}/hub`)
+  if (!stored?.payload) return NextResponse.redirect(`${origin}/myhub`)
 
   try {
     const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, stored.payload, {
@@ -47,5 +47,5 @@ export async function GET(req: Request) {
     console.error('[checkout/continue] finalize failed:', err)
   }
   // Mock mode (or a live failure we've logged): land on the hub with the saved bundle.
-  return NextResponse.redirect(`${origin}/hub?welcome=subscribed`)
+  return NextResponse.redirect(`${origin}/myhub?welcome=subscribed`)
 }

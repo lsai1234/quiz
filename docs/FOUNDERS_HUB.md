@@ -2,9 +2,16 @@
 
 This is the current shape of the hub. Where an older phase spec
 (`PHASE6_PORTAL_SPEC.md`, `POWERBODY_STRIPE_PLAN.md`, `BUNDLES_SPEC.md`,
-`PRODUCT_CHANGES_SPEC.md`, `SUBSCRIPTIONS.md`) names a `/portal/*` route, this
+`PRODUCT_CHANGES_SPEC.md`, `SUBSCRIPTIONS.md`) names a `/founderhub/*` route, this
 document supersedes it — those specs record what was built at the time and are
 left as history rather than rewritten.
+
+**The hub moved.** With the site now on the apex domain `getchrgd.co.uk`, the
+whole tree moved `/portal/*` → `/founderhub/*` (and the customer hub `/hub` →
+`/myhub`). Every route below is written in the new form. Old paths still land in
+the right place — `next.config.ts` redirects them — but nothing links to them
+any more. The API routes did **not** move: they are still `/api/portal/*` and
+`/api/hub/*`, because nobody types those and renaming them buys nothing.
 
 ---
 
@@ -15,33 +22,33 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 
 | Tab | Route | What lives there |
 | --- | --- | --- |
-| **Dashboard** | `/portal` | The business at a glance (see §4). |
-| **Commerce** | `/portal/commerce` | Review queue · Single orders · Subscriptions · Financials |
-| **Products** | `/portal/products` | Catalogue · Top 25 · Bundles · PowerBody · Dashboard · Readiness · Coverage |
-| **Pricing** | `/portal/pricing` | Every pricing rule, in one place (see §2). |
-| **Requires action** | `/portal/actions` | Product changes on live subscriptions. |
-| **Emails** | `/portal/emails` | The outbox. |
-| **Settings** | `/portal/settings` | Mock vs live data, supplier, payments. |
+| **Dashboard** | `/founderhub` | The business at a glance (see §4). |
+| **Commerce** | `/founderhub/commerce` | Review queue · Single orders · Subscriptions · Financials |
+| **Products** | `/founderhub/products` | Catalogue · Top 25 · Bundles · PowerBody · Dashboard · Readiness · Coverage |
+| **Pricing** | `/founderhub/pricing` | Every pricing rule, in one place (see §2). |
+| **Requires action** | `/founderhub/actions` | Product changes on live subscriptions. |
+| **Emails** | `/founderhub/emails` | The outbox. |
+| **Settings** | `/founderhub/settings` | Mock vs live data, supplier, payments. |
 
 ### Routes that moved
 
 | Was | Now |
 | --- | --- |
-| `/portal/dashboard` | `/portal/products/dashboard` |
-| `/portal/coverage` | `/portal/products/coverage` |
-| `/portal/readiness` | `/portal/products/readiness` |
-| `/portal/supplier` | `/portal/products/powerbody` |
-| `/portal/bundles` | `/portal/products/bundles` |
-| `/portal/orders` | `/portal/commerce/orders` |
-| `/portal/subscriptions` | `/portal/commerce/subscriptions` |
+| `/founderhub/dashboard` | `/founderhub/products/dashboard` |
+| `/founderhub/coverage` | `/founderhub/products/coverage` |
+| `/founderhub/readiness` | `/founderhub/products/readiness` |
+| `/founderhub/supplier` | `/founderhub/products/powerbody` |
+| `/founderhub/bundles` | `/founderhub/products/bundles` |
+| `/founderhub/orders` | `/founderhub/commerce/orders` |
+| `/founderhub/subscriptions` | `/founderhub/commerce/subscriptions` |
 
 ### Routes that were removed
 
-- **Bulk import** (`/portal/import`, `/api/portal/import`, `lib/portal/import.ts`,
+- **Bulk import** (`/founderhub/import`, `/api/portal/import`, `lib/portal/import.ts`,
   the Olivit CSV template). Products come from the PowerBody feed via
-  `/portal/products/powerbody`, which maps, AI-fills and de-dupes them — the CSV
+  `/founderhub/products/powerbody`, which maps, AI-fills and de-dupes them — the CSV
   path was a second, worse way to do the same thing.
-- **Improvements backlog** (`/portal/backlog`, `/api/portal/backlog`,
+- **Improvements backlog** (`/founderhub/backlog`, `/api/portal/backlog`,
   `lib/portal/backlog*.ts`). A to-do list inside the product it is a to-do list
   for; it belongs wherever the rest of the work is tracked.
 
@@ -52,7 +59,7 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 
 ## 2. Pricing — one page, and the Good-price model
 
-`/portal/pricing` is now the single home for every rule that decides a price:
+`/founderhub/pricing` is now the single home for every rule that decides a price:
 the subscription offer and per-bundle rates, the first-month offer and scratch
 card odds, delivery, profit guardrails, one-off and subscription discount tiers,
 budget ceilings, and what happens when a supplier changes a product. Editing any
@@ -246,7 +253,7 @@ Every order carries `review: { state, by, at, note }`:
 | `held` | Parked deliberately (an address query, a stock doubt). |
 | `rejected` | Will not be fulfilled as it stands. **Does not** refund or cancel — money is a separate decision. |
 
-`/portal/commerce/queue` groups everything paid-but-unsent by the day it was
+`/founderhub/commerce/queue` groups everything paid-but-unsent by the day it was
 raised, with separate views for **one-off** and **subscription** renewals,
 because the questions differ: "is this address real?" versus "has anything on
 this plan gone out of stock?". It flags orders that could not be dropshipped as
@@ -261,7 +268,7 @@ the gate exists to demand. The gate itself stays.
 
 ## 4. The dashboard
 
-`/portal` is ordered by what a founder can act on:
+`/founderhub` is ordered by what a founder can act on:
 
 1. **Needs you** — orders to review, approved orders to send, product changes on
    live subscriptions, subscriptions needing attention, products not
@@ -306,7 +313,7 @@ drop-off wherever a cohort legitimately skipped a step.
 
 ## 5. The Top 25
 
-`/portal/products/top-25` holds an **ordered roster** of up to 25 products — the
+`/founderhub/products/top-25` holds an **ordered roster** of up to 25 products — the
 ones the quiz reaches for first.
 
 Held as one list rather than as a number on each product, because "which

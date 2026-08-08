@@ -103,7 +103,7 @@ export function OrdersList({ defaultChannel = 'all' }: { defaultChannel?: string
       ) : (
         <div className="space-y-2">
           {filtered.map((o) => (
-            <Link key={o.id} href={`/portal/commerce/orders/${o.id}`} className="block rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+            <Link key={o.id} href={`/founderhub/commerce/orders/${o.id}`} className="block rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">

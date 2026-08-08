@@ -195,7 +195,7 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                       <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} className="mt-1 shrink-0" aria-label={`Select ${o.reference ?? o.id}`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Link href={`/portal/commerce/orders/${o.id}`} className="text-sm font-bold text-[var(--color-text)] underline" style={{ fontFamily: 'var(--font-display)' }}>
+                          <Link href={`/founderhub/commerce/orders/${o.id}`} className="text-sm font-bold text-[var(--color-text)] underline" style={{ fontFamily: 'var(--font-display)' }}>
                             {o.reference ?? o.id}
                           </Link>
                           <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">

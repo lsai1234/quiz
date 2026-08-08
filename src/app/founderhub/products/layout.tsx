@@ -9,16 +9,16 @@ import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
  * (Readiness, Coverage) and packaging it (Bundles) belong together.
  */
 const ITEMS: SubNavItem[] = [
-  { href: '/portal/products', label: 'Catalogue', exact: true },
-  { href: '/portal/products/top-25', label: 'Top 25' },
-  { href: '/portal/products/bundles', label: 'Bundles' },
-  { href: '/portal/products/powerbody', label: 'PowerBody' },
+  { href: '/founderhub/products', label: 'Catalogue', exact: true },
+  { href: '/founderhub/products/top-25', label: 'Top 25' },
+  { href: '/founderhub/products/bundles', label: 'Bundles' },
+  { href: '/founderhub/products/powerbody', label: 'PowerBody' },
   // Sits next to PowerBody because it is the second half of the same job:
   // nothing imported there is on sale until it has been through here.
-  { href: '/portal/products/review', label: 'Review' },
-  { href: '/portal/products/dashboard', label: 'Dashboard' },
-  { href: '/portal/products/readiness', label: 'Readiness' },
-  { href: '/portal/products/coverage', label: 'Coverage' },
+  { href: '/founderhub/products/review', label: 'Review' },
+  { href: '/founderhub/products/dashboard', label: 'Dashboard' },
+  { href: '/founderhub/products/readiness', label: 'Readiness' },
+  { href: '/founderhub/products/coverage', label: 'Coverage' },
 ]
 
 export default function ProductsLayout({ children }: { children: React.ReactNode }) {

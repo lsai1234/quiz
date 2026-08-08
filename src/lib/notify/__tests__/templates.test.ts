@@ -20,7 +20,7 @@ function substituted(over: Partial<SubstitutedContext> = {}): RenderedEmail {
     monthlyBefore: 60.05,
     monthlyAfter: 60.05,
     effectiveFrom: '2026-08-15T00:00:00.000Z',
-    changeUrl: 'https://chrgd.dev/hub?change=line-1',
+    changeUrl: 'https://chrgd.dev/myhub?change=line-1',
     ...over,
   })
 }
@@ -33,7 +33,7 @@ function removed(over: Partial<RemovedContext> = {}): RenderedEmail {
     monthlyBefore: 60.05,
     monthlyAfter: 30.31,
     effectiveFrom: '2026-08-15T00:00:00.000Z',
-    addUrl: 'https://chrgd.dev/hub?add=protein-whey',
+    addUrl: 'https://chrgd.dev/myhub?add=protein-whey',
     ...over,
   })
 }
@@ -64,7 +64,7 @@ describe('product-substituted', () => {
 
   it('links into the swap flow for that line, not the hub front door', () => {
     for (const body of bodies(substituted())) {
-      expect(body).toContain('https://chrgd.dev/hub?change=line-1')
+      expect(body).toContain('https://chrgd.dev/myhub?change=line-1')
     }
   })
 
@@ -103,7 +103,7 @@ describe('product-removed', () => {
 
   it('links into the add flow for that category, with suggestions when we have them', () => {
     const email = removed({ suggestions: ['Impact Whey', 'Clear Whey', 'Vegan Protein'] })
-    expect(email.text).toContain('https://chrgd.dev/hub?add=protein-whey')
+    expect(email.text).toContain('https://chrgd.dev/myhub?add=protein-whey')
     expect(email.text).toContain('Impact Whey, Clear Whey, Vegan Protein')
   })
 
@@ -120,7 +120,7 @@ describe('price-change-notice', () => {
       monthlyAfter: 63.2,
       effectiveFrom: '2026-09-15T00:00:00.000Z',
       noticeDays: 30,
-      hubUrl: 'https://chrgd.dev/hub',
+      hubUrl: 'https://chrgd.dev/myhub',
     })
 
     expect(email.subject).toContain('£63.20')

@@ -146,7 +146,7 @@ export async function finalizeCheckout(
       customerId: subscription.stripeCustomerId ?? null,
       customerEmail: subscription.customerEmail || email,
       successUrl: `${base}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${base}/hub`,
+      cancelUrl: `${base}/myhub`,
       metadata: { userId },
     })
     if (url) return { checkoutUrl: url, mock: false }
