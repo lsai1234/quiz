@@ -136,15 +136,81 @@ new modelling. Ship phases 1 and 5 (internal only) in the meantime.
 > 3. **Cap the combined discount** at whatever leaves the first order at or
 >    above zero after commission (~30% on these numbers).
 >
-> Settled on option 1. Multiplicative stacking, with the margin floor still
-> applied per line underneath so nothing is ever sold below cost.
+> Settled on option 1 at the time. Multiplicative stacking, with the margin
+> floor still applied per line underneath so nothing is ever sold below cost.
 >
-> **Still worth revisiting** now the corrected figures are in: at a 20% code and
-> 15% first-order commission, an attributed ONE-OFF loses ~£2.26 with no
-> subscription behind it to recover from. Options if that matters: drop the
-> first-order rate, restrict codes to subscription signups, or accept it as the
-> cost of the channel. Phase 3's contribution guard stops the commission making
-> it worse, but it cannot make a loss-making order profitable.
+> **SUPERSEDED (2026-08) — option 2 is what ships.** See below.
+
+> **Revision: the code REPLACES, it does not stack. Rate raised to 25%.**
+>
+> The "still worth revisiting" note above was right, and the modelling that
+> settled it was the programme lifetime rather than a single order. On a £90
+> plan, measured over `orderMix.averageRetentionMonths`:
+>
+> | | Unattributed | Attributed, stacking | Attributed, replacing |
+> |---|---|---|---|
+> | Returned over its life | £51.24 | £10.42 | £22.44 |
+> | As a share of unattributed | 100% | **20%** | **44%** |
+>
+> A channel that returns a fifth of what organic returns is not an acquisition
+> cost, it is a different business. Two changes fix it, and both were made:
+>
+> 1. **Renewal commission cut from 6 months to 3** (`partners.renewalMonths`).
+>    At 6 the window matched expected retention exactly — commission on every
+>    month a customer is expected to exist, which is revenue share rather than a
+>    referral fee. Worth £18 over the life of a £90 plan, more than the loss on
+>    the discounted first month, and invisible because it never lands on any
+>    single order. That alone moved 20% → 34%.
+> 2. **Replacement, not stacking**, at a 25% rate (`partners.codeDiscountPct`,
+>    renamed from `introFloorPct` — there has been no scratch card to put a
+>    floor under since phase 0). 34% → 44%.
+>
+> On the same £90 three-item box costing £45, with `sharedParcelItems: 1`:
+>
+> | Route | Discount | Customer pays | **After commission** |
+> |---|---|---|---|
+> | No code, no discount | 0% | £90.00 | **£26.27** |
+> | Code, replacing | 25% | £67.50 | **−£6.02** |
+> | *(was)* code + deepest rung, stacked | *36%* | *£57.60* | *−£14.28* |
+>
+> Month one still costs us money — that is an acquisition cost taken knowingly —
+> but there is now only ONE rate to be negative at, and it is 2.4× shallower
+> than the deepest stacked rung was. Pinned in
+> `lib/pricing/__tests__/partner-discount.test.ts`.
+>
+> **Every discount a code replaces is shallower than 25%** (bundle tier 8%,
+> subscription rungs 13/15/20%), so replacing never leaves a customer worse off.
+> `priceOneOffLines` and `firstMonthRate` both take the DEEPER of the two
+> anyway, so a rate set above 25% cannot turn a code into a penalty.
+>
+> A subscription code is 25% off the **list** price for month one, replacing the
+> subscribe-&-save rung for that month only; months two onwards are untouched.
+> Because everything downstream bills off `flatMonthly` (post-rung),
+> `firstMonthRate` restates the rate as the equivalent measured from there —
+> 25% off list from a 20% rung is 6.25% off the monthly.
+>
+> Replacing is also the version a partner can state honestly. "25% off" is what
+> a follower gets, full stop.
+
+### D2b — Where a code works  ·  **BUILT**
+
+Codes apply to **quiz stacks, curated bundles and subscriptions only**. Not to
+general shop sales.
+
+A code is an acquisition cost priced against what a stack is worth over its
+life. A single tub off the shop shelf has neither a renewal behind it nor the
+basket size to carry 25% and a commission on top — it is the −£6.02 row with
+nothing to recover it from, on a smaller basket.
+
+Enforced in `redeemPartnerCode` via `RedeemContext.channel`, which every
+checkout path supplies: `/api/cart` derives it from the line `source`
+attributes (`channelFrom`), and `finalizeCheckout` passes `'subscription'`.
+The refusal happens **before** the code lookup, so the shop answers the same
+way whether or not the code is real — trying codes somewhere they were never
+going to work cannot be used to enumerate them.
+
+The shop basket has no code box at all (`BasketDrawer`), because a box that
+took a code and then had the checkout refuse it is worse than no box.
 
 ### D3 — Are partners customers?  ·  **BUILT AS RECOMMENDED (phase 4)**
 
@@ -418,7 +484,7 @@ Migration; `lib/partners/` domain (create, suspend, generate code, set and
 supersede terms); founders API + UI at a new top-level **Partners** tab.
 
 Creating a partner generates a code from their name with a collision check
-(`SARAH20`, `SARAH20-2`), defaulted to `partners.introFloorPct` and editable, and
+(`SARAH25`, `SARAH25-2`), defaulted to `partners.codeDiscountPct` and editable, and
 seeds a first `partner_terms` row from `PRICING_CONFIG.partners` so every partner
 has a dated deal from the moment they exist.
 

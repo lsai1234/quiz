@@ -322,7 +322,10 @@ function CodePanel({ code, busy, onSave }: { code: PartnerCode; busy: boolean; o
     <Group title={code.code} desc={`Used ${code.terms.uses} time${code.terms.uses === 1 ? '' : 's'}. Created ${code.createdAt.slice(0, 10)}.`}>
       <ShareLink code={code.code} />
 
-      <Field label="Discount (%)" hint="What a follower gets off. This is the only extra discount on the site.">
+      <Field
+        label="Discount (%)"
+        hint="What a follower gets off the regular price. It REPLACES the bundle deal or the first month of Subscribe & Save rather than stacking on top, and works on stacks, bundles and subscriptions only — not on single products from the shop. Set it below those rates and the code simply does nothing extra."
+      >
         <input className={INPUT} style={inputStyle} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
       </Field>
 

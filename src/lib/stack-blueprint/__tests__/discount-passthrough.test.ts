@@ -201,6 +201,43 @@ describe('regime 4 — the first-month intro discount', () => {
   })
 })
 
+describe('regime 5 — a partner’s code, on the same displayed figures', () => {
+  const CODE = PRICING_CONFIG.partners.codeDiscountPct
+  const priceWith = (partnerDiscountPct: number | null) =>
+    calculatePricing(MOCK_BLUEPRINT, MOCK_CATALOGUE as CatalogueProduct[], null, undefined, {
+      level: 'complete',
+      partnerDiscountPct,
+    })
+
+  it('replaces the bundle tier on the one-off total rather than compounding', () => {
+    const plain = priceWith(null)
+    const coded = priceWith(CODE)
+
+    expect(plain.bundleDiscountPct).toBeGreaterThan(0)
+    expect(coded.partnerDiscountPct).toBe(Math.round(CODE * 1000) / 10)
+    // Exactly the code's rate off the subtotal — not the tier and the code
+    // compounded, which would have been strictly cheaper than this.
+    expect(coded.oneOffTotal).toBeCloseTo(round2(plain.oneOffSubtotal * (1 - CODE)), 1)
+    expect(coded.oneOffTotal).toBeGreaterThan(round2(plain.oneOffSubtotal * (1 - plain.bundleDiscountPct / 100) * (1 - CODE)))
+  })
+
+  it('charges the code’s rate off the LIST price for the first month', () => {
+    const coded = priceWith(CODE)
+    // The subscribe-&-save rung is replaced for month one, so the first month is
+    // the code's rate off the undiscounted monthly — NOT off the rung price.
+    expect(coded.subscriptionDiscountPct).toBeGreaterThan(0)
+    expect(coded.subscriptionFirstMonth).toBeCloseTo(coded.subscriptionItemsOneOffTotal * (1 - CODE), 1)
+    // And month two onwards is untouched.
+    expect(coded.subscriptionTotal).toBe(priceWith(null).subscriptionTotal)
+  })
+
+  it('leaves both totals exactly as they were when no code is used', () => {
+    const plain = priceWith(null)
+    expect(priceWith(0).oneOffTotal).toBe(plain.oneOffTotal)
+    expect(priceWith(0).subscriptionFirstMonth).toBe(plain.subscriptionFirstMonth)
+  })
+})
+
 describe('an empty or single-line order still prices sanely', () => {
   it('handles no lines', () => {
     const priced = priceOneOffLines([])

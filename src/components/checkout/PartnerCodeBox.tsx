@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import type { RedeemChannel } from '@/lib/partners/redeem'
 
 const GREEN = '#34d399'
 const ACCENT = '#00D4FF'
@@ -18,6 +19,13 @@ export interface AppliedCode {
 interface Props {
   /** Undiscounted order value, so a minimum-spend rule is judged on the real basket. */
   subtotal: number
+  /**
+   * What is being bought. Codes apply to stacks, curated bundles and
+   * subscriptions, not to general shop sales — the server decides, and passing
+   * it here just means the answer arrives while they are typing rather than at
+   * the payment screen.
+   */
+  channel?: RedeemChannel
   applied: AppliedCode | null
   onChange: (applied: AppliedCode | null) => void
 }
@@ -42,7 +50,7 @@ function cookieValue(name: string): string | null {
  * checkout is where attribution goes missing, and a partner who brought the
  * customer in but earned nothing has a real complaint.
  */
-export function PartnerCodeBox({ subtotal, applied, onChange }: Props) {
+export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }: Props) {
   const [open, setOpen] = useState(false)
   const [input, setInput] = useState('')
   const [checking, setChecking] = useState(false)
@@ -59,7 +67,7 @@ export function PartnerCodeBox({ subtotal, applied, onChange }: Props) {
         const res = await fetch('/api/partner-code', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, subtotal }),
+          body: JSON.stringify({ code, subtotal, channel }),
         })
         const d = await res.json().catch(() => ({}))
         if (d.ok) {
@@ -79,7 +87,7 @@ export function PartnerCodeBox({ subtotal, applied, onChange }: Props) {
         setChecking(false)
       }
     },
-    [subtotal, onChange],
+    [subtotal, channel, onChange],
   )
 
   useEffect(() => {
@@ -99,8 +107,12 @@ export function PartnerCodeBox({ subtotal, applied, onChange }: Props) {
           <p className="text-[11px] font-bold" style={{ color: GREEN }}>
             {applied.code} · {Math.round(applied.discountPct * 100)}% off
           </p>
-          <p className="text-[10px] truncate" style={{ color: 'var(--color-muted)' }}>
-            {applied.partnerName}’s code applied
+          {/* Says out loud that it replaces rather than stacks. Someone who
+              expected it on top of the bundle deal should find that out here,
+              looking at the receipt, rather than by working backwards from a
+              total that is less generous than they had counted on. */}
+          <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
+            {applied.partnerName}’s code — takes {Math.round(applied.discountPct * 100)}% off the regular price, instead of any other discount
           </p>
         </div>
         <button

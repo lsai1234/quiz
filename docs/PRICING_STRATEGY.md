@@ -12,6 +12,18 @@
 > the code and switching it back on restores exactly what ran before — see
 > `docs/PARTNER_PROGRAMME_BUILD.md` §0 D1 for what that switch costs and why the
 > flat rate has to be set in the same breath.
+>
+> ### ⚠️ And the partner code no longer stacks (2026-08)
+>
+> `partners.introFloorPct` is now **`partners.codeDiscountPct`, at 25%**, and it
+> **replaces** the discount an order had earned rather than compounding with it
+> — the bundle tier on a one-off, the subscribe-&-save rung for the first month
+> of a subscription. It applies to quiz stacks, curated bundles and
+> subscriptions only, not to general shop sales. §3 and §7.2 below model the
+> stacked version and are history on that point; the reasoning about *why* the
+> programme was mispriced still holds and is what led here. The current
+> settlement, with the lifetime figures that forced it, is
+> `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2.
 
 > **Superseded in part.** §5 and §7.1's anchoring argument no longer applies —
 > prices are now set at a flat multiple of what we pay, with the supplier's RRP

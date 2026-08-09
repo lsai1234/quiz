@@ -2,7 +2,7 @@
  * Redeeming a code — the only place a partner's code turns into money off.
  */
 import { createPartner, updateCodeTerms, setPartnerStatus } from '@/lib/partners'
-import { redeemPartnerCode, recordCodeUse, stackDiscount } from '@/lib/partners/redeem'
+import { redeemPartnerCode, recordCodeUse, replaceDiscount, worksOn } from '@/lib/partners/redeem'
 import { getPartnerRecord } from '@/lib/partners'
 
 /** Nobody has ever ordered, unless a test says otherwise. */
@@ -36,6 +36,27 @@ describe('redeeming a code', () => {
   it('does not tell a guesser whether a code ever existed', async () => {
     const result = await redeemPartnerCode('NOTACODE', { subtotal: 90 }, never)
     expect(result).toEqual({ ok: false, reason: 'We don’t recognise that code.' })
+  })
+
+  it('refuses a live code on a general shop sale, and says why', async () => {
+    const created = await createPartner({ email: 'shopper@example.com', name: 'Shop Person' })
+    const result = await redeemPartnerCode(created.codes[0].code, { subtotal: 90, channel: 'shop' }, never)
+
+    expect(result.ok).toBe(false)
+    expect(result.ok === false && result.reason).toMatch(/bundles and subscriptions/)
+
+    // The same code on a stack still works — it is the basket that is
+    // ineligible, not the partner.
+    expect((await redeemPartnerCode(created.codes[0].code, { subtotal: 90, channel: 'quiz' }, never)).ok).toBe(true)
+  })
+
+  it('answers the shop the same way whether or not the code is real', async () => {
+    // Refused before the lookup, so the response cannot be used to enumerate
+    // which codes exist by trying them somewhere they were never going to work.
+    const real = await createPartner({ email: 'enum@example.com', name: 'Enum Person' })
+    const a = await redeemPartnerCode(real.codes[0].code, { subtotal: 90, channel: 'shop' }, never)
+    const b = await redeemPartnerCode('NOTACODE', { subtotal: 90, channel: 'shop' }, never)
+    expect(a).toEqual(b)
   })
 
   it('stops the moment the partner is suspended', async () => {
@@ -115,22 +136,50 @@ describe('banking a use', () => {
   })
 })
 
-describe('stacking', () => {
-  it('multiplies rather than adding', () => {
-    // 20% then 20% is 36%, not 40%. Adding would overstate what comes off at
-    // every rung and, at the deep end, ask for more than the price can carry.
-    expect(stackDiscount(0.2, 0.2)).toBe(0.36)
-    expect(stackDiscount(0.1, 0.25)).toBe(0.325)
+describe('combining with a discount already being given', () => {
+  it('takes the deeper of the two rather than compounding them', () => {
+    // It used to compound — 20% then 20% came to 36% off AND a commission, the
+    // single most expensive thing in the programme. A code now states one
+    // number, and that number is what the follower gets.
+    expect(replaceDiscount(0.08, 0.25)).toBe(0.25)
+    expect(replaceDiscount(0.2, 0.2)).toBe(0.2)
+  })
+
+  it('never lets a shallow code cost someone the discount they had earned', () => {
+    // A founder is free to set a code below the bundle tier. That must read as
+    // "no better than what you already had", never as a penalty for using it.
+    expect(replaceDiscount(0.2, 0.05)).toBe(0.2)
   })
 
   it('is a no-op when either side is zero', () => {
-    expect(stackDiscount(0, 0.2)).toBe(0.2)
-    expect(stackDiscount(0.2, 0)).toBe(0.2)
+    expect(replaceDiscount(0, 0.2)).toBe(0.2)
+    expect(replaceDiscount(0.2, 0)).toBe(0.2)
   })
 
   it('never exceeds 100% or goes negative on nonsense input', () => {
-    expect(stackDiscount(2, 2)).toBe(1)
-    expect(stackDiscount(-1, 0.2)).toBe(0.2)
-    expect(stackDiscount(Number.NaN, 0.2)).toBe(0.2)
+    expect(replaceDiscount(2, 2)).toBe(1)
+    expect(replaceDiscount(-1, 0.2)).toBe(0.2)
+    expect(replaceDiscount(Number.NaN, 0.2)).toBe(0.2)
+  })
+})
+
+describe('where a code works', () => {
+  it('works on stacks, bundles and subscriptions', () => {
+    expect(worksOn('quiz')).toBe(true)
+    expect(worksOn('subscription')).toBe(true)
+  })
+
+  it('does not work on general shop sales', () => {
+    // A single tub off the shelf has no renewal behind it and not enough
+    // basket to carry the discount and a commission on top.
+    expect(worksOn('shop')).toBe(false)
+  })
+
+  it('treats an unstated channel as eligible', () => {
+    // Every caller that CAN be in the shop says so. Defaulting the other way
+    // would silently kill codes on any journey that forgot to pass one, which
+    // is the failure that is hard to notice.
+    expect(worksOn(null)).toBe(true)
+    expect(worksOn(undefined)).toBe(true)
   })
 })

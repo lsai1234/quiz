@@ -9,7 +9,6 @@ import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
-import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -20,9 +19,6 @@ interface Props {
   /** The discounted price — what /api/cart will bill. */
   priced: OneOffPricing
   checkoutState: ShopCheckoutState
-  /** A validated partner code, held by the shell so it survives the drawer closing. */
-  partnerCode: AppliedCode | null
-  onPartnerCode: (applied: AppliedCode | null) => void
   onCheckout: () => void
   onClose: () => void
 }
@@ -33,18 +29,7 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 }
 
 /** A right-side slide-in cart drawer: line items up top, the money below. */
-export function BasketDrawer({ resolved, subtotal, priced, checkoutState, partnerCode, onPartnerCode, onCheckout, onClose }: Props) {
-  /**
-   * What each discount is worth in pounds.
-   *
-   * Derived from the real total rather than from the rates, so the margin floor
-   * clipping a line cannot leave the receipt claiming a saving that was not
-   * given. The bundle is applied first and the code to what remains — the same
-   * order `priceOneOffLines` builds the price in.
-   */
-  const afterBundle = Math.round(subtotal * (1 - priced.tierPct) * 100) / 100
-  const bundleSaving = Math.round((subtotal - afterBundle) * 100) / 100
-  const codeSaving = Math.round((priced.discount - bundleSaving) * 100) / 100
+export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onCheckout, onClose }: Props) {
   const { setQty, remove } = useBasket()
   const [mounted, setMounted] = useState(false)
   const [shown, setShown] = useState(false)
@@ -161,40 +146,27 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, partne
                 <span aria-hidden>→</span>
               </Link>
 
-              <PartnerCodeBox subtotal={subtotal} applied={partnerCode} onChange={onPartnerCode} />
-
-              {/* Show the discounts they've earned, and total at what the card
+              {/* Show the discount they've earned, and total at what the card
                   will actually be charged. Both come from `priceOneOffLines`,
-                  the same function /api/cart bills Stripe from — including the
-                  partner code, so the number here is the number on the card.
+                  the same function /api/cart bills Stripe from, so the number
+                  here is the number on the card.
 
-                  A LINE EACH. They stack multiplicatively — the bundle comes
-                  off first, the code off what is left — which is the order the
-                  price is actually built in, so the two lines add up to the
-                  total underneath them. Lumping them together left a customer
-                  looking at "£21.12 saved" with only 8% of it accounted for. */}
+                  Named and itemised rather than a lump "you saved £x": a saving
+                  a customer cannot account for reads as marketing. There is
+                  only ever one line — a shop basket earns the bundle tier and
+                  nothing else, because partner codes do not apply here. */}
               {priced.discount > 0.01 && (
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>Subtotal</span>
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
                   </div>
-                  {bundleSaving > 0.01 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm" style={{ color: GREEN }}>
-                        {priced.tierLabel ?? 'Bundle discount'} · {Math.round(priced.tierPct * 100)}% off
-                      </span>
-                      <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(bundleSaving)}</span>
-                    </div>
-                  )}
-                  {codeSaving > 0.01 && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm" style={{ color: GREEN }}>
-                        {partnerCode?.code ?? 'Discount code'} · {Math.round(priced.partnerPct * 100)}% off
-                      </span>
-                      <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(codeSaving)}</span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm" style={{ color: GREEN }}>
+                      {priced.tierLabel ?? 'Bundle discount'} · {Math.round(priced.tierPct * 100)}% off
+                    </span>
+                    <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
+                  </div>
                 </>
               )}
               <div className="flex items-center justify-between">

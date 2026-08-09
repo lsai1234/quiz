@@ -376,18 +376,29 @@ export const PRICING_CONFIG = {
      */
     renewalMonths: 3,
     /**
-     * The floor a partner's code puts under the scratch card (0–1). The card
-     * still runs and can still pay out its top prize — the code raises the worst
-     * outcome, so a partner can promise "at least this much off".
+     * What a partner's code takes off, 0–1.
      *
-     * 20%, down from 25%. At 25% the floor was DEEPER THAN THE ~18% BLENDED CARD
-     * WE GIVE AWAY ANYWAY, so a partner's code cost us a bigger discount AND a
-     * commission on top of it — the single most expensive line in the programme,
-     * and the reason month one via a partner lost £12–£28 at every stack size.
-     * At 20% against a 15% blended card it is still a genuine "at least 20% off"
-     * a partner can advertise.
+     * 25%, and it REPLACES whatever discount the order would otherwise have
+     * earned rather than compounding with it. It was 20% stacked on top, which
+     * was the single most expensive thing in the programme: on the deepest rung
+     * that came to 36% off AND a commission, and an attributed subscriber
+     * returned a fifth of what an unattributed one did.
+     *
+     * Replacing rather than stacking is also the version a partner can state
+     * honestly. "25% off" is what a follower gets, full stop — not "25% off,
+     * compounded with a bundle rate you will have to work out from the
+     * receipt".
+     *
+     * Every discount it replaces is shallower than this (bundle tier 8%,
+     * subscription rungs 13/15/20%), so a code always leaves someone better
+     * off. `applyPartnerRate` takes the deeper of the two anyway, so a founder
+     * setting a tier above 25% cannot accidentally make a code a penalty.
+     *
+     * Named for what it does now. It used to be `introFloorPct` — "the floor a
+     * partner's code puts under the scratch card" — and the scratch card has
+     * been gone since phase 0.
      */
-    introFloorPct: 0.2,
+    codeDiscountPct: 0.25,
     /**
      * Whether partners are typically VAT-registered. A registered partner
      * invoices commission plus VAT, and while WE cannot reclaim, that makes
@@ -895,6 +906,47 @@ export function clampRate(pct: number | null | undefined): number {
   return Math.min(1, Math.max(0, pct))
 }
 
+/**
+ * The first month's discount **measured off the already-subscribed price**.
+ *
+ * A partner's code takes its rate off the LIST price and replaces the
+ * subscribe-&-save rung for that one month — "25% off" means 25% off what the
+ * products cost, not 25% off a number that already had 20% taken off it. Months
+ * two onwards revert to the rung, untouched.
+ *
+ * Everything downstream (the per-line first-month calculation, Stripe's
+ * single-cycle coupon) works off `flatMonthly`, which is post-rung. So the code
+ * has to be restated as the rate that lands the same price from there:
+ *
+ *     list 100 → rung 20% → subscribed 80 → code 25% off list → 75
+ *     75 off 80 is 6.25%, which is 1 − (1 − 0.25) / (1 − 0.20)
+ *
+ * `Math.max` against the intro offer rather than compounding, for the same
+ * reason the bundle tier is replaced rather than stacked: a code states one
+ * number and that number is what a follower gets. And max rather than "the code
+ * wins" so a deeper intro offer can never make a code cost someone money.
+ */
+export function firstMonthRate(
+  introRate: number | null | undefined,
+  partnerPct: number | null | undefined,
+  subscriptionRate: number | null | undefined,
+): number {
+  const intro = clampRate(introRate)
+  const code = clampRate(partnerPct)
+  if (code === 0) return intro
+
+  const rung = clampRate(subscriptionRate)
+  // A 100% rung means the subscribed price is already zero, so there is nothing
+  // left for a code to take off — and the division below would not survive it.
+  const equivalent = rung >= 1 ? 0 : Math.max(0, 1 - (1 - code) / (1 - rung))
+  // Six places, not four. The division rarely lands clean — 25% off list from a
+  // 20% rung is 0.062500000000000056 — and money is rounded to the penny
+  // downstream, so a rate a hair under the true one rounds a £84.375 first month
+  // DOWN to £84.37 instead of up. Six places is past anything a price can carry
+  // and still kills the float dust.
+  return Math.round(Math.max(intro, equivalent) * 1e6) / 1e6
+}
+
 /** Cost of one unit — explicit, or estimated from price. */
 export function unitCostOf(product: Pick<CatalogueProduct, 'cost' | 'basePrice'>, unitPrice: number, config = getPricingConfig()): number {
   if (product.cost != null) return product.cost
@@ -962,8 +1014,11 @@ export interface OneOffPricing {
   /** The partner code's own rate, 0–1. Zero when no code was used. */
   partnerPct: number
   /**
-   * Tier and partner code combined, 0–1 — what actually comes off each line
-   * before the floor. Multiplicative: 20% then 20% is 36%, not 40%.
+   * What actually comes off each line before the floor, 0–1.
+   *
+   * The DEEPER of the tier and the code, not the two compounded — a code
+   * replaces the discount the basket had earned rather than adding to it. So a
+   * £50+ basket on the 8% tier with a 25% code pays 25% off, not 31%.
    */
   combinedPct: number
 }
@@ -991,9 +1046,9 @@ export function priceOneOffLines(
   /**
    * A partner code's rate, 0–1, already validated by `redeemPartnerCode`.
    *
-   * Stacks on top of the bundle tier deliberately — see
+   * REPLACES the bundle tier rather than stacking on top of it — see
    * `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. The margin floor below still
-   * applies, so however the two add up nothing is sold under cost.
+   * applies underneath.
    */
   partnerPct = 0,
 ): OneOffPricing {
@@ -1007,10 +1062,13 @@ export function priceOneOffLines(
   const itemCount = lines.reduce((n, l) => n + qtyOf(l), 0)
   const { pct, tier } = resolveTier(config.bundleTiers, subtotal, itemCount)
 
-  const partner = Number.isFinite(partnerPct) ? Math.min(1, Math.max(0, partnerPct)) : 0
-  // Multiplicative, not additive: adding them would overstate what comes off at
-  // every rung and could ask for more than the price can carry.
-  const combined = Math.round((1 - (1 - pct) * (1 - partner)) * 10000) / 10000
+  const partner = clampRate(partnerPct)
+  // The deeper of the two, not the two compounded. A code replaces whatever the
+  // basket had earned, so "25% off" is the whole story a partner has to tell —
+  // not "25% off, compounded with a tier you would have to work out from the
+  // receipt". `Math.max` rather than "the code wins" so a founder who sets a
+  // tier deeper than a code cannot turn that code into a penalty.
+  const combined = Math.max(pct, partner)
 
   const priced: OneOffPricedLine[] = lines.map((l) => {
     const quantity = qtyOf(l)
@@ -1311,10 +1369,11 @@ export interface SubscriptionPlanOptions {
   /**
    * A partner's code rate (0–1), already validated by `redeemPartnerCode`.
    *
-   * Applied to the first month alongside the intro offer, and to the one-off
-   * total alongside the bundle tier — so the receipt on screen shows what the
-   * card will actually be charged. Stacks multiplicatively; see
-   * `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2.
+   * Its rate comes off the LIST price and REPLACES whatever the order had
+   * earned — the bundle tier on a one-off, the subscribe-&-save rung for the
+   * first month — rather than compounding with it. See `firstMonthRate` and
+   * `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. Applied here as well as at
+   * checkout so the receipt on screen shows what the card will be charged.
    */
   partnerDiscountPct?: number | null
 }
@@ -1648,10 +1707,11 @@ export function calculatePricing(
   // it line by line puts the intro under the same rule as the subscribe-&-save
   // rate, and the two now compound against one floor rather than around it.
   const introRate = subPlan.length > 0 ? resolveIntroDiscount(opts.introDiscountOverride, config) : 0
-  // A partner's code rides on the same leg. Multiplicative, so 20% then 20% is
-  // 36% and not 40% — and it goes through the same per-line floor above.
-  const partnerRate = clampRate(opts.partnerDiscountPct)
-  const introDiscount = 1 - (1 - introRate) * (1 - partnerRate)
+  // A partner's code rides on the same leg, REPLACING the subscribe-&-save rung
+  // for this one month rather than compounding with it — its rate is off list,
+  // restated here as the equivalent off the subscribed price. See
+  // `firstMonthRate`. Months two onwards are untouched, on the rung as normal.
+  const introDiscount = firstMonthRate(introRate, opts.partnerDiscountPct, subscriptionDiscountRate)
   const subscriptionFirstMonth = round(
     subPlan.reduce((s, line) => {
       // `unitsPerShipment` is always ≥ 1, so this recovers the subscribe-&-save

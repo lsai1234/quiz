@@ -190,9 +190,12 @@ one-off tier won.
 **Plus, on your first month:** a scratch card averaging 15% (top prize 40%,
 ~1 in 21).
 
-**Plus, when the partner programme goes live:** the influencer's code raises the
-scratch card's floor to 20% — the card still runs and can still pay 40%, the
-code just raises the worst outcome. It never stacks on top of a won card.
+**Plus, on an influencer's code:** 25% off the regular price — *instead of* the
+bundle deal or the first month of Subscribe & Save, never on top of one. Every
+discount it replaces is shallower than 25%, so a code always leaves someone
+better off than they were; the price takes the deeper of the two, so it can
+never do the reverse. Codes work on stacks, curated bundles and subscriptions,
+not on single products from the shop.
 
 **Every discount is floored.** No combination can take a product below cost plus
 15%, including the scratch card — which used to be the one discount that slipped

@@ -36,7 +36,7 @@ export async function createPartner(input: {
   if (existing) throw new Error(`A partner already exists for ${input.email}.`)
 
   const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
-  const discountPct = input.discountPct ?? getPricingConfig().partners.introFloorPct
+  const discountPct = input.discountPct ?? getPricingConfig().partners.codeDiscountPct
 
   const partner = await repo.createPartner({ email: input.email, name: input.name })
 

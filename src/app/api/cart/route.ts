@@ -102,8 +102,14 @@ export async function POST(req: Request) {
   // server does this so no journey can lose a referral by not having rendered
   // the code box — "Buy now" goes straight to Stripe without one.
   const code = await resolveCheckoutCode(typedCode)
+  // The channel decides eligibility as well as reporting: codes work on stacks
+  // and bundles, not on single products off the shop shelf (`worksOn`). Read
+  // from the line attributes, which the client sends — but a client claiming to
+  // be the quiz can only reach a stack it also has to pay for at these prices,
+  // so the worst it buys is the discount it could have had by using the quiz.
+  const channel = channelFrom(lines)
   const redemption = code
-    ? await redeemPartnerCode(code, { subtotal: undiscountedSubtotal, email: user?.email ?? null })
+    ? await redeemPartnerCode(code, { subtotal: undiscountedSubtotal, email: user?.email ?? null, channel })
     : null
   // A code somebody TYPED and got wrong is worth stopping for — that basket is
   // still on screen and can be fixed. A stale cookie they never typed is not:
@@ -158,8 +164,6 @@ export async function POST(req: Request) {
       { status: 400 },
     )
   }
-
-  const channel = channelFrom(lines)
 
   // A signed-in member who already has a Stripe customer (from subscribing)
   // should buy one-offs against the SAME customer, so their orders, cards and

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { redeemPartnerCode } from '@/lib/partners/redeem'
+import { redeemPartnerCode, type RedeemChannel } from '@/lib/partners/redeem'
 import { getHubUser } from '@/lib/auth/session'
 import { syncPortalRuntime } from '@/lib/portal/store'
 
@@ -18,7 +18,7 @@ export const dynamic = 'force-dynamic'
  * useful to someone guessing at codes.
  */
 export async function POST(req: Request) {
-  let body: { code?: string; subtotal?: number }
+  let body: { code?: string; subtotal?: number; channel?: RedeemChannel }
   try {
     body = await req.json()
   } catch {
@@ -34,6 +34,11 @@ export async function POST(req: Request) {
   const result = await redeemPartnerCode(body.code, {
     subtotal: typeof body.subtotal === 'number' ? body.subtotal : 0,
     email: user?.email ?? null,
+    // Which journey is asking. Codes do not apply to general shop sales, and
+    // this is what lets the box say so while they are typing rather than at the
+    // payment screen. Advisory like the rest of this route — `/api/cart` and
+    // `finalizeCheckout` decide the channel from what is actually being bought.
+    channel: body.channel ?? null,
   })
 
   if (!result.ok) return NextResponse.json({ ok: false, reason: result.reason })

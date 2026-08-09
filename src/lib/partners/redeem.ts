@@ -8,17 +8,46 @@
  * customer believes they got a discount and the partner believes they earned a
  * commission, and neither is true.
  *
- * The discount **stacks** on top of the bundle and subscription rates. That is a
- * decision, not an oversight — see `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. On
- * the deepest rung it means an attributed first order can lose a few pounds,
- * recovered from month two. The margin floor still applies per line underneath,
- * so nothing is ever sold below cost however the discounts add up.
+ * The discount **replaces** the bundle or subscription rate the order would
+ * otherwise have earned rather than stacking on top of it, and it only applies
+ * to curated bundles, quiz stacks and subscriptions — not to general shop
+ * sales. See `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. The margin floor still
+ * applies per line underneath, so nothing is ever sold below cost.
  *
  * Server-only.
  */
 import { checkCode, normaliseCode } from './codes'
 import * as repo from './repo'
 import type { Partner, PartnerCode } from './types'
+
+/**
+ * What is being bought. `quiz` covers both journeys that build a stack — the
+ * quiz itself and the curated bundle landing pages — because both check out
+ * through `/api/cart` carrying a `quiz` source.
+ */
+export type RedeemChannel = 'quiz' | 'subscription' | 'shop'
+
+/**
+ * Where a code works.
+ *
+ * Bundles, quiz stacks and subscriptions only. A code is an acquisition cost
+ * paid to bring someone into the programme, and it is priced against what a
+ * stack is worth over its life — a single tub off the shop shelf has neither a
+ * renewal behind it nor the basket size to carry 25% and a commission, so a
+ * code there is a straight loss with nothing to recover it from.
+ *
+ * Refused out loud rather than silently ignored: a customer who typed a code
+ * and was charged full price without being told is the outcome this whole
+ * module exists to prevent.
+ */
+const ELIGIBLE_CHANNELS: readonly RedeemChannel[] = ['quiz', 'subscription']
+
+export function worksOn(channel: RedeemChannel | null | undefined): boolean {
+  // An unstated channel is eligible. Every caller that can be in the shop says
+  // so; defaulting the other way would silently kill codes on any journey that
+  // forgot to pass one, which is the failure mode that is hard to notice.
+  return channel == null || ELIGIBLE_CHANNELS.includes(channel)
+}
 
 export interface RedeemContext {
   /** Order subtotal before any discount (£). */
@@ -30,6 +59,8 @@ export interface RedeemContext {
    * someone who checked out as a guest under two addresses.
    */
   email?: string | null
+  /** What is being bought — see `worksOn`. */
+  channel?: RedeemChannel | null
   now?: Date
 }
 
@@ -51,6 +82,16 @@ export async function redeemPartnerCode(
 ): Promise<Redemption> {
   const typed = (input ?? '').trim()
   if (!typed) return { ok: false, reason: 'Enter a code.' }
+
+  // Before the lookup, so the answer is the same whether or not the code is
+  // real: in the shop no code works, and saying which ones exist there would
+  // only help someone guessing at them.
+  if (!worksOn(context.channel)) {
+    return {
+      ok: false,
+      reason: 'Discount codes apply to bundles and subscriptions, not single products from the shop.',
+    }
+  }
 
   const code = await repo.getCode(normaliseCode(typed))
   if (!code) return { ok: false, reason: 'We don’t recognise that code.' }
@@ -107,13 +148,18 @@ export async function recordCodeUse(code: string): Promise<void> {
 /**
  * Combine a partner's code with a discount already being given.
  *
- * Multiplicative, not additive: 20% off then 20% off is 36%, not 40%. Adding
- * them would overstate what comes off at every rung and, at the deep end, could
- * ask for more than the price can carry.
+ * The DEEPER of the two, not the two compounded. A code replaces what the order
+ * had earned: "25% off" is the whole story a partner has to tell, rather than
+ * "25% off, compounded with a rate you would have to work out from the receipt".
+ *
+ * It used to compound, and that was the single most expensive thing in the
+ * programme — on the deepest rung it came to 36% off AND a commission.
+ *
+ * The deeper of the two rather than "the code always wins", so a rate set above
+ * the code can never turn that code into a penalty for the customer using it.
  */
-export function stackDiscount(existingPct: number, partnerPct: number): number {
-  const combined = 1 - (1 - clamp(existingPct)) * (1 - clamp(partnerPct))
-  return Math.round(combined * 10000) / 10000
+export function replaceDiscount(existingPct: number, partnerPct: number): number {
+  return Math.max(clamp(existingPct), clamp(partnerPct))
 }
 
 function clamp(pct: number): number {

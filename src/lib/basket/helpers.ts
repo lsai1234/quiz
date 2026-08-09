@@ -77,8 +77,6 @@ export function basketSubtotal(resolved: ResolvedBasketLine[]): number {
 export function priceBasket(
   resolved: ResolvedBasketLine[],
   config = getPricingConfig(),
-  /** A validated partner code rate, 0–1 — stacks on top of the bundle tier. */
-  partnerPct = 0,
 ): OneOffPricing {
   return priceOneOffLines(
     resolved.map(({ product, variant, quantity }) => ({
@@ -87,7 +85,6 @@ export function priceBasket(
       quantity,
     })),
     config,
-    partnerPct,
   )
 }
 

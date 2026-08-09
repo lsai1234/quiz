@@ -19,7 +19,7 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 import { saveSubscription, saveQuiz } from '@/lib/db/hub-data'
 import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
-import { getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
+import { clampRate, firstMonthRate, getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
 import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
 import { consentErrorMessage, recordConsent, validateConsent } from '@/lib/legal/consent'
@@ -65,36 +65,43 @@ export function claimIntroDiscount(
   sub: MemberSubscription,
   config = getPricingConfig(),
   /**
-   * A partner's code rate, 0–1, already validated. Stacks with the intro rate
-   * multiplicatively — see `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2. With the
-   * scratch card off the intro rate is 0, so in practice this IS the first
-   * month's discount; the stacking maths is here so it stays correct if a
-   * site-wide first-month offer ever comes back.
+   * A partner's code rate, 0–1, already validated. Its rate is off the LIST
+   * price and REPLACES the subscribe-&-save rung for the first month rather
+   * than compounding with it — see `firstMonthRate`, which does the restating,
+   * and `docs/PARTNER_PROGRAMME_BUILD.md` §0 D2 for why.
+   *
+   * Stored here as the headline rate the partner advertises (25%), not the
+   * smaller equivalent that comes off `flatMonthly` — that is what the order,
+   * the founders' hub and the partner's own dashboard all mean by "their
+   * discount", and `firstMonthDiscountOf` derives the billing rate from it.
    */
   partnerPct = 0,
 ): MemberSubscription {
   const rate = resolveIntroDiscount(sub.introDiscountRate ?? null, config)
-  const partner = Number.isFinite(partnerPct) ? Math.min(1, Math.max(0, partnerPct)) : 0
-  const combined = 1 - (1 - rate) * (1 - partner)
-  return {
+  const partner = clampRate(partnerPct)
+  const claimed = {
     ...sub,
     introDiscountRate: rate,
     partnerDiscountPct: partner > 0 ? partner : null,
-    firstMonth: Math.round(sub.flatMonthly * (1 - combined) * 100) / 100,
+  }
+  return {
+    ...claimed,
+    firstMonth: Math.round(sub.flatMonthly * (1 - firstMonthDiscountOf(claimed)) * 100) / 100,
   }
 }
 
 /**
- * The whole first-month discount, intro offer and partner code combined.
+ * The whole first-month discount as a rate off `flatMonthly` — the intro offer
+ * and the partner's code, whichever is deeper.
  *
- * Derived rather than stored so it can never disagree with the two rates it
- * comes from — this is what Stripe's one-cycle coupon is created at, and what
- * the member is actually charged.
+ * Derived rather than stored so it can never disagree with the rates it comes
+ * from. This is what Stripe's one-cycle coupon is created at, and what the
+ * member is actually charged. It is deliberately NOT `partnerDiscountPct`: that
+ * is the code's headline rate off list, and `flatMonthly` has already had the
+ * subscribe-&-save rung taken off it.
  */
 export function firstMonthDiscountOf(sub: MemberSubscription): number {
-  const intro = sub.introDiscountRate ?? 0
-  const partner = sub.partnerDiscountPct ?? 0
-  return Math.round((1 - (1 - intro) * (1 - partner)) * 10000) / 10000
+  return firstMonthRate(sub.introDiscountRate, sub.partnerDiscountPct, sub.subscriptionDiscountRate)
 }
 
 export interface FinalizeOptions {
@@ -132,6 +139,7 @@ export async function finalizeCheckout(
     ? await redeemPartnerCode(payload.partnerCode, {
         subtotal: payload.subscription.flatMonthly,
         email: email || payload.subscription.customerEmail || null,
+        channel: 'subscription',
       })
     : null
   if (redemption && !redemption.ok) {

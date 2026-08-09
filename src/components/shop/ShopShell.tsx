@@ -7,7 +7,6 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
-import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { resolveBasket, basketSubtotal, basketItemCount, priceBasket } from '@/lib/basket/helpers'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
@@ -181,12 +180,18 @@ export function ShopShell() {
 
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
   const subtotal = basketSubtotal(resolved)
-  // A partner's code, once validated. Held here rather than in the drawer so it
-  // survives the drawer closing and reopening mid-shop.
-  const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
-  // What they'll actually be charged — the same computation /api/cart bills from,
-  // including the code, so the total on screen is the total on the card.
-  const pricedBasket = priceBasket(resolved, undefined, partnerCode?.discountPct ?? 0)
+  /**
+   * What they'll actually be charged — the same computation /api/cart bills
+   * from, so the total on screen is the total on the card.
+   *
+   * No partner code here, and no box to enter one in. A code is an acquisition
+   * cost priced against what a stack is worth over its life; a single tub off
+   * the shelf has neither a renewal behind it nor the basket size to carry 25%
+   * and a commission on top. `/api/cart` refuses one on this channel whatever
+   * the browser sends, so a box here would only have offered a discount the
+   * checkout then took back.
+   */
+  const pricedBasket = priceBasket(resolved)
   const count = basketItemCount(lines)
 
   // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
@@ -210,7 +215,7 @@ export function ShopShell() {
   const handleBuyNow = () => {
     setExpanded(null)
     setDrawerOpen(true)
-    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now', partnerCode?.code ?? null)
+    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now')
   }
 
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
@@ -338,9 +343,7 @@ export function ShopShell() {
           subtotal={subtotal}
           priced={pricedBasket}
           checkoutState={state}
-          partnerCode={partnerCode}
-          onPartnerCode={setPartnerCode}
-          onCheckout={() => checkout(resolved, 'basket', partnerCode?.code ?? null)}
+          onCheckout={() => checkout(resolved, 'basket')}
           onClose={closeDrawer}
         />
       )}

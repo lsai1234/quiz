@@ -301,8 +301,8 @@ export default function PricingPage() {
             <Num label="Commission, renewals" value={pct(draft.partners.renewalPct)} suffix="%" onChange={(n) => setNested('partners', { renewalPct: n / 100 })} />
             <Num label="Renewals earn for" value={draft.partners.renewalMonths} suffix="mo" onChange={(n) => setNested('partners', { renewalMonths: n })}
               help={`Worth matching to how long a subscriber actually stays (${draft.orderMix.averageRetentionMonths} months).`} />
-            <Num label="Their code guarantees" value={pct(draft.partners.introFloorPct)} suffix="% off" onChange={(n) => setNested('partners', { introFloorPct: n / 100 })}
-              help={`Keep it near the average card (${pct(draft.introOffer.effectiveFirstMonthDiscount)}%): deeper and a code costs a bigger discount AND a commission on top.`} />
+            <Num label="Their code takes off" value={pct(draft.partners.codeDiscountPct)} suffix="% off" onChange={(n) => setNested('partners', { codeDiscountPct: n / 100 })}
+              help={`Off the regular price of stacks, bundles and subscriptions — replacing the bundle deal (${pct(draft.bundleTiers[0]?.discountPct ?? 0)}%) or the first month of Subscribe & Save (up to ${pct(draft.levelSubscriptionDiscount.complete)}%), not stacking on top. Below those and the code does nothing extra; well above and it costs a deep discount AND a commission.`} />
             <Toggle label="Partners charge us VAT" value={draft.partners.partnersChargeVat} onChange={(v) => setNested('partners', { partnersChargeVat: v })} />
           </Section>
 

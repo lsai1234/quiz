@@ -12,8 +12,10 @@ describe('creating a partner', () => {
     expect(record.partner.status).toBe('invited')
 
     expect(record.codes).toHaveLength(1)
-    expect(record.codes[0].code).toBe('SARAH20')
-    expect(record.codes[0].discountPct).toBe(PRICING_CONFIG.partners.introFloorPct)
+    // Name plus rate, so the code says what it does. Derived from the config
+    // rather than written out, because the rate has moved once already.
+    expect(record.codes[0].code).toBe(`SARAH${Math.round(PRICING_CONFIG.partners.codeDiscountPct * 100)}`)
+    expect(record.codes[0].discountPct).toBe(PRICING_CONFIG.partners.codeDiscountPct)
     expect(record.codes[0].terms.firstOrderOnly).toBe(true)
 
     // A partner with no terms row has no answer to "what am I on", which is the

@@ -185,7 +185,7 @@ export function PartnersPage() {
 function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: string) => void }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
-  const [discount, setDiscount] = useState(String(Math.round(PRICING_CONFIG.partners.introFloorPct * 100)))
+  const [discount, setDiscount] = useState(String(Math.round(PRICING_CONFIG.partners.codeDiscountPct * 100)))
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -253,6 +253,9 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
 
       <p className="text-[11px] text-[var(--color-muted)] leading-snug mb-3">
         {suggested && !code.trim() ? <>Their code will be <strong className="text-[var(--color-text)]">{suggested}</strong>. </> : null}
+        It takes that much off the regular price of stacks, curated bundles and subscriptions — replacing the
+        bundle deal or the first month of Subscribe &amp; Save, not stacking on top — and does nothing on
+        single products from the shop.{' '}
         They start on the standard deal — {describeTerms({
           firstOrderPct: PRICING_CONFIG.partners.firstOrderPct,
           renewalPct: PRICING_CONFIG.partners.renewalPct,

@@ -312,6 +312,13 @@ function TermsTab({ data }: { data: Data }) {
 
           {/* Every restriction, stated — nothing they have to email to find out. */}
           <ul className="text-[11px] text-[var(--color-muted)] leading-relaxed mt-3 space-y-0.5">
+            {/* Where it works and what it replaces, stated up front. A partner
+                who tells their audience "25% off everything, on top of whatever
+                else is on" is going to hear about it from the people who
+                believed them. */}
+            <li>· Works on stacks, curated bundles and subscriptions — not on single products from the shop.</li>
+            <li>· Takes {pct(code.discountPct)} off the regular price, instead of any other discount — never on top of one.</li>
+            <li>· On a subscription it&rsquo;s the first month, then the normal monthly price after that.</li>
             <li>{code.terms.firstOrderOnly ? '· Valid on a customer’s first order only.' : '· Valid on any order.'}</li>
             {code.terms.minSpend != null && <li>· Orders of {money(code.terms.minSpend)} or more.</li>}
             {code.terms.maxUses != null && (

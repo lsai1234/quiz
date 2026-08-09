@@ -107,6 +107,47 @@ describe('finalizeCheckout', () => {
     expect(stored?.flatMonthly).toBe(42)
   })
 
+  it('takes the code’s rate off the LIST price, not off the subscribed one', async () => {
+    // The fixture above has no subscribe-&-save rung, so 20% off £42 is 20% off
+    // list by coincidence. This is the case that actually distinguishes
+    // replacing from stacking: a £42/mo plan that listed at £52.50 before a 20%
+    // rung. The code replaces the rung for month one, so the member pays 20% off
+    // the £52.50 — £42 — and NOT 20% off the already-discounted £42.
+    const partner = await createPartner({ email: 'rung@example.com', name: 'Rung Partner', discountPct: 0.2 })
+    const user = await createUser({ email: 'onarung@example.com', passwordHash: 'h' })
+
+    await finalizeCheckout(user.id, user.email, {
+      subscription: { ...subscription, subscriptionDiscountRate: 0.2 },
+      consent,
+      partnerCode: partner.codes[0].code,
+    })
+
+    const stored = await getSubscription(user.id)
+    // The rung already gives everything the code would have. Month one is the
+    // normal monthly price — the code takes nothing FURTHER off, and crucially
+    // does not put the price back UP.
+    expect(stored?.firstMonth).toBe(42)
+    expect(stored?.flatMonthly).toBe(42)
+    // The headline rate is still what is stored and what the partner earns on.
+    expect(stored?.partnerDiscountPct).toBe(0.2)
+  })
+
+  it('gives a code deeper than the rung the difference, and only the difference', async () => {
+    const partner = await createPartner({ email: 'deeper@example.com', name: 'Deeper Partner', discountPct: 0.25 })
+    const user = await createUser({ email: 'gotdeeper@example.com', passwordHash: 'h' })
+
+    await finalizeCheckout(user.id, user.email, {
+      subscription: { ...subscription, subscriptionDiscountRate: 0.2 },
+      consent,
+      partnerCode: partner.codes[0].code,
+    })
+
+    // list £52.50 → 25% off is £39.38. Stacking would have charged £31.50.
+    const stored = await getSubscription(user.id)
+    expect(stored?.firstMonth).toBe(39.38)
+    expect(stored?.flatMonthly).toBe(42)
+  })
+
   it('carries the attribution onto every order the subscription raises', async () => {
     const partner = await createPartner({ email: 'renewals@example.com', name: 'Renewals Partner' })
     const user = await createUser({ email: 'renewer@example.com', passwordHash: 'h' })
