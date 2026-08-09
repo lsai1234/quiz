@@ -13,11 +13,24 @@ import {
   type PayoutTerms,
 } from '@/lib/partners'
 import { performanceForCodes } from '@/lib/partners/performance'
-import { balanceFor, settle } from '@/lib/partners/ledger'
-import { markPayoutPaid, oldestUnsettledCommission } from '@/lib/partners/repo'
+import { balanceFor, markPaid, runPayouts, settle } from '@/lib/partners/ledger'
+import { oldestUnsettledCommission } from '@/lib/partners/repo'
 import { createInviteToken } from '@/lib/partners/auth'
 
 export const dynamic = 'force-dynamic'
+
+/**
+ * The month a payout run settles by default: the one just gone.
+ *
+ * Runs are in arrears — settling the month you are still in would pay half of
+ * it and leave the rest stranded until next time.
+ */
+function previousMonth(): string {
+  const d = new Date()
+  d.setUTCDate(1)
+  d.setUTCMonth(d.getUTCMonth() - 1)
+  return d.toISOString().slice(0, 7)
+}
 
 /**
  * Partner management, for founders.
@@ -49,7 +62,7 @@ export async function GET() {
 }
 
 interface Body {
-  action?: 'create' | 'status' | 'terms' | 'code' | 'settle' | 'mark-paid' | 'invite'
+  action?: 'create' | 'status' | 'terms' | 'code' | 'settle' | 'mark-paid' | 'invite' | 'run-payouts'
   id?: string
   // create
   email?: string
@@ -153,10 +166,20 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: true, token, kind: record.partner.status === 'invited' ? 'invite' : 'reset' })
       }
 
+      case 'run-payouts': {
+        // The monthly run: every partner with something confirmed, each judged
+        // against THEIR OWN minimum. Skips are named with a reason — a run that
+        // silently did nothing for somebody is how "where is my money" starts.
+        const period = body.period ?? previousMonth()
+        return NextResponse.json({ ok: true, report: await runPayouts(period, { ignoreMinimum: body.ignoreMinimum }) })
+      }
+
       case 'mark-paid': {
         if (!body.payoutId) return NextResponse.json({ error: 'payoutId required' }, { status: 400 })
-        await markPayoutPaid(body.payoutId, body.reference ?? null)
-        return NextResponse.json({ ok: true })
+        // Records the money actually leaving — this is what moves the ledger
+        // rows to `paid`, not raising the payout.
+        const moved = await markPaid(body.payoutId, body.reference?.trim() || null)
+        return NextResponse.json({ ok: true, rows: moved })
       }
 
       default:

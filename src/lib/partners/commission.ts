@@ -23,8 +23,17 @@ export type CommissionKind = 'first' | 'renewal'
 export type CommissionState =
   /** Earned, inside the return window. Not yet payable. */
   | 'accrued'
-  /** Window passed. Payable in the next run. */
+  /** Window passed. Waiting for the next payout run. */
   | 'confirmed'
+  /**
+   * On a raised payout, money not yet sent.
+   *
+   * A state of its own because "we owe you this" and "we have sent you this"
+   * are different facts, and collapsing them means the ledger claims money has
+   * moved at the moment a founder pressed a button rather than when it actually
+   * left. It also stops a second run picking the same rows up again.
+   */
+  | 'invoiced'
   /** The order was refunded or cancelled. Never payable. */
   | 'reversed'
   | 'paid'

@@ -9,10 +9,11 @@
  *
  * Server-only.
  */
-import { balanceFor } from './ledger'
+import { balanceFor, invoiceFor } from './ledger'
 import { performanceForCodes, type PartnerPerformance } from './performance'
 import { describePayout, describeTerms, sortedHistory, termsInForce } from './terms'
 import * as repo from './repo'
+import type { SelfBilledInvoice } from './invoice'
 import type { PartnerBalance, PartnerCode, PartnerCommission, PartnerPayout, PartnerTerms } from './types'
 
 /** One earned commission, in the words a partner reads it in. */
@@ -43,6 +44,8 @@ export interface PartnerDashboard {
   balance: PartnerBalance
   earnings: PartnerEarning[]
   payouts: PartnerPayout[]
+  /** The self-billed invoice behind each payout, in the same order. */
+  invoices: (SelfBilledInvoice | null)[]
   terms: PartnerTerms
   termsHistory: PartnerTerms[]
   /** The deal in whole sentences, so the screen never has to assemble it. */
@@ -96,6 +99,10 @@ export async function dashboardFor(partnerId: string): Promise<PartnerDashboard 
     balance,
     earnings: commissions.map(toEarning),
     payouts,
+    // Their own invoice, readable by them — self-billing means we raise it, and
+    // a partner who cannot see what we raised on their behalf is being asked to
+    // take our word for the amount.
+    invoices: await Promise.all(payouts.map((p) => invoiceFor(p.id))),
     terms,
     termsHistory: sortedHistory(history),
     wording: { earn: describeTerms(terms), paid: describePayout(terms.payout) },

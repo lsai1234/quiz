@@ -119,7 +119,7 @@ function Figure({ label, value, tone, note }: { label: string; value: string; to
 }
 
 function MoneyTab({ data }: { data: Data }) {
-  const { balance, totals, thisMonth, earnings, payouts } = data
+  const { balance, totals, thisMonth, earnings, payouts, invoices } = data
 
   return (
     <>
@@ -140,13 +140,24 @@ function MoneyTab({ data }: { data: Data }) {
             tone={balance.accrued > 0 ? AMBER : undefined}
             note="Earned, not yet clear"
           />
-          <Figure label="Paid to you" value={money(balance.paid)} />
           <Figure
-            label="Reversed"
-            value={money(balance.reversed)}
-            tone={balance.reversed > 0 ? RED : undefined}
-            note={balance.reversed > 0 ? 'Orders that were refunded' : undefined}
+            label="On its way"
+            value={money(balance.invoiced)}
+            tone={balance.invoiced > 0 ? ACCENT : undefined}
+            note={balance.invoiced > 0 ? 'Invoiced, being sent' : undefined}
           />
+          <Figure label="Paid to you" value={money(balance.paid)} />
+          {/* Only when there is something to say. A permanent £0.00 reversed
+              tile is a row of the grid spent telling someone nothing went
+              wrong, and it leaves the four that matter sitting unevenly. */}
+          {balance.reversed > 0 && (
+            <Figure
+              label="Reversed"
+              value={money(balance.reversed)}
+              tone={RED}
+              note="Orders that were refunded"
+            />
+          )}
         </div>
         <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-3">{data.wording.paid}</p>
       </Card>
@@ -186,15 +197,18 @@ function MoneyTab({ data }: { data: Data }) {
                       ? `Clears ${day(e.payableFrom)}`
                       : e.state === 'confirmed'
                         ? 'Cleared — in the next payout'
-                        : e.state === 'paid'
-                          ? 'Paid'
-                          : 'Reversed — that order was refunded'}
+                        : e.state === 'invoiced'
+                          ? 'On its way to you'
+                          : e.state === 'paid'
+                            ? 'Paid'
+                            : 'Reversed — that order was refunded'}
                   </p>
                 </div>
                 <span
                   className="font-bold flex-shrink-0"
                   style={{
-                    color: e.state === 'reversed' ? RED : e.state === 'accrued' ? AMBER : 'var(--color-text)',
+                    color:
+                      e.state === 'reversed' ? RED : e.state === 'accrued' ? AMBER : e.state === 'invoiced' ? ACCENT : 'var(--color-text)',
                     textDecoration: e.state === 'reversed' ? 'line-through' : undefined,
                   }}
                 >
@@ -206,25 +220,65 @@ function MoneyTab({ data }: { data: Data }) {
         )}
       </Card>
 
-      <Card title={`Payouts (${payouts.length})`}>
+      <Card
+        title={`Payouts (${payouts.length})`}
+        desc="We raise the invoice for you — here is exactly what it says."
+      >
         {payouts.length === 0 ? (
           <p className="text-[11px] text-[var(--color-muted)]">None yet.</p>
         ) : (
-          <div className="space-y-1.5">
-            {payouts.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-[var(--color-text-2)]">{p.period} · {money(p.amount)}</span>
-                <span
-                  className="font-bold px-2 py-0.5 rounded-full"
-                  style={{
-                    color: p.state === 'paid' ? GREEN : AMBER,
-                    background: `color-mix(in srgb, ${p.state === 'paid' ? GREEN : AMBER} 14%, transparent)`,
-                  }}
-                >
-                  {p.state === 'paid' ? 'paid' : 'on its way'}
-                </span>
-              </div>
-            ))}
+          <div className="space-y-2.5">
+            {payouts.map((p, i) => {
+              const inv = invoices[i]
+              return (
+                <div key={p.id} className="rounded-xl p-3" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black text-[var(--color-text)]">{p.period}</p>
+                      {inv && <p className="text-[10px] text-[var(--color-muted)] truncate">{inv.number}</p>}
+                    </div>
+                    <span
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0"
+                      style={{
+                        color: p.state === 'paid' ? GREEN : AMBER,
+                        background: `color-mix(in srgb, ${p.state === 'paid' ? GREEN : AMBER} 14%, transparent)`,
+                      }}
+                    >
+                      {p.state === 'paid' ? 'paid' : 'on its way'}
+                    </span>
+                  </div>
+
+                  {inv ? (
+                    <>
+                      {inv.lines.map((l, n) => (
+                        <div key={n} className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-[var(--color-muted)]">
+                            {l.description} — {l.count} × {l.rate != null ? `${Math.round(l.rate * 100)}%` : 'mixed'} of {money(l.basis)}
+                          </span>
+                          <span className="text-[var(--color-text-2)]">{money(l.amount)}</span>
+                        </div>
+                      ))}
+                      {inv.vat > 0 && (
+                        <div className="flex items-center justify-between gap-2 text-[11px] mt-0.5">
+                          <span className="text-[var(--color-muted)]">VAT at {Math.round(inv.vatRate * 100)}%</span>
+                          <span className="text-[var(--color-text-2)]">{money(inv.vat)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2 text-[11px] font-bold mt-1 pt-1 border-t border-[var(--color-border)]">
+                        <span className="text-[var(--color-text)]">Total</span>
+                        <span className="text-[var(--color-text)]">{money(inv.gross)}</span>
+                      </div>
+                      {p.reference && (
+                        <p className="text-[10px] text-[var(--color-muted)] mt-1">Sent with reference {p.reference}</p>
+                      )}
+                      <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-1.5">{inv.notice}</p>
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-[var(--color-text-2)]">{money(p.amount)}</p>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </Card>

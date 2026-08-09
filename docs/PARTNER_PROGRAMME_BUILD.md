@@ -6,8 +6,8 @@ partner, a `/partner` login where they track their own numbers and their terms,
 and management of all of it in the Founders Hub. Plus switching the scratch card
 off.
 
-This document is the **plan**. **Phases 0–4 are now built** — see the status
-notes on each. Phases 5 and 6 are not.
+This document is the **plan**. **Every phase is now built** — see the status
+note on each.
 
 **Read §2A before touching the scratch card.** Switching it off is the smallest-
 looking change here and the most dangerous: the pricing model keeps reading the
@@ -632,7 +632,7 @@ than a programme-wide default.
 > invite cannot be replayed; and suspending them from the hub signs them out.
 > The raw invite token is confirmed absent from the database.
 
-### Phase 5 — Founders management
+### Phase 5 — Founders management  ·  **DONE**
 
 List every partner with performance side by side; open one to see their orders
 and ledger, change their terms, or suspend them; a payouts view showing what is
@@ -651,7 +651,18 @@ their own Terms tab. Two consequences worth stating:
 without a database client, and can change someone's deal in a way that partner
 can see and date.
 
-### Phase 6 — Payouts
+> **Built.** The Partners tab now has two views: **Partners** (who they are, what
+> deal they are on, what they have brought in) and **Payouts** (what we owe).
+> Both guarded questions are answered on the screen.
+>
+> The backdating guard was written in phase 1 and fed real data in phase 3; it
+> refuses a rate change dated before the oldest commission that is earned and
+> not yet paid — `accrued`, `confirmed` or `invoiced`. Stricter than "oldest
+> still-accrued" as originally planned, because a `confirmed` row is about to be
+> paid AT ITS STORED RATE, and restating terms behind it would leave the ledger
+> and the partner's own terms screen disagreeing.
+
+### Phase 6 — Payouts  ·  **DONE**
 
 Monthly run in arrears, £25 minimum, carried forward below it. Self-billed
 invoice honouring `partnersChargeVat`. Mark paid with a reference; the ledger
@@ -660,6 +671,61 @@ rows move to `paid`.
 *Done when:* a month can be closed, and a partner sees the payout on their
 dashboard.
 
+> **Built — and it needed a correction to phase 3 first.**
+>
+> `settle` used to move commission straight to `paid`, which made the ledger
+> claim money had moved the instant a founder pressed a button. There is now an
+> **`invoiced`** state between them:
+>
+> ```
+> accrued ─(window)─▶ confirmed ─(payout raised)─▶ invoiced ─(money sent)─▶ paid
+>    └───────────────(refund)──▶ reversed ◀──────────────────────────┘
+> ```
+>
+> "We owe you this" and "we have sent you this" are different facts. The state
+> also stops a second run picking up rows that are already on a raised payout —
+> `payableNow` counts `confirmed` only.
+>
+> | Piece | Where |
+> |---|---|
+> | The monthly run, everyone at once | `runPayouts(period)` — each partner against THEIR OWN minimum |
+> | Self-billed invoice | `lib/partners/invoice.ts` — derived from the rows, never stored |
+> | Marking it sent | `markPaid(payoutId, reference)` — this is what moves rows to `paid` |
+> | Founders' view | `/portal/partners/payouts` |
+> | The partner's copy | their dashboard, lines and all |
+>
+> Decisions worth defending:
+>
+> - **Each partner is judged against their own minimum**, read from the terms in
+>   force for them. The minimum is part of a negotiable deal; a run using the
+>   programme default would quietly pay someone on terms they were never given.
+> - **Everyone skipped is named with a reason.** A run that silently did nothing
+>   for a partner is how "where is my money" starts. Partners who earned nothing
+>   at all are left out — that is the ordinary case, not an exception.
+> - **The invoice is derived, never stored.** An invoice that disagreed with its
+>   own lines is the worst possible artefact to find eighteen months later.
+> - **VAT is read from THEIR terms**, not `partnersChargeVat`. It is a fact about
+>   them; the config figure is only what a new partner starts on. A registered
+>   partner's commission costs us 20% more than the rate suggests.
+> - **The payout amount is corrected to what actually moved onto it.** A refund
+>   landing mid-run would otherwise leave an invoice for more than its own rows.
+> - **A run's period is a LABEL, not a filter.** It sweeps everything cleared,
+>   whenever it was earned — which is what arrears means, and what the screen now
+>   says out loud so nobody runs twice looking for money already in the first run.
+>
+> Also built here, from §4: **self-referral**. A partner may use their own code —
+> they are a customer like anyone else and we are not policing a personal order —
+> but they earn no commission on it, which would otherwise turn the code into a
+> standing extra discount funded out of the programme. Matched on email, which
+> catches the honest and the careless case; a second address is a trust problem,
+> not a validation one, and the ledger makes it visible either way.
+>
+> Verified end to end: two partners earn, £66.87 clears the £25 minimum and
+> £22.29 does not; the run raises one payout and names the skip with its reason;
+> the invoice reads `CHRGD-SB-2026-08-MSLJICA8`, one line, `3 × 15% of £445.86`;
+> marking it paid with `BACS-77213` moves three ledger rows; and the partner sees
+> the invoice, the reference and the self-billing notice on their own dashboard.
+
 ---
 
 ## 4. Risks
@@ -667,10 +733,12 @@ dashboard.
 - **Code leakage to deal sites.** A 20% code posted publicly is a site-wide 20%
   off funded partly by commission. Mitigate with `firstOrderOnly` and `maxUses`
   in the terms from day one — cheap to build now, expensive to retrofit.
-- **Self-referral.** A partner buying through their own code. Detect on email
-  match at minimum.
-- **Attribution gaps.** Every checkout path must write the code. Enumerate them
-  in phase 2 and test each.
+- **Self-referral.** ✅ Built in phase 6. A partner may use their own code; they
+  earn nothing on it. Matched on email — a second address is a trust problem,
+  not a validation one.
+- **Attribution gaps.** ✅ Closed in phase 2: shop, quiz, mock, subscription
+  first box and renewals all funnel through one accrual path in the order
+  service, so no route can quietly skip it.
 - **Reversal depends on refunds being recorded.** ✅ Confirmed in phase 3: there
   is an automated path. `charge.refunded` from Stripe reaches `refundOrder`,
   which now reverses the commission, and the same function backs a refund

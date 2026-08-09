@@ -124,7 +124,7 @@ export interface PartnerCommission {
   rate: number
   /** What the partner earns (£), after the contribution guard. */
   amount: number
-  state: 'accrued' | 'confirmed' | 'reversed' | 'paid'
+  state: 'accrued' | 'confirmed' | 'invoiced' | 'reversed' | 'paid'
   /** When it stops being reversible and becomes payable (ISO). */
   confirmAfter: string
   /** The payout run that settled it, once paid. */
@@ -149,8 +149,10 @@ export interface PartnerPayout {
 export interface PartnerBalance {
   /** Earned but still inside the return window (£). */
   accrued: number
-  /** Past the window, payable in the next run (£). */
+  /** Past the window, waiting for the next payout run (£). */
   confirmed: number
+  /** On a raised payout, money not yet sent (£). */
+  invoiced: number
   /** Already sent (£). */
   paid: number
   /** Reversed by a refund (£) — shown, never hidden. */

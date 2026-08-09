@@ -3,7 +3,17 @@
  * index that makes accrual idempotent is exercised rather than assumed.
  */
 import { createPartner, changeTerms } from '@/lib/partners'
-import { accrueForOrder, balanceFor, confirmDue, reverseForOrder, settle, summariseBalance } from '@/lib/partners/ledger'
+import {
+  accrueForOrder,
+  balanceFor,
+  confirmDue,
+  invoiceFor,
+  markPaid,
+  reverseForOrder,
+  runPayouts,
+  settle,
+  summariseBalance,
+} from '@/lib/partners/ledger'
 import * as repo from '@/lib/partners/repo'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import { createOrderFromCheckout } from '@/lib/orders/service'
@@ -78,6 +88,43 @@ describe('accruing on a paid order', () => {
     const result = await accrueForOrder(order, {})
     expect(result.commission).toBeNull()
     expect(result.reason).toMatch(/No code NOSUCHCODE/)
+  })
+
+  it('lets a partner use their own code but not earn on it', async () => {
+    // The discount is theirs to use — they are a customer like anyone else. What
+    // they cannot do is pay themselves commission, which would turn the code
+    // into a standing extra discount funded out of the programme.
+    const partner = await createPartner({ email: 'self@example.com', name: 'Self Person' })
+    const order = await createOrderFromCheckout({
+      channel: 'shop',
+      status: 'paid',
+      email: 'self@example.com',
+      lines: [{ sku: 's1', productId: 'p1', title: 'Whey', quantity: 1, unitPrice: 90, supplierCost: 20 }],
+      partnerCode: partner.codes[0].code,
+      partnerDiscountPct: 0.2,
+    })
+
+    // The order stands, discount and all.
+    expect(order.partnerCode).toBe(partner.codes[0].code)
+    expect(order.partnerDiscountPct).toBe(0.2)
+    // The commission does not.
+    expect(await repo.listCommissions(partner.partner.id)).toHaveLength(0)
+
+    const result = await accrueForOrder(order, {})
+    expect(result.commission).toBeNull()
+    expect(result.reason).toMatch(/their own order/i)
+  })
+
+  it('is not fooled by casing or whitespace on the email', async () => {
+    const partner = await createPartner({ email: 'case-self@example.com', name: 'Case Self' })
+    const order = await createOrderFromCheckout({
+      channel: 'shop',
+      status: 'paid',
+      email: '  Case-Self@Example.com ',
+      lines: [{ sku: 's1', productId: 'p1', title: 'Whey', quantity: 1, unitPrice: 90, supplierCost: 20 }],
+      partnerCode: partner.codes[0].code,
+    })
+    expect((await accrueForOrder(order, {})).reason).toMatch(/their own order/i)
   })
 
   it('earns nothing on an order that was already losing money', async () => {
@@ -198,17 +245,35 @@ describe('a refund', () => {
     const partner = await createPartner({ email: 'late-refund@example.com', name: 'Late Refund' })
     const order = await paidOrder(partner.codes[0].code)
     await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
-    await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+    const run = await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+    await markPaid('payoutId' in run ? run.payoutId! : '', 'BACS-123')
 
     expect((await repo.listCommissions(partner.partner.id))[0].state).toBe('paid')
 
     expect(await reverseForOrder(order.id)).toBe(1)
     expect((await repo.listCommissions(partner.partner.id))[0].state).toBe('reversed')
   })
+
+  it('leaves a reversed row alone when the payout is later marked paid', async () => {
+    // Money simply is not sent for it. Paying it out from under the reversal
+    // would be the ledger disagreeing with the bank.
+    const partner = await createPartner({ email: 'midrun@example.com', name: 'Midrun Person' })
+    const order = await paidOrder(partner.codes[0].code)
+    await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
+    const run = await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+    const payoutId = 'payoutId' in run ? run.payoutId! : ''
+
+    await reverseForOrder(order.id)
+    expect(await markPaid(payoutId, 'BACS-456')).toBe(0)
+    expect((await repo.listCommissions(partner.partner.id))[0].state).toBe('reversed')
+  })
 })
 
 describe('settling a payout', () => {
-  it('pays everything confirmed and marks the rows', async () => {
+  it('raises an obligation — it does NOT send money', async () => {
+    // "We owe you this" and "we have sent you this" are different facts. The
+    // ledger used to claim money had moved the moment a founder pressed a
+    // button, which is a lie the bank statement eventually contradicts.
     const partner = await createPartner({ email: 'payout@example.com', name: 'Payout Person' })
     await paidOrder(partner.codes[0].code)
     await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
@@ -218,12 +283,42 @@ describe('settling a payout', () => {
     expect('rows' in result && result.rows).toBe(1)
 
     const rows = await repo.listCommissions(partner.partner.id)
-    expect(rows[0].state).toBe('paid')
+    expect(rows[0].state).toBe('invoiced')
     expect(rows[0].payoutId).toBeTruthy()
 
     const balance = await balanceFor(partner.partner.id)
     expect(balance.payableNow).toBe(0)
+    expect(balance.invoiced).toBeGreaterThan(0)
+    expect(balance.paid).toBe(0)
+  })
+
+  it('marks the rows paid only when the money actually goes', async () => {
+    const partner = await createPartner({ email: 'sent@example.com', name: 'Sent Person' })
+    await paidOrder(partner.codes[0].code)
+    await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
+    const run = await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+    const payoutId = 'payoutId' in run ? run.payoutId! : ''
+
+    expect(await markPaid(payoutId, 'BACS-789')).toBe(1)
+
+    const balance = await balanceFor(partner.partner.id)
+    expect(balance.invoiced).toBe(0)
     expect(balance.paid).toBeGreaterThan(0)
+
+    const payout = await repo.getPayout(payoutId)
+    expect(payout?.state).toBe('paid')
+    // The reference is what answers "did this arrive" months later.
+    expect(payout?.reference).toBe('BACS-789')
+  })
+
+  it('does not pick the same rows up on a second run', async () => {
+    const partner = await createPartner({ email: 'twice-run@example.com', name: 'Twice Run' })
+    await paidOrder(partner.codes[0].code)
+    await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
+
+    await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+    const again = await settle(partner.partner.id, '2026-09', { ignoreMinimum: true })
+    expect('reason' in again && again.reason).toMatch(/Nothing confirmed/)
   })
 
   it('carries a balance forward below the agreed minimum', async () => {
@@ -249,6 +344,7 @@ describe('the balance a partner sees', () => {
     const rows = [
       { state: 'accrued', amount: 10 },
       { state: 'confirmed', amount: 20 },
+      { state: 'invoiced', amount: 25 },
       { state: 'paid', amount: 30 },
       { state: 'reversed', amount: 40 },
     ] as Parameters<typeof summariseBalance>[0]
@@ -256,9 +352,93 @@ describe('the balance a partner sees', () => {
     expect(summariseBalance(rows)).toEqual({
       accrued: 10,
       confirmed: 20,
+      invoiced: 25,
       paid: 30,
       reversed: 40,
+      // NOT 45. An invoiced row is already on a raised payout, and counting it
+      // here would let the next run pay the same money twice.
       payableNow: 20,
     })
   })
 })
+
+describe('the monthly run', () => {
+  it('pays everyone over their own bar and names everyone it skips', async () => {
+    const rich = await createPartner({ email: 'rich@example.com', name: 'Rich Person' })
+    const poor = await createPartner({ email: 'poor@example.com', name: 'Poor Person' })
+
+    // Four healthy orders clears the £25 default; one does not.
+    for (let i = 0; i < 4; i++) await paidOrder(rich.codes[0].code)
+    await paidOrder(poor.codes[0].code)
+    await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
+
+    const report = await runPayouts('2026-08')
+
+    const paidRich = report.paid.find((p) => p.partnerId === rich.partner.id)
+    expect(paidRich).toBeTruthy()
+    expect(paidRich!.amount).toBeGreaterThanOrEqual(25)
+
+    const skippedPoor = report.skipped.find((p) => p.partnerId === poor.partner.id)
+    expect(skippedPoor).toBeTruthy()
+    expect(skippedPoor!.reason).toMatch(/carries forward/)
+
+    // And the skipped balance is still there, waiting.
+    expect((await balanceFor(poor.partner.id)).payableNow).toBeGreaterThan(0)
+  })
+
+  it('does not clutter the report with partners who earned nothing', async () => {
+    await createPartner({ email: 'idle@example.com', name: 'Idle Person' })
+    const report = await runPayouts('2026-08')
+    expect(report.skipped.some((s) => s.name === 'Idle Person')).toBe(false)
+  })
+})
+
+describe('the self-billed invoice', () => {
+  it('is built from the rows, and says it is self-billed', async () => {
+    const partner = await createPartner({ email: 'inv@example.com', name: 'Inv Person' })
+    await paidOrder(partner.codes[0].code)
+    await paidOrder(partner.codes[0].code)
+    await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
+    const run = await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+
+    const invoice = (await invoiceFor('payoutId' in run ? run.payoutId! : ''))!
+    expect(invoice.number).toMatch(/^CHRGD-SB-2026-08-/)
+    expect(invoice.selfBilled).toBe(true)
+    expect(invoice.notice).toMatch(/self-billed/i)
+    expect(invoice.supplier.name).toBe('Inv Person')
+
+    // Two orders at one rate collapse to one line, not two.
+    expect(invoice.lines).toHaveLength(1)
+    expect(invoice.lines[0].count).toBe(2)
+    // And the lines add up to the invoice.
+    expect(round2(invoice.lines.reduce((s, l) => s + l.amount, 0))).toBe(invoice.net)
+    expect(invoice.gross).toBe(round2(invoice.net + invoice.vat))
+  })
+
+  it('adds VAT only for a partner who charges it', async () => {
+    const partner = await createPartner({ email: 'vat@example.com', name: 'Vat Person' })
+    await changeTerms(partner.partner.id, {
+      firstOrderPct: PRICING_CONFIG.partners.firstOrderPct,
+      renewalPct: PRICING_CONFIG.partners.renewalPct,
+      renewalMonths: 6,
+      payout: { ...partner.terms.payout, chargesVat: true },
+      // Just after the opening row and BEFORE the payout is raised — the
+      // invoice honours the terms in force when it was raised, so a change
+      // dated after it would (correctly) not apply.
+      effectiveFrom: new Date(Date.now() + 1).toISOString(),
+      note: 'They registered for VAT.',
+    })
+
+    await paidOrder(partner.codes[0].code)
+    await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))
+    const run = await settle(partner.partner.id, '2026-08', { ignoreMinimum: true })
+
+    const invoice = (await invoiceFor('payoutId' in run ? run.payoutId! : ''))!
+    // Their commission costs us 20% more than the rate suggests.
+    expect(invoice.vatRate).toBe(PRICING_CONFIG.vat.standardRate)
+    expect(invoice.vat).toBeGreaterThan(0)
+    expect(invoice.gross).toBeGreaterThan(invoice.net)
+  })
+})
+
+const round2 = (n: number) => Math.round(n * 100) / 100

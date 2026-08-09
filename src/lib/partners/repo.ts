@@ -458,9 +458,44 @@ export async function createPayout(input: {
   return payout
 }
 
+/** Every commission row sitting on one payout. */
+export async function listCommissionsForPayout(payoutId: string): Promise<PartnerCommission[]> {
+  const db = await getEngine()
+  const rows = await db.all<CommissionRow>('SELECT * FROM partner_commissions WHERE payout_id = ?', [payoutId])
+  return rows.map(toCommission)
+}
+
+/**
+ * Correct a payout's amount to what actually moved onto it.
+ *
+ * A refund landing between reading the confirmed rows and stamping them would
+ * otherwise leave an invoice for more than the rows behind it — and an invoice
+ * that does not equal its own lines is the kind of thing an accountant finds
+ * eighteen months later.
+ */
+export async function setPayoutAmount(id: string, amount: number): Promise<void> {
+  const db = await getEngine()
+  await db.run('UPDATE partner_payouts SET amount = ? WHERE id = ?', [String(amount), id])
+}
+
 export async function markPayoutPaid(id: string, reference: string | null): Promise<void> {
   const db = await getEngine()
   await db.run("UPDATE partner_payouts SET state = 'paid', reference = ? WHERE id = ?", [reference, id])
+}
+
+export async function getPayout(id: string): Promise<PartnerPayout | null> {
+  const db = await getEngine()
+  const row = await db.get<PayoutRow>('SELECT * FROM partner_payouts WHERE id = ?', [id])
+  return row ? toPayout(row) : null
+}
+
+/** Every payout in a period, across all partners — the run's own record. */
+export async function listPayoutsForPeriod(period: string): Promise<PartnerPayout[]> {
+  const db = await getEngine()
+  const rows = await db.all<PayoutRow>('SELECT * FROM partner_payouts WHERE period = ? ORDER BY created_at DESC', [
+    period,
+  ])
+  return rows.map(toPayout)
 }
 
 export async function listPayouts(partnerId: string): Promise<PartnerPayout[]> {

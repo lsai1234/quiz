@@ -78,8 +78,7 @@ export function PartnersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 mb-1">
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Partners</h2>
+      <div className="flex items-center justify-end gap-3 mb-3">
         <button
           onClick={() => setCreating((c) => !c)}
           className="text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all"
@@ -88,11 +87,6 @@ export function PartnersPage() {
           {creating ? 'Cancel' : '+ New partner'}
         </button>
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] leading-snug mb-4">
-        Influencers who bring people in on their own code, and earn on what those people spend. Their code is the only
-        extra discount on the site.
-      </p>
-
       {creating && (
         <CreatePartner
           taken={taken}
