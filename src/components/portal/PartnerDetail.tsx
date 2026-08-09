@@ -410,8 +410,12 @@ function ShareLink({ code }: { code: string }) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
+      {/* The 30 days is the LINK's memory — how long a browser holds the
+          referral — not how long the code works. Read the other way round it
+          says a partner's deal expires in a month. */}
       <span className="text-[10px] text-[var(--color-muted)] block mt-1 leading-snug">
-        Anyone following this gets the code applied at checkout without typing it. Lasts 30 days.
+        Anyone following this gets the code applied at checkout without typing it. Their browser remembers it for 30
+        days. The code itself does not expire — it works while the partner is active, unless you cap or end it above.
       </span>
     </div>
   )

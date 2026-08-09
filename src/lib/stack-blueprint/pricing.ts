@@ -1479,6 +1479,12 @@ export interface StackPricing {
   bundleSavingPct: number
   /** The resolved one-off bundle discount tier, 0–100. */
   bundleDiscountPct: number
+  /**
+   * A partner code's rate as a whole percent, or 0. Reported separately from
+   * the bundle tier so a receipt can name BOTH — a saving the customer can see
+   * but not account for reads as a mistake in our favour.
+   */
+  partnerDiscountPct: number
   /** Label of the qualifying bundle tier (e.g. "£90+ bundle"), null if none. */
   bundleTierLabel: string | null
   /** One-off gross margin (oneOffTotal − cost of goods). PORTAL-facing, not shown to customers. */
@@ -1686,6 +1692,7 @@ export function calculatePricing(
     bundleSaving,
     bundleSavingPct: rrpTotal > 0 ? Math.round((bundleSaving / rrpTotal) * 100) : 0,
     bundleDiscountPct: Math.round(bundleTier.pct * 1000) / 10,
+    partnerDiscountPct: Math.round(oneOff.partnerPct * 1000) / 10,
     bundleTierLabel: bundleTier.tier?.label ?? null,
     oneOffMargin,
     oneOffMarginPct: oneOffTotal > 0 ? Math.round((oneOffMargin / oneOffTotal) * 100) : 0,

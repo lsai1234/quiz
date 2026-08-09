@@ -34,6 +34,17 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 
 /** A right-side slide-in cart drawer: line items up top, the money below. */
 export function BasketDrawer({ resolved, subtotal, priced, checkoutState, partnerCode, onPartnerCode, onCheckout, onClose }: Props) {
+  /**
+   * What each discount is worth in pounds.
+   *
+   * Derived from the real total rather than from the rates, so the margin floor
+   * clipping a line cannot leave the receipt claiming a saving that was not
+   * given. The bundle is applied first and the code to what remains — the same
+   * order `priceOneOffLines` builds the price in.
+   */
+  const afterBundle = Math.round(subtotal * (1 - priced.tierPct) * 100) / 100
+  const bundleSaving = Math.round((subtotal - afterBundle) * 100) / 100
+  const codeSaving = Math.round((priced.discount - bundleSaving) * 100) / 100
   const { setQty, remove } = useBasket()
   const [mounted, setMounted] = useState(false)
   const [shown, setShown] = useState(false)
@@ -152,29 +163,38 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, partne
 
               <PartnerCodeBox subtotal={subtotal} applied={partnerCode} onChange={onPartnerCode} />
 
-              {/* Show the discount they've earned, and total at what the card
+              {/* Show the discounts they've earned, and total at what the card
                   will actually be charged. Both come from `priceOneOffLines`,
                   the same function /api/cart bills Stripe from — including the
-                  partner code, so the number here is the number on the card. */}
+                  partner code, so the number here is the number on the card.
+
+                  A LINE EACH. They stack multiplicatively — the bundle comes
+                  off first, the code off what is left — which is the order the
+                  price is actually built in, so the two lines add up to the
+                  total underneath them. Lumping them together left a customer
+                  looking at "£21.12 saved" with only 8% of it accounted for. */}
               {priced.discount > 0.01 && (
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>Subtotal</span>
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: GREEN }}>
-                      {/* One line, because it is one number off the line price —
-                          splitting it would imply the two were applied in some
-                          order the customer could reason about. */}
-                      {priced.partnerPct > 0 && priced.tierPct > 0
-                        ? `${priced.tierLabel ?? 'Bundle discount'} + ${partnerCode?.code ?? 'code'}`
-                        : priced.partnerPct > 0
-                          ? `${partnerCode?.code ?? 'Discount code'}`
-                          : (priced.tierLabel ?? 'Bundle discount')}
-                    </span>
-                    <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
-                  </div>
+                  {bundleSaving > 0.01 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: GREEN }}>
+                        {priced.tierLabel ?? 'Bundle discount'} · {Math.round(priced.tierPct * 100)}% off
+                      </span>
+                      <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(bundleSaving)}</span>
+                    </div>
+                  )}
+                  {codeSaving > 0.01 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm" style={{ color: GREEN }}>
+                        {partnerCode?.code ?? 'Discount code'} · {Math.round(priced.partnerPct * 100)}% off
+                      </span>
+                      <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(codeSaving)}</span>
+                    </div>
+                  )}
                 </>
               )}
               <div className="flex items-center justify-between">

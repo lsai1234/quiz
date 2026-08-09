@@ -403,8 +403,13 @@ function ShareLink({ code }: { code: string }) {
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
+      {/* The 30 days is the LINK's memory, not the code's life. Saying "lasts
+          30 days" next to a code read as the code expiring, which would be a
+          fairly alarming thing for a partner to think about their own deal. */}
       <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-1">
-        Anyone following this gets your code applied at checkout without typing it, for 30 days.
+        Anyone following this gets your code applied at checkout without typing it. Their browser remembers it for 30
+        days, so it still works if they come back later. Your code itself doesn’t expire — it works as long as your
+        account is active, and they can always type it in.
       </p>
     </div>
   )

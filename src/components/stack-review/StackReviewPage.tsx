@@ -534,6 +534,7 @@ export function StackReviewPage() {
             planType={planType}
             onPlanChange={setPlanType}
             onCheckout={handleCheckout}
+          partnerCode={partnerCode?.code ?? null}
             onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             isLoading={checkoutState.status === 'loading'}
           />

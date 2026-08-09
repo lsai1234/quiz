@@ -30,6 +30,8 @@ interface Props {
   onCheckout?: () => void
   onCustomise?: () => void
   isLoading?: boolean
+  /** The applied partner code, so its line can be named rather than anonymous. */
+  partnerCode?: string | null
 }
 
 function PlanTab({ label, sub, active, disabled, onClick }: { label: string; sub: string; active: boolean; disabled?: boolean; onClick: () => void }) {
@@ -67,13 +69,13 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false,
+  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null,
 }: Props) {
   const config = getPricingConfig()
   const {
     oneOffTotal, oneOffSubtotal, subscriptionTotal, subscriptionItemCount, subscriptionFirstMonth,
     subscriptionIntroDiscountPct, subscriptionMinMonths, subscriptionMinTermTotal, subscriptionMinOrderMet,
-    bundleDiscountPct, bundleTierLabel, subscriptionDiscountPct, bundleLevel,
+    bundleDiscountPct, bundleTierLabel, subscriptionDiscountPct, bundleLevel, partnerDiscountPct,
   } = pricing
 
   const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet
@@ -81,6 +83,19 @@ export function PlanReceipt({
   const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
   const oneOffSaving = Math.round((oneOffSubtotal - oneOffTotal) * 100) / 100
   const hasOneOffSaving = oneOffSaving > 0.01
+
+  /**
+   * Split the saving between the two discounts, in pounds.
+   *
+   * They stack multiplicatively, so the bundle comes off first and the code
+   * comes off what is left — that IS the order the price is built in, and
+   * showing them any other way would print two numbers that do not add up to
+   * the total sitting underneath them. The margin floor can clip either, so
+   * both are derived from the real total rather than from the rates.
+   */
+  const afterBundle = Math.round(oneOffSubtotal * (1 - bundleDiscountPct / 100) * 100) / 100
+  const bundleSaving = Math.round((oneOffSubtotal - afterBundle) * 100) / 100
+  const codeSaving = Math.round((oneOffSaving - bundleSaving) * 100) / 100
 
   const activeTotal = isSub ? subscriptionTotal : oneOffTotal
   // Free delivery qualifies on the SUBTOTAL, before the bundle discount — so a
@@ -163,7 +178,21 @@ export function PlanReceipt({
                 <Row label={`${LEVEL_LABEL[bundleLevel]} bundle · Subscribe & Save`} value={`up to ${subscriptionDiscountPct}% off`} accent />
               )}
               {hasIntro && (
-                <Row label={`First month (${subscriptionIntroDiscountPct}% off)`} value={formatGBP(subscriptionFirstMonth)} accent />
+                <Row
+                  label={
+                    partnerDiscountPct > 0
+                      ? `First month with ${partnerCode ?? 'your code'} (${subscriptionIntroDiscountPct}% off)`
+                      : `First month (${subscriptionIntroDiscountPct}% off)`
+                  }
+                  value={formatGBP(subscriptionFirstMonth)}
+                  accent
+                />
+              )}
+              {hasIntro && (
+                <p className="text-[11px] leading-relaxed text-emerald-400">
+                  You save {formatGBP(Math.round((subscriptionTotal - subscriptionFirstMonth) * 100) / 100)} on your
+                  first month. Every month after is {formatGBP(subscriptionTotal)}.
+                </p>
               )}
               <div className="flex items-center justify-between pt-0.5">
                 <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>Monthly total</span>
@@ -181,7 +210,18 @@ export function PlanReceipt({
             <>
               {hasOneOffSaving && <Row label="Regular price" value={formatGBP(oneOffSubtotal)} strike />}
               {bundleDiscountPct > 0 && bundleTierLabel && (
-                <Row label={`Bundle deal · ${bundleTierLabel}`} value={`${bundleDiscountPct}% off`} accent />
+                <Row label={`Bundle deal · ${bundleTierLabel} · ${bundleDiscountPct}% off`} value={`−${formatGBP(bundleSaving)}`} accent />
+              )}
+              {/* The code gets its own line with its own money. A total that
+                  saves £21 while the receipt only accounts for £6 of it reads
+                  as a mistake in the customer's favour — which is the last
+                  thing you want someone thinking at the moment they pay. */}
+              {partnerDiscountPct > 0 && (
+                <Row
+                  label={partnerCode ? `${partnerCode} · ${partnerDiscountPct}% off` : `Discount code · ${partnerDiscountPct}% off`}
+                  value={`−${formatGBP(codeSaving)}`}
+                  accent
+                />
               )}
               <div className="flex items-center justify-between pt-0.5">
                 <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>One-off total</span>
