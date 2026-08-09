@@ -785,8 +785,25 @@ dashboard.
 - **The economics are verified and thin.** D2, corrected in phase 3: at a 20%
   code and 15% first-order commission, an attributed order loses ~£2.26 on a
   one-off and ~£14.28 on the deepest subscription rung. Recovered from month two
-  on a subscription; not recovered at all on a one-off. Accepted deliberately,
-  but revisit the rates before running volume through the channel.
+  on a subscription; not recovered at all on a one-off.
+
+  **Renewal window cut 6 → 3 months (2026-08)** after modelling the whole
+  lifetime rather than single orders. At 6 months the window matched
+  `averageRetentionMonths` exactly, so we paid commission on every month a
+  customer was expected to exist — revenue share, not a referral fee. On a £90
+  plan that was £18 of renewal commission, MORE than the £14.28 lost on the
+  discounted first month, and invisible because it never lands on one order.
+
+  | £90 plan, 6-month life | attributed | unattributed | share |
+  |---|---|---|---|
+  | Renewals ×6 (before) | £10.42 | £51.24 | 20% |
+  | **Renewals ×3 (now)** | **£17.62** | £51.24 | **34%** |
+
+  **Still open: stacking.** The remaining lever, and the bigger one — a code
+  that did not compound with the subscription rate would take the same plan to
+  £22.44 (44%). Left as-is deliberately; see D2. The other candidate is dropping
+  the first-order rate to 10%, worth about £2.88 over the life, which is small
+  next to either of the above.
 - **The pricing model does not currently notice the card being switched off.**
   §2A, measured. Until the effective-intro-rate accessor lands, the scenario and
   threshold checks will report healthy numbers for a configuration that is losing

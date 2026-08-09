@@ -139,6 +139,23 @@ describe('what the stack actually costs us', () => {
     expect(keeps(0)).toBeGreaterThan(20)
   })
 
+  it('pays renewals for a window SHORTER than a customer stays', () => {
+    /**
+     * Pinned because it is the correction that made the programme affordable,
+     * and because 3 < 6 looks like an oversight until you know why.
+     *
+     * At 6 the window matched `averageRetentionMonths` exactly — commission on
+     * every month a customer is expected to exist, which is revenue share
+     * rather than a referral fee. Measured on a £90 plan: renewal commission
+     * came to £18 over the life, MORE than the £14.28 lost on the discounted
+     * first month, and invisible because it never lands on a single order.
+     */
+    expect(PRICING_CONFIG.partners.renewalMonths).toBe(3)
+    expect(PRICING_CONFIG.partners.renewalMonths).toBeLessThan(
+      PRICING_CONFIG.orderMix.averageRetentionMonths,
+    )
+  })
+
   it('never lets the COMMISSION be what pushes an order under', () => {
     // The contribution guard. It does not rescue the rows above — those were
     // already losing before any commission — but it stops a thin-but-positive

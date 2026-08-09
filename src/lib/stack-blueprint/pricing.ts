@@ -352,13 +352,29 @@ export const PRICING_CONFIG = {
     /**
      * Months of renewals a partner earns on, from signup.
      *
-     * 6, matching `orderMix.averageRetentionMonths`. Paying renewals for 12
-     * months on a customer who stays 6 doesn't cost double — it costs nothing
-     * extra, because the months don't happen — but it sets an expectation the
-     * business can't fund if retention ever improves, which is precisely when it
-     * would hurt most.
+     * 3, down from 6.
+     *
+     * At 6 this matched `orderMix.averageRetentionMonths` exactly, which sounded
+     * tidy and was the problem: paying commission for every month a customer is
+     * expected to exist is not a referral fee, it is revenue share. Measured on
+     * a £90 plan over a 6-month life, renewal commission came to £18 — MORE than
+     * the £14.28 lost on the discounted first month, and invisible because it
+     * never appears on any single order.
+     *
+     * The whole picture, same basket: an attributed subscriber returned £10.42
+     * against £51.24 unattributed. The channel was taking four fifths of a
+     * customer's lifetime value. Three months moves that to £17.62 (34%).
+     *
+     * Three is also the honest shape of the thing being paid for: a partner
+     * introduced someone. Whether that person is still subscribing in month six
+     * is our job, not theirs.
+     *
+     * This is the DEFAULT a new partner's opening terms are seeded from.
+     * Partners already on 6 keep 6 — their terms row is a statement made to a
+     * counterparty, and it changes only through `changeTerms`, dated, with a
+     * reason they can read.
      */
-    renewalMonths: 6,
+    renewalMonths: 3,
     /**
      * The floor a partner's code puts under the scratch card (0–1). The card
      * still runs and can still pay out its top prize — the code raises the worst
