@@ -5,6 +5,7 @@ import { kvGet, kvDelete } from '@/lib/db/kv'
 import { CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
+import { resolveCheckoutCode } from '@/lib/partners/referral'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
 export const dynamic = 'force-dynamic'
@@ -28,8 +29,16 @@ export async function GET(req: Request) {
   await kvDelete(PENDING_KEY_PREFIX + token)
   if (!stored?.payload) return NextResponse.redirect(`${origin}/myhub`)
 
+  // The stashed payload carries whatever they typed before the OAuth trip; the
+  // cookie is the fallback for someone who typed nothing. Both survive the
+  // round-trip — the cookie is the browser's and the payload is ours.
+  const payload: CheckoutPayload = {
+    ...stored.payload,
+    partnerCode: await resolveCheckoutCode(stored.payload.partnerCode),
+  }
+
   try {
-    const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, stored.payload, {
+    const { checkoutUrl, mock } = await finalizeCheckout(user.id, user.email, payload, {
       origin,
       ...requestMetadata(req),
     })

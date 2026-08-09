@@ -7,6 +7,7 @@ import { createOrderFromCheckout, newOrderId } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
+import { resolveCheckoutCode } from '@/lib/partners/referral'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
 
@@ -97,10 +98,18 @@ export async function POST(req: Request) {
    */
   const undiscountedSubtotal = pricedLines.reduce((s, l) => s + l.price * Math.max(1, l.quantity), 0)
   const typedCode = typeof body.partnerCode === 'string' ? body.partnerCode : null
-  const redemption = typedCode
-    ? await redeemPartnerCode(typedCode, { subtotal: undiscountedSubtotal, email: user?.email ?? null })
+  // What they typed, or failing that the code their link left in a cookie. The
+  // server does this so no journey can lose a referral by not having rendered
+  // the code box — "Buy now" goes straight to Stripe without one.
+  const code = await resolveCheckoutCode(typedCode)
+  const redemption = code
+    ? await redeemPartnerCode(code, { subtotal: undiscountedSubtotal, email: user?.email ?? null })
     : null
-  if (redemption && !redemption.ok) {
+  // A code somebody TYPED and got wrong is worth stopping for — that basket is
+  // still on screen and can be fixed. A stale cookie they never typed is not:
+  // failing the checkout over it would punish someone for a link they clicked
+  // weeks ago, so it just attributes nothing.
+  if (redemption && !redemption.ok && typedCode) {
     return NextResponse.json({ error: redemption.reason, codeRejected: true }, { status: 400 })
   }
   const partnerPct = redemption?.ok ? redemption.discountPct : 0

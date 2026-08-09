@@ -11,6 +11,7 @@ import { selectStatAxes } from '@/lib/stack-stats'
 import type { PlanType } from '@/lib/store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
+import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { StackDeck } from '@/components/stack-review/StackDeck'
 import { PlanReceipt } from '@/components/stack-review/PlanReceipt'
 import { SubscriptionProtocol } from '@/components/stack-review/SubscriptionProtocol'
@@ -116,9 +117,17 @@ export function BundleLandingPage({ bundle }: Props) {
 
   const { state: checkoutState, checkout, resume: resumeCheckout, reset: resetCheckout } = useStackCheckout()
 
+  // A partner's code, once validated. Feeds both the receipt and the checkout,
+  // so what is shown and what is charged come from the same number.
+  const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
+
   const subOpts = useMemo(
-    () => ({ introDiscountOverride: revealedIntroDiscount }),
-    [revealedIntroDiscount],
+    () => ({
+      introDiscountOverride: revealedIntroDiscount,
+      partnerDiscountPct: partnerCode?.discountPct ?? null,
+      partnerCode: partnerCode?.code ?? null,
+    }),
+    [revealedIntroDiscount, partnerCode],
   )
 
   const handleCheckout = useCallback(
@@ -284,6 +293,15 @@ export function BundleLandingPage({ bundle }: Props) {
             onReveal={setRevealedIntroDiscount}
           />
         )}
+
+        {/* Above the receipt, so the totals below already include it. */}
+        <div className="mb-3 flex flex-col">
+          <PartnerCodeBox
+            subtotal={planType === 'subscription' ? pricing.subscriptionTotal : pricing.oneOffSubtotal}
+            applied={partnerCode}
+            onChange={setPartnerCode}
+          />
+        </div>
 
         <PlanReceipt
           slots={sortedSlots}

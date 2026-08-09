@@ -736,9 +736,29 @@ dashboard.
 - **Self-referral.** ✅ Built in phase 6. A partner may use their own code; they
   earn nothing on it. Matched on email — a second address is a trust problem,
   not a validation one.
-- **Attribution gaps.** ✅ Closed in phase 2: shop, quiz, mock, subscription
-  first box and renewals all funnel through one accrual path in the order
-  service, so no route can quietly skip it.
+- **Attribution gaps.** ✅ Closed. The ACCRUAL side funnels through one path in
+  the order service (phase 2), so no route can skip it. The ENTRY side was
+  audited separately afterwards and had two holes, both now closed:
+
+  | Journey | Code box | Notes |
+  |---|---|---|
+  | Shop basket | ✅ | Applied and removable in the drawer |
+  | Quiz stack review | ✅ | Above the receipt, so totals include it |
+  | Bundle landing page | ✅ | **Was missing** — added |
+  | Express "Buy now" | — by design | Skips the basket entirely; see below |
+  | `Act5Bundle` (scroll demo) | n/a | `useLocalCart`, never reaches Stripe |
+
+  **The referral cookie is now resolved SERVER-SIDE** (`lib/partners/referral.ts`)
+  in `/api/cart`, `/api/checkout/finalize` and `/api/checkout/continue`. It used
+  to be applied only by the checkout UI, which meant a referral was lost on any
+  journey where that component had not mounted and run — "Buy now" goes straight
+  to Stripe, so a partner's link was silently unattributed there. A typed code
+  still wins; the cookie is a fallback, never an override.
+
+  One asymmetry worth keeping: a code somebody TYPED and got wrong stops the
+  checkout with a reason, because that basket is still on screen and fixable. A
+  stale cookie they never typed does not — failing a purchase over a link
+  clicked weeks ago would punish the customer for our bookkeeping.
 - **Reversal depends on refunds being recorded.** ✅ Confirmed in phase 3: there
   is an automated path. `charge.refunded` from Stripe reaches `refundOrder`,
   which now reverses the commission, and the same function backs a refund

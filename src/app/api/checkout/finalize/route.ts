@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getHubUser } from '@/lib/auth/session'
 import { CheckoutRejected, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
+import { resolveCheckoutCode } from '@/lib/partners/referral'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
 export const dynamic = 'force-dynamic'
@@ -26,9 +27,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'subscription is required' }, { status: 400 })
   }
 
+  // What they typed, or failing that the code their link left in a cookie —
+  // resolved here because a subscription can be finalized from a screen that
+  // never rendered the code box.
+  const payload: CheckoutPayload = { ...body, partnerCode: await resolveCheckoutCode(body.partnerCode) }
+
   const origin = process.env.APP_URL || req.headers.get('origin') || new URL(req.url).origin
   try {
-    const result = await finalizeCheckout(user.id, user.email, body, {
+    const result = await finalizeCheckout(user.id, user.email, payload, {
       origin,
       ...requestMetadata(req),
     })
