@@ -691,7 +691,7 @@ dashboard.
 > | The monthly run, everyone at once | `runPayouts(period)` — each partner against THEIR OWN minimum |
 > | Self-billed invoice | `lib/partners/invoice.ts` — derived from the rows, never stored |
 > | Marking it sent | `markPaid(payoutId, reference)` — this is what moves rows to `paid` |
-> | Founders' view | `/portal/partners/payouts` |
+> | Founders' view | `/founderhub/partners/payouts` |
 > | The partner's copy | their dashboard, lines and all |
 >
 > Decisions worth defending:

@@ -15,12 +15,12 @@ import type { QueueInput, TemplateId } from './types'
 /** Deep links into the hub flow that can act on the change. */
 export const hubLinks = {
   /** Opens `ChangeProductFlow` on that line — "pick something else instead". */
-  change: (base: string, lineId: string) => `${base}/hub?change=${encodeURIComponent(lineId)}`,
+  change: (base: string, lineId: string) => `${base}/myhub?change=${encodeURIComponent(lineId)}`,
   /** Opens `AddProductSheet` filtered to that category — "browse replacements". */
-  add: (base: string, swapGroup: string) => `${base}/hub?add=${encodeURIComponent(swapGroup)}`,
-  hub: (base: string) => `${base}/hub`,
+  add: (base: string, swapGroup: string) => `${base}/myhub?add=${encodeURIComponent(swapGroup)}`,
+  hub: (base: string) => `${base}/myhub`,
   /** Opens the hub with the billing panel focused, from which the Stripe portal opens. */
-  billing: (base: string) => `${base}/hub?billing=1`,
+  billing: (base: string) => `${base}/myhub?billing=1`,
 }
 
 /**

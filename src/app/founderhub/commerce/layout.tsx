@@ -9,10 +9,10 @@ import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
  * than under Products because it is a decision about an order, not a product.
  */
 const ITEMS: SubNavItem[] = [
-  { href: '/portal/commerce/queue', label: 'Review queue' },
-  { href: '/portal/commerce/orders', label: 'Single orders' },
-  { href: '/portal/commerce/subscriptions', label: 'Subscriptions' },
-  { href: '/portal/commerce/financials', label: 'Financials' },
+  { href: '/founderhub/commerce/queue', label: 'Review queue' },
+  { href: '/founderhub/commerce/orders', label: 'Single orders' },
+  { href: '/founderhub/commerce/subscriptions', label: 'Subscriptions' },
+  { href: '/founderhub/commerce/financials', label: 'Financials' },
 ]
 
 export default function CommerceLayout({ children }: { children: React.ReactNode }) {

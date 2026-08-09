@@ -3,9 +3,10 @@
  *
  * Accounts are seeded from the environment (FOUNDER_1_EMAIL / FOUNDER_1_PASSWORD,
  * FOUNDER_2_*, … up to FOUNDER_5_*). When none are configured we fall back to two
- * demo founders so the hub works out of the box in development — mirroring how
- * ADMIN_PASSWORD used to default to "chrgd-admin". A legacy ADMIN_PASSWORD, if set,
- * is kept as an extra "admin" account so existing setups keep working.
+ * demo founders so the hub works out of the box in development — but never in a
+ * production build, where an unconfigured hub admits nobody rather than
+ * everybody. A legacy ADMIN_PASSWORD, if set, is kept as an extra "admin"
+ * account so existing setups keep working.
  *
  * The session cookie stores an opaque per-account token (a salted hash of the
  * credentials) rather than the password itself, and the token maps back to the
@@ -28,8 +29,28 @@ interface RawAccount extends FounderAccount {
   password: string
 }
 
-/** All configured accounts (founders from env, demo fallback, legacy admin). */
-function rawAccounts(): RawAccount[] {
+/** The out-of-the-box accounts. Their passwords are printed on the sign-in screen. */
+const DEMO_FOUNDERS: RawAccount[] = [
+  { email: 'founder1@chrgd.dev', password: 'chrgd-founder-1', name: 'Founder One' },
+  { email: 'founder2@chrgd.dev', password: 'chrgd-founder-2', name: 'Founder Two' },
+]
+
+/**
+ * Whether the demo founders may sign in. Never in a production build.
+ *
+ * These credentials are in the repo, in `.env.example`, and rendered on the
+ * sign-in page itself — they are a convenience for `npm run dev`, not a
+ * fallback. Accepting them in production would leave the Founders Hub open to
+ * anyone who loads the page, on the domain we are actively promoting, with the
+ * password printed underneath the form. A deploy that forgets `FOUNDER_1_*` now
+ * lets nobody in, which is the safe way to be wrong.
+ */
+function demoAccountsAllowed(): boolean {
+  return process.env.NODE_ENV !== 'production'
+}
+
+/** Accounts configured for real — env founders plus the legacy shared admin. */
+function configuredAccounts(): RawAccount[] {
   const accounts: RawAccount[] = []
 
   for (let i = 1; i <= MAX_ACCOUNTS; i++) {
@@ -44,20 +65,35 @@ function rawAccounts(): RawAccount[] {
     }
   }
 
-  // Demo founders so the hub is usable without any env config (dev only).
-  if (accounts.length === 0) {
-    accounts.push(
-      { email: 'founder1@chrgd.dev', password: 'chrgd-founder-1', name: 'Founder One' },
-      { email: 'founder2@chrgd.dev', password: 'chrgd-founder-2', name: 'Founder Two' },
-    )
-  }
-
   // Legacy shared password — keep it working as an "admin" account if present.
   if (process.env.ADMIN_PASSWORD) {
     accounts.push({ email: 'admin@chrgd.dev', password: process.env.ADMIN_PASSWORD, name: 'Admin' })
   }
 
   return accounts
+}
+
+/** All accounts that may sign in right now (configured, plus demo where allowed). */
+function rawAccounts(): RawAccount[] {
+  const configured = configuredAccounts()
+  if (configured.length > 0) return configured
+  return demoAccountsAllowed() ? [...DEMO_FOUNDERS] : []
+}
+
+/**
+ * How the hub is currently secured, for the sign-in screen to explain itself:
+ *
+ *   configured   — real accounts exist; sign in normally.
+ *   demo         — none configured, but this isn't production, so the printed
+ *                  demo credentials work.
+ *   unconfigured — production with no `FOUNDER_*` and no `ADMIN_PASSWORD`.
+ *                  Nobody can sign in until the env vars are set and deployed.
+ */
+export type FounderAuthMode = 'configured' | 'demo' | 'unconfigured'
+
+export function founderAuthMode(): FounderAuthMode {
+  if (configuredAccounts().length > 0) return 'configured'
+  return demoAccountsAllowed() ? 'demo' : 'unconfigured'
 }
 
 /** Opaque session token derived from the credentials (cookie isn't the password). */

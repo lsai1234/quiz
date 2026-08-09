@@ -190,13 +190,13 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
   const requiresAction = subscriptions.filter((s) => s.health === 'requires-action').length
 
   const actionRequired = [
-    { label: 'Orders PowerBody will not ship to', count: input.undeliverable ?? 0, href: '/portal/commerce/queue' },
-    { label: 'Orders to review before we ask the supplier', count: input.awaitingReview, href: '/portal/commerce/queue' },
-    { label: 'Approved orders ready to send', count: input.readyToSend, href: '/portal/commerce/queue' },
-    { label: 'Product changes on live subscriptions', count: input.openChanges, href: '/portal/actions' },
-    { label: 'Subscriptions needing attention', count: requiresAction, href: '/portal/commerce/subscriptions' },
-    { label: 'Products not launch-ready', count: input.productsNeedingAttention, href: '/portal/products/readiness' },
-    { label: 'Orders that failed to reach the supplier', count: orders.filter((o) => o.status === 'failed').length, href: '/portal/commerce/orders' },
+    { label: 'Orders PowerBody will not ship to', count: input.undeliverable ?? 0, href: '/founderhub/commerce/queue' },
+    { label: 'Orders to review before we ask the supplier', count: input.awaitingReview, href: '/founderhub/commerce/queue' },
+    { label: 'Approved orders ready to send', count: input.readyToSend, href: '/founderhub/commerce/queue' },
+    { label: 'Product changes on live subscriptions', count: input.openChanges, href: '/founderhub/actions' },
+    { label: 'Subscriptions needing attention', count: requiresAction, href: '/founderhub/commerce/subscriptions' },
+    { label: 'Products not launch-ready', count: input.productsNeedingAttention, href: '/founderhub/products/readiness' },
+    { label: 'Orders that failed to reach the supplier', count: orders.filter((o) => o.status === 'failed').length, href: '/founderhub/commerce/orders' },
   ]
     .filter((a) => a.count > 0)
     .sort((a, b) => b.count - a.count)
@@ -222,7 +222,7 @@ export function buildDashboard(input: DashboardInput): DashboardSummary {
     // Only surfaced once it's actionable — a threshold six years away is noise.
     notices:
       input.vat && input.vat.tone !== 'ok'
-        ? [{ id: 'vat', label: input.vat.headline, detail: input.vat.detail, href: '/portal/pricing', tone: input.vat.tone }]
+        ? [{ id: 'vat', label: input.vat.headline, detail: input.vat.detail, href: '/founderhub/pricing', tone: input.vat.tone }]
         : [],
   }
 }

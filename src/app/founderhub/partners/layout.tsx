@@ -8,8 +8,8 @@ import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
  * you set a partner up once and settle with them every month.
  */
 const ITEMS: SubNavItem[] = [
-  { href: '/portal/partners', label: 'Partners', exact: true },
-  { href: '/portal/partners/payouts', label: 'Payouts' },
+  { href: '/founderhub/partners', label: 'Partners', exact: true },
+  { href: '/founderhub/partners/payouts', label: 'Payouts' },
 ]
 
 export default function PartnersLayout({ children }: { children: React.ReactNode }) {

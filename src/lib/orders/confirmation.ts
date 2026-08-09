@@ -362,7 +362,7 @@ async function buildFromSubscription(
     state,
     variant,
     order: null,
-    subscription: toConfirmationSubscription(sub, { manageUrl: `${origin}/hub` }),
+    subscription: toConfirmationSubscription(sub, { manageUrl: `${origin}/myhub` }),
     personalisation: null,
     analytics: {
       transactionId: sub.stripeSubscriptionId ?? userId,

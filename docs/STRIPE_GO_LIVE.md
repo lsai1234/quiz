@@ -75,7 +75,7 @@ settle it. Send them to the hub to cancel; the portal is for cards only.
 ### 2c. Create the webhook endpoint
 **Developers → Webhooks → Add endpoint.**
 
-- **URL:** `https://<your-domain>/api/webhooks/stripe`
+- **URL:** `https://getchrgd.co.uk/api/webhooks/stripe`
 - **Events — add all seven:**
 
 | Event | What it does |
@@ -107,7 +107,7 @@ Then copy the endpoint's **Signing secret** (`whsec_…`).
 | `PAYMENTS_SOURCE` | `stripe` | Falls back to mock if the key is missing, so it fails safe |
 | `STRIPE_SECRET_KEY` | `sk_test_…` | Swap for `sk_live_…` at go-live |
 | `STRIPE_WEBHOOK_SECRET` | `whsec_…` | From §2c. **Different per endpoint** — test and live have separate ones |
-| `APP_URL` | `https://your-domain.com` | Used for Stripe return URLs and email links. Get it wrong and members land on localhost |
+| `APP_URL` | `https://getchrgd.co.uk` | Used for Stripe return URLs and email links. Get it wrong and members land on localhost |
 | `CRON_SECRET` | a long random string | `openssl rand -hex 32`. Without it the cron route is **closed** in production, so the daily job never runs |
 | `DATABASE_URL` | *(already set)* | |
 | `SUPPLIER_SOURCE` | `mock` | Leave it — you don't have PowerBody API access yet |
@@ -123,7 +123,7 @@ Three checks, in order. Each one isolates a different thing.
 
 **1. Did the app resolve to Stripe?**
 ```
-curl https://your-domain.com/api/config
+curl https://getchrgd.co.uk/api/config
 ```
 Look for `"paymentsLive": true`. If it's `false`, the secret key isn't reaching
 the running deployment — check you redeployed after setting it.
@@ -133,7 +133,7 @@ In Stripe: **Developers → Webhooks → your endpoint → Send test webhook.**
 Expect a `200`. A `401` almost always means Vercel Deployment Protection (§7).
 
 **3. Did the database migrate?**
-Sign in to `/hub`. If it loads, migrations ran. They apply automatically on the
+Sign in to `/myhub`. If it loads, migrations ran. They apply automatically on the
 first Postgres connection.
 
 ---
@@ -153,7 +153,7 @@ Card `4242 4242 4242 4242`, any future expiry, any CVC.
 1. Run the quiz → subscribe → create an account → tick the consent box.
 2. Pay. Check Stripe: the customer has a subscription, and **an address** — this
    was the bug that would have shipped every box to nowhere.
-3. `/hub` shows your bundle and **the card you actually used**.
+3. `/myhub` shows your bundle and **the card you actually used**.
 
 **Change it — this is the part that was silently broken**
 4. Add a product in the hub. Stripe's subscription amount changes.
@@ -169,7 +169,7 @@ Card `4242 4242 4242 4242`, any future expiry, any CVC.
 **The daily job**
 ```
 curl -H "Authorization: Bearer $CRON_SECRET" \
-  "https://your-domain.com/api/cron/daily?dryRun=1"
+  "https://getchrgd.co.uk/api/cron/daily?dryRun=1"
 ```
 `dryRun=1` reports what it would do and writes nothing.
 

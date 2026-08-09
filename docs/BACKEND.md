@@ -104,7 +104,18 @@ a random token whose hash is stored in `sessions` — revocable server-side,
 `src/lib/auth/session.ts` (`getHubUser()` is the guard for hub APIs).
 
 The founders' portal keeps its own separate realm (`portal_session`,
-env-configured founder accounts) — customers can never reach `/portal`.
+env-configured founder accounts) — customers can never reach `/founderhub`.
+
+**The demo founders are development-only, and that is enforced.** With no
+`FOUNDER_*` (or `ADMIN_PASSWORD`) configured, `npm run dev` accepts
+`founder1@chrgd.dev` / `chrgd-founder-1` so the hub works out of the box. A
+production build refuses them: their passwords are in this repo and printed on
+the sign-in screen, so honouring them would leave the whole business — the
+fulfilment queue, the subscriber list, the switch that arms real supplier
+ordering — open to anyone who loaded the page. An unconfigured production deploy
+therefore admits *nobody*, and the sign-in screen says so instead of answering a
+missing environment variable with "Incorrect email or password".
+`founderAuthMode()` is the single source of that state.
 
 ### Account gate before subscription checkout
 
@@ -178,11 +189,13 @@ already in place.
    it and uses Postgres. Migrations run on the first request after deploy.
 2. **Set the founder login** so the portal isn't on the public demo password:
    `FOUNDER_1_EMAIL` / `FOUNDER_1_PASSWORD` (Settings → Environment Variables).
-3. **(Optional) Social sign-in:** add `APP_URL=https://<your-domain>` plus the
-   credentials for whichever providers you want (see "Setting up social
-   sign-in" above), registering `https://<your-domain>/api/auth/<provider>/callback`
-   as each provider's redirect URI. Buttons appear only for configured providers.
-4. **Redeploy.** New sign-ups, subscriptions, feedback and portal edits now
+3. **Set `APP_URL`** to `https://getchrgd.co.uk` — Stripe return URLs, OAuth
+   redirects and email links are all built from it (see `docs/DOMAIN_SETUP.md`).
+4. **(Optional) Social sign-in:** add the credentials for whichever providers
+   you want (see "Setting up social sign-in" above), registering
+   `https://getchrgd.co.uk/api/auth/<provider>/callback` as each provider's
+   redirect URI. Buttons appear only for configured providers.
+5. **Redeploy.** New sign-ups, subscriptions, feedback and portal edits now
    persist across deploys and across serverless instances.
 
 Without `DATABASE_URL` the deploy still works, but data lives in a per-instance

@@ -422,12 +422,16 @@ describe('the self-billed invoice', () => {
       renewalPct: PRICING_CONFIG.partners.renewalPct,
       renewalMonths: 6,
       payout: { ...partner.terms.payout, chargesVat: true },
-      // Just after the opening row and BEFORE the payout is raised — the
-      // invoice honours the terms in force when it was raised, so a change
-      // dated after it would (correctly) not apply.
+      // Just after the opening row, which is the earliest `changeTerms` allows.
       effectiveFrom: new Date(Date.now() + 1).toISOString(),
       note: 'They registered for VAT.',
     })
+
+    // The invoice honours the terms in force WHEN THE PAYOUT WAS RAISED, so the
+    // payout has to be raised after they take effect. Waited for explicitly
+    // rather than assumed: an earlier version of this raced the millisecond and
+    // passed alone but failed in a full run.
+    await new Promise((resolve) => setTimeout(resolve, 25))
 
     await paidOrder(partner.codes[0].code)
     await confirmDue(new Date(Date.now() + 30 * 24 * 3600 * 1000))

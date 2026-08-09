@@ -16,6 +16,9 @@ export async function POST(req: Request) {
   res.cookies.set(PORTAL_COOKIE, result.token, {
     httpOnly: true,
     sameSite: 'lax',
+    // The session is the whole hub — never let it travel in clear. Off in dev so
+    // http://localhost still works.
+    secure: process.env.NODE_ENV === 'production',
     path: '/',
     maxAge: 60 * 60 * 12,
   })

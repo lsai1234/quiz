@@ -93,7 +93,7 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
         </button>
       </form>
 
-      <ProviderButtons providers={providers} returnTo="/hub" />
+      <ProviderButtons providers={providers} returnTo="/myhub" />
 
       <button
         type="button"

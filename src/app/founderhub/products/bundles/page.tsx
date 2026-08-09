@@ -83,7 +83,7 @@ export default function PortalBundlesPage() {
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Bundles</h2>
         <Link
-          href="/portal/products/bundles/new"
+          href="/founderhub/products/bundles/new"
           className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"
           style={{ fontFamily: 'var(--font-display)' }}
         >
@@ -151,7 +151,7 @@ export default function PortalBundlesPage() {
                     >
                       {bundle.published ? 'Unpublish' : 'Publish'}
                     </button>
-                    <Link href={`/portal/products/bundles/${bundle.slug}`} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Edit</Link>
+                    <Link href={`/founderhub/products/bundles/${bundle.slug}`} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Edit</Link>
                     <Link href={`/bundles/${bundle.slug}`} target="_blank" className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Preview ↗</Link>
                     <button onClick={() => duplicate(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Duplicate</button>
                     <button onClick={() => setExpanded(isOpen ? null : bundle.slug)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>{isOpen ? 'Hide checks' : 'Checks'}</button>

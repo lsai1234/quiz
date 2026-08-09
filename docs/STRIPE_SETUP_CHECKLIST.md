@@ -73,7 +73,7 @@ charged and your app never notices.*
 
 ☐ **2.7** — Stripe → **Developers** → **Webhooks** → **Add endpoint**
 
-☐ **2.8** — URL: `https://YOUR-DOMAIN.com/api/webhooks/stripe`
+☐ **2.8** — URL: `https://getchrgd.co.uk/api/webhooks/stripe`
 (swap in your real domain)
 
 ☐ **2.9** — Tick these **seven** events. All of them:
@@ -106,7 +106,7 @@ generator, 30+ characters. This just stops strangers triggering your daily job.
 | `PAYMENTS_SOURCE` | `stripe` |
 | `STRIPE_SECRET_KEY` | The `sk_test_...` key from 2.2 |
 | `STRIPE_WEBHOOK_SECRET` | The `whsec_...` secret from 2.10 |
-| `APP_URL` | `https://YOUR-DOMAIN.com` |
+| `APP_URL` | `https://getchrgd.co.uk` |
 | `CRON_SECRET` | The random password from 3.1 |
 
 ☐ **3.3** — **Redeploy.** Vercel → **Deployments** → the top one → **⋯** →
@@ -122,7 +122,7 @@ generator, 30+ characters. This just stops strangers triggering your daily job.
 *~2 minutes. Two checks. Both should pass before you try buying anything.*
 
 ☐ **4.1** — Visit this in your browser:
-`https://YOUR-DOMAIN.com/api/config`
+`https://getchrgd.co.uk/api/config`
 
 Look for **`"paymentsLive": true`**.
 

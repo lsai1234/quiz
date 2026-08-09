@@ -138,11 +138,16 @@ describe('applyBlueprintAIResultWithinBudget gates swaps to the cap', () => {
     const out = applyBlueprintAIResultWithinBudget(blueprint, result, MOCK_CATALOGUE, 80, config)
     const total = calculatePricing(out, MOCK_CATALOGUE).oneOffTotal
     expect(total).toBeLessThanOrEqual(80 + 0.01)
-    // Reason is always applied even if the swap was reverted.
-    expect(out.slots[0].reason).toBe('AI reason')
+    // The reason belongs to the product the AI picked, so it only lands if that
+    // pick survived the cap.
+    if (out.slots[0].selectedProductId === alt.id) {
+      expect(out.slots[0].reason).toBe('AI reason')
+    } else {
+      expect(out.slots[0].reason).toBe(slot.reason)
+    }
   })
 
-  it('reverts a swap that would exceed the cap but still applies the reason', () => {
+  it('reverts a swap that would exceed the cap, and drops its reason too', () => {
     const answers = makeAnswers({ budget: 'under-30' })
     const blueprint = buildStackBlueprint(answers, MOCK_CATALOGUE)
     const slot = blueprint.slots[0]
@@ -156,9 +161,15 @@ describe('applyBlueprintAIResultWithinBudget gates swaps to the cap', () => {
     const out = applyBlueprintAIResultWithinBudget(blueprint, result, MOCK_CATALOGUE, 30, config)
     const total = calculatePricing(out, MOCK_CATALOGUE).oneOffTotal
     expect(total).toBeLessThanOrEqual(30 + 0.01)
-    // If the dearest product would have busted the cap, the original is kept.
-    if (dearest.basePrice > 30) expect(out.slots[0].selectedProductId).toBe(before)
-    expect(out.slots[0].reason).toBe('Premium pick')
+    // If the dearest product would have busted the cap, the original is kept —
+    // and so is the engine's own reason for it. Keeping "Premium pick" here
+    // would caption the affordable product with the case for the dear one.
+    if (dearest.basePrice > 30) {
+      expect(out.slots[0].selectedProductId).toBe(before)
+      expect(out.slots[0].reason).toBe(slot.reason)
+    } else {
+      expect(out.slots[0].reason).toBe('Premium pick')
+    }
   })
 
   it('with no cap (top tier) applies the swap unconditionally', () => {

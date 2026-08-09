@@ -25,7 +25,7 @@ export async function POST(req: Request) {
   const origin = process.env.APP_URL || req.headers.get('origin') || new URL(req.url).origin
   try {
     const { createBillingPortalSession } = await import('@/lib/payments/stripe')
-    const { url } = await createBillingPortalSession(sub.stripeCustomerId, `${origin}/hub`)
+    const { url } = await createBillingPortalSession(sub.stripeCustomerId, `${origin}/myhub`)
     return NextResponse.json({ url })
   } catch (err) {
     console.error('[billing-portal] failed:', err)

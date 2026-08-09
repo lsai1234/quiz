@@ -53,7 +53,7 @@ export function SubscriptionsPage() {
           {data.subscriptions.map((s) => (
             <Link
               key={s.userId}
-              href={`/portal/commerce/subscriptions/${s.userId}`}
+              href={`/founderhub/commerce/subscriptions/${s.userId}`}
               className="block rounded-2xl border p-4 transition-colors hover:border-[var(--color-border-2)]"
               style={{
                 background: 'var(--color-surface)',

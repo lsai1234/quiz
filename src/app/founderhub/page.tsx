@@ -90,7 +90,7 @@ export default function HubDashboard() {
 
       {/* ── Orders ────────────────────────────────────────────────────────── */}
       <section>
-        <SectionTitle href="/portal/commerce/queue">Orders</SectionTitle>
+        <SectionTitle href="/founderhub/commerce/queue">Orders</SectionTitle>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <Tile n={orders.today} label="Raised today" colour="var(--color-text)" />
           <Tile n={orders.awaitingReview} label="Awaiting review" colour={orders.awaitingReview > 0 ? AMBER : 'var(--color-muted)'} />
@@ -106,7 +106,7 @@ export default function HubDashboard() {
 
       {/* ── Money ─────────────────────────────────────────────────────────── */}
       <section>
-        <SectionTitle href="/portal/commerce/financials">This month</SectionTitle>
+        <SectionTitle href="/founderhub/commerce/financials">This month</SectionTitle>
         <MonthCard w={summary.month} />
         <div className="grid grid-cols-2 gap-3 mt-3">
           <SmallWindow label="Last 24 hours" w={summary.today} />
@@ -116,7 +116,7 @@ export default function HubDashboard() {
 
       {/* ── Subscriptions ─────────────────────────────────────────────────── */}
       <section>
-        <SectionTitle href="/portal/commerce/subscriptions">Subscriptions</SectionTitle>
+        <SectionTitle href="/founderhub/commerce/subscriptions">Subscriptions</SectionTitle>
         <div className="grid grid-cols-3 gap-3">
           <Tile n={subscriptions.active} label="Active members" colour="var(--color-text)" />
           <Tile n={money(subscriptions.mrr)} label="Per month" colour={ACCENT} />

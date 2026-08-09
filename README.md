@@ -11,6 +11,22 @@ npm run dev
 
 Open http://localhost:3000 on mobile or in DevTools mobile view (360px+).
 
+## Routes
+
+Production lives on the apex domain **https://getchrgd.co.uk**.
+
+| Path | What it is |
+|---|---|
+| `/` | The quiz — the front door |
+| `/shop` | The shop |
+| `/bundles/[slug]` | Bundle landing pages |
+| `/myhub` | Customers' subscription hub (sign-in required) |
+| `/founderhub` | Founders Hub — the business (founder password required) |
+
+`/hub` and `/portal` are the old names for the last two and redirect. Moving the
+site to a new domain, or changing these paths, touches Stripe, every OAuth
+provider and Cloudflare DNS — the runbook is `docs/DOMAIN_SETUP.md`.
+
 ## Mock mode
 
 Works out of the box — no API keys needed. All 8 builder stages run with realistic CHRGD example data.
