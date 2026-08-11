@@ -113,6 +113,10 @@ Read PowerBody for real; sell nothing yet.
       founder-edited is overwritten
 - [ ] **B10** Settings → Data source → **real** → the shop now serves only imported
       products, and the quiz recommends from them
+- [ ] **B11** `GET /api/portal/supplier/shipping-methods` → how many delivery services this
+      account actually has. One (or an "not callable" error) means their published card is
+      the whole story; two or more means real speed options are possible and
+      `transport_code` is worth wiring up.
 
 ---
 
@@ -138,6 +142,8 @@ a test-mode endpoint at `/api/webhooks/stripe` with `STRIPE_WEBHOOK_SECRET`.
       `pending_payment` forever: `checkout.session.expired` fails it, and the daily sweep
       catches any whose webhook never arrived
 - [ ] **C1.9** Decline card `4000 0000 0000 9995` → no order is marked paid
+- [ ] **C1.10** Delivery is charged and consistent end to end — see the delivery section
+      below, which is worth walking as its own pass.
 
 ### C2 · Subscriptions
 
@@ -264,23 +270,37 @@ One order. Do this on a day you can watch it.
 
 ---
 
-## Known gaps — decide before phase C
+## Delivery — what to check
 
-**Delivery is never charged.** The basket and the plan receipt both say "spend £X more for
-free delivery", implying postage is charged below the £60 threshold. No checkout path
-charges it: `/api/cart` sets no shipping, and the Stripe sessions carry no `shipping_options`.
-The unit-economics model in the hub *does* assume `customerDeliveryCharge` is collected on
-sub-£60 orders, so **margin on those orders is currently overstated** by that amount.
+Delivery is now **charged**, on a ladder that mirrors PowerBody's own (see
+`docs/PRICING_GUIDE.md` §2). Worth its own pass, because it touches every journey:
 
-Two honest ways out, and it is a pricing decision rather than a bug fix:
-
-1. **Charge it** — add a shipping line to both Stripe sessions and to the order, so
-   `shipping_price` on the PowerBody invoice is real too; or
-2. **Stop promising it** — drop the free-delivery messaging and set
-   `customerDeliveryCharge` to 0 so the margin model tells the truth.
-
-Worth settling before C1, because it changes what every test order should total.
+- [ ] **D.1** £30 basket → £4.95 delivery, shown in the basket *before* Stripe
+- [ ] **D.2** £60 basket → £2.95
+- [ ] **D.3** £120 basket → free, and the basket says so
+- [ ] **D.4** The number in the basket matches the number on the Stripe page matches
+      `order.shipping` in Commerce → Orders. All three came from different places before.
+- [ ] **D.5** Two options appear at Stripe: **UK mainland** and **Highlands, Islands &
+      Isle of Man** (+£2.95). Both appear even on a free-delivery basket, because Zone 2
+      never ships free.
+- [ ] **D.6** Pick **mainland** and give an `IV1 1AA` address → the fulfilment queue shows
+      "£2.95 short on postage". Stripe fixes its options before it knows the postcode, so
+      this flag is the check on a self-selected zone.
+- [ ] **D.7** Subscription checkout charges delivery too, and it **recurs** — check the
+      second invoice on a test clock carries it, since a box ships every cycle
+- [ ] **D.8** `order.shipping` reaches PowerBody as `shipping_price` on the picking list
+      (phase D7)
 
 **Weight.** PowerBody publish no weight in their API, so orders are sent without one and
-they weigh the parcel. Delivery cost in the margin model falls back to 1kg per product. If
-their invoices come back showing a different band to what the hub predicted, this is why.
+they weigh the parcel. Their *live* card bands on what we spend with them, not on weight,
+so this does not affect what anyone is charged — only the margin model's delivery estimate,
+which falls back to 1kg per product.
+
+**Worth confirming with Kasia:** the June 2026 PDF still quotes weight bands (£3.25–£5.17)
+and says free delivery is not available to dropshippers, which contradicts the value bands
+and free tiers the account actually shows. Every number in the ladder above is built on the
+account's card. If the PDF is the live truth, the ladder needs re-cutting.
+
+**Different delivery speeds** need PowerBody to sell more than one service. Run
+`GET /api/portal/supplier/shipping-methods` once API access lands (phase B) — until it
+returns two, delivery options can only be prices we set, not speeds we buy.

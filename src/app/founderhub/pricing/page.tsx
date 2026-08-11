@@ -9,6 +9,8 @@ import { checkLadder } from '@/lib/pricing/ladder'
 import { CutOffs } from '@/components/portal/pricing/CutOffs'
 import { LadderPanel } from '@/components/portal/pricing/LadderPanel'
 import { RateCard } from '@/components/portal/pricing/RateCard'
+import { CustomerRates } from '@/components/portal/pricing/CustomerRates'
+import { deriveFreeDeliveryThreshold } from '@/lib/pricing/delivery'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
@@ -217,10 +219,21 @@ export default function PricingPage() {
 
           <Section title="Delivery" desc="Two different numbers: what PowerBody charge US (banded on our spend in the box) and what we charge the MEMBER (banded on their basket).">
             <RateCard config={draft} supplierValue={assetPrice * parcelItems} onChange={(services: DeliveryService[]) => setNested('delivery', { services })} />
+            <div className="mt-4">
+              <CustomerRates
+                config={draft}
+                orderValue={assetPrice * parcelItems * 2}
+                onChange={(customerRates) => {
+                  // The advertised threshold is derived from the ladder that
+                  // actually charges, so editing one cannot leave the other
+                  // promising free delivery the checkout then bills for.
+                  setNested('delivery', { customerRates })
+                  set({ freeDeliveryThreshold: deriveFreeDeliveryThreshold({ ...draft, delivery: { ...draft.delivery, customerRates } }) })
+                }}
+                onSurchargeChange={(zone2Surcharge) => setNested('delivery', { zone2Surcharge })}
+              />
+            </div>
             <div className="mt-3">
-              <Num label="We charge the member" value={draft.delivery.customerDeliveryCharge} suffix="£" onChange={(n) => setNested('delivery', { customerDeliveryCharge: n })} help="On orders below our own free threshold." />
-              <Num label="Our free delivery above" value={draft.freeDeliveryThreshold} suffix="£" onChange={(n) => set({ freeDeliveryThreshold: n })}
-                help="On the basket SUBTOTAL, before any discount — so a basket can't lose the perk by earning a discount. Nothing to do with PowerBody's thresholds, which sit on our wholesale spend." />
               <Num label="Orders to the Highlands & Islands" value={pct(draft.delivery.zone2SharePct)} suffix="%" onChange={(n) => setNested('delivery', { zone2SharePct: n / 100 })}
                 help="Used to blend one honest delivery cost rather than pricing everything at the mainland or the worst rate." />
               <Num label="Assumed weight when unset" value={draft.delivery.defaultProductGrams} suffix="g" onChange={(n) => setNested('delivery', { defaultProductGrams: n })} help="PowerBody's order call needs a weight even though they don't price on it." />

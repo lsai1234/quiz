@@ -7,6 +7,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import type { StackLevel } from '@/lib/types'
 import { ProductTile } from './ProductTile'
+import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 
 const LEVEL_LABEL: Record<StackLevel, string> = { essentials: 'Essentials', performance: 'Performance', complete: 'Complete' }
 
@@ -104,6 +105,7 @@ export function PlanReceipt({
   const deliveryBasis = isSub ? subscriptionTotal : oneOffSubtotal
   const freeDelivery = qualifiesForFreeDelivery(deliveryBasis, config)
   const freeDeliveryRemaining = Math.max(0, Math.round((config.freeDeliveryThreshold - deliveryBasis) * 100) / 100)
+  const deliveryCharge = customerDeliveryCharge(deliveryBasis, 'uk-1', config)
 
   const subTabLabel = canSubscribe
     ? `${formatGBP(subscriptionTotal)}/mo`
@@ -289,7 +291,10 @@ export function PlanReceipt({
                 Free delivery included
               </>
             ) : (
-              `Spend ${formatGBP(freeDeliveryRemaining)} more for free delivery`
+              // Names the charge as well as the gap. Saying only how far off free
+              // delivery is, while the basket adds nothing for postage, made the
+              // Stripe page the first place a delivery line appeared.
+              `+${formatGBP(deliveryCharge)} delivery · spend ${formatGBP(freeDeliveryRemaining)} more for free`
             )}
           </div>
         )}

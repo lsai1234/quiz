@@ -8,6 +8,7 @@ import { syncPortalRuntime } from '@/lib/portal/store'
 import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
+import { deliveryOptions } from '@/lib/pricing/delivery'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
 
@@ -171,6 +172,21 @@ export async function POST(req: Request) {
   // have none, and Stripe creates one for them.
   const stripeCustomerId = user ? (await getSubscription(user.id))?.stripeCustomerId ?? null : null
 
+  /**
+   * Delivery, charged rather than quietly absorbed.
+   *
+   * The basket has been telling people "spend £X more for free delivery" since
+   * it was built, while no checkout path ever added a shipping line — so every
+   * order shipped free and the margin model, which assumes postage is collected
+   * below the free line, was overstating every sub-threshold order by the whole
+   * parcel. `deliveryOptions` bands it on the retail total, the same number the
+   * basket shows.
+   */
+  const options = deliveryOptions(priced.total, config)
+  // What we book against the order up front. Stripe's real figure — including a
+  // Highlands surcharge if they pick it — replaces this on the webhook.
+  const mainlandCharge = options[0]?.price ?? 0
+
   // ── Stripe ──
   if (getPaymentSource() === 'stripe') {
     const orderId = newOrderId()
@@ -179,6 +195,7 @@ export async function POST(req: Request) {
       status: 'pending_payment',
       channel,
       lines: orderLines,
+      shipping: mainlandCharge,
       userId: user?.id ?? null,
       email: user?.email ?? null,
       partnerCode: redemption?.ok ? redemption.code.code : null,
@@ -204,6 +221,7 @@ export async function POST(req: Request) {
         successUrl: `${origin}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${origin}/shop?checkout=cancelled`,
         metadata: { orderId, channel },
+        shippingOptions: options,
       })
       if (!url) return NextResponse.json({ error: 'Stripe did not return a checkout URL.' }, { status: 502 })
       return NextResponse.json({ checkoutUrl: url, orderId })
@@ -221,6 +239,8 @@ export async function POST(req: Request) {
     userId: user?.id ?? null,
     email: user?.email ?? null,
     status: 'paid',
+    // Mock mode has no Stripe to pick a rate, so it books the mainland one.
+    shipping: mainlandCharge,
     partnerCode: redemption?.ok ? redemption.code.code : null,
     partnerDiscountPct: redemption?.ok ? redemption.discountPct : null,
   })

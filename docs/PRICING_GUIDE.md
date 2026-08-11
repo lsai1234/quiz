@@ -130,21 +130,49 @@ instead of landing every month.
 > what the account actually shows. **Worth confirming with PowerBody**, because
 > the small-order cost doubled and the large-order cost went to zero.
 
-### Our free delivery is a different thing
+### What we charge the member — a second ladder
 
-We give the customer free delivery over £50 **of our retail prices**. PowerBody's
-thresholds are on **their wholesale values**. Different numbers, different
-bases — they are not related, and crossing them is how a margin model starts
-believing postage is free.
+PowerBody's ladder bands on **their wholesale values**; ours bands on **our
+retail total**. Different numbers, different bases, and crossing them is how a
+margin model starts believing postage is free.
 
-Under our £50 line the customer pays £3.95 — which covers **about half** of what
-a small parcel actually costs us (£7.87, because we can't reclaim the VAT
-PowerBody charge). So we lose ~£3.92 on postage even on the orders where we
-charge for it. Over the £50 line we collect nothing and pay the whole £7.87.
+So there are two ladders, deliberately shaped to line up
+(`delivery.customerRates`, editable on the Pricing page beside the supplier one):
 
-Both are marketing costs rather than fulfilment ones, and both are bigger than
-they look. Worth a decision: raise the charge towards £5.95–£6.95, or accept it
-as a loss-leader that pulls basket size up. See `docs/PRICING_EXAMPLES.md` §7.
+| Basket (retail) | Member pays | Costs us (Zone 1) | We absorb |
+|---|---|---|---|
+| under £40 | £4.95 | £7.80 | £2.85 |
+| £40–£99 | £2.95 | £7.80 | £4.85 |
+| £100–£198 | free | £6.60 | £6.60 |
+| £198+ | free | £0.00 | £0.00 |
+
+Plus a **£2.95 Highlands & Islands surcharge**, applied on every band including
+the free one — PowerBody's Zone 2 free line is £300 of wholesale (roughly a £600
+basket), so our cost genuinely never goes away up there.
+
+**Why the free line sits at £100 and not lower.** It used to be £60, while our
+own cost did not step down until ~£100 of retail and did not vanish until ~£198.
+Every order in between shipped free and cost us the full £7.80 — the single worst
+basket in the business was one that had just *earned* free delivery. The free
+line now sits where their band steps down, so the point we stop charging is the
+point it starts costing us less. `customer-rates.test.ts` pins that alignment.
+
+What we still carry between £100 and £198 is a deliberate, bounded absorption:
+delivery is a cost recovery, not a product, and a ladder that fully recovered
+postage would price the small baskets out. The tests also assert we never collect
+*more* than the parcel costs — if that ever needs to change it is a margin
+decision worth saying out loud rather than hiding in a postage line.
+
+**At checkout**, Stripe fixes its shipping options when the session is created —
+before the customer has typed an address — so a rate cannot react to their
+postcode. They pick mainland or Highlands themselves, and the fulfilment queue
+flags a mainland rate paid on a Highlands postcode (`deliveryShortfall`) rather
+than trusting the pick.
+
+**Different speeds** would need PowerBody to sell more than one service. Their
+rate card reads as one per zone; `GET /api/portal/supplier/shipping-methods`
+asks their `getShippingMethod` directly, and until it returns two, delivery
+options can only be prices we set.
 
 ---
 

@@ -7,6 +7,7 @@ import type { ResolvedBasketLine } from '@/lib/basket/types'
 import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
+import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
 
@@ -56,6 +57,10 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
   const threshold = config.freeDeliveryThreshold
   const freeDelivery = qualifiesForFreeDelivery(subtotal, config)
   const remaining = Math.max(0, Math.round((threshold - subtotal) * 100) / 100)
+  // The mainland rate — the one all but ~4% of baskets pay, and the one Stripe
+  // will show as the default choice. A Highlands address picks the surcharged
+  // option there.
+  const deliveryCharge = customerDeliveryCharge(subtotal, 'uk-1', config)
   const progress = threshold > 0 ? Math.min(1, subtotal / threshold) : 1
   const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
 
@@ -129,6 +134,15 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                     <span className="text-[11px] font-semibold" style={{ color: freeDelivery ? ACCENT : 'var(--color-text-2)' }}>
                       {freeDelivery ? '✓ Free delivery unlocked' : `${formatGBP(remaining)} away from free delivery`}
                     </span>
+                    {/* What postage actually costs on this basket. It used to say
+                        only how far off free delivery was, while charging nothing
+                        either way — so the first time anyone saw a delivery line
+                        was on Stripe's page. */}
+                    {!freeDelivery && (
+                      <span className="text-[11px] font-semibold" style={{ color: 'var(--color-muted)' }}>
+                        +{formatGBP(deliveryCharge)} delivery
+                      </span>
+                    )}
                   </div>
                   <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-surface-2)' }}>
                     <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: ACCENT, transition: reduced ? 'none' : 'width 0.4s ease' }} />

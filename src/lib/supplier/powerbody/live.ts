@@ -30,6 +30,7 @@ import type {
   SupplierOrder,
   SupplierOrderInput,
   SupplierOrderResult,
+  SupplierShippingMethod,
   SupplierProduct,
   SupplierProvider,
   SupplierStockLevel,
@@ -440,6 +441,36 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       return items
         .map((item) => toStockLevel(item, updatedAt))
         .filter((level) => level.sku !== '' && (!wanted || wanted.has(level.sku)))
+    },
+
+    /**
+     * Ask what delivery services this account has.
+     *
+     * Their guide documents the call and not its reply, so the shape is read
+     * defensively: an array of rows, an object keyed by code, or an empty
+     * answer, which is what an account with a single service looks like.
+     */
+    async shippingMethods(): Promise<SupplierShippingMethod[]> {
+      const reply = await client.call<unknown>('dropshipping.getShippingMethod', '')
+      const rows: unknown[] = Array.isArray(reply)
+        ? reply
+        : reply && typeof reply === 'object'
+          ? Object.entries(reply as Record<string, unknown>).map(([code, value]) =>
+              value && typeof value === 'object' ? { code, ...(value as object) } : { code, name: String(value) },
+            )
+          : []
+      return rows.flatMap((row) => {
+        if (!row || typeof row !== 'object') return []
+        const r = row as Record<string, unknown>
+        const code = String(r.code ?? r.transport_code ?? r.id ?? '').trim()
+        if (!code) return []
+        const price = r.price ?? r.cost ?? null
+        return [{
+          code,
+          name: String(r.name ?? r.title ?? r.label ?? code),
+          price: price == null || price === '' ? null : Number(price) || 0,
+        }]
+      })
     },
 
     async placeOrder(order: SupplierOrderInput): Promise<SupplierOrderResult> {

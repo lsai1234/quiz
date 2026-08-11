@@ -225,6 +225,8 @@ export async function markOrderPaid(
     stripePaymentIntentId?: string
     email?: string | null
     shippingAddress?: SupplierAddress | null
+    /** What they chose to pay for delivery, when the processor collected it. */
+    shipping?: number
   },
 ): Promise<Order | null> {
   let becamePaid = false
@@ -232,6 +234,13 @@ export async function markOrderPaid(
     if (o.status !== 'pending_payment') return // idempotent — already progressed
     becamePaid = true
     o.status = 'paid'
+    if (payment.shipping != null) {
+      // The delivery rate they picked, which the order could not know before the
+      // session existed. Re-derive the total rather than leaving it at the
+      // figure we guessed with.
+      o.shipping = round(payment.shipping)
+      o.total = round(o.subtotal + o.shipping)
+    }
     if (payment.stripeSessionId) o.stripeSessionId = payment.stripeSessionId
     if (payment.stripePaymentIntentId) o.stripePaymentIntentId = payment.stripePaymentIntentId
     if (payment.email && !o.email) o.email = payment.email

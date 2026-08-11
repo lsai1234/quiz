@@ -208,7 +208,16 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                         </div>
                         <p className="text-[11px] text-[var(--color-muted)] mt-0.5 truncate">
                           {o.email ?? 'guest'} · {o.itemCount} item{o.itemCount === 1 ? '' : 's'} · {new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          {o.deliveryZone === 'uk-2' && <span style={{ color: AMBER }}> · Highlands rate</span>}
+                          {o.deliveryZone === 'uk-2' && (
+                            <span style={{ color: AMBER }}>
+                              {' '}
+                              · Highlands rate
+                              {/* They picked their own zone at checkout, before Stripe knew
+                                  the postcode. This is where a mainland pick on a Highlands
+                                  address surfaces instead of vanishing into the margin. */}
+                              {o.deliveryShortfall != null && ` · ${money(o.deliveryShortfall, o.currency)} short on postage`}
+                            </span>
+                          )}
                           {o.supplierCost != null && ` · costs us ${money(o.supplierCost, o.currency)}`}
                         </p>
                         {blocked && <p className="text-[11px] mt-1" style={{ color: RED }}>Can&apos;t send — {blocked}.</p>}

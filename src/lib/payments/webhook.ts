@@ -117,6 +117,12 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         stripePaymentIntentId: paymentIntentId,
         email,
         shippingAddress: addressFromSession(session),
+        // What they ACTUALLY paid for delivery, including the Highlands rate if
+        // they picked it. The order was raised with the mainland figure because
+        // the session had to exist before they could choose.
+        shipping: session.shipping_cost?.amount_total != null
+          ? session.shipping_cost.amount_total / 100
+          : undefined,
       })
       return { handled: true, type: event.type, orderId }
     }

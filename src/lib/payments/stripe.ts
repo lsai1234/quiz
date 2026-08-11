@@ -7,6 +7,7 @@
  * catalogue server-side — the client's numbers are never trusted.
  */
 import Stripe from 'stripe'
+import type { DeliveryOption } from '@/lib/pricing/delivery'
 
 /**
  * Pinned deliberately. Left unset, Stripe applies whatever default version the
@@ -70,6 +71,32 @@ export interface CreateSessionOptions {
   successUrl: string
   cancelUrl: string
   metadata?: Record<string, string>
+  /**
+   * Delivery choices to show. Fixed when the session is created — Stripe cannot
+   * vary a rate by the address the customer is about to type — so the customer
+   * picks their zone and the fulfilment queue checks the pick against their
+   * postcode. See `deliveryOptions`.
+   */
+  shippingOptions?: DeliveryOption[]
+}
+
+/** Delivery choices as Stripe's `shipping_options`, or undefined when there are
+ *  none to offer (which leaves the session with no shipping line at all). */
+function shippingOptionsFor(
+  options: DeliveryOption[] | undefined,
+  currency: string,
+): Stripe.Checkout.SessionCreateParams.ShippingOption[] | undefined {
+  if (!options || options.length === 0) return undefined
+  return options.map((option) => ({
+    shipping_rate_data: {
+      type: 'fixed_amount',
+      // The id rides along in the display name so the webhook can map the
+      // customer's choice back to a zone without a second Stripe lookup.
+      display_name: option.label,
+      fixed_amount: { amount: Math.round(option.price * 100), currency },
+      metadata: { optionId: option.id, zone: option.zone },
+    },
+  }))
 }
 
 /** Create a one-off Checkout Session and return its hosted URL. Guest-friendly:
@@ -91,6 +118,7 @@ export async function createCheckoutSession(opts: CreateSessionOptions): Promise
     ...customerFields(opts),
     // Collect a delivery address so the order can be dropshipped by the supplier.
     shipping_address_collection: { allowed_countries: ['GB'] },
+    shipping_options: shippingOptionsFor(opts.shippingOptions, currency),
     phone_number_collection: { enabled: true },
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
@@ -117,6 +145,8 @@ export interface CreateSubscriptionSessionOptions {
    * bills at `monthlyTotal`. Omit or 0 for no intro.
    */
   introDiscountRate?: number
+  /** Delivery choices — see `CreateSessionOptions.shippingOptions`. */
+  shippingOptions?: DeliveryOption[]
 }
 
 /**
@@ -191,9 +221,14 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
     discounts: coupon ? [{ coupon }] : undefined,
     // A subscription ships a physical box every month, so it needs a delivery
     // address just as much as a one-off does. Without this the webhook has no
-    // address to put on the order and `submitOrderToSupplier` falls through to
-    // its blank-address placeholder — i.e. every box dropshipped to nowhere.
+    // address to put on the order, and `submitOrderToSupplier` now refuses an
+    // order that has none — i.e. every box stuck in the queue, undeliverable.
     shipping_address_collection: { allowed_countries: ['GB'] },
+    // Delivery RECURS on a subscription, because a box ships every cycle. That
+    // matches what the margin model already assumes: a plan under the free line
+    // collects postage like any other order (see `lib/pricing/thresholds.ts`),
+    // and the flat monthly total is the goods alone.
+    shipping_options: shippingOptionsFor(opts.shippingOptions, currency),
     phone_number_collection: { enabled: true },
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,

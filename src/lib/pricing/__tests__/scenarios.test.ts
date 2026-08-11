@@ -4,6 +4,7 @@
 import { checkScenarios } from '../scenarios'
 import { unitEconomics } from '../unit-economics'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
 
@@ -106,7 +107,7 @@ describe('the scenario check', () => {
     const onWorth = unitEconomics({ shelfPrice: oneOff.paid, ...shared, freeDeliveryBasis: listPrice }, c)
     const onDiscounted = unitEconomics({ shelfPrice: oneOff.paid, ...shared }, c)
     expect(onWorth.deliveryCharged).toBe(0)
-    expect(onDiscounted.deliveryCharged).toBe(c.delivery.customerDeliveryCharge)
+    expect(onDiscounted.deliveryCharged).toBe(customerDeliveryCharge(oneOff.paid, c.delivery.defaultZone, c))
   })
 
   it('keeps more when the box is shared between more products', () => {

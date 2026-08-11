@@ -21,6 +21,7 @@ import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { clampRate, firstMonthRate, getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
 import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
+import { deliveryOptions } from '@/lib/pricing/delivery'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
 import { consentErrorMessage, recordConsent, validateConsent } from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
@@ -207,6 +208,10 @@ export async function finalizeCheckout(
       successUrl: `${base}/order/confirmation?session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${base}/myhub`,
       metadata: { userId },
+      // Delivery on the monthly total, recurring with the box. The margin model
+      // already assumes a plan under the free line collects postage like any
+      // other order; until now nothing actually collected it.
+      shippingOptions: deliveryOptions(subscription.flatMonthly, getPricingConfig()),
     })
     if (url) return { checkoutUrl: url, mock: false }
     // No URL back — fall through to the mock confirmation rather than dead-ending.

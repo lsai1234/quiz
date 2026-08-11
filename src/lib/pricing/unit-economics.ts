@@ -27,7 +27,7 @@
  * Pure. Every function takes its config, so the hub previews unsaved rules.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { blendedDeliveryCost, customerDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
+import { blendedDeliveryCost, customerDeliveryCharge, entryDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
 import { costFromSupplierPrice, revenueFromShelfPrice, vatRateFor } from './vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -142,7 +142,7 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
   const deliveryCharged =
     input.chargeDelivery === false
       ? 0
-      : customerDeliveryCharge(input.freeDeliveryBasis ?? shelfPrice, config)
+      : customerDeliveryCharge(input.freeDeliveryBasis ?? shelfPrice, config.delivery.defaultZone, config)
   const grossRevenue = round(shelfPrice + deliveryCharged)
   const netRevenue = round(
     revenueFromShelfPrice(shelfPrice, vatRate, config) +
@@ -346,7 +346,7 @@ export function priceForMargin(
     return false
   }
 
-  const charge = round(config.delivery.customerDeliveryCharge)
+  const charge = entryDeliveryCharge(config)
   const freeAbove = config.freeDeliveryThreshold
 
   const chooseBranch = (): number => {

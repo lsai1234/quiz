@@ -209,7 +209,14 @@ describe('what an attributed order actually costs us', () => {
     // subscription. What changed is the size of it: stacking put the deepest
     // rung at −£14.28, and there is no longer a deepest rung to be at — one
     // code, one rate, one figure.
-    expect(keeps(CODE) - commission(CODE)).toBeCloseTo(-6.02, 1)
+    //
+    // −£6.02 → −£3.12 when delivery started being charged. Nothing about the
+    // programme changed: this £90 box qualified for free delivery under the old
+    // £60 threshold, so we ate the whole £7.80 parcel; on the customer rate
+    // ladder it pays £2.95 and the free line sits at £100. The trade got £2.90
+    // cheaper per attributed order, which moves D2 in the safe direction — the
+    // pin is here so the next move gets looked at rather than absorbed.
+    expect(keeps(CODE) - commission(CODE)).toBeCloseTo(-3.12, 1)
 
     // Undiscounted and unattributed, the same box pays perfectly well — so the
     // cost is the programme's, not the product's.

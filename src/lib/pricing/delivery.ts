@@ -35,6 +35,7 @@
 import {
   getPricingConfig,
   type PricingConfig,
+  type CustomerDeliveryRate,
   type DeliveryZone,
   type DeliveryService,
 } from '@/lib/stack-blueprint/pricing'
@@ -191,11 +192,96 @@ export function toFreeShipping(
   return { threshold, shortfall: alreadyFree ? null : round(threshold - orderValue), alreadyFree, next }
 }
 
-export function customerDeliveryCharge(orderValue: number, config: PricingConfig = getPricingConfig()): number {
+/** The customer ladder, tightest ceiling first — the same first-fit reading as
+ *  `eligibleServices`, on retail money instead of wholesale. */
+function customerRates(config: PricingConfig): CustomerDeliveryRate[] {
+  return [...config.delivery.customerRates].sort(
+    (a, b) => (a.maxOrderValue ?? Infinity) - (b.maxOrderValue ?? Infinity),
+  )
+}
+
+/**
+ * The order total at or above which delivery is free — read off the ladder
+ * rather than stored beside it.
+ *
+ * `config.freeDeliveryThreshold` is what the storefront advertises and this is
+ * what checkout charges; they have to be the same number, and deriving one from
+ * the other is cheaper than trusting two fields to stay in step.
+ */
+export function deriveFreeDeliveryThreshold(config: PricingConfig = getPricingConfig()): number {
+  const rates = customerRates(config)
+  const free = rates.find((r) => r.price === 0)
+  if (!free) return 0 // every band is paid — no free-delivery offer at all
+  const lastPaid = rates.filter((r) => r.price > 0).pop()
+  return lastPaid?.maxOrderValue ?? 0
+}
+
+/** The entry rung — what the smallest order pays. The margin model solves a
+ *  shelf price against this, because a single item is the basket it is pricing. */
+export function entryDeliveryCharge(config: PricingConfig = getPricingConfig()): number {
+  return round(customerRates(config)[0]?.price ?? 0)
+}
+
+/**
+ * What the member is charged for delivery on an order of this size, to this zone.
+ *
+ * The Zone 2 surcharge applies to the free band too. That is not an oversight:
+ * PowerBody's Zone 2 free line is £300 of wholesale — roughly a £600 basket —
+ * so unlike the mainland, our cost never actually goes away up there.
+ */
+export function customerDeliveryCharge(
+  orderValue: number,
+  zone: DeliveryZone = getPricingConfig().delivery.defaultZone,
+  config: PricingConfig = getPricingConfig(),
+): number {
   if (orderValue <= 0) return 0
-  const { freeDeliveryThreshold } = config
-  if (freeDeliveryThreshold > 0 && orderValue >= freeDeliveryThreshold) return 0
-  return round(config.delivery.customerDeliveryCharge)
+  const band = customerRates(config).find((r) => r.maxOrderValue == null || orderValue < r.maxOrderValue)
+  const base = band?.price ?? 0
+  const surcharge = zone === 'uk-2' ? config.delivery.zone2Surcharge : 0
+  return round(base + surcharge)
+}
+
+/** One delivery choice as the customer sees it at checkout. */
+export interface DeliveryOption {
+  /** Stable id, echoed back by Stripe as the chosen shipping rate's name. */
+  id: 'uk-mainland' | 'uk-highlands'
+  zone: DeliveryZone
+  label: string
+  /** What they pay for it (£, inc VAT). */
+  price: number
+}
+
+/**
+ * The delivery choices to put in front of someone with a basket this size.
+ *
+ * Two, and only because of a Stripe constraint worth being explicit about:
+ * Checkout fixes its shipping options when the SESSION is created, which is
+ * before the customer has typed an address, so a rate cannot react to their
+ * postcode the way `quoteDelivery` can. Offering the mainland rate alone would
+ * silently undercharge every Highlands order; offering the surcharge to everyone
+ * would overcharge the 96%.
+ *
+ * So the customer self-selects, and `deliverability`/`zoneForPostcode` check the
+ * choice against the address they actually gave — the fulfilment queue flags a
+ * mainland rate paid on a Highlands postcode rather than trusting the pick. That
+ * is the same shape as the rest of the queue: collect, then verify before
+ * anything ships.
+ */
+export function deliveryOptions(orderValue: number, config: PricingConfig = getPricingConfig()): DeliveryOption[] {
+  return [
+    {
+      id: 'uk-mainland',
+      zone: 'uk-1',
+      label: 'UK mainland',
+      price: customerDeliveryCharge(orderValue, 'uk-1', config),
+    },
+    {
+      id: 'uk-highlands',
+      zone: 'uk-2',
+      label: 'Highlands, Islands & Isle of Man',
+      price: customerDeliveryCharge(orderValue, 'uk-2', config),
+    },
+  ]
 }
 
 /** Both sides of one shipment's delivery, and what it leaves us carrying. */
@@ -212,7 +298,7 @@ export function quoteDelivery(shipment: Shipment, config: PricingConfig = getPri
       supplierValue,
       supplierPriceExVat: 0,
       supplierCost: 0,
-      customerCharge: customerDeliveryCharge(shipment.orderValue ?? 0, config),
+      customerCharge: customerDeliveryCharge(shipment.orderValue ?? 0, zone, config),
       absorbed: 0,
       freeForCustomer: false,
       unavailableReason: fromPostcode.reason,
@@ -222,7 +308,7 @@ export function quoteDelivery(shipment: Shipment, config: PricingConfig = getPri
 
   const supplierPriceExVat = service?.price ?? 0
   const supplierCost = service ? costFromSupplierPrice(supplierPriceExVat, config) : 0
-  const customerCharge = customerDeliveryCharge(shipment.orderValue ?? 0, config)
+  const customerCharge = customerDeliveryCharge(shipment.orderValue ?? 0, zone, config)
 
   return {
     service,
@@ -320,7 +406,9 @@ export function freeDeliveryImpact(
   config: PricingConfig = getPricingConfig(),
 ): FreeDeliveryImpact {
   const supplierCost = blendedDeliveryCost(supplierValue, config)
-  const charge = round(config.delivery.customerDeliveryCharge)
+  // The entry rung — what a small order pays, which is the case this impact
+  // model is about: whether postage pays for itself on the baskets that carry it.
+  const charge = entryDeliveryCharge(config)
   const chargeNet = revenueFromShelfPrice(charge, config.vat.standardRate, config)
   return {
     threshold: config.freeDeliveryThreshold,

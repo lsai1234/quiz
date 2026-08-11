@@ -37,6 +37,27 @@ export interface DeliveryService {
   price: number
 }
 
+/**
+ * One rung of the ladder WE charge the member — the mirror image of
+ * `DeliveryService` above, and deliberately a separate shape.
+ *
+ * The two ladders band on different money and cannot be merged. The supplier's
+ * bands on our WHOLESALE spend (ex VAT); ours bands on the RETAIL total the
+ * member can actually see (inc VAT). At cost × 2 those are roughly a factor of
+ * two apart, which is exactly the sort of thing that gets conflated once and
+ * then quietly charges the wrong people.
+ *
+ * Read first-fit, tightest ceiling first, same as the supplier's — see
+ * `eligibleServices` for why cheapest-qualifying would be wrong.
+ */
+export interface CustomerDeliveryRate {
+  /** Upper bound of the band — the member's order total (£, inc VAT, at our
+   *  retail prices). null means "and above": the free band. */
+  maxOrderValue: number | null
+  /** What the member pays for delivery in this band (£, inc VAT). */
+  price: number
+}
+
 /** A volume/value discount tier. Qualifies when the order meets every set threshold. */
 export interface DiscountTier {
   id: string
@@ -200,8 +221,15 @@ export const PRICING_CONFIG = {
    * directions — ours is a marketing promise that costs us money; theirs is a
    * discount we don't qualify for. Crossing them is how a margin model quietly
    * starts believing postage is free.
+   *
+   * DERIVED, not independent: this must equal the ceiling of the last paid rung
+   * of `delivery.customerRates`, because that ladder is what checkout actually
+   * charges and this is what the storefront advertises. Two numbers that mean
+   * "free above here" are one edit away from disagreeing, and the way you find
+   * out is a basket that promises free delivery and then bills for it — so
+   * `deriveFreeDeliveryThreshold()` computes it and a test holds them together.
    */
-  freeDeliveryThreshold: 60,
+  freeDeliveryThreshold: 100,
 
   /**
    * VAT. The single biggest thing a UK retail margin gets wrong.
@@ -293,8 +321,43 @@ export const PRICING_CONFIG = {
     /** Share of orders going to a Highlands/Islands (Zone 2) address, 0–1.
      *  Used to blend a realistic average delivery cost. */
     zone2SharePct: 0.04,
-    /** What we charge a member for delivery below `freeDeliveryThreshold` (£, inc VAT). */
-    customerDeliveryCharge: 3.95,
+    /**
+     * What WE charge the member, as a ladder that mirrors the supplier's.
+     *
+     * A single charge with one free-delivery cliff was the shape before, and it
+     * put the cliff in the worst possible place: free delivery started at £60 of
+     * retail while our own cost did not drop until ~£100 of retail and did not
+     * vanish until ~£198. Every order in between shipped free and cost us the
+     * full £7.80 — the single worst basket in the business was one that had just
+     * earned free delivery.
+     *
+     * These rungs are lined up with the supplier's instead. The £100 free line
+     * is where their band steps down to £5.50, so the point we stop charging is
+     * the point it starts costing us less. What we still carry between £100 and
+     * ~£198 is a deliberate, bounded absorption rather than an accident of two
+     * thresholds having been set independently.
+     *
+     * Banded on the RETAIL total inc VAT — what the member sees in the basket.
+     */
+    customerRates: [
+      { maxOrderValue: 40, price: 4.95 },
+      { maxOrderValue: 100, price: 2.95 },
+      { maxOrderValue: null, price: 0 },
+    ] as CustomerDeliveryRate[],
+    /**
+     * Added to every Zone 2 order, free-delivery band included (£, inc VAT).
+     *
+     * The Highlands, Islands, Isle of Man and Scilly cost us £9.59 a parcel and
+     * — unlike the mainland — never reach a free band in practice: PowerBody's
+     * Zone 2 free line is £300 of WHOLESALE, roughly a £600 basket. Absorbing
+     * that silently made ~4% of orders the least profitable ones we take, and
+     * made them invisible by putting the cost in a blended average.
+     *
+     * It applies on top of the free band on purpose. "Free UK mainland delivery,
+     * Highlands & Islands surcharge applies" is the ordinary shape of this in UK
+     * retail, and it is honest: our cost genuinely does not fall there.
+     */
+    zone2Surcharge: 2.95,
     /** Assumed shipped weight when a product has none recorded (g). A 1kg tub
      *  plus packaging is the typical single-item supplement parcel. */
     defaultProductGrams: 1000,

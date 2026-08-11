@@ -12,6 +12,7 @@
  */
 import { reviewStateOf } from './service'
 import { deliverability } from '@/lib/pricing/zones'
+import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import type { Order, OrderReviewState } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -50,6 +51,18 @@ export interface QueueOrder {
   undeliverableReason: string | null
   /** Which zone the address falls in — Zone 2 costs us more to ship to. */
   deliveryZone: string | null
+  /**
+   * Set when they paid a mainland delivery rate and then gave a Highlands
+   * address (£, what is missing).
+   *
+   * Stripe fixes its shipping options when the SESSION is created, before the
+   * customer has typed an address, so the zone is self-selected and nothing
+   * stops someone picking the cheaper one. This is the check on that pick — the
+   * order is still perfectly sendable, it just cost us more than it collected,
+   * and a number on the screen is how that gets noticed rather than blended
+   * into a monthly margin figure.
+   */
+  deliveryShortfall: number | null
   review: OrderReviewState
   reviewNote: string | null
   createdAt: string
@@ -87,12 +100,28 @@ export interface FulfilmentQueue {
   total: number
 }
 
+/**
+ * What this order should have collected for delivery, minus what it did.
+ *
+ * Only ever reports a Zone 2 order that paid a Zone 1 rate. An order that
+ * overpaid is not a problem to flag, and an order with no address has bigger
+ * ones — both come back null.
+ */
+function shortfallOn(order: Order, zone: string | null): number | null {
+  if (zone !== 'uk-2') return null
+  const due = customerDeliveryCharge(order.subtotal, 'uk-2')
+  const paid = order.shipping ?? 0
+  const short = round(due - paid)
+  return short > 0 ? short : null
+}
+
 function toQueueOrder(order: Order): QueueOrder {
   const costKnown = order.lines.every((l) => l.supplierCost != null)
   const reach = order.shippingAddress ? deliverability(order.shippingAddress) : null
   return {
     undeliverableReason: reach?.excluded ? reach.reason : null,
     deliveryZone: reach?.zone ?? null,
+    deliveryShortfall: shortfallOn(order, reach?.zone ?? null),
     id: order.id,
     reference: order.reference ?? null,
     kind: queueKindOf(order),

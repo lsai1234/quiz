@@ -131,6 +131,16 @@ export interface SupplierOrderInput {
   comment?: string | null
 }
 
+/** A delivery service the supplier will accept on `createOrder`. */
+export interface SupplierShippingMethod {
+  /** Their `transport_code` — what `createOrder` takes. */
+  code: string
+  /** Their label for it, when they send one. */
+  name: string
+  /** What they charge for it, when the reply carries a price. */
+  price: number | null
+}
+
 export type SupplierOrderStatus =
   | 'received'
   | 'processing'
@@ -178,6 +188,20 @@ export interface SupplierProvider {
   sampleSkus(limit: number): Promise<string[]>
   /** Live stock + price. Pass SKUs to narrow it; omit for everything. */
   getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]>
+  /**
+   * The delivery services this account can ask for, if any.
+   *
+   * `createOrder` takes a `transport_code` and we send it empty, letting
+   * PowerBody choose — which is fine, and is why nothing depended on this. It
+   * exists to answer a question their guide does not: whether the account has
+   * more than one service to offer at all. Their rate card reads as one service
+   * per zone, so until this returns two, "delivery options" can only mean
+   * prices we set, not speeds we buy.
+   *
+   * Optional on the interface because the answer is diagnostic, not something
+   * the order path needs.
+   */
+  shippingMethods?(): Promise<SupplierShippingMethod[]>
   /** Place a dropship order (Phase 3 wires this to the orders domain). */
   placeOrder(order: SupplierOrderInput): Promise<SupplierOrderResult>
   getOrder(supplierOrderId: string): Promise<SupplierOrder | null>

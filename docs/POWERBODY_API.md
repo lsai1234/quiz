@@ -289,7 +289,7 @@ customer-facing document listing blank product names at £0.00.
 | `products[].name` | the order line's title + variant |
 | `products[].price` | what the customer actually paid per unit, after discounts |
 | `products[].tax` | the product's VAT rate as a **percentage** (ours is a fraction) |
-| `shipping_price` | `order.shipping` — what we charged for delivery |
+| `shipping_price` | `order.shipping` — what we charged for delivery (see below) |
 | `address.email` | the address's, falling back to the order's |
 | `comment` | our customer-facing reference, e.g. `CHRGD-7K4M2XQP` |
 
@@ -304,6 +304,13 @@ can fetch would fail the whole catalogue.
 
 `transport_code` is still sent empty, letting PowerBody choose the service — see
 "Not implemented" below.
+
+**`shipping_price` is a real number now.** Checkout charges delivery on a customer rate
+ladder (`delivery.customerRates`) that mirrors their supplier ladder, rather than promising
+free delivery and collecting nothing — see `docs/PRICING_GUIDE.md`. Stripe fixes its
+shipping options when the session is created, before it knows the postcode, so the customer
+self-selects mainland vs Highlands and the fulfilment queue flags a mainland rate paid on a
+Highlands address.
 
 ### Two guards in the domain, not the screen
 
@@ -448,8 +455,12 @@ Available in their API, no caller yet — add when there is a reason:
 - `updateOrder` — amend an order before it completes.
 - `getRefundOrders` — returns and refunds.
 - `insertComment` / `getComments` — message exchange on an order.
-- `getShippingMethod` — the transport code list. `createOrder` currently sends an empty
-  `transport_code`, letting PowerBody pick; wire this up if you need to choose a service.
+- `getShippingMethod` — wired as a **diagnostic only**:
+  `GET /api/portal/supplier/shipping-methods`. `createOrder` still sends an empty
+  `transport_code` and lets PowerBody pick. Run it once when API access lands: their
+  published rate card reads as one service per zone, and until this returns two,
+  customer-facing "delivery options" can only be prices we set, not speeds we buy. If it
+  does return two, wire the chosen code into `transport_code`.
 - `getPromoProductList` — promotional pricing (needs enabling by your account manager).
 
 ---

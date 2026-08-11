@@ -109,7 +109,9 @@ describe('the settings that enforce them', () => {
     expect(floor).toBeLessThan(PRICING_CONFIG.freeDeliveryThreshold)
     // Turn the customer charge off and the floor has to rise — proving the
     // charge is really being counted.
-    const absorbed = at('lifetime', cfg({ delivery: { ...PRICING_CONFIG.delivery, customerDeliveryCharge: 0 } })).value!
+    // Every rung free = we absorb the lot.
+    const freeLadder = PRICING_CONFIG.delivery.customerRates.map((r) => ({ ...r, price: 0 }))
+    const absorbed = at('lifetime', cfg({ delivery: { ...PRICING_CONFIG.delivery, customerRates: freeLadder } })).value!
     expect(absorbed).toBeGreaterThan(floor)
   })
 })
