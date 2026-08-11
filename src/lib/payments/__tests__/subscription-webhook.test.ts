@@ -60,6 +60,38 @@ describe('subscription webhook flow', () => {
     expect(order?.lines.length).toBeGreaterThan(0)
   })
 
+  // ── Event ordering ──────────────────────────────────────────────────────────
+  // Stripe does not promise the ORDER of events, only their delivery. The first
+  // invoice of a subscription and the checkout session that links it are emitted
+  // together, so the invoice can arrive first — before anything knows whose
+  // subscription it is.
+
+  it('asks for a retry when the first invoice beats the checkout session', async () => {
+    const user = await makeUserWithSub('race@example.com')
+    const subId = 'sub_stripe_race'
+
+    // Invoice first. Nothing can resolve it yet — and answering "handled" would
+    // retire the event for good, losing the member's first box silently.
+    const early = await handleStripeEvent(invoicePaidEvent(subId, 'in_race', 'subscription_create'))
+    expect(early).toMatchObject({ handled: false, retryable: true })
+    expect(await getOrder('ord_inv_in_race')).toBeNull()
+
+    // Stripe redelivers after the session has linked it, and the box is raised.
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    const retried = await handleStripeEvent(invoicePaidEvent(subId, 'in_race', 'subscription_create'))
+    expect(retried.handled).toBe(true)
+    expect((await getOrder('ord_inv_in_race'))?.channel).toBe('subscription')
+  })
+
+  it('does not ask for retries on a renewal for a subscription that is not ours', async () => {
+    // A first invoice we cannot place is a race worth waiting out. A RENEWAL for
+    // an unknown subscription is somebody else's, and retrying it for three days
+    // would be noise rather than recovery.
+    const outcome = await handleStripeEvent(invoicePaidEvent('sub_not_ours', 'in_foreign'))
+    expect(outcome).toMatchObject({ handled: false })
+    expect(outcome.retryable).toBeFalsy()
+  })
+
   it('is idempotent: a redelivered invoice.paid does not double-create the order', async () => {
     const user = await makeUserWithSub('sub2@example.com')
     const subId = 'sub_stripe_2'

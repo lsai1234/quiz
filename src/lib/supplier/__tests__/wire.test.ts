@@ -271,6 +271,43 @@ describe('PowerBody wire mapping', () => {
         { product_id: '', sku: 'PB-1', name: 'Whey 1kg', qty: 2, price: 39.99, currency: 'GBP', tax: 20 },
       ])
     })
+
+    it('takes the invoice fields off the order itself', () => {
+      // The order carries these now — nothing has to remember to pass a context
+      // for a real send, which is exactly what used to go wrong.
+      const payload = toCreateOrderPayload({
+        ...order,
+        shippingPrice: 3.9,
+        weightKg: 1.2,
+        comment: 'CHRGD-7K4M2XQP',
+        lines: [{ sku: 'PB-1', quantity: 2, name: 'Whey 1kg — Chocolate', unitPrice: 39.99, taxPercent: 20 }],
+      })
+      expect(payload.shipping_price).toBe(3.9)
+      expect(payload.weight).toBe(1.2)
+      expect(payload.comment).toBe('CHRGD-7K4M2XQP')
+      expect(payload.products[0]).toMatchObject({ name: 'Whey 1kg — Chocolate', price: 39.99, tax: 20 })
+    })
+
+    it('sends no weight at all when we do not know it', () => {
+      // Rather than a zero, which reads as a measured weightless parcel and puts
+      // it in the wrong delivery band. PowerBody publish no weight on either
+      // product call, so this is the normal case.
+      expect(toCreateOrderPayload(order).weight).toBe('')
+    })
+
+    it('carries the recipient email, for the courier verification code', () => {
+      const { address } = toCreateOrderPayload({
+        ...order,
+        shippingAddress: { ...order.shippingAddress, email: 'ada@example.com' },
+      })
+      expect(address.email).toBe('ada@example.com')
+    })
+
+    it('sends a country NAME in the name field, not the code twice over', () => {
+      const { address } = toCreateOrderPayload(order)
+      expect(address.country_name).toBe('United Kingdom')
+      expect(address.country_code).toBe('GB')
+    })
   })
 
   describe('readOrderAck', () => {

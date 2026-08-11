@@ -81,18 +81,21 @@ export function productReadiness(p: CatalogueProduct, opts: { live: boolean }): 
     detail: p.cost == null ? 'Using estimated cost' : undefined,
   })
 
-  // 5. Shippable — weight is load-bearing twice over. PowerBody charge delivery
-  // by weight BAND, so without it the margin is a guess; and their `createOrder`
-  // call takes a weight, so without it a live order can't be placed correctly.
-  // That second reason is why this fails rather than warns once we're live.
+  // 5. Shippable — weight moves the margin, because PowerBody charge delivery by
+  // weight BAND. It is a WARNING and never a failure, including when we are live:
+  // their API publishes no weight on `getProductList` or `getProductInfo`, so
+  // this is supplier information we have no way to fetch, and failing a product
+  // for it would fail the entire catalogue for something no one can fix from
+  // here. An order with an unknown weight is sent without one and PowerBody
+  // weigh the parcel; what we lose is the margin estimate, not the order.
+  const hasWeight = p.weightGrams != null && p.weightGrams > 0
   checks.push({
     id: 'shipping',
     label: 'Shipping weight set',
-    status: p.weightGrams != null && p.weightGrams > 0 ? 'ok' : opts.live ? 'fail' : 'warn',
-    detail:
-      p.weightGrams != null && p.weightGrams > 0
-        ? undefined
-        : `No weight — delivery cost estimated at ${config.delivery.defaultProductGrams}g`,
+    status: hasWeight ? 'ok' : 'warn',
+    detail: hasWeight
+      ? undefined
+      : `No weight from PowerBody — delivery costed at ${config.delivery.defaultProductGrams}g. Enter the real one in Review if you know it.`,
   })
 
   return { productId: p.id, overall: worst(checks.map((c) => c.status)), checks }

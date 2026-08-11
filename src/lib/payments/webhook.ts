@@ -54,6 +54,21 @@ export interface WebhookOutcome {
   type: string
   orderId?: string
   userId?: string
+  /**
+   * Set when the event is ours but arrived before the state it needs.
+   *
+   * Stripe does not promise event ORDER, and a subscription's first
+   * `invoice.paid` can land before the `checkout.session.completed` that links
+   * the Stripe subscription to a user. Answering 200 to that would drop the
+   * member's first box on the floor: nothing else ever raises it, and there is
+   * no error anywhere to notice. The route turns this into a 5xx so Stripe
+   * retries it, by which time the link exists.
+   *
+   * Only the FIRST invoice of a subscription sets it. A renewal for a
+   * subscription we have never heard of is genuinely not ours — retrying that
+   * for three days would be noise, not recovery.
+   */
+  retryable?: boolean
 }
 
 function idOf(ref: string | { id: string } | null | undefined): string | undefined {
@@ -114,10 +129,13 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
       }
       const stripeSubscriptionId = idOf(invoice.subscription)
       if (!stripeSubscriptionId) return { handled: false, type: event.type }
+      // The first invoice of a subscription is the one that races the checkout
+      // session — see `WebhookOutcome.retryable`.
+      const isFirstInvoice = invoice.billing_reason === 'subscription_create'
       const userId = await userIdForStripeSubscription(stripeSubscriptionId)
-      if (!userId) return { handled: false, type: event.type }
+      if (!userId) return { handled: false, type: event.type, retryable: isFirstInvoice }
       const sub = await getSubscription(userId)
-      if (!sub) return { handled: false, type: event.type }
+      if (!sub) return { handled: false, type: event.type, userId, retryable: isFirstInvoice }
 
       // Idempotency: the fulfilment order is keyed by invoice id, so its prior
       // existence is our record of having already processed this invoice. Check

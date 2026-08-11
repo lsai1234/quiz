@@ -252,10 +252,24 @@ export function toSupplierOrder(order: PbOrder, updatedAt = new Date().toISOStri
   }
 }
 
+/**
+ * ISO country codes → the name PowerBody print on the shipping document.
+ *
+ * Their block carries `country_name` AND `country_code` as separate fields, so
+ * sending "GB" for both puts a code where a courier label wants a country. Only
+ * the countries a UK dropshipping account can actually reach are listed; an
+ * unrecognised code falls back to itself, which is no worse than before.
+ */
+const COUNTRY_NAMES: Record<string, string> = {
+  GB: 'United Kingdom',
+  UK: 'United Kingdom',
+}
+
 /** Their address block. `name`/`surname` are separate fields, ours is one string. */
 function toPbAddress(address: SupplierAddress) {
   const trimmed = address.name.trim()
   const space = trimmed.indexOf(' ')
+  const code = address.country.trim().toUpperCase()
   return {
     name: space === -1 ? trimmed : trimmed.slice(0, space),
     // Their form requires a surname; a single-word name repeats rather than
@@ -267,10 +281,14 @@ function toPbAddress(address: SupplierAddress) {
     postcode: address.postcode,
     city: address.city,
     county: '',
-    country_name: address.country,
-    country_code: address.country,
+    country_name: COUNTRY_NAMES[code] ?? address.country,
+    country_code: code,
     phone: address.phone ?? '',
-    email: '',
+    // Their guide: a valid email OR phone is needed so couriers can send
+    // verification codes to the recipient. This used to be hard-coded empty,
+    // which left phone as the only channel and nothing at all for an order
+    // without one.
+    email: address.email ?? '',
   }
 }
 
@@ -297,26 +315,34 @@ export interface CreateOrderContext {
  */
 export function toCreateOrderPayload(order: SupplierOrderInput, context: CreateOrderContext = {}) {
   const detail = context.lineDetail ?? {}
+  // The order carries its own invoice fields now; `context` stays as the
+  // override for the things only a caller can know (a transport code, a fixed
+  // date in a test). Order first, context second, empty last.
+  const weightKg = order.weightKg ?? context.weightKg ?? null
   return {
     id: order.reference,
     status: 'pending',
     currency_rate: 1,
     transport_code: context.transportCode ?? '',
-    weight: context.weightKg ?? 0,
+    // Empty rather than 0 when we don't know it. Their API publishes no weight
+    // on either product call, so for most orders we genuinely have none — and a
+    // zero is a measurement that reads as "this parcel weighs nothing", which
+    // lands it in the wrong delivery band rather than in no band at all.
+    weight: weightKg ?? '',
     date_add: context.dateAdd ?? new Date().toISOString().slice(0, 19).replace('T', ' '),
-    comment: context.comment ?? '',
-    shipping_price: context.shippingPrice ?? 0,
+    comment: order.comment ?? context.comment ?? '',
+    shipping_price: order.shippingPrice ?? context.shippingPrice ?? 0,
     address: toPbAddress(order.shippingAddress),
     products: order.lines.map((line) => {
       const extra = detail[line.sku] ?? {}
       return {
         product_id: '',
         sku: line.sku,
-        name: extra.name ?? '',
+        name: line.name ?? extra.name ?? '',
         qty: line.quantity,
-        price: extra.price ?? 0,
+        price: line.unitPrice ?? extra.price ?? 0,
         currency: 'GBP',
-        tax: extra.taxPercent ?? 0,
+        tax: line.taxPercent ?? extra.taxPercent ?? 0,
       }
     }),
   }

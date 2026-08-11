@@ -24,6 +24,13 @@ export async function POST(req: Request) {
 
   try {
     const outcome = await handleStripeEvent(event)
+    // An event we own that arrived before the state it needs (Stripe does not
+    // promise ordering). A 200 here would retire it for good; a 503 puts it back
+    // on Stripe's retry schedule, which is the only thing that recovers it.
+    if (outcome.retryable) {
+      console.warn(`[stripe webhook] ${event.type} arrived early — asking Stripe to retry`)
+      return NextResponse.json({ received: false, retry: true, ...outcome }, { status: 503 })
+    }
     return NextResponse.json({ received: true, ...outcome })
   } catch (err) {
     console.error('[stripe webhook] handler error:', err)

@@ -82,16 +82,16 @@ describe('product readiness', () => {
     expect(r.overall).toBe('fail')
   })
 
-  it('blocks a live product with no shipping weight', () => {
-    // PowerBody price delivery by weight band AND require a weight to place the
-    // order, so going live without one is a hard stop, not a nag.
-    const live = productReadiness(makeProduct({ weightGrams: null }), { live: true })
-    expect(live.checks.find((c) => c.id === 'shipping')?.status).toBe('fail')
-    expect(live.overall).toBe('fail')
-
-    // On mock data it is only a warning — the margin is estimated, nothing ships.
-    const mock = productReadiness(makeProduct({ weightGrams: null }), { live: false })
-    expect(mock.checks.find((c) => c.id === 'shipping')?.status).toBe('warn')
+  it('warns but never blocks when there is no shipping weight, live or not', () => {
+    // PowerBody publish no weight on either product call, so this is supplier
+    // information we cannot fetch. It costs us the margin ESTIMATE — the order
+    // still goes, weighed at their end — so failing a product for it would fail
+    // the whole catalogue over something nobody can fix from here.
+    for (const live of [true, false]) {
+      const readiness = productReadiness(makeProduct({ weightGrams: null }), { live })
+      expect(readiness.checks.find((c) => c.id === 'shipping')?.status).toBe('warn')
+      expect(readiness.overall).not.toBe('fail')
+    }
   })
 })
 

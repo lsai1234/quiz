@@ -274,6 +274,50 @@ The queue shows which mode it is in, the Send button changes its wording
 ("Simulate sending 3 approved" vs "Send 3 approved to PowerBody"), and the confirmation
 message says which actually happened.
 
+### What we send, and why it is not just SKUs
+
+PowerBody print a **picking list and an invoice and put them in the parcel**, naming
+CHRGD as the seller. Their guide marks the per-line `price` and the `shipping_price`
+"required to print your invoice" — so those, and the product names, are part of placing
+an order correctly rather than optional extras. Sending an order without them produces a
+customer-facing document listing blank product names at £0.00.
+
+`supplierOrderInputFor()` (`lib/orders/service.ts`) builds all of it off the order:
+
+| Field | Source |
+|---|---|
+| `products[].name` | the order line's title + variant |
+| `products[].price` | what the customer actually paid per unit, after discounts |
+| `products[].tax` | the product's VAT rate as a **percentage** (ours is a fraction) |
+| `shipping_price` | `order.shipping` — what we charged for delivery |
+| `address.email` | the address's, falling back to the order's |
+| `comment` | our customer-facing reference, e.g. `CHRGD-7K4M2XQP` |
+
+**Weight is sent empty when we don't know it, which is most of the time.** Their API
+publishes no weight on `getProductList` *or* `getProductInfo`, so unless someone typed one
+in at import review we have no figure. `orderWeightKg()` is deliberately all-or-nothing: a
+partial sum is a real number in the right units describing only some of the parcel, and it
+would pick a delivery band confidently and wrongly. An absent weight lets PowerBody weigh
+it; what we lose is the margin *estimate*, not the order. For the same reason product
+readiness only ever **warns** about a missing weight — failing products for a fact nobody
+can fetch would fail the whole catalogue.
+
+`transport_code` is still sent empty, letting PowerBody choose the service — see
+"Not implemented" below.
+
+### Two guards in the domain, not the screen
+
+`submitOrderToSupplier` refuses, before any provider is touched:
+
+- an order with **no delivery address** — it used to substitute an empty one and send it,
+  which is how a mock-checkout order with no address reached the supplier looking real;
+- an address PowerBody **will not ship to** (Northern Ireland, Guernsey, Jersey — see
+  `lib/pricing/zones.ts`).
+
+The fulfilment queue flags both, but the queue is a screen. These sit alongside the
+approval check and the ordering gate for the same reason: a cron, a webhook or a future
+caller must not be able to get past them by not having looked at the UI.
+
 ### Going live
 
 1. Confirm the catalogue is on live PowerBody and stock looks right.

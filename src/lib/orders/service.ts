@@ -14,7 +14,8 @@
 import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
-import type { SupplierOrderStatus, SupplierAddress } from '@/lib/supplier/types'
+import { deliverability } from '@/lib/pricing/zones'
+import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
@@ -326,6 +327,81 @@ async function supplierForOrdering(simulated: boolean) {
 }
 
 /**
+ * Total shipped weight in kilograms, or null when any line's weight is unknown.
+ *
+ * All-or-nothing on purpose. PowerBody publish no weight on either product call,
+ * so most catalogue products carry none unless a founder typed one in at import
+ * review — and a partial sum is worse than no sum: it is a real number, in the
+ * right units, describing only some of the parcel, and it would pick a delivery
+ * band confidently and wrongly. Sending nothing lets them weigh it.
+ */
+export function orderWeightKg(
+  lines: Pick<OrderLine, 'productId' | 'quantity'>[],
+  catalogue: Pick<CatalogueProduct, 'id' | 'weightGrams'>[],
+): number | null {
+  let grams = 0
+  for (const line of lines) {
+    const product = catalogue.find((p) => p.id === line.productId)
+    const each = product?.weightGrams
+    if (each == null || !(each > 0)) return null
+    grams += each * line.quantity
+  }
+  return grams > 0 ? Math.round(grams) / 1000 : null
+}
+
+/**
+ * Build what the supplier needs to place — and to PRINT — this order.
+ *
+ * The picking list and invoice PowerBody put in the parcel name us as the
+ * seller, so the product names, the prices the customer actually paid and our
+ * delivery charge are part of the order rather than trimmings. Everything here
+ * comes off the order itself; the catalogue is consulted only for the two facts
+ * an order line doesn't carry (VAT rate and shipped weight).
+ */
+async function supplierOrderInputFor(order: Order, lines: OrderLine[]): Promise<SupplierOrderInput> {
+  const address = order.shippingAddress!
+  let catalogue: CatalogueProduct[] = []
+  try {
+    const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
+    catalogue = (await getResolvedCatalogue()).products
+  } catch (err) {
+    // A catalogue read that fails costs us the VAT rate and the weight, not the
+    // order. Names and prices — the two the customer sees — are on the order.
+    console.error('[orders] catalogue read failed while building supplier order:', err)
+  }
+
+  const { vatRateFor } = await import('@/lib/pricing/vat')
+  const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
+  const config = getPricingConfig()
+
+  return {
+    reference: order.id,
+    shippingAddress: {
+      ...address,
+      // Their guide wants an email OR a phone so couriers can send verification
+      // codes. Stripe collects a phone; the email is the order's, and a
+      // subscription raised before phone collection existed has only this.
+      email: address.email ?? order.email ?? null,
+    },
+    shippingPrice: order.shipping,
+    weightKg: orderWeightKg(lines, catalogue),
+    comment: orderReference(order),
+    lines: lines.map((line) => {
+      const product = catalogue.find((p) => p.id === line.productId)
+      return {
+        sku: line.sku!,
+        quantity: line.quantity,
+        name: [line.title, line.variantTitle].filter(Boolean).join(' — '),
+        unitPrice: line.unitPrice,
+        // Their `tax` is a percentage; ours is a fraction, and a product with no
+        // rate of its own is standard-rated.
+        taxPercent: Math.round(vatRateFor(product, config) * 10000) / 100,
+      }
+    }),
+  }
+}
+
+/**
  * Send the order to PowerBody for dropship fulfilment. Requires approval.
  *
  * Whether this actually reaches PowerBody depends on the ordering mode
@@ -351,17 +427,32 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
     throw new Error(`Order ${id} has no lines with a supplier SKU to fulfil.`)
   }
 
+  /**
+   * An address we could actually ship to, checked HERE and not only in the queue.
+   *
+   * This used to fall back to an empty address — `line1: ''`, no postcode — and
+   * send it, which is how a mock-checkout order with no address at all reached
+   * the supplier looking like a real one. The queue does flag both of these, but
+   * the queue is a screen; this is the gate, and it exists for the same reason
+   * the approval check does: a cron or a future caller must not be able to get
+   * past it by not having looked at the UI.
+   */
+  if (!order.shippingAddress?.line1 || !order.shippingAddress.postcode) {
+    throw new Error(
+      `Order ${id} has no delivery address — nothing can be dropshipped until one is on the order.`,
+    )
+  }
+  const reach = deliverability(order.shippingAddress)
+  if (reach.excluded) {
+    throw new Error(`Order ${id} cannot be dropshipped: ${reach.reason}`)
+  }
+
   // Resolved once, before the call, and then recorded on the order — so an order
   // sent as a simulation stays a simulation even after the switch is flipped.
   const simulated = getOrderingSource() === 'simulate'
   const supplier = await supplierForOrdering(simulated)
   try {
-    const result = await supplier.placeOrder({
-      reference: order.id,
-      shippingAddress:
-        order.shippingAddress ?? { name: order.email ?? 'Customer', line1: '', city: '', postcode: '', country: 'GB' },
-      lines: fulfilable.map((l) => ({ sku: l.sku!, quantity: l.quantity })),
-    })
+    const result = await supplier.placeOrder(await supplierOrderInputFor(order, fulfilable))
     return updateOrder(id, (o) => {
       o.supplierOrderId = result.supplierOrderId
       o.supplierStatus = result.status

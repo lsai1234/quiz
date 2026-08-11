@@ -25,7 +25,11 @@ describe('order lifecycle', () => {
   })
 
   it('submits an approved order to the supplier, then syncs its status', async () => {
-    const order = await createOrderFromCheckout({ channel: 'shop', lines: LINES })
+    const order = await createOrderFromCheckout({
+      channel: 'shop',
+      lines: LINES,
+      shippingAddress: { name: 'Sam Taylor', line1: '1 High Street', city: 'Leeds', postcode: 'LS1 4DY', country: 'GB' },
+    })
     await approveOrderForSupplier(order.id, 'Test founder')
     const submitted = await submitOrderToSupplier(order.id)
     expect(submitted?.status).toBe('submitted_to_supplier')

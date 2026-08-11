@@ -34,8 +34,22 @@ const LINES: OrderLine[] = [
 
 const ENV_KEYS = ['POWERBODY_API_URL', 'POWERBODY_API_USER', 'POWERBODY_API_KEY'] as const
 
+/** A deliverable UK address — `submitOrderToSupplier` refuses an order without one. */
+const ADDRESS = {
+  name: 'Sam Taylor',
+  line1: '1 High Street',
+  city: 'Leeds',
+  postcode: 'LS1 4DY',
+  country: 'GB',
+}
+
 async function approvedOrder() {
-  const order = await createOrderFromCheckout({ channel: 'shop', email: 'a@b.com', lines: LINES })
+  const order = await createOrderFromCheckout({
+    channel: 'shop',
+    email: 'a@b.com',
+    lines: LINES,
+    shippingAddress: ADDRESS,
+  })
   await approveOrderForSupplier(order.id, 'Test founder')
   return order
 }

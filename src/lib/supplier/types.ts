@@ -80,11 +80,34 @@ export interface SupplierAddress {
   postcode: string
   country: string
   phone?: string | null
+  /**
+   * The recipient's email.
+   *
+   * PowerBody's guide is explicit that an order needs a valid email OR phone
+   * number, because couriers send verification codes to the recipient. We hold
+   * both where we have them: Stripe collects a phone at checkout, but a member
+   * who subscribed before phone collection was switched on has only an email,
+   * and an order with neither is one the courier may not be able to deliver.
+   */
+  email?: string | null
 }
 
 export interface SupplierOrderLine {
   sku: string
   quantity: number
+  /**
+   * What the customer knows this as, and what they paid for one of them.
+   *
+   * Both are printed by PowerBody on the picking list and invoice that go IN
+   * THE PARCEL, showing us as the seller — their guide marks the price
+   * "required to print your invoice". Sending neither is what produces a
+   * customer-facing document listing blank names at £0.00, so these are part of
+   * placing an order correctly rather than decoration.
+   */
+  name?: string
+  unitPrice?: number
+  /** VAT rate as a PERCENTAGE (their `tax` field is a percentage, not a fraction). */
+  taxPercent?: number
 }
 
 export interface SupplierOrderInput {
@@ -92,6 +115,20 @@ export interface SupplierOrderInput {
   reference: string
   shippingAddress: SupplierAddress
   lines: SupplierOrderLine[]
+  /** What we charged the customer for delivery — also printed on their invoice. */
+  shippingPrice?: number | null
+  /**
+   * Total shipped weight in kilograms, or null when we don't know it.
+   *
+   * Null is the normal case and not a defect: PowerBody's API does not publish a
+   * weight on either `getProductList` or `getProductInfo`, so unless someone has
+   * typed one in at import review we genuinely have no figure. Null is sent as
+   * an absent weight rather than a zero-that-looks-like-a-measurement, and they
+   * weigh the parcel their end. See `orderWeightKg`.
+   */
+  weightKg?: number | null
+  /** Free-text note on the order, visible to PowerBody. */
+  comment?: string | null
 }
 
 export type SupplierOrderStatus =
