@@ -148,10 +148,14 @@ describe('the margin model and the ladder', () => {
      * hit the target margin when re-priced, which it cannot do if the postage
      * assumed on the way in was the wrong rung.
      */
-    for (const cost of [8, 12, 18, 25, 40, 60]) {
-      const price = priceForMargin({ supplierCost: cost, sharedParcelItems: 1 }, 0.35, config)
-      if (price == null) continue
-      expect(unitEconomics({ shelfPrice: price, supplierCost: cost, sharedParcelItems: 1 }, config).marginPct)
+    const costs = [8, 12, 18, 25, 40, 60]
+    for (const cost of costs) {
+      const price = priceForMargin(0.35, { supplierCost: cost, sharedParcelItems: 1 }, config)
+      // Asserted, not skipped. An earlier version of this had the arguments the
+      // wrong way round, which made every solve return null and the whole loop
+      // pass without checking anything.
+      expect(price).not.toBeNull()
+      expect(unitEconomics({ shelfPrice: price!, supplierCost: cost, sharedParcelItems: 1 }, config).marginPct)
         .toBeGreaterThanOrEqual(0.35)
     }
   })
