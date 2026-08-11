@@ -4,7 +4,7 @@
 import { checkScenarios } from '../scenarios'
 import { unitEconomics } from '../unit-economics'
 import { PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { blendedCustomerCharge, customerDeliveryCharge } from '@/lib/pricing/delivery'
 
 const cfg = (over: Partial<PricingConfig> = {}): PricingConfig => ({ ...PRICING_CONFIG, ...over })
 
@@ -106,8 +106,16 @@ describe('the scenario check', () => {
     const shared = { supplierCost: listPrice / 2, sharedParcelItems: 1 }
     const onWorth = unitEconomics({ shelfPrice: oneOff.paid, ...shared, freeDeliveryBasis: listPrice }, c)
     const onDiscounted = unitEconomics({ shelfPrice: oneOff.paid, ...shared }, c)
-    expect(onWorth.deliveryCharged).toBe(0)
-    expect(onDiscounted.deliveryCharged).toBe(customerDeliveryCharge(oneOff.paid, c.delivery.defaultZone, c))
+    // Qualified on the list value, so the mainland rate is free — what is left
+    // is the Highlands surcharge blended over the share of orders that pay one,
+    // which no free-delivery offer removes (PowerBody's Zone 2 free line is
+    // £300 of wholesale).
+    expect(onWorth.deliveryCharged).toBe(blendedCustomerCharge(listPrice, c))
+    expect(customerDeliveryCharge(listPrice, 'uk-1', c)).toBe(0)
+    // Qualified on the discounted price instead, it pays a real postage rung —
+    // strictly more, which is the whole point of the distinction.
+    expect(onDiscounted.deliveryCharged).toBe(blendedCustomerCharge(oneOff.paid, c))
+    expect(onDiscounted.deliveryCharged).toBeGreaterThan(onWorth.deliveryCharged)
   })
 
   it('keeps more when the box is shared between more products', () => {

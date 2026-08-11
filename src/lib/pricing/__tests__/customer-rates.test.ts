@@ -10,12 +10,15 @@
  * should fail here rather than in a month's margin figures.
  */
 import {
+  blendedCustomerCharge,
   customerDeliveryCharge,
   deriveFreeDeliveryThreshold,
   deliveryOptions,
   entryDeliveryCharge,
+  freeDeliveryImpact,
   quoteDelivery,
 } from '@/lib/pricing/delivery'
+import { priceForMargin, unitEconomics } from '@/lib/pricing/unit-economics'
 import { PRICING_CONFIG, getPricingConfig, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 
 const config = getPricingConfig()
@@ -112,5 +115,52 @@ describe('a ladder with no free band', () => {
   it('derives a threshold of zero rather than pretending there is one', () => {
     expect(deriveFreeDeliveryThreshold(alwaysPaid)).toBe(0)
     expect(customerDeliveryCharge(1000, 'uk-1', alwaysPaid)).toBe(3.5)
+  })
+})
+
+describe('the margin model and the ladder', () => {
+  it('blends the Highlands surcharge into what we assume we collect', () => {
+    // The cost side is already blended (`blendedDeliveryCost`), so the revenue
+    // side has to be too. Charging mainland revenue against blended cost counts
+    // Zone 2's extra cost while ignoring the surcharge raised to cover it.
+    const share = config.delivery.zone2SharePct
+    const expected =
+      customerDeliveryCharge(30, 'uk-1', config) * (1 - share) +
+      customerDeliveryCharge(30, 'uk-2', config) * share
+    expect(blendedCustomerCharge(30, config)).toBeCloseTo(expected, 2)
+  })
+
+  it('still collects the surcharge share above the free line', () => {
+    // Free delivery is a mainland promise. Zone 2 never reaches PowerBody's own
+    // free band, so a few pence of surcharge survives on every basket.
+    expect(customerDeliveryCharge(250, 'uk-1', config)).toBe(0)
+    expect(blendedCustomerCharge(250, config)).toBeGreaterThan(0)
+  })
+
+  it('solves a target price against the rung that price lands on', () => {
+    /**
+     * The solver used to take the delivery charge as a constant. On a ladder it
+     * is a step function of the very price being solved for, so a price solved
+     * at the £4.95 rung but landing in the £2.95 band would be under-priced by
+     * the difference — silently, and only near a rung boundary.
+     *
+     * Checked by asking the waterfall: whatever price comes back must actually
+     * hit the target margin when re-priced, which it cannot do if the postage
+     * assumed on the way in was the wrong rung.
+     */
+    for (const cost of [8, 12, 18, 25, 40, 60]) {
+      const price = priceForMargin({ supplierCost: cost, sharedParcelItems: 1 }, 0.35, config)
+      if (price == null) continue
+      expect(unitEconomics({ shelfPrice: price, supplierCost: cost, sharedParcelItems: 1 }, config).marginPct)
+        .toBeGreaterThanOrEqual(0.35)
+    }
+  })
+
+  it('reports the position rung by rung, not just the entry one', () => {
+    const impact = freeDeliveryImpact(20, config)
+    expect(impact.bands).toHaveLength(config.delivery.customerRates.length)
+    // The free rung is the one that costs us the whole parcel.
+    const free = impact.bands.find((b) => b.charge === 0)!
+    expect(free.net).toBeCloseTo(-impact.supplierCost, 2)
   })
 })

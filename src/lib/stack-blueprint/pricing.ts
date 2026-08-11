@@ -110,11 +110,11 @@ export const PRICING_CONFIG = {
    * beats it by a widening margin (+4.5 / +7 / +12 points). See
    * docs/PRICING_STRATEGY.md §7.1.
    *
-   * Set BELOW `freeDeliveryThreshold` on purpose, so growing a basket pays
-   * twice: 8% off at £50, then free delivery at £60. What must never happen is
-   * the discount starting ABOVE the free-delivery line, which would leave a band
-   * where postage is free but the basket has earned nothing — an offer that
-   * appears to go backwards.
+   * Set BELOW `freeDeliveryThreshold` on purpose, so growing a basket keeps
+   * paying: 8% off at £50, a cheaper postage rung at £40, then free delivery at
+   * £100. What must never happen is the discount starting ABOVE the
+   * free-delivery line, which would leave a band where postage is free but the
+   * basket has earned nothing — an offer that appears to go backwards.
    */
   bundleTiers: [
     { id: 'bundle-50', label: '£50+ bundle', minSubtotal: 50, discountPct: 0.08 },
@@ -159,9 +159,9 @@ export const PRICING_CONFIG = {
    *
    * This briefly sat at 40, from a calculation that assumed we ABSORB the
    * postage on every subscription. We don't: a plan under `freeDeliveryThreshold`
-   * is charged `delivery.customerDeliveryCharge` like any other order, and only
-   * plans above it ship free. Assuming the worst case on the wrong side of our
-   * own rule turned away subscriptions that make money.
+   * is charged its rung of `delivery.customerRates` like any other order, and
+   * only plans above it ship free. Assuming the worst case on the wrong side of
+   * our own rule turned away subscriptions that make money.
    */
   minSubscriptionMonthly: 25,
 
@@ -300,9 +300,12 @@ export const PRICING_CONFIG = {
       // and £99 bands land at roughly £100 and £198 OF RETAIL. Free shipping
       // needs a ~£200 basket, not a £99 one.
       //
-      // Note our own `freeDeliveryThreshold` (£50 retail) starts well below the
-      // point our cost drops (£100 retail), so orders between the two collect
-      // nothing and still pay the full charge. See docs/PRICING_FROM_SCRATCH.md.
+      // Our own free line is cut to match: `delivery.customerRates` stops
+      // charging at £100 of retail, which is exactly where the £50 wholesale
+      // band ends and their price steps down. It used to sit at £60, leaving a
+      // stretch where we collected nothing and still paid the full charge — the
+      // worst basket in the business was one that had just earned free delivery.
+      // See docs/PRICING_GUIDE.md §2.
       { id: 'z1-50', name: 'Standard', zone: 'uk-1', maxOrderValue: 50, price: 6.5 },
       { id: 'z1-99', name: 'Standard', zone: 'uk-1', maxOrderValue: 99, price: 5.5 },
       { id: 'z1-free', name: 'Free over £99', zone: 'uk-1', maxOrderValue: null, price: 0 },
@@ -628,7 +631,8 @@ export const PRICING_CONFIG = {
     /**
      * Assume we eat the delivery rather than collect it. True is the honest
      * worst case: a subscription that clears `freeDeliveryThreshold` pays us
-     * nothing for postage, and that is the common outcome.
+     * nothing for postage beyond the blended Highlands surcharge, and that is
+     * the common outcome.
      */
     assumeFreeDelivery: true,
   },

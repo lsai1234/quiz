@@ -60,7 +60,7 @@ better, clearer offer.
 | **Subscribe & save** | `levelSubscriptionDiscount` | **10 / 15 / 20%** by stack size |
 | **Subscription tiers** | `subscriptionTiers` | *empty — unused* |
 | **First-month scratch card** | `introOffer.scratchReveal` | **50 / 25 / 10%**, weighted 1 / 10 / 10 → blended 18% |
-| **Free delivery** | `freeDeliveryThreshold` | free over **£50**, else £3.95 |
+| **Delivery** | `delivery.customerRates` | **£4.95** under £40 · **£2.95** to £99 · **free** at £100+, plus a **£2.95** Highlands surcharge on every band |
 | **Partner intro floor** | `partners.introFloorPct` | code guarantees at least **25%** off month one |
 | **Partner commission** | `partners.firstOrderPct` / `renewalPct` | **20%** first order, **10%** renewals for **12 months** |
 | **Margin floor** | `marginFloorPct` | never discount below cost × 1.15 (≈ 36.8% max off) |

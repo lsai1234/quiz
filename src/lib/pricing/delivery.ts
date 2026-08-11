@@ -23,9 +23,16 @@
  * cost doubled and the large-order cost went to zero.
  *
  * Two numbers hide behind the word "delivery" and confusing them is how a
- * catalogue goes quietly unprofitable: what the SUPPLIER charges US, and what we
- * charge the MEMBER. On anything over our free-delivery threshold the second is
- * zero, and the gap is a real cost the sell price has to carry.
+ * catalogue goes quietly unprofitable: what the SUPPLIER charges US (the bands
+ * above, on our wholesale spend) and what WE charge the MEMBER
+ * (`delivery.customerRates`, on their retail total). They are deliberately cut
+ * to line up — we stop charging at £100 of retail, which is where their £50
+ * wholesale band ends and their price steps down — but they are never the same
+ * number, and the gap between them is a real cost the sell price has to carry.
+ *
+ * The one place they do not line up is Zone 2, where their free band needs £300
+ * of wholesale and effectively never arrives, so `zone2Surcharge` applies to
+ * every rung including the free one.
  *
  * All supplier prices here are EX VAT, as PowerBody quote them; what that
  * actually costs us depends on whether we can reclaim it (see `./vat.ts`).
@@ -330,6 +337,27 @@ export function quoteDelivery(shipment: Shipment, config: PricingConfig = getPri
 }
 
 /**
+ * What we COLLECT for delivery when pricing rather than shipping — the revenue
+ * twin of `blendedDeliveryCost`, blended across the same zones.
+ *
+ * These have to be blended the same way or the model is unfair to itself in one
+ * direction: `blendedDeliveryCost` already charges the margin for the Highlands
+ * parcels we send, so pricing the revenue at the mainland rate alone would count
+ * Zone 2's extra cost while ignoring the surcharge raised to cover it. Small —
+ * `zone2SharePct` of one surcharge — but it is the difference between a model
+ * that describes the business and one that quietly assumes the worst of it.
+ *
+ * For an order we are actually shipping, use `customerDeliveryCharge` with the
+ * real zone. There is nothing to blend once you know the postcode.
+ */
+export function blendedCustomerCharge(orderValue: number, config: PricingConfig = getPricingConfig()): number {
+  const share = Math.min(1, Math.max(0, config.delivery.zone2SharePct))
+  const zone1 = customerDeliveryCharge(orderValue, 'uk-1', config)
+  const zone2 = customerDeliveryCharge(orderValue, 'uk-2', config)
+  return round(zone1 * (1 - share) + zone2 * share)
+}
+
+/**
  * The delivery cost to assume when PRICING rather than shipping — a blend of
  * the zones we actually ship to.
  *
@@ -374,10 +402,22 @@ export function shipmentWeight(
   return { grams, weightKnown: known }
 }
 
+/** Our position on one rung of the customer ladder. */
+export interface DeliveryBandImpact {
+  /** Basket ceiling for this rung (£ inc VAT), or null for "and above". */
+  upTo: number | null
+  /** What the member pays in it (£ inc VAT). */
+  charge: number
+  /** What we keep of that after VAT (£). */
+  chargeNet: number
+  /** `chargeNet − supplierCost` (£). Positive = postage pays for itself. */
+  net: number
+}
+
 export interface FreeDeliveryImpact {
   /** Our own threshold (£ inc VAT, at our retail prices). */
   threshold: number
-  /** What we charge below it (£ inc VAT). */
+  /** What we charge on the ENTRY rung (£ inc VAT) — the smallest basket. */
   charge: number
   /** What we keep of that after VAT (£). */
   chargeNet: number
@@ -387,6 +427,15 @@ export interface FreeDeliveryImpact {
   belowThreshold: number
   /** Net position on an order ABOVE it (£). Always negative — the whole cost. */
   aboveThreshold: number
+  /**
+   * The position rung by rung.
+   *
+   * `belowThreshold` was the whole story when there was one charge and one
+   * cliff. On a ladder it is only the entry rung, and the interesting number is
+   * usually the one in the middle — the band that collects something but not
+   * enough. Both are kept so nothing reading the old fields breaks.
+   */
+  bands: DeliveryBandImpact[]
 }
 
 /**
@@ -410,6 +459,15 @@ export function freeDeliveryImpact(
   // model is about: whether postage pays for itself on the baskets that carry it.
   const charge = entryDeliveryCharge(config)
   const chargeNet = revenueFromShelfPrice(charge, config.vat.standardRate, config)
+  const bands = customerRates(config).map((rate) => {
+    const net = revenueFromShelfPrice(rate.price, config.vat.standardRate, config)
+    return {
+      upTo: rate.maxOrderValue,
+      charge: round(rate.price),
+      chargeNet: net,
+      net: round(net - supplierCost),
+    }
+  })
   return {
     threshold: config.freeDeliveryThreshold,
     charge,
@@ -417,6 +475,7 @@ export function freeDeliveryImpact(
     supplierCost,
     belowThreshold: round(chargeNet - supplierCost),
     aboveThreshold: round(-supplierCost),
+    bands,
   }
 }
 

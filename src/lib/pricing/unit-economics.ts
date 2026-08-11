@@ -27,7 +27,7 @@
  * Pure. Every function takes its config, so the hub previews unsaved rules.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { blendedDeliveryCost, customerDeliveryCharge, entryDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
+import { blendedCustomerCharge, blendedDeliveryCost, customerDeliveryCharge, entryDeliveryCharge, shipmentWeight, toFreeShipping } from './delivery'
 import { costFromSupplierPrice, revenueFromShelfPrice, vatRateFor } from './vat'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -142,7 +142,7 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
   const deliveryCharged =
     input.chargeDelivery === false
       ? 0
-      : customerDeliveryCharge(input.freeDeliveryBasis ?? shelfPrice, config.delivery.defaultZone, config)
+      : blendedCustomerCharge(input.freeDeliveryBasis ?? shelfPrice, config)
   const grossRevenue = round(shelfPrice + deliveryCharged)
   const netRevenue = round(
     revenueFromShelfPrice(shelfPrice, vatRate, config) +
@@ -212,7 +212,20 @@ export function unitEconomics(input: EconomicsInput, config: PricingConfig = get
 
   push('shelf', 'Customer pays', shelfPrice, quantity > 1 ? `${quantity} × the shelf price, VAT included.` : 'The shelf price, VAT included.')
   if (deliveryCharged > 0) {
-    push('delivery-charged', 'Delivery charged', deliveryCharged, `Under the £${config.freeDeliveryThreshold} free-delivery threshold, so they pay postage.`)
+    // Blended across zones, like the delivery COST below it — so an order over
+    // the free line still shows a few pence: the Highlands surcharge, averaged
+    // over the share of orders that pay one. Saying "they pay postage" on a
+    // free-delivery order would be the wrong explanation for a real number.
+    const basis = input.freeDeliveryBasis ?? shelfPrice
+    const freeOnMainland = customerDeliveryCharge(basis, 'uk-1', config) === 0
+    push(
+      'delivery-charged',
+      'Delivery charged',
+      deliveryCharged,
+      freeOnMainland
+        ? `Free over £${config.freeDeliveryThreshold}, so this is the Highlands surcharge averaged over the ${Math.round(config.delivery.zone2SharePct * 100)}% of orders that pay it.`
+        : `Under the £${config.freeDeliveryThreshold} free-delivery threshold, so they pay postage — blended across zones.`,
+    )
   }
   push('vat', config.vat.registered ? 'Less VAT' : 'No VAT charged', -vat,
     config.vat.registered
@@ -346,8 +359,29 @@ export function priceForMargin(
     return false
   }
 
-  const charge = entryDeliveryCharge(config)
   const freeAbove = config.freeDeliveryThreshold
+  /**
+   * What the member pays for delivery — which now depends on the answer, the
+   * same way the supplier's band does.
+   *
+   * It used to be one number, so the solver could take it as a constant. On a
+   * ladder it is a step function of the very price being solved for: seed from
+   * the dearest rung, solve, re-read which rung the answer lands on, solve
+   * again. `settleCharge` below closes that loop alongside `settleDelivery`.
+   * Without it a price solved at the £4.95 rung but landing in the £2.95 band
+   * would be under-priced by the difference — silently, and only on the baskets
+   * near a rung boundary.
+   */
+  let charge = entryDeliveryCharge(config)
+
+  /** Re-read the customer's delivery rung from the price a solve produced. */
+  const settleCharge = (price: number): boolean => {
+    if (input.chargeDelivery === false || price <= 0) return true
+    const next = blendedCustomerCharge(price, config)
+    if (next === charge) return true
+    charge = next
+    return false
+  }
 
   const chooseBranch = (): number => {
     // The caller can pin the branch — the good-price model does, because its
@@ -380,7 +414,15 @@ export function priceForMargin(
   let price = chooseBranch()
   // Settle the delivery band first — a price solved against the wrong band is
   // out by pounds, and the penny-nudge below only fixes rounding.
-  for (let pass = 0; pass < 6 && !settleDelivery(price); pass++) price = chooseBranch()
+  for (let pass = 0; pass < 6; pass++) {
+    // Both bands have to settle: the supplier's (on our wholesale cost) and the
+    // member's (on the shelf price). Each re-solve can move the other, so they
+    // are settled together rather than one after the next.
+    const settled = settleDelivery(price)
+    const charged = settleCharge(price)
+    if (settled && charged) break
+    price = chooseBranch()
+  }
 
   for (let i = 0; i < 25; i++) {
     if (unitEconomics({ ...input, shelfPrice: price }, config).marginPct >= m) return price

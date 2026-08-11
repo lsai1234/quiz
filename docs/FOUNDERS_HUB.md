@@ -194,14 +194,20 @@ Two numbers that look comparable and are not, in different directions:
 |  | Ours | PowerBody's |
 | --- | --- | --- |
 | Basis | Our **retail** prices, inc VAT | Their **wholesale** values, ex VAT |
-| Figure | Free over £50 | Free over £300 (Zone 2 **wholesale** only) |
+| Figure | Free over £100 | Free over £300 (Zone 2 **wholesale** only) |
 | Applies to us? | It's our promise, it costs us | **No** — dropshipping never gets free delivery |
 
-`freeDeliveryImpact()` prices the promise. Below £50 the member's £3.95 (£3.29
-net) roughly covers PowerBody's £3.25–£3.30, so postage is near enough free to
-us. At or above £50 we collect nothing and still pay the full charge on **every**
-qualifying order — that's the cost of the promise, and it's a marketing cost,
-not a fulfilment one. The Delivery rules section shows both lines.
+`freeDeliveryImpact()` prices the promise, and returns it **rung by rung**
+(`bands`) rather than as one number — the ladder has two paid rungs and the
+interesting one is usually the middle: it collects something, but not enough.
+
+On a small parcel costing us £7.80, the entry rung's £4.95 recovers most of it,
+the £2.95 rung about a third, and at £100+ we collect nothing and pay the full
+charge on **every** qualifying order. That last line is the cost of the promise,
+and it is a marketing cost rather than a fulfilment one. What changed is where it
+starts: the free line now sits at £100, which is where PowerBody's own price
+steps down, instead of £60 — where we stopped collecting a full £40 of retail
+before our cost moved at all.
 
 ### Zone from postcode, and where they won't go (`lib/pricing/zones.ts`)
 

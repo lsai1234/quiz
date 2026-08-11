@@ -29,7 +29,7 @@ is what went wrong in my last few write-ups.
 | | Measured on | Threshold |
 | --- | --- | --- |
 | **What PowerBody charge us** | what **we spend with them** in one parcel | £50 / £99 |
-| **What we charge the customer** | what **the customer spends** | £60 |
+| **What we charge the customer** | what **the customer spends** | £40 / £100 |
 
 Since we price at ×2, our spend is roughly **half** the retail price. So
 PowerBody's £50 and £99 bands land at **£100 and £198 of retail**, not £50 and
@@ -68,8 +68,13 @@ Two consequences, and they drive everything:
 
 | Their basket | They pay for delivery |
 | --- | --- |
-| Under £60 | **£3.95** |
-| £60 or more | **Free** |
+| Under £40 | **£4.95** |
+| £40 – £99 | **£2.95** |
+| £100 or more | **Free** |
+
+Plus a **£2.95 Highlands & Islands surcharge**, on every band including the free
+one — PowerBody's Zone 2 free line needs £300 of wholesale (a ~£600 basket), so
+our cost up there never actually goes away.
 
 Qualified on the **subtotal, before any discount** — so a basket can't lose the
 perk by earning one. (It used to qualify on the discounted total: a £62 basket
@@ -80,20 +85,36 @@ by being cheaper.)
 
 | Their basket | We collect | We pay | **Net** |
 | --- | --- | --- | --- |
-| Under £60 | £3.95 | £7.80 | **−£3.85** |
-| **£60 – £100** | **£0** | **£7.80** | **−£7.80** ← worst |
+| Under £40 | £4.95 | £7.80 | **−£2.85** |
+| £40 – £99 | £2.95 | £7.80 | **−£4.85** |
 | £100 – £198 | £0 | £6.60 | **−£6.60** |
 | Over £198 | £0 | £0 | **£0** |
 
-> ### The £60–£100 band is the expensive one
+> ### Why the free line moved from £60 to £100
 >
-> Our free-delivery promise starts at **£60**, but our own cost doesn't drop
-> until **£100**. So there's a band where we've stopped collecting anything and
-> are still paying the full £7.80.
+> It used to be a single £3.95 charge with a cliff at £60 — and our own cost
+> doesn't drop until **£100** of retail and doesn't vanish until **£198**. That
+> left a band where we had stopped collecting anything and were still paying the
+> full £7.80: **the worst basket in the business was one that had just earned
+> free delivery.**
 >
-> It stays profitable — a £70 basket still keeps £13.12 — which is why £60 is
-> where the line sits. Pushing it to £100 would be worth about £1.17 an order,
-> and that isn't worth a worse-sounding offer.
+> An earlier version of this page weighed moving the line to £100 at about £1.17
+> an order and judged it not worth a worse-sounding offer. The ladder is what
+> changed the trade — the offer no longer goes from £3.95 to nothing in one step,
+> so the middle of the range gets *cheaper* postage rather than a worse promise:
+>
+> | Basket | Was | Now |
+> | --- | --- | --- |
+> | £30 | £3.95 | £4.95 |
+> | £50 | £3.95 | **£2.95** |
+> | £70 | free | £2.95 |
+> | £120 | free | free |
+>
+> The free line now sits exactly where PowerBody's £50 wholesale band ends and
+> their price steps down, so the point we stop charging is the point it starts
+> costing us less. `customer-rates.test.ts` pins that alignment, and also that we
+> never collect *more* than a parcel costs — delivery is a cost recovery, not a
+> product.
 
 ---
 
@@ -115,12 +136,17 @@ all orders, roughly **30p each**.
 
 ### Put together
 
-| Customer pays | They add postage | Goods | Postage | Card | Returns | **We keep** |
-| --- | --- | --- | --- | --- | --- | --- |
-| £20 | £3.95 | £12.00 | £7.80 | £0.56 | £0.31 | **£3.28** |
-| £40 | £3.95 | £24.00 | £7.80 | £0.86 | £0.31 | **£10.98** |
-| £62 | £0 *(over £60)* | £37.20 | £7.80 | £1.13 | £0.31 | **£15.56** |
-| £120 | £0 | £72.00 | £6.60 | £2.00 | £0.26 | **£39.14** |
+| Customer pays | They add postage | Goods | Postage | **We keep** |
+| --- | --- | --- | --- | --- |
+| £20 | £5.07 | £12.00 | £7.87 | **£4.31** |
+| £40 | £3.07 | £24.00 | £7.87 | **£10.04** |
+| £62 | £3.07 | £37.20 | £7.87 | **£18.51** |
+| £120 | £0.12 *(over £100)* | £72.00 | £6.72 | **£39.13** |
+
+The postage collected is a penny or two off the rung because it is blended across
+zones — the same way the cost is — so a few pence of Highlands surcharge shows up
+even on a free-delivery basket. That is why the £120 row collects £0.12 rather
+than nothing.
 
 ---
 
@@ -131,7 +157,7 @@ all orders, roughly **30p each**.
 | **Bundle** | 8% off | One-off orders over £50 |
 | **Subscribe & save** | 13% / 15% / 20% | By stack size (3 / 5 / 7 products) |
 | **First month** | Scratch card: 40% (1 in 21), 20% (1 in 3), 10% (1 in 2) — averages **15%** | New subscribers |
-| **Free delivery** | Worth £3.95 | Orders over £60 |
+| **Free delivery** | Worth £2.95 | Orders over £100 (UK mainland) |
 | **Partner code** | At least 20% off month one | Influencer referrals |
 | **The floor** | Never below **cost + 15%** | The ongoing price — NOT the first-month card, which is allowed to lose |
 
@@ -164,14 +190,20 @@ exactly that. Here's what each does:
 
 | We pay | ×2 | we keep | ×1.7 + £4 | we keep | Brand RRP | Adder vs RRP |
 | --- | --- | --- | --- | --- | --- | --- |
-| £3 | £6.00 | **−£2.11** | £9.10 | +£0.94 | £5.82 | **+56%** |
-| £4 | £8.00 | **−£1.34** | £10.80 | +£1.42 | £7.76 | **+39%** |
-| £5 | £10.00 | **−£0.57** | £12.50 | +£1.89 | £9.70 | **+29%** |
-| £8 | £16.00 | +£1.74 | £17.60 | +£3.32 | £15.52 | +13% |
-| £12 | £24.00 | +£4.82 | £24.40 | +£5.21 | £23.28 | +5% |
-| £20 | £40.00 | +£10.98 | £38.00 | +£9.01 | £38.80 | −2% |
-| £31 | £62.00 | +£15.56 | £56.70 | +£10.34 | £60.14 | −6% |
-| £40 | £80.00 | +£22.49 | £72.00 | +£14.61 | £77.60 | −7% |
+| £3 | £6.00 | **−£1.08** | £9.10 | +£1.98 | £5.82 | **+56%** |
+| £4 | £8.00 | **−£0.31** | £10.80 | +£2.45 | £7.76 | **+39%** |
+| £5 | £10.00 | +£0.46 | £12.50 | +£2.93 | £9.70 | **+29%** |
+| £8 | £16.00 | +£2.77 | £17.60 | +£4.35 | £15.52 | +13% |
+| £12 | £24.00 | +£5.85 | £24.40 | +£6.25 | £23.28 | +5% |
+| £20 | £40.00 | +£10.04 | £38.00 | +£10.04 | £38.80 | −2% |
+| £31 | £62.00 | +£18.51 | £56.70 | +£13.29 | £60.14 | −6% |
+| £40 | £80.00 | +£25.44 | £72.00 | +£17.56 | £77.60 | −7% |
+
+> Every figure here moved up when delivery started being charged — the cheap end
+> most of all, because a £6 product now collects £4.95 of postage where it used
+> to collect £3.95 and often nothing. The **shape** of the argument is unchanged:
+> ×2 still loses money under about £5 of cost, and the adder still overshoots
+> brand RRP at the cheap end by more than the loss it fixes.
 
 ### Stay proportional
 
@@ -213,7 +245,7 @@ Six rules. That's the whole model.
 | **1. Price** | what we pay **× 2**, rounded down to .99 |
 | **2. Minimum order** | **£15** — enforced at checkout and in the cart API |
 | **3. Quiz floor** | nothing under **£8** gets a slot in a stack; cheaper products are add-ons |
-| **4. Delivery** | **£3.95** under £60, **free** at £60+ — qualified on the subtotal, before any discount |
+| **4. Delivery** | **£4.95** under £40 · **£2.95** to £99 · **free** at £100+, plus a £2.95 Highlands surcharge — qualified on the subtotal, before any discount |
 | **5. Discounts** | 8% one-off over £50 · subscribe & save 13/15/20 · first-month card averaging 15% |
 | **6. Minimum subscription** | **£25/month** |
 

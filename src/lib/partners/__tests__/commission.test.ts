@@ -79,18 +79,19 @@ describe('the contribution guard', () => {
     // returns provision are out — while 15% of net is £9.00. Still more than
     // the order made.
     //
-    // That £5.63 was £2.72 while free delivery started at £60: this exact order
+    // That £5.74 was £2.72 while free delivery started at £60: this exact order
     // sat on the threshold and shipped free, and we carried the £7.80 parcel.
     // Under the customer rate ladder it pays £2.95 and the free line moved to
-    // £100, so the same order now keeps £2.91 more. The cap still binds — the
-    // guard is doing its job either way — it just binds less hard.
+    // £100, so the same order now keeps £3.02 more — £2.95 of postage plus the
+    // Highlands surcharge blended over the orders that pay one. The cap still
+    // binds — the guard is doing its job either way — it just binds less hard.
     const thin = order([{ unitPrice: 60, supplierCost: 40 }])
     const calc = commissionFor(thin, 0.15, cfg())
 
     expect(calc.contribution).toBeGreaterThan(0)
     expect(calc.uncapped).toBeGreaterThan(calc.contribution)
     expect(calc.capped).toBe(true)
-    expect(calc.amount).toBe(5.35) // 95% of £5.63
+    expect(calc.amount).toBe(5.45) // 95% of £5.74
     expect(calc.amount).toBeLessThanOrEqual(calc.contribution * PRICING_CONFIG.partners.maxShareOfContribution + 0.01)
   })
 
