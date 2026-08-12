@@ -54,6 +54,30 @@ function deliveryId(year: number, monthIndex0: number): string {
   return `${year}-${String(monthIndex0 + 1).padStart(2, '0')}`
 }
 
+/**
+ * The calendar month a billing cycle falls in, as a `deliveryOverrides` key.
+ *
+ * Dispatch counts in CYCLES (0 = signup, 1 = first renewal); the member's
+ * calendar — and therefore every skip they make — is keyed by calendar month.
+ * This is the join between the two, so a box the member skipped is a box that
+ * does not ship.
+ *
+ * Derived from `startedAt` rather than from today, because a cycle's month is a
+ * fact about when the plan began, not about when the question is asked.
+ */
+export function deliveryIdForCycle(sub: Pick<MemberSubscription, 'startedAt'>, cycle: number): string | null {
+  const start = new Date(sub.startedAt)
+  if (Number.isNaN(start.getTime())) return null
+  const at = new Date(start.getFullYear(), start.getMonth() + Math.max(0, cycle), 1)
+  return deliveryId(at.getFullYear(), at.getMonth())
+}
+
+/** Whether the member skipped the box for this billing cycle. */
+export function cycleIsSkipped(sub: MemberSubscription, cycle: number): boolean {
+  const id = deliveryIdForCycle(sub, cycle)
+  return id != null && sub.deliveryOverrides?.[id]?.skipped === true
+}
+
 function dispatchDateInMonth(day: number, year: number, monthIndex0: number): Date {
   return new Date(year, monthIndex0, Math.min(Math.max(Math.round(day), 1), 28))
 }

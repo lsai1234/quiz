@@ -230,6 +230,10 @@ export async function finalizeCheckout(
       sub: subscription,
       catalogue: products,
       cycle: 0,
+      // Mock payments take no money, but the plan's own first-month figure is
+      // what a real invoice would have charged — so the ledger has something
+      // truthful to read in mock mode rather than a hole.
+      billedAmount: subscription.firstMonth ?? subscription.flatMonthly,
     })
   } catch (err) {
     console.error('[finalizeCheckout] mock subscription order creation failed:', err)

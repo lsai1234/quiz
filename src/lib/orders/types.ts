@@ -141,6 +141,22 @@ export interface Order {
    * the amount a customer actually got is not open to later revision.
    */
   partnerDiscountPct?: number | null
+  /**
+   * What the member was actually charged for the billing cycle this order
+   * belongs to (£). Subscription orders only.
+   *
+   * Deliberately NOT `total`. `total` is the value of the goods in THIS box; on
+   * a smoothed plan the two are different by design — a box carrying a
+   * three-month tub is worth far more than that month's payment, and the boxes
+   * in between are worth less. The exit settlement is those two columns summed
+   * over a plan's life and subtracted, so both have to be written down at the
+   * time. Neither can be honestly re-derived afterwards once a price has moved,
+   * which is the whole failure this replaces.
+   *
+   * A cycle that dispatched nothing still carries this: it is the payment record
+   * for that month, and the reason those empty orders are worth keeping.
+   */
+  billedAmount?: number | null
   // ── Audit ──
   events: OrderEvent[]
   createdAt: string
@@ -170,4 +186,6 @@ export interface CreateOrderInput {
   /** Attribution, when the buyer used a partner's code. Already validated. */
   partnerCode?: string | null
   partnerDiscountPct?: number | null
+  /** What the cycle was billed at — see `Order.billedAmount`. */
+  billedAmount?: number | null
 }

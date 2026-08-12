@@ -16,6 +16,7 @@ import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
 import { deliverability } from '@/lib/pricing/zones'
 import { shipsAtCycle } from '@/lib/recharge/clock'
+import { cycleIsSkipped } from '@/lib/recharge/schedule'
 import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -92,6 +93,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     trackingNumber: null,
     partnerCode: input.partnerCode ?? null,
     partnerDiscountPct: input.partnerDiscountPct ?? null,
+    billedAmount: input.billedAmount ?? null,
     events: [
       event('created', `channel=${input.channel}`),
       ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),
@@ -163,6 +165,11 @@ export function subscriptionOrderLines(
   catalogue: CatalogueProduct[],
   cycle: number,
 ): OrderLine[] {
+  // A box the member skipped is a box that does not ship — and therefore never
+  // reaches the exit settlement, which counts what was dispatched rather than
+  // what the cadence predicted. That is E-3 fixed by construction rather than by
+  // a second subtraction somewhere downstream.
+  if (cycleIsSkipped(sub, cycle)) return []
   return sub.lines.filter((line) => shipsAtCycle(line, cycle)).map((line) => {
     const product = catalogue.find((p) => p.id === line.productId)
     const variant =
@@ -204,6 +211,8 @@ export async function createSubscriptionOrder(input: {
    * THEN advances the cycle, so `sub.monthsActive` is one behind at this point.
    */
   cycle: number
+  /** What this cycle's invoice actually charged (£) — see `Order.billedAmount`. */
+  billedAmount?: number | null
 }): Promise<Order> {
   // Idempotency: if this invoice already produced an order, return it unchanged.
   // This also protects the cycle: a redelivered webhook arriving after the clock
@@ -226,6 +235,9 @@ export async function createSubscriptionOrder(input: {
     // order is where that gets counted.
     partnerCode: input.sub.partnerCode ?? null,
     partnerDiscountPct: input.sub.partnerDiscountPct ?? null,
+    // What the member paid for this cycle, recorded now because it cannot be
+    // re-derived once the plan's price moves.
+    billedAmount: input.billedAmount ?? null,
   })
 }
 

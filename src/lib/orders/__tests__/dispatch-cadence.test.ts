@@ -141,6 +141,32 @@ describe('a cycle where nothing is due', () => {
   })
 })
 
+describe('a box the member skipped', () => {
+  // Skips are keyed by calendar month on `deliveryOverrides`; dispatch counts in
+  // cycles. `cycleIsSkipped` is the join, derived from `startedAt`.
+  const skipped = plan({
+    startedAt: '2026-01-10T00:00:00.000Z',
+    deliveryOverrides: { '2026-02': { skipped: true } },
+  })
+
+  it('does not ship', () => {
+    // Cycle 1 is February, which they skipped.
+    expect(subscriptionOrderLines(skipped, CATALOGUE, 1)).toEqual([])
+  })
+
+  it('does not disturb the months around it', () => {
+    expect(titlesAt(0, skipped)).toEqual(['Creatine', 'Magnesium', 'Protein'])
+    expect(titlesAt(2, skipped)).toEqual(['Magnesium', 'Protein'])
+  })
+
+  it('means the skipped box never reaches the settlement', () => {
+    // E-3, fixed by construction: the exit ledger counts orders, and a skipped
+    // cycle has no lines to count. Nothing subtracts it afterwards because
+    // nothing added it.
+    expect(subscriptionOrderLines(skipped, CATALOGUE, 1)).toHaveLength(0)
+  })
+})
+
 describe('shipsAtCycle', () => {
   const monthly = { deliveryIntervalMonths: 1, joinedAtMonth: 0 }
   const quarterly = { deliveryIntervalMonths: 3, joinedAtMonth: 0 }

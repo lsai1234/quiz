@@ -79,7 +79,7 @@ whether or not the cadence filter exists. It is the same fixture that hid the ca
 S-1 of the Stripe plan. **Test subscription behaviour at `monthsActive: 0`**, which is what
 a real checkout produces.
 
-### E-2 · The settlement re-prices history at today's prices
+### E-2 · The settlement re-prices history at today's prices · ✅ FIXED
 
 This is the scenario you named, and it is the most consequential.
 
@@ -101,7 +101,11 @@ direction that produces a complaint.
 The same applies to a member who added a product in month five: their whole history gets
 re-priced at the bigger monthly.
 
-### E-3 · Skipped deliveries are billed as shipped
+**Fixed by §3's ledger.** Orders already snapshot `lines[].unitPrice` at dispatch;
+`billedAmount` now records what each cycle's invoice actually charged. The statement adds
+up rows, so a price change cannot re-price the past in either direction.
+
+### E-3 · Skipped deliveries are billed as shipped · ✅ FIXED
 
 `skipNextDelivery()` pushes the ship date out and banks a credit, but
 `deliveriesMadeFor()` derives purely from `monthsActive` and cadence. A skipped box still
@@ -109,6 +113,12 @@ counts as delivered, so the settlement charges for a parcel that never left.
 
 `skippedDeliveryCount()` exists and is used by `monthsRemainingOnTerm` — it just isn't in
 the settlement path.
+
+**Fixed at dispatch rather than in the settlement.** `cycleIsSkipped()` joins the two
+representations — skips are keyed by calendar month on `deliveryOverrides`, dispatch counts
+in cycles — and `subscriptionOrderLines` returns nothing for a skipped cycle. The ledger
+then excludes it for free, because there is no order line to count. Nothing subtracts it
+afterwards, because nothing added it.
 
 ### E-4 · The consent gate is never enforced
 
@@ -154,6 +164,25 @@ cheap to build.
 > **Dependency:** this only works once orders reflect real dispatch (E-1) and only for
 > orders raised *after* that fix. Members mid-flight at the time need the model figure, or
 > a migration that back-fills dispatch history. See §8.
+
+---
+
+### What Phase 2 added, beyond the plan
+
+- **`billedAmount` on the order.** The other half of the ledger. `total` is the value of
+  the goods in that box; `billedAmount` is what the card was charged for the cycle. On a
+  smoothed plan they are deliberately different, and neither can be honestly re-derived
+  once a price has moved — so both are written at the time.
+- **A refusal to bill from a half-populated ledger.** `ledgerIsComplete()` requires every
+  cycle to carry a payment figure. A plan predating this has boxes but no payments and
+  would compute as *"paid nothing, owes everything"* — the most damaging way this could be
+  wrong. Those members fall back to the forecast.
+- **`ledgerDivergence()`.** The hub shows the forecast while a plan runs; the ledger is what
+  charges. A gap over £1 between them means one is wrong about the plan's history, and a
+  founder should see it rather than the cheaper of the two winning silently.
+- **The policies are reported as lines, not applied silently.** The statement says what the
+  cap took off and what the waiver took off, so *"we capped this at what you have paid"* is
+  a sentence the screen can actually show.
 
 ---
 
@@ -433,7 +462,7 @@ and would cost margin for nothing.
 |---|---|---|
 | ~~0~~ | ~~Model D-9 across real bundles~~ — **done**, §9. Two levers adopted. | ✅ |
 | ~~1~~ | ~~Fix E-1 — dispatch respects cadence~~ — **done**. `shipsAtCycle` gates `subscriptionOrderLines`; the webhook computes the cycle; empty boxes stay out of the queue. | ✅ |
-| **2** | Ledger-based settlement (§3) + E-3 skips + overpayment. Pure functions, heavily tested. | ~2 days |
+| ~~2~~ | ~~Ledger-based settlement + E-3 skips + overpayment~~ — **done**. `exit-ledger.ts`; skips honoured at dispatch; overpayment reported. | ✅ |
 | **3** | Server-side cancel route: recompute, enforce consent (E-4), snapshot, charge, cancel. Stripe invoice + waiver rules. | ~2 days |
 | **4** | The member journey — statement, options A/B/C, receipt. | ~2 days |
 | **5** | Founders portal — balance, exit queue, waivers, financials. | ~1.5 days |

@@ -175,6 +175,11 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
          * before it gets here.
          */
         cycle: isFirstInvoice ? 0 : sub.monthsActive + 1,
+        // Stripe's own figure for what this cycle cost, in major units. The
+        // authoritative record of what the card was charged — intro coupon,
+        // proration and all — and the half of the exit settlement that cannot be
+        // reconstructed later from a plan whose price has since moved.
+        billedAmount: typeof invoice.amount_paid === 'number' ? invoice.amount_paid / 100 : null,
         // Captured at signup and carried on the subscription, because Stripe
         // only asks for it once.
         shippingAddress: sub.shippingAddress ?? null,
