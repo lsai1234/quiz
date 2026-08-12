@@ -93,6 +93,28 @@ describe('terms cover the promises the app makes', () => {
     expect(prose).toContain('£80')
   })
 
+  it('discloses the three things that make the balance survivable', () => {
+    // Each is a policy in `PRICING_CONFIG.settlement`, and each has to be a
+    // promise in the terms before it is worth anything to the member.
+    const prose = proseOf(terms())
+    // Capped at what they have paid.
+    expect(prose).toContain('never ask you for more than you have already paid')
+    // Small balances waived.
+    expect(prose).toContain('£5 or less, there is nothing to pay')
+    // The intro discount is not clawed back at the exit.
+    expect(prose).toContain('do not take it back when you leave')
+  })
+
+  it('admits the balance can RISE again, rather than only that it falls', () => {
+    // The correction that moved SETTLEMENT_TERMS_VERSION. The balance is a
+    // sawtooth: it climbs every time a multi-month item ships. Saying only that
+    // it "reaches zero" describes half the curve, and the missing half is the
+    // half that costs the member money.
+    const prose = proseOf(terms())
+    expect(prose).toContain('rises again each time a new multi-month item arrives')
+    expect(prose).toContain('leaving costs nothing at all')
+  })
+
   it('shows the figure before the member confirms', () => {
     expect(proseOf(terms())).toContain('before you confirm the cancellation')
   })

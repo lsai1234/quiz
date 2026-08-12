@@ -7,10 +7,11 @@
  * has paid, and when is it worst?**
  *
  * That distinction matters because the arithmetic being correct is not the same
- * as the outcome being sellable. A month-one settlement can exceed the first
- * bill — in the worked example published in the terms it is £80 against £70
- * paid — and a member who is asked for more than they have ever paid, however
- * correctly, disputes it. Chargebacks arrive before revenue does.
+ * as the outcome being sellable. A member asked for more than they have ever
+ * paid disputes it, however correct the sum, and chargebacks arrive before
+ * revenue does. Running this is what produced the three settlement policies now
+ * in `PRICING_CONFIG.settlement`; pass a config with them turned off to see what
+ * they are protecting against.
  *
  * Pure and dependency-light on purpose: it runs over any `MemberSubscription`,
  * so it can be pointed at the persona fixtures, at seed bundles, or at real
@@ -19,6 +20,7 @@
 import type { MemberSubscription } from './types'
 import { syncDeliveryCounts } from './clock'
 import { cancelSettlement, paidToDateOf, shippedValueOf } from './mock'
+import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -31,7 +33,8 @@ export interface ExitPoint {
   shipped: number
   /** Everything they have paid by now, including the discounted first month (£). */
   paid: number
-  /** The balance owed to leave (£). Zero once payments have caught up. */
+  /** The balance owed to leave (£), after the cap and the waiver. Zero once
+   *  payments have caught up, or once the balance is too small to collect. */
   settlement: number
   /**
    * Settlement as a multiple of what they have paid.
@@ -66,10 +69,14 @@ export function subscriptionAtMonth(sub: MemberSubscription, month: number): Mem
   return syncDeliveryCounts({ ...sub, monthsActive: Math.max(0, month) })
 }
 
-export function exitPointAt(sub: MemberSubscription, month: number): ExitPoint {
+export function exitPointAt(
+  sub: MemberSubscription,
+  month: number,
+  config: PricingConfig = getPricingConfig(),
+): ExitPoint {
   const at = subscriptionAtMonth(sub, month)
   const paid = paidToDateOf(at)
-  const settlement = cancelSettlement(at)
+  const settlement = cancelSettlement(at, config)
   return {
     month,
     shipped: shippedValueOf(at),
@@ -86,12 +93,16 @@ export function exitPointAt(sub: MemberSubscription, month: number): ExitPoint {
  * curve stops before the balance has had a chance to clear and `clearsAtMonth`
  * reads as "never" when it isn't.
  */
-export function exitCurve(sub: MemberSubscription, months = 12): ExitCurve {
+export function exitCurve(
+  sub: MemberSubscription,
+  months = 12,
+  config: PricingConfig = getPricingConfig(),
+): ExitCurve {
   const points: ExitPoint[] = []
-  for (let m = 0; m <= months; m++) points.push(exitPointAt(sub, m))
+  for (let m = 0; m <= months; m++) points.push(exitPointAt(sub, m, config))
 
   const worst = points.reduce((a, b) => (b.settlement > a.settlement ? b : a), points[0])
-  const cleared = points.find((p) => p.settlement <= 0.005)
+  const cleared = points.find((p) => p.settlement <= 0)
   const ratios = points.map((p) => p.ratioToPaid).filter((r): r is number => r != null)
 
   return {
@@ -105,10 +116,11 @@ export function exitCurve(sub: MemberSubscription, months = 12): ExitCurve {
 /**
  * Apply an intro discount to the first month and nothing else.
  *
- * A scratch card makes the settlement BIGGER, which is the counter-intuitive
- * part and the reason this is modelled separately: the discount reduces what
- * they paid without reducing what we sent, so the whole of it lands in the
- * shortfall. The deepest card on offer is therefore also the worst exit.
+ * Under the ADOPTED policy this changes only what they paid, not what they owe
+ * — `settlement.reclaimIntroDiscount` is false. Kept as a modelling input
+ * because the rejected alternative is worth being able to re-run: clawing the
+ * card back lands the whole discount in the shortfall, permanently, and the
+ * deepest card then becomes the worst exit.
  */
 export function withIntroDiscount(sub: MemberSubscription, rate: number): MemberSubscription {
   const clamped = Math.min(1, Math.max(0, rate))

@@ -407,6 +407,53 @@ And one thing the modelling turned up that changes the product rather than the m
 |---|---|---|
 | 9 | Show the next free-exit date | **Yes — headline it.** The balance is a sawtooth with a £0 month every cadence, so almost every member is 1–2 months from leaving free |
 
+### Decisions 7–10, now implemented
+
+`PRICING_CONFIG.settlement` holds all three policies, so they are one place and
+editable from the Pricing page later:
+
+```ts
+settlement: {
+  minimum: 5,                   // waive anything at or below this
+  reclaimIntroDiscount: false,  // the card is a marketing cost, not a loan
+  maxShareOfPaid: 1,            // never more than they have paid us
+}
+```
+
+**The 1p accumulation you spotted was a real bug, and worse than a penny.**
+`flatMonthly` is rounded to the penny; the goods it amortises are not. A plan
+billing £54.94 against £54.9433 of amortised product leaves the member a third of
+a penny short every month, and it compounds — the balance drifts up by ~1p per
+cadence and **never reaches exactly zero**. Financially that is ~40p a decade.
+Logically it is fatal: `paidToDate >= shippedValue` is never true, so **Option B
+would never terminate** — a member on "pay it off, then stop" would pay forever.
+
+The £5 floor fixes it properly, and `settlementIsClear()` is now the only correct
+way to ask "has this cleared". A bare `> 0` test is testing a permanently true
+condition.
+
+### The terms had to change with the policy
+
+Three sentences in the consented Terms were contradicted by the new rules, and
+one was wrong before it:
+
+| Was | Now |
+|---|---|
+| *"settle the £80 difference"* | £80 named, then capped to the £70 they paid |
+| *(nothing about a cap or a floor)* | both disclosed as promises |
+| *(nothing about the intro discount)* | explicitly not clawed back |
+| *"it reaches zero as soon as [payments catch up]"* | **corrected** — it rises again on each multi-month dispatch, and we show the next free date |
+
+The first three are concessions. **The fourth is a correction**, and it is the
+reason `SETTLEMENT_TERMS_VERSION` moves to `2026-08-12` rather than only
+`TERMS_VERSION`. A member who agreed to "it reaches zero" was told half of a
+curve, and the missing half is the half that costs them money — so they
+re-consent before anything is charged.
+
+That folds neatly into decision 4: **one re-consent campaign, one version**,
+covering both the original settlement disclosure and this correction. Worth legal
+eyes on the sawtooth wording specifically.
+
 ### Also now in scope, from decision 4
 
 A **re-consent campaign** is its own piece of work — an in-hub notice, a deadline, a

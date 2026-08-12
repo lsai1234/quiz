@@ -73,7 +73,7 @@ export interface LegalDocument {
 export type LegalDocumentId = 'terms' | 'disclaimer'
 
 /** Bump on a material change. Triggers the in-hub re-consent notice. */
-export const TERMS_VERSION = '2026-08-03'
+export const TERMS_VERSION = '2026-08-12'
 export const DISCLAIMER_VERSION = '2026-07-29'
 
 /**
@@ -85,8 +85,17 @@ export const DISCLAIMER_VERSION = '2026-07-29'
  * they were never shown; they cancel free until they accept these terms. Consent
  * records are keyed by version (see `lib/legal/consent.ts`), so this is
  * enforceable per member rather than by deploy date.
+ *
+ * Moved to 2026-08-12. Most of that revision is more generous — the balance is
+ * capped at what the member has paid, anything under £5 is waived, and a
+ * first-month discount is no longer clawed back — but one part is a CORRECTION
+ * rather than a concession: the previous wording said the balance "reaches zero
+ * as soon as [payments catch up]" and stopped there, which is only half true.
+ * It is a sawtooth, and it rises again each time a multi-month item ships. A
+ * member who agreed to the old sentence was not told that, so the gate moves
+ * with it and they re-consent before anything is charged.
  */
-export const SETTLEMENT_TERMS_VERSION = '2026-08-03'
+export const SETTLEMENT_TERMS_VERSION = '2026-08-12'
 
 // ─── Shared sentences (one definition, used everywhere) ───────────────────────
 
@@ -215,8 +224,10 @@ export function getTermsDocument(
           'There is no minimum term and no cancellation fee. You can cancel whenever you like, from your account, in a couple of taps — we will never ask you to phone us or make you wait out a notice period.',
           'What you do settle when you cancel is the balance on anything we have already sent you and you have not finished paying for. This is not a charge for leaving; it is the outstanding balance on goods you have received and kept.',
           'Here is why it can arise. Your monthly amount is a smoothed average, so items that last several months are spread across those months rather than charged in full the month they arrive. That is good for you while you are subscribed — it keeps your bill flat and predictable instead of spiking whenever a big tub is due. But it means a first box can contain more value than a first payment covers.',
-          'A worked example. Your plan is £70 a month: a £30 protein you get every month, and two £60 tubs that each last three months (£20 a month each). Your first box contains all three — £150 of product — and you have paid £70. If you cancel after that first month, you keep everything in the box and settle the £80 difference. Nothing more.',
-          'The balance only ever covers goods already dispatched to you. It goes down every month as your payments catch up with what was sent, and it reaches zero — nothing at all to pay — as soon as they do. It can never be more than the value of what you have actually received, and we never charge you for a box that has not shipped.',
+          'A worked example. Your plan is £70 a month: a £30 protein you get every month, and two £60 tubs that each last three months (£20 a month each). Your first box contains all three — £150 of product — and you have paid £70. The difference is £80 — but we never ask you for more than you have already paid us, so you would settle £70, keep everything in the box, and owe nothing further.',
+          'That cap always applies, whatever the arithmetic says. And if the balance comes to £5 or less, there is nothing to pay at all.',
+          'If you claimed a first-month discount when you joined, we do not take it back when you leave. Your balance is worked out as though you had paid the full monthly amount, so accepting the offer can never make leaving cost you more.',
+          'The balance only ever covers goods already dispatched to you, and we never charge you for a box that has not shipped. It falls every month as your payments catch up with what was sent, and reaches zero when they do — but it rises again each time a new multi-month item arrives, because that item has only just started being paid for. So there is a regular point in your plan, usually a month or two away, where leaving costs nothing at all. We will always show you when that next date is, so you can leave then instead if you would rather.',
           'You will see the exact figure, and what it is made up of, before you confirm the cancellation. Your plan then ends and nothing further is billed.',
           'Some cancellations settle nothing at all. You pay no balance if you cancel during a price-increase notice period (see “Prices can change”), if you are cancelling after we changed your plan ourselves because a product became unavailable, or if your payments have already covered everything sent to you.',
           'You also have the statutory right to cancel within 14 days of your first order under the Consumer Contracts Regulations 2013. That right comes first: exercise it and you return any unopened products for a refund rather than settling a balance. For hygiene reasons we cannot refund opened supplements unless they are faulty.',

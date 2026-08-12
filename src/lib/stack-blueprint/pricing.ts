@@ -166,6 +166,57 @@ export const PRICING_CONFIG = {
   minSubscriptionMonthly: 25,
 
   /**
+   * The exit settlement — the balance owed on goods already sent when a member
+   * cancels early. See `docs/EXIT_JOURNEY_PROPOSAL.md` §9 for the modelling
+   * these three numbers come from.
+   */
+  settlement: {
+    /**
+     * Balances at or below this are waived entirely (£).
+     *
+     * Commercially it is not worth collecting: below a fiver the support time,
+     * the card fee and the chargeback risk all cost more than the balance.
+     *
+     * It is also load-bearing, which is less obvious. `flatMonthly` is rounded
+     * to the penny while the goods it amortises are not — a plan billing £54.94
+     * against £54.9433 of amortised product leaves the member a third of a penny
+     * short every month, and that compounds. The balance therefore drifts
+     * upwards by about 1p per cadence forever and NEVER reaches exactly zero.
+     * Any logic testing `settlement > 0` is testing a condition that is
+     * permanently true; the "pay it off, then stop" exit would never terminate.
+     * This threshold is what makes "the balance has cleared" a decidable
+     * question, so use `settlementIsClear()` rather than comparing to zero.
+     */
+    minimum: 5,
+    /**
+     * Whether an intro discount counts against the shortfall.
+     *
+     * FALSE, deliberately. The scratch card reduces what the member paid without
+     * reducing what we sent, so counting it lifts the entire balance for the
+     * whole life of the plan — the modelling found a 50% card means the balance
+     * never returns to zero at any point, ever, and that in 12 of 48 modelled
+     * cases it exceeds everything the member has ever paid us.
+     *
+     * The discount was a marketing cost we chose to bear to win the signup.
+     * Reclaiming it at the exit charges it back to precisely the people most
+     * likely to dispute it, and turns our best conversion tool into a debt
+     * instrument. So the settlement is measured against what the plan COSTS, not
+     * against what the card reduced month one to.
+     */
+    reclaimIntroDiscount: false,
+    /**
+     * Cap the balance at this multiple of what the member has actually paid.
+     * `null` for no cap.
+     *
+     * Belt and braces on top of `reclaimIntroDiscount: false`. Modelled at
+     * £0.00 written off on two of three representative plans and £4.34 on the
+     * third, in exchange for "you owe us more than you have ever paid us" being
+     * structurally impossible to say.
+     */
+    maxShareOfPaid: 1 as number | null,
+  },
+
+  /**
    * Smallest order we will take at all (£ inc VAT).
    *
    * A one-off order has nothing behind it — no renewal, no second chance — so if

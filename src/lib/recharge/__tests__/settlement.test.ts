@@ -14,7 +14,7 @@
  * been charged a balance they had cleared long ago.
  */
 import type { MemberSubscription, MemberSubscriptionLine } from '../types'
-import { cancelSettlement, shippedValueOf, paidToDateOf } from '../mock'
+import { cancelSettlement, settlementBasisOf, shippedValueOf, paidToDateOf } from '../mock'
 import { advanceCycle } from '../clock'
 
 function line(
@@ -68,6 +68,11 @@ function exampleSub(over: Partial<MemberSubscription> = {}): MemberSubscription 
   )
 }
 
+/** The uncapped, unwaived gap — what the policies below are applied to. */
+function rawGap(s: Parameters<typeof shippedValueOf>[0]) {
+  return Math.round((shippedValueOf(s) - settlementBasisOf(s)) * 100) / 100
+}
+
 describe('cancelSettlement', () => {
   it('matches the worked example published in the terms', () => {
     // flatMonthly = 30 + 20 + 20 = £70. First box = 30 + 60 + 60 = £150.
@@ -75,17 +80,48 @@ describe('cancelSettlement', () => {
     expect(s.flatMonthly).toBe(70)
     expect(shippedValueOf(s)).toBe(150)
     expect(paidToDateOf(s)).toBe(70)
-    expect(cancelSettlement(s)).toBe(80)
+    // The raw gap is £80, but the cap holds it to what they have actually paid.
+    // The terms publish the capped figure — see `legal/content.ts`.
+    expect(rawGap(s)).toBe(80)
+    expect(cancelSettlement(s)).toBe(70)
   })
 
-  it('accounts for the first-month intro discount — less paid means MORE owed', () => {
+  it('caps the balance at everything the member has paid', () => {
+    // "You owe us more than you have ever given us" is not a sentence we are
+    // willing to put in front of anyone, however sound the arithmetic behind it.
+    const s = exampleSub()
+    expect(cancelSettlement(s)).toBe(paidToDateOf(s))
+    expect(cancelSettlement(s)).toBeLessThan(rawGap(s))
+  })
+
+  it('does NOT claw back the first-month intro discount', () => {
+    // Reversed deliberately. The discount reduces what they paid without
+    // reducing what we sent, so counting it against them lifts the balance for
+    // the whole life of the plan — a 50% card means it never reaches zero at
+    // any point, ever. It was a marketing cost we chose to bear to win the
+    // signup, not a loan. See docs/EXIT_JOURNEY_PROPOSAL.md §9.
     const full = exampleSub()
     const halfOff = exampleSub({ introDiscountRate: 0.5, firstMonth: 35 })
+
+    // What they PAID still differs — that figure stays truthful for the statement.
     expect(paidToDateOf(full)).toBe(70)
     expect(paidToDateOf(halfOff)).toBe(35)
-    // The loss-leader can't be banked and bailed on.
-    expect(cancelSettlement(halfOff)).toBeGreaterThan(cancelSettlement(full))
-    expect(cancelSettlement(halfOff)).toBe(115)
+
+    // What they OWE does not: both are settled against what the plan costs.
+    expect(settlementBasisOf(full)).toBe(settlementBasisOf(halfOff))
+    // The card holder is capped harder, because the cap tracks what they paid —
+    // so taking the discount can never make the exit more expensive.
+    expect(cancelSettlement(halfOff)).toBeLessThanOrEqual(cancelSettlement(full))
+  })
+
+  it('waives a balance too small to be worth collecting', () => {
+    // Below the minimum the support time, the card fee and the chargeback risk
+    // all cost more than the balance. It is also what makes "cleared" decidable
+    // at all — see `settlementIsClear`.
+    const tiny = exampleSub({ monthsActive: 0 })
+    tiny.lines = [{ ...tiny.lines[0], pricePerDelivery: 30.01, deliveryIntervalMonths: 1 }]
+    tiny.flatMonthly = 30
+    expect(cancelSettlement(tiny)).toBe(0)
   })
 
   it('prefers the recorded firstMonth over re-deriving it', () => {

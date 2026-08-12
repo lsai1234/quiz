@@ -24,6 +24,7 @@ import {
   type SubscriptionPlanOptions,
 } from '@/lib/stack-blueprint/pricing'
 import { basisForProduct } from '@/lib/feedback'
+import { syncDeliveryCounts } from './clock'
 import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine, SafetyConstraints } from './types'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -423,24 +424,92 @@ export function paidToDateOf(sub: MemberSubscription): number {
 }
 
 /**
+ * What the settlement is measured against — what the plan COSTS over the months
+ * lived, at the full flat monthly, ignoring any intro discount.
+ *
+ * Distinct from `paidToDateOf`, which is the truthful "what your card was
+ * charged" figure and belongs on the member's statement. This is the basis for
+ * the shortfall, and the difference between the two is exactly the intro
+ * discount we are choosing not to reclaim (`settlement.reclaimIntroDiscount`).
+ *
+ * Keeping them separate is what lets the exit statement show the discount as a
+ * line the member KEEPS — "intro offer, not reclaimed: −£27.47" — rather than
+ * silently folding it into a smaller number nobody can account for.
+ */
+export function settlementBasisOf(sub: MemberSubscription, config = getPricingConfig()): number {
+  if (config.settlement.reclaimIntroDiscount) return paidToDateOf(sub)
+  return round(sub.flatMonthly * (1 + Math.max(0, sub.monthsActive)))
+}
+
+/**
  * The cancel BUY-OUT: the outstanding balance on goods already delivered.
  *
  * The flat monthly SPREADS the cost of items that last several months, so a
  * member who cancels early has received more product than they have paid for —
  * three tubs in month one when only one is due in month two. This is that gap,
- * and nothing more: the value of what we shipped, minus everything they paid.
+ * and nothing more.
  *
- * It reaches 0 as soon as their payments cover what was sent, which is what lets
- * "cancel whenever you want" be true without the smoothing being exploitable.
  * It is a debt for goods received, NOT a cancellation fee — that distinction is
  * the whole basis on which it is chargeable, so keep it in the maths and in the
  * copy (see docs/STRIPE_INTEGRATION_PLAN.md §1).
  *
- * Correct at any point in the subscription's life only because the clock now
- * advances — see `lib/recharge/clock.ts`.
+ * Three policies shape the raw gap, all modelled in
+ * `docs/EXIT_JOURNEY_PROPOSAL.md` §9:
+ *
+ *  1. It is measured against `settlementBasisOf`, so an intro discount is not
+ *     clawed back at the exit.
+ *  2. It is capped at `settlement.maxShareOfPaid` × what they actually paid, so
+ *     it can never exceed everything they have given us.
+ *  3. Anything at or below `settlement.minimum` is waived to zero — see
+ *     `settlementIsClear`, and do not replace that with a `> 0` test.
+ *
+ * NOT a smoothly decaying balance, whatever the shape of the word "settlement"
+ * suggests. It is a sawtooth: it falls as each dispatch amortises and jumps
+ * again on the next one, for the life of the plan. `nextFreeExitMonth` is how a
+ * member is told when the next £0 window is.
  */
-export function cancelSettlement(sub: MemberSubscription): number {
-  return round(Math.max(0, shippedValueOf(sub) - paidToDateOf(sub)))
+export function cancelSettlement(sub: MemberSubscription, config = getPricingConfig()): number {
+  const raw = Math.max(0, shippedValueOf(sub) - settlementBasisOf(sub, config))
+  const cap = config.settlement.maxShareOfPaid
+  const capped = cap == null ? raw : Math.min(raw, Math.max(0, paidToDateOf(sub) * cap))
+  return settlementIsClear(capped, config) ? 0 : round(capped)
+}
+
+/**
+ * Whether a balance counts as cleared.
+ *
+ * Use this instead of `=== 0` or `> 0.005`. The balance never reaches exactly
+ * zero: `flatMonthly` is rounded to the penny and the goods it amortises are
+ * not, so a plan billing £54.94 against £54.9433 of product leaves the member a
+ * third of a penny short every month and the gap drifts up by about 1p per
+ * cadence forever. A termination test against zero would never fire — which is
+ * precisely how the "pay it off, then stop" exit would run for eternity.
+ */
+export function settlementIsClear(amount: number, config = getPricingConfig()): boolean {
+  return amount <= config.settlement.minimum
+}
+
+/**
+ * The next month at which leaving would cost nothing, from `from` onwards.
+ *
+ * The balance is a sawtooth with a £0 window once per cadence, so almost every
+ * member is one or two months from a free exit. Telling them which month turns
+ * a demand into a choice — and it is the honest thing to do, because we know.
+ *
+ * `null` when no free window exists inside `horizon`, which in practice means a
+ * plan whose cadences never line up rather than one that can never clear.
+ */
+export function nextFreeExitMonth(
+  sub: MemberSubscription,
+  from = sub.monthsActive,
+  horizon = 12,
+  config = getPricingConfig(),
+): number | null {
+  for (let m = Math.max(0, from); m <= from + horizon; m++) {
+    const at = syncDeliveryCounts({ ...sub, monthsActive: m })
+    if (cancelSettlement(at, config) <= 0) return m
+  }
+  return null
 }
 
 /** Add a product as a new subscription line (sized & priced at the sub rate, no intro). */

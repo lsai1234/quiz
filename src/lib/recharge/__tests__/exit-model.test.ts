@@ -21,7 +21,7 @@ import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { buildMemberSubscription } from '@/lib/recharge/mock'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { cappedSettlement, exitCurve, exitPointAt, withIntroDiscount } from '@/lib/recharge/exit-model'
-import { levelForStackPreference } from '@/lib/stack-blueprint/pricing'
+import { levelForStackPreference, PRICING_CONFIG, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import type { QuizAnswers } from '@/lib/types'
 
 function answers(o: Partial<QuizAnswers> = {}): QuizAnswers {
@@ -77,56 +77,67 @@ describe('the shape of the balance over a plan’s life', () => {
   })
 })
 
-describe('what an intro discount does to the exit', () => {
-  it('is never amortised — the discount becomes a permanent debt', () => {
+/** The policy we rejected, so the reason for rejecting it stays testable. */
+const RECLAIMING: PricingConfig = {
+  ...PRICING_CONFIG,
+  settlement: { ...PRICING_CONFIG.settlement, reclaimIntroDiscount: true, maxShareOfPaid: null, minimum: 0 },
+}
+
+describe('what an intro discount would do if we clawed it back', () => {
+  it('would never be amortised — the discount becomes a permanent debt', () => {
     const plan = planFor(BULKING)
     const discounted = withIntroDiscount(plan, 0.5)
 
-    const plainFloor = Math.min(...exitCurve(plan, 14).points.map((p) => p.settlement))
-    const discountedFloor = Math.min(...exitCurve(discounted, 14).points.map((p) => p.settlement))
+    const plainFloor = Math.min(...exitCurve(plan, 14, RECLAIMING).points.map((p) => p.settlement))
+    const cardFloor = Math.min(...exitCurve(discounted, 14, RECLAIMING).points.map((p) => p.settlement))
 
-    // The undiscounted plan touches zero. The discounted one never does: the
+    // Undiscounted touches zero once per cadence. Discounted never does: the
     // whole sawtooth is lifted by the discount, for the life of the plan.
     expect(plainFloor).toBeLessThan(0.5)
-    expect(discountedFloor).toBeGreaterThan(plan.flatMonthly * 0.4)
+    expect(cardFloor).toBeGreaterThan(plan.flatMonthly * 0.4)
   })
 
-  it('makes the month-one balance exceed everything the member has ever paid', () => {
+  it('would make the month-one balance exceed everything the member had paid', () => {
     const withCard = withIntroDiscount(planFor(BULKING), 0.5)
-    const point = exitPointAt(withCard, 0)
-    expect(point.ratioToPaid).toBeGreaterThan(1)
-  })
-
-  it('excluding the discount from the shortfall fixes both', () => {
-    // The lever: settle against what the plan COSTS, not what the card reduced
-    // month one to. The discount was a marketing cost we chose to bear — turning
-    // it into a debt at the exit is claiming it back from the people most likely
-    // to complain about it.
-    const plan = planFor(BULKING)
-    const withCard = withIntroDiscount(plan, 0.5)
-    const excluded = { ...withCard, firstMonth: plan.flatMonthly }
-
-    expect(exitPointAt(withCard, 0).ratioToPaid).toBeGreaterThan(1)
-    expect(exitPointAt(excluded, 0).ratioToPaid).toBeLessThan(0.5)
-    expect(exitPointAt(excluded, 0).settlement).toBe(exitPointAt(plan, 0).settlement)
+    expect(exitPointAt(withCard, 0, RECLAIMING).ratioToPaid).toBeGreaterThan(1)
   })
 })
 
-describe('capping the settlement at what they have paid', () => {
-  it('costs almost nothing on a normal plan', () => {
-    const curve = exitCurve(planFor(BULKING), 14)
-    const writtenOff = curve.points.reduce((s, p) => s + (p.settlement - cappedSettlement(p, 1)), 0)
-    expect(writtenOff).toBe(0)
+describe('what the adopted policy does instead', () => {
+  it('settles a card holder against the same basis as everyone else', () => {
+    const plan = planFor(BULKING)
+    const withCard = withIntroDiscount(plan, 0.5)
+    // Same plan, same goods, same months — so the same balance. Taking the offer
+    // cannot make leaving more expensive.
+    expect(exitPointAt(withCard, 0).settlement).toBeLessThanOrEqual(exitPointAt(plan, 0).settlement)
+    expect(exitPointAt(withCard, 0).ratioToPaid).toBeLessThan(1)
   })
 
-  it('only bites where the balance would otherwise exceed everything paid', () => {
-    const point = exitPointAt(withIntroDiscount(planFor(BULKING), 0.5), 0)
-    expect(cappedSettlement(point, 1)).toBe(point.paid)
-    expect(cappedSettlement(point, 1)).toBeLessThan(point.settlement)
+  it('keeps a free-exit window even for a card holder', () => {
+    const withCard = withIntroDiscount(planFor(BULKING), 0.5)
+    const free = exitCurve(withCard, 14).points.filter((p) => p.settlement === 0)
+    expect(free.length).toBeGreaterThan(1)
   })
 
+  it('never asks for more than the member has paid', () => {
+    for (const rate of [0, 0.1, 0.25, 0.5]) {
+      const plan = withIntroDiscount(planFor(BULKING), rate)
+      for (const point of exitCurve(plan, 14).points) {
+        expect(point.settlement).toBeLessThanOrEqual(point.paid)
+      }
+    }
+  })
+})
+
+describe('the cap, in isolation', () => {
   it('is a no-op when no cap is configured', () => {
     const point = exitPointAt(planFor(BULKING), 0)
     expect(cappedSettlement(point, null)).toBe(point.settlement)
+  })
+
+  it('bites only where the balance would exceed everything paid', () => {
+    const point = exitPointAt(withIntroDiscount(planFor(BULKING), 0.5), 0, RECLAIMING)
+    expect(cappedSettlement(point, 1)).toBe(point.paid)
+    expect(cappedSettlement(point, 1)).toBeLessThan(point.settlement)
   })
 })
