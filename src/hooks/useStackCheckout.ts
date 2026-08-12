@@ -67,6 +67,21 @@ function serverErrorMessage(status: number, error?: string): string {
 }
 
 /**
+ * The extra lines a failed checkout carries: the log reference, and — for a
+ * founder signed into the portal — what actually broke.
+ *
+ * Shown rather than swallowed because the alternative is a founder testing
+ * their own checkout on a phone, reading a sentence written for customers, and
+ * having no way to tell a Stripe key problem from a database one.
+ */
+function failureDetail(data: { ref?: string; detail?: string } | null): string[] {
+  const lines: string[] = []
+  if (data?.detail) lines.push(data.detail)
+  if (data?.ref) lines.push(`Reference: ${data.ref}`)
+  return lines
+}
+
+/**
  * Validates and initiates checkout for a StackBlueprint, for either plan.
  *
  * One-off      → POST /api/cart → checkoutUrl → redirect.
@@ -104,6 +119,10 @@ export function useStackCheckout() {
         error?: string
         code?: string
         versions?: ConsentVersions
+        /** Log reference for a server-side failure. */
+        ref?: string
+        /** What broke — present only for a signed-in founder. */
+        detail?: string
       } | null = await res.json().catch(() => null)
       // Consent is the one refusal the member can clear from here: ask for it
       // and re-submit, rather than showing a banner about a box that was never
@@ -124,7 +143,10 @@ export function useStackCheckout() {
         // rebuilding the stack. The status goes in the message because a member
         // reporting "it says 500" tells us far more than "it didn't work".
         console.error(`[checkout] finalize failed (${res.status})`, data)
-        setState({ status: 'error', messages: [serverErrorMessage(res.status, data?.error)] })
+        setState({
+          status: 'error',
+          messages: [serverErrorMessage(res.status, data?.error), ...failureDetail(data)],
+        })
         return
       }
       if (data.checkoutUrl.startsWith('#')) {

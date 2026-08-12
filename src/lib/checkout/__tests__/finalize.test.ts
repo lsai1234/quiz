@@ -4,7 +4,7 @@ import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
  * returns a payment URL (mock mode returns a placeholder). Runs against the
  * in-memory DB.
  */
-import { finalizeCheckout, claimIntroDiscount, CheckoutRejected } from '../finalize'
+import { finalizeCheckout, claimIntroDiscount, CheckoutRejected, PaymentStartFailed } from '../finalize'
 import type { CheckoutPayload } from '../types'
 import { createUser } from '@/lib/db/users'
 import { getSubscription, getQuiz } from '@/lib/db/hub-data'
@@ -15,6 +15,13 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
 import { setPortalPricingOverrides, resetPortalPricing } from '@/lib/portal/store'
 import { createPartner, setPartnerStatus } from '@/lib/partners'
+
+// Stripe is stubbed for the whole file. Only the live-payment tests below reach
+// it — everything else runs in mock mode and never asks for a session.
+const mockCreateSubscriptionSession = jest.fn()
+jest.mock('@/lib/payments/stripe', () => ({
+  createSubscriptionSession: (...args: unknown[]) => mockCreateSubscriptionSession(...args),
+}))
 
 // The card is switched off in the live config — a partner's code is the only
 // extra discount now. These tests pin the BANKING of a claim, which still has to
@@ -284,6 +291,74 @@ describe('consent is a precondition of checkout', () => {
 
     const stored = await getSubscription(user.id)
     expect(stored?.safetyConstraints).toEqual({ dietaryTags: ['vegan'], noStimulants: true })
+  })
+})
+
+describe('when the payment cannot be started', () => {
+  // Live Stripe failing used to fall through to the MOCK branch below it, which
+  // raises a subscription order and shows a confirmation — a Stripe outage
+  // handing out running subscriptions that nothing ever charges for. The safe
+  // direction is to fail: "try again" costs a sale, a free subscription costs
+  // every month of it.
+  const stripeEnv = { PAYMENTS_SOURCE: process.env.PAYMENTS_SOURCE, STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY }
+
+  beforeEach(() => {
+    process.env.PAYMENTS_SOURCE = 'stripe'
+    process.env.STRIPE_SECRET_KEY = 'sk_test_not_a_real_key'
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    process.env.PAYMENTS_SOURCE = stripeEnv.PAYMENTS_SOURCE
+    process.env.STRIPE_SECRET_KEY = stripeEnv.STRIPE_SECRET_KEY
+    mockCreateSubscriptionSession.mockReset()
+    jest.restoreAllMocks()
+  })
+
+  it('refuses the checkout rather than raising an unpaid subscription', async () => {
+    mockCreateSubscriptionSession.mockRejectedValue(new Error('No such coupon: chrgd-first-month-13'))
+    const user = await createUser({ email: 'stripe-down@example.com', passwordHash: 'h' })
+
+    await expect(finalizeCheckout(user.id, user.email, { subscription, consent }))
+      .rejects.toThrow(PaymentStartFailed)
+
+    // No order raised — nothing ships that nobody is being billed for.
+    const { listOrders } = await import('@/lib/orders/repo')
+    expect((await listOrders()).filter((o) => o.userId === user.id)).toHaveLength(0)
+  })
+
+  it('refuses a session that comes back without a URL, too', async () => {
+    // Same hazard by a quieter route: Stripe answering, but with nothing to
+    // send the member to.
+    mockCreateSubscriptionSession.mockResolvedValue({ id: 'cs_1', url: null })
+    const user = await createUser({ email: 'no-url@example.com', passwordHash: 'h' })
+
+    await expect(finalizeCheckout(user.id, user.email, { subscription, consent }))
+      .rejects.toThrow(PaymentStartFailed)
+
+    const { listOrders } = await import('@/lib/orders/repo')
+    expect((await listOrders()).filter((o) => o.userId === user.id)).toHaveLength(0)
+  })
+
+  it('names Stripe as the thing that refused, for the log', async () => {
+    mockCreateSubscriptionSession.mockRejectedValue(new Error('Invalid API Key provided'))
+    const user = await createUser({ email: 'bad-key@example.com', passwordHash: 'h' })
+
+    const err = await finalizeCheckout(user.id, user.email, { subscription, consent })
+      .catch((e: unknown) => e as PaymentStartFailed)
+
+    expect(err).toBeInstanceOf(PaymentStartFailed)
+    expect((err as PaymentStartFailed).message).toMatch(/stripe refused/i)
+    // The detail is the whole point: "Invalid API Key" and "No such coupon" are
+    // the same 500 to a member and completely different jobs to us.
+    expect((err as PaymentStartFailed).message).toMatch(/Invalid API Key/)
+  })
+
+  it('still takes the payment when Stripe is working', async () => {
+    mockCreateSubscriptionSession.mockResolvedValue({ id: 'cs_2', url: 'https://checkout.stripe.com/c/pay/cs_2' })
+    const user = await createUser({ email: 'pays@example.com', passwordHash: 'h' })
+
+    const result = await finalizeCheckout(user.id, user.email, { subscription, consent })
+    expect(result).toEqual({ checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_2', mock: false })
   })
 })
 

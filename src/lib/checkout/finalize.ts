@@ -120,6 +120,40 @@ export function firstMonthDiscountOf(sub: MemberSubscription): number {
   return firstMonthRate(sub.introDiscountRate, sub.partnerDiscountPct, sub.subscriptionDiscountRate)
 }
 
+/**
+ * Payment couldn't be started. Distinct from `CheckoutRejected` (the member's
+ * to fix) — this one is ours, and it exists so the failure says WHERE it
+ * happened. "Stripe said no" and "the database said no" are the same 500 to a
+ * customer and completely different jobs to us.
+ */
+export class PaymentStartFailed extends Error {
+  constructor(
+    message: string,
+    /** The underlying Stripe/network error, kept for the log. */
+    readonly reason?: unknown,
+  ) {
+    super(message)
+    this.name = 'PaymentStartFailed'
+  }
+}
+
+/**
+ * Create the Checkout Session, turning anything the SDK throws into a
+ * `PaymentStartFailed` that names Stripe.
+ *
+ * Stripe's own errors carry the useful detail (an invalid coupon, a customer
+ * from another account, a key in the wrong mode) — so it's carried through
+ * rather than flattened, and the route decides who is allowed to read it.
+ */
+async function startStripeSession<T, A>(create: (args: A) => Promise<T>, args: A): Promise<T> {
+  try {
+    return await create(args)
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new PaymentStartFailed(`Stripe refused the checkout session: ${detail}`, err)
+  }
+}
+
 export interface FinalizeOptions {
   origin?: string
   /** Request metadata recorded against the consent, for evidential weight. */
@@ -210,7 +244,7 @@ export async function finalizeCheckout(
   if (getPaymentSource() === 'stripe') {
     const base = origin || process.env.APP_URL || ''
     const { createSubscriptionSession } = await import('@/lib/payments/stripe')
-    const { url } = await createSubscriptionSession({
+    const { url } = await startStripeSession(createSubscriptionSession, {
       monthlyTotal: subscription.flatMonthly,
       // Intro offer and partner code as one coupon — Stripe applies a single
       // `duration: 'once'` discount, and two separate ones would compound in a
@@ -231,7 +265,12 @@ export async function finalizeCheckout(
       shippingOptions: deliveryOptions(subscription.flatMonthly, getPricingConfig()),
     })
     if (url) return { checkoutUrl: url, mock: false }
-    // No URL back — fall through to the mock confirmation rather than dead-ending.
+    // No session URL under LIVE payments. This used to fall through to the mock
+    // branch below, which raises a subscription order and shows a confirmation
+    // — i.e. a Stripe outage would have handed out running subscriptions that
+    // nothing ever charged for. Failing here is the safe direction: the member
+    // sees "try again", and nobody gets a box we're not billing for.
+    throw new PaymentStartFailed('Stripe returned no checkout URL.')
   }
 
   // 6. Mock mode: raise the first subscription order now so the hub + fulfilment
