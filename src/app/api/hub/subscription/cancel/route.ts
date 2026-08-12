@@ -75,8 +75,11 @@ export async function GET() {
 }
 
 interface CancelBody {
-  /** `now` settles and ends today; `scheduled` ends free on the next zero month. */
-  mode?: 'now' | 'scheduled'
+  /**
+   * `now` settles and ends today; `scheduled` ends free on the next zero month;
+   * `resume` clears a scheduled exit for someone who changed their mind.
+   */
+  mode?: 'now' | 'scheduled' | 'resume'
   reason?: string
   /** What the screen showed them, so a moved figure can be caught. */
   expectedSettlement?: number
@@ -98,6 +101,14 @@ export async function POST(req: Request) {
   if (sub.status === 'cancelled') return NextResponse.json({ ok: true, alreadyCancelled: true })
 
   const quote = quoteExit({ sub, orders, consentCoversSettlement: consented })
+
+  // ── Changed their mind about a scheduled exit ──────────────────────────────
+  // Nothing was charged and nothing was stopped, so there is nothing to undo
+  // beyond forgetting the date.
+  if (body.mode === 'resume') {
+    await saveSubscription(user.id, { ...sub, scheduledExitMonth: null })
+    return NextResponse.json({ ok: true, scheduledExitMonth: null })
+  }
 
   // ── Scheduled exit: nothing to charge, nothing to stop ─────────────────────
   if (body.mode === 'scheduled') {

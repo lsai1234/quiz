@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { downsizePreview, cancelSettlement, shippedValueOf, paidToDateOf } from '@/lib/recharge/mock'
+import { downsizePreview } from '@/lib/recharge/mock'
+import { ExitStatementView } from './ExitStatement'
+import type { ExitQuote } from '@/lib/recharge/exit'
 import { BillingImpact } from './BillingImpact'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -14,6 +16,14 @@ const GREEN = '#34d399'
 const AMBER = '#fbbf24'
 
 type Reason = 'expensive' | 'too-much' | 'not-working' | 'break' | 'dont-need' | 'other'
+
+/** "in 2 months" / "next month" — a cycle count the member can act on. */
+function monthsAway(target: number, current: number): string {
+  const gap = Math.max(0, target - current)
+  if (gap === 0) return 'this month'
+  if (gap === 1) return 'a month'
+  return `${gap} months`
+}
 
 const REASONS: { id: Reason; label: string }[] = [
   { id: 'expensive', label: 'It’s too expensive right now' },
@@ -32,14 +42,76 @@ interface Props {
   onDownsize: (dropLineIds: string[]) => void
   onSkipNext: () => void
   onSwap: (lineId: string) => void
-  onCancel: (reason: string) => void
+  /** Called once the exit has actually happened, so the hub can refresh. */
+  onExited: () => void
   onClose: () => void
 }
 
-export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, onSnooze, onDownsize, onSkipNext, onSwap, onCancel, onClose }: Props) {
+export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, onSnooze, onDownsize, onSkipNext, onSwap, onExited, onClose }: Props) {
   const [mounted, setMounted] = useState(false)
-  const [step, setStep] = useState<'reason' | 'save' | 'snooze' | 'cancel'>('reason')
+  const [step, setStep] = useState<'reason' | 'save' | 'snooze' | 'cancel' | 'done'>('reason')
   const [reason, setReason] = useState<Reason | null>(null)
+
+  /**
+   * The quote comes from the SERVER, not from the subscription in the browser.
+   *
+   * The figure decides a charge, so it is recomputed from the stored plan and
+   * the member's own order history — the client's copy is a display, and a
+   * display is not a thing to bill from. See the cancel route.
+   */
+  const [quote, setQuote] = useState<ExitQuote | null>(null)
+  const [quoteError, setQuoteError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [outcome, setOutcome] = useState<{ settlement: number; paid: boolean; scheduledFor: number | null } | null>(null)
+
+  useEffect(() => {
+    if (step !== 'cancel' || quote) return
+    let live = true
+    fetch('/api/hub/subscription/cancel')
+      .then((r) => r.json())
+      .then((d) => { if (live) d.quote ? setQuote(d.quote) : setQuoteError(d.error ?? 'Could not work out your balance.') })
+      .catch(() => { if (live) setQuoteError('Could not work out your balance.') })
+    return () => { live = false }
+  }, [step, quote])
+
+  async function submitExit(mode: 'now' | 'scheduled') {
+    if (submitting) return
+    setSubmitting(true)
+    try {
+      const res = await fetch('/api/hub/subscription/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode,
+          reason: REASONS.find((r) => r.id === reason)?.label ?? 'unspecified',
+          // A check, not an instruction — the server bills its own figure and
+          // tells us if it has moved since this screen loaded.
+          expectedSettlement: mode === 'now' ? quote?.settlement : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.settlementChanged && quote) {
+          setQuote({ ...quote, settlement: data.settlement })
+          setQuoteError('Your balance changed while this was open — here is the new figure.')
+        } else {
+          setQuoteError(data.error ?? 'That did not go through. Nothing has changed.')
+        }
+        return
+      }
+      setOutcome({
+        settlement: data.settlement ?? 0,
+        paid: data.paid !== false,
+        scheduledFor: data.scheduledExitMonth ?? null,
+      })
+      setStep('done')
+      onExited()
+    } catch {
+      setQuoteError('That did not go through. Nothing has changed.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
@@ -59,9 +131,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
   // refuse. What there can be is a balance on product already sent that the flat
   // monthly hasn't covered yet; the terms promise the member sees that figure,
   // and what it's made of, before they confirm.
-  const settlement = cancelSettlement(sub)
-  const shipped = shippedValueOf(sub)
-  const paid = paidToDateOf(sub)
+  const settlement = quote?.settlement ?? 0
   const downsize = downsizePreview(sub, catalogue)
   const reviewItems = recommendations.filter((r) => r.phase === 'review')
   const reasonLabel = REASONS.find((r) => r.id === reason)?.label ?? ''
@@ -69,6 +139,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
   const heading = step === 'reason' ? 'Before you go'
     : step === 'snooze' ? 'Snooze instead'
     : step === 'cancel' ? 'Cancel subscription'
+    : step === 'done' ? 'That’s done'
     : 'A few options first'
 
   function Primary({ title, body, cta, tone = ACCENT, onClick }: { title: string; body: React.ReactNode; cta: string; tone?: string; onClick: () => void }) {
@@ -210,58 +281,129 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {step === 'cancel' && (
             <>
               <button onClick={() => setStep(reason ? 'save' : 'reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
-              <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
-                You can cancel now — there’s no minimum term and no cancellation fee. We’d love to know why{reasonLabel ? ` — you said “${reasonLabel.toLowerCase()}”` : ''}.
-              </p>
 
-              {settlement > 0.01 ? (
-                <div
-                  className="rounded-2xl p-4"
-                  style={{ border: `1px solid color-mix(in srgb, ${AMBER} 35%, transparent)`, background: `color-mix(in srgb, ${AMBER} 6%, transparent)` }}
-                >
-                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                    One last payment: {formatGBP(settlement)}
-                  </p>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                    Your monthly is a smoothed average, so longer-lasting items are spread over the months they last. You’ve had more product than your payments have covered so far — this settles that difference, and nothing else. Everything already sent to you is yours to keep.
-                  </p>
-                  <dl className="mt-3 space-y-1 text-xs">
-                    <div className="flex justify-between">
-                      <dt className="text-[var(--color-text-2)]">Value of everything sent to you</dt>
-                      <dd className="font-semibold text-[var(--color-text)]">{formatGBP(shipped)}</dd>
-                    </div>
-                    <div className="flex justify-between">
-                      <dt className="text-[var(--color-text-2)]">Paid so far</dt>
-                      <dd className="font-semibold text-[var(--color-text)]">−{formatGBP(paid)}</dd>
-                    </div>
-                    <div className="flex justify-between pt-1.5 border-t border-[var(--color-border)]">
-                      <dt className="font-semibold text-[var(--color-text)]">To settle</dt>
-                      <dd className="font-bold" style={{ color: AMBER }}>{formatGBP(settlement)}</dd>
-                    </div>
-                  </dl>
-                </div>
-              ) : (
-                <div
-                  className="rounded-2xl p-4"
-                  style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}
-                >
-                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                    Nothing left to pay
-                  </p>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                    Your payments have covered everything we’ve sent you. Cancel and you won’t be charged again.
-                  </p>
-                </div>
+              {!quote && !quoteError && (
+                <p className="text-sm text-[var(--color-muted)]">Working out where you stand…</p>
               )}
 
-              <button onClick={() => { onCancel(reasonLabel || 'unspecified'); onClose() }} className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all" style={{ background: AMBER, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
-                {settlement > 0.01 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
-              </button>
+              {quoteError && (
+                <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
+                  {quoteError}
+                </p>
+              )}
+
+              {quote && (
+                <>
+                  <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
+                    You can cancel now — there’s no minimum term and no cancellation fee{reasonLabel ? `. You said “${reasonLabel.toLowerCase()}”` : ''}.
+                  </p>
+
+                  {/* Nothing to pay, and why. A waiver is a promise being kept,
+                      so it says which promise rather than just showing £0.00. */}
+                  {quote.waiver && (
+                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}>
+                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Nothing to pay</p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">{quote.waiver.explanation}</p>
+                    </div>
+                  )}
+
+                  {!quote.waiver && settlement > 0 && (
+                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${AMBER} 35%, transparent)`, background: `color-mix(in srgb, ${AMBER} 6%, transparent)` }}>
+                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        One last payment: {formatGBP(settlement)}
+                      </p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                        Your monthly is a smoothed average, so longer-lasting items are spread over the months they last. You’ve had more product than your payments have covered so far — this settles that difference, and nothing else. Everything already sent to you is yours to keep.
+                      </p>
+                    </div>
+                  )}
+
+                  {quote.overpayment > 0 && (
+                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}>
+                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        We owe you {formatGBP(quote.overpayment)}
+                      </p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                        You’ve paid for more than we’ve sent. We’ll refund the difference to your card.
+                      </p>
+                    </div>
+                  )}
+
+                  {quote.statement && <ExitStatementView statement={quote.statement} />}
+
+                  {/* The alternative. The balance is a sawtooth, so there is
+                      almost always a near month where leaving is free — and
+                      saying so turns a bill into a choice. */}
+                  {quote.freeExitMonth != null && (
+                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: `color-mix(in srgb, ${ACCENT} 6%, transparent)` }}>
+                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        Or leave free in {monthsAway(quote.freeExitMonth, sub.monthsActive)}
+                      </p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                        Nothing changes in the meantime — your boxes still arrive and your payments carry on, which is what clears the balance. Then your plan ends by itself with nothing to pay.
+                      </p>
+                      <button
+                        onClick={() => submitExit('scheduled')}
+                        disabled={submitting}
+                        className="mt-3 w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-60"
+                        style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+                      >
+                        {submitting ? 'One moment…' : 'End it free on that date'}
+                      </button>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={() => submitExit('now')}
+                    disabled={submitting}
+                    className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-60"
+                    style={{ background: AMBER, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+                  >
+                    {submitting ? 'One moment…' : settlement > 0 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
+                  </button>
+                </>
+              )}
+
               <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
                 Keep my subscription
               </button>
               <button onClick={() => setStep('snooze')} className="w-full py-3 rounded-2xl text-sm font-bold border border-[var(--color-border)] text-[var(--color-text-2)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
                 Snooze instead — nothing to settle
+              </button>
+            </>
+          )}
+
+          {/* Step: done */}
+          {step === 'done' && outcome && (
+            <>
+              {outcome.scheduledFor != null ? (
+                <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: `color-mix(in srgb, ${ACCENT} 6%, transparent)` }}>
+                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                    Your plan ends in {monthsAway(outcome.scheduledFor, sub.monthsActive)}
+                  </p>
+                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                    Nothing to pay. Everything carries on as normal until then, and you can change your mind any time from your plan.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}>
+                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                    Your subscription has ended
+                  </p>
+                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                    {outcome.settlement > 0
+                      ? outcome.paid
+                        ? `We’ve taken ${formatGBP(outcome.settlement)} for the balance on what was already sent. Everything you have is yours to keep, and nothing further will be billed.`
+                        : `We couldn’t take the ${formatGBP(outcome.settlement)} balance from your card, so we’ve left it as an invoice you can pay from your billing page. Your plan has ended either way.`
+                      : 'There was nothing left to pay. Everything you have is yours to keep, and nothing further will be billed.'}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+                Thanks for giving us a go. Your account stays open — you can start a new plan whenever you like.
+              </p>
+              <button onClick={onClose} className="w-full py-3.5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                Done
               </button>
             </>
           )}

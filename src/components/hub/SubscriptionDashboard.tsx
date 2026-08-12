@@ -37,7 +37,7 @@ export function SubscriptionDashboard() {
     setDispatchDay, resume,
     swapLine, addLine, removeLine, setLineUsage, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
-    snooze, applyDownsize, cancelWithReason,
+    snooze, applyDownsize, refresh,
   } = useHubStore()
   const { products } = useCatalogueProducts()
   const [changeLineId, setChangeLineId] = useState<string | null>(null)
@@ -180,6 +180,34 @@ export function SubscriptionDashboard() {
           >
             <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full" style={{ background: `radial-gradient(circle, color-mix(in srgb, ${ACCENT} 22%, transparent), transparent 70%)` }} />
             <div className="relative">
+              {/* A scheduled free exit. Shown above everything else because it is
+                  the most consequential thing about the plan right now — and
+                  because the copy promised they could change their mind, which
+                  is only true if there is somewhere to do it. */}
+              {sub.scheduledExitMonth != null && (
+                <div className="mb-4 rounded-xl px-3 py-2.5" style={{ background: 'color-mix(in srgb, #fbbf24 10%, transparent)', border: '1px solid color-mix(in srgb, #fbbf24 30%, transparent)' }}>
+                  <p className="text-xs font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                    Your plan ends in {Math.max(0, sub.scheduledExitMonth - sub.monthsActive)} month
+                    {Math.max(0, sub.scheduledExitMonth - sub.monthsActive) === 1 ? '' : 's'} — nothing to pay
+                  </p>
+                  <p className="text-[11px] text-[var(--color-text-2)] mt-0.5 leading-relaxed">
+                    Everything carries on as normal until then, which is what clears your balance.
+                  </p>
+                  <button
+                    onClick={() => {
+                      void fetch('/api/hub/subscription/cancel', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: 'resume' }),
+                      }).then(() => refresh())
+                    }}
+                    className="mt-2 text-xs font-bold underline"
+                    style={{ color: ACCENT }}
+                  >
+                    Actually, keep my plan
+                  </button>
+                </div>
+              )}
               {sub.status === 'paused' ? (
                 <>
                   <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: '#fbbf24', fontFamily: 'var(--font-display)' }}>
@@ -474,7 +502,10 @@ export function SubscriptionDashboard() {
           onDownsize={(ids) => { applyDownsize(ids); setShowSave(false) }}
           onSkipNext={() => { if (next) skipDelivery(next.id); setShowSave(false) }}
           onSwap={(lineId) => { setShowSave(false); openChange(lineId) }}
-          onCancel={(reason) => { cancelWithReason(reason); setShowSave(false) }}
+          // The flow drives the exit itself against the server, because the
+          // settlement is a charge and a charge is not something the browser
+          // gets to compute. All that is left here is reloading what changed.
+          onExited={() => { void refresh(); setShowSave(false) }}
           onClose={() => setShowSave(false)}
         />
       )}

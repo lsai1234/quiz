@@ -328,6 +328,27 @@ correct and reads like an assertion. A statement reads like evidence.
 Step 5 must recompute server-side and **charge what the server calculated**, never what the
 client displayed. If the two differ, show the new figure and make them confirm again.
 
+### What Phase 4 built
+
+- **The quote comes from the server.** The flow fetches `GET /api/hub/subscription/cancel`
+  on opening the cancel step rather than computing anything locally. The client's number
+  goes back on confirm purely as a check, and a 409 tells the member their balance moved
+  while the sheet was open instead of billing a figure nobody agreed to.
+- **`ExitStatementView`** — every box with its contents, every payment, both totals, then
+  the difference. The cap and the waiver appear as their own lines when they bite and are
+  absent when they don't: *"£0.00 was knocked off"* is noise, *"£10.00 was"* is
+  reassurance.
+- **Both exits on one screen.** "Confirm — pay £11.33 and cancel", and above it "Or leave
+  free in 2 months" with what happens in between spelled out.
+- **A hub banner** for a scheduled exit, with *"Actually, keep my plan"* — the copy
+  promises they can change their mind, which is only true if there is somewhere to do it.
+- **A done screen that tells the truth about the charge**, including the declined case:
+  *"we couldn't take it, so we've left it as an invoice you can pay — your plan has ended
+  either way."*
+- **`BillingSummary` now says "around"**, because it is a forecast off the plan's current
+  state and the exit computes from real history. Two figures that can differ should not
+  both be stated as fact.
+
 ---
 
 ## 6. Stripe
@@ -502,7 +523,7 @@ and would cost margin for nothing.
 | ~~1~~ | ~~Fix E-1 — dispatch respects cadence~~ — **done**. `shipsAtCycle` gates `subscriptionOrderLines`; the webhook computes the cycle; empty boxes stay out of the queue. | ✅ |
 | ~~2~~ | ~~Ledger-based settlement + E-3 skips + overpayment~~ — **done**. `exit-ledger.ts`; skips honoured at dispatch; overpayment reported. | ✅ |
 | ~~3~~ | ~~Server-side cancel route, consent, charge, waivers~~ — **done**. `exit.ts` decides, `POST /api/hub/subscription/cancel` acts, `chargeSettlement` bills. | ✅ |
-| **4** | The member journey — statement, options A/B/C, receipt. | ~2 days |
+| ~~4~~ | ~~The member journey — statement, options, receipt~~ — **done**. Server-quoted flow, itemised statement, both exits, done screen, hub banner. | ✅ |
 | **5** | Founders portal — balance, exit queue, waivers, financials. | ~1.5 days |
 | **6** | Emails: statement, receipt, failed charge, Option B progress. | ~0.5 day |
 

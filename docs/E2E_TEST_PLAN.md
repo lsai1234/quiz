@@ -184,6 +184,49 @@ a test-mode endpoint at `/api/webhooks/stripe` with `STRIPE_WEBHOOK_SECRET`.
 - [ ] **C3.7** A substitution suggested after a stock-out respects the **safety constraints
       snapshotted at signup** — not whatever the quiz answers say today
 
+### C3b · The exit journey
+
+The settlement is a charge, so it wants walking properly. `/myhub` → Plan →
+**Manage subscription** → *Cancel*.
+
+- [ ] **C3b.1** The statement lists **every box with its contents** and **every payment**,
+      and the totals add up to the balance shown
+- [ ] **C3b.2** Cancel in month 1 of a plan with a multi-month tub → a balance is owed;
+      cancel at the free-exit month → **£0.00**
+- [ ] **C3b.3** **"Or leave free in N months"** appears with a real figure, and choosing it
+      schedules rather than charges — check the hub banner appears afterwards
+- [ ] **C3b.4** The scheduled exit **fires by itself**: advance a test clock to that month
+      and the plan cancels with nothing charged
+- [ ] **C3b.5** *"Actually, keep my plan"* on the banner clears the schedule
+- [ ] **C3b.6** Settle now → a **Stripe invoice** is raised and paid; it appears in the
+      member's billing portal
+- [ ] **C3b.7** **Declined card** (`4000 0000 0000 9995` as the default payment method) →
+      the plan **still cancels**, and the invoice is left open and payable
+- [ ] **C3b.8** Press Confirm twice quickly → **one** invoice, not two (idempotency)
+- [ ] **C3b.9** A member in credit (pause or skip a few months first) → the statement says
+      **"We owe you £X"** rather than £0.00
+
+**Waivers** — each should show its own explanation, not a bare £0.00:
+
+- [ ] **C3b.10** Within 14 days of the **first delivery** → statutory waiver, mentions
+      returning unopened products
+- [ ] **C3b.11** During a price-increase notice period → waived
+- [ ] **C3b.12** Just after we substituted a product (out of stock) → waived
+- [ ] **C3b.13** A member who has never accepted the settlement terms → waived, and this
+      beats every other reason
+
+**Tamper checks** — the figure is a charge, so treat it as one:
+
+- [ ] **C3b.14** POST `/api/hub/subscription/cancel` with `expectedSettlement: 0` on an
+      account that owes money → **409**, no charge, the real figure returned
+- [ ] **C3b.15** The same call while signed out → **401**
+- [ ] **C3b.16** An account with orders belonging to *another* member → their history must
+      not appear in the statement
+
+> In **mock payments mode nothing is collected** — the exit records the amount with
+> `paid: false` and logs a warning. That is deliberate (an exit record claiming a charge
+> that never happened would be worse), but it means C3b.6–C3b.8 need Stripe test keys.
+
 ### C4 · Discounts, codes and the intro offer
 
 Three different discounts that can all touch one basket. The rule that matters: **a partner

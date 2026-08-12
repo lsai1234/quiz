@@ -83,8 +83,12 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
           is the balance on product already sent that the smoothed monthly hasn't
           covered yet — so show that, not a commitment that no longer exists. */}
       <p className="text-[11px] text-[var(--color-muted)] mt-3">
+        {/* An indication, not the bill. This is the forecast off the plan's
+            current state; the exact figure is worked out from your actual
+            deliveries and payments when you go to cancel, and shown itemised
+            before anything is confirmed. */}
         {settlement > 0.01
-          ? `No minimum term — cancel or pause anytime. If you cancelled today you'd settle ${formatGBP(settlement)} for what's already been sent to you, and nothing more.`
+          ? `No minimum term — cancel or pause anytime. As things stand you'd settle around ${formatGBP(settlement)} for what's already been sent to you, and nothing more. You'll see the exact figure, itemised, before you confirm.`
           : 'No minimum term — cancel or pause anytime, with nothing left to settle.'}
       </p>
     </div>
