@@ -3,6 +3,9 @@ import {
   productRemoved,
   productSubstituted,
   termsUpdated,
+  exitReceipt,
+  exitChargeFailed,
+  exitScheduled,
   type RemovedContext,
   type SubstitutedContext,
 } from '@/lib/notify/templates'
@@ -145,10 +148,59 @@ describe('terms-updated', () => {
   })
 })
 
+describe('leaving', () => {
+  it('leads a receipt with the two totals, because the balance only means anything between them', () => {
+    const email = exitReceipt({ settlement: 11.33, shippedTotal: 66.27, paidTotal: 54.94, shopUrl: 'u' })
+    expect(email.text).toContain('£66.27')
+    expect(email.text).toContain('£54.94')
+    expect(email.text).toContain('£11.33')
+    expect(email.text).toContain('yours to keep')
+  })
+
+  it('gives the member’s own reason when nothing was charged', () => {
+    const email = exitReceipt({
+      settlement: 0,
+      shippedTotal: 66.27,
+      paidTotal: 54.94,
+      waiverExplanation: 'You are within 14 days of your first delivery.',
+      shopUrl: 'u',
+    })
+    expect(email.text).toContain('within 14 days')
+    // Not a bare zero, and not a demand.
+    expect(email.subject).not.toMatch(/pay|owe/i)
+  })
+
+  it('tells someone in credit that it is coming back', () => {
+    const email = exitReceipt({ settlement: 0, shippedTotal: 20, paidTotal: 60, overpayment: 40, shopUrl: 'u' })
+    expect(email.text).toContain('£40.00')
+    expect(email.text).toContain('back to your card')
+  })
+
+  it('opens the failed-charge email by confirming the cancellation went through', () => {
+    // The member's actual worry on seeing "payment" and "ended" together is
+    // whether they are still subscribed. Answer that first.
+    const email = exitChargeFailed({ settlement: 11.33, invoiceUrl: 'u' })
+    const firstLine = email.text.split('\n').find((l) => l.trim().length > 20) ?? ''
+    expect(firstLine).toMatch(/cancelled|ended/i)
+  })
+
+  it('is unambiguous that a scheduled exit changes nothing in the meantime', () => {
+    // A member who believes they have stopped and then sees a payment reads it
+    // as a mistake, however clearly the screen explained it at the time.
+    const email = exitScheduled({ monthsAway: 2, monthly: 54.94, hubUrl: 'u' })
+    expect(email.text).toContain('carries on')
+    expect(email.text).toContain('£54.94')
+    expect(email.text).toContain('nothing to settle')
+  })
+})
+
 describe('every template', () => {
   const all = [substituted(), removed(), priceChangeNotice({
     productTitle: 'X', monthlyBefore: 1, monthlyAfter: 2, effectiveFrom: '2026-09-15T00:00:00.000Z', noticeDays: 30, hubUrl: 'u',
-  }), termsUpdated({ summary: 's', effectiveFrom: '2026-09-01T00:00:00.000Z', termsUrl: 'u' })]
+  }), termsUpdated({ summary: 's', effectiveFrom: '2026-09-01T00:00:00.000Z', termsUrl: 'u' }),
+    exitReceipt({ settlement: 5, shippedTotal: 10, paidTotal: 5, shopUrl: 'u' }),
+    exitChargeFailed({ settlement: 5, invoiceUrl: 'u' }),
+    exitScheduled({ monthsAway: 2, monthly: 20, hubUrl: 'u' })]
 
   it('renders a subject and both bodies', () => {
     for (const email of all) {

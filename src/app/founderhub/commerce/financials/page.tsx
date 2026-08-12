@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import type { DashboardSummary, MoneyWindow } from '@/lib/portal/dashboard'
+import type { ExitQueue } from '@/lib/portal/exits'
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -27,6 +29,7 @@ const WINDOWS: { key: keyof Pick<DashboardSummary, 'today' | 'last7' | 'month'>;
  */
 export default function FinancialsPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
+  const [exits, setExits] = useState<ExitQueue | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -34,6 +37,10 @@ export default function FinancialsPage() {
       .then((r) => r.json())
       .then((d) => setSummary(d.summary))
       .catch(() => setError('Could not load the figures.'))
+    // Exits are their own read: an uncollected settlement is money owed that no
+    // order or invoice window will ever show, so it has to be counted here or it
+    // is counted nowhere.
+    fetch('/api/portal/exits').then((r) => r.json()).then(setExits).catch(() => {})
   }, [])
 
   if (!summary) return <p className="text-sm text-[var(--color-muted)]">{error ?? 'Loading…'}</p>
@@ -63,6 +70,38 @@ export default function FinancialsPage() {
       {WINDOWS.map(({ key, label, blurb }) => (
         <Window key={key} label={label} blurb={blurb} w={summary[key]} />
       ))}
+
+      {/* Exits. Kept apart from the windows above because a settlement is not
+          revenue from a sale — it is the recovery of a cost already incurred on
+          goods already sent, and blending the two would flatter both. */}
+      {exits && exits.rows.length > 0 && (
+        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+          <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)]">Exits</p>
+          <p className="text-xs text-[var(--color-text-2)] mt-1 mb-3">
+            Balances settled by members who left. Not sales revenue — the recovery of a cost already spent on goods
+            already sent.
+          </p>
+          <dl className="space-y-1.5 text-xs">
+            <Row label="Collected" value={money(exits.collected)} />
+            <Row label="Still owed" value={money(exits.owed)} tone={exits.owed > 0 ? AMBER : undefined} />
+            <Row label="Waived" value={money(exits.waived)} />
+            <Row label="Written off" value={money(exits.writtenOff)} />
+            <Row label="Refunds we owe" value={money(exits.refundsDue)} tone={exits.refundsDue > 0 ? ACCENT : undefined} />
+          </dl>
+          <Link href="/founderhub/commerce/exits" className="text-xs font-bold mt-3 inline-block" style={{ color: ACCENT }}>
+            Work the exit queue →
+          </Link>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Row({ label, value, tone }: { label: string; value: string; tone?: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <dt className="text-[var(--color-text-2)]">{label}</dt>
+      <dd className="font-bold" style={{ color: tone ?? 'var(--color-text)' }}>{value}</dd>
     </div>
   )
 }

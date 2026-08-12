@@ -8,6 +8,7 @@ import { cancelSubscription, nextFreeExitMonth } from '@/lib/recharge/mock'
 import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getPaymentSource } from '@/lib/payments'
+import { queueExitEmail, queueScheduledExitEmail } from '@/lib/notify/billing'
 import type { MemberSubscription } from '@/lib/recharge/types'
 
 export const dynamic = 'force-dynamic'
@@ -120,6 +121,9 @@ export async function POST(req: Request) {
       )
     }
     await saveSubscription(user.id, { ...sub, scheduledExitMonth: month, cancelReason: body.reason ?? undefined })
+    // Confirming in writing that nothing changes in the meantime. A member who
+    // thinks they have stopped and then sees a payment reads it as a mistake.
+    await queueScheduledExitEmail(user.id, sub, Math.max(0, month - sub.monthsActive))
     return NextResponse.json({ ok: true, scheduledExitMonth: month, settlement: 0 })
   }
 
@@ -143,6 +147,7 @@ export async function POST(req: Request) {
   }
 
   let invoiceId: string | null = null
+  let invoiceUrl: string | null = null
   let paid = quote.settlement <= 0
 
   if (quote.settlement > 0) {
@@ -164,6 +169,7 @@ export async function POST(req: Request) {
           idempotencyKey: `exit:${sub.stripeSubscriptionId ?? sub.id}:${sub.monthsActive}`,
         })
         invoiceId = result.invoiceId
+        invoiceUrl = result.hostedInvoiceUrl
         paid = result.paid
       } catch (err) {
         // The charge failed in a way that was not a decline. The member still
@@ -196,6 +202,16 @@ export async function POST(req: Request) {
     console.error(`[exit] cancelled locally but NOT in Stripe for ${user.id}:`, sync.cancelError)
   }
   await saveSubscription(user.id, cancelled)
+
+  await queueExitEmail(user.id, cancelled, {
+    settlement: quote.settlement,
+    paid,
+    waiverExplanation: quote.waiver?.explanation ?? null,
+    shippedTotal: quote.statement?.shippedTotal ?? 0,
+    paidTotal: quote.statement?.paidTotal ?? 0,
+    overpayment: quote.overpayment,
+    invoiceUrl: invoiceUrl,
+  })
 
   return NextResponse.json({
     ok: true,

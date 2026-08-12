@@ -3,15 +3,18 @@ import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
 /**
  * Commerce — money in, orders out.
  *
- * One-off orders, monthly subscriptions, the supplier review queue and the
- * month's financials are four views of the same ledger, so they live in one tab
+ * One-off orders, monthly subscriptions, the supplier review queue, exits and
+ * the month's financials are views of the same ledger, so they live in one tab
  * rather than being scattered across the top bar. The queue sits here rather
- * than under Products because it is a decision about an order, not a product.
+ * than under Products because it is a decision about an order, not a product;
+ * Exits sits here because an uncollected settlement is money owed, and money
+ * owed belongs next to the money that came in.
  */
 const ITEMS: SubNavItem[] = [
   { href: '/founderhub/commerce/queue', label: 'Review queue' },
   { href: '/founderhub/commerce/orders', label: 'Single orders' },
   { href: '/founderhub/commerce/subscriptions', label: 'Subscriptions' },
+  { href: '/founderhub/commerce/exits', label: 'Exits' },
   { href: '/founderhub/commerce/financials', label: 'Financials' },
 ]
 

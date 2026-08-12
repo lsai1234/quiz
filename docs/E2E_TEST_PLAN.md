@@ -267,6 +267,31 @@ underneath everything.
       reverses
 - [ ] **C5.9** Refund from the **Stripe dashboard** instead → the order still shows refunded
 
+### C5b · The exit queue (Founders Hub → Commerce → Exits)
+
+- [ ] **C5b.1** A cancelled plan with a settled balance appears as **Collected**
+- [ ] **C5b.2** One whose card declined appears as **Owed**, and the `owed` total at the
+      top reflects it
+- [ ] **C5b.3** **Waive** and **write off** both demand a note, and the note plus the
+      founder's email show on the row afterwards
+- [ ] **C5b.4** A written-off balance stops counting towards `owed` — that total is the
+      measure of whether this feature is working, so it must not include things you have
+      already decided not to chase
+- [ ] **C5b.5** A member in credit shows as **Refund due**, and **Mark refunded** clears it
+- [ ] **C5b.6** An exit priced from the forecast is flagged as such in the row
+- [ ] **C5b.7** Financials shows the exit totals *separately* from sales revenue
+
+### C5c · The exit emails
+
+- [ ] **C5c.1** Settle-and-go → a **receipt** naming both totals and the balance
+- [ ] **C5c.2** Declined card → the **failed-charge** email, which opens by confirming the
+      cancellation went through and links to the payable invoice
+- [ ] **C5c.3** Scheduled exit → a **confirmation** that is unambiguous about boxes and
+      payments carrying on until the date
+- [ ] **C5c.4** A waived exit's receipt gives the member's own reason, and its subject does
+      not mention paying or owing
+- [ ] **C5c.5** Re-running the same exit does not queue a second email (deduped per exit)
+
 ### C6 · Partner portal
 
 - [ ] **C6.1** Create a partner in Founders Hub → Partners; issue a code

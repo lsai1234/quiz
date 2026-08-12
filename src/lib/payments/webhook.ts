@@ -241,6 +241,16 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         } catch (err) {
           console.error(`[exit] scheduled exit cancelled locally but NOT in Stripe for ${userId}:`, err)
         }
+
+        const { queueExitEmail } = await import('@/lib/notify/billing')
+        await queueExitEmail(userId, next, {
+          settlement: 0,
+          paid: true,
+          waiverExplanation: 'You chose to leave on your next free date, so there was nothing left to settle.',
+          shippedTotal: quote.statement?.shippedTotal ?? 0,
+          paidTotal: quote.statement?.paidTotal ?? 0,
+          overpayment: quote.overpayment,
+        })
       }
 
       if (next !== sub) await saveSubscription(userId, next)

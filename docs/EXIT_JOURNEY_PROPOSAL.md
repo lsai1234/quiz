@@ -388,6 +388,37 @@ Nothing exists for this today — `SubscriptionDetail` has no settlement anywher
 - **Waivers must be first-class**, not exceptional. §8 lists five cases where we should
   waive automatically; a founder will find a sixth in week one.
 
+### What Phases 5 and 6 built
+
+**Commerce → Exits.** Every plan that has ended, in five states that each want a
+different action: **owed** (invoiced, declined — chase, waive or write off), **collected**,
+**waived**, **written off**, and **refund due**. `owed` sits at the top because it is the
+honest measure of whether the exit charge is working at all — a large one means we are
+billing balances we cannot collect, which is worse than not billing them.
+
+- **A waiver and a write-off are kept apart.** One is a decision made *for the member*, the
+  other one made *about our own book*. Reporting them as the same number hides which is
+  actually happening.
+- **Every founder action takes a note and records who did it.** A waiver is a decision, not
+  a database edit, and someone will ask about it later.
+- **An exit priced from the forecast rather than the ledger is flagged in the row.** That
+  is one whose history we could not read, and it deserves a second look before anyone is
+  chased for it.
+- **Financials counts exits separately from sales.** A settlement is not revenue from a
+  sale; it is the recovery of a cost already incurred on goods already sent. Blending them
+  would flatter both.
+
+**Three emails**, through the existing outbox and deduped per exit:
+
+- **Receipt** — leads with the two totals, because the balance only means anything as the
+  difference between them, and says plainly that everything delivered is theirs to keep.
+- **Failed charge** — the only one that asks for anything, and it opens by confirming the
+  cancellation went through. That is the member's actual worry on seeing "payment" and
+  "ended" in the same message.
+- **Scheduled exit** — whose entire job is the sentence about nothing changing in the
+  meantime. A member who believes they have stopped and then sees a payment will read it as
+  a mistake, however clearly the screen explained it.
+
 ---
 
 ## 8. Scenarios, and what each does
@@ -524,8 +555,8 @@ and would cost margin for nothing.
 | ~~2~~ | ~~Ledger-based settlement + E-3 skips + overpayment~~ — **done**. `exit-ledger.ts`; skips honoured at dispatch; overpayment reported. | ✅ |
 | ~~3~~ | ~~Server-side cancel route, consent, charge, waivers~~ — **done**. `exit.ts` decides, `POST /api/hub/subscription/cancel` acts, `chargeSettlement` bills. | ✅ |
 | ~~4~~ | ~~The member journey — statement, options, receipt~~ — **done**. Server-quoted flow, itemised statement, both exits, done screen, hub banner. | ✅ |
-| **5** | Founders portal — balance, exit queue, waivers, financials. | ~1.5 days |
-| **6** | Emails: statement, receipt, failed charge, Option B progress. | ~0.5 day |
+| ~~5~~ | ~~Founders portal — exit queue, waivers, financials~~ — **done**. Commerce → Exits, with waive / write-off / mark-paid / mark-refunded, all noted and attributed. | ✅ |
+| ~~6~~ | ~~Emails: receipt, failed charge, scheduled exit~~ — **done**. Three templates, queued through the existing outbox. | ✅ |
 
 **~10 days**, with phases 0 and 1 as hard gates. Phases 2–6 are shippable behind the
 existing `PAYMENTS_SOURCE` switch, so this can be walked in simulate mode exactly like the

@@ -24,6 +24,12 @@ export type TemplateId =
   | 'terms-updated'
   /** A card was declined and Stripe is retrying. */
   | 'payment-failed'
+  /** Their plan has ended: what was sent, what was paid, what was settled. */
+  | 'exit-receipt'
+  /** The settlement invoice could not be taken from their card. */
+  | 'exit-charge-failed'
+  /** They chose to leave on their next free date, and we are confirming when. */
+  | 'exit-scheduled'
 
 export type NotificationStatus = 'queued' | 'sent' | 'failed'
 

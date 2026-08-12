@@ -237,6 +237,120 @@ export function paymentFailed(ctx: PaymentFailedContext): RenderedEmail {
   }
 }
 
+// ─── Leaving ──────────────────────────────────────────────────────────────────
+
+export interface ExitReceiptContext {
+  /** What we charged (£). Zero when waived or already covered. */
+  settlement: number
+  /** Everything dispatched over the plan's life (£). */
+  shippedTotal: number
+  /** Everything they paid (£). */
+  paidTotal: number
+  /** Set when nothing was charged — the member's own words for why. */
+  waiverExplanation?: string | null
+  /** What we owe them back (£), when their payments outran their deliveries. */
+  overpayment?: number
+  shopUrl: string
+}
+
+/**
+ * The receipt for an ended plan.
+ *
+ * Leads with the two totals rather than the balance, because the balance only
+ * makes sense as the difference between them — and a member reading this has
+ * usually already forgotten how many boxes they had. Everything they were sent
+ * is theirs; saying so plainly is the difference between a receipt and a
+ * demand.
+ */
+export function exitReceipt(ctx: ExitReceiptContext): RenderedEmail {
+  const paragraphs: string[] = [
+    `Your plan has ended. Over its life we sent you ${formatGBP(ctx.shippedTotal)} of product and you paid ${formatGBP(ctx.paidTotal)}.`,
+  ]
+
+  if (ctx.waiverExplanation) {
+    paragraphs.push(ctx.waiverExplanation)
+  } else if (ctx.settlement > 0) {
+    paragraphs.push(
+      `We've taken a final ${formatGBP(ctx.settlement)} — the balance on what had already been sent to you and your payments hadn't yet covered. That's it; nothing further will be billed.`,
+    )
+  } else {
+    paragraphs.push('Your payments had covered everything we sent, so there was nothing left to settle.')
+  }
+
+  if ((ctx.overpayment ?? 0) > 0) {
+    paragraphs.push(`You had paid ${formatGBP(ctx.overpayment!)} more than we sent, so that is coming back to your card.`)
+  }
+
+  paragraphs.push('Everything already delivered is yours to keep.')
+
+  return {
+    subject: 'Your CHRGD plan has ended',
+    ...layout('Your plan has ended', {
+      paragraphs,
+      cta: { label: 'Shop one-offs', url: ctx.shopUrl },
+      footnote: 'Your account stays open — you can start a new plan whenever you like.',
+    }),
+  }
+}
+
+export interface ExitChargeFailedContext {
+  settlement: number
+  /** Where they can pay it. Stripe's hosted invoice, or the billing page. */
+  invoiceUrl: string
+}
+
+/**
+ * The settlement invoice was not paid.
+ *
+ * The only exit email that asks for anything, and it opens by confirming the
+ * cancellation went through — because that is the member's actual worry on
+ * seeing an email about a failed payment after leaving.
+ */
+export function exitChargeFailed(ctx: ExitChargeFailedContext): RenderedEmail {
+  return {
+    subject: 'Your plan has ended — one payment did not go through',
+    ...layout('Your plan has ended', {
+      paragraphs: [
+        'Your subscription is cancelled and nothing further will be billed. That part is done.',
+        `The final ${formatGBP(ctx.settlement)} — the balance on products already sent to you — could not be taken from your card, so we have left it as an invoice you can pay whenever suits.`,
+        'Everything already delivered is yours to keep either way.',
+      ],
+      cta: { label: 'Pay the balance', url: ctx.invoiceUrl },
+      footnote: 'If the card on file has expired, paying through the link above will sort it.',
+    }),
+  }
+}
+
+export interface ExitScheduledContext {
+  /** How many billing cycles away the free exit is. */
+  monthsAway: number
+  monthly: number
+  hubUrl: string
+}
+
+/**
+ * Confirming a scheduled free exit.
+ *
+ * The thing to be unambiguous about is that nothing changes in the meantime —
+ * boxes still arrive and payments still go out. A member who thinks they have
+ * stopped and then sees a charge will treat it as a mistake, however clearly the
+ * screen explained it at the time.
+ */
+export function exitScheduled(ctx: ExitScheduledContext): RenderedEmail {
+  const when = ctx.monthsAway <= 1 ? 'after your next payment' : `in ${ctx.monthsAway} months`
+  return {
+    subject: 'Your plan will end — nothing to pay',
+    ...layout('Your plan ends ' + when, {
+      paragraphs: [
+        `You've chosen to leave on your next free date, so your plan will end ${when} with nothing to settle.`,
+        `Until then everything carries on exactly as it is — your boxes still arrive and your ${formatGBP(ctx.monthly)} payment still goes out. That is what clears the balance on what has already been sent to you, which is why leaving this way costs nothing.`,
+        'Change your mind any time before then and your plan simply carries on.',
+      ],
+      cta: { label: 'View your plan', url: ctx.hubUrl },
+    }),
+  }
+}
+
 // ─── Terms updated ────────────────────────────────────────────────────────────
 
 export interface TermsUpdatedContext {

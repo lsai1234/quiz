@@ -15,7 +15,7 @@
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { queueNotification } from './outbox'
 import { hubLinks } from './from-change'
-import { paymentFailed } from './templates'
+import { paymentFailed, exitReceipt, exitChargeFailed, exitScheduled } from './templates'
 
 function baseUrl(): string {
   return process.env.APP_URL || ''
@@ -49,5 +49,86 @@ export async function queuePaymentFailedEmail(
     })
   } catch (err) {
     console.error('[notify] could not queue the payment-failed email:', err)
+  }
+}
+
+/**
+ * Tell a member their plan has ended, and what it came to.
+ *
+ * Deduped per exit rather than per send: an exit happens once, and a retry of
+ * the route that raised it must not produce a second receipt.
+ *
+ * Picks the failed-charge variant when the money did not move, because that
+ * email has a different job — it opens by confirming the cancellation went
+ * through, which is the member's actual worry on seeing "payment" and "ended" in
+ * the same message.
+ */
+export async function queueExitEmail(
+  userId: string,
+  sub: MemberSubscription,
+  outcome: {
+    settlement: number
+    paid: boolean
+    waiverExplanation?: string | null
+    shippedTotal: number
+    paidTotal: number
+    overpayment?: number
+    invoiceUrl?: string | null
+  },
+): Promise<void> {
+  if (!sub.customerEmail) return
+  const base = baseUrl()
+  const owedButUnpaid = outcome.settlement > 0 && !outcome.paid
+
+  try {
+    await queueNotification({
+      userId,
+      email: sub.customerEmail,
+      template: owedButUnpaid ? 'exit-charge-failed' : 'exit-receipt',
+      dedupeKey: `exit:${sub.id}:${owedButUnpaid ? 'failed' : 'receipt'}`,
+      rendered: owedButUnpaid
+        ? exitChargeFailed({
+            settlement: outcome.settlement,
+            invoiceUrl: outcome.invoiceUrl || `${base}/myhub`,
+          })
+        : exitReceipt({
+            settlement: outcome.settlement,
+            shippedTotal: outcome.shippedTotal,
+            paidTotal: outcome.paidTotal,
+            waiverExplanation: outcome.waiverExplanation ?? null,
+            overpayment: outcome.overpayment ?? 0,
+            shopUrl: `${base}/shop`,
+          }),
+    })
+  } catch (err) {
+    // Never blocks an exit. The plan has already ended; a mail provider having a
+    // bad afternoon is not a reason to fail the request that ended it.
+    console.error('[notify] exit email could not be queued:', err)
+  }
+}
+
+/**
+ * Confirm a scheduled free exit.
+ *
+ * Its whole job is the sentence about nothing changing in the meantime: a member
+ * who believes they have stopped and then sees a payment will read it as a
+ * mistake, however clearly the screen explained it at the time.
+ */
+export async function queueScheduledExitEmail(
+  userId: string,
+  sub: MemberSubscription,
+  monthsAway: number,
+): Promise<void> {
+  if (!sub.customerEmail) return
+  try {
+    await queueNotification({
+      userId,
+      email: sub.customerEmail,
+      template: 'exit-scheduled',
+      dedupeKey: `exit-scheduled:${sub.id}:${sub.monthsActive}`,
+      rendered: exitScheduled({ monthsAway, monthly: sub.flatMonthly, hubUrl: `${baseUrl()}/myhub` }),
+    })
+  } catch (err) {
+    console.error('[notify] scheduled-exit email could not be queued:', err)
   }
 }

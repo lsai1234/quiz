@@ -277,6 +277,15 @@ export interface SubscriptionExit {
    * re-deriving it through whatever the catalogue looks like by then.
    */
   statement?: unknown
+  // ── Set later, by a founder working the exit queue ────────────────────────
+  /** When a founder decided this balance would never be collected. */
+  writtenOffAt?: string | null
+  /** When the overpayment was actually refunded. */
+  refundedAt?: string | null
+  /** Why a founder waived or wrote it off, in their words. Audit, not decoration. */
+  note?: string | null
+  /** Which founder acted, for the same reason. */
+  by?: string | null
 }
 
 /** A member's edit to a single scheduled delivery (from the calendar). */

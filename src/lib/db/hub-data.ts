@@ -87,6 +87,28 @@ export async function listActiveSubscriptions(): Promise<{ userId: string; subsc
   return out
 }
 
+/**
+ * Every subscription, whatever its status — for anything that has to look at
+ * plans which have ENDED.
+ *
+ * `listActiveSubscriptions` deliberately filters to active, which is right for
+ * the daily stock check and wrong for the exit queue: a cancelled plan with an
+ * unpaid balance is precisely the row a founder needs to see.
+ */
+export async function listSubscriptions(): Promise<{ userId: string; subscription: MemberSubscription }[]> {
+  const db = await getEngine()
+  const rows = await db.all<{ user_id: string; data: string }>('SELECT user_id, data FROM subscriptions')
+  const out: { userId: string; subscription: MemberSubscription }[] = []
+  for (const row of rows) {
+    try {
+      out.push({ userId: row.user_id, subscription: JSON.parse(row.data) as MemberSubscription })
+    } catch {
+      /* skip an unreadable row */
+    }
+  }
+  return out
+}
+
 export async function addFeedback(userId: string, checkIn: FeedbackCheckIn): Promise<void> {
   const db = await getEngine()
   await db.run('INSERT INTO feedback (id, user_id, created_at, payload) VALUES (?, ?, ?, ?)', [
