@@ -413,6 +413,13 @@ export async function chargeSettlement(opts: {
       amount: Math.round(opts.amount * 100),
       currency,
       description: opts.description,
+      // No VAT line while we are not registered — see `settlement.chargeVat`,
+      // which is deliberately its own flag rather than a read of
+      // `vat.registered`. The settlement is a taxable supply of goods already
+      // delivered, so registration raises a tax-point question about balances
+      // settled after the date on goods sent before it. That gets decided by a
+      // person, not by a boolean flipping.
+      tax_behavior: 'inclusive',
     },
     { idempotencyKey: `${opts.idempotencyKey}:item` },
   )
@@ -452,6 +459,43 @@ export async function chargeSettlement(opts: {
       status: open?.status ?? null,
     }
   }
+}
+
+/**
+ * Put a credit on the customer's Stripe balance.
+ *
+ * Stripe applies a customer credit balance to the NEXT invoice automatically,
+ * which is exactly the shape the Terms promise for a skipped box: *"the value of
+ * the skipped box is credited against your next one."* No coupon, no proration,
+ * no bespoke schedule — one primitive that already does the thing.
+ *
+ * Stripe's sign convention is the opposite of the intuitive one: a NEGATIVE
+ * balance is credit owed to the customer, positive is money they owe. Passing
+ * this the wrong way round would silently bill people extra for skipping a box,
+ * so `amount` here is a plain positive credit and the negation happens once,
+ * here.
+ *
+ * `idempotencyKey` should identify the box being credited, so a repeated skip of
+ * the same delivery cannot stack credits.
+ */
+export async function creditCustomerBalance(opts: {
+  customerId: string
+  amount: number
+  description: string
+  idempotencyKey: string
+  currency?: string
+}): Promise<void> {
+  if (opts.amount <= 0) return
+  const stripe = getStripeClient()
+  await stripe.customers.createBalanceTransaction(
+    opts.customerId,
+    {
+      amount: -Math.round(opts.amount * 100),
+      currency: (opts.currency ?? DEFAULT_CURRENCY).toLowerCase(),
+      description: opts.description,
+    },
+    { idempotencyKey: opts.idempotencyKey },
+  )
 }
 
 export async function refundPayment(paymentIntentId: string): Promise<void> {

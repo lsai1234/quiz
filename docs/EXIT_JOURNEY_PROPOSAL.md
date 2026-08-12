@@ -564,6 +564,30 @@ supplier integration was.
 
 ---
 
+## 10b. The four loose ends, closed
+
+- **Legal review** — `docs/EXIT_LEGAL_REVIEW.md` is a pack to send as-is. §6 is the
+  question that actually matters: three of the four terms changes are concessions, the
+  fourth is a correction of an overstatement, and we want the consent-gate move confirmed
+  as the right response to it.
+- **The calendar and dispatch disagreed** about which months a multi-month item ships. The
+  schedule staggered them by a hash of the line id — a nice idea nothing in dispatch ever
+  implemented, so the calendar could promise a tub in April that shipped in March, while
+  the settlement billed against the other answer. **Dispatch wins**, because it is what
+  actually happens; the calendar now reads `shipsAtCycle` like everything else. Staggering
+  can return if it is built into `shipsAtCycle`, where both sides would see it.
+- **A skipped box now produces a credit**, as the Terms have always promised. Priced
+  server-side from the lines actually due in that cycle and applied as a Stripe **customer
+  balance credit**, which Stripe puts against the next invoice by itself. Only newly
+  skipped boxes are credited and the key is the box, so unskip-then-reskip cannot stack.
+- **VAT (D-3)** is now a stated position: `settlement.chargeVat: false`, deliberately its
+  own flag rather than a read of `vat.registered`. The settlement is a taxable supply of
+  goods already delivered, so registration raises a tax-point question about balances
+  settled after the date on goods sent before it — that should be answered by a person, not
+  by a boolean flipping.
+
+---
+
 ## 11. Decisions — all confirmed
 
 | # | Decision | Answer |

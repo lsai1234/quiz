@@ -305,6 +305,18 @@ underneath everything.
       existed a snooze stayed paused indefinitely with a return date on screen that came
       and went.
 
+### C5e · Skipped boxes, and the calendar
+
+- [ ] **C5e.1** Skip a box in `/myhub` → a **credit appears on the Stripe customer balance**
+      for the value of what was due, and the next invoice is reduced by it
+- [ ] **C5e.2** Skipping a month where nothing was due credits **nothing** — there was no
+      box to miss
+- [ ] **C5e.3** Unskip then re-skip the same box → **one** credit, not two
+- [ ] **C5e.4** The skipped box does not ship, and does not appear in the exit statement
+- [ ] **C5e.5** The delivery calendar shows a three-month item **only in the months it
+      actually ships** — compare against what the fulfilment queue raises. These used to
+      disagree.
+
 ### C6 · Partner portal
 
 - [ ] **C6.1** Create a partner in Founders Hub → Partners; issue a code

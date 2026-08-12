@@ -214,6 +214,23 @@ export const PRICING_CONFIG = {
      * structurally impossible to say.
      */
     maxShareOfPaid: 1 as number | null,
+    /**
+     * Whether a settlement invoice carries a VAT line — decision D-3, stated
+     * rather than assumed.
+     *
+     * FALSE while `vat.registered` is false, which is the position today: we
+     * charge no VAT on anything, so a settlement invoice showing one would be
+     * claiming tax we are not entitled to collect.
+     *
+     * It is a SEPARATE flag rather than a read of `vat.registered` on purpose.
+     * The settlement is a taxable supply of goods already delivered, and the
+     * moment registration happens someone has to decide whether balances settled
+     * AFTER that date on goods sent BEFORE it carry VAT — a question about tax
+     * points, not about a boolean. Leaving it derived would answer it silently
+     * on the day the registration switch flips, which is exactly the wrong way
+     * to answer it. Turn this on deliberately, with advice.
+     */
+    chargeVat: false,
   },
 
   /**

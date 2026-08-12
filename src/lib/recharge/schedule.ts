@@ -12,6 +12,7 @@ import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine, DeliveryOverride } from './types'
 import { effectiveNextDispatch } from './mock'
 import { getPricingConfig, discountWithFloor, unitCostOf } from '@/lib/stack-blueprint/pricing'
+import { shipsAtCycle } from './clock'
 
 const round = (n: number) => Math.round(n * 100) / 100
 
@@ -43,13 +44,6 @@ export interface Delivery {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** A stable 0..(cadence-1) offset per line so multi-month items stagger across boxes. */
-function lineOffset(line: MemberSubscriptionLine): number {
-  let h = 0
-  for (let i = 0; i < line.id.length; i++) h = (h * 31 + line.id.charCodeAt(i)) | 0
-  return Math.abs(h) % Math.max(1, line.deliveryIntervalMonths)
-}
-
 function deliveryId(year: number, monthIndex0: number): string {
   return `${year}-${String(monthIndex0 + 1).padStart(2, '0')}`
 }
@@ -65,6 +59,27 @@ function deliveryId(year: number, monthIndex0: number): string {
  * Derived from `startedAt` rather than from today, because a cycle's month is a
  * fact about when the plan began, not about when the question is asked.
  */
+/**
+ * The billing cycle a calendar month belongs to.
+ *
+ * The inverse of `deliveryIdForCycle`, and the join the schedule needs: the
+ * calendar walks months from today, dispatch counts cycles from signup, and the
+ * two have to agree about which box is which.
+ *
+ * Null before the plan began — there is no cycle 0 in a month that predates it.
+ */
+export function cycleForMonth(
+  sub: Pick<MemberSubscription, 'startedAt'>,
+  year: number,
+  monthIndex0: number,
+  now: Date = new Date(),
+): number | null {
+  const start = new Date(sub.startedAt)
+  const from = Number.isNaN(start.getTime()) ? now : start
+  const cycle = (year - from.getFullYear()) * 12 + (monthIndex0 - from.getMonth())
+  return cycle >= 0 ? cycle : null
+}
+
 export function deliveryIdForCycle(sub: Pick<MemberSubscription, 'startedAt'>, cycle: number): string | null {
   const start = new Date(sub.startedAt)
   if (Number.isNaN(start.getTime())) return null
@@ -121,10 +136,23 @@ export function buildDeliverySchedule(
 
     const items: DeliveryItem[] = []
 
-    // Recurring lines due this month (staggered by per-line offset).
+    /**
+     * Recurring lines due this month — read from the SAME function dispatch uses.
+     *
+     * This used to run its own cadence, staggering multi-month items across
+     * boxes by a hash of the line id so a member with three quarterly tubs did
+     * not get all three at once. A nice idea, and a fiction: nothing in dispatch
+     * implemented it, so the calendar said a tub was coming in April while the
+     * fulfilment order shipped it in March. Two answers to "when does this
+     * arrive", and the exit settlement bills against the other one.
+     *
+     * The calendar is a promise about what will actually turn up, so it defers
+     * to whatever actually ships. Staggering can come back if it is built in
+     * `shipsAtCycle`, where both sides would read it.
+     */
+    const cycle = cycleForMonth(sub, year, monthIndex0, now)
     for (const line of sub.lines) {
-      const k = m - lineOffset(line)
-      if (k < 0 || k % Math.max(1, line.deliveryIntervalMonths) !== 0) continue
+      if (cycle == null || !shipsAtCycle(line, cycle)) continue
       if (ov.removedLineIds?.includes(line.id)) continue
       items.push({
         lineId: line.id,
@@ -218,6 +246,32 @@ export function nextChargeBreakdown(sub: MemberSubscription, deliveries: Deliver
 function withOverride(sub: MemberSubscription, id: string, patch: Partial<DeliveryOverride>): MemberSubscription {
   const cur = sub.deliveryOverrides?.[id] ?? {}
   return { ...sub, deliveryOverrides: { ...sub.deliveryOverrides, [id]: { ...cur, ...patch } } }
+}
+
+/**
+ * What a skipped box was worth — the credit the member is owed for it.
+ *
+ * The Terms say plainly: *"Skipping a box does not cost you a payment — the
+ * value of the skipped box is credited against your next one."* Nothing kept
+ * that. `skipDelivery` set a flag, dispatch (since the cadence fix) sends
+ * nothing, and Stripe billed the full monthly regardless — so a member who
+ * skipped paid in full and received an empty month.
+ *
+ * Priced from the lines actually due in that cycle, using the same `shipsAtCycle`
+ * dispatch reads. A box with nothing in it is worth nothing, which is the right
+ * answer for a plan of quarterly items skipping a month that was empty anyway.
+ */
+export function creditForSkippedBox(sub: MemberSubscription, id: string, now: Date = new Date()): number {
+  const [year, month] = id.split('-').map(Number)
+  if (!year || !month) return 0
+  const cycle = cycleForMonth(sub, year, month - 1, now)
+  if (cycle == null) return 0
+  const removed = sub.deliveryOverrides?.[id]?.removedLineIds ?? []
+  return round(
+    sub.lines
+      .filter((line) => shipsAtCycle(line, cycle) && !removed.includes(line.id))
+      .reduce((total, line) => total + line.pricePerDelivery, 0),
+  )
 }
 
 export function skipDelivery(sub: MemberSubscription, id: string): MemberSubscription {
