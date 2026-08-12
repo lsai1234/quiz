@@ -160,6 +160,21 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
         sub,
         catalogue: products,
         stripeSubscriptionId,
+        /**
+         * Which delivery this invoice pays for.
+         *
+         * The first invoice is the signup box, cycle 0. Every renewal is the
+         * cycle AFTER the one the subscription is currently on, because the
+         * clock is advanced further down this handler — reading
+         * `sub.monthsActive` here without the +1 would raise every renewal as a
+         * repeat of the signup box, which is exactly the shape of the
+         * over-shipping bug this replaced.
+         *
+         * A redelivered invoice arriving after the clock moved would compute a
+         * later cycle, but `createSubscriptionOrder` returns the existing order
+         * before it gets here.
+         */
+        cycle: isFirstInvoice ? 0 : sub.monthsActive + 1,
         // Captured at signup and carried on the subscription, because Stripe
         // only asks for it once.
         shippingAddress: sub.shippingAddress ?? null,

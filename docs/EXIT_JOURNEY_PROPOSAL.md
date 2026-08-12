@@ -39,7 +39,7 @@ client-supplied document and diffs it.
 These are new findings, not in the Phase 3 spec. The first is a blocker on the whole
 premise.
 
-### E-1 · Fulfilment ignores delivery cadence — so the premise isn't true yet
+### E-1 · Fulfilment ignores delivery cadence — so the premise isn't true yet · ✅ FIXED
 
 The settlement exists because a 3-month tub **ships once and is paid for over three
 months**. `deliveriesMadeFor()` models exactly that: `floor(cycles / interval) + 1`.
@@ -60,6 +60,24 @@ So today, a member on a 3-month tub is sent that tub **every month**. Either:
 Either way **the settlement cannot be charged until dispatch matches the model it bills
 against.** You cannot invoice someone for "goods shipped ahead of payment" while the
 shipping logic disagrees with the billing logic about what shipped.
+
+**Fixed.** `shipsAtCycle(line, cycle)` in `recharge/clock.ts` is the cadence gate, and
+`subscriptionOrderLines(sub, catalogue, cycle)` filters on it. The `invoice.paid` handler
+computes the cycle as `0` for the signup invoice and `monthsActive + 1` for a renewal — the
++1 because the clock is advanced further down the same handler, so reading it raw would
+make every renewal a repeat of the signup box.
+
+A cycle where nothing is due now yields an **empty** order rather than a phantom parcel.
+The order is still written, because it is the record that the invoice was processed and the
+Phase 2 ledger needs it, but `awaitingReview` and the fulfilment queue both skip it — there
+is no box, so there is nothing for a founder to approve.
+
+One thing worth knowing for the rest of this work: the demo seed
+(`createMockSubscription`) starts at `monthsActive: 2`, so its first renewal lands on cycle
+3 — exactly where a three-month tub is due again. A test written against that fixture passes
+whether or not the cadence filter exists. It is the same fixture that hid the cancel bug in
+S-1 of the Stripe plan. **Test subscription behaviour at `monthsActive: 0`**, which is what
+a real checkout produces.
 
 ### E-2 · The settlement re-prices history at today's prices
 
@@ -148,16 +166,62 @@ same screen, with the settlement figure shown first.
 Pay the balance now, subscription ends today, nothing else ships. One Stripe charge against
 the card on file.
 
-### Option B — **Pay it off, then stop** *(recommended to offer)*
-Nothing more ships. The monthly keeps running until the balance clears, then the
-subscription cancels **automatically**. No money today.
+### Option B — **Leave free on [date]** *(recommended)*
 
-This is the honest one, because it is *exactly what the smoothing already promised*: they
-agreed to pay for those goods over N months, and this is them finishing that. It converts a
-scary £80 demand into "two more payments and you're done", it needs no new payment method,
-and it is far more likely to be paid than an off-session charge on a card that may decline.
-Mechanically: stop dispatch, keep the Stripe subscription billing, cancel when
-`paidToDate ≥ shippedValue`.
+> **Corrected.** This was originally specified as "nothing more ships, the monthly keeps
+> running until the balance clears". Worked through against a real plan, that is the worst
+> option on the menu: a member owing **£11.33** would have their next **£54.94** taken and
+> receive nothing for it — a £43.61 overshoot. The mistake was treating the balance as a
+> debt to be paid *instead of* the plan, when it is already being paid *by* the plan.
+
+A **scheduled cancellation** on the next date the balance is zero. The plan runs on exactly
+as it is — boxes keep arriving, payments keep going out — and it ends by itself on that
+date with nothing to pay.
+
+The member is already paying the balance off, inside their normal monthly. On the worked
+plan below they pay £54.94 and receive £49.28 of goods in each of the next two months; the
+£5.66 difference *is* the creatine amortising. Nothing is stopped, so nothing is paid for
+without something arriving.
+
+**And the date has a natural meaning: it is the month the current multi-month item runs
+out.** That falls straight out of the arithmetic — a product spread over its life is fully
+paid for exactly when it is used up. Which makes the whole thing explicable in one
+sentence, with no debt language at all:
+
+> *"Your creatine lasts three months and you're one month in. Stay until 14 March — when it
+> runs out — and there's nothing to pay. Or leave today for £11.33 and keep the rest of the
+> tub."*
+
+Mechanically this is much less than the original: no new Stripe object, no dunning, no
+instalment schedule. It is `nextFreeExitMonth()`, a stored intent to cancel, and a check on
+each `invoice.paid`. The member can change their mind by clearing the intent.
+
+### The worked example, in full
+
+`perf-bulking-balanced` — £54.94/month: Mass Builder £36.54 monthly, Creatine £16.99 every
+three months, Magnesium £12.74 monthly.
+
+| | Box contains | Goods to date | Paid to date | Owed to leave |
+|---|---|---|---|---|
+| **Month 0** | all three | £66.27 | £54.94 | **£11.33** |
+| Month 1 | protein + magnesium | £115.55 | £109.88 | £5.67 |
+| Month 2 | protein + magnesium | £164.83 | £164.82 | **£0.00** |
+| Month 3 | all three (new creatine) | £231.10 | £219.76 | £11.34 |
+
+The £11.33 is exactly the two-thirds of the creatine tub not yet paid for (£16.99 × ⅔).
+Both routes leave the member square:
+
+- **Leave today** — pay £11.33, keep everything. £66.27 paid for £66.27 of goods.
+- **Leave on month 2** — pay nothing extra, receive two more boxes. £164.82 for £164.83.
+
+It is a genuine choice about timing, not a penalty either way.
+
+### Not recommended: instalments
+
+With the discount no longer clawed back and the 1.0× cap in place, real balances land at
+**£5–£20** (modelled worst cases: £11.33, £14.34, £18.65), and anything at or below £5 is
+waived outright. Splitting £15 into instalments is administration, not kindness — and
+dunning a departing customer is a bad place to be.
 
 ### Option C — **Send it back**
 For unopened goods inside the 14-day statutory window, the settlement is reduced by the
@@ -169,9 +233,7 @@ whether or not we build it, so it needs at least a manual path in the portal fro
 Pause, snooze, downsize, swap — `CancelSaveFlow` already offers these and they already
 work. They stay in front of the settlement, not behind it.
 
-**Not recommended: instalments as a separate option.** Option B already is one, using
-machinery that exists. A bespoke payment plan means dunning, and dunning on a departing
-customer is a bad place to be.
+
 
 ---
 
@@ -214,8 +276,8 @@ Per the existing spec (S-6), and it still looks right:
   the single worst thing this feature could do, and the terms already promise otherwise.
 - Idempotency keyed on `subscriptionId + monthsActive`, so a double-submit cannot
   double-charge.
-- Option B needs no new Stripe object: keep the subscription, suppress dispatch, cancel on
-  a threshold check in the `invoice.paid` handler.
+- Option B needs no new Stripe object and no change to billing at all: the plan runs
+  normally and a stored cancel-on date is checked in the `invoice.paid` handler.
 
 **Open: VAT.** D-3 in the existing plan, still unresolved, and it blocks this. The
 settlement is a taxable supply. Right now we are not VAT-registered
@@ -370,7 +432,7 @@ and would cost margin for nothing.
 | # | Work | Size |
 |---|---|---|
 | ~~0~~ | ~~Model D-9 across real bundles~~ — **done**, §9. Two levers adopted. | ✅ |
-| **1** | **Fix E-1** — dispatch respects cadence. Blocker, and a live fulfilment bug regardless of this feature. | ~1 day |
+| ~~1~~ | ~~Fix E-1 — dispatch respects cadence~~ — **done**. `shipsAtCycle` gates `subscriptionOrderLines`; the webhook computes the cycle; empty boxes stay out of the queue. | ✅ |
 | **2** | Ledger-based settlement (§3) + E-3 skips + overpayment. Pure functions, heavily tested. | ~2 days |
 | **3** | Server-side cancel route: recompute, enforce consent (E-4), snapshot, charge, cancel. Stripe invoice + waiver rules. | ~2 days |
 | **4** | The member journey — statement, options A/B/C, receipt. | ~2 days |
@@ -388,7 +450,7 @@ supplier integration was.
 | # | Decision | Answer |
 |---|---|---|
 | 1 | E-1 — dispatch should respect cadence | **Bug. Fix it.** |
-| 2 | Option B — pay it off, then stop | **Offer it** |
+| 2 | Option B — leave free on a scheduled date | **Offer it** (corrected — see §4) |
 | 3 | Overpayments | **Refund them** |
 | 4 | D-8 grandfathering | **Run a re-consent campaign with a deadline** |
 | 5 | D-3 VAT | **No VAT line while unregistered — stated position** |

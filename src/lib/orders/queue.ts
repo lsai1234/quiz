@@ -156,7 +156,15 @@ function isBlocked(o: QueueOrder): boolean {
  * of a first order ("is this address real?").
  */
 export function buildFulfilmentQueue(orders: Order[], kind?: QueueKind): FulfilmentQueue {
-  const rows = orders.map(toQueueOrder).filter((o) => (kind ? o.kind === kind : true))
+  const rows = orders
+    // A subscription cycle can legitimately dispatch nothing — every line a
+    // multi-month item that is not due this month. The order still exists as the
+    // record that the invoice was processed, but there is no box, so it is not
+    // queue work. Dropped here rather than in the SQL because "has lines" is a
+    // domain fact, not a storage one.
+    .filter((o) => o.lines.length > 0)
+    .map(toQueueOrder)
+    .filter((o) => (kind ? o.kind === kind : true))
 
   const byDate = new Map<string, QueueOrder[]>()
   for (const row of rows) {

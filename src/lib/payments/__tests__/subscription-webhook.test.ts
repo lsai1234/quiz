@@ -60,6 +60,47 @@ describe('subscription webhook flow', () => {
     expect(order?.lines.length).toBeGreaterThan(0)
   })
 
+  it('raises each renewal against the NEXT cycle, not a repeat of the signup box', async () => {
+    /**
+     * The clock is advanced further down the handler, so `sub.monthsActive` is
+     * one behind when the order is raised. Reading it without the +1 makes every
+     * renewal compute cycle 0 — i.e. the signup box — which is the shape of the
+     * over-shipping bug this replaced: every multi-month item, every month.
+     *
+     * Asserted through the webhook rather than the pure function because the
+     * off-by-one lives here, in the ordering of two statements.
+     */
+    const user = await makeUserWithSub('cycles@example.com')
+    const subId = 'sub_stripe_cycles'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+
+    // Start at zero, which is what a REAL checkout produces. The demo seed uses
+    // `monthsActive: 2`, so its first renewal lands on cycle 3 — where a
+    // three-month tub is genuinely due again, and the test would pass whether or
+    // not the cadence filter existed. That same seed is what hid the cancel bug
+    // in S-1 of the Stripe plan; it hides this one too.
+    const seeded = (await getSubscription(user.id))!
+    await saveSubscription(user.id, { ...seeded, monthsActive: 0 })
+
+    const stored = await getSubscription(user.id)
+    const multiMonth = stored!.lines.filter((l) => l.deliveryIntervalMonths > 1)
+    // The fixture needs at least one spread line or this proves nothing.
+    expect(multiMonth.length).toBeGreaterThan(0)
+
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_c1', 'subscription_create'))
+    const first = await getOrder('ord_inv_in_c1')
+    // Signup box: everything.
+    expect(first!.lines).toHaveLength(stored!.lines.length)
+
+    // First renewal — the spread lines are not due again yet.
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_c2'))
+    const renewal = await getOrder('ord_inv_in_c2')
+    expect(renewal!.lines.length).toBeLessThan(first!.lines.length)
+    for (const line of multiMonth) {
+      expect(renewal!.lines.some((l) => l.productId === line.productId)).toBe(false)
+    }
+  })
+
   // ── Event ordering ──────────────────────────────────────────────────────────
   // Stripe does not promise the ORDER of events, only their delivery. The first
   // invoice of a subscription and the checkout session that links it are emitted

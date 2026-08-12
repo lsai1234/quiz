@@ -223,7 +223,14 @@ export async function finalizeCheckout(
     const { getResolvedCatalogue } = await import('@/lib/catalogue/resolve')
     const { createSubscriptionOrder } = await import('@/lib/orders/service')
     const { products } = await getResolvedCatalogue()
-    await createSubscriptionOrder({ userId, email: subscription.customerEmail || email, sub: subscription, catalogue: products })
+    // Cycle 0 — the box that ships at signup, which is every line.
+    await createSubscriptionOrder({
+      userId,
+      email: subscription.customerEmail || email,
+      sub: subscription,
+      catalogue: products,
+      cycle: 0,
+    })
   } catch (err) {
     console.error('[finalizeCheckout] mock subscription order creation failed:', err)
   }

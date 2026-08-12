@@ -15,6 +15,7 @@ import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
 import { deliverability } from '@/lib/pricing/zones'
+import { shipsAtCycle } from '@/lib/recharge/clock'
 import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -139,10 +140,30 @@ async function accrueCommission(order: Order): Promise<void> {
   }
 }
 
-/** Turn a member's subscription bundle into order lines, resolving supplier SKUs
- *  and per-unit price from the catalogue. */
-export function subscriptionOrderLines(sub: MemberSubscription, catalogue: CatalogueProduct[]): OrderLine[] {
-  return sub.lines.map((line) => {
+/**
+ * The lines that actually dispatch on a given billing cycle.
+ *
+ * `cycle` is which delivery this is: 0 is the box that ships at signup, 1 the
+ * first renewal, and so on. **Only lines due on that cycle are included** —
+ * a three-month tub appears on cycles 0, 3, 6… and not on the months in between.
+ *
+ * That filter was missing, and its absence was a live over-shipping bug: every
+ * renewal invoice raised an order containing every line at full quantity, so a
+ * member on a three-month tub was sent one every month while paying a third of
+ * its price each month. It also made the exit settlement fiction — that model
+ * bills against `deliveriesMadeFor`, which says the tub ships once a quarter, so
+ * it was describing a dispatch pattern the system did not actually perform.
+ *
+ * A cycle where nothing is due yields an EMPTY array, which is a real and
+ * expected outcome for a plan of only multi-month items — see
+ * `createSubscriptionOrder` for what happens to the order in that case.
+ */
+export function subscriptionOrderLines(
+  sub: MemberSubscription,
+  catalogue: CatalogueProduct[],
+  cycle: number,
+): OrderLine[] {
+  return sub.lines.filter((line) => shipsAtCycle(line, cycle)).map((line) => {
     const product = catalogue.find((p) => p.id === line.productId)
     const variant =
       product?.variants.find((v) => (v.flavour || v.size || v.title) === line.variantTitle) ??
@@ -173,8 +194,20 @@ export async function createSubscriptionOrder(input: {
   shippingAddress?: SupplierAddress | null
   /** The charge behind this invoice, so the order is refundable for real. */
   stripePaymentIntentId?: string | null
+  /**
+   * Which delivery this is: 0 for the box that ships at signup, 1 for the first
+   * renewal, and so on. Decides which lines are actually due — see
+   * `subscriptionOrderLines`.
+   *
+   * The caller owns this because the subscription's own clock has not moved yet
+   * when the order is raised: the `invoice.paid` handler creates the order and
+   * THEN advances the cycle, so `sub.monthsActive` is one behind at this point.
+   */
+  cycle: number
 }): Promise<Order> {
   // Idempotency: if this invoice already produced an order, return it unchanged.
+  // This also protects the cycle: a redelivered webhook arriving after the clock
+  // advanced would compute a later cycle, and must not re-derive the lines.
   if (input.id) {
     const existing = await getOrder(input.id)
     if (existing) return existing
@@ -184,7 +217,7 @@ export async function createSubscriptionOrder(input: {
     channel: 'subscription',
     userId: input.userId ?? null,
     email: input.email ?? input.sub.customerEmail ?? null,
-    lines: subscriptionOrderLines(input.sub, input.catalogue),
+    lines: subscriptionOrderLines(input.sub, input.catalogue, input.cycle),
     shippingAddress: input.shippingAddress ?? input.sub.shippingAddress ?? null,
     stripePaymentIntentId: input.stripePaymentIntentId ?? null,
     status: 'paid',
@@ -267,9 +300,15 @@ export function reviewStateOf(order: Pick<Order, 'review'>): OrderReviewState {
 }
 
 /** True when the order is waiting on a founder in the daily queue. */
-export function awaitingReview(order: Pick<Order, 'status' | 'supplierOrderId' | 'review'>): boolean {
+export function awaitingReview(order: Pick<Order, 'status' | 'supplierOrderId' | 'review' | 'lines'>): boolean {
   if (order.supplierOrderId) return false
   if (order.status !== 'paid' && order.status !== 'failed') return false
+  // Nothing to dispatch, so nothing to decide. A subscription cycle where every
+  // line is a multi-month item that is not due raises a real order — it is the
+  // record that this invoice was processed, and the ledger needs it — but it has
+  // no lines, and putting an empty box in front of a founder to approve would be
+  // asking them to sign off on nothing.
+  if (order.lines.length === 0) return false
   return reviewStateOf(order) === 'pending'
 }
 

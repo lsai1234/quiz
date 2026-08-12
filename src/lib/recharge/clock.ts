@@ -48,6 +48,26 @@ export function deliveriesMadeFor(
 }
 
 /**
+ * Whether a line actually dispatches at a given billing cycle.
+ *
+ * The cadence gate. `deliveriesMadeFor` is a running total, so a line ships on
+ * exactly the cycles where that total goes up — which is cycle 0, and then every
+ * `deliveryIntervalMonths` after the cycle it joined on.
+ *
+ * This is what makes the flat monthly honest. The whole reason a three-month tub
+ * costs a third of its price each month is that it arrives once every three
+ * months; dispatching it monthly would send three times the product for the same
+ * money, and would make the exit settlement — which bills against this exact
+ * model — describe something that never happened.
+ */
+export function shipsAtCycle(
+  line: Pick<MemberSubscriptionLine, 'deliveryIntervalMonths' | 'joinedAtMonth'>,
+  cycle: number,
+): boolean {
+  return deliveriesMadeFor(line, cycle) > deliveriesMadeFor(line, cycle - 1)
+}
+
+/**
  * Advance the subscription by one paid billing cycle.
  *
  * Called once per renewal invoice. Idempotency is the caller's job and is keyed
