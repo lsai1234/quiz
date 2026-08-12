@@ -101,6 +101,34 @@ describe('subscription webhook flow', () => {
     }
   })
 
+  it('ends a scheduled free exit by itself once the clock reaches it', async () => {
+    /**
+     * Option B. Nothing was charged and nothing was stopped — the plan ran on as
+     * it was, which is what pays the balance off — and it ends on the month the
+     * member picked, with nothing to pay.
+     */
+    const user = await makeUserWithSub('scheduled@example.com')
+    const subId = 'sub_stripe_sched'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+
+    const seeded = (await getSubscription(user.id))!
+    await saveSubscription(user.id, { ...seeded, monthsActive: 0, scheduledExitMonth: 2 })
+
+    // Not yet — the plan is still running, and still shipping.
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_s1'))
+    const midway = (await getSubscription(user.id))!
+    expect(midway.status).toBe('active')
+    expect(midway.monthsActive).toBe(1)
+
+    // The month they chose. It ends itself, free.
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_s2'))
+    const ended = (await getSubscription(user.id))!
+    expect(ended.status).toBe('cancelled')
+    expect(ended.scheduledExitMonth).toBeNull()
+    expect(ended.exit?.settlement).toBe(0)
+    expect(ended.exit?.waiver).toBe('nothing-owed')
+  })
+
   // ── Event ordering ──────────────────────────────────────────────────────────
   // Stripe does not promise the ORDER of events, only their delivery. The first
   // invoice of a subscription and the checkout session that links it are emitted

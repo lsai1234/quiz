@@ -199,6 +199,50 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
       if (!alreadyProcessed && invoice.billing_reason === 'subscription_cycle') {
         next = advanceCycle(next)
       }
+
+      /**
+       * A member who chose to leave on their next free date.
+       *
+       * Nothing was charged and nothing was stopped — the plan ran on exactly as
+       * it was, which is what pays the balance off. Once the clock reaches the
+       * month they picked, the balance is zero and the plan ends by itself.
+       *
+       * Checked AFTER the advance, because the month they chose is a cycle count
+       * and this is the cycle that just completed. Stripe is told separately;
+       * this handler must not fail an invoice over a cancellation call.
+       */
+      if (next.scheduledExitMonth != null && next.monthsActive >= next.scheduledExitMonth) {
+        const { cancelSubscription } = await import('@/lib/recharge/mock')
+        const { quoteExit } = await import('@/lib/recharge/exit')
+        const { listOrders } = await import('@/lib/orders/repo')
+        const theirs = (await listOrders({ channel: 'subscription' })).filter((o) => o.userId === userId)
+        const quote = quoteExit({ sub: next, orders: theirs, consentCoversSettlement: true })
+
+        next = {
+          ...cancelSubscription(next, next.cancelReason ?? 'Scheduled free exit'),
+          scheduledExitMonth: null,
+          exit: {
+            at: new Date().toISOString(),
+            reason: next.cancelReason ?? null,
+            // Zero by construction: this is the date the balance cleared. If it
+            // has not, something moved underneath and the member is not billed
+            // for it — they chose a free exit and that is what they get.
+            settlement: 0,
+            source: quote.source,
+            waiver: 'nothing-owed',
+            paid: true,
+            overpayment: quote.overpayment,
+            statement: quote.statement ?? undefined,
+          },
+        }
+        try {
+          const { cancelStripeSubscription } = await import('./stripe')
+          await cancelStripeSubscription(stripeSubscriptionId)
+        } catch (err) {
+          console.error(`[exit] scheduled exit cancelled locally but NOT in Stripe for ${userId}:`, err)
+        }
+      }
+
       if (next !== sub) await saveSubscription(userId, next)
 
       return { handled: true, type: event.type, userId, orderId: order.id }

@@ -120,11 +120,15 @@ in cycles — and `subscriptionOrderLines` returns nothing for a skipped cycle. 
 then excludes it for free, because there is no order line to count. Nothing subtracts it
 afterwards, because nothing added it.
 
-### E-4 · The consent gate is never enforced
+### E-4 · The consent gate is never enforced · ✅ FIXED
 
 `consentCoversSettlement(userId)` is the thing that stops us charging a balance to someone
 who signed up under the old "no fee" terms. It is written, tested, documented as *"the gate
 for ever charging one"* — and called by nothing outside its own test file.
+
+**Now enforced**, and first in precedence among the waivers: it is the only one that is not
+a kindness. A member on the old terms cannot be charged whatever else is true of their
+account, so it is checked before the arithmetic is even consulted.
 
 ---
 
@@ -263,6 +267,40 @@ Pause, snooze, downsize, swap — `CancelSaveFlow` already offers these and they
 work. They stay in front of the settlement, not behind it.
 
 
+
+---
+
+### What Phase 3 built
+
+- **`exit.ts` — the one place an exit is decided.** Everything above it computes figures,
+  everything below it moves money or state. Pure: the caller fetches the subscription, the
+  orders and the consent answer; this decides. The decision is the part worth testing
+  exhaustively and it should not need a database to do it.
+- **Five waivers, in precedence order.** Consent, then the statutory cooling-off period,
+  then an unaccepted price rise, then a change we made ourselves, then simply owing
+  nothing. Each is a promise made somewhere else — in the Terms, in the price-increase
+  email, in the Consumer Contracts Regulations — and a settlement that ignored any of them
+  is a charge we would have to give back with an apology.
+  - Cooling-off runs from the **first delivery**, not signup: the regulations start when
+    the goods arrive.
+  - The involuntary-change waiver **expires** (60 days), so one old substitution is not a
+    permanent free pass.
+- **`chargeSettlement()` — an invoice, not a bare PaymentIntent.** It is a document the
+  member can see, the right object if VAT registration ever happens, and on a decline it
+  survives as an **open invoice they can still pay** rather than a failed charge that
+  leaves nothing behind. It never throws on a decline; a refusal is `paid: false`.
+- **`POST /api/hub/subscription/cancel`.** The figure is recomputed server-side from the
+  stored plan and the member's own orders. What the browser believed is used only to check
+  they were shown the same number — if a renewal landed while the sheet was open, they get
+  a 409 and the new figure rather than a charge nobody agreed to.
+- **Cancel proceeds regardless of the charge.** A declined card leaves an open invoice; it
+  never leaves someone still subscribed. That is the one thing the Terms explicitly
+  promise.
+- **The exit is snapshotted** onto the subscription — the statement, the source, the
+  waiver, the invoice — because a history read back later through a changed catalogue is
+  not the one the member agreed to.
+- **The scheduled free exit fires itself** in the `invoice.paid` handler once the clock
+  reaches the chosen month.
 
 ---
 
@@ -463,7 +501,7 @@ and would cost margin for nothing.
 | ~~0~~ | ~~Model D-9 across real bundles~~ — **done**, §9. Two levers adopted. | ✅ |
 | ~~1~~ | ~~Fix E-1 — dispatch respects cadence~~ — **done**. `shipsAtCycle` gates `subscriptionOrderLines`; the webhook computes the cycle; empty boxes stay out of the queue. | ✅ |
 | ~~2~~ | ~~Ledger-based settlement + E-3 skips + overpayment~~ — **done**. `exit-ledger.ts`; skips honoured at dispatch; overpayment reported. | ✅ |
-| **3** | Server-side cancel route: recompute, enforce consent (E-4), snapshot, charge, cancel. Stripe invoice + waiver rules. | ~2 days |
+| ~~3~~ | ~~Server-side cancel route, consent, charge, waivers~~ — **done**. `exit.ts` decides, `POST /api/hub/subscription/cancel` acts, `chargeSettlement` bills. | ✅ |
 | **4** | The member journey — statement, options A/B/C, receipt. | ~2 days |
 | **5** | Founders portal — balance, exit queue, waivers, financials. | ~1.5 days |
 | **6** | Emails: statement, receipt, failed charge, Option B progress. | ~0.5 day |

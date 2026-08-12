@@ -214,6 +214,25 @@ export interface MemberSubscription {
   safetyConstraints?: SafetyConstraints
   /** Audit trail of every move in the recurring amount, newest last. */
   billingHistory?: BillingChange[]
+  /**
+   * How this plan ended, recorded at the moment it did.
+   *
+   * A snapshot rather than something re-derivable: the whole point of the exit
+   * statement is that it describes a history, and a history read back six months
+   * later through a changed catalogue is not the one the member agreed to. This
+   * is the evidence of what was charged and why.
+   */
+  exit?: SubscriptionExit
+  /**
+   * The cycle this plan is scheduled to end on, when the member chose to leave
+   * on their next free date rather than settle now.
+   *
+   * Nothing is charged and nothing stops: the plan runs on exactly as it is —
+   * boxes still arrive, payments still go out — and ends by itself when the
+   * balance reaches zero. Which is what the smoothing already promised, so it is
+   * a scheduled cancellation rather than a payment plan. Clearing it resumes.
+   */
+  scheduledExitMonth?: number | null
   /** Stripe subscription id, set once the member checks out via Stripe. */
   stripeSubscriptionId?: string
   /** Stripe customer id — used to open the billing portal. */
@@ -234,6 +253,30 @@ export interface MemberSubscription {
    * hide the problem. Cleared when a payment next succeeds.
    */
   billingStatus?: 'ok' | 'past_due'
+}
+
+/** How a subscription ended, snapshotted at the exit. */
+export interface SubscriptionExit {
+  at: string
+  /** What the member told us, free text from the cancel flow. */
+  reason?: string | null
+  /** What we charged (£). Zero when waived. */
+  settlement: number
+  /** Whether the figure came from the order ledger or the forecast model. */
+  source: 'ledger' | 'forecast'
+  /** Why nothing was charged, when nothing was. */
+  waiver?: string | null
+  /** The Stripe invoice raised for it, when there was one. */
+  invoiceId?: string | null
+  /** False when the card declined — the invoice is still open and payable. */
+  paid?: boolean
+  /** What we owed THEM at the exit (£), if anything. */
+  overpayment?: number
+  /**
+   * The statement as it stood, so the figure can be explained later without
+   * re-deriving it through whatever the catalogue looks like by then.
+   */
+  statement?: unknown
 }
 
 /** A member's edit to a single scheduled delivery (from the calendar). */

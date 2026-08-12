@@ -368,6 +368,92 @@ export function constructWebhookEvent(rawBody: string, signature: string): Strip
 }
 
 /** Refund a payment in full by its PaymentIntent id. */
+export interface SettlementChargeResult {
+  invoiceId: string
+  /** True when the money actually moved. False means an open invoice they can pay. */
+  paid: boolean
+  /** Stripe's hosted invoice page, to link the member to when it did not. */
+  hostedInvoiceUrl: string | null
+  status: string | null
+}
+
+/**
+ * Charge a member the balance they owe on goods already sent, at the exit.
+ *
+ * An INVOICE, not a bare PaymentIntent, and the difference matters three times
+ * over: it is a document the member can see in their billing portal, it is the
+ * right object for a taxable supply if VAT registration ever happens, and when
+ * the card declines it survives as an **open invoice they can still pay** rather
+ * than as a failed charge that leaves nothing behind.
+ *
+ * Off-session against the saved card, because nobody is at the keyboard by the
+ * time this runs — the member has already confirmed and expects to be finished.
+ *
+ * NEVER throws on a decline. A refusal comes back as `paid: false` with the
+ * invoice still there. The caller cancels the subscription either way: holding
+ * someone's cancellation hostage to a card decline is the single worst thing
+ * this feature could do, and the terms promise the opposite.
+ *
+ * `idempotencyKey` must be stable for a given exit — the subscription plus the
+ * cycle it is leaving on — so a double-submit cannot bill twice.
+ */
+export async function chargeSettlement(opts: {
+  customerId: string
+  amount: number
+  description: string
+  idempotencyKey: string
+  currency?: string
+}): Promise<SettlementChargeResult> {
+  const stripe = getStripeClient()
+  const currency = (opts.currency ?? DEFAULT_CURRENCY).toLowerCase()
+
+  await stripe.invoiceItems.create(
+    {
+      customer: opts.customerId,
+      amount: Math.round(opts.amount * 100),
+      currency,
+      description: opts.description,
+    },
+    { idempotencyKey: `${opts.idempotencyKey}:item` },
+  )
+
+  const invoice = await stripe.invoices.create(
+    {
+      customer: opts.customerId,
+      collection_method: 'charge_automatically',
+      // Bill exactly what we just added and nothing else that happens to be
+      // pending on the customer.
+      pending_invoice_items_behavior: 'include',
+      auto_advance: false,
+      description: opts.description,
+      metadata: { kind: 'exit-settlement' },
+    },
+    { idempotencyKey: `${opts.idempotencyKey}:invoice` },
+  )
+  if (!invoice.id) throw new Error('Stripe returned an invoice with no id')
+
+  try {
+    const paid = await stripe.invoices.pay(invoice.id, { off_session: true })
+    return {
+      invoiceId: invoice.id,
+      paid: paid.status === 'paid',
+      hostedInvoiceUrl: paid.hosted_invoice_url ?? null,
+      status: paid.status ?? null,
+    }
+  } catch (err) {
+    // A decline is an outcome, not an exception — the invoice stands and the
+    // member can pay it from the portal.
+    console.warn('[stripe] settlement invoice was not paid immediately:', err instanceof Error ? err.message : err)
+    const open = await stripe.invoices.retrieve(invoice.id).catch(() => null)
+    return {
+      invoiceId: invoice.id,
+      paid: false,
+      hostedInvoiceUrl: open?.hosted_invoice_url ?? null,
+      status: open?.status ?? null,
+    }
+  }
+}
+
 export async function refundPayment(paymentIntentId: string): Promise<void> {
   const stripe = getStripeClient()
   await stripe.refunds.create({ payment_intent: paymentIntentId })
