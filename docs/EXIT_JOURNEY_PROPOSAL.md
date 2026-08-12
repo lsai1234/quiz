@@ -268,23 +268,100 @@ this is a debt for goods rather than a fee. **Recommend: compute and refund it.*
 
 ---
 
-## 9. D-9 is still the real decision
+## 9. D-9 — MODELLED. Two things have to change before this is chargeable
 
-The existing plan flagged this as *"the most valuable thing to do next"* and it was never
-done:
+*Run over 12 real personas through the real engine (`buildStackBlueprint` →
+`buildMemberSubscription`), at four intro-discount rates, across 15 months.
+`src/lib/recharge/exit-model.ts`, pinned by `exit-model.test.ts`.*
+
+### Finding 1 — the balance is a **sawtooth**, not a debt that runs down
+
+A typical plan (`perf-bulking-balanced`, £54.94/mo):
+
+```
+month   0      1     2      3      4     5      6      7     8
+owed  £11.33 £5.67 £0.01 £11.34 £5.68 £0.02 £11.35 £5.69 £0.03
+```
+
+It returns to ~zero **once per cadence** and jumps again on the next dispatch —
+forever. A member three years in still owes a full dispatch if they cancel the
+day after a tub ships.
+
+So the framing in the code — *"it reaches 0 as soon as their payments cover what
+was sent"* — is wrong, or at least badly incomplete. It reaches zero
+**periodically**. That is economically right (you are holding a tub you have not
+finished paying for) but it changes the product:
+
+> **There is always a date, usually one or two months away, when leaving is free.
+> Show it.** "Cancel now for £11.33, or on 14 March for nothing" turns a demand
+> into a choice, costs us the difference only from members who won't wait, and
+> pairs exactly with Option B.
+
+I'd make that the headline of the exit screen, not a footnote.
+
+### Finding 2 — an intro discount is **never amortised**
+
+This is the one that would have caused real damage. The scratch card reduces what
+they paid without reducing what we sent, so it lifts the **entire sawtooth
+permanently**. The undiscounted plan touches £0 every third month; the 50%-card
+version never touches zero at all, at any point in the plan's life.
+
+| Persona | monthly | m0 owed, no card | m0 owed, 50% card | ratio to paid |
+|---|---|---|---|---|
+| perf-bulking-balanced | £54.94 | £11.33 (0.21×) | £38.80 | **1.41×** |
+| perf-muscle-complete | £87.69 | £18.65 (0.21×) | £62.49 | **1.43×** |
+| well-immune-focus | £24.78 | £14.34 (0.58×) | £26.73 | **2.16×** |
+| well-health-under30 | £10.00 | £14.34 (1.43×) | £19.34 | **3.87×** |
+
+Across all 48 persona × rate combinations, the balance exceeds everything the
+member has ever paid in **15 cases — and 12 of those are the 50% card**. Without
+any card it happens once in twelve.
+
+**Recommendation: exclude the intro discount from the shortfall.** Settle against
+what the plan costs, not what the card reduced month one to. It drops
+`perf-bulking` from £38.80 (1.41×) to £11.33 (0.21×) and restores the free-exit
+month. The discount was a marketing cost we chose to bear; reclaiming it at the
+exit is charging it back to precisely the people most likely to dispute it — and
+it makes the scratch card, our best conversion tool, into a debt instrument.
+
+### Finding 3 — capping at what they have paid is nearly free
+
+Modelled at 1.0×: **£0.00** written off across 15 exit months on `perf-bulking`
+and `well-immune-focus`, **£4.34** on the £10/month plan. It only ever bites
+where the balance would otherwise exceed everything they have paid — which, with
+Finding 2 fixed, is a handful of very small plans.
+
+**Recommendation: adopt it as a belt-and-braces cap.** It costs almost nothing
+and it makes "you owe more than you have ever paid us" structurally impossible.
+
+### Together
+
+With both levers, the worst case across every persona and rate falls to well
+under 1× paid, every plan keeps a periodic free-exit month, and the sawtooth
+becomes explainable in one sentence: *you are settling the box you are holding.*
+
+> Footnote worth chasing separately: `well-health-under30` builds a £10.00/month
+> plan while `minSubscriptionMonthly` is £25, so that plan should not be sellable
+> at all. Either the floor is not enforced on this path or the persona is
+> unreachable — it does not affect the exit work, but it is the sort of thing
+> that turns up as a real order.
+
+---
+
+## 9b. What the original D-9 warning got right
+
+The existing plan said:
 
 > a month-one settlement can be a large fraction of the first bill — in the published
-> example it is **£80 against £70 paid**, i.e. more than the first month itself. A
-> scratch-card intro discount makes it larger still (the 50%-off case owes £115).
+> example it is **£80 against £70 paid**. A scratch-card intro discount makes it larger
+> still (the 50%-off case owes £115).
 
-That is still true, and the delivery ladder we just shipped doesn't change it. Before this
-is chargeable, model the settlement across the **real bundles the quiz actually builds**. I
-can do that as a standalone piece in a day — it needs no new product code, just the
-blueprint factory and the settlement function over the seed bundles.
-
-If the numbers are hostile, the levers are: cap the settlement at a fraction of what has
-been paid; exclude the intro discount from the shortfall; or bias month-one bundles away
-from multi-month tubs. All three are cheaper to decide now than after the first chargeback.
+The instinct was right and the emphasis was slightly off. On the plans the quiz actually
+builds, the **undiscounted** settlement is modest — 0.11× to 0.58× of what has been paid in
+eleven of twelve personas. It is the **scratch card** that makes it hostile, and it does so
+permanently rather than only in month one. The two levers adopted above deal with it; the
+third option the plan floated — biasing bundles away from multi-month tubs — is not needed
+and would cost margin for nothing.
 
 ---
 
@@ -292,7 +369,7 @@ from multi-month tubs. All three are cheaper to decide now than after the first 
 
 | # | Work | Size |
 |---|---|---|
-| **0** | **Model D-9 across real bundles.** No code ships until we know what we'd be charging. | ~1 day |
+| ~~0~~ | ~~Model D-9 across real bundles~~ — **done**, §9. Two levers adopted. | ✅ |
 | **1** | **Fix E-1** — dispatch respects cadence. Blocker, and a live fulfilment bug regardless of this feature. | ~1 day |
 | **2** | Ledger-based settlement (§3) + E-3 skips + overpayment. Pure functions, heavily tested. | ~2 days |
 | **3** | Server-side cancel route: recompute, enforce consent (E-4), snapshot, charge, cancel. Stripe invoice + waiver rules. | ~2 days |
@@ -306,14 +383,33 @@ supplier integration was.
 
 ---
 
-## 11. What I need from you
+## 11. Decisions — all confirmed
 
-1. **Is E-1 a bug?** Should a 3-month tub ship once every three months? I'm confident yes,
-   but it changes what this feature even means, so I won't assume it.
-2. **Option B — offer it?** My recommendation is yes; it is the kindest option and the most
-   likely to actually get paid.
-3. **Overpayments — refund them?** Recommend yes.
-4. **D-8 grandfathering** — accept that pre-settlement members exit free, or run a
-   re-consent campaign?
-5. **D-3 VAT** — confirm "no VAT line while unregistered" as a stated position.
-6. **D-9** — do you want the modelling run before anything is built? Recommend yes.
+| # | Decision | Answer |
+|---|---|---|
+| 1 | E-1 — dispatch should respect cadence | **Bug. Fix it.** |
+| 2 | Option B — pay it off, then stop | **Offer it** |
+| 3 | Overpayments | **Refund them** |
+| 4 | D-8 grandfathering | **Run a re-consent campaign with a deadline** |
+| 5 | D-3 VAT | **No VAT line while unregistered — stated position** |
+| 6 | D-9 modelling before building | **Done — §9** |
+
+Two further calls follow from the modelling and are taken as adopted unless overruled:
+
+| # | Decision | Position |
+|---|---|---|
+| 7 | Intro discount in the shortfall | **Excluded.** It is a marketing cost, not a loan |
+| 8 | Cap on the settlement | **1.0× what they have paid.** Costs ~nothing; makes "you owe more than you have paid" impossible |
+
+And one thing the modelling turned up that changes the product rather than the maths:
+
+| # | Decision | Position |
+|---|---|---|
+| 9 | Show the next free-exit date | **Yes — headline it.** The balance is a sawtooth with a £0 month every cadence, so almost every member is 1–2 months from leaving free |
+
+### Also now in scope, from decision 4
+
+A **re-consent campaign** is its own piece of work — an in-hub notice, a deadline, a
+reminder email, and a report of who has and hasn't accepted. It gates how much of the
+member base this feature can ever apply to, so it wants starting early rather than last.
+Roughly a day, and it can run in parallel with phases 1–2.
