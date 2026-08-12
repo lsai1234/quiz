@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CheckoutConsent } from './CheckoutConsent'
+import { fetchAuthContext } from '@/lib/auth-client'
 import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import type { ConsentSubmission, ConsentVersions } from '@/lib/legal/consent'
 
@@ -38,6 +39,33 @@ export function ConsentGate({
 }) {
   const [consented, setConsented] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * Who is about to be charged.
+   *
+   * A member signed in from a session weeks ago is never asked to log in, so
+   * the first they'd otherwise hear of WHICH account is subscribing is the
+   * receipt. Saying it here — with a way out — is the difference between "no
+   * login needed, nice" and finding a monthly plan on the wrong account.
+   */
+  const [account, setAccount] = useState<string | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
+
+  useEffect(() => {
+    void fetchAuthContext().then((ctx) => setAccount(ctx.user?.email ?? ctx.user?.name ?? null))
+  }, [])
+
+  const signOut = async () => {
+    setSigningOut(true)
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' })
+    } catch {
+      // Nothing to do about it here; closing the gate is still the right move,
+      // and the next checkout will ask them to sign in anyway.
+    }
+    // Back to the basket signed out: their stack is untouched, and starting the
+    // subscription again brings up the account gate.
+    onCancel()
+  }
 
   const submit = () => {
     if (!consented) {
@@ -75,6 +103,30 @@ export function ConsentGate({
         <p className="text-sm text-[var(--color-muted)] leading-relaxed">
           {notice ?? 'Have a read, then tick the box to start your subscription.'}
         </p>
+
+        {account && (
+          <div
+            className="mt-4 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+          >
+            <p className="text-[11px] leading-relaxed text-[var(--color-text-2)] min-w-0">
+              You’re already signed in — this will subscribe{' '}
+              <span className="font-bold break-all" style={{ color: 'var(--color-text)' }}>
+                {account}
+              </span>
+              .
+            </p>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              disabled={signingOut}
+              className="text-[10px] font-semibold underline flex-shrink-0 disabled:opacity-50"
+              style={{ color: 'var(--color-muted)' }}
+            >
+              {signingOut ? 'Signing out…' : 'Not you?'}
+            </button>
+          </div>
+        )}
 
         <CheckoutConsent
           accepted={consented}

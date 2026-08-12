@@ -37,6 +37,21 @@ function cookieValue(name: string): string | null {
 }
 
 /**
+ * Forget the referral. Same `path` the middleware set it with, or the browser
+ * keeps the original alongside the expired one.
+ *
+ * This is what makes "Remove" true. The cookie is read SERVER-side too
+ * (`resolveCheckoutCode`), as a fallback for screens with no code box — so
+ * without this, taking the code off the basket cleared the label and the
+ * checkout still went through attributed to the partner, on this purchase and
+ * on every purchase for the next thirty days.
+ */
+function forgetReferral(): void {
+  if (typeof document === 'undefined') return
+  document.cookie = `${REFERRAL_COOKIE}=; path=/; max-age=0; SameSite=Lax`
+}
+
+/**
  * The discount-code box.
  *
  * Checks the code as it is entered so someone finds out it works — or exactly
@@ -57,6 +72,13 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
   const [error, setError] = useState<string | null>(null)
   /** So a referral is only auto-applied once, not on every subtotal change. */
   const [triedReferral, setTriedReferral] = useState(false)
+  /**
+   * Whether the applied code arrived on a link rather than being typed here.
+   * Worth saying out loud: a code someone doesn't remember entering — because
+   * they followed the link weeks ago — reads as the site helping itself to a
+   * discount decision on their behalf.
+   */
+  const [fromLink, setFromLink] = useState(false)
 
   const check = useCallback(
     async (code: string, silent = false) => {
@@ -72,6 +94,7 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
         const d = await res.json().catch(() => ({}))
         if (d.ok) {
           onChange({ code: d.code, discountPct: d.discountPct, partnerName: d.partnerName })
+          setFromLink(silent)
           setInput('')
           setError(null)
         } else {
@@ -114,9 +137,22 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
           <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>
             {applied.partnerName}’s code — takes {Math.round(applied.discountPct * 100)}% off the regular price, instead of any other discount
           </p>
+          {fromLink && (
+            <p className="text-[10px] mt-0.5" style={{ color: 'var(--color-muted)' }}>
+              Applied automatically from a link you followed. Remove it to buy without it.
+            </p>
+          )}
         </div>
         <button
-          onClick={() => { onChange(null); setError(null) }}
+          onClick={() => {
+            // Forget the link as well as the label, so it doesn't quietly come
+            // back on the next screen — or get picked up server-side anyway.
+            forgetReferral()
+            setTriedReferral(true)
+            setFromLink(false)
+            onChange(null)
+            setError(null)
+          }}
           className="text-[10px] font-semibold underline flex-shrink-0"
           style={{ color: 'var(--color-muted)' }}
         >

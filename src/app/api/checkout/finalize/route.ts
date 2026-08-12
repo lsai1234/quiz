@@ -50,6 +50,17 @@ export async function POST(req: Request) {
         { status: 400 },
       )
     }
-    throw err
+    // Anything else — a Stripe call that failed, a write that didn't land — is
+    // ours. Logged with the member's id so it can be traced, and answered with
+    // JSON: rethrowing gives Next's HTML error page, which the browser can't
+    // parse, so the fault surfaced to the member as "check your connection".
+    console.error(`[checkout/finalize] failed for user ${user.id}:`, err)
+    return NextResponse.json(
+      {
+        error:
+          'We couldn’t start your payment just then. Your stack is saved — please try again in a moment.',
+      },
+      { status: 500 },
+    )
   }
 }

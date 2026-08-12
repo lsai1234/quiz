@@ -47,6 +47,25 @@ export type CheckoutState =
    */
   | { status: 'mock-complete'; plan: PlanType; subscription?: SubscriptionCheckout }
 
+/** Transport failure — the request never got an answer. The ONLY case where
+ *  telling someone to check their connection is honest. */
+const OFFLINE_MESSAGE = 'Unable to reach the store. Check your connection and try again.'
+
+/**
+ * What to say when the server answered, but not with a checkout.
+ *
+ * Its own sentence, because "check your connection" for a 500 sends a member to
+ * reboot their router over a fault that is entirely ours — and buries the one
+ * detail that would let us find it.
+ */
+function serverErrorMessage(status: number, error?: string): string {
+  if (error) return error
+  if (status >= 500) {
+    return `Something went wrong at our end (error ${status}) — your stack is saved. Please try again in a moment.`
+  }
+  return `We couldn’t start your checkout (error ${status}). Please try again.`
+}
+
 /**
  * Validates and initiates checkout for a StackBlueprint, for either plan.
  *
@@ -74,18 +93,23 @@ export function useStackCheckout() {
         setState({ status: 'needs-account', payload })
         return
       }
+      // Defensively: a 500 from a route handler comes back as an HTML error
+      // page, and `res.json()` throwing on that used to land in the catch below
+      // — telling a member with a perfectly good connection to check it, while
+      // the real fault (ours) went unsaid. A response that ARRIVED is never a
+      // connection problem.
       const data: {
         checkoutUrl?: string
         mock?: boolean
         error?: string
         code?: string
         versions?: ConsentVersions
-      } = await res.json()
+      } | null = await res.json().catch(() => null)
       // Consent is the one refusal the member can clear from here: ask for it
       // and re-submit, rather than showing a banner about a box that was never
       // on the screen. `stale-version` carries its own explanation — the terms
       // changed under them — so that sentence goes into the gate.
-      if (!res.ok && (data.code === 'not-accepted' || data.code === 'stale-version')) {
+      if (!res.ok && (data?.code === 'not-accepted' || data?.code === 'stale-version')) {
         pending.current = { payload, checkout }
         setState({
           status: 'needs-consent',
@@ -95,8 +119,12 @@ export function useStackCheckout() {
         })
         return
       }
-      if (!res.ok || !data.checkoutUrl) {
-        setState({ status: 'error', messages: [data.error ?? 'Something went wrong. Please try again.'] })
+      if (!res.ok || !data?.checkoutUrl) {
+        // Keep the plan and the gate state, so "try again" doesn't mean
+        // rebuilding the stack. The status goes in the message because a member
+        // reporting "it says 500" tells us far more than "it didn't work".
+        console.error(`[checkout] finalize failed (${res.status})`, data)
+        setState({ status: 'error', messages: [serverErrorMessage(res.status, data?.error)] })
         return
       }
       if (data.checkoutUrl.startsWith('#')) {
@@ -105,8 +133,9 @@ export function useStackCheckout() {
       }
       setState({ status: 'redirecting', plan: 'subscription' })
       window.location.href = data.checkoutUrl
-    } catch {
-      setState({ status: 'error', messages: ['Unable to reach the store. Check your connection and try again.'] })
+    } catch (err) {
+      console.error('[checkout] finalize could not be sent', err)
+      setState({ status: 'error', messages: [OFFLINE_MESSAGE] })
     }
   }, [])
 
@@ -185,9 +214,11 @@ export function useStackCheckout() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ lines: validation.lines, partnerCode: subOpts.partnerCode ?? null }),
         })
-        const data: { checkoutUrl?: string; mock?: boolean; error?: string } = await res.json()
-        if (!res.ok || !data.checkoutUrl) {
-          setState({ status: 'error', messages: [data.error ?? 'Something went wrong. Please try again.'] })
+        const data: { checkoutUrl?: string; mock?: boolean; error?: string } | null =
+          await res.json().catch(() => null)
+        if (!res.ok || !data?.checkoutUrl) {
+          console.error(`[checkout] cart failed (${res.status})`, data)
+          setState({ status: 'error', messages: [serverErrorMessage(res.status, data?.error)] })
           return
         }
         if (data.checkoutUrl.startsWith('#')) {
@@ -196,8 +227,9 @@ export function useStackCheckout() {
         }
         setState({ status: 'redirecting', plan: 'oneoff' })
         window.location.href = data.checkoutUrl
-      } catch {
-        setState({ status: 'error', messages: ['Unable to reach the store. Check your connection and try again.'] })
+      } catch (err) {
+        console.error('[checkout] cart could not be sent', err)
+        setState({ status: 'error', messages: [OFFLINE_MESSAGE] })
       }
     },
     [runFinalize],

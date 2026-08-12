@@ -134,3 +134,51 @@ describe('a checkout refused for want of consent', () => {
     await waitFor(() => expect(result.current.state.status).toBe('needs-account'))
   })
 })
+
+describe('a checkout that fails at our end', () => {
+  it('does not blame the member’s connection for a server fault', async () => {
+    // A 500 from a route handler arrives as an HTML error page, so `res.json()`
+    // throws. That used to land in the offline catch — sending someone with a
+    // working connection off to check their wifi over a fault that was ours.
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const htmlError = {
+      ok: false,
+      status: 500,
+      json: async () => {
+        throw new SyntaxError('Unexpected token < in JSON')
+      },
+    } as unknown as Response
+    fetchMock(htmlError)
+    const { result } = renderHook(() => useStackCheckout())
+    await startSubscription(result)
+
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    const state = result.current.state as Extract<typeof result.current.state, { status: 'error' }>
+    expect(state.messages[0]).toMatch(/our end/i)
+    expect(state.messages[0]).toContain('500')
+    expect(state.messages[0]).not.toMatch(/connection/i)
+  })
+
+  it('passes on what the server said when it said something', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    fetchMock(json(500, { error: 'We couldn’t start your payment just then.' }))
+    const { result } = renderHook(() => useStackCheckout())
+    await startSubscription(result)
+
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    const state = result.current.state as Extract<typeof result.current.state, { status: 'error' }>
+    expect(state.messages[0]).toMatch(/couldn’t start your payment/i)
+  })
+
+  it('still says "check your connection" when the request never got out', async () => {
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    const fn = jest.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+    global.fetch = fn as unknown as typeof fetch
+    const { result } = renderHook(() => useStackCheckout())
+    await startSubscription(result)
+
+    await waitFor(() => expect(result.current.state.status).toBe('error'))
+    const state = result.current.state as Extract<typeof result.current.state, { status: 'error' }>
+    expect(state.messages[0]).toMatch(/connection/i)
+  })
+})
