@@ -16,7 +16,7 @@ import { buildMemberSubscription } from '@/lib/recharge/mock'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
 import type { ChangePolicy } from '@/lib/recharge/types'
 import type { CheckoutPayload } from '@/lib/checkout/types'
-import type { ConsentSubmission } from '@/lib/legal/consent'
+import type { ConsentSubmission, ConsentVersions } from '@/lib/legal/consent'
 
 export type CheckoutState =
   | { status: 'idle' }
@@ -34,6 +34,13 @@ export type CheckoutState =
   | { status: 'error'; messages: string[] }
   // Subscription checkout requires an account — the page shows the AccountGate.
   | { status: 'needs-account'; payload: CheckoutPayload }
+  /**
+   * Signed in, but this checkout carries no usable consent — the page shows the
+   * ConsentGate. Signing up captures consent on the way through the account
+   * gate; a member who was already signed in has never been asked, so the
+   * server's refusal is what opens the box rather than what reports an error.
+   */
+  | { status: 'needs-consent'; payload: CheckoutPayload; versions: ConsentVersions | null; notice: string | null }
   /**
    * Mock payments only: no Stripe to go to, so the demo order is complete. Real
    * payments end at `redirecting` and confirm on `/order/confirmation`.
@@ -67,7 +74,27 @@ export function useStackCheckout() {
         setState({ status: 'needs-account', payload })
         return
       }
-      const data: { checkoutUrl?: string; mock?: boolean; error?: string } = await res.json()
+      const data: {
+        checkoutUrl?: string
+        mock?: boolean
+        error?: string
+        code?: string
+        versions?: ConsentVersions
+      } = await res.json()
+      // Consent is the one refusal the member can clear from here: ask for it
+      // and re-submit, rather than showing a banner about a box that was never
+      // on the screen. `stale-version` carries its own explanation — the terms
+      // changed under them — so that sentence goes into the gate.
+      if (!res.ok && (data.code === 'not-accepted' || data.code === 'stale-version')) {
+        pending.current = { payload, checkout }
+        setState({
+          status: 'needs-consent',
+          payload,
+          versions: data.versions ?? null,
+          notice: data.code === 'stale-version' ? data.error ?? null : null,
+        })
+        return
+      }
       if (!res.ok || !data.checkoutUrl) {
         setState({ status: 'error', messages: [data.error ?? 'Something went wrong. Please try again.'] })
         return

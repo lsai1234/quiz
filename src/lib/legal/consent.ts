@@ -71,22 +71,46 @@ export type ConsentError =
    */
   | 'stale-version'
 
+/** The versions of the two checkout documents as we are serving them now. */
+export interface ConsentVersions {
+  terms: string
+  disclaimer: string
+}
+
+/**
+ * What a browser has to echo back for its tick to be accepted.
+ *
+ * Handed to the client so a consent form submits the versions WE serve rather
+ * than the ones its bundle was built with — otherwise a member on a tab opened
+ * before a deploy can only ever fail `stale-version`, however many times they
+ * tick the box. Echoing these back doesn't let a client name its own terms: the
+ * server still re-renders and hashes the documents itself in `validateConsent`.
+ */
+export function currentConsentVersions(config: PricingConfig = getPricingConfig()): ConsentVersions {
+  const docs = checkoutDocuments(config)
+  return {
+    terms: docs.find((d) => d.id === 'terms')!.version,
+    disclaimer: docs.find((d) => d.id === 'disclaimer')!.version,
+  }
+}
+
 /**
  * Check a submission against the documents currently being served.
- * Returns the documents to record, or why the submission can't be accepted.
+ * Returns the documents to record, or why the submission can't be accepted —
+ * with the versions we're serving, so a caller can ask again for the right ones.
  */
 export function validateConsent(
   submission: ConsentSubmission | undefined | null,
   config: PricingConfig = getPricingConfig(),
-): { ok: true; documents: ConsentedDocument[] } | { ok: false; error: ConsentError } {
-  if (!submission?.accepted) return { ok: false, error: 'not-accepted' }
-
+):
+  | { ok: true; documents: ConsentedDocument[] }
+  | { ok: false; error: ConsentError; versions: ConsentVersions } {
   const docs = checkoutDocuments(config)
-  const terms = docs.find((d) => d.id === 'terms')!
-  const disclaimer = docs.find((d) => d.id === 'disclaimer')!
+  const versions = currentConsentVersions(config)
 
-  if (submission.termsVersion !== terms.version || submission.disclaimerVersion !== disclaimer.version) {
-    return { ok: false, error: 'stale-version' }
+  if (!submission?.accepted) return { ok: false, error: 'not-accepted', versions }
+  if (submission.termsVersion !== versions.terms || submission.disclaimerVersion !== versions.disclaimer) {
+    return { ok: false, error: 'stale-version', versions }
   }
   return { ok: true, documents: docs.map(consentedDocument) }
 }

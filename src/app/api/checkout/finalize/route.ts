@@ -41,8 +41,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, ...result })
   } catch (err) {
     // A missing or stale consent is the member's to fix, not a server fault.
+    // The code and the versions we're serving go back with the sentence so the
+    // browser can open the consent gate and re-submit against the right terms,
+    // rather than dead-ending on a message about a box the member never saw.
     if (err instanceof CheckoutRejected) {
-      return NextResponse.json({ error: err.message }, { status: 400 })
+      return NextResponse.json(
+        { error: err.message, code: err.code, versions: err.versions },
+        { status: 400 },
+      )
     }
     throw err
   }

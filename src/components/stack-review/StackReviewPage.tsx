@@ -32,6 +32,7 @@ import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
+import { ConsentGate } from '@/components/legal/ConsentGate'
 import { funnel } from '@/lib/analytics/quiz'
 import type { StackLevel, Goal } from '@/lib/types'
 import { TIER_ORDER, TIER_SIZES, TIER_META } from '@/lib/quiz-core'
@@ -306,7 +307,9 @@ export function StackReviewPage() {
     && pricing.subscriptionItemCount > 0
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
-  const showStickyBar = !swapSlot && !journeyOpen && checkoutState.status !== 'needs-account'
+  const showStickyBar = !swapSlot && !journeyOpen
+    && checkoutState.status !== 'needs-account'
+    && checkoutState.status !== 'needs-consent'
   const leavingForStripe = checkoutState.status === 'redirecting'
 
   // Funnel: the built-bundle screen was reached (once), and the checkout
@@ -652,6 +655,17 @@ export function StackReviewPage() {
         <AccountGate
           payload={checkoutState.payload}
           onAuthenticated={resumeCheckout}
+          onCancel={resetCheckout}
+        />
+      )}
+
+      {/* Already signed in: the account gate never ran, so this is where the
+          terms and the health disclaimer get shown. */}
+      {checkoutState.status === 'needs-consent' && (
+        <ConsentGate
+          versions={checkoutState.versions}
+          notice={checkoutState.notice}
+          onAccept={resumeCheckout}
           onCancel={resetCheckout}
         />
       )}

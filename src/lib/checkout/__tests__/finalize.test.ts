@@ -242,6 +242,23 @@ describe('consent is a precondition of checkout', () => {
     expect(await latestConsent(user.id)).toBeNull()
   })
 
+  it('tells the caller WHICH refusal it is, and what to ask for', async () => {
+    // The browser needs more than a sentence: a member who is already signed in
+    // has never been shown the box, so "not-accepted" has to be actionable —
+    // open the consent gate, submit against these versions, carry on.
+    const user = await createUser({ email: 'codes@example.com', passwordHash: 'h' })
+
+    const rejection = await finalizeCheckout(user.id, user.email, { subscription })
+      .catch((err: unknown) => err as CheckoutRejected)
+
+    expect(rejection).toBeInstanceOf(CheckoutRejected)
+    expect((rejection as CheckoutRejected).code).toBe('not-accepted')
+    expect((rejection as CheckoutRejected).versions).toEqual({
+      terms: TERMS_VERSION,
+      disclaimer: DISCLAIMER_VERSION,
+    })
+  })
+
   it('refuses consent to a version we no longer serve', async () => {
     const user = await createUser({ email: 'stale@example.com', passwordHash: 'h' })
 

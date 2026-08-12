@@ -18,6 +18,7 @@ import { SubscriptionProtocol } from '@/components/stack-review/SubscriptionProt
 import { ScratchToReveal, scratchRevealAvailable } from '@/components/stack-review/ScratchToReveal'
 import { CheckoutSuccess } from '@/components/stack-review/CheckoutSuccess'
 import { AccountGate } from '@/components/auth/AccountGate'
+import { ConsentGate } from '@/components/legal/ConsentGate'
 import { BundleHero } from './BundleHero'
 import { BundleAddOnCard } from './BundleAddOnCard'
 import { WorkoutSection } from './WorkoutSection'
@@ -158,7 +159,9 @@ export function BundleLandingPage({ bundle }: Props) {
     && pricing.subscriptionItemCount > 0
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
-  const showStickyBar = checkoutState.status !== 'needs-account' && checkoutState.status !== 'mock-complete'
+  const showStickyBar = checkoutState.status !== 'needs-account'
+    && checkoutState.status !== 'needs-consent'
+    && checkoutState.status !== 'mock-complete'
 
   // Mock payments only — a real payment confirms on /order/confirmation.
   if (checkoutState.status === 'mock-complete') {
@@ -388,6 +391,17 @@ export function BundleLandingPage({ bundle }: Props) {
           </div>
         </div>,
         document.body,
+      )}
+
+      {/* Already signed in: the account gate never ran, so this is where the
+          terms and the health disclaimer get shown. */}
+      {checkoutState.status === 'needs-consent' && (
+        <ConsentGate
+          versions={checkoutState.versions}
+          notice={checkoutState.notice}
+          onAccept={resumeCheckout}
+          onCancel={resetCheckout}
+        />
       )}
 
       {checkoutState.status === 'needs-account' && (

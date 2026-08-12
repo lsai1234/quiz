@@ -1,6 +1,7 @@
 import {
   consentCoversSettlement,
   consentErrorMessage,
+  currentConsentVersions,
   hashDocument,
   latestConsent,
   listConsents,
@@ -36,7 +37,7 @@ describe('validating a submission', () => {
   it('rejects an unticked box, a missing field and a missing object alike', () => {
     for (const submission of [{ ...good, accepted: false }, undefined, null]) {
       const result = validateConsent(submission)
-      expect(result).toEqual({ ok: false, error: 'not-accepted' })
+      expect(result).toMatchObject({ ok: false, error: 'not-accepted' })
     }
   })
 
@@ -44,9 +45,21 @@ describe('validating a submission', () => {
     // Only reachable across a deploy mid-session. Recording consent to text we
     // can't reproduce would make the evidence worthless, so the member re-reads.
     expect(validateConsent({ ...good, termsVersion: '2020-01-01' }))
-      .toEqual({ ok: false, error: 'stale-version' })
+      .toMatchObject({ ok: false, error: 'stale-version' })
     expect(validateConsent({ ...good, disclaimerVersion: '2020-01-01' }))
-      .toEqual({ ok: false, error: 'stale-version' })
+      .toMatchObject({ ok: false, error: 'stale-version' })
+  })
+
+  it('says which versions it wants, on every rejection', () => {
+    // What the browser re-asks with. Without it, a member whose tab predates a
+    // deploy re-ticks the box forever against versions we no longer serve.
+    const wanted = { terms: TERMS_VERSION, disclaimer: DISCLAIMER_VERSION }
+    expect(currentConsentVersions()).toEqual(wanted)
+    for (const bad of [{ ...good, accepted: false }, { ...good, termsVersion: '2020-01-01' }]) {
+      const result = validateConsent(bad)
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.versions).toEqual(wanted)
+    }
   })
 
   it('has a member-facing message for each rejection', () => {

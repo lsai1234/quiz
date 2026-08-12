@@ -23,7 +23,13 @@ import { clampRate, firstMonthRate, getPricingConfig, resolveIntroDiscount } fro
 import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
 import { deliveryOptions } from '@/lib/pricing/delivery'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
-import { consentErrorMessage, recordConsent, validateConsent } from '@/lib/legal/consent'
+import {
+  consentErrorMessage,
+  recordConsent,
+  validateConsent,
+  type ConsentError,
+  type ConsentVersions,
+} from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
 
 export const PENDING_COOKIE = 'pending_checkout'
@@ -38,9 +44,18 @@ export interface FinalizeResult {
  * A checkout that can't proceed. Thrown rather than returned so no caller can
  * accidentally carry on and take a payment — the routes turn it into a 400 with
  * the member-facing message.
+ *
+ * It carries the machine-readable `code` and the versions we're serving as well
+ * as the sentence, because "you haven't consented yet" is a thing the browser
+ * can FIX — it opens the consent gate and asks — and matching on prose to work
+ * that out would be a fix waiting to break on a copy edit.
  */
 export class CheckoutRejected extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly code: ConsentError,
+    readonly versions: ConsentVersions,
+  ) {
     super(message)
     this.name = 'CheckoutRejected'
   }
@@ -129,7 +144,9 @@ export async function finalizeCheckout(
   // 2. Consent, before anything is stored or charged. The documents recorded
   //    are the ones WE are currently serving, never what the payload claims.
   const consent = validateConsent(payload.consent)
-  if (!consent.ok) throw new CheckoutRejected(consentErrorMessage(consent.error))
+  if (!consent.ok) {
+    throw new CheckoutRejected(consentErrorMessage(consent.error), consent.error, consent.versions)
+  }
 
   // 3. The partner code, re-validated here against OUR monthly total. What the
   //    browser sent is a string; the discount is decided on this side. A code
