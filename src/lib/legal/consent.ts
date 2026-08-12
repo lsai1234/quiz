@@ -157,6 +157,25 @@ export async function listConsents(userId: string): Promise<ConsentRecord[]> {
   return rows.map(parse).filter((r): r is ConsentRecord => r !== null)
 }
 
+/**
+ * Every terms version each member has ever accepted.
+ *
+ * One query rather than one per member: the re-consent report walks the whole
+ * base, and doing that a row at a time is how a report becomes a timeout.
+ */
+export async function acceptedTermsVersionsByUser(): Promise<Map<string, string[]>> {
+  const db = await getEngine()
+  const rows = await db.all<Row & { user_id: string }>('SELECT user_id, data FROM consents')
+  const out = new Map<string, string[]>()
+  for (const row of rows) {
+    const record = parse(row)
+    if (!record) continue
+    const versions = record.documents.filter((d) => d.id === 'terms').map((d) => d.version)
+    out.set(row.user_id, [...(out.get(row.user_id) ?? []), ...versions])
+  }
+  return out
+}
+
 export async function latestConsent(userId: string): Promise<ConsentRecord | null> {
   return (await listConsents(userId))[0] ?? null
 }

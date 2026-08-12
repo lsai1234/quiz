@@ -292,6 +292,19 @@ underneath everything.
       not mention paying or owing
 - [ ] **C5c.5** Re-running the same exit does not queue a second email (deduped per exit)
 
+### C5d · Re-consent, and snoozes that expire
+
+- [ ] **C5d.1** A member on the old terms sees the notice in `/myhub`, and it is
+      **dismissible** — "Not now" closes it and nothing stops working
+- [ ] **C5d.2** Accepting records a `re-consent` row, and the notice does not come back
+- [ ] **C5d.3** Their exit now quotes a real balance rather than the consent waiver
+- [ ] **C5d.4** Founders Hub → `GET /api/portal/consent` reports the uncovered share
+- [ ] **C5d.5** POST a *stale* `termsVersion` to `/api/hub/consent` → rejected
+- [ ] **C5d.6** **Snooze for 1 month, then set `snoozeUntil` into the past and run the
+      daily job** → the plan comes back to `active` and Stripe billing resumes. Before this
+      existed a snooze stayed paused indefinitely with a return date on screen that came
+      and went.
+
 ### C6 · Partner portal
 
 - [ ] **C6.1** Create a partner in Founders Hub → Partners; issue a code

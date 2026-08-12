@@ -17,6 +17,7 @@ import { DeliveryCalendar } from './DeliveryCalendar'
 import { DeliveryDetailSheet } from './DeliveryDetailSheet'
 import { BillingSummary } from './BillingSummary'
 import { CancelSaveFlow } from './CancelSaveFlow'
+import { ReconsentNotice } from './ReconsentNotice'
 import { ChangeSummary, type PendingChange } from './ChangeSummary'
 import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
 import { constraintsFor, describeConstraints } from '@/lib/changes/safety'
@@ -151,6 +152,10 @@ export function SubscriptionDashboard() {
 
   return (
     <div ref={rootRef} className="max-w-lg mx-auto px-5 py-8 pb-16">
+      {/* Terms that have moved on since this member accepted them. Dismissible
+          and non-blocking on purpose — see the component. */}
+      <ReconsentNotice />
+
       {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-5" data-reveal>
         <div>

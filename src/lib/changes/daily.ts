@@ -35,6 +35,8 @@ export interface DailyRunResult {
   productsMissing?: number
   /** Partner commissions whose return window passed, now payable. */
   commissionsConfirmed?: number
+  /** Snoozed plans whose return date arrived and are now active again. */
+  snoozesResumed?: number
   note?: string
 }
 
@@ -94,6 +96,21 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     console.error('[daily] commission confirmation failed:', err)
   }
 
+  // Snoozes that have run out. The hub tells a member "back on 14 March" and
+  // nothing used to make that true — a three-month snooze simply stayed paused
+  // forever. Never allowed to fail the rest of the job.
+  let snoozesResumed = 0
+  try {
+    const { resumeDueSnoozes } = await import('@/lib/recharge/resume')
+    const result = await resumeDueSnoozes()
+    snoozesResumed = result.resumed
+    if (result.stripeErrors.length > 0) {
+      console.error(`[daily] ${result.stripeErrors.length} snooze(s) resumed locally but NOT in Stripe`)
+    }
+  } catch (err) {
+    console.error('[daily] snooze resume failed:', err)
+  }
+
   return {
     dryRun: false,
     baselineOnly: detection.baselineOnly,
@@ -108,6 +125,7 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     productsRefreshed: productSync.updated,
     productsMissing: productSync.missing.length,
     commissionsConfirmed,
+    snoozesResumed,
   }
 }
 

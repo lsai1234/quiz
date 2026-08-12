@@ -635,9 +635,27 @@ That folds neatly into decision 4: **one re-consent campaign, one version**,
 covering both the original settlement disclosure and this correction. Worth legal
 eyes on the sawtooth wording specifically.
 
-### Also now in scope, from decision 4
+### Decision 4 — the re-consent campaign · ✅ BUILT
 
-A **re-consent campaign** is its own piece of work — an in-hub notice, a deadline, a
-reminder email, and a report of who has and hasn't accepted. It gates how much of the
-member base this feature can ever apply to, so it wants starting early rather than last.
-Roughly a day, and it can run in parallel with phases 1–2.
+It gates how much of the member base this feature can ever apply to, so it was the last
+real gap rather than a nice-to-have.
+
+- **`campaignReport()`** puts a number on it. `preSettlement` + `none` is the share of
+  members whose exits cost nothing whatever the arithmetic says — the figure that decides
+  what this feature is actually worth, and the one a founder should look at first.
+  `GET /api/portal/consent`.
+- **An in-hub notice** (`ReconsentNotice`), **dismissible and non-blocking**. A member who
+  declines carries on under the terms they already accepted and everything they pay for
+  keeps working. That is not softness: a consent given to get past a blocking modal is not
+  much of a consent, and withholding a service someone is paying for over terms they are
+  entitled to refuse is coercion with a compliance label on it. The notice says *"Not now —
+  nothing changes"* out loud, because a member who does not know they can decline has not
+  been given a choice.
+- **Two different asks.** Someone who never accepted a settlement-disclosing version is
+  being asked for a genuinely new commercial term and gets the full statement — what it is,
+  that it is not a cancellation fee, the cap, the £5 floor, and that they may decline.
+  Someone merely behind the last edit is being asked to acknowledge a correction, and it
+  reads like the smaller thing it is.
+- **`POST /api/hub/consent`** validates against the documents *we* are serving, never what
+  the payload claims — the same rule the checkout follows, because a consent record the
+  client wrote is not evidence.
