@@ -17,6 +17,7 @@ import { PlanReceipt } from '@/components/stack-review/PlanReceipt'
 import { SubscriptionProtocol } from '@/components/stack-review/SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from '@/components/stack-review/ScratchToReveal'
 import { CheckoutSuccess } from '@/components/stack-review/CheckoutSuccess'
+import { receiptItemsFromSlots } from '@/lib/receipt/build'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { ConsentGate } from '@/components/legal/ConsentGate'
 import { BundleHero } from './BundleHero'
@@ -171,6 +172,11 @@ export function BundleLandingPage({ bundle }: Props) {
           plan={checkoutState.plan}
           mock
           subscription={checkoutState.subscription}
+          oneOff={{
+            items: receiptItemsFromSlots(blueprint.slots, products),
+            subtotal: pricing.oneOffSubtotal,
+            total: pricing.oneOffTotal,
+          }}
           onBack={resetCheckout}
         />
       </div>

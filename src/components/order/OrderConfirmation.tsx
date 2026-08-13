@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { track } from '@/lib/analytics/events'
 import type { ConfirmationResponse } from '@/lib/orders/confirmation'
+import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
+import { receiptFromConfirmation } from '@/lib/receipt/build'
 
 const ACCENT = '#00D4FF'
 const AMBER = '#fbbf24'
@@ -28,18 +30,6 @@ type Resolved = { status: 'unresolved' } | { status: 'ready'; data: Confirmation
 
 const POLL_INTERVAL_MS = 3_000
 const POLL_CEILING_MS = 60_000
-
-function money(minorUnits: number, currency: string): string {
-  return new Intl.NumberFormat('en-GB', { style: 'currency', currency }).format(minorUnits / 100)
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime())
-    ? '—'
-    : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-}
 
 export function OrderConfirmation({ sessionId, mockOrderId }: { sessionId: string | null; mockOrderId: string | null }) {
   const [resolved, setResolved] = useState<Resolved>({ status: 'unresolved' })
@@ -246,10 +236,20 @@ function Processing({ data, timedOut }: { data: ConfirmationResponse; timedOut: 
 
 // ─── V1–V5 Confirmed ─────────────────────────────────────────────────────────
 
+/**
+ * The confirmed screen prints its own receipt.
+ *
+ * Everything the old cards carried — reference, line items, totals, delivery
+ * window, address, plan — is on the paper, because that is what a receipt is
+ * for and repeating it underneath in a second layout only invites the two to
+ * disagree. The cards that remain are the ones a receipt has no business
+ * printing: why this stack was chosen, and where to go next.
+ */
 function Confirmed({ data }: { data: ConfirmationResponse }) {
   const { order, subscription, personalisation, variant } = data
   const isSub = variant === 'personalised_subscription' || variant === 'standard_subscription'
   const name = personalisation?.firstName
+  const receipt = receiptFromConfirmation(data)
 
   return (
     <Shell>
@@ -269,110 +269,19 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
         </p>
       )}
 
-      {order && (
-        <>
-          <Card title="Order reference">
-            {/* Announced to screen readers as a unit, so it isn't read as loose digits. */}
-            <p
-              className="text-lg font-black"
-              style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
-              aria-label={`Order reference ${order.reference.split('').join(' ')}`}
-            >
-              {order.reference}
-            </p>
-            {order.refunded && (
-              <p className="text-xs mt-2" style={{ color: AMBER }}>
-                A refund has been issued on this order.
-              </p>
-            )}
-          </Card>
+      {receipt && <ReceiptPrinter receipt={receipt} className="mt-6 mb-2" />}
 
-          <Card title="What you ordered">
-            <ul className="space-y-2">
-              {order.lineItems.map((l, i) => (
-                <li key={i} className="flex justify-between gap-3 text-sm">
-                  <span className="text-[var(--color-text-2)]">
-                    {l.name}
-                    {l.qty > 1 && <span className="text-[var(--color-muted)]"> × {l.qty}</span>}
-                  </span>
-                  <span className="font-semibold text-[var(--color-text)] whitespace-nowrap">
-                    {money(l.unitAmount * l.qty, order.currency)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <dl className="mt-3 pt-3 border-t border-[var(--color-border)] space-y-1 text-sm">
-              <Row label="Subtotal" value={money(order.totals.subtotal, order.currency)} />
-              {order.totals.discount > 0 && (
-                <Row label="Discount" value={`−${money(order.totals.discount, order.currency)}`} />
-              )}
-              <Row
-                label="Delivery"
-                value={order.totals.shipping > 0 ? money(order.totals.shipping, order.currency) : 'Free'}
-              />
-              <div className="flex justify-between pt-2 border-t border-[var(--color-border)]">
-                <dt className="font-bold text-[var(--color-text)]">Total paid</dt>
-                <dd className="font-black" style={{ color: ACCENT }}>
-                  {money(order.totals.total, order.currency)}
-                </dd>
-              </div>
-            </dl>
-          </Card>
-
-          {order.deliveryEstimate && (
-            <Card title="Delivery">
-              <p className="text-sm text-[var(--color-text-2)]">
-                Expected {formatDate(order.deliveryEstimate.from)} – {formatDate(order.deliveryEstimate.to)}
-              </p>
-              {order.shippingAddress && (
-                <address className="not-italic text-xs text-[var(--color-muted)] mt-2 leading-relaxed">
-                  {order.shippingAddress.name}
-                  <br />
-                  {order.shippingAddress.line1}
-                  {order.shippingAddress.line2 && (
-                    <>
-                      <br />
-                      {order.shippingAddress.line2}
-                    </>
-                  )}
-                  <br />
-                  {order.shippingAddress.city} {order.shippingAddress.postcode}
-                </address>
-              )}
-              <p className="text-[11px] text-[var(--color-muted)] mt-3">
-                Something wrong? Email us within 12 hours and we&apos;ll change it before it ships.
-              </p>
-            </Card>
-          )}
-        </>
+      {order?.refunded && (
+        <Card>
+          <p className="text-xs" style={{ color: AMBER }}>
+            A refund has been issued on this order.
+          </p>
+        </Card>
       )}
 
       {subscription && (
-        <Card title="Your plan">
-          <dl className="space-y-1 text-sm">
-            <Row label="Billed" value={`${subscription.cadenceLabel.toLowerCase()}`} />
-            <Row
-              label="Amount"
-              value={money(subscription.recurringAmount, order?.currency ?? 'GBP')}
-            />
-            <Row label="Next payment" value={formatDate(subscription.nextBillingDate)} />
-            <Row label="Next delivery" value={formatDate(subscription.nextDispatchDate)} />
-          </dl>
-
-          {subscription.cadenceGroups.length > 1 && (
-            <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
-              <p className="text-[11px] text-[var(--color-muted)] mb-2">
-                Your items arrive on their own schedules — one flat payment covers them all.
-              </p>
-              {subscription.cadenceGroups.map((g) => (
-                <p key={g.label} className="text-xs text-[var(--color-text-2)]">
-                  <span className="font-semibold">{g.label}:</span> {g.items.join(', ')}
-                </p>
-              ))}
-            </div>
-          )}
-
-          <p className="text-[11px] text-[var(--color-muted)] mt-3 leading-relaxed">
+        <Card>
+          <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
             No minimum term. Cancel any time from your account before your next payment — you&apos;ll
             only settle the balance on anything already sent to you.
           </p>
@@ -413,14 +322,5 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
         </Link>
       )}
     </Shell>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between">
-      <dt className="text-[var(--color-text-2)]">{label}</dt>
-      <dd className="font-semibold text-[var(--color-text)]">{value}</dd>
-    </div>
   )
 }

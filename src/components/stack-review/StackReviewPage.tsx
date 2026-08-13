@@ -27,6 +27,7 @@ import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
+import { receiptItemsFromSlots } from '@/lib/receipt/build'
 import { ProductSwapModal } from './ProductSwapModal'
 import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
@@ -400,6 +401,11 @@ export function StackReviewPage() {
         mock
         subscription={checkoutState.subscription}
         changePolicy={changePolicy.default}
+        oneOff={{
+          items: receiptItemsFromSlots(activeSlots, products),
+          subtotal: pricing.oneOffSubtotal,
+          total: pricing.oneOffTotal,
+        }}
         onBack={resetCheckout}
       />
     )

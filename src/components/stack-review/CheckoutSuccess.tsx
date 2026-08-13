@@ -1,35 +1,13 @@
 'use client'
 
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { useMemo, useRef } from 'react'
 import type { SubscriptionCheckout } from '@/lib/stack-blueprint/checkout'
 import type { ChangePolicy } from '@/lib/recharge/types'
+import type { ReceiptItem } from '@/lib/receipt/types'
+import { demoReference, receiptFromStackCheckout } from '@/lib/receipt/build'
+import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
 
 const ACCENT = '#00D4FF'
-
-/**
- * Confirms the unavailability choice the member already made in the subscription
- * journey — it is not asked for here.
- *
- * It used to be: this screen carried per-line toggles, which meant the decision
- * was taken after payment, by someone halfway out the door. Making it part of
- * the plan they're buying is both better consent and better data, so all this
- * has to do now is tell them what's on file and where to change it.
- */
-function ChangePolicySummary({ policy }: { policy: ChangePolicy }) {
-  return (
-    <div className="border-t border-[var(--color-border)] pt-3 mt-3">
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-        If something&apos;s out of stock
-      </p>
-      <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">
-        {policy === 'remove'
-          ? 'We’ll take it off your plan and lower your monthly from the next payment — no action needed from you.'
-          : 'We’ll swap in the closest match at the same or lower price, so your monthly doesn’t change.'}{' '}
-        Either way we’ll email you, and you can change this any time in your hub.
-      </p>
-    </div>
-  )
-}
 
 interface Props {
   plan: 'oneoff' | 'subscription'
@@ -37,20 +15,51 @@ interface Props {
   subscription?: SubscriptionCheckout
   /** What the member chose in the journey, echoed back for confirmation. */
   changePolicy?: ChangePolicy
+  /**
+   * A one-off stack's lines and money, so the printed receipt itemises what was
+   * bought rather than printing a total with nothing above it. Subscriptions
+   * carry their own lines on `subscription`.
+   */
+  oneOff?: { items: ReceiptItem[]; subtotal: number; total: number }
   onBack?: () => void
 }
 
-function deliveryLabel(months: number): string {
-  if (months <= 1) return 'every month'
-  return `every ${months} months`
-}
+/**
+ * The end of the in-page checkout: the receipt prints itself.
+ *
+ * Everything this screen used to say in cards — the money, the delivery
+ * schedule, what happens if something is out of stock — is printed on the
+ * paper, by the same builder the confirmation screen uses, so a member sees one
+ * artefact whichever journey they bought through.
+ *
+ * The stamp is the honest part. This path is only ever reached by the mock
+ * payment route today, and the receipt says `DEMO — NOT CHARGED` rather than
+ * approving a payment nobody took.
+ */
+export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto-swap', oneOff, onBack }: Props) {
+  const isSub = plan === 'subscription' && !!subscription
 
-export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto-swap', onBack }: Props) {
-  const isSub = plan === 'subscription' && subscription
+  // Held in refs, not derived on each render: the parent rebuilds `oneOff`
+  // inline, and a receipt that renumbers and re-times itself whenever its
+  // parent re-renders is not a receipt.
+  const printedAt = useRef(new Date())
+  const reference = useRef(demoReference(printedAt.current))
+
+  const receipt = useMemo(
+    () => receiptFromStackCheckout({
+      plan,
+      subscription,
+      changePolicy,
+      oneOff,
+      mock,
+      now: printedAt.current,
+      reference: reference.current,
+    }),
+    [plan, subscription, changePolicy, oneOff, mock],
+  )
 
   return (
-    <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 py-12 text-center max-w-lg mx-auto">
-      <div className="text-5xl mb-5">🎉</div>
+    <div className="min-h-[80vh] flex flex-col items-center justify-center px-5 py-12 text-center max-w-lg mx-auto">
       <h2 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
         {isSub ? "You're subscribed." : 'Your stack is on its way.'}
       </h2>
@@ -60,50 +69,7 @@ export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto
           : 'Check your inbox for your order confirmation.'}
       </p>
 
-      {isSub && subscription && (
-        <div className="w-full mt-7 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 text-left">
-          {/* Money */}
-          <div className="space-y-1.5 mb-4">
-            {subscription.introDiscountPct > 0 && subscription.firstMonth < subscription.flatMonthly && (
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-[var(--color-text-2)]">First month ({subscription.introDiscountPct}% off)</span>
-                <span className="text-base font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                  {formatGBP(subscription.firstMonth)}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-[var(--color-text-2)]">Then per month</span>
-              <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>{formatGBP(subscription.flatMonthly)}/mo</span>
-            </div>
-            {subscription.minMonths > 1 && (
-              <p className="text-[11px] text-[var(--color-muted)] pt-1">
-                {subscription.minMonths}-month minimum ({formatGBP(subscription.minTermTotal)} total), then cancel anytime.
-              </p>
-            )}
-          </div>
-
-          {/* Schedule */}
-          <div className="border-t border-[var(--color-border)] pt-3">
-            <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              Delivery schedule
-            </p>
-            <div className="space-y-1.5">
-              {subscription.lines.map((line) => (
-                <div key={line.productId} className="flex items-center justify-between gap-3">
-                  <span className="text-xs truncate" style={{ color: 'var(--color-text-2)' }}>
-                    {line.quantity > 1 ? `${line.quantity}× ` : ''}{line.productTitle}
-                  </span>
-                  <span className="text-[11px] text-[var(--color-muted)] flex-shrink-0">{deliveryLabel(line.deliveryIntervalMonths)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* What we'll do if something's unavailable — chosen in the journey. */}
-          <ChangePolicySummary policy={changePolicy} />
-        </div>
-      )}
+      <ReceiptPrinter receipt={receipt} className="w-full mt-7" />
 
       {mock && (
         <div className="mt-6 px-4 py-3 rounded-xl text-xs leading-relaxed max-w-sm"

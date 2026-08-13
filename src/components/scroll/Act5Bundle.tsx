@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import confetti from 'canvas-confetti'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
 import { useLocalCart } from '@/hooks/useLocalCart'
 import { isLiveCatalogue } from '@/lib/data-source'
-import { levelSubscriptionRate } from '@/lib/stack-blueprint/pricing'
+import { formatGBP, levelSubscriptionRate } from '@/lib/stack-blueprint/pricing'
+import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
+import { receiptFromDemoBundle } from '@/lib/receipt/build'
 import type { Product } from '@/lib/types'
 
 interface Props {
@@ -116,6 +118,26 @@ export function Act5Bundle({ reducedMotion }: Props) {
   const discount = total * discountRate
   const discountedTotal = total - discount
 
+  // The receipt this bundle would print. Its clock is fixed at mount so the
+  // printed time doesn't drift as quantities change.
+  const printedAt = useRef(new Date())
+  const demoReceipt = useMemo(
+    () =>
+      receiptFromDemoBundle({
+        items: activeItems.map((p) => {
+          const qty = quantities[p.variantId] ?? 1
+          return { name: p.name, qty, amount: `${formatGBP(p.price * qty)}/mo` }
+        }),
+        subtotal: total,
+        discount,
+        discountPct: subPct,
+        total: discountedTotal,
+        stackName: identity?.name ?? null,
+        now: printedAt.current,
+      }),
+    [activeItems, quantities, total, discount, subPct, discountedTotal, identity],
+  )
+
   function handleQtyChange(product: Product, newQty: number) {
     setQuantities((q) => ({ ...q, [product.variantId]: newQty }))
     const line = cart.cart?.lines.find((l) => l.variantId === product.variantId)
@@ -127,19 +149,18 @@ export function Act5Bundle({ reducedMotion }: Props) {
 
   if (cart.isCheckoutSuccess) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-6 text-center">
-        <div ref={successRef} style={{ opacity: 0 }}>
-          <div className="text-5xl mb-6">🎉</div>
+      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-5 py-14 text-center">
+        <div ref={successRef} className="w-full max-w-md" style={{ opacity: 0 }}>
           <h2 className="text-3xl font-black text-white mb-3" style={{ fontFamily: 'var(--font-display)' }}>
             Your stack is on its way.
           </h2>
           <p className="text-sm text-white/50 max-w-xs mx-auto leading-relaxed">
-            {isLive
-              ? 'Check your inbox for your order confirmation. Your getCHRGD stack will be with you soon.'
-              : 'This is a demo — the real purchase flows are the shop and the quiz stack builder.'}
+            This is a preview of the bundle — the real purchase flows are the shop and the quiz
+            stack builder.
           </p>
+          <ReceiptPrinter receipt={demoReceipt} className="w-full mt-7" />
           {identity && (
-            <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-xs text-white/40">
+            <div className="mt-7 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-white/10 text-xs text-white/40">
               <span className="w-2 h-2 rounded-full bg-[#00D4FF]" />
               {identity.name} stack confirmed
             </div>
