@@ -154,6 +154,10 @@ that's connected).
 
 ### Setting up social sign-in
 
+> Doing this from the Vercel dashboard rather than reading code? There's a
+> click-by-click walkthrough of every provider's console in
+> [`docs/SOCIAL_LOGIN_SETUP.md`](SOCIAL_LOGIN_SETUP.md).
+
 Each provider's redirect URI is `<origin>/api/auth/<provider>/callback`
 (provider = `google` | `apple` | `facebook` | `microsoft` | `amazon` |
 `twitter` | `discord` | `linkedin` | `github`). Set `APP_URL` to your public
