@@ -98,9 +98,13 @@ supplier — mock SKUs are sample data. See `docs/POWERBODY_API.md`.
 Customer accounts (hub sign-in), sessions, subscriptions, feedback and portal
 edits persist in a database — zero-config SQLite locally, and Postgres
 automatically when `DATABASE_URL` is set (required on serverless / Vercel, where
-SQLite doesn't persist). Email + password works out of the box; add
-`GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` for "Continue with Google". See
-`docs/BACKEND.md` (includes the Vercel deploy steps).
+SQLite doesn't persist). Email + password works out of the box; social sign-in
+is available at both the hub login and the checkout account gate for Google,
+Microsoft, Amazon, Facebook, X, Discord, LinkedIn, GitHub (all free to set up)
+and Apple (needs a paid Apple Developer account). Each one appears only once its
+credentials are set — add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and
+"Continue with Google" shows up. See `docs/BACKEND.md` (includes the Vercel
+deploy steps).
 
 ## Stack
 

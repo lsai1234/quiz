@@ -5,6 +5,7 @@ import { kvGet, kvDelete } from '@/lib/db/kv'
 import { CheckoutRejected, finalizeCheckout, PENDING_COOKIE, PENDING_KEY_PREFIX } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveOrigin } from '@/lib/auth/providers/common'
+import { getProvider } from '@/lib/auth/providers'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
@@ -22,8 +23,16 @@ export async function GET(req: Request) {
   const token = jar.get(PENDING_COOKIE)?.value
   jar.delete(PENDING_COOKIE)
 
+  // A provider round-trip that failed lands here rather than back on the gate
+  // (the gate is a modal over client-held stack state, which the redirect
+  // discarded). Carry the reason through to the hub login so it can say what
+  // happened — arriving signed-out at a fresh login screen, with no order and
+  // no message, reads as the tap having done nothing at all.
+  const failedProvider = getProvider(new URL(req.url).searchParams.get('auth_error') ?? '')
+  const signedOut = failedProvider ? `${origin}/myhub?auth_error=${failedProvider.id}` : `${origin}/myhub`
+
   const user = await getHubUser()
-  if (!user || !token) return NextResponse.redirect(`${origin}/myhub`)
+  if (!user || !token) return NextResponse.redirect(signedOut)
 
   const stored = await kvGet<{ payload: CheckoutPayload }>(PENDING_KEY_PREFIX + token)
   await kvDelete(PENDING_KEY_PREFIX + token)

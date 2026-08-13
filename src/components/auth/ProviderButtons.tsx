@@ -1,15 +1,25 @@
 'use client'
 
+import { useState } from 'react'
+
 /**
  * OAuth sign-in buttons for every configured provider. Used by the hub login
  * and the checkout account gate. Each button is a plain link to
  * `/api/auth/<id>?returnTo=…` — the full-page redirect is intentional (OAuth).
+ *
+ * Beyond four configured providers the list folds: the first three stay on
+ * screen and the rest sit behind "More ways to sign in". The checkout gate is a
+ * modal at the last step before payment, and a column of nine buttons there
+ * pushes the thing they came to do off the bottom of a phone.
  */
 
 interface Provider {
   id: string
   label: string
 }
+
+/** How many stay visible when the list is folded. */
+const PRIMARY_COUNT = 3
 
 const ICONS: Record<string, React.ReactNode> = {
   google: (
@@ -30,11 +40,54 @@ const ICONS: Record<string, React.ReactNode> = {
       <path fill="#1877F2" d="M24 12c0-6.63-5.37-12-12-12S0 5.37 0 12c0 5.99 4.39 10.95 10.13 11.85v-8.38H7.08V12h3.05V9.36c0-3 1.79-4.67 4.53-4.67 1.31 0 2.68.24 2.68.24v2.95h-1.51c-1.49 0-1.95.92-1.95 1.87V12h3.32l-.53 3.47h-2.79v8.38C19.61 22.95 24 17.99 24 12z" />
     </svg>
   ),
+  microsoft: (
+    <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#F25022" d="M0 0h11.4v11.4H0z" />
+      <path fill="#7FBA00" d="M12.6 0H24v11.4H12.6z" />
+      <path fill="#00A4EF" d="M0 12.6h11.4V24H0z" />
+      <path fill="#FFB900" d="M12.6 12.6H24V24H12.6z" />
+    </svg>
+  ),
   twitter: (
     <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
       <path d="M18.9 1.15h3.68l-8.04 9.19L24 22.85h-7.41l-5.8-7.58-6.64 7.58H.46l8.6-9.83L0 1.15h7.6l5.24 6.93 6.06-6.93zm-1.29 19.5h2.04L6.49 3.24H4.3L17.61 20.65z" />
     </svg>
   ),
+  linkedin: (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <rect width="24" height="24" rx="4" fill="#0A66C2" />
+      <path
+        fill="#fff"
+        d="M7.2 9.4H4.8v9.4h2.4V9.4zM6 5.2a1.4 1.4 0 1 0 0 2.8 1.4 1.4 0 0 0 0-2.8zM19.2 13.4c0-2.6-1.4-3.8-3.2-3.8-1.5 0-2.2.8-2.5 1.4V9.4H11.1c.03.7 0 9.4 0 9.4h2.4v-5.2c0-.3 0-.5.1-.7.2-.5.6-1 1.4-1 1 0 1.4.8 1.4 1.9v5h2.4v-5.4z"
+      />
+    </svg>
+  ),
+}
+
+/**
+ * The fallback mark: the brand's initial in its own colour.
+ *
+ * Deliberately not a hand-drawn approximation of a logo — a nearly-right
+ * Amazon swoosh or GitHub octocat looks broken in a way a clean monogram never
+ * does, and any provider added later gets a presentable button for free.
+ */
+const MONOGRAM_COLOURS: Record<string, string> = {
+  amazon: '#FF9900',
+  discord: '#5865F2',
+  github: '#8b949e',
+}
+
+function Monogram({ id, label }: { id: string; label: string }) {
+  const colour = MONOGRAM_COLOURS[id] ?? 'var(--color-muted)'
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex items-center justify-center rounded-[4px] text-[11px] font-black"
+      style={{ width: 16, height: 16, background: colour, color: '#0b0b0d', fontFamily: 'var(--font-display)' }}
+    >
+      {label.charAt(0).toUpperCase()}
+    </span>
+  )
 }
 
 export function ProviderButtons({
@@ -48,8 +101,14 @@ export function ProviderButtons({
    *  throws, navigation is aborted. */
   beforeNavigate?: () => Promise<void>
 }) {
+  const [expanded, setExpanded] = useState(false)
   if (providers.length === 0) return null
+
   const query = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''
+  // Fold only when it actually saves a row — hiding one button behind a button
+  // that reveals it is worse than showing it.
+  const folded = providers.length > PRIMARY_COUNT + 1 && !expanded
+  const visible = folded ? providers.slice(0, PRIMARY_COUNT) : providers
 
   const className =
     'w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide active:scale-95 transition-all flex items-center justify-center gap-2.5'
@@ -71,18 +130,29 @@ export function ProviderButtons({
 
   return (
     <div className="w-full space-y-2 mt-3">
-      {providers.map((p) =>
-        beforeNavigate ? (
+      {visible.map((p) => {
+        const icon = ICONS[p.id] ?? <Monogram id={p.id} label={p.label} />
+        return beforeNavigate ? (
           <button key={p.id} type="button" onClick={() => void go(p.id)} className={className} style={style}>
-            {ICONS[p.id]}
+            {icon}
             Continue with {p.label}
           </button>
         ) : (
           <a key={p.id} href={`/api/auth/${p.id}${query}`} className={className} style={style}>
-            {ICONS[p.id]}
+            {icon}
             Continue with {p.label}
           </a>
-        ),
+        )
+      })}
+
+      {folded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="w-full py-2.5 text-xs font-semibold underline text-[var(--color-muted)]"
+        >
+          More ways to sign in ({providers.length - PRIMARY_COUNT})
+        </button>
       )}
     </div>
   )

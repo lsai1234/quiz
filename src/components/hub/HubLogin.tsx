@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ProviderButtons } from '@/components/auth/ProviderButtons'
 
 const ACCENT = '#00D4FF'
@@ -19,6 +19,35 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [failedProviderId, setFailedProviderId] = useState<string | null>(null)
+
+  /**
+   * A social sign-in that failed comes back here as `?auth_error=<provider>`,
+   * and until something read it the member landed on a login screen that looked
+   * exactly like the one they'd just left — no error, no explanation, nothing
+   * to suggest their tap had done anything at all.
+   *
+   * Read once and the URL cleaned straight away, so a refresh doesn't resurrect
+   * a stale failure. The *message* is derived at render rather than stored,
+   * because the provider list arrives from the server a beat later and the id
+   * on its own can't be shown to anyone.
+   */
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const failed = params.get('auth_error')
+    if (!failed) return
+    setFailedProviderId(failed)
+    const url = new URL(window.location.href)
+    url.searchParams.delete('auth_error')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+  }, [])
+
+  // Named only when it's a provider we actually offer, so the query parameter
+  // can never print text of its own choosing onto the page.
+  const failedProvider = providers.find((p) => p.id === failedProviderId)
+  const ssoError = failedProviderId
+    ? `That ${failedProvider ? `${failedProvider.label} ` : ''}sign-in didn’t complete. Try again, or use your email and password.`
+    : null
 
   const valid = /\S+@\S+\.\S+/.test(email) && password.length >= (mode === 'signup' ? 8 : 1)
 
@@ -52,6 +81,16 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
           ? 'Sign in to swap products, change your dispatch date, and manage your subscription.'
           : 'Create your account to save your stack, track how it’s working, and manage deliveries.'}
       </p>
+
+      {ssoError && (
+        <p
+          className="w-full mb-4 rounded-2xl px-4 py-3 text-xs font-semibold leading-relaxed text-left"
+          role="alert"
+          style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.22)' }}
+        >
+          {ssoError}
+        </p>
+      )}
 
       <form
         onSubmit={(e) => { e.preventDefault(); void submit() }}

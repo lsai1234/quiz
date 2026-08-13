@@ -155,9 +155,14 @@ that's connected).
 ### Setting up social sign-in
 
 Each provider's redirect URI is `<origin>/api/auth/<provider>/callback`
-(provider = `google` | `apple` | `facebook` | `twitter`). Set `APP_URL` to your
-public origin when deployed behind a proxy/custom domain. All keys go in
-`.env.local` (local) or the Vercel env vars (deployed); see `.env.example`.
+(provider = `google` | `apple` | `facebook` | `microsoft` | `amazon` |
+`twitter` | `discord` | `linkedin` | `github`). Set `APP_URL` to your public
+origin when deployed behind a proxy/custom domain. All keys go in `.env.local`
+(local) or the Vercel env vars (deployed); see `.env.example`.
+
+Every provider below is **free to set up** except Apple, which is the only one
+that costs money. Turn them on in whatever order suits — nothing here depends
+on anything else.
 
 - **Google** — Google Cloud console → Credentials → OAuth client (Web
   application). Redirect URI `<origin>/api/auth/google/callback`. Set
@@ -165,17 +170,43 @@ public origin when deployed behind a proxy/custom domain. All keys go in
 - **Facebook** — developers.facebook.com → Facebook Login. Set
   `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`. The `email` permission needs
   Facebook **app review** before it works for the public.
+- **Microsoft** — portal.azure.com → Entra ID → App registrations. Choose
+  *"Accounts in any organizational directory and personal Microsoft accounts"*
+  so Outlook/Hotmail addresses sign in too. Set `MICROSOFT_CLIENT_ID`,
+  `MICROSOFT_CLIENT_SECRET`. A personal account's address is trusted for
+  linking; a **work/school** address is only trusted when the tenant proves the
+  domain (the `xms_edov` optional claim), because a tenant admin can otherwise
+  put any address on a user — including one they don't own.
+- **Amazon** — developer.amazon.com → Login with Amazon → Security Profile, then
+  add the return URL under Web Settings. Set `AMAZON_CLIENT_ID`,
+  `AMAZON_CLIENT_SECRET`.
 - **X / Twitter** — developer.x.com → OAuth 2.0 (Confidential client, PKCE). Set
   `TWITTER_CLIENT_ID`, `TWITTER_CLIENT_SECRET`. X returns **no email** (see
   above).
-- **Apple** — needs a **paid Apple Developer account** and works only over
-  **HTTPS** (your live domain, not localhost). Create a Services ID + a Sign in
-  with Apple key (.p8). Set `APPLE_CLIENT_ID` (the Services ID), `APPLE_TEAM_ID`,
-  `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the .p8 contents; `\n` for newlines is
-  fine).
+- **Discord** — discord.com/developers → New Application → OAuth2. Set
+  `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`. No review step.
+- **LinkedIn** — linkedin.com/developers → your app → Products → *"Sign In with
+  LinkedIn using OpenID Connect"*. Set `LINKEDIN_CLIENT_ID`,
+  `LINKEDIN_CLIENT_SECRET`. The scopes fail until that product is added.
+- **GitHub** — github.com/settings/developers → OAuth Apps. Set
+  `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`. The account's email comes from a
+  second call to `/user/emails`, and only a **primary verified** address is used.
+- **Apple** — the one that isn't free: needs a **paid Apple Developer account**
+  ($99/yr) and works only over **HTTPS** (your live domain, not localhost).
+  Create a Services ID + a Sign in with Apple key (.p8). Set `APPLE_CLIENT_ID`
+  (the Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY` (the
+  .p8 contents; `\n` for newlines is fine).
 
 Only the providers you configure appear as buttons — the rest stay hidden, so
-you can turn them on one at a time as you get each set of credentials.
+you can turn them on one at a time as you get each set of credentials. Both
+sign-in surfaces (the hub login and the checkout account gate) show the same
+list, in the order set by `PROVIDERS` in `src/lib/auth/providers/index.ts`; past
+four configured providers the list folds, keeping the first three on screen with
+the rest behind "More ways to sign in".
+
+A provider round-trip that fails comes back as `?auth_error=<provider>` and the
+hub login says so by name — including when it failed mid-checkout, where the
+member lands on the hub signed out.
 
 ## Deploying on Vercel
 
