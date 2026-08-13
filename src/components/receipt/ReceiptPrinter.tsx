@@ -6,11 +6,19 @@ import type { ReceiptData, ReceiptItem, ReceiptRow } from '@/lib/receipt/types'
 /**
  * A thermal receipt printing itself at the end of a payment journey.
  *
- * The effect is one clipped container, nothing more: the paper is laid out at
- * full height from the first frame, and the clip above it grows from 0 to that
- * height at a constant feed speed, so the receipt is revealed top-first out of
- * the printer's mouth exactly as paper leaves a real one. Everything else —
- * the housing, the LED, the torn edge — is decoration around that one idea.
+ * The paper *moves*. Two things happen together at the same constant speed: the
+ * clip below the printer's mouth grows, and the paper inside it translates down
+ * by exactly the same amount, so its bottom edge stays at the clip's bottom
+ * edge and leads the way out of the slot. The receipt therefore emerges
+ * bottom-first — footer, then barcode, then the totals, with the masthead
+ * arriving last as the sheet finishes clearing the mouth — and every line
+ * already printed slides visibly downward as more paper feeds behind it.
+ *
+ * The distinction matters because the obvious implementation (grow the clip,
+ * leave the paper still) reveals the receipt top-first with nothing in motion,
+ * which reads as a wipe over a static image rather than as a mechanism.
+ * Everything else — the housing, the LED, the torn edge — is decoration around
+ * those two synchronised numbers.
  *
  * Two things it deliberately does NOT do:
  *
@@ -183,7 +191,10 @@ export function ReceiptPrinter({ receipt, className }: { receipt: ReceiptData; c
   useIsomorphicLayoutEffect(() => {
     const el = paperRef.current
     if (!el) return
-    const measure = () => setPaperHeight(el.getBoundingClientRect().height)
+    // `offsetHeight`, not the bounding rect: the paper carries a translate for
+    // the whole of the feed, and a rect measured through a transform would feed
+    // its own measurement back into itself.
+    const measure = () => setPaperHeight(el.offsetHeight)
     measure()
     // Fonts and images settle after mount; the clip has to follow the paper or
     // it crops the last line off a receipt that grew.
@@ -239,6 +250,9 @@ export function ReceiptPrinter({ receipt, className }: { receipt: ReceiptData; c
           ref={paperRef}
           className="relative px-6 pt-5 pb-8 mx-auto"
           style={{
+            // The sheet rides down with the clip's bottom edge: at zero feed it
+            // sits entirely above the mouth, still inside the printer.
+            transform: paperHeight ? `translateY(${fed - paperHeight}px)` : undefined,
             width: 'min(100%, 340px)',
             fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
             color: '#1c1814',
