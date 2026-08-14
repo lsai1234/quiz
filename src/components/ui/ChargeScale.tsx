@@ -79,6 +79,13 @@ export function ChargeScale({
           const leading = i === selectedIndex
           // Segments climb left to right, so the control reads as a level even
           // before anything is filled in.
+          //
+          // The height belongs to the BAR, not to the button. It used to be set
+          // on the button alongside `min-h-11` — and a 44px minimum flattened
+          // every step of a 26→46px climb, so the meter rendered as five
+          // identical empty boxes with no emoji and nothing in their place. The
+          // button is now a plain 44px tap target and the bar is drawn inside
+          // it, bottom-aligned, at whatever height its step is worth.
           const height = 26 + i * (steps === 3 ? 9 : 5)
 
           return (
@@ -93,35 +100,39 @@ export function ChargeScale({
               onFocus={() => setHovered(rating)}
               onBlur={() => setHovered(null)}
               className={[
-                'relative flex-1 rounded-lg overflow-hidden min-h-11',
-                'transition-all duration-200 active:scale-95',
+                'group relative flex-1 flex items-end h-11 rounded-lg',
+                'transition-transform duration-200 active:scale-95',
                 'focus-visible:outline-none focus-visible:ring-2',
               ].join(' ')}
-              style={{
-                height,
-                background: filled ? 'transparent' : GLASS.surface,
-                border: `1px solid ${filled ? tint(ACCENT, 55) : GLASS.hairline}`,
-                ['--tw-ring-color' as string]: tint(ACCENT, 45),
-              }}
+              style={{ ['--tw-ring-color' as string]: tint(ACCENT, 45) }}
             >
-              {filled && (
-                <span
-                  className="absolute inset-0"
-                  style={{
-                    background: `linear-gradient(to top, ${tint(ACCENT, 55)}, ${ACCENT})`,
-                    boxShadow: `0 0 10px -2px ${tint(ACCENT, 60)}`,
-                    transition: reduced ? undefined : `opacity 200ms ${EASE}`,
-                  }}
-                />
-              )}
-              {/* A pulse on the segment the level currently reaches — the same
-                  cue the quiz's charge rail gives when an answer lands. */}
-              {leading && !reduced && (
-                <span
-                  className="absolute inset-0 rounded-lg"
-                  style={{ background: ACCENT, animation: 'rail-surge 0.5s ease-out' }}
-                />
-              )}
+              <span
+                className="relative w-full rounded-lg overflow-hidden transition-all duration-200"
+                style={{
+                  height,
+                  background: filled ? 'transparent' : GLASS.surface,
+                  border: `1px solid ${filled ? tint(ACCENT, 55) : GLASS.hairline}`,
+                }}
+              >
+                {filled && (
+                  <span
+                    className="absolute inset-0"
+                    style={{
+                      background: `linear-gradient(to top, ${tint(ACCENT, 55)}, ${ACCENT})`,
+                      boxShadow: `0 0 10px -2px ${tint(ACCENT, 60)}`,
+                      transition: reduced ? undefined : `opacity 200ms ${EASE}`,
+                    }}
+                  />
+                )}
+                {/* A pulse on the segment the level currently reaches — the same
+                    cue the quiz's charge rail gives when an answer lands. */}
+                {leading && !reduced && (
+                  <span
+                    className="absolute inset-0 rounded-lg"
+                    style={{ background: ACCENT, animation: 'rail-surge 0.5s ease-out' }}
+                  />
+                )}
+              </span>
             </button>
           )
         })}
