@@ -348,7 +348,7 @@ export function SubscriptionDashboard() {
 
           {/* Delivery calendar */}
           <div className="mb-6" data-reveal>
-            <DeliveryCalendar deliveries={deliveries} onSelect={(d) => setSelectedDeliveryId(d.id)} />
+            <DeliveryCalendar deliveries={deliveries} catalogue={products} onSelect={(d) => setSelectedDeliveryId(d.id)} />
           </div>
 
           {/* Check-in */}

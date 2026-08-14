@@ -2,12 +2,12 @@
 
 import { useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
+import { Icon } from '@/components/ui/Icon'
 import { IconButton } from '@/components/ui/IconButton'
+import { Eyebrow } from '@/components/ui/Eyebrow'
+import { ACCENT, GLASS, GREEN } from '@/lib/ui/tokens'
 import { toneColor } from './StatusBadge'
 import type { LineRecommendation, StatusTone } from '@/lib/feedback'
-
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
 
 interface Props {
   recommendations: LineRecommendation[]
@@ -70,16 +70,17 @@ export function CheckInJourney({ recommendations, onChange, onDismiss }: Props) 
             <div key={g.key}>
               <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-                <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color, fontFamily: 'var(--font-display)' }}>{g.title}</p>
+                <Eyebrow color={color}>{g.title}</Eyebrow>
               </div>
               <div className="space-y-2">
                 {g.items.map((r) => (
-                  <div key={r.lineId} className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] p-3">
+                  <div key={r.lineId} className="rounded-xl p-3" style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}` }}>
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-bold text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{r.productTitle}</p>
                       {r.phase === 'review' && (
-                        <button onClick={() => onChange(r.lineId)} className="text-xs font-bold flex-shrink-0" style={{ color }}>
-                          Find a better fit →
+                        <button onClick={() => onChange(r.lineId)} className="text-xs font-bold shrink-0 inline-flex items-center gap-1" style={{ color, fontFamily: 'var(--font-display)' }}>
+                          Find a better fit
+                          <Icon name="chevron-right" size={12} />
                         </button>
                       )}
                     </div>

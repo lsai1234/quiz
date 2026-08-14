@@ -3,6 +3,7 @@
 import { useMemo } from 'react'
 import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
+import { Eyebrow } from '@/components/ui/Eyebrow'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { productBars, selectShopAxes, type StatAxis } from '@/lib/stack-stats'
@@ -83,7 +84,6 @@ interface Props {
 
 export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focusSwapGroup }: Props) {
 
-
   const inStack = useMemo(() => new Set(subscription.lines.map((l) => l.productId)), [subscription.lines])
 
   /**
@@ -126,37 +126,32 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
 
   return (
     <Sheet onClose={onClose}>
-
       <SheetHeader eyebrow="Add to your stack" title="What would you like to add?" />
 
       <SheetBody className="space-y-5">
-          {focused.length > 0 && (
-            <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                In place of what you lost
-              </p>
-              <div className="space-y-2">
-                {focused.map((p) => (
-                  <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
-                ))}
-              </div>
+        {focused.length > 0 && (
+          <div>
+            <Eyebrow color={ACCENT} className="mb-2">In place of what you lost</Eyebrow>
+            <div className="space-y-2">
+              {focused.map((p) => (
+                <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
+              ))}
             </div>
-          )}
-          {grouped.length === 0 && focused.length === 0 && (
-            <p className="text-sm text-[var(--color-muted)] text-center py-10">Your stack already covers everything available to subscribe to.</p>
-          )}
-          {grouped.map(([slot, products]) => (
-            <div key={slot}>
-              <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>
-                {SLOT_LABELS[slot]}
-              </p>
-              <div className="space-y-2">
-                {products.map((p) => (
-                  <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
-                ))}
-              </div>
+          </div>
+        )}
+        {grouped.length === 0 && focused.length === 0 && (
+          <p className="text-sm text-[var(--color-muted)] text-center py-10">Your stack already covers everything available to subscribe to.</p>
+        )}
+        {grouped.map(([slot, products]) => (
+          <div key={slot}>
+            <Eyebrow className="mb-2">{SLOT_LABELS[slot]}</Eyebrow>
+            <div className="space-y-2">
+              {products.map((p) => (
+                <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
+              ))}
             </div>
-          ))}
+          </div>
+        ))}
       </SheetBody>
     </Sheet>
   )

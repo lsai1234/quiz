@@ -2,7 +2,10 @@
 
 import { useState } from 'react'
 import { ChargeScale } from '@/components/ui/ChargeScale'
-import { ACCENT } from '@/lib/ui/tokens'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Eyebrow } from '@/components/ui/Eyebrow'
+import { ACCENT, GLASS, tint } from '@/lib/ui/tokens'
 import type { CheckInPlan, FeedbackDimension } from '@/lib/feedback'
 
 interface Props {
@@ -39,7 +42,7 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
   // ── Collapsed prompt ──
   if (!open) {
     return (
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mb-4">
+      <Card className="mb-4">
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>How are you feeling?</p>
@@ -51,57 +54,47 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
                   : 'A quick look at how your stack is landing.'}
             </p>
           </div>
-          <button
-            onClick={() => setOpen(true)}
-            className="py-2 px-4 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all flex-shrink-0"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
+          <Button variant="primary" size="sm" onClick={() => setOpen(true)} className="shrink-0">
             Check in
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
     )
   }
 
   // ── Nothing to ask yet — pure reassurance ──
   if (questions.length === 0) {
     return (
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5 mb-4">
+      <Card className="mb-4">
         <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>It&apos;s early days</p>
         <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
           Nothing to rate just yet — your stack is still settling in. Here&apos;s what to expect:
         </p>
         <div className="mt-3 space-y-2">
           {expectations.map((e) => (
-            <div key={e.lineId} className="rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] p-3">
+            <div key={e.lineId} className="rounded-xl p-3" style={{ background: GLASS.raised, border: `1px solid ${GLASS.hairline}` }}>
               <p className="text-xs text-[var(--color-text-2)] leading-relaxed">{e.message}</p>
             </div>
           ))}
         </div>
-        <button
-          onClick={() => { onComplete({}); reset() }}
-          className="mt-4 w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
+        <Button variant="primary" onClick={() => { onComplete({}); reset() }} className="mt-4">
           Got it
-        </button>
-      </div>
+        </Button>
+      </Card>
     )
   }
 
   // ── One question at a time ──
   return (
-    <div className="rounded-2xl border p-5 mb-4" style={{ background: 'var(--color-surface-2)', borderColor: `color-mix(in srgb, ${ACCENT} 30%, transparent)` }}>
+    <div className="rounded-2xl p-5 mb-4" style={{ background: GLASS.surface, border: `1px solid ${tint(ACCENT, 30)}` }}>
       {/* Progress */}
       <div className="flex items-center gap-1.5 mb-4">
         {questions.map((_, i) => (
-          <div key={i} className="h-1 rounded-full flex-1 transition-all" style={{ background: i <= index ? ACCENT : 'var(--color-border-2)' }} />
+          <div key={i} className="h-1 rounded-full flex-1 transition-all" style={{ background: i <= index ? ACCENT : GLASS.hairline }} />
         ))}
       </div>
 
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-        {question.immediate ? 'Felt the same session' : 'How it’s landing'}
-      </p>
+      <Eyebrow color={ACCENT} className="mb-1">{question.immediate ? 'Felt the same session' : 'How it’s landing'}</Eyebrow>
       <p className="text-base font-black text-[var(--color-text)] leading-snug mb-4" style={{ fontFamily: 'var(--font-display)' }}>
         {question.prompt}
       </p>
@@ -115,9 +108,7 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
         onChange={(rating) => answer(question.dimension, rating)}
       />
 
-      <button onClick={reset} className="mt-4 w-full text-xs font-semibold text-[var(--color-muted)] underline">
-        Cancel
-      </button>
+      <Button variant="ghost" size="sm" onClick={reset} className="mt-4 underline">Cancel</Button>
     </div>
   )
 }

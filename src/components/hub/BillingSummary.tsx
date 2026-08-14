@@ -1,13 +1,15 @@
 'use client'
 
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { Card } from '@/components/ui/Card'
+import { Eyebrow } from '@/components/ui/Eyebrow'
+import { ACCENT, GLASS, GREEN } from '@/lib/ui/tokens'
+import { MoneyRow } from './MoneyRow'
 import { nextChargeBreakdown } from '@/lib/recharge/schedule'
 import { cancelSettlement } from '@/lib/recharge/mock'
 import type { Delivery } from '@/lib/recharge/schedule'
 import type { MemberSubscription } from '@/lib/recharge/types'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
 
 function fmtDate(s: string | null): string {
   if (!s) return '—'
@@ -31,12 +33,12 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
   const hasAdjustments = charge.extras > 0.01 || charge.credits > 0.01
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-      <div className="flex items-baseline justify-between mb-1">
-        <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
-          How you’re billed
-        </p>
-        <span className="text-lg font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{formatGBP(sub.flatMonthly)}/mo</span>
+    <Card>
+      <div className="flex items-baseline justify-between gap-3 mb-1">
+        <Eyebrow>How you’re billed</Eyebrow>
+        <span className="text-lg font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums' }}>
+          {formatGBP(sub.flatMonthly)}/mo
+        </span>
       </div>
       <p className="text-xs text-[var(--color-text-2)] leading-relaxed">
         One flat amount on the {sub.dispatchDayOfMonth}{ordinal(sub.dispatchDayOfMonth)} each month — it covers your whole stack,
@@ -44,33 +46,19 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
       </p>
 
       {/* Next charge */}
-      <div className="mt-4 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border)] p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Next charge</span>
-          <span className="text-lg font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{formatGBP(charge.net)}</span>
-        </div>
-        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{fmtDate(charge.date)}</p>
-
+      <div className="mt-4 rounded-xl p-4" style={{ background: GLASS.raised, border: `1px solid ${GLASS.hairline}` }}>
+        {/* The breakdown reads down a single column of figures, the way the
+            printed receipt does — the panels used to put every amount on its
+            own x-position and leave the eye nothing to follow. */}
         {hasAdjustments && (
-          <div className="mt-3 space-y-1.5 border-t border-[var(--color-border)] pt-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[var(--color-text-2)]">Monthly plan</span>
-              <span className="font-semibold text-[var(--color-text)]">{formatGBP(charge.plan)}</span>
-            </div>
-            {charge.extras > 0.01 && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--color-text-2)]">One-off extras this box</span>
-                <span className="font-semibold text-[var(--color-text)]">+{formatGBP(charge.extras)}</span>
-              </div>
-            )}
-            {charge.credits > 0.01 && (
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-[var(--color-text-2)]">Credit (from a skip)</span>
-                <span className="font-semibold" style={{ color: GREEN }}>−{formatGBP(charge.credits)}</span>
-              </div>
-            )}
+          <div className="space-y-2 mb-3 pb-3" style={{ borderBottom: `1px solid ${GLASS.hairline}` }}>
+            <MoneyRow label="Monthly plan" value={formatGBP(charge.plan)} />
+            {charge.extras > 0.01 && <MoneyRow label="One-off extras this box" value={`+${formatGBP(charge.extras)}`} />}
+            {charge.credits > 0.01 && <MoneyRow label="Credit (from a skip)" value={`−${formatGBP(charge.credits)}`} color={GREEN} />}
           </div>
         )}
+
+        <MoneyRow label="Next charge" value={formatGBP(charge.net)} color={ACCENT} strong sub={fmtDate(charge.date)} />
 
         {charge.skippedUpcoming > 0 && (
           <p className="text-[11px] mt-2" style={{ color: GREEN }}>
@@ -91,6 +79,6 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
           ? `No minimum term — cancel or pause anytime. As things stand you'd settle around ${formatGBP(settlement)} for what's already been sent to you, and nothing more. You'll see the exact figure, itemised, before you confirm.`
           : 'No minimum term — cancel or pause anytime, with nothing left to settle.'}
       </p>
-    </div>
+    </Card>
   )
 }

@@ -128,7 +128,6 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
     }
   }
 
-
   // Cancelling is unconditional — there is no term to serve out and nothing to
   // refuse. What there can be is a balance on product already sent that the flat
   // monthly hasn't covered yet; the terms promise the member sees that figure,
@@ -168,227 +167,226 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
 
   return (
     <Sheet onClose={onClose}>
-
       <SheetHeader eyebrow="Your subscription" title={heading} />
 
       <SheetBody className="space-y-3">
-          {/* Step 1: reason */}
-          {step === 'reason' && (
-            <>
-              <p className="text-xs text-[var(--color-muted)] mb-1">What’s prompting this? We’ll see if there’s a better option than cancelling.</p>
-              {REASONS.map((r) => (
-                <OptionRow
-                  key={r.id}
-                  label={r.label}
-                  icon={REASON_ICON[r.id]}
-                  navigates
-                  onClick={() => { setReason(r.id); setStep(r.id === 'break' ? 'snooze' : 'save') }}
-                />
-              ))}
-            </>
-          )}
+        {/* Step 1: reason */}
+        {step === 'reason' && (
+          <>
+            <p className="text-xs text-[var(--color-muted)] mb-1">What’s prompting this? We’ll see if there’s a better option than cancelling.</p>
+            {REASONS.map((r) => (
+              <OptionRow
+                key={r.id}
+                label={r.label}
+                icon={REASON_ICON[r.id]}
+                navigates
+                onClick={() => { setReason(r.id); setStep(r.id === 'break' ? 'snooze' : 'save') }}
+              />
+            ))}
+          </>
+        )}
 
-          {/* Step 2: tailored save */}
-          {step === 'save' && (
-            <>
-              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep('reason')} className="mb-1 -ml-2 underline">Back</Button>
+        {/* Step 2: tailored save */}
+        {step === 'save' && (
+          <>
+            <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep('reason')} className="mb-1 -ml-2 underline">Back</Button>
 
-              {reason === 'expensive' && (
-                <Primary
-                  tone={GREEN}
-                  title={`Trim to essentials · ${formatGBP(downsize.newMonthly)}/mo`}
-                  body={downsize.droppedLines.length > 0
-                    ? <>Keep what you won’t want to miss and drop the rest for now: {downsize.droppedLines.map((d) => d.productTitle).join(', ')}. You can re-add anytime.</>
-                    : <>Your stack is already lean — try snoozing or skipping a box instead.</>}
-                  cta={downsize.droppedLines.length > 0 ? `Switch to ${formatGBP(downsize.newMonthly)}/mo` : 'See other options'}
-                  onClick={() => { if (downsize.droppedLines.length > 0) { onDownsize(downsize.droppedLines.map((d) => d.id)); onClose() } else setStep('snooze') }}
-                />
-              )}
-              {reason === 'expensive' && downsize.droppedLines.length > 0 && (
-                <BillingImpact monthlyBefore={downsize.currentMonthly} monthlyAfter={downsize.newMonthly} note="Trims your plan from your next box — re-add anything whenever you like." />
-              )}
+            {reason === 'expensive' && (
+              <Primary
+                tone={GREEN}
+                title={`Trim to essentials · ${formatGBP(downsize.newMonthly)}/mo`}
+                body={downsize.droppedLines.length > 0
+                  ? <>Keep what you won’t want to miss and drop the rest for now: {downsize.droppedLines.map((d) => d.productTitle).join(', ')}. You can re-add anytime.</>
+                  : <>Your stack is already lean — try snoozing or skipping a box instead.</>}
+                cta={downsize.droppedLines.length > 0 ? `Switch to ${formatGBP(downsize.newMonthly)}/mo` : 'See other options'}
+                onClick={() => { if (downsize.droppedLines.length > 0) { onDownsize(downsize.droppedLines.map((d) => d.id)); onClose() } else setStep('snooze') }}
+              />
+            )}
+            {reason === 'expensive' && downsize.droppedLines.length > 0 && (
+              <BillingImpact monthlyBefore={downsize.currentMonthly} monthlyAfter={downsize.newMonthly} note="Trims your plan from your next box — re-add anything whenever you like." />
+            )}
 
-              {reason === 'too-much' && (
-                <Primary
-                  tone={ACCENT}
-                  title="Skip your next box"
-                  body={<>Got plenty? Skip the next delivery — you won’t be charged for it and your term moves back a month. Slow individual items down anytime from Manage.</>}
-                  cta="Skip my next box"
-                  onClick={() => { onSkipNext(); onClose() }}
-                />
-              )}
+            {reason === 'too-much' && (
+              <Primary
+                tone={ACCENT}
+                title="Skip your next box"
+                body={<>Got plenty? Skip the next delivery — you won’t be charged for it and your term moves back a month. Slow individual items down anytime from Manage.</>}
+                cta="Skip my next box"
+                onClick={() => { onSkipNext(); onClose() }}
+              />
+            )}
 
-              {reason === 'not-working' && (reviewItems.length > 0 ? (
-                <Card variant="tone" tone={AMBER} padding="tight">
-                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Let’s fix what’s not landing</p>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">Before you drop everything, swap the {reviewItems.length === 1 ? 'one product' : 'products'} that hasn’t worked for you:</p>
-                  <div className="mt-3 space-y-2">
-                    {reviewItems.map((r) => (
-                      <button key={r.lineId} onClick={() => { onSwap(r.lineId); onClose() }} className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-left active:scale-[0.98]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                        <span className="text-sm font-semibold text-[var(--color-text)] truncate">{r.productTitle}</span>
-                        <span className="text-xs font-bold flex-shrink-0" style={{ color: AMBER }}>Find a better fit →</span>
-                      </button>
-                    ))}
-                  </div>
-                </Card>
-              ) : (
-                <Primary tone={ACCENT} title="Most of your stack is still settling in" body={<>Some products (like vitamins and omega-3) work quietly over weeks. Snooze if you need to, rather than stopping before they’ve had a fair go.</>} cta="Snooze instead" onClick={() => setStep('snooze')} />
-              ))}
-
-              {(reason === 'dont-need' || reason === 'other') && (
-                <p className="text-xs text-[var(--color-text-2)] leading-relaxed">No problem. If it’s temporary, a snooze keeps everything in place — otherwise you can cancel below.</p>
-              )}
-
-              {/* Universal snooze offer (except where it's already the primary) */}
-              {reason !== 'not-working' && <SnoozeOption />}
-
-              {/* Honest exit */}
-              <Button variant="ghost" onClick={() => setStep('cancel')} className="underline">
-                No thanks — cancel my subscription
-              </Button>
-            </>
-          )}
-
-          {/* Step: snooze */}
-          {step === 'snooze' && (
-            <>
-              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep(reason && reason !== 'break' ? 'save' : 'reason')} className="mb-1 -ml-2 underline">Back</Button>
-              <p className="text-xs text-[var(--color-text-2)] leading-relaxed">Pick how long. Billing and deliveries pause; your stack and prices are untouched; there’s nothing to settle — so you lose nothing.</p>
-              <div className="grid grid-cols-3 gap-2 mt-1">
-                {[1, 2, 3].map((m) => {
-                  const until = new Date(); until.setMonth(until.getMonth() + m)
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => { onSnooze(m); onClose() }}
-                      className="rounded-2xl p-4 text-center transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2"
-                      style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}`, ['--tw-ring-color' as string]: tint(ACCENT, 45) }}
-                    >
-                      <p className="text-2xl font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{m}</p>
-                      <p className="text-[10px] text-[var(--color-muted)]">month{m > 1 ? 's' : ''}</p>
-                      <p className="text-[10px] mt-1" style={{ color: ACCENT }}>back {until.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+            {reason === 'not-working' && (reviewItems.length > 0 ? (
+              <Card variant="tone" tone={AMBER} padding="tight">
+                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Let’s fix what’s not landing</p>
+                <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">Before you drop everything, swap the {reviewItems.length === 1 ? 'one product' : 'products'} that hasn’t worked for you:</p>
+                <div className="mt-3 space-y-2">
+                  {reviewItems.map((r) => (
+                    <button key={r.lineId} onClick={() => { onSwap(r.lineId); onClose() }} className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-left active:scale-[0.98]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
+                      <span className="text-sm font-semibold text-[var(--color-text)] truncate">{r.productTitle}</span>
+                      <span className="text-xs font-bold flex-shrink-0" style={{ color: AMBER }}>Find a better fit →</span>
                     </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                  ))}
+                </div>
+              </Card>
+            ) : (
+              <Primary tone={ACCENT} title="Most of your stack is still settling in" body={<>Some products (like vitamins and omega-3) work quietly over weeks. Snooze if you need to, rather than stopping before they’ve had a fair go.</>} cta="Snooze instead" onClick={() => setStep('snooze')} />
+            ))}
 
-          {/* Step: cancel */}
-          {step === 'cancel' && (
-            <>
-              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep(reason ? 'save' : 'reason')} className="mb-1 -ml-2 underline">Back</Button>
+            {(reason === 'dont-need' || reason === 'other') && (
+              <p className="text-xs text-[var(--color-text-2)] leading-relaxed">No problem. If it’s temporary, a snooze keeps everything in place — otherwise you can cancel below.</p>
+            )}
 
-              {!quote && !quoteError && (
-                <p className="text-sm text-[var(--color-muted)]">Working out where you stand…</p>
-              )}
+            {/* Universal snooze offer (except where it's already the primary) */}
+            {reason !== 'not-working' && <SnoozeOption />}
 
-              {quoteError && (
-                <Note icon="alert-triangle" color={AMBER} live>{quoteError}</Note>
-              )}
+            {/* Honest exit */}
+            <Button variant="ghost" onClick={() => setStep('cancel')} className="underline">
+              No thanks — cancel my subscription
+            </Button>
+          </>
+        )}
 
-              {quote && (
-                <>
-                  <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
-                    You can cancel now — there’s no minimum term and no cancellation fee{reasonLabel ? `. You said “${reasonLabel.toLowerCase()}”` : ''}.
-                  </p>
+        {/* Step: snooze */}
+        {step === 'snooze' && (
+          <>
+            <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep(reason && reason !== 'break' ? 'save' : 'reason')} className="mb-1 -ml-2 underline">Back</Button>
+            <p className="text-xs text-[var(--color-text-2)] leading-relaxed">Pick how long. Billing and deliveries pause; your stack and prices are untouched; there’s nothing to settle — so you lose nothing.</p>
+            <div className="grid grid-cols-3 gap-2 mt-1">
+              {[1, 2, 3].map((m) => {
+                const until = new Date(); until.setMonth(until.getMonth() + m)
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => { onSnooze(m); onClose() }}
+                    className="rounded-2xl p-4 text-center transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2"
+                    style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}`, ['--tw-ring-color' as string]: tint(ACCENT, 45) }}
+                  >
+                    <p className="text-2xl font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{m}</p>
+                    <p className="text-[10px] text-[var(--color-muted)]">month{m > 1 ? 's' : ''}</p>
+                    <p className="text-[10px] mt-1" style={{ color: ACCENT }}>back {until.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
 
-                  {/* Nothing to pay, and why. A waiver is a promise being kept,
-                      so it says which promise rather than just showing £0.00. */}
-                  {quote.waiver && (
-                    <Card variant="tone" tone={GREEN} padding="tight">
-                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Nothing to pay</p>
-                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">{quote.waiver.explanation}</p>
-                    </Card>
-                  )}
+        {/* Step: cancel */}
+        {step === 'cancel' && (
+          <>
+            <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep(reason ? 'save' : 'reason')} className="mb-1 -ml-2 underline">Back</Button>
 
-                  {!quote.waiver && settlement > 0 && (
-                    <Card variant="tone" tone={AMBER} padding="tight">
-                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                        One last payment: {formatGBP(settlement)}
-                      </p>
-                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                        Your monthly is a smoothed average, so longer-lasting items are spread over the months they last. You’ve had more product than your payments have covered so far — this settles that difference, and nothing else. Everything already sent to you is yours to keep.
-                      </p>
-                    </Card>
-                  )}
+            {!quote && !quoteError && (
+              <p className="text-sm text-[var(--color-muted)]">Working out where you stand…</p>
+            )}
 
-                  {quote.overpayment > 0 && (
-                    <Card variant="tone" tone={GREEN} padding="tight">
-                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                        We owe you {formatGBP(quote.overpayment)}
-                      </p>
-                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                        You’ve paid for more than we’ve sent. We’ll refund the difference to your card.
-                      </p>
-                    </Card>
-                  )}
+            {quoteError && (
+              <Note icon="alert-triangle" color={AMBER} live>{quoteError}</Note>
+            )}
 
-                  {quote.statement && <ExitStatementView statement={quote.statement} />}
+            {quote && (
+              <>
+                <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
+                  You can cancel now — there’s no minimum term and no cancellation fee{reasonLabel ? `. You said “${reasonLabel.toLowerCase()}”` : ''}.
+                </p>
 
-                  {/* The alternative. The balance is a sawtooth, so there is
-                      almost always a near month where leaving is free — and
-                      saying so turns a bill into a choice. */}
-                  {quote.freeExitMonth != null && (
-                    <Card variant="tone" tone={ACCENT} padding="tight">
-                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                        Or leave free in {monthsAway(quote.freeExitMonth, sub.monthsActive)}
-                      </p>
-                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                        Nothing changes in the meantime — your boxes still arrive and your payments carry on, which is what clears the balance. Then your plan ends by itself with nothing to pay.
-                      </p>
-                      <Button variant="primary" onClick={() => submitExit('scheduled')} disabled={submitting} className="mt-3">
-                        {submitting ? 'One moment…' : 'End it free on that date'}
-                      </Button>
-                    </Card>
-                  )}
+                {/* Nothing to pay, and why. A waiver is a promise being kept,
+                    so it says which promise rather than just showing £0.00. */}
+                {quote.waiver && (
+                  <Card variant="tone" tone={GREEN} padding="tight">
+                    <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Nothing to pay</p>
+                    <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">{quote.waiver.explanation}</p>
+                  </Card>
+                )}
 
-                  <Button variant="danger" onClick={() => submitExit('now')} disabled={submitting} className="mt-2">
-                    {submitting ? 'One moment…' : settlement > 0 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
-                  </Button>
-                </>
-              )}
+                {!quote.waiver && settlement > 0 && (
+                  <Card variant="tone" tone={AMBER} padding="tight">
+                    <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                      One last payment: {formatGBP(settlement)}
+                    </p>
+                    <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                      Your monthly is a smoothed average, so longer-lasting items are spread over the months they last. You’ve had more product than your payments have covered so far — this settles that difference, and nothing else. Everything already sent to you is yours to keep.
+                    </p>
+                  </Card>
+                )}
 
-              <Button variant="primary" onClick={onClose}>Keep my subscription</Button>
-              <Button variant="secondary" icon="pause" onClick={() => setStep('snooze')}>
-                Snooze instead — nothing to settle
-              </Button>
-            </>
-          )}
+                {quote.overpayment > 0 && (
+                  <Card variant="tone" tone={GREEN} padding="tight">
+                    <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                      We owe you {formatGBP(quote.overpayment)}
+                    </p>
+                    <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                      You’ve paid for more than we’ve sent. We’ll refund the difference to your card.
+                    </p>
+                  </Card>
+                )}
 
-          {/* Step: done */}
-          {step === 'done' && outcome && (
-            <>
-              {outcome.scheduledFor != null ? (
-                <Card variant="tone" tone={ACCENT} padding="tight">
-                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                    Your plan ends in {monthsAway(outcome.scheduledFor, sub.monthsActive)}
-                  </p>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                    Nothing to pay. Everything carries on as normal until then, and you can change your mind any time from your plan.
-                  </p>
-                </Card>
-              ) : (
-                <Card variant="tone" tone={GREEN} padding="tight">
-                  <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                    Your subscription has ended
-                  </p>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                    {outcome.settlement > 0
-                      ? outcome.paid
-                        ? `We’ve taken ${formatGBP(outcome.settlement)} for the balance on what was already sent. Everything you have is yours to keep, and nothing further will be billed.`
-                        : `We couldn’t take the ${formatGBP(outcome.settlement)} balance from your card, so we’ve left it as an invoice you can pay from your billing page. Your plan has ended either way.`
-                      : 'There was nothing left to pay. Everything you have is yours to keep, and nothing further will be billed.'}
-                  </p>
-                </Card>
-              )}
-              <p className="text-xs text-[var(--color-muted)] leading-relaxed">
-                Thanks for giving us a go. Your account stays open — you can start a new plan whenever you like.
-              </p>
-              <Button variant="primary" size="lg" onClick={onClose}>Done</Button>
-            </>
-          )}
+                {quote.statement && <ExitStatementView statement={quote.statement} />}
+
+                {/* The alternative. The balance is a sawtooth, so there is
+                    almost always a near month where leaving is free — and
+                    saying so turns a bill into a choice. */}
+                {quote.freeExitMonth != null && (
+                  <Card variant="tone" tone={ACCENT} padding="tight">
+                    <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                      Or leave free in {monthsAway(quote.freeExitMonth, sub.monthsActive)}
+                    </p>
+                    <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                      Nothing changes in the meantime — your boxes still arrive and your payments carry on, which is what clears the balance. Then your plan ends by itself with nothing to pay.
+                    </p>
+                    <Button variant="primary" onClick={() => submitExit('scheduled')} disabled={submitting} className="mt-3">
+                      {submitting ? 'One moment…' : 'End it free on that date'}
+                    </Button>
+                  </Card>
+                )}
+
+                <Button variant="danger" onClick={() => submitExit('now')} disabled={submitting} className="mt-2">
+                  {submitting ? 'One moment…' : settlement > 0 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
+                </Button>
+              </>
+            )}
+
+            <Button variant="primary" onClick={onClose}>Keep my subscription</Button>
+            <Button variant="secondary" icon="pause" onClick={() => setStep('snooze')}>
+              Snooze instead — nothing to settle
+            </Button>
+          </>
+        )}
+
+        {/* Step: done */}
+        {step === 'done' && outcome && (
+          <>
+            {outcome.scheduledFor != null ? (
+              <Card variant="tone" tone={ACCENT} padding="tight">
+                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                  Your plan ends in {monthsAway(outcome.scheduledFor, sub.monthsActive)}
+                </p>
+                <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                  Nothing to pay. Everything carries on as normal until then, and you can change your mind any time from your plan.
+                </p>
+              </Card>
+            ) : (
+              <Card variant="tone" tone={GREEN} padding="tight">
+                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                  Your subscription has ended
+                </p>
+                <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                  {outcome.settlement > 0
+                    ? outcome.paid
+                      ? `We’ve taken ${formatGBP(outcome.settlement)} for the balance on what was already sent. Everything you have is yours to keep, and nothing further will be billed.`
+                      : `We couldn’t take the ${formatGBP(outcome.settlement)} balance from your card, so we’ve left it as an invoice you can pay from your billing page. Your plan has ended either way.`
+                    : 'There was nothing left to pay. Everything you have is yours to keep, and nothing further will be billed.'}
+                </p>
+              </Card>
+            )}
+            <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+              Thanks for giving us a go. Your account stays open — you can start a new plan whenever you like.
+            </p>
+            <Button variant="primary" size="lg" onClick={onClose}>Done</Button>
+          </>
+        )}
       </SheetBody>
     </Sheet>
   )
