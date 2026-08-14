@@ -15,6 +15,30 @@
   --color-red: #f87171;
   --color-amber: #f59e0b;
 
+  /* Alpha-on-black surfaces — the technique that separates the designed screens
+     from the assembled ones. Opaque greys put every card at the same visual
+     weight; a translucent white over the page background recedes, and stacks.
+     Kept in step with `GLASS` in src/lib/ui/tokens.ts, which exists because
+     runtime `color-mix()` needs a value rather than a var(). */
+  --color-glass: rgba(255, 255, 255, 0.015);
+  --color-glass-raised: rgba(255, 255, 255, 0.04);
+  --color-hairline: rgba(255, 255, 255, 0.08);
+  --color-hairline-strong: rgba(255, 255, 255, 0.2);
+
+  /* How a stack line is landing. Mirrors TONE in src/lib/ui/tokens.ts. */
+  --color-tone-good: #34d399;
+  --color-tone-building: #00D4FF;
+  --color-tone-essential: #7dd3fc;
+  --color-tone-review: #fbbf24;
+
+  /* One radius per role, so adjacent elements stop disagreeing. */
+  --radius-row: 0.75rem;
+  --radius-card: 1rem;
+  --radius-sheet: 1.5rem;
+
+  /* The house easing — a soft, overshoot-free settle. */
+  --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
+
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
 
@@ -276,6 +300,59 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .receipt-led-on { animation: none !important; }
+}
+
+/* ── UI primitives (src/components/ui) ─────────────────────────────────────── */
+
+/* Bottom sheets. The hub's six hand-rolled sheets appear instantly, which reads
+   as a jump cut; these slide the panel up under a fading backdrop, and every
+   member-initiated dismissal plays the exit before unmounting. */
+@keyframes sheet-in {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes sheet-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(28px); }
+}
+@keyframes fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Loading placeholders. A sheen crossing the block, not a pulse — a rectangle
+   that throbs is exactly what reduced-motion exists to stop. */
+@keyframes skeleton-sheen {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(100%); }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.05),
+    transparent
+  );
+  animation: skeleton-sheen 1.6s ease-in-out infinite;
+}
+
+/* A 36px control that still answers to a 44px thumb. The button stays the size
+   it looks; only the hit area grows, and it does so outside the layout. */
+.hit-target::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after { animation: none !important; }
 }
 
 /* Hover styles guarded so they don't stick on touch devices */
