@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Disclosure } from '@/components/ui/Disclosure'
+import { Eyebrow } from '@/components/ui/Eyebrow'
 import { Icon } from '@/components/ui/Icon'
+import { Note } from '@/components/ui/Note'
+import { ProductTile } from '@/components/stack-review/ProductTile'
+import { useReducedMotion } from '@/hooks/useReducedMotion'
+import { ACCENT, AMBER, GLASS, tint } from '@/lib/ui/tokens'
+import { selectShopAxes } from '@/lib/stack-stats'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice } from '@/lib/recharge/schedule'
@@ -23,7 +32,6 @@ import { ChangeSummary, type PendingChange } from './ChangeSummary'
 import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice'
 import { constraintsFor, describeConstraints } from '@/lib/changes/safety'
 
-const ACCENT = '#00D4FF'
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
 
 function countdownLabel(iso: string): string {
@@ -35,13 +43,15 @@ function countdownLabel(iso: string): string {
 
 export function SubscriptionDashboard() {
   const {
-    subscription: sub, feedback, logout,
+    // Sign-out moved to the shell's header, where an account action belongs.
+    subscription: sub, feedback,
     setDispatchDay, resume,
     swapLine, addLine, removeLine, setLineUsage, setLineChangePolicy, setDefaultChangePolicy, skipNext, submitFeedback, submitDimension,
     skipDelivery, unskipDelivery, rescheduleDelivery, addItemToDelivery, removeItemFromDelivery,
     snooze, applyDownsize, refresh,
   } = useHubStore()
   const { products } = useCatalogueProducts()
+  const session = useHubStore((st) => st.session)
   const [changeLineId, setChangeLineId] = useState<string | null>(null)
   const [manageLineId, setManageLineId] = useState<string | null>(null)
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<string | null>(null)
@@ -51,7 +61,49 @@ export function SubscriptionDashboard() {
   const [showJourney, setShowJourney] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showSave, setShowSave] = useState(false)
+  const [portalError, setPortalError] = useState<string | null>(null)
+  const [openingPortal, setOpeningPortal] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
+  const reduced = useReducedMotion()
+
+  /** The catalogue entry behind each line, for photos and stat bars. */
+  const productById = useMemo(
+    () => Object.fromEntries(products.map((p) => [p.id, p])),
+    [products],
+  )
+  /**
+   * One set of stat axes for the whole stack, derived from the products in it.
+   * Shared axes are the point: four cards scored on the same four goals can be
+   * compared at a glance, which four cards each picking their own cannot.
+   */
+  const axes = useMemo(() => {
+    if (!sub) return []
+    const owned = sub.lines.map((l) => productById[l.productId]).filter(Boolean)
+    return owned.length > 0 ? selectShopAxes(owned, 4) : []
+  }, [sub, productById])
+
+  /**
+   * Opens the real Stripe billing portal. This was an `alert()` — a browser
+   * dialog, in production, on a paying member's billing panel — even though the
+   * route it needed has existed all along.
+   */
+  async function openBillingPortal() {
+    if (openingPortal) return
+    setOpeningPortal(true)
+    setPortalError(null)
+    try {
+      const res = await fetch('/api/hub/billing-portal', { method: 'POST' })
+      const data = await res.json()
+      if (res.ok && data.url) {
+        window.location.href = data.url
+        return
+      }
+      setPortalError(data.error ?? 'Could not open the billing portal.')
+    } catch {
+      setPortalError('Could not open the billing portal.')
+    }
+    setOpeningPortal(false)
+  }
 
   const recommendations = useMemo(
     () => (sub ? recommendForSubscription(sub, feedback, products) : []),
@@ -119,12 +171,13 @@ export function SubscriptionDashboard() {
     window.history.replaceState({}, '', `${url.pathname}${url.search}`)
   }, [sub])
 
-  // Subtle premium entrance.
+  // Subtle premium entrance — the one piece of hub motion that was already
+  // right. It just never asked whether the visitor wanted any.
   useEffect(() => {
-    if (!rootRef.current) return
+    if (!rootRef.current || reduced) return
     const els = rootRef.current.querySelectorAll('[data-reveal]')
     gsap.fromTo(els, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.06, ease: 'power2.out' })
-  }, [])
+  }, [reduced])
 
   if (!sub) return null
 
@@ -140,6 +193,14 @@ export function SubscriptionDashboard() {
     counts.review > 0 ? `${counts.review} to review` : null,
   ].filter(Boolean).join(' · ')
 
+  /**
+   * A name, or nothing. The half of an email address before the `@` is not a
+   * name — it is a login, and using it as one is the cheapest thing a paid
+   * product can do.
+   */
+  const firstName = (session?.name ?? '').trim().split(/\s+/)[0]
+  const greeting = firstName && !firstName.includes('@') ? `Hi ${firstName}` : 'Welcome back'
+
   const changeLine = sub.lines.find((l) => l.id === changeLineId) ?? null
   const manageLine = sub.lines.find((l) => l.id === manageLineId) ?? null
   const selectedDelivery = deliveries.find((d) => d.id === selectedDeliveryId) ?? null
@@ -152,46 +213,49 @@ export function SubscriptionDashboard() {
   }
 
   return (
-    <div ref={rootRef} className="max-w-lg mx-auto px-5 py-8 pb-16">
+    <div ref={rootRef}>
       {/* Terms that have moved on since this member accepted them. Dismissible
           and non-blocking on purpose — see the component. */}
       <ReconsentNotice />
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 mb-5" data-reveal>
-        <div>
-          <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-            Your subscription
-          </p>
-          <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-            Hi {sub.customerEmail.split('@')[0]}
-          </h1>
-        </div>
-        <button onClick={logout} className="text-xs font-semibold text-[var(--color-muted)] underline mt-1">
-          Sign out
-        </button>
+      {/* Greeting. `email.split('@')[0]` used to stand in for a name, which
+          greeted paying members as "Hi lewissiara". A real first name if the
+          account has one, and otherwise nothing pretending to be one. */}
+      <div className="mb-6" data-reveal>
+        <Eyebrow color={ACCENT}>Your subscription</Eyebrow>
+        <h1 className="text-2xl font-black mt-1.5" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          {greeting}
+        </h1>
       </div>
 
       {sub.status === 'cancelled' ? (
-        <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-6 text-center" data-reveal>
-          <p className="text-sm text-[var(--color-text-2)]">Your subscription has been cancelled. You won&apos;t be charged again.</p>
-        </div>
+        <Card className="text-center py-8" data-reveal>
+          <span className="inline-flex items-center justify-center w-11 h-11 rounded-full mb-3" style={{ background: GLASS.raised, color: 'var(--color-muted)' }}>
+            <Icon name="check" size={20} />
+          </span>
+          <p className="text-base font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+            Your subscription has ended
+          </p>
+          <p className="text-sm text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+            You won&apos;t be charged again. Everything already sent is yours to keep, and you can start a new plan whenever you like.
+          </p>
+        </Card>
       ) : (
         <>
           {/* Hero — next box */}
           <div
             className="rounded-3xl p-5 mb-5 relative overflow-hidden"
             data-reveal
-            style={{ background: 'var(--color-surface-2)', border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)` }}
+            style={{ background: GLASS.surface, border: `1px solid ${tint(ACCENT, 30)}` }}
           >
-            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full" style={{ background: `radial-gradient(circle, color-mix(in srgb, ${ACCENT} 22%, transparent), transparent 70%)` }} />
+            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full" style={{ background: `radial-gradient(circle, ${tint(ACCENT, 22)}, transparent 70%)` }} />
             <div className="relative">
               {/* A scheduled free exit. Shown above everything else because it is
                   the most consequential thing about the plan right now — and
                   because the copy promised they could change their mind, which
                   is only true if there is somewhere to do it. */}
               {sub.scheduledExitMonth != null && (
-                <div className="mb-4 rounded-xl px-3 py-2.5" style={{ background: 'color-mix(in srgb, #fbbf24 10%, transparent)', border: '1px solid color-mix(in srgb, #fbbf24 30%, transparent)' }}>
+                <div className="mb-4 rounded-xl px-3 py-2.5" style={{ background: tint(AMBER, 10), border: `1px solid ${tint(AMBER, 30)}` }}>
                   <p className="text-xs font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                     Your plan ends in {Math.max(0, sub.scheduledExitMonth - sub.monthsActive)} month
                     {Math.max(0, sub.scheduledExitMonth - sub.monthsActive) === 1 ? '' : 's'} — nothing to pay
@@ -216,34 +280,59 @@ export function SubscriptionDashboard() {
               )}
               {sub.status === 'paused' ? (
                 <>
-                  <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: '#fbbf24', fontFamily: 'var(--font-display)' }}>
-                    {sub.snoozeUntil ? 'Snoozed' : 'Paused'}
-                  </p>
+                  <div className="flex items-center gap-2 mb-1.5" style={{ color: AMBER }}>
+                    <Icon name="pause" size={14} />
+                    <Eyebrow color={AMBER}>{sub.snoozeUntil ? 'Snoozed' : 'Paused'}</Eyebrow>
+                  </div>
                   <p className="text-lg font-black text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Your deliveries are on hold</p>
                   {sub.snoozeUntil && (
                     <p className="text-xs text-[var(--color-text-2)] mb-3">Back on {new Date(sub.snoozeUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} — nothing billed until then.</p>
                   )}
-                  <button onClick={resume} className="py-2.5 px-5 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>Resume now</button>
+                  <Button variant="primary" icon="play" onClick={resume} fullWidth={false} className="mt-1">Resume now</Button>
                 </>
               ) : next ? (
                 <>
-                  <p className="text-[10px] font-bold tracking-widest uppercase mb-1" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                    Your next box · {countdownLabel(next.date)}
-                  </p>
+                  <div className="flex items-center gap-2 mb-1.5" style={{ color: ACCENT }}>
+                    <Icon name="truck" size={14} />
+                    <Eyebrow color={ACCENT}>Your next box · {countdownLabel(next.date)}</Eyebrow>
+                  </div>
                   <p className="text-2xl font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                     {new Date(next.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </p>
-                  <p className="text-xs text-[var(--color-text-2)] mt-1.5">
+
+                  {/* What is actually in it. The hub knew these products all
+                      along and printed them as a comma-joined string; the same
+                      data as tiles is the difference between a manifest and a
+                      box you can picture arriving. */}
+                  {next.items.length > 0 && (
+                    <div className="flex items-center gap-2 mt-3.5">
+                      {next.items.slice(0, 5).map((it, i) => (
+                        <ProductTile
+                          key={`${it.productId}-${i}`}
+                          imageUrl={productById[it.productId]?.imageUrl}
+                          slot={productById[it.productId]?.stackSlots[0]}
+                          title={it.productTitle}
+                          size={40}
+                        />
+                      ))}
+                      {next.items.length > 5 && (
+                        <span className="text-xs font-bold text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
+                          +{next.items.length - 5}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-[var(--color-text-2)] mt-2.5">
                     {next.items.map((it) => it.productTitle).slice(0, 3).join(', ')}{next.items.length > 3 ? ` +${next.items.length - 3} more` : ''}
                   </p>
+
                   <div className="flex gap-2 mt-4">
-                    <button onClick={() => setSelectedDeliveryId(next.id)} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                    <Button variant="primary" icon="box" onClick={() => setSelectedDeliveryId(next.id)}>
                       Edit next box
-                    </button>
-                    <button onClick={() => setShowAdd(true)} className="py-2.5 px-4 rounded-xl text-sm font-bold active:scale-95 transition-all inline-flex items-center gap-1.5" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
-                      <Icon name="plus" size={15} />
+                    </Button>
+                    <Button variant="secondary" icon="plus" onClick={() => setShowAdd(true)} fullWidth={false} className="px-4">
                       Add
-                    </button>
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -255,12 +344,6 @@ export function SubscriptionDashboard() {
           {/* What you're actually billed */}
           <div className="mb-5" data-reveal>
             <BillingSummary subscription={sub} deliveries={deliveries} />
-          </div>
-
-          {/* Stack status one-liner */}
-          <div className="flex items-center gap-2 mb-6 px-1" data-reveal>
-            <span className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>Stack</span>
-            <span className="text-xs font-semibold text-[var(--color-text-2)]">{summary || `${sub.lines.length} products`}</span>
           </div>
 
           {/* Delivery calendar */}
@@ -286,18 +369,16 @@ export function SubscriptionDashboard() {
           )}
 
           {/* Your stack */}
-          <div className="flex items-center justify-between mt-6 mb-3" data-reveal>
-            <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
-              Your stack
-            </p>
-            <button
-              onClick={() => setShowAdd(true)}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all inline-flex items-center gap-1.5"
-              style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, fontFamily: 'var(--font-display)' }}
-            >
-              <Icon name="plus" size={13} />
+          <div className="flex items-end justify-between gap-3 mt-8 mb-3" data-reveal>
+            <div>
+              <Eyebrow>Your stack</Eyebrow>
+              <p className="text-xs font-semibold text-[var(--color-text-2)] mt-1">
+                {summary || `${sub.lines.length} products`}
+              </p>
+            </div>
+            <Button variant="secondary" size="sm" icon="plus" onClick={() => setShowAdd(true)}>
               Add product
-            </button>
+            </Button>
           </div>
           <div className="space-y-3" data-reveal>
             {sub.lines.map((line) => (
@@ -305,6 +386,8 @@ export function SubscriptionDashboard() {
                 key={line.id}
                 line={line}
                 recommendation={recById[line.id]}
+                product={productById[line.productId]}
+                axes={axes}
                 onChange={openChange}
                 onManage={(id) => { setChangeLineId(null); setManageLineId(id) }}
                 onMicroFeedback={submitDimension}
@@ -314,23 +397,14 @@ export function SubscriptionDashboard() {
 
           {/* Settings (collapsed) */}
           <div className="mt-8" data-reveal>
-            <button
-              onClick={() => setShowSettings((v) => !v)}
-              className="w-full flex items-center justify-between py-3 text-sm font-bold text-[var(--color-text-2)]"
-              style={{ fontFamily: 'var(--font-display)' }}
+            <Disclosure
+              summary="Plan & billing settings"
+              open={showSettings}
+              onOpenChange={setShowSettings}
             >
-              <span>Plan &amp; billing settings</span>
-              <Icon
-                name="chevron-down"
-                size={18}
-                className={`text-[var(--color-muted)] transition-transform duration-200 ${showSettings ? 'rotate-180' : ''}`}
-              />
-            </button>
-
-            {showSettings && (
               <div className="space-y-4 pt-1">
                 {/* Regular ship day */}
-                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5">
+                <Card>
                   <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Regular ship day</p>
                   <p className="text-xs text-[var(--color-muted)] mb-3">Boxes default to the {sub.dispatchDayOfMonth}th. Move any single box from the calendar.</p>
                   <div className="flex flex-wrap gap-2">
@@ -345,11 +419,11 @@ export function SubscriptionDashboard() {
                       )
                     })}
                   </div>
-                </div>
+                </Card>
 
                 {/* If a product becomes unavailable — the plan-wide default.
                     Per-product overrides live in each line's manage sheet. */}
-                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5">
+                <Card>
                   <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>If something goes out of stock</p>
                   <p className="text-xs text-[var(--color-muted)] mb-3">
                     What we do by default. {overriddenPolicyCount > 0
@@ -362,27 +436,39 @@ export function SubscriptionDashboard() {
                     monthly={sub.flatMonthly}
                     constraintsLabel={planConstraintsLabel}
                   />
-                </div>
+                </Card>
 
                 {/* Billing */}
-                <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-5">
-                  <p className="text-sm font-bold text-[var(--color-text)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Billing & payment</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-[var(--color-text-2)]">{sub.paymentMethod ? `${sub.paymentMethod.brand} ending ${sub.paymentMethod.last4}` : 'No card on file'}</span>
+                <Card>
+                  <p className="text-sm font-bold text-[var(--color-text)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Billing &amp; payment</p>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2 text-xs text-[var(--color-text-2)]">
+                      <Icon name="credit-card" size={14} className="text-[var(--color-muted)]" />
+                      {sub.paymentMethod ? `${sub.paymentMethod.brand} ending ${sub.paymentMethod.last4}` : 'No card on file'}
+                    </span>
                     <span className="text-[11px] text-[var(--color-muted)]">Direct debit · monthly</span>
                   </div>
-                  <button onClick={() => alert('Live, this opens your Recharge billing portal.')} className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold transition-all active:scale-95" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
-                    Manage billing
-                  </button>
-                </div>
+                  {/* This was `alert()` — a browser dialog, in production, on a
+                      paying member's billing panel — while the route it needed
+                      sat unused. */}
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={openBillingPortal}
+                    disabled={openingPortal}
+                    className="mt-3"
+                  >
+                    {openingPortal ? 'Opening…' : 'Manage billing'}
+                  </Button>
+                  {portalError && <Note icon="alert-triangle" color={AMBER} live className="mt-3">{portalError}</Note>}
+                </Card>
 
                 {/* Pause / cancel — routed through the save flow */}
-                <button onClick={() => setShowSave(true)}
-                  className="w-full py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+                <Button variant="ghost" icon="pause" onClick={() => setShowSave(true)}>
                   Pause or cancel
-                </button>
+                </Button>
               </div>
-            )}
+            </Disclosure>
           </div>
         </>
       )}
