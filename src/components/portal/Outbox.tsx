@@ -222,6 +222,9 @@ export function Outbox() {
   const [canSend, setCanSend] = useState(false)
   const [policy, setPolicy] = useState<'none' | 'confirmations' | 'all'>('none')
   const [canConnectGmail, setCanConnectGmail] = useState(false)
+  const [gmailRedirectUri, setGmailRedirectUri] = useState('')
+  const [gmailClientId, setGmailClientId] = useState<string | null>(null)
+  const [appUrlSet, setAppUrlSet] = useState(true)
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -250,6 +253,9 @@ export function Outbox() {
         setCanSend(Boolean(d.canSend))
         setPolicy(d.autoSendPolicy ?? 'none')
         setCanConnectGmail(Boolean(d.canConnectGmail))
+        setGmailRedirectUri(d.gmailRedirectUri ?? '')
+        setGmailClientId(d.gmailClientId ?? null)
+        setAppUrlSet(d.appUrlSet !== false)
       })
       .catch(() => setNotifications([]))
   }, [tab, logStatus, logTemplate, logEmail])
@@ -374,15 +380,62 @@ export function Outbox() {
           </p>
           <p className="text-xs text-[var(--color-muted)] mb-3">
             No third-party service and nothing more to pay for — Workspace allows 2,000 emails a day, which is far
-            past what this needs. Connecting takes a minute: pick the mailbox, then paste what it gives you into
-            Vercel. The permission it asks for can send email and cannot read your inbox.
+            past what this needs. The permission it asks for can send email and cannot read your inbox.
           </p>
+
+          {/* Google matches the callback address byte for byte against a list you
+              register in advance, and refuses with `redirect_uri_mismatch`
+              otherwise — which is where everybody's first attempt ends. The
+              address depends on APP_URL, so it cannot be written in a document;
+              it has to be shown here, from the running deployment. */}
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--color-surface-2)' }}>
+            <p className="text-[11px] font-bold mb-1" style={{ color: 'var(--color-text)' }}>
+              First, in Google Cloud → APIs &amp; Services → Credentials
+            </p>
+            <p className="text-[11px] text-[var(--color-muted)] mb-2">
+              Open your OAuth client and add this to <strong>Authorised redirect URIs</strong>, exactly as written —
+              Google matches it character for character, and refuses with <em>redirect_uri_mismatch</em> if it is not
+              already on the list.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <code
+                className="text-[11px] px-2 py-1 rounded-lg break-all"
+                style={{ background: 'var(--color-surface)', color: ACCENT }}
+              >
+                {gmailRedirectUri || '…'}
+              </code>
+              <CopyButton
+                label="Copy"
+                text={gmailRedirectUri}
+                copyKey="gmail-redirect"
+                copied={copied}
+                onCopy={copy}
+              />
+            </div>
+            {gmailClientId && (
+              <p className="text-[11px] text-[var(--color-muted)] mt-2">
+                The client to edit is the one whose ID starts{' '}
+                <code style={{ color: 'var(--color-text-2)' }}>{gmailClientId.slice(0, 18)}…</code>
+              </p>
+            )}
+            {!appUrlSet && (
+              <p className="text-[11px] mt-2" style={{ color: AMBER }}>
+                APP_URL is not set, so this address is guessed from whichever URL you are browsing — on Vercel that is
+                a per-deployment address that changes on every push and can never stay registered. Set APP_URL to
+                https://getchrgd.co.uk and redeploy before registering anything.
+              </p>
+            )}
+            <p className="text-[11px] text-[var(--color-muted)] mt-2">
+              Also enable the <strong>Gmail API</strong>{' '}for that project, under APIs &amp; Services → Library.
+            </p>
+          </div>
+
           <a
             href="/api/portal/gmail-connect"
             className="inline-block text-xs font-bold px-4 py-2 rounded-xl"
             style={{ background: ACCENT, color: '#001018' }}
           >
-            Connect Google Workspace
+            Then connect Google Workspace
           </a>
         </section>
       )}

@@ -67,7 +67,7 @@ means a customer with a question has nowhere to ask it, and mail providers treat
 it as a spam signal too.
 
 On Resend you get all three automatically. On Google Workspace they need setting
-up as aliases (step A4) — until you do, everything sends from
+up as aliases (step A5) — until you do, everything sends from
 `contact@getchrgd.co.uk`, which is perfectly fine to start with.
 
 ---
@@ -89,28 +89,55 @@ sign-in page. In Vercel → Settings → Environment Variables, look for
 If they're there, skip to A2.
 
 If not, make them: **console.cloud.google.com** → APIs & Services → Credentials →
-Create Credentials → OAuth client ID → Web application. Add this to
-**Authorised redirect URIs**:
+Create Credentials → OAuth client ID → Web application. Copy the client ID and
+secret into Vercel as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, and
+redeploy.
+
+### A2 — Register the callback address
+
+**Do this before pressing Connect, or you'll get `Error 400: redirect_uri_mismatch`.**
+
+Google will only send the browser back to an address you've registered in
+advance, and it matches the string **character for character**. Not
+case-insensitively, not ignoring a trailing slash, not treating `www.` and bare
+as the same.
+
+1. Open **getchrgd.co.uk/founderhub → Emails**. The Google Workspace panel prints
+   **the exact address to register**, with a Copy button. It's shown there rather
+   than written here because it's derived from your `APP_URL` — so the running
+   site is the only thing that knows it for certain.
+2. Go to **console.cloud.google.com** → APIs & Services → **Credentials** → click
+   your OAuth 2.0 Client ID (the panel tells you which one, by the first few
+   characters of its ID).
+3. Under **Authorised redirect URIs**, press **Add URI**, paste, and **Save**.
+
+It'll normally be:
 
 ```
 https://getchrgd.co.uk/api/portal/gmail-connect/callback
 ```
 
-Copy the client ID and secret into Vercel as `GOOGLE_CLIENT_ID` and
-`GOOGLE_CLIENT_SECRET`, and redeploy.
+> **If `APP_URL` isn't set in Vercel**, the address is derived from whatever URL
+> you're browsing — which on Vercel is a per-deployment preview address that
+> changes on every push and can never stay registered. The panel warns you in
+> amber if this is the case. Set `APP_URL=https://getchrgd.co.uk` and redeploy
+> before registering anything.
 
-> If you already had these for social login, add the redirect URI above to the
-> existing client — you don't need a second one.
+Google sometimes takes a few minutes to apply a new redirect URI. If it still
+fails immediately after saving, wait five minutes and try again.
 
-### A2 — Enable the Gmail API
+> If you already had this client for social login, just add the redirect URI to
+> it — you don't need a second one.
+
+### A3 — Enable the Gmail API
 
 In the same Google Cloud project: **APIs & Services → Library**, search "Gmail
 API", press **Enable**. One click, and it's free.
 
-### A3 — Connect the mailbox
+### A4 — Connect the mailbox
 
 1. Open **getchrgd.co.uk/founderhub** → **Emails**.
-2. Press **Connect Google Workspace**.
+2. Press **Then connect Google Workspace**.
 3. Pick `contact@getchrgd.co.uk` and approve. The permission it asks for is
    "Send email on your behalf" — it **cannot read your inbox**.
 4. It prints two or three settings. Paste them into Vercel → Settings →
@@ -122,7 +149,7 @@ already. Every link in every email is built from it.
 That's it — you're sending. Jump to **[Step 6](#step-6--check-it-before-a-customer-does)**
 to check it.
 
-### A4 — Optional: the three separate addresses
+### A5 — Optional: the three separate addresses
 
 By default everything sends from `contact@getchrgd.co.uk`, which works fine and
 needs nothing further.
@@ -378,9 +405,22 @@ of what they bought, not marketing, and the opt-out page says so plainly.
 
 ## When something goes wrong
 
+**"Access blocked: this app's request is invalid — Error 400:
+redirect_uri_mismatch"** when you press Connect. The callback address isn't
+registered on your Google OAuth client yet. That's step A2 — the Emails page
+prints the exact string to paste, with a Copy button. Common causes of it still
+failing after you've added one:
+
+- a trailing slash on the end of the registered URI that isn't in the real one
+- `www.getchrgd.co.uk` registered but `getchrgd.co.uk` being sent (or the reverse)
+- `http://` registered, `https://` sent
+- `APP_URL` not set, so a preview deployment address is being sent instead
+- added to the wrong OAuth client — the panel names the right one by its ID
+- saved less than five minutes ago; Google can take a moment to apply it
+
 **Everything's queuing and there's no Send button.** No provider. Check
-`RESEND_API_KEY` is set on **Production** in Vercel, not just locally, and that
-you redeployed afterwards.
+`RESEND_API_KEY` (or `GMAIL_REFRESH_TOKEN`) is set on **Production** in Vercel,
+not just locally, and that you redeployed afterwards.
 
 **A row says "Failed to send".** The reason is printed on the row, word for word.
 
@@ -393,12 +433,12 @@ On Google Workspace:
   **Testing** in Google Cloud, where refresh tokens expire after seven days.
   Publish the app (APIs & Services → OAuth consent screen → **Publish**), then
   press **Connect Google Workspace** again for a fresh token.
-- *"Gmail API has not been used in project …"* — step A2, enable the Gmail API.
+- *"Gmail API has not been used in project …"* — step A3, enable the Gmail API.
 - *"Delegation denied"* — you're authenticated as one account and asking to send
-  as another that isn't a verified alias on it. Step A4.
+  as another that isn't a verified alias on it. Step A5.
 
 **Emails arrive from `contact@` instead of the noreply addresses.** The aliases
-aren't verified. Gmail substitutes silently rather than failing. Do step A4, and
+aren't verified. Gmail substitutes silently rather than failing. Do step A5, and
 make sure `GMAIL_SEND_AS` lists them so the site warns you next time instead of
 letting it through.
 

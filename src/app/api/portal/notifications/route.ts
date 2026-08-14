@@ -21,6 +21,7 @@ import {
   listStreams,
   sendsAutomatically,
 } from '@/lib/notify'
+import { gmailOAuthClient, gmailRedirectUri } from '@/lib/notify/gmail-connect'
 import type { NotificationStatus, TemplateId } from '@/lib/notify/types'
 
 export const dynamic = 'force-dynamic'
@@ -74,8 +75,24 @@ export async function GET(req: Request) {
     // Offer the Google Workspace route only when it could actually work: there
     // is a Google client to authorise against, and no mailbox connected yet.
     // Dangling a button that 400s is worse than not offering it.
-    canConnectGmail:
-      !hasGmailCredentials() && Boolean(process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID),
+    canConnectGmail: !hasGmailCredentials() && gmailOAuthClient() !== null,
+    /**
+     * The exact callback address Google will be sent, and the client it will be
+     * sent to.
+     *
+     * Surfaced because `redirect_uri_mismatch` is the error every single person
+     * hits on their first attempt, and it is unfixable without knowing the exact
+     * string — Google matches it byte for byte, and the value depends on
+     * `APP_URL`, so it cannot be written down in a document either.
+     */
+    gmailRedirectUri: gmailRedirectUri(process.env.APP_URL || new URL(req.url).origin),
+    gmailClientId: gmailOAuthClient()?.id ?? null,
+    /**
+     * Without `APP_URL` the callback is derived from whatever host the request
+     * arrived on — which on Vercel means a per-deployment preview URL that
+     * changes every push and can never stay registered with Google.
+     */
+    appUrlSet: Boolean(process.env.APP_URL),
     // Which address each kind of email leaves from, so the page can show it and
     // a misconfigured domain is visible before anyone wonders why nothing lands.
     streams: listStreams(),
