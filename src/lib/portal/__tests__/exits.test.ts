@@ -101,3 +101,68 @@ describe('the queue', () => {
     expect(forecast.rows[0].source).toBe('forecast')
   })
 })
+
+describe('a parcel on its way back', () => {
+  /**
+   * A return is the one exit state with a deadline attached to somebody else's
+   * money: the member has posted their box and is waiting to be paid. It beats
+   * every other state on the same exit, because nothing else about it can be
+   * decided until the parcel has been opened.
+   */
+  const statement = {
+    shippedTotal: 68.8,
+    paidTotal: 46.86,
+    shipments: [
+      {
+        at: '2026-08-01T00:00:00.000Z',
+        items: [
+          { title: 'LQD Recover', quantity: 1, value: 36.54 },
+          { title: 'Creatine', quantity: 2, value: 32.26 },
+        ],
+      },
+    ],
+  }
+  const returning = (over: Partial<SubscriptionExit> = {}) =>
+    exit({ settlement: 0, returnRequested: true, refundDue: 46.86, statement, ...over })
+
+  it('outranks every other state on the same exit', () => {
+    expect(exitStateOf(returning())).toBe('return-due')
+    // Even with an overpayment that would otherwise call for a refund.
+    expect(exitStateOf(returning({ overpayment: 15 }))).toBe('return-due')
+  })
+
+  it('stops asking once it has been refunded', () => {
+    expect(exitStateOf(returning({ returnRefundedAt: '2026-08-20T00:00:00.000Z' }))).toBe('waived')
+  })
+
+  it('lists what was sent, so it can be ticked off against the box', () => {
+    const [row] = buildExitQueue([member('r', returning())]).rows
+    expect(row.returnItems).toEqual([
+      { key: '0:0', title: 'LQD Recover', quantity: 1, value: 36.54, at: '2026-08-01T00:00:00.000Z' },
+      { key: '0:1', title: 'Creatine', quantity: 2, value: 32.26, at: '2026-08-01T00:00:00.000Z' },
+    ])
+    expect(row.paidTotal).toBe(46.86)
+    expect(row.shippedTotal).toBe(68.8)
+    expect(row.refundCeiling).toBe(46.86)
+  })
+
+  it('totals what is out there, as a ceiling rather than a liability', () => {
+    const queue = buildExitQueue([member('r', returning()), member('s', returning({ refundDue: 20 }))])
+    expect(queue.returnsAwaiting).toBe(66.86)
+    expect(queue.returnsAwaitingCount).toBe(2)
+  })
+
+  it('survives an exit whose statement was never stored', () => {
+    // Plans that predate the ledger have no itemised statement. The queue must
+    // still list them — with nothing to tick — rather than fail to render.
+    const [row] = buildExitQueue([member('old', returning({ statement: undefined }))]).rows
+    expect(row.state).toBe('return-due')
+    expect(row.returnItems).toEqual([])
+    expect(row.shippedTotal).toBe(0)
+  })
+
+  it('survives a statement whose shape has since changed', () => {
+    const [row] = buildExitQueue([member('odd', returning({ statement: { shipments: 'not an array' } }))]).rows
+    expect(row.returnItems).toEqual([])
+  })
+})

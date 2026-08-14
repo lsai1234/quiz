@@ -122,10 +122,24 @@ is opened is not knowable until the parcel is:
 - Faulty or damaged goods are refunded whether opened or not, and we cover the postage. The
   flow and the email both say so, and both ask the member to tell us *before* posting.
 
-**Still open:** nothing yet processes the refund. The return is recorded, the member is
-emailed, and their orders are held in the fulfilment queue with the ceiling and the rule on
-the note — but paying out is a manual Stripe action today, and `refundPaid` is written by
-hand. A returns screen in the Founders Hub is the obvious next step.
+**Processing one** happens in the Founders Hub, on **Commerce → Exits & returns**. A return
+outranks every other state on the same exit, because nothing else about it can be decided
+until the parcel is open. Each one expands into exactly what we sent, priced, unticked by
+default — unticked meaning *not refunded*, which is the safe direction and the one the Terms
+take. The founder ticks what is physically in front of them, the refund updates live, and
+settling it:
+
+1. Recomputes the figure **server-side** from the statement on the exit record. The browser
+   says which items came back; it never says what they are worth or what to pay. Same rule
+   as the member's own settlement, and this one pays money out.
+2. Refunds it across the member's actual charges, newest first, keyed on the RETURN so a
+   double-tap cannot pay twice.
+3. Writes `refundPaid` and `returnRefundedAt`, with the founder's note and name.
+
+A partial payout — a charge too old to refund, Stripe declining, mock payments — leaves
+`returnRefundedAt` null and the return open, showing what did go back and what is still
+owed. Closing it on a figure nobody received would be the one outcome worse than not
+paying it.
 
 Return postage sits with the member unless the goods arrived damaged or wrong, which is the
 statutory default and is stated in both the flow and the email. Diminished value on goods that come back opened does not arise as a separate question: an

@@ -6,7 +6,7 @@
  * Consumer Contracts Regulations — and a settlement that ignores any of them is
  * a charge we would have to give back with an apology.
  */
-import { quoteExit, waiverFor, withinCoolingOff, coolingOffDeadline, refundForReturned, insidePriceIncreaseNotice, followsInvoluntaryChange } from '@/lib/recharge/exit'
+import { quoteExit, waiverFor, withinCoolingOff, coolingOffDeadline, refundForReturned, refundForReturnedValue, insidePriceIncreaseNotice, followsInvoluntaryChange } from '@/lib/recharge/exit'
 import type { MemberSubscription, MemberSubscriptionLine, BillingChange } from '@/lib/recharge/types'
 import type { Order } from '@/lib/orders/types'
 
@@ -264,6 +264,47 @@ describe('what a return is actually worth', () => {
     })
     expect(closed.coolingOff).toBeNull()
     expect(refundForReturned(closed, 60)).toBe(0)
+  })
+})
+
+describe('pricing a return from the stored statement', () => {
+  // The Founders Hub settles a return months after the quote that offered it,
+  // from the snapshot on the exit record. It has to reach the same number the
+  // member was shown, so it runs the same function rather than a second copy of
+  // the rule that can drift.
+  const figures = { paidTotal: 46.86, shippedTotal: 68.8 }
+
+  it('agrees with the live quote it was offered from', () => {
+    const quote = quoteExit({
+      sub: plan(),
+      orders: [order({ createdAt: '2026-05-25T00:00:00.000Z', billedAmount: 20 })],
+      consentCoversSettlement: true,
+      now: NOW,
+    })
+    const viaQuote = refundForReturned(quote, 30)
+    const viaFigures = refundForReturnedValue({
+      paidTotal: quote.coolingOff!.returnRefund,
+      shippedTotal: quote.coolingOff!.keepValue,
+      returnedValue: 30,
+    })
+    expect(viaFigures).toBe(viaQuote)
+  })
+
+  it('refunds every payment for a whole box back unopened', () => {
+    expect(refundForReturnedValue({ ...figures, returnedValue: 68.8 })).toBe(46.86)
+  })
+
+  it('apportions a part return by value, not by item count', () => {
+    // £36.54 of £68.80 came back — 53% of the goods, so 53% of the payments.
+    expect(refundForReturnedValue({ ...figures, returnedValue: 36.54 })).toBe(24.89)
+  })
+
+  it('refunds nothing when the whole box was opened', () => {
+    expect(refundForReturnedValue({ ...figures, returnedValue: 0 })).toBe(0)
+  })
+
+  it('refunds nothing when there is no statement to price against', () => {
+    expect(refundForReturnedValue({ paidTotal: 0, shippedTotal: 0, returnedValue: 40 })).toBe(0)
   })
 })
 

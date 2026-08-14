@@ -589,3 +589,63 @@ export async function refundPayment(paymentIntentId: string): Promise<void> {
   const stripe = getStripeClient()
   await stripe.refunds.create({ payment_intent: paymentIntentId })
 }
+
+/**
+ * Refund a set amount across the payments a member actually made, newest first.
+ *
+ * A returns refund is rarely one whole payment: it is a share of everything they
+ * paid, apportioned to what came back unopened, and their money arrived as a
+ * string of monthly charges. So it is spread rather than aimed — newest first,
+ * because the most recent charge is the one most likely still inside Stripe's
+ * refund window, and each intent takes at most what it was charged.
+ *
+ * `idempotencyKey` must identify the RETURN, not the attempt: a founder pressing
+ * refund twice on a slow connection must not pay out twice. Stripe scopes it per
+ * request, so each intent gets the key plus its own id.
+ *
+ * Returns what was actually put back and against which intents. A shortfall is
+ * reported rather than thrown — the goods are already back, the member is owed
+ * the money either way, and the honest outcome is "we refunded £30 of £46, here
+ * is what is left" rather than an exception that loses the £30 too.
+ */
+export async function refundAcrossPayments(opts: {
+  /** Newest first is applied here, not assumed of the caller. */
+  payments: { paymentIntentId: string; amount: number }[]
+  amount: number
+  idempotencyKey: string
+  reason?: string
+}): Promise<{ refunded: number; refunds: { paymentIntentId: string; amount: number }[]; shortfall: number }> {
+  const stripe = getStripeClient()
+  const ordered = [...opts.payments].sort((a, b) => b.amount - a.amount)
+  const refunds: { paymentIntentId: string; amount: number }[] = []
+  let remaining = Math.round(opts.amount * 100)
+
+  for (const payment of ordered) {
+    if (remaining <= 0) break
+    const available = Math.round(payment.amount * 100)
+    if (available <= 0) continue
+    const take = Math.min(remaining, available)
+    try {
+      await stripe.refunds.create(
+        {
+          payment_intent: payment.paymentIntentId,
+          amount: take,
+          metadata: opts.reason ? { reason: opts.reason } : undefined,
+        },
+        { idempotencyKey: `${opts.idempotencyKey}:${payment.paymentIntentId}` },
+      )
+      refunds.push({ paymentIntentId: payment.paymentIntentId, amount: take / 100 })
+      remaining -= take
+    } catch (err) {
+      // One charge being un-refundable (too old, already refunded) must not stop
+      // the others. Logged, skipped, and counted in the shortfall.
+      console.error(`[stripe] could not refund ${take / 100} against ${payment.paymentIntentId}:`, err)
+    }
+  }
+
+  return {
+    refunded: Math.round((opts.amount * 100 - remaining)) / 100,
+    refunds,
+    shortfall: remaining / 100,
+  }
+}

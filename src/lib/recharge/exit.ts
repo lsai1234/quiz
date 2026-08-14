@@ -256,9 +256,33 @@ export function refundForReturned(
   returnedValue: number,
 ): number {
   const choice = quote.coolingOff
-  if (!choice || choice.keepValue <= 0 || returnedValue <= 0) return 0
-  const share = Math.min(1, Math.max(0, returnedValue / choice.keepValue))
-  return Math.round(choice.returnRefund * share * 100) / 100
+  if (!choice) return 0
+  return refundForReturnedValue({
+    paidTotal: choice.returnRefund,
+    shippedTotal: choice.keepValue,
+    returnedValue,
+  })
+}
+
+/**
+ * The same arithmetic, from the three figures rather than from a live quote.
+ *
+ * The Founders Hub prices a return months after the quote that offered it, from
+ * the statement snapshotted on the exit record. It has to reach the same number
+ * the member was shown, so it runs the same function rather than a second copy
+ * of the rule that can drift from this one.
+ */
+export function refundForReturnedValue(input: {
+  /** Everything the member paid (£) — the ceiling. */
+  paidTotal: number
+  /** Everything we sent, at retail (£) — what a full return would be. */
+  shippedTotal: number
+  /** The retail value of what actually came back unopened (£). */
+  returnedValue: number
+}): number {
+  if (input.shippedTotal <= 0 || input.returnedValue <= 0 || input.paidTotal <= 0) return 0
+  const share = Math.min(1, Math.max(0, input.returnedValue / input.shippedTotal))
+  return Math.round(input.paidTotal * share * 100) / 100
 }
 
 /**
