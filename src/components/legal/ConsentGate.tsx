@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { CheckoutConsent } from './CheckoutConsent'
+import { CheckoutSteps } from '@/components/checkout/CheckoutSteps'
+import { PlanBeingBought } from '@/components/checkout/PlanBeingBought'
+import { Button } from '@/components/ui/Button'
+import { Note } from '@/components/ui/Note'
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from '@/components/ui/Sheet'
+import { GLASS } from '@/lib/ui/tokens'
 import { fetchAuthContext } from '@/lib/auth-client'
 import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import type { ConsentSubmission, ConsentVersions } from '@/lib/legal/consent'
-
-const ACCENT = '#00D4FF'
+import type { MemberSubscription } from '@/lib/recharge/types'
 
 /**
  * Consent, for a member who is ALREADY signed in.
@@ -23,10 +28,14 @@ const ACCENT = '#00D4FF'
  * them back with the refusal), falling back to the build-time constants for a
  * direct open. That's what stops a member on a tab that predates a deploy from
  * looping on `stale-version` forever.
+ *
+ * A `Sheet`, like the account gate and for the same reason — see `AccountGate`
+ * for why a hand-rolled overlay opened halfway down this particular page.
  */
 export function ConsentGate({
   versions,
   notice,
+  subscription,
   onAccept,
   onCancel,
 }: {
@@ -34,6 +43,8 @@ export function ConsentGate({
   versions?: ConsentVersions | null
   /** Why we're asking again, when it isn't simply "you haven't yet". */
   notice?: string | null
+  /** What they're about to be billed for, restated over the covered receipt. */
+  subscription?: MemberSubscription
   onAccept: (consent: ConsentSubmission) => void
   onCancel: () => void
 }) {
@@ -80,34 +91,22 @@ export function ConsentGate({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Confirm the subscription terms"
-        className="w-full max-w-sm rounded-3xl p-6 max-h-[92vh] overflow-y-auto"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
-      >
-        <p
-          className="text-[10px] font-bold tracking-widest uppercase mb-2"
-          style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
-        >
-          One last step
-        </p>
-        <h2
-          className="text-2xl font-black mb-1.5"
-          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
-        >
-          Before you subscribe
-        </h2>
-        <p className="text-sm text-[var(--color-muted)] leading-relaxed">
+    <Sheet onClose={onCancel} label="Confirm the subscription terms">
+      <SheetHeader eyebrow="One last step" title="Before you subscribe">
+        <CheckoutSteps current="terms" />
+      </SheetHeader>
+
+      <SheetBody className="space-y-4">
+        {subscription && <PlanBeingBought subscription={subscription} />}
+
+        <p className="text-xs text-[var(--color-muted)] leading-relaxed">
           {notice ?? 'Have a read, then tick the box to start your subscription.'}
         </p>
 
         {account && (
           <div
-            className="mt-4 rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
-            style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+            className="rounded-2xl px-4 py-3 flex items-center justify-between gap-3"
+            style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}` }}
           >
             <p className="text-[11px] leading-relaxed text-[var(--color-text-2)] min-w-0">
               You’re already signed in — this will subscribe{' '}
@@ -137,23 +136,17 @@ export function ConsentGate({
           error={error}
         />
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={!consented}
-          className="w-full mt-5 py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-50"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          Agree & start subscription →
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="w-full mt-3 text-xs font-semibold text-[var(--color-muted)]"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
+        <Note icon="credit-card">
+          Card details are taken on Stripe’s secure page — nothing is charged until you finish there.
+        </Note>
+      </SheetBody>
+
+      <SheetFooter>
+        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button variant="primary" iconRight="arrow-right" onClick={submit} disabled={!consented}>
+          Continue to payment
+        </Button>
+      </SheetFooter>
+    </Sheet>
   )
 }

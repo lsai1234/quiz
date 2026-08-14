@@ -15,7 +15,9 @@ jest.mock('@/lib/auth-client', () => ({
   authenticateAccount: jest.fn().mockResolvedValue(null),
 }))
 
-const payload = { subscription: { lines: [] }, lines: [] } as unknown as CheckoutPayload
+const payload = {
+  subscription: { flatMonthly: 52.18, firstMonth: 41.74, lines: [{ id: 'l1' }, { id: 'l2' }] },
+} as unknown as CheckoutPayload
 
 /** Renders and lets the mounted provider fetch settle, so no assertion races it. */
 async function setup() {
@@ -26,7 +28,7 @@ async function setup() {
   return { onAuthenticated, user: userEvent.setup() }
 }
 
-const submitButton = () => screen.getByRole('button', { name: /create account & subscribe/i })
+const submitButton = () => screen.getByRole('button', { name: /continue to payment/i })
 const consentBox = () => screen.getByRole('checkbox')
 
 describe('AccountGate consent', () => {
@@ -80,5 +82,37 @@ describe('AccountGate consent', () => {
 
     await user.click(submitButton()) // disabled, but click it anyway
     expect(onAuthenticated).not.toHaveBeenCalled()
+  })
+})
+
+describe('AccountGate placement', () => {
+  /**
+   * The bug this pins: the gate was a bare `fixed inset-0` div rendered inline
+   * on a page whose wrapper is GSAP-animated. A transformed ancestor makes
+   * `position: fixed` resolve against that ancestor rather than the viewport, so
+   * the sign-in box opened halfway down the page — below the fold, at the exact
+   * moment someone was trying to buy something. Portalling is the fix, and it is
+   * only observable from outside the React tree.
+   */
+  it('renders outside its own tree, so no transformed ancestor can catch it', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    await act(async () => {
+      render(<AccountGate payload={payload} onAuthenticated={jest.fn()} onCancel={jest.fn()} />, {
+        container,
+      })
+    })
+    const dialog = screen.getByRole('dialog')
+    expect(container.contains(dialog)).toBe(false)
+    expect(document.body.contains(dialog)).toBe(true)
+  })
+
+  it('shows what is being bought, and says payment happens on Stripe', async () => {
+    await setup()
+    expect(screen.getByText('£52.18')).toBeInTheDocument()
+    expect(screen.getByText(/first month £41\.74/i)).toBeInTheDocument()
+    expect(screen.getByText(/card details are taken on stripe/i)).toBeInTheDocument()
+    // Three named steps, so terms-then-Stripe is not a surprise.
+    expect(screen.getByRole('list', { name: /checkout progress/i })).toBeInTheDocument()
   })
 })

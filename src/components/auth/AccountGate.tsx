@@ -4,11 +4,15 @@ import { useEffect, useState } from 'react'
 import { ProviderButtons } from './ProviderButtons'
 import { fetchAuthContext, authenticateAccount } from '@/lib/auth-client'
 import { CheckoutConsent } from '@/components/legal/CheckoutConsent'
+import { CheckoutSteps } from '@/components/checkout/CheckoutSteps'
+import { PlanBeingBought } from '@/components/checkout/PlanBeingBought'
+import { Button } from '@/components/ui/Button'
+import { Note } from '@/components/ui/Note'
+import { Sheet, SheetBody, SheetFooter, SheetHeader } from '@/components/ui/Sheet'
+import { GLASS } from '@/lib/ui/tokens'
 import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import type { ConsentSubmission } from '@/lib/legal/consent'
 import type { CheckoutPayload } from '@/lib/checkout/types'
-
-const ACCENT = '#00D4FF'
 
 /**
  * Account gate shown before subscription checkout. Email/password signs in
@@ -21,6 +25,21 @@ const ACCENT = '#00D4FF'
  * having been shown them. Both paths carry the consent — inline via
  * `onAuthenticated`, OAuth by stashing it with the pending order — because the
  * server refuses to finalize a checkout without one.
+ *
+ * ── Why this is a Sheet ──────────────────────────────────────────────────────
+ * It used to be a hand-rolled `fixed inset-0` overlay rendered inline. The stack
+ * review page renders inside a GSAP-animated wrapper, and a transformed ancestor
+ * makes `position: fixed` resolve against THAT rather than the viewport — so the
+ * gate opened halfway down the page, below the fold, at the exact moment someone
+ * was trying to buy something. The sticky checkout bar on the same page already
+ * portals itself for this reason; this one didn't. `Sheet` portals to
+ * `document.body`, and brings the scroll lock, focus trap and Escape handling
+ * that a hand-rolled overlay never had.
+ *
+ * The action lives in a pinned `SheetFooter` for the same class of reason: the
+ * consent points are long enough to push a button off the bottom of a phone, and
+ * the one thing this screen exists to do must not be the part you have to scroll
+ * to find.
  */
 export function AccountGate({
   payload,
@@ -88,29 +107,36 @@ export function AccountGate({
   }
 
   const inputStyle = {
-    background: 'var(--color-surface-2)',
-    border: '1px solid var(--color-border)',
+    background: GLASS.surface,
+    border: `1px solid ${GLASS.hairline}`,
     color: 'var(--color-text)',
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-6">
-      <div
-        className="w-full max-w-sm rounded-3xl p-6 max-h-[92vh] overflow-y-auto"
-        style={{ background: 'var(--color-bg)', border: '1px solid var(--color-border)' }}
+    <Sheet onClose={onCancel} label="Create your account to subscribe">
+      <SheetHeader
+        eyebrow="One last step"
+        title={mode === 'signup' ? 'Create your account' : 'Welcome back'}
       >
-        <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-          One last step
-        </p>
-        <h2 className="text-2xl font-black mb-1.5" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-          {mode === 'signup' ? 'Create your account' : 'Welcome back'}
-        </h2>
-        <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-5">
+        <CheckoutSteps current="account" />
+      </SheetHeader>
+
+      <SheetBody className="space-y-4">
+        {/* What they are actually buying. The gate used to open over the stack
+            with no figures on it at all, so the last thing anyone saw before
+            typing a password was a form. */}
+        <PlanBeingBought subscription={payload.subscription} />
+
+        <p className="text-xs text-[var(--color-muted)] leading-relaxed">
           We save your stack and quiz answers to your account so you can log back in to see and
           manage your subscription any time.
         </p>
 
-        <form onSubmit={(e) => { e.preventDefault(); void submit() }} className="space-y-3">
+        <form
+          id="account-gate-form"
+          onSubmit={(e) => { e.preventDefault(); void submit() }}
+          className="space-y-3"
+        >
           <input
             type="email" inputMode="email" autoComplete="email" placeholder="you@email.com"
             value={email} onChange={(e) => setEmail(e.target.value)}
@@ -123,46 +149,52 @@ export function AccountGate({
             className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none" style={inputStyle}
           />
           {error && <p className="text-xs font-semibold px-1" style={{ color: '#ff6b6b' }} role="alert">{error}</p>}
-
-          <CheckoutConsent
-            accepted={consented}
-            onChange={(next) => { setConsented(next); if (next) setConsentError(null) }}
-            error={consentError}
-          />
-
-          <button
-            type="submit" disabled={!valid || busy}
-            className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-50"
-            style={{ fontFamily: 'var(--font-display)' }}
-          >
-            {busy ? 'One sec…' : mode === 'signup' ? 'Create account & subscribe →' : 'Sign in & subscribe →'}
-          </button>
         </form>
 
         {providers.length > 0 && (
           <>
-            <div className="flex items-center gap-3 my-4">
-              <div className="h-px flex-1" style={{ background: 'var(--color-border)' }} />
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1" style={{ background: GLASS.hairline }} />
               <span className="text-[10px] uppercase tracking-widest text-[var(--color-muted)]">or</span>
-              <div className="h-px flex-1" style={{ background: 'var(--color-border)' }} />
+              <div className="h-px flex-1" style={{ background: GLASS.hairline }} />
             </div>
             <ProviderButtons providers={providers} returnTo="/api/checkout/continue" beforeNavigate={stashPending} />
           </>
         )}
 
-        <div className="flex items-center justify-between mt-5">
-          <button
-            type="button"
-            onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(null) }}
-            className="text-xs font-semibold underline text-[var(--color-muted)]"
-          >
-            {mode === 'signup' ? 'Already have an account?' : 'New here? Create one'}
-          </button>
-          <button type="button" onClick={onCancel} className="text-xs font-semibold text-[var(--color-muted)]">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+        <CheckoutConsent
+          accepted={consented}
+          onChange={(next) => { setConsented(next); if (next) setConsentError(null) }}
+          error={consentError}
+        />
+
+        {/* Said before the button rather than discovered after it. Nobody should
+            be surprised by a different website asking for their card. */}
+        <Note icon="credit-card">
+          Card details are taken on Stripe’s secure page — nothing is charged until you finish there.
+        </Note>
+
+        <button
+          type="button"
+          onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(null) }}
+          className="text-xs font-semibold underline text-[var(--color-muted)]"
+        >
+          {mode === 'signup' ? 'Already have an account?' : 'New here? Create one'}
+        </button>
+      </SheetBody>
+
+      <SheetFooter>
+        <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+        <Button
+          type="submit"
+          form="account-gate-form"
+          variant="primary"
+          iconRight="arrow-right"
+          disabled={!valid || busy}
+        >
+          {busy ? 'One sec…' : 'Continue to payment'}
+        </Button>
+      </SheetFooter>
+    </Sheet>
   )
 }

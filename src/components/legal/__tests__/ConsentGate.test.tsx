@@ -32,7 +32,7 @@ const setup = async (props: Partial<React.ComponentProps<typeof ConsentGate>> = 
   return { onAccept, onCancel, user: userEvent.setup() }
 }
 
-const confirm = () => screen.getByRole('button', { name: /agree & start subscription/i })
+const confirm = () => screen.getByRole('button', { name: /continue to payment/i })
 
 describe('ConsentGate', () => {
   it('shows the billing terms and the health disclaimer before anyone can agree', async () => {
@@ -116,5 +116,26 @@ describe('ConsentGate', () => {
       await setup()
       expect(screen.queryByText(/already signed in/i)).not.toBeInTheDocument()
     })
+  })
+})
+
+describe('ConsentGate placement', () => {
+  // Same hazard as the account gate — see `AccountGate.test.tsx`.
+  it('renders outside its own tree, so no transformed ancestor can catch it', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    await act(async () => {
+      render(<ConsentGate onAccept={jest.fn()} onCancel={jest.fn()} />, { container })
+    })
+    const dialog = screen.getByRole('dialog')
+    expect(container.contains(dialog)).toBe(false)
+    expect(document.body.contains(dialog)).toBe(true)
+  })
+
+  it('restates the plan being bought, over the receipt it covers', async () => {
+    await setup({
+      subscription: { flatMonthly: 52.18, lines: [{ id: 'l1' }] } as never,
+    })
+    expect(screen.getByText('£52.18')).toBeInTheDocument()
   })
 })

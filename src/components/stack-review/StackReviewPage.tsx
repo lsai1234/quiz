@@ -672,6 +672,7 @@ export function StackReviewPage() {
         <ConsentGate
           versions={checkoutState.versions}
           notice={checkoutState.notice}
+          subscription={checkoutState.payload.subscription}
           onAccept={resumeCheckout}
           onCancel={resetCheckout}
         />
