@@ -61,7 +61,13 @@ async function flagOrdersAwaitingReturn(
   refund: number,
   reference: string,
 ): Promise<void> {
-  const note = `Return requested (14-day cancellation, ${reference}) — refund £${refund.toFixed(2)} once the goods are back.`
+  // "Up to", because the refund is settled on inspection: unopened items are
+  // refunded, opened ones are not unless they arrived faulty. Whoever opens the
+  // parcel is the first person who can know which, so the note tells them the
+  // ceiling and the rule rather than a figure to pay out on sight.
+  const note =
+    `Return requested (14-day cancellation, ${reference}) — refund up to £${refund.toFixed(2)} for whatever ` +
+    `comes back unopened. Opened items are not refundable unless faulty.`
   for (const order of orders) {
     if (order.status === 'refunded' || order.status === 'cancelled') continue
     try {
@@ -203,6 +209,7 @@ export async function POST(req: Request) {
         statement: quote.statement ?? undefined,
         returnRequested: true,
         refundDue: refund,
+        refundPaid: null,
         returnRefundedAt: null,
       },
     }

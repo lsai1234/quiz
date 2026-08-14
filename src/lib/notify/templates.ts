@@ -294,7 +294,7 @@ export function exitReceipt(ctx: ExitReceiptContext): RenderedEmail {
 }
 
 export interface ExitReturnContext {
-  /** Coming back to their card once the goods are with us (£). */
+  /** The MOST that can come back (£) — a full, unopened return. */
   refund: number
   /** The last day the statutory window runs to, already formatted. */
   deadline: string
@@ -321,8 +321,8 @@ export function exitReturnRequested(ctx: ExitReturnContext): RenderedEmail {
         'Your subscription is cancelled and nothing further will be billed. You cancelled inside your 14-day cancellation period and chose to return what you have.',
         `Send everything back to: ${ctx.returnAddress.join(', ')}.`,
         `Please put your plan reference ${ctx.reference} in with it, so we can match the parcel to your account.`,
-        `Once it reaches us we will refund ${formatGBP(ctx.refund)} to the card you paid with. Post it within 14 days of telling us — by ${ctx.deadline} — and keep your proof of postage.`,
-        'Return postage is yours to pay unless the goods arrived damaged or wrong, in which case tell us and we will cover it.',
+        `Once it reaches us we will refund what you paid for everything that comes back unopened — up to ${formatGBP(ctx.refund)} if the whole box returns — to the card you paid with, and email you the exact figure. Post it within 14 days of telling us — by ${ctx.deadline} — and keep your proof of postage.`,
+        'Supplements you have already opened cannot be refunded, for food hygiene reasons, unless they arrived faulty or damaged. If anything did, tell us before you post it: we will refund those and cover your postage. Return postage is otherwise yours to pay.',
       ],
       cta: { label: 'View your account', url: ctx.hubUrl },
       footnote: 'Changed your mind about returning it? Keep it — there is nothing to pay either way. Just let us know so we are not waiting on a parcel.',

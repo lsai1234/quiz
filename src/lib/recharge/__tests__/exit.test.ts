@@ -6,7 +6,7 @@
  * Consumer Contracts Regulations — and a settlement that ignores any of them is
  * a charge we would have to give back with an apology.
  */
-import { quoteExit, waiverFor, withinCoolingOff, coolingOffDeadline, insidePriceIncreaseNotice, followsInvoluntaryChange } from '@/lib/recharge/exit'
+import { quoteExit, waiverFor, withinCoolingOff, coolingOffDeadline, refundForReturned, insidePriceIncreaseNotice, followsInvoluntaryChange } from '@/lib/recharge/exit'
 import type { MemberSubscription, MemberSubscriptionLine, BillingChange } from '@/lib/recharge/types'
 import type { Order } from '@/lib/orders/types'
 
@@ -212,6 +212,58 @@ describe('the statutory cooling-off period', () => {
       })
       expect(quote.coolingOff).toBeNull()
     })
+  })
+})
+
+describe('what a return is actually worth', () => {
+  /**
+   * The Terms refuse a refund on opened supplements unless they arrived faulty,
+   * on hygiene grounds — so the quoted figure is a ceiling for a whole, unopened
+   * box, and the real amount is settled when someone opens the parcel.
+   *
+   * Proportional to VALUE rather than to item count: the member paid less than
+   * the goods are worth (smoothed monthly, discounted first month), so refunding
+   * retail would hand back more than was ever taken, and a flat share per item
+   * would price a returned £60 tub the same as a returned sachet.
+   */
+  const inWindow = () =>
+    quoteExit({
+      sub: plan(),
+      orders: [order({ createdAt: '2026-05-25T00:00:00.000Z', billedAmount: 20 })],
+      consentCoversSettlement: true,
+      now: NOW,
+    })
+
+  it('gives everything back when the whole box returns unopened', () => {
+    const quote = inWindow()
+    // £60 sent, £20 paid — a full return refunds the full £20.
+    expect(refundForReturned(quote, quote.coolingOff!.keepValue)).toBe(20)
+  })
+
+  it('refunds a part return in proportion to what came back', () => {
+    // Half the value returned unopened → half the payment back.
+    expect(refundForReturned(inWindow(), 30)).toBe(10)
+  })
+
+  it('refunds nothing when everything was opened', () => {
+    expect(refundForReturned(inWindow(), 0)).toBe(0)
+  })
+
+  it('never hands back more than was ever taken', () => {
+    // Retail value exceeds what they paid, so an un-clamped share would pay out
+    // more than the card was charged.
+    expect(refundForReturned(inWindow(), 999)).toBe(20)
+  })
+
+  it('is zero once the window has closed', () => {
+    const closed = quoteExit({
+      sub: plan(),
+      orders: [order({ createdAt: '2026-03-01T00:00:00.000Z', billedAmount: 20 })],
+      consentCoversSettlement: true,
+      now: NOW,
+    })
+    expect(closed.coolingOff).toBeNull()
+    expect(refundForReturned(closed, 60)).toBe(0)
   })
 })
 

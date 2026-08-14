@@ -103,17 +103,34 @@ brings the code back to what members have already been shown and consented to, a
 `SETTLEMENT_TERMS_VERSION` does **not** need moving: nobody is being held to wording they
 did not accept.
 
-One place the code is still more generous than the published Terms: those say *"for hygiene
-reasons we cannot refund opened supplements unless they are faulty"*, and `returnRefund`
-today refunds every payment regardless of what comes back opened. That is the same
-diminished-value decision as below, and it is the direction that costs money rather than
-the direction that causes complaints.
+**Opened supplements are not refunded.** The Terms say *"for hygiene reasons we cannot
+refund opened supplements unless they are faulty"*, and that is now what the code does.
+The consequence is that the refund cannot be a fixed number at cancellation, because what
+is opened is not knowable until the parcel is:
+
+- `coolingOff.returnRefund` is a **ceiling** — everything they paid, refunded in full only
+  if the whole box comes back unopened. Quoted as "up to" everywhere it appears: the flow,
+  the confirmation, the email and the queue note.
+- `refundForReturned(quote, returnedValue)` prices what actually arrives. Proportional to
+  VALUE, not to item count: the member paid less than the goods are worth, so refunding
+  retail would hand back more than was ever taken, and a flat per-item share would price a
+  returned £60 tub the same as a returned sachet. Clamped so it can never exceed what was
+  paid.
+- `exit.refundDue` holds the ceiling; `exit.refundPaid` and `exit.returnRefundedAt` are set
+  by whoever opens the parcel. They are deliberately separate fields — conflating them would
+  turn "up to £46.86" into a promise made before anyone had looked in the box.
+- Faulty or damaged goods are refunded whether opened or not, and we cover the postage. The
+  flow and the email both say so, and both ask the member to tell us *before* posting.
+
+**Still open:** nothing yet processes the refund. The return is recorded, the member is
+emailed, and their orders are held in the fulfilment queue with the ceiling and the rule on
+the note — but paying out is a manual Stripe action today, and `refundPaid` is written by
+hand. A returns screen in the Founders Hub is the obvious next step.
 
 Return postage sits with the member unless the goods arrived damaged or wrong, which is the
-statutory default and is stated in both the flow and the email. **Still to be decided by a
-person:** whether to deduct for diminished value on opened goods. Nothing does today — a
-full refund is paid on everything returned — and the figure to deduct from is on the exit
-statement if that changes.
+statutory default and is stated in both the flow and the email. Diminished value on goods that come back opened does not arise as a separate question: an
+opened supplement is not refunded at all unless it was faulty, so there is nothing to
+deduct from.
 
 ---
 

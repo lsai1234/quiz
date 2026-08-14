@@ -355,12 +355,21 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                     {quote.coolingOff.returnRefund > 0 && (
                       <Card variant="tone" tone={ACCENT} padding="tight">
                         <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                          Send it back · {formatGBP(quote.coolingOff.returnRefund)} refunded
+                          Send it back · up to {formatGBP(quote.coolingOff.returnRefund)} refunded
                         </p>
                         <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                          Post everything back to us and we&apos;ll refund every payment you&apos;ve made — {formatGBP(quote.coolingOff.returnRefund)} — to
+                          Post it back and we&apos;ll refund what you paid for everything that comes back{' '}
+                          <strong>unopened</strong> — up to {formatGBP(quote.coolingOff.returnRefund)}, if the whole box returns — to
                           the card you paid with, as soon as it reaches us. We&apos;ll email you the address and what to put in the box.
-                          Return postage is yours unless something arrived damaged or wrong.
+                        </p>
+                        {/* Said here rather than discovered when a smaller refund
+                            lands. It is in the Terms, it is the reason the figure
+                            above is a ceiling, and someone deciding between two
+                            options needs it before they decide, not after. */}
+                        <p className="text-xs text-[var(--color-text-2)] mt-2 leading-relaxed">
+                          Supplements you&apos;ve already opened can&apos;t be refunded — food hygiene rules — unless
+                          they arrived faulty or damaged, in which case tell us and we&apos;ll refund them and cover
+                          the postage. Return postage is otherwise yours.
                         </p>
                         <Button variant="tone" tone={ACCENT} onClick={() => submitExit('return')} disabled={submitting} className="mt-3">
                           {submitting ? 'One moment…' : 'Cancel and send it back'}
@@ -446,13 +455,14 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
             {outcome.returning ? (
               <Card variant="tone" tone={ACCENT} padding="tight">
                 <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                  Your subscription has ended — send it back for {formatGBP(outcome.returning.refundDue)}
+                  Your subscription has ended — send it back for up to {formatGBP(outcome.returning.refundDue)}
                 </p>
                 <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
                   We&apos;ve emailed you the return address. Put <strong>{outcome.returning.reference}</strong> in
                   with the parcel so we can match it to your account, and post it by{' '}
                   {new Date(outcome.returning.returnBy).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} — keep
-                  your proof of postage. The refund goes back to the card you paid with as soon as it reaches us.
+                  your proof of postage. We&apos;ll refund what you paid for everything that comes back unopened, to the
+                  card you paid with, as soon as it reaches us — and tell you the exact figure when we do.
                 </p>
                 <p className="text-xs text-[var(--color-text-2)] mt-2 leading-relaxed">
                   Nothing further will be billed, whether you post it or change your mind and keep it.

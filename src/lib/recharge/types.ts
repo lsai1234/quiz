@@ -286,9 +286,20 @@ export interface SubscriptionExit {
    * has to still be answerable in six months when the window has long closed.
    */
   returnRequested?: boolean
-  /** Refundable once the goods are back (£). Set with `returnRequested`. */
+  /**
+   * The MOST refundable once the goods are back (£) — a full, unopened return.
+   * Set with `returnRequested`.
+   *
+   * A ceiling, not a debt. Opened supplements are not refundable unless they
+   * arrived faulty, and nobody can know what is opened until the parcel is, so
+   * the amount actually paid out is `refundPaid` and it is set by whoever
+   * inspects it. Conflating the two would turn "up to £46.86" into a promise
+   * made before anyone had looked in the box.
+   */
   refundDue?: number
   // ── Set later, by a founder working the exit queue ────────────────────────
+  /** What was actually refunded once the parcel was opened and checked (£). */
+  refundPaid?: number | null
   /** When the returned goods came back and the refund actually went out. */
   returnRefundedAt?: string | null
   /** When a founder decided this balance would never be collected. */

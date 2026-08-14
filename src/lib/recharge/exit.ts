@@ -61,12 +61,22 @@ export interface Waiver {
  * So it is a choice, with both halves priced:
  *
  *   Keep it     → settle the balance on goods kept (`keepSettlement`)
- *   Send it back → every payment returned once it arrives (`returnRefund`)
+ *   Send it back → refunded for whatever comes back unopened (`returnRefund`)
  */
 export interface CoolingOffChoice {
   /** Last day the right runs to (ISO). */
   deadline: string
-  /** Refunded when everything comes back — every payment taken so far (£). */
+  /**
+   * The MOST that can come back (£) — every payment taken, refunded in full if
+   * the whole box returns unopened.
+   *
+   * A ceiling rather than a promise, because the Terms refuse a refund on opened
+   * supplements unless they are faulty, on hygiene grounds, and what is opened
+   * is not knowable until the parcel is. Quoting it as a firm figure would be
+   * promising money on a condition we cannot check from here; quoting nothing
+   * would leave someone deciding blind. So it is "up to", the rule is stated
+   * beside it, and `refundForReturned` prices what actually arrives.
+   */
   returnRefund: number
   /** Retail value of what has actually been sent (£) — what "keep it" keeps. */
   keepValue: number
@@ -221,6 +231,34 @@ export function waiverFor(input: {
     }
   }
   return null
+}
+
+/**
+ * What to actually refund, once someone has opened the parcel and seen what came
+ * back.
+ *
+ * The member paid less than the goods are worth — the monthly is smoothed and
+ * month one carries a discount — so refunding the RETAIL value of what returns
+ * would hand back more than was ever taken. And refunding a flat share per item
+ * would ignore that a returned £60 tub is worth ten times a returned £6 sachet.
+ *
+ * So it is proportional to value: the share of everything we sent that has come
+ * back unopened, applied to everything they paid. A full return gives the whole
+ * payment back, which is the statutory answer, and it falls away fairly from
+ * there. Never more than they paid, whatever is handed over.
+ *
+ * `returnedValue` is at the same retail prices as `keepValue` — the figures on
+ * the exit statement's "everything we sent you" side, so the two can be read
+ * against each other.
+ */
+export function refundForReturned(
+  quote: Pick<ExitQuote, 'coolingOff'>,
+  returnedValue: number,
+): number {
+  const choice = quote.coolingOff
+  if (!choice || choice.keepValue <= 0 || returnedValue <= 0) return 0
+  const share = Math.min(1, Math.max(0, returnedValue / choice.keepValue))
+  return Math.round(choice.returnRefund * share * 100) / 100
 }
 
 /**
