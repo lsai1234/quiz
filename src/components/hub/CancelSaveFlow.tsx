@@ -1,9 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { IconButton } from '@/components/ui/IconButton'
+import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
+import { GLASS, tint } from '@/lib/ui/tokens'
 import { Button } from '@/components/ui/Button'
+import { Card } from '@/components/ui/Card'
+import { Note } from '@/components/ui/Note'
+import { OptionRow } from '@/components/ui/OptionRow'
+import type { IconName } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { downsizePreview } from '@/lib/recharge/mock'
 import { ExitStatementView } from './ExitStatement'
@@ -25,6 +29,16 @@ function monthsAway(target: number, current: number): string {
   if (gap === 0) return 'this month'
   if (gap === 1) return 'a month'
   return `${gap} months`
+}
+
+/** A glyph per reason — the same scan-by-shape the quiz's option lists give. */
+const REASON_ICON: Record<Reason, IconName> = {
+  expensive: 'trending-down',
+  'too-much': 'box',
+  'not-working': 'alert-triangle',
+  break: 'pause',
+  'dont-need': 'minus',
+  other: 'info',
 }
 
 const REASONS: { id: Reason; label: string }[] = [
@@ -50,7 +64,6 @@ interface Props {
 }
 
 export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, onSnooze, onDownsize, onSkipNext, onSwap, onExited, onClose }: Props) {
-  const [mounted, setMounted] = useState(false)
   const [step, setStep] = useState<'reason' | 'save' | 'snooze' | 'cancel' | 'done'>('reason')
   const [reason, setReason] = useState<Reason | null>(null)
 
@@ -115,19 +128,6 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
     }
   }
 
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [])
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
-
-  if (!mounted) return null
 
   // Cancelling is unconditional — there is no term to serve out and nothing to
   // refuse. What there can be is a balance on product already sent that the flat
@@ -146,13 +146,11 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
 
   function Primary({ title, body, cta, tone = ACCENT, onClick }: { title: string; body: React.ReactNode; cta: string; tone?: string; onClick: () => void }) {
     return (
-      <div className="rounded-2xl border p-4" style={{ borderColor: `color-mix(in srgb, ${tone} 35%, transparent)`, background: `color-mix(in srgb, ${tone} 6%, transparent)` }}>
+      <Card variant="tone" tone={tone} padding="tight">
         <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
         <div className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">{body}</div>
-        <button onClick={onClick} className="mt-3 w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all" style={{ background: tone, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
-          {cta}
-        </button>
-      </div>
+        <Button variant="tone" tone={tone} onClick={onClick} className="mt-3">{cta}</Button>
+      </Card>
     )
   }
 
@@ -168,32 +166,24 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
     )
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose() }} style={{ background: 'rgba(0,0,0,0.72)' }}>
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
-        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-[var(--color-border-2)]" />
-        </div>
+  return (
+    <Sheet onClose={onClose}>
 
-        <div className="px-5 pt-2 pb-4 flex items-start justify-between gap-3 flex-shrink-0 border-b border-[var(--color-border)]">
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase mb-0.5" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>Your subscription</p>
-            <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{heading}</h3>
-          </div>
-          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
-        </div>
+      <SheetHeader eyebrow="Your subscription" title={heading} />
 
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
+      <SheetBody className="space-y-3">
           {/* Step 1: reason */}
           {step === 'reason' && (
             <>
               <p className="text-xs text-[var(--color-muted)] mb-1">What’s prompting this? We’ll see if there’s a better option than cancelling.</p>
               {REASONS.map((r) => (
-                <button key={r.id} onClick={() => { setReason(r.id); setStep(r.id === 'break' ? 'snooze' : 'save') }}
-                  className="w-full text-left px-4 py-3.5 rounded-2xl text-sm font-semibold active:scale-[0.98] transition-all"
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
-                  {r.label}
-                </button>
+                <OptionRow
+                  key={r.id}
+                  label={r.label}
+                  icon={REASON_ICON[r.id]}
+                  navigates
+                  onClick={() => { setReason(r.id); setStep(r.id === 'break' ? 'snooze' : 'save') }}
+                />
               ))}
             </>
           )}
@@ -229,7 +219,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
               )}
 
               {reason === 'not-working' && (reviewItems.length > 0 ? (
-                <div className="rounded-2xl border p-4" style={{ borderColor: `color-mix(in srgb, ${AMBER} 35%, transparent)`, background: `color-mix(in srgb, ${AMBER} 6%, transparent)` }}>
+                <Card variant="tone" tone={AMBER} padding="tight">
                   <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Let’s fix what’s not landing</p>
                   <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">Before you drop everything, swap the {reviewItems.length === 1 ? 'one product' : 'products'} that hasn’t worked for you:</p>
                   <div className="mt-3 space-y-2">
@@ -240,7 +230,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                       </button>
                     ))}
                   </div>
-                </div>
+                </Card>
               ) : (
                 <Primary tone={ACCENT} title="Most of your stack is still settling in" body={<>Some products (like vitamins and omega-3) work quietly over weeks. Snooze if you need to, rather than stopping before they’ve had a fair go.</>} cta="Snooze instead" onClick={() => setStep('snooze')} />
               ))}
@@ -253,9 +243,9 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
               {reason !== 'not-working' && <SnoozeOption />}
 
               {/* Honest exit */}
-              <button onClick={() => setStep('cancel')} className="w-full py-3 rounded-2xl text-sm font-semibold text-[var(--color-muted)] underline">
+              <Button variant="ghost" onClick={() => setStep('cancel')} className="underline">
                 No thanks — cancel my subscription
-              </button>
+              </Button>
             </>
           )}
 
@@ -268,7 +258,13 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                 {[1, 2, 3].map((m) => {
                   const until = new Date(); until.setMonth(until.getMonth() + m)
                   return (
-                    <button key={m} onClick={() => { onSnooze(m); onClose() }} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 text-center active:scale-95 transition-all">
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => { onSnooze(m); onClose() }}
+                      className="rounded-2xl p-4 text-center transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2"
+                      style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}`, ['--tw-ring-color' as string]: tint(ACCENT, 45) }}
+                    >
                       <p className="text-2xl font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{m}</p>
                       <p className="text-[10px] text-[var(--color-muted)]">month{m > 1 ? 's' : ''}</p>
                       <p className="text-[10px] mt-1" style={{ color: ACCENT }}>back {until.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</p>
@@ -289,9 +285,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
               )}
 
               {quoteError && (
-                <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
-                  {quoteError}
-                </p>
+                <Note icon="alert-triangle" color={AMBER} live>{quoteError}</Note>
               )}
 
               {quote && (
@@ -303,32 +297,32 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                   {/* Nothing to pay, and why. A waiver is a promise being kept,
                       so it says which promise rather than just showing £0.00. */}
                   {quote.waiver && (
-                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}>
+                    <Card variant="tone" tone={GREEN} padding="tight">
                       <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Nothing to pay</p>
                       <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">{quote.waiver.explanation}</p>
-                    </div>
+                    </Card>
                   )}
 
                   {!quote.waiver && settlement > 0 && (
-                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${AMBER} 35%, transparent)`, background: `color-mix(in srgb, ${AMBER} 6%, transparent)` }}>
+                    <Card variant="tone" tone={AMBER} padding="tight">
                       <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                         One last payment: {formatGBP(settlement)}
                       </p>
                       <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
                         Your monthly is a smoothed average, so longer-lasting items are spread over the months they last. You’ve had more product than your payments have covered so far — this settles that difference, and nothing else. Everything already sent to you is yours to keep.
                       </p>
-                    </div>
+                    </Card>
                   )}
 
                   {quote.overpayment > 0 && (
-                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}>
+                    <Card variant="tone" tone={GREEN} padding="tight">
                       <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                         We owe you {formatGBP(quote.overpayment)}
                       </p>
                       <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
                         You’ve paid for more than we’ve sent. We’ll refund the difference to your card.
                       </p>
-                    </div>
+                    </Card>
                   )}
 
                   {quote.statement && <ExitStatementView statement={quote.statement} />}
@@ -337,41 +331,29 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                       almost always a near month where leaving is free — and
                       saying so turns a bill into a choice. */}
                   {quote.freeExitMonth != null && (
-                    <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: `color-mix(in srgb, ${ACCENT} 6%, transparent)` }}>
+                    <Card variant="tone" tone={ACCENT} padding="tight">
                       <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                         Or leave free in {monthsAway(quote.freeExitMonth, sub.monthsActive)}
                       </p>
                       <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
                         Nothing changes in the meantime — your boxes still arrive and your payments carry on, which is what clears the balance. Then your plan ends by itself with nothing to pay.
                       </p>
-                      <button
-                        onClick={() => submitExit('scheduled')}
-                        disabled={submitting}
-                        className="mt-3 w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-60"
-                        style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-                      >
+                      <Button variant="primary" onClick={() => submitExit('scheduled')} disabled={submitting} className="mt-3">
                         {submitting ? 'One moment…' : 'End it free on that date'}
-                      </button>
-                    </div>
+                      </Button>
+                    </Card>
                   )}
 
-                  <button
-                    onClick={() => submitExit('now')}
-                    disabled={submitting}
-                    className="mt-2 w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-60"
-                    style={{ background: AMBER, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-                  >
+                  <Button variant="danger" onClick={() => submitExit('now')} disabled={submitting} className="mt-2">
                     {submitting ? 'One moment…' : settlement > 0 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
-                  </button>
+                  </Button>
                 </>
               )}
 
-              <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
-                Keep my subscription
-              </button>
-              <button onClick={() => setStep('snooze')} className="w-full py-3 rounded-2xl text-sm font-bold border border-[var(--color-border)] text-[var(--color-text-2)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
+              <Button variant="primary" onClick={onClose}>Keep my subscription</Button>
+              <Button variant="secondary" icon="pause" onClick={() => setStep('snooze')}>
                 Snooze instead — nothing to settle
-              </button>
+              </Button>
             </>
           )}
 
@@ -379,16 +361,16 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {step === 'done' && outcome && (
             <>
               {outcome.scheduledFor != null ? (
-                <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${ACCENT} 35%, transparent)`, background: `color-mix(in srgb, ${ACCENT} 6%, transparent)` }}>
+                <Card variant="tone" tone={ACCENT} padding="tight">
                   <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                     Your plan ends in {monthsAway(outcome.scheduledFor, sub.monthsActive)}
                   </p>
                   <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
                     Nothing to pay. Everything carries on as normal until then, and you can change your mind any time from your plan.
                   </p>
-                </div>
+                </Card>
               ) : (
-                <div className="rounded-2xl p-4" style={{ border: `1px solid color-mix(in srgb, ${GREEN} 35%, transparent)`, background: `color-mix(in srgb, ${GREEN} 6%, transparent)` }}>
+                <Card variant="tone" tone={GREEN} padding="tight">
                   <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                     Your subscription has ended
                   </p>
@@ -399,19 +381,15 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                         : `We couldn’t take the ${formatGBP(outcome.settlement)} balance from your card, so we’ve left it as an invoice you can pay from your billing page. Your plan has ended either way.`
                       : 'There was nothing left to pay. Everything you have is yours to keep, and nothing further will be billed.'}
                   </p>
-                </div>
+                </Card>
               )}
               <p className="text-xs text-[var(--color-muted)] leading-relaxed">
                 Thanks for giving us a go. Your account stays open — you can start a new plan whenever you like.
               </p>
-              <button onClick={onClose} className="w-full py-3.5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
-                Done
-              </button>
+              <Button variant="primary" size="lg" onClick={onClose}>Done</Button>
             </>
           )}
-        </div>
-      </div>
-    </div>,
-    document.body,
+      </SheetBody>
+    </Sheet>
   )
 }

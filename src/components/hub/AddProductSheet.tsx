@@ -1,8 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { IconButton } from '@/components/ui/IconButton'
+import { useMemo } from 'react'
+import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
+import { Button } from '@/components/ui/Button'
+import { ProductTile } from '@/components/stack-review/ProductTile'
+import { StatBars } from '@/components/stack-review/StatBars'
+import { productBars, selectShopAxes, type StatAxis } from '@/lib/stack-stats'
+import { GLASS } from '@/lib/ui/tokens'
 import { Icon } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
@@ -14,34 +18,51 @@ const ACCENT = '#00D4FF'
 
 /** One addable product, with what it does to the monthly. */
 function ProductCard({
-  product: p, subscription, catalogue, onAdd,
+  product: p, subscription, catalogue, axes, onAdd,
 }: {
   product: CatalogueProduct
   subscription: MemberSubscription
   catalogue: CatalogueProduct[]
+  /** Shared axes, so every card in the sheet compares on the same footing. */
+  axes: StatAxis[]
   onAdd: (product: CatalogueProduct) => void
 }) {
   const impact = computeAddImpact(subscription, p, catalogue)
   const econ = projectedEconomics(p)
+  const bars = axes.length > 0 ? productBars(p, axes) : null
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-bold text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
-        <span className="text-xs font-bold flex-shrink-0" style={{ color: ACCENT }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
+    <div className="rounded-2xl overflow-hidden" style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}` }}>
+      <div className="p-4">
+        <div className="flex items-start gap-3">
+          {/* This sheet is asking a member to buy something. Selling it as a
+              line of text, on the one screen in the app where the reveal deck
+              would have shown a product, was leaving the argument unmade. */}
+          <ProductTile imageUrl={p.imageUrl} slot={p.stackSlots[0]} title={p.title} size={52} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-sm font-medium text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
+              <span className="text-xs font-black shrink-0" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
+            </div>
+            <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-[var(--color-muted)] mt-2.5">
+          {econ.discountPct > 0 && <><span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% · </>}
+          {econ.shipEveryMonths > 1 ? `ships every ${econ.shipEveryMonths} months, spread to ${formatGBP(econ.perMonth)}/mo` : 'ships every month'}
+        </p>
+        <Button variant="primary" size="sm" icon="plus" onClick={() => onAdd(p)} className="mt-3">
+          Add to every delivery
+        </Button>
       </div>
-      <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
-      <p className="text-[11px] text-[var(--color-muted)] mt-1.5">
-        {econ.discountPct > 0 && <><span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% · </>}
-        {econ.shipEveryMonths > 1 ? `ships every ${econ.shipEveryMonths} months, spread to ${formatGBP(econ.perMonth)}/mo` : 'ships every month'}
-      </p>
-      <button
-        onClick={() => onAdd(p)}
-        className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all inline-flex items-center justify-center gap-1.5"
-        style={{ fontFamily: 'var(--font-display)' }}
-      >
-        <Icon name="plus" size={14} />
-        Add to every delivery
-      </button>
+      {bars && (
+        <StatBars
+          bars={bars}
+          animate={false}
+          label="What it supports"
+          className="px-4 pt-3 pb-3.5"
+          style={{ borderTop: `1px solid ${GLASS.hairline}` }}
+        />
+      )}
     </div>
   )
 }
@@ -61,21 +82,19 @@ interface Props {
 }
 
 export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focusSwapGroup }: Props) {
-  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [])
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
 
   const inStack = useMemo(() => new Set(subscription.lines.map((l) => l.productId)), [subscription.lines])
+
+  /**
+   * Axes drawn from the member's existing stack, not from what's on offer — so
+   * a candidate's bars answer "how does this compare to what I already have?"
+   * rather than to the other things being sold alongside it.
+   */
+  const axes = useMemo(() => {
+    const owned = subscription.lines.map((l) => catalogue.find((p) => p.id === l.productId)).filter((p): p is CatalogueProduct => !!p)
+    return owned.length > 0 ? selectShopAxes(owned, 4) : []
+  }, [subscription.lines, catalogue])
 
   // Products in the category the member came here for, if any.
   const focused = useMemo(
@@ -105,30 +124,12 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
     return [...map.entries()]
   }, [catalogue, inStack, focusedIds])
 
-  if (!mounted) return null
+  return (
+    <Sheet onClose={onClose}>
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{ background: 'rgba(0,0,0,0.72)' }}
-    >
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '90dvh' }}>
-        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-[var(--color-border-2)]" />
-        </div>
+      <SheetHeader eyebrow="Add to your stack" title="What would you like to add?" />
 
-        <div className="px-5 pt-2 pb-4 flex items-start justify-between gap-3 flex-shrink-0 border-b border-[var(--color-border)]">
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase mb-0.5" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              Add to your stack
-            </p>
-            <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>What would you like to add?</h3>
-          </div>
-          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+      <SheetBody className="space-y-5">
           {focused.length > 0 && (
             <div>
               <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
@@ -136,7 +137,7 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
               </p>
               <div className="space-y-2">
                 {focused.map((p) => (
-                  <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} onAdd={onAdd} />
+                  <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
                 ))}
               </div>
             </div>
@@ -151,14 +152,12 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
               </p>
               <div className="space-y-2">
                 {products.map((p) => (
-                  <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} onAdd={onAdd} />
+                  <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
                 ))}
               </div>
             </div>
           ))}
-        </div>
-      </div>
-    </div>,
-    document.body,
+      </SheetBody>
+    </Sheet>
   )
 }

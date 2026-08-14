@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { IconButton } from '@/components/ui/IconButton'
+import { useState } from 'react'
+import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
+import { GLASS } from '@/lib/ui/tokens'
+import { OptionRow } from '@/components/ui/OptionRow'
+import type { IconName } from '@/components/ui/Icon'
 import { Button } from '@/components/ui/Button'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { CHANGE_REASONS, recommendReplacements, replacementRationale } from '@/lib/feedback'
@@ -13,6 +15,18 @@ import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const ACCENT = '#00D4FF'
+
+/** A glyph per reason, so the list can be scanned by shape as well as read. */
+const REASON_ICON: Record<ChangeReason, IconName> = {
+  'not-working': 'alert-triangle',
+  'side-effects': 'thermometer',
+  vegan: 'leaf',
+  cheaper: 'trending-down',
+  exploring: 'sparkle',
+}
+
+/** Where each step sits on the progress rail. */
+const STEP_INDEX = { reason: 0, pick: 1, confirm: 2 } as const
 
 interface Props {
   subscription: MemberSubscription
@@ -28,24 +42,10 @@ function deltaLabel(delta: number): string {
 }
 
 export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, onClose }: Props) {
-  const [mounted, setMounted] = useState(false)
   const [reason, setReason] = useState<ChangeReason | null>(null)
   const [selected, setSelected] = useState<CatalogueProduct | null>(null)
   const [applyToNextBox, setApplyToNextBox] = useState(true)
 
-  useEffect(() => { setMounted(true) }, [])
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [])
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', h)
-    return () => window.removeEventListener('keydown', h)
-  }, [onClose])
-
-  if (!mounted) return null
 
   const step: 'reason' | 'pick' | 'confirm' = selected ? 'confirm' : reason ? 'pick' : 'reason'
   const alternatives = reason ? recommendReplacements(line, reason, catalogue) : []
@@ -57,42 +57,31 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
     : step === 'pick' ? 'Recommended for you'
     : 'Confirm your change'
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{ background: 'rgba(0,0,0,0.72)' }}
-    >
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '90dvh' }}>
-        <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-[var(--color-border-2)]" />
-        </div>
+  return (
+    <Sheet onClose={onClose}>
 
         {/* Header */}
-        <div className="px-5 pt-2 pb-4 flex items-start justify-between gap-3 flex-shrink-0 border-b border-[var(--color-border)]">
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase mb-0.5" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              {line.slotTitle} · currently {line.productTitle}
-            </p>
-            <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{heading}</h3>
-          </div>
-          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
+      <SheetHeader eyebrow={`${line.slotTitle} · currently ${line.productTitle}`} title={heading}>
+        {/* Where they are in the three steps, in the quiz's own rail — the flow
+            gave no sense of length or progress at all. */}
+        <div className="flex items-center gap-1.5 mt-3">
+          {(['reason', 'pick', 'confirm'] as const).map((s, i) => (
+            <div
+              key={s}
+              className="h-1 rounded-full flex-1 transition-all duration-200"
+              style={{ background: i <= STEP_INDEX[step] ? ACCENT : GLASS.hairline }}
+            />
+          ))}
         </div>
+      </SheetHeader>
 
-        <div className="overflow-y-auto flex-1 px-5 py-4">
+      <SheetBody>
           {/* Step 1: reason */}
           {step === 'reason' && (
             <div className="space-y-2">
               <p className="text-xs text-[var(--color-muted)] mb-2">What's prompting the change? We'll tailor the recommendation.</p>
               {CHANGE_REASONS.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => setReason(r.id)}
-                  className="w-full text-left px-4 py-3.5 rounded-2xl text-sm font-semibold active:scale-[0.98] transition-all"
-                  style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
-                >
-                  {r.label}
-                </button>
+                <OptionRow key={r.id} label={r.label} icon={REASON_ICON[r.id]} navigates onClick={() => setReason(r.id)} />
               ))}
             </div>
           )}
@@ -173,9 +162,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
               </button>
             </div>
           )}
-        </div>
-      </div>
-    </div>,
-    document.body,
+      </SheetBody>
+    </Sheet>
   )
 }
