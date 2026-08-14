@@ -77,7 +77,13 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
   const [quote, setQuote] = useState<ExitQuote | null>(null)
   const [quoteError, setQuoteError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
-  const [outcome, setOutcome] = useState<{ settlement: number; paid: boolean; scheduledFor: number | null } | null>(null)
+  const [outcome, setOutcome] = useState<{
+    settlement: number
+    paid: boolean
+    scheduledFor: number | null
+    /** The statutory return: what is coming back, and where to send the goods. */
+    returning?: { refundDue: number; reference: string; returnBy: string } | null
+  } | null>(null)
 
   useEffect(() => {
     if (step !== 'cancel' || quote) return
@@ -89,7 +95,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
     return () => { live = false }
   }, [step, quote])
 
-  async function submitExit(mode: 'now' | 'scheduled') {
+  async function submitExit(mode: 'now' | 'scheduled' | 'return') {
     if (submitting) return
     setSubmitting(true)
     try {
@@ -118,6 +124,9 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
         settlement: data.settlement ?? 0,
         paid: data.paid !== false,
         scheduledFor: data.scheduledExitMonth ?? null,
+        returning: data.returnRequested
+          ? { refundDue: data.refundDue ?? 0, reference: data.reference, returnBy: data.returnBy }
+          : null,
       })
       setStep('done')
       onExited()
@@ -295,9 +304,64 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                   You can cancel now — there’s no minimum term and no cancellation fee{reasonLabel ? `. You said “${reasonLabel.toLowerCase()}”` : ''}.
                 </p>
 
+                {/* ── Inside the statutory 14 days: a real choice ──────────
+                    The Consumer Contracts Regulations give a new member a right
+                    the rest of the year does not — send it back and have their
+                    money returned. This flow used to offer only the keep half
+                    and describe the return in a sentence nobody could act on, so
+                    the option the law is actually about was never on the screen.
+                    Both halves are priced, because "keep £64 of product and pay
+                    nothing" against "send it back for £41.74" is a decision, and
+                    it is not obvious which way it goes. */}
+                {quote.coolingOff && (
+                  <>
+                    <Card variant="tone" tone={ACCENT} padding="tight">
+                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        You&apos;re still inside your 14 days
+                      </p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                        Until {new Date(quote.coolingOff.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} you
+                        can do either of these. There&apos;s nothing to settle either way.
+                      </p>
+                    </Card>
+
+                    <Card variant="tone" tone={GREEN} padding="tight">
+                      <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        Keep what you&apos;ve got · pay nothing
+                      </p>
+                      <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                        {quote.coolingOff.keepValue > 0
+                          ? `The ${formatGBP(quote.coolingOff.keepValue)} of product already sent to you is yours to keep, and there is nothing further to pay.`
+                          : 'Nothing has shipped yet, so there is nothing to send back and nothing to pay.'}
+                      </p>
+                      <Button variant="tone" tone={GREEN} onClick={() => submitExit('now')} disabled={submitting} className="mt-3">
+                        {submitting ? 'One moment…' : 'Cancel and keep it'}
+                      </Button>
+                    </Card>
+
+                    {quote.coolingOff.returnRefund > 0 && (
+                      <Card variant="tone" tone={ACCENT} padding="tight">
+                        <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                          Send it back · {formatGBP(quote.coolingOff.returnRefund)} refunded
+                        </p>
+                        <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                          Post everything back to us and we&apos;ll refund every payment you&apos;ve made — {formatGBP(quote.coolingOff.returnRefund)} — to
+                          the card you paid with, as soon as it reaches us. We&apos;ll email you the address and what to put in the box.
+                          Return postage is yours unless something arrived damaged or wrong.
+                        </p>
+                        <Button variant="tone" tone={ACCENT} onClick={() => submitExit('return')} disabled={submitting} className="mt-3">
+                          {submitting ? 'One moment…' : 'Cancel and send it back'}
+                        </Button>
+                      </Card>
+                    )}
+                  </>
+                )}
+
                 {/* Nothing to pay, and why. A waiver is a promise being kept,
-                    so it says which promise rather than just showing £0.00. */}
-                {quote.waiver && (
+                    so it says which promise rather than just showing £0.00.
+                    Suppressed inside the window, where the two cards above have
+                    already said it with more to act on. */}
+                {quote.waiver && !quote.coolingOff && (
                   <Card variant="tone" tone={GREEN} padding="tight">
                     <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Nothing to pay</p>
                     <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">{quote.waiver.explanation}</p>
@@ -345,9 +409,14 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                   </Card>
                 )}
 
-                <Button variant="danger" onClick={() => submitExit('now')} disabled={submitting} className="mt-2">
-                  {submitting ? 'One moment…' : settlement > 0 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
-                </Button>
+                {/* The plain exit. Inside the 14 days the two cards above are
+                    the choice, and a third unlabelled "cancel" underneath them
+                    would only be a way to pick one by accident. */}
+                {!quote.coolingOff && (
+                  <Button variant="danger" onClick={() => submitExit('now')} disabled={submitting} className="mt-2">
+                    {submitting ? 'One moment…' : settlement > 0 ? `Confirm — pay ${formatGBP(settlement)} and cancel` : 'Confirm cancellation'}
+                  </Button>
+                )}
               </>
             )}
 
@@ -361,7 +430,22 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
         {/* Step: done */}
         {step === 'done' && outcome && (
           <>
-            {outcome.scheduledFor != null ? (
+            {outcome.returning ? (
+              <Card variant="tone" tone={ACCENT} padding="tight">
+                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                  Your subscription has ended — send it back for {formatGBP(outcome.returning.refundDue)}
+                </p>
+                <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+                  We&apos;ve emailed you the return address. Put <strong>{outcome.returning.reference}</strong> in
+                  with the parcel so we can match it to your account, and post it by{' '}
+                  {new Date(outcome.returning.returnBy).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} — keep
+                  your proof of postage. The refund goes back to the card you paid with as soon as it reaches us.
+                </p>
+                <p className="text-xs text-[var(--color-text-2)] mt-2 leading-relaxed">
+                  Nothing further will be billed, whether you post it or change your mind and keep it.
+                </p>
+              </Card>
+            ) : outcome.scheduledFor != null ? (
               <Card variant="tone" tone={ACCENT} padding="tight">
                 <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
                   Your plan ends in {monthsAway(outcome.scheduledFor, sub.monthsActive)}

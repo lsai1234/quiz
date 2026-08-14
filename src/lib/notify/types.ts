@@ -30,6 +30,8 @@ export type TemplateId =
   | 'exit-charge-failed'
   /** They chose to leave on their next free date, and we are confirming when. */
   | 'exit-scheduled'
+  /** They cancelled inside the 14 days and are sending everything back. */
+  | 'exit-return-requested'
 
 export type NotificationStatus = 'queued' | 'sent' | 'failed'
 

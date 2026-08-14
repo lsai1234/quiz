@@ -15,7 +15,8 @@
 import type { MemberSubscription } from '@/lib/recharge/types'
 import { queueNotification } from './outbox'
 import { hubLinks } from './from-change'
-import { paymentFailed, exitReceipt, exitChargeFailed, exitScheduled } from './templates'
+import { paymentFailed, exitReceipt, exitChargeFailed, exitScheduled, exitReturnRequested } from './templates'
+import { returnAddressLines } from '@/lib/legal/content'
 
 function baseUrl(): string {
   return process.env.APP_URL || ''
@@ -104,6 +105,48 @@ export async function queueExitEmail(
     // Never blocks an exit. The plan has already ended; a mail provider having a
     // bad afternoon is not a reason to fail the request that ended it.
     console.error('[notify] exit email could not be queued:', err)
+  }
+}
+
+/**
+ * Confirm an exit where the member is sending everything back.
+ *
+ * Its own email rather than a variant of the exit receipt, because it is the
+ * only one with an instruction in it: the receipt tells someone what happened,
+ * this one tells them what to do and by when, and burying a return address in a
+ * paragraph about balances is how a refund stops happening.
+ */
+export async function queueReturnRequestedEmail(
+  userId: string,
+  sub: MemberSubscription,
+  outcome: { refund: number; deadline: string; reference: string },
+): Promise<void> {
+  if (!sub.customerEmail) return
+  const base = baseUrl()
+
+  try {
+    await queueNotification({
+      userId,
+      email: sub.customerEmail,
+      template: 'exit-return-requested',
+      dedupeKey: `exit:${sub.id}:return`,
+      rendered: exitReturnRequested({
+        refund: outcome.refund,
+        deadline: new Date(outcome.deadline).toLocaleDateString('en-GB', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+        }),
+        returnAddress: returnAddressLines(),
+        reference: outcome.reference,
+        hubUrl: `${base}/myhub`,
+      }),
+    })
+  } catch (err) {
+    // Same rule as every other exit email: the plan has already ended, and a
+    // mail provider having a bad afternoon is not a reason to fail the request
+    // that ended it. The refund is recorded on the subscription either way.
+    console.error('[notify] return-requested email could not be queued:', err)
   }
 }
 

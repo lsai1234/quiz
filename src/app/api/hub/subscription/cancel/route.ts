@@ -8,8 +8,10 @@ import { cancelSubscription, nextFreeExitMonth } from '@/lib/recharge/mock'
 import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getPaymentSource } from '@/lib/payments'
-import { queueExitEmail, queueScheduledExitEmail } from '@/lib/notify/billing'
+import { queueExitEmail, queueScheduledExitEmail, queueReturnRequestedEmail } from '@/lib/notify/billing'
+import { holdOrder } from '@/lib/orders/service'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import type { Order } from '@/lib/orders/types'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +43,34 @@ export const dynamic = 'force-dynamic'
  * must never leave them still subscribed. Holding someone's cancellation hostage
  * to a payment is the one thing the terms explicitly promise we will not do.
  */
+
+/**
+ * Put the member's delivered orders in front of a founder, marked as a return.
+ *
+ * `held` with a note, because the fulfilment queue is where someone already
+ * looks every day and a return that only exists on the subscription document is
+ * a return nobody opens the post for. The note carries the refund and the
+ * reference, so matching a parcel to an account does not need a second lookup.
+ *
+ * Never throws: the plan has already ended and the refund is already recorded on
+ * the subscription. Failing the member's cancellation over a queue annotation
+ * would be the wrong way round.
+ */
+async function flagOrdersAwaitingReturn(
+  orders: Order[],
+  refund: number,
+  reference: string,
+): Promise<void> {
+  const note = `Return requested (14-day cancellation, ${reference}) — refund £${refund.toFixed(2)} once the goods are back.`
+  for (const order of orders) {
+    if (order.status === 'refunded' || order.status === 'cancelled') continue
+    try {
+      await holdOrder(order.id, 'system', note)
+    } catch (err) {
+      console.error(`[exit] could not flag order ${order.id} as awaiting return:`, err)
+    }
+  }
+}
 
 /** Everything the decision needs, fetched once. */
 async function loadContext(userId: string) {
@@ -78,9 +108,10 @@ export async function GET() {
 interface CancelBody {
   /**
    * `now` settles and ends today; `scheduled` ends free on the next zero month;
-   * `resume` clears a scheduled exit for someone who changed their mind.
+   * `return` is the statutory one — end today, send everything back, refunded on
+   * arrival; `resume` clears a scheduled exit for someone who changed their mind.
    */
-  mode?: 'now' | 'scheduled' | 'resume'
+  mode?: 'now' | 'scheduled' | 'resume' | 'return'
   reason?: string
   /** What the screen showed them, so a moved figure can be caught. */
   expectedSettlement?: number
@@ -125,6 +156,77 @@ export async function POST(req: Request) {
     // thinks they have stopped and then sees a payment reads it as a mistake.
     await queueScheduledExitEmail(user.id, sub, Math.max(0, month - sub.monthsActive))
     return NextResponse.json({ ok: true, scheduledExitMonth: month, settlement: 0 })
+  }
+
+  // ── The statutory return ───────────────────────────────────────────────────
+  //
+  // Inside the 14 days the member may send everything back and have their money
+  // returned. Three things make this different from every other exit, and all
+  // three are the reason it is not a flag on the one below:
+  //
+  //  • Nothing is charged. Not "waived" — there is no balance to waive, because
+  //    the goods are coming back.
+  //  • We now OWE them, and the debt is recorded on the plan rather than paid
+  //    on the spot. Refunding before the parcel arrives would make a returns
+  //    policy an honour system, and nobody runs one of those on purpose.
+  //  • Their orders need flagging so whoever opens the parcel knows what it is
+  //    and what it is worth.
+  //
+  // Refused outside the window rather than quietly downgraded to a normal exit:
+  // a member who asked to return something and was silently cancelled instead
+  // would be waiting for a refund that was never coming.
+  if (body.mode === 'return') {
+    if (!quote.coolingOff) {
+      return NextResponse.json(
+        {
+          error: 'Your 14-day cancellation period has passed, so returning it is no longer an option — you can still cancel and keep everything.',
+          coolingOffClosed: true,
+        },
+        { status: 400 },
+      )
+    }
+
+    const refund = quote.coolingOff.returnRefund
+    const reference = `SUB-${(sub.stripeSubscriptionId ?? sub.id).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()}`
+
+    const returned: MemberSubscription = {
+      ...cancelSubscription(sub, body.reason ?? undefined),
+      scheduledExitMonth: null,
+      exit: {
+        at: new Date().toISOString(),
+        reason: body.reason ?? null,
+        settlement: 0,
+        source: quote.source,
+        waiver: 'cooling-off',
+        paid: true,
+        overpayment: quote.overpayment,
+        statement: quote.statement ?? undefined,
+        returnRequested: true,
+        refundDue: refund,
+        returnRefundedAt: null,
+      },
+    }
+
+    const sync = await syncSubscriptionToStripe(sub, returned)
+    if (sync.cancelError) {
+      console.error(`[exit] return cancelled locally but NOT in Stripe for ${user.id}:`, sync.cancelError)
+    }
+    await saveSubscription(user.id, returned)
+    await flagOrdersAwaitingReturn(orders, refund, reference)
+    await queueReturnRequestedEmail(user.id, returned, {
+      refund,
+      deadline: quote.coolingOff.deadline,
+      reference,
+    })
+
+    return NextResponse.json({
+      ok: true,
+      settlement: 0,
+      returnRequested: true,
+      refundDue: refund,
+      reference,
+      returnBy: quote.coolingOff.deadline,
+    })
   }
 
   // ── Settle and go ──────────────────────────────────────────────────────────

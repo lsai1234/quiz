@@ -277,7 +277,20 @@ export interface SubscriptionExit {
    * re-deriving it through whatever the catalogue looks like by then.
    */
   statement?: unknown
+  /**
+   * The member exercised their statutory right to send everything back.
+   *
+   * A different exit from every other one: nothing is settled, the goods are
+   * coming back, and we owe them `refundDue` once it arrives. Recorded rather
+   * than inferred from the dates, because "did they say they were returning it?"
+   * has to still be answerable in six months when the window has long closed.
+   */
+  returnRequested?: boolean
+  /** Refundable once the goods are back (£). Set with `returnRequested`. */
+  refundDue?: number
   // ── Set later, by a founder working the exit queue ────────────────────────
+  /** When the returned goods came back and the refund actually went out. */
+  returnRefundedAt?: string | null
   /** When a founder decided this balance would never be collected. */
   writtenOffAt?: string | null
   /** When the overpayment was actually refunded. */

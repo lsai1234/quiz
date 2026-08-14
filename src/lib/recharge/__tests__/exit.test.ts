@@ -6,7 +6,7 @@
  * Consumer Contracts Regulations — and a settlement that ignores any of them is
  * a charge we would have to give back with an apology.
  */
-import { quoteExit, waiverFor, withinCoolingOff, insidePriceIncreaseNotice, followsInvoluntaryChange } from '@/lib/recharge/exit'
+import { quoteExit, waiverFor, withinCoolingOff, coolingOffDeadline, insidePriceIncreaseNotice, followsInvoluntaryChange } from '@/lib/recharge/exit'
 import type { MemberSubscription, MemberSubscriptionLine, BillingChange } from '@/lib/recharge/types'
 import type { Order } from '@/lib/orders/types'
 
@@ -132,7 +132,62 @@ describe('the statutory cooling-off period', () => {
     })
     expect(quote.settlement).toBe(0)
     expect(quote.waiver?.reason).toBe('cooling-off')
-    expect(quote.waiver?.explanation).toContain('unopened')
+    expect(quote.waiver?.explanation).toContain('yours to keep')
+  })
+
+  describe('the choice it gives them', () => {
+    /**
+     * The regulations give a new member a right the rest of the year does not:
+     * send it back and have their money returned. The quote used to report only
+     * that nothing was owed, so the flow could offer only the keep half and the
+     * return existed as a sentence nobody could act on.
+     */
+    const inWindow = () =>
+      quoteExit({
+        sub: plan(),
+        orders: [order({ createdAt: '2026-05-25T00:00:00.000Z', billedAmount: 20 })],
+        consentCoversSettlement: true,
+        now: NOW,
+      })
+
+    it('prices both halves, so the decision is made on figures', () => {
+      const { coolingOff } = inWindow()
+      expect(coolingOff).not.toBeNull()
+      // Refund = every payment taken. Keep = everything shipped, so "keep £60 of
+      // product for nothing" can be weighed against "get £20 back".
+      expect(coolingOff!.returnRefund).toBe(20)
+      expect(coolingOff!.keepValue).toBe(60)
+    })
+
+    it('says when the right runs out', () => {
+      // 14 days from the first delivery, not from signup.
+      expect(inWindow().coolingOff!.deadline).toBe('2026-06-08T00:00:00.000Z')
+      expect(coolingOffDeadline(plan(), [])).toBe('2026-01-15T00:00:00.000Z')
+    })
+
+    it('is offered even when some other waiver got there first', () => {
+      // Being let off a balance and being entitled to your money back are not
+      // the same thing, and a member should not lose the second because they
+      // also happened to qualify for the first.
+      const quote = quoteExit({
+        sub: plan(),
+        orders: [order({ createdAt: '2026-05-25T00:00:00.000Z', billedAmount: 20 })],
+        consentCoversSettlement: false,
+        now: NOW,
+      })
+      expect(quote.waiver?.reason).toBe('consent-not-given')
+      expect(quote.coolingOff).not.toBeNull()
+    })
+
+    it('is gone once the window closes', () => {
+      const quote = quoteExit({
+        sub: plan(),
+        orders: [order({ createdAt: '2026-03-01T00:00:00.000Z' })],
+        consentCoversSettlement: true,
+        now: NOW,
+      })
+      expect(quote.coolingOff).toBeNull()
+    })
   })
 })
 

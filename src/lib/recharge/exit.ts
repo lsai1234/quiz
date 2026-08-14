@@ -44,6 +44,37 @@ export interface Waiver {
   explanation: string
 }
 
+/**
+ * The choice a member gets inside the statutory 14 days, which is a genuinely
+ * different one from any other exit.
+ *
+ * Outside the window, leaving is settle-up-and-keep: the goods are theirs and
+ * the only question is the balance. Inside it, the Consumer Contracts
+ * Regulations give them a right the rest of the year does not — send it back and
+ * have their money returned. Offering only the keep half, as this flow used to,
+ * quietly withheld the option the law is actually about, and did it at the one
+ * moment a new member is deciding whether they were sold to honestly.
+ *
+ * Both halves are priced up front so the choice is made on figures rather than
+ * on which sentence sounds safer.
+ */
+export interface CoolingOffChoice {
+  /** Last day the right runs to (ISO). */
+  deadline: string
+  /** Refunded when everything comes back — every payment taken so far (£). */
+  returnRefund: number
+  /**
+   * What keeping everything is worth, before the waiver (£).
+   *
+   * Shown, not charged: the cooling-off waiver still zeroes the settlement, so a
+   * member who keeps their box owes nothing. It is here so the choice is
+   * informed — "keep £64 of product, pay nothing" is a different decision from
+   * "keep it, pay nothing" — and so the figure already exists if that policy is
+   * ever tightened.
+   */
+  keepValue: number
+}
+
 export interface ExitQuote {
   /** What to charge (£). Zero whenever `waiver` is set. */
   settlement: number
@@ -66,28 +97,41 @@ export interface ExitQuote {
    * inside the horizon.
    */
   freeExitMonth: number | null
+  /** Set only inside the statutory 14 days. See `CoolingOffChoice`. */
+  coolingOff: CoolingOffChoice | null
 }
 
 /**
- * Whether a plan is inside the statutory cancellation window.
+ * The last moment the statutory cancellation right runs to, or null when there
+ * is no usable start date.
  *
  * Runs from the FIRST ORDER rather than from signup: the Consumer Contracts
  * Regulations start the clock when the goods arrive, and for a subscription that
  * is the first box. Falls back to `startedAt` when no order is available.
  */
+export function coolingOffDeadline(
+  sub: MemberSubscription,
+  orders: Order[],
+  days = 14,
+): string | null {
+  const first = orders
+    .filter((o) => o.channel === 'subscription')
+    .map((o) => o.createdAt)
+    .sort()[0]
+  const from = new Date(first ?? sub.startedAt)
+  if (Number.isNaN(from.getTime())) return null
+  return new Date(from.getTime() + days * DAY_MS).toISOString()
+}
+
+/** Whether a plan is inside the statutory cancellation window. */
 export function withinCoolingOff(
   sub: MemberSubscription,
   orders: Order[],
   now: Date = new Date(),
   days = 14,
 ): boolean {
-  const first = orders
-    .filter((o) => o.channel === 'subscription')
-    .map((o) => o.createdAt)
-    .sort()[0]
-  const from = new Date(first ?? sub.startedAt)
-  if (Number.isNaN(from.getTime())) return false
-  return now.getTime() - from.getTime() <= days * DAY_MS
+  const deadline = coolingOffDeadline(sub, orders, days)
+  return deadline != null && now.getTime() <= new Date(deadline).getTime()
 }
 
 /**
@@ -154,8 +198,14 @@ export function waiverFor(input: {
   if (withinCoolingOff(input.sub, input.orders, now)) {
     return {
       reason: 'cooling-off',
+      // Describes the KEEP branch, because that is the only one that reaches
+      // this sentence: a member who chose to send everything back gets the
+      // return email instead, which has an address and a deadline in it. This
+      // used to end "send back anything unopened for a refund" — a right with
+      // no way to exercise it, printed on the screen of someone who had just
+      // been given no option to.
       explanation:
-        'You are within 14 days of your first delivery, so your statutory right to cancel applies — there is nothing to pay. Send back anything unopened for a refund.',
+        'You are within 14 days of your first delivery, so your statutory right to cancel applies — there is nothing to pay, and everything already sent is yours to keep.',
     }
   }
   if (insidePriceIncreaseNotice(input.sub, now)) {
@@ -213,6 +263,22 @@ export function quoteExit(input: {
     now: input.now,
   })
 
+  // The statutory choice, priced. Offered whenever the window is open — even if
+  // some OTHER waiver got there first in `waiverFor`, because the right to send
+  // it back and be refunded is not the same thing as being let off a balance,
+  // and a member who is owed money should not lose the option to ask for it just
+  // because they also happened to owe none.
+  const deadline = coolingOffDeadline(input.sub, input.orders)
+  const inWindow = withinCoolingOff(input.sub, input.orders, input.now)
+  const coolingOff: CoolingOffChoice | null =
+    inWindow && deadline
+      ? {
+          deadline,
+          returnRefund: statement?.paidTotal ?? paidToDateOf(input.sub),
+          keepValue: statement?.shippedTotal ?? shippedValueOf(input.sub),
+        }
+      : null
+
   return {
     settlement: waiver ? 0 : computed,
     source,
@@ -221,6 +287,7 @@ export function quoteExit(input: {
     forecast,
     overpayment: statement?.overpayment ?? Math.max(0, paidToDateOf(input.sub) - shippedValueOf(input.sub)),
     divergence: statement ? ledgerDivergence(statement, forecast) : null,
+    coolingOff,
     // Only worth offering when there is something to avoid. An exit that is
     // already free — waived, or simply paid off — has no "or wait until…".
     freeExitMonth:

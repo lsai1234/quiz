@@ -293,6 +293,43 @@ export function exitReceipt(ctx: ExitReceiptContext): RenderedEmail {
   }
 }
 
+export interface ExitReturnContext {
+  /** Coming back to their card once the goods are with us (£). */
+  refund: number
+  /** The last day the statutory window runs to, already formatted. */
+  deadline: string
+  /** Where to send it back to. */
+  returnAddress: string[]
+  /** The plan reference to put in the box, so the parcel can be matched. */
+  reference: string
+  hubUrl: string
+}
+
+/**
+ * They cancelled inside the 14 days and chose to send everything back.
+ *
+ * The one exit email that asks the member to DO something, so it has to be
+ * unambiguous about all three of: where the parcel goes, what to put in it, and
+ * what comes back to them when it arrives. A refund promise with no address is
+ * how a statutory right becomes an argument.
+ */
+export function exitReturnRequested(ctx: ExitReturnContext): RenderedEmail {
+  return {
+    subject: 'Your CHRGD plan has ended — sending it back',
+    ...layout('Your plan has ended', {
+      paragraphs: [
+        'Your subscription is cancelled and nothing further will be billed. You cancelled inside your 14-day cancellation period and chose to return what you have.',
+        `Send everything back to: ${ctx.returnAddress.join(', ')}.`,
+        `Please put your plan reference ${ctx.reference} in with it, so we can match the parcel to your account.`,
+        `Once it reaches us we will refund ${formatGBP(ctx.refund)} to the card you paid with. Post it within 14 days of telling us — by ${ctx.deadline} — and keep your proof of postage.`,
+        'Return postage is yours to pay unless the goods arrived damaged or wrong, in which case tell us and we will cover it.',
+      ],
+      cta: { label: 'View your account', url: ctx.hubUrl },
+      footnote: 'Changed your mind about returning it? Keep it — there is nothing to pay either way. Just let us know so we are not waiting on a parcel.',
+    }),
+  }
+}
+
 export interface ExitChargeFailedContext {
   settlement: number
   /** Where they can pay it. Stripe's hosted invoice, or the billing page. */

@@ -59,6 +59,38 @@ Nothing is charged when any of these hold. Checked in this order, strongest firs
 
 ---
 
+## 4a. Inside the 14 days, the member chooses
+
+A waiver only ever answered half the question. Being let off a balance is not the same
+thing as the right the Consumer Contracts Regulations actually grant, which is to send the
+goods back and have the money returned — and for a while the only trace of that right was a
+sentence in the waiver copy with nothing behind it.
+
+`quoteExit` now returns a `coolingOff` block whenever the window is open, priced on both
+sides, and the cancel flow offers two buttons rather than one:
+
+| Choice | What the member gets | What we do |
+| --- | --- | --- |
+| **Keep it** | Everything sent is theirs, nothing to pay | `mode: 'now'` — the cooling-off waiver, as before |
+| **Send it back** | Every payment refunded (`returnRefund`) | `mode: 'return'` — cancel, record `exit.returnRequested` + `refundDue`, email the address and deadline, and hold their orders in the fulfilment queue for whoever opens the parcel |
+
+Three things are deliberate:
+
+- **The refund is recorded, not paid.** Money goes back when the goods do. Refunding on the
+  click would make the returns policy an honour system.
+- **`coolingOff` is offered even when another waiver already applies.** A member who owes
+  nothing for one reason must not lose the right to ask for their money back for another.
+- **`mode: 'return'` is refused once the window closes**, rather than quietly downgraded to
+  an ordinary cancellation — otherwise someone waits for a refund that was never coming.
+
+Return postage sits with the member unless the goods arrived damaged or wrong, which is the
+statutory default and is stated in both the flow and the email. **Still to be decided by a
+person:** whether to deduct for diminished value on opened goods. Nothing does today — a
+full refund is paid on everything returned — and the figure to deduct from is on the exit
+statement if that changes.
+
+---
+
 ## 5. Disclosure — where and when
 
 - **At checkout**, in `CHECKOUT_BILLING_POINTS`, above the consent box and before payment.

@@ -39,6 +39,23 @@ export const LEGAL_ENTITY = {
   contactEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || '[support email]',
 }
 
+/**
+ * Where a member sends goods back inside their 14-day cancellation period.
+ *
+ * Its own setting rather than a reuse of `registeredAddress`: a registered
+ * office is frequently an accountant's, and parcels arriving there is how a
+ * statutory return turns into a lost one. Falls back to the registered address
+ * so the email is never sent with nowhere to post to, and carries the same
+ * obvious-placeholder convention as everything else here.
+ */
+export const RETURNS_ADDRESS =
+  process.env.NEXT_PUBLIC_RETURNS_ADDRESS || LEGAL_ENTITY.registeredAddress
+
+/** The return address as lines, for an email or a label. */
+export function returnAddressLines(address = RETURNS_ADDRESS): string[] {
+  return address.split(',').map((line) => line.trim()).filter(Boolean)
+}
+
 /** Entity details still on their placeholder — surfaced as a warning in the app. */
 export function missingEntityDetails(entity = LEGAL_ENTITY): string[] {
   return Object.entries(entity)
