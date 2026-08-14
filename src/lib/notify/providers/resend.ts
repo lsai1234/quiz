@@ -10,7 +10,7 @@
  * than a silent success that nobody ever sees.
  */
 import { fromAddress } from '../index'
-import type { NotificationProvider, RenderedEmail, SendResult } from '../types'
+import type { NotificationProvider, RenderedEmail, SendEnvelope, SendResult } from '../types'
 
 const DEFAULT_ENDPOINT = 'https://api.resend.com/emails'
 
@@ -26,7 +26,7 @@ function endpoint(): string {
 export function createResendProvider(): NotificationProvider {
   return {
     name: 'resend',
-    async send(to: string, email: RenderedEmail): Promise<SendResult> {
+    async send(to: string, email: RenderedEmail, envelope?: SendEnvelope): Promise<SendResult> {
       const res = await fetch(endpoint(), {
         method: 'POST',
         headers: {
@@ -34,8 +34,15 @@ export function createResendProvider(): NotificationProvider {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          from: fromAddress(),
+          // The stream's own address, decided when the email was queued. The
+          // shared `fromAddress()` is the fallback for notifications written
+          // before streams existed.
+          from: envelope?.from || fromAddress(),
           to: [to],
+          // A `noreply` sender is only acceptable because of this header: a
+          // customer who hits reply reaches the monitored inbox rather than a
+          // bounce.
+          ...(envelope?.replyTo ? { reply_to: envelope.replyTo } : {}),
           subject: email.subject,
           html: email.html,
           text: email.text,

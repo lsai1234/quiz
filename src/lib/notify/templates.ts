@@ -16,11 +16,12 @@
  * `lib/legal`, because a different product in the same box is exactly when
  * someone needs to be told to read the label.
  */
-import { ALLERGEN_CHECK_SENTENCE, LEGAL_ENTITY } from '@/lib/legal/content'
+import { ALLERGEN_CHECK_SENTENCE } from '@/lib/legal/content'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { appBaseUrl } from './index'
+import { defaultMarketing, emailShell, type MarketingAudience } from './brand'
+import type { ReceiptData } from '@/lib/receipt/types'
 import type { RenderedEmail } from './types'
-
-const ACCENT = '#00D4FF'
 
 function formatDate(iso: string): string {
   const d = new Date(iso)
@@ -29,44 +30,69 @@ function formatDate(iso: string): string {
     : d.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-/** Escape anything interpolated into the HTML body — product titles are data. */
-function esc(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+/**
+ * What the shell needs that a template's own context doesn't carry.
+ *
+ * Optional throughout, so every template stays callable with nothing but its
+ * own facts — which is how they are unit-tested, and how a preview is rendered
+ * without a database. The queueing helpers fill it in for real sends.
+ */
+export interface BrandContext {
+  /** Absolute origin for the footer links. Defaults to the configured APP_URL. */
+  baseUrl?: string
+  /**
+   * The recipient's marketing opt-out link.
+   *
+   * **The promotional strip does not render without it.** See `./marketing`:
+   * the opt-out is what makes marketing inside a transactional email lawful, so
+   * it is wired as a precondition rather than as a footer someone remembers.
+   */
+  optOutUrl?: string | null
 }
 
 interface Block {
   paragraphs: string[]
+  /** Sits under the heading, ahead of the paragraphs. */
+  intro?: string
+  /** The printed receipt, for the emails that have one. */
+  receipt?: ReceiptData | null
   /** The call to action. Optional — a notice with nothing to adjust has none. */
   cta?: { label: string; url: string }
+  /** A quieter second link under the button. */
+  secondaryCta?: { label: string; url: string }
   /** Small print under the button. */
   footnote?: string
+  /** The inbox preview line. Falls back to the first paragraph. */
+  preheader?: string
+  /**
+   * Whether the promotional strip belongs on this email, and who it addresses.
+   *
+   * `false` for the emails where a pitch would be crass: a declined card, a
+   * settlement that failed, a member packing up a box to send back. Those
+   * readers are mid-problem, and selling to someone mid-problem is how a
+   * solvable situation becomes a complaint.
+   *
+   * `'member'` for anyone with a running plan, whose pitch is about using it
+   * rather than starting one.
+   */
+  marketing?: false | MarketingAudience
 }
 
 /** One house style for every email, so a new template can't drift visually. */
-function layout(heading: string, block: Block): { text: string; html: string } {
-  const text = [
+function layout(heading: string, block: Block, brand: BrandContext = {}): { text: string; html: string } {
+  const base = (brand.baseUrl ?? appBaseUrl()).replace(/\/+$/, '')
+  return emailShell({
+    preheader: block.preheader ?? block.paragraphs[0] ?? heading,
     heading,
-    '',
-    ...block.paragraphs,
-    ...(block.cta ? ['', `${block.cta.label}: ${block.cta.url}`] : []),
-    ...(block.footnote ? ['', block.footnote] : []),
-    '',
-    `— ${LEGAL_ENTITY.tradingName}`,
-  ].join('\n')
-
-  const html = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:520px;margin:0 auto;padding:24px;color:#18181b;line-height:1.6">
-  <h1 style="font-size:20px;font-weight:800;margin:0 0 16px">${esc(heading)}</h1>
-  ${block.paragraphs.map((p) => `<p style="margin:0 0 12px;font-size:14px">${esc(p)}</p>`).join('\n  ')}
-  ${block.cta ? `<p style="margin:24px 0"><a href="${esc(block.cta.url)}" style="display:inline-block;background:${ACCENT};color:#001018;font-weight:700;font-size:14px;text-decoration:none;padding:12px 20px;border-radius:12px">${esc(block.cta.label)}</a></p>` : ''}
-  ${block.footnote ? `<p style="margin:0 0 12px;font-size:12px;color:#71717a">${esc(block.footnote)}</p>` : ''}
-  <p style="margin:24px 0 0;font-size:12px;color:#71717a">— ${esc(LEGAL_ENTITY.tradingName)}</p>
-</div>`
-
-  return { text, html }
+    intro: block.intro,
+    paragraphs: block.paragraphs,
+    receipt: block.receipt ?? null,
+    cta: block.cta,
+    secondaryCta: block.secondaryCta,
+    footnote: block.footnote,
+    links: { base, optOutUrl: brand.optOutUrl ?? null },
+    marketing: block.marketing === false ? null : defaultMarketing(base, block.marketing || 'prospect'),
+  })
 }
 
 /** "your monthly stays at £X" / "goes from £X to £Y from <date>". */
@@ -76,6 +102,124 @@ function monthlyLine(before: number, after: number, effectiveFrom: string): stri
   }
   const direction = after < before ? 'drops' : 'goes up'
   return `Your monthly ${direction} from ${formatGBP(before)} to ${formatGBP(after)}, starting ${formatDate(effectiveFrom)}.`
+}
+
+// ─── Order confirmation ───────────────────────────────────────────────────────
+
+export interface OrderConfirmationContext {
+  /** The receipt, built from the same data the confirmation screen printed. */
+  receipt: ReceiptData
+  /** For the greeting, when we know it. */
+  firstName?: string | null
+  /** The customer-facing order reference, for the subject line. */
+  reference: string
+  /** When it should land, already formatted, when we can say. */
+  deliveryWindow?: string | null
+  /** Where they can see their orders — the shop's account view or the hub. */
+  accountUrl?: string | null
+  shopUrl: string
+}
+
+/**
+ * The receipt for a one-off order, emailed.
+ *
+ * Its job is to be findable in six weeks' time, which is why the receipt itself
+ * is in the body rather than behind a link: an email that says "view your order"
+ * and nothing else is useless to someone searching their inbox for what they
+ * paid, and useless again once the link needs a login they have forgotten.
+ *
+ * What it does NOT do is promise a delivery date. The supplier dropships on
+ * their own schedule, so the window is a dispatch expectation and is worded as
+ * one — the same restraint `deliveryEstimate` shows on the confirmation screen.
+ */
+export function orderConfirmation(ctx: OrderConfirmationContext, brand: BrandContext = {}): RenderedEmail {
+  const paragraphs = [
+    ctx.deliveryWindow
+      ? `We are getting it ready now. It should be with you ${ctx.deliveryWindow} — we will email you again if anything about that changes.`
+      : 'We are getting it ready now, and we will email you again when it is on its way.',
+    'Your receipt is below. Keep this email — it is the record of what you ordered and what you paid.',
+  ]
+
+  return {
+    subject: `Your getCHRGD order ${ctx.reference}`,
+    ...layout(
+      ctx.firstName ? `Thanks, ${ctx.firstName} — your order is confirmed` : 'Your order is confirmed',
+      {
+        preheader: `Order ${ctx.reference} — your receipt is inside.`,
+        paragraphs,
+        receipt: ctx.receipt,
+        cta: ctx.accountUrl ? { label: 'View your orders', url: ctx.accountUrl } : { label: 'Shop again', url: ctx.shopUrl },
+        footnote:
+          'Something not right with the address? Reply to this email within 12 hours and we will change it before it ships.',
+      },
+      brand,
+    ),
+  }
+}
+
+// ─── Subscription confirmation ────────────────────────────────────────────────
+
+export interface SubscriptionConfirmationContext {
+  receipt: ReceiptData
+  firstName?: string | null
+  /** The plan reference, e.g. `SUB-7F3A91`. */
+  reference: string
+  /** What recurs, in major units. */
+  monthly: number
+  /** When the next payment goes out, already formatted. Null when unknown. */
+  nextPayment?: string | null
+  /** A minimum term, in months. 1 or less means none. */
+  minMonths?: number
+  /** The hub — where they change, pause, skip or cancel any of it. */
+  hubUrl: string
+}
+
+/**
+ * The receipt for a plan that has just started.
+ *
+ * Two things earn their place ahead of everything else, and both are here
+ * because of what a member does NOT know at the moment they commit:
+ *
+ *  1. **The hub, named and linked.** Every other email in this system leans on
+ *     "you can change this yourself in your hub", and this is the email that
+ *     teaches them the hub exists. If it lands nowhere useful, every later
+ *     invitation to self-serve lands nowhere useful too.
+ *  2. **What happens next, on what date, for how much.** A recurring payment
+ *     nobody remembers agreeing to is the single most common cause of a chargeback,
+ *     and the fix is to put the amount and the date in the confirmation rather
+ *     than in the terms.
+ */
+export function subscriptionConfirmation(
+  ctx: SubscriptionConfirmationContext,
+  brand: BrandContext = {},
+): RenderedEmail {
+  const paragraphs = [
+    ctx.nextPayment
+      ? `From here it runs itself: ${formatGBP(ctx.monthly)} a month, next taken on ${ctx.nextPayment}, with your box going out on the same day.`
+      : `From here it runs itself: ${formatGBP(ctx.monthly)} a month, with your box going out on the same day the payment does.`,
+    (ctx.minMonths ?? 1) > 1
+      ? `Your plan has a ${ctx.minMonths}-month minimum term. After that you can cancel any time before a payment, and you can always skip, pause, swap a product or change what is in the box — all of it from your hub, without asking us.`
+      : 'You can cancel any time before a payment — and you can skip a month, pause, swap a product or change what is in the box whenever you like, all from your hub, without asking us.',
+    'Your receipt is below. Keep this email — it is the record of what your plan is and what it costs.',
+  ]
+
+  return {
+    subject: `Your getCHRGD plan is live — ${ctx.reference}`,
+    ...layout(
+      ctx.firstName ? `You are in, ${ctx.firstName}` : 'Your plan is live',
+      {
+        preheader: `${formatGBP(ctx.monthly)} a month. Manage all of it from your hub.`,
+        intro: 'Everything about your plan lives in one place, and you control all of it.',
+        paragraphs,
+        receipt: ctx.receipt,
+        cta: { label: 'Open your hub', url: ctx.hubUrl },
+        marketing: 'member',
+        footnote:
+          'Bookmark your hub — it is where you skip a delivery, swap a product, update your card or cancel, and it is the fastest way to change anything.',
+      },
+      brand,
+    ),
+  }
 }
 
 // ─── Product substituted ──────────────────────────────────────────────────────
@@ -92,7 +236,7 @@ export interface SubstitutedContext {
   changeUrl: string
 }
 
-export function productSubstituted(ctx: SubstitutedContext): RenderedEmail {
+export function productSubstituted(ctx: SubstitutedContext, brand: BrandContext = {}): RenderedEmail {
   const paragraphs = [
     ctx.discontinued
       ? `${ctx.productTitle} has been discontinued by our supplier, so we've swapped it for ${ctx.replacementTitle} — the closest match we could find.`
@@ -104,11 +248,16 @@ export function productSubstituted(ctx: SubstitutedContext): RenderedEmail {
 
   return {
     subject: `We've swapped ${ctx.productTitle} for ${ctx.replacementTitle}`,
-    ...layout(`A change to your plan`, {
-      paragraphs,
-      cta: { label: 'Pick something else instead', url: ctx.changeUrl },
-      footnote: "Happy with the swap? You don't need to do anything.",
-    }),
+    ...layout(
+      `A change to your plan`,
+      {
+        paragraphs,
+        cta: { label: 'Pick something else instead', url: ctx.changeUrl },
+        marketing: 'member',
+        footnote: "Happy with the swap? You don't need to do anything.",
+      },
+      brand,
+    ),
   }
 }
 
@@ -154,7 +303,7 @@ function removalExplanation(ctx: RemovedContext): string {
   }
 }
 
-export function productRemoved(ctx: RemovedContext): RenderedEmail {
+export function productRemoved(ctx: RemovedContext, brand: BrandContext = {}): RenderedEmail {
   const paragraphs = [
     removalExplanation(ctx),
     monthlyLine(ctx.monthlyBefore, ctx.monthlyAfter, ctx.effectiveFrom),
@@ -174,11 +323,16 @@ export function productRemoved(ctx: RemovedContext): RenderedEmail {
 
   return {
     subject: `${ctx.productTitle} has come off your plan`,
-    ...layout('A change to your plan', {
-      paragraphs,
-      cta: { label: 'Browse replacements', url: ctx.addUrl },
-      footnote: 'Your next box is otherwise unchanged.',
-    }),
+    ...layout(
+      'A change to your plan',
+      {
+        paragraphs,
+        cta: { label: 'Browse replacements', url: ctx.addUrl },
+        marketing: 'member',
+        footnote: 'Your next box is otherwise unchanged.',
+      },
+      brand,
+    ),
   }
 }
 
@@ -193,7 +347,7 @@ export interface PriceChangeContext {
   hubUrl: string
 }
 
-export function priceChangeNotice(ctx: PriceChangeContext): RenderedEmail {
+export function priceChangeNotice(ctx: PriceChangeContext, brand: BrandContext = {}): RenderedEmail {
   return {
     subject: `Your monthly is changing to ${formatGBP(ctx.monthlyAfter)}`,
     ...layout('A change to your price', {
@@ -204,7 +358,8 @@ export function priceChangeNotice(ctx: PriceChangeContext): RenderedEmail {
         "If you're happy to carry on, you don't need to do anything.",
       ],
       cta: { label: 'Review your plan', url: ctx.hubUrl },
-    }),
+      marketing: 'member',
+    }, brand),
   }
 }
 
@@ -222,7 +377,7 @@ export interface PaymentFailedContext {
  * that declined. Written to be easy rather than alarming — a card expires, it is
  * nobody's fault, and their plan is still there.
  */
-export function paymentFailed(ctx: PaymentFailedContext): RenderedEmail {
+export function paymentFailed(ctx: PaymentFailedContext, brand: BrandContext = {}): RenderedEmail {
   return {
     subject: "We couldn't take your payment",
     ...layout("We couldn't take this month's payment", {
@@ -233,7 +388,9 @@ export function paymentFailed(ctx: PaymentFailedContext): RenderedEmail {
       ],
       cta: { label: 'Update your card', url: ctx.billingUrl },
       footnote: "If you'd rather stop, you can cancel any time from your account.",
-    }),
+      // Nothing is being sold to someone whose card just declined.
+      marketing: false,
+    }, brand),
   }
 }
 
@@ -262,7 +419,7 @@ export interface ExitReceiptContext {
  * is theirs; saying so plainly is the difference between a receipt and a
  * demand.
  */
-export function exitReceipt(ctx: ExitReceiptContext): RenderedEmail {
+export function exitReceipt(ctx: ExitReceiptContext, brand: BrandContext = {}): RenderedEmail {
   const paragraphs: string[] = [
     `Your plan has ended. Over its life we sent you ${formatGBP(ctx.shippedTotal)} of product and you paid ${formatGBP(ctx.paidTotal)}.`,
   ]
@@ -289,7 +446,7 @@ export function exitReceipt(ctx: ExitReceiptContext): RenderedEmail {
       paragraphs,
       cta: { label: 'Shop one-offs', url: ctx.shopUrl },
       footnote: 'Your account stays open — you can start a new plan whenever you like.',
-    }),
+    }, brand),
   }
 }
 
@@ -313,7 +470,7 @@ export interface ExitReturnContext {
  * what comes back to them when it arrives. A refund promise with no address is
  * how a statutory right becomes an argument.
  */
-export function exitReturnRequested(ctx: ExitReturnContext): RenderedEmail {
+export function exitReturnRequested(ctx: ExitReturnContext, brand: BrandContext = {}): RenderedEmail {
   return {
     subject: 'Your CHRGD plan has ended — sending it back',
     ...layout('Your plan has ended', {
@@ -326,7 +483,9 @@ export function exitReturnRequested(ctx: ExitReturnContext): RenderedEmail {
       ],
       cta: { label: 'View your account', url: ctx.hubUrl },
       footnote: 'Changed your mind about returning it? Keep it — there is nothing to pay either way. Just let us know so we are not waiting on a parcel.',
-    }),
+      // They are packing a box to send back. Selling into that is tone-deaf.
+      marketing: false,
+    }, brand),
   }
 }
 
@@ -343,7 +502,7 @@ export interface ExitChargeFailedContext {
  * cancellation went through — because that is the member's actual worry on
  * seeing an email about a failed payment after leaving.
  */
-export function exitChargeFailed(ctx: ExitChargeFailedContext): RenderedEmail {
+export function exitChargeFailed(ctx: ExitChargeFailedContext, brand: BrandContext = {}): RenderedEmail {
   return {
     subject: 'Your plan has ended — one payment did not go through',
     ...layout('Your plan has ended', {
@@ -354,7 +513,9 @@ export function exitChargeFailed(ctx: ExitChargeFailedContext): RenderedEmail {
       ],
       cta: { label: 'Pay the balance', url: ctx.invoiceUrl },
       footnote: 'If the card on file has expired, paying through the link above will sort it.',
-    }),
+      // An unpaid balance is not the moment to advertise.
+      marketing: false,
+    }, brand),
   }
 }
 
@@ -373,7 +534,7 @@ export interface ExitScheduledContext {
  * stopped and then sees a charge will treat it as a mistake, however clearly the
  * screen explained it at the time.
  */
-export function exitScheduled(ctx: ExitScheduledContext): RenderedEmail {
+export function exitScheduled(ctx: ExitScheduledContext, brand: BrandContext = {}): RenderedEmail {
   const when = ctx.monthsAway <= 1 ? 'after your next payment' : `in ${ctx.monthsAway} months`
   return {
     subject: 'Your plan will end — nothing to pay',
@@ -384,7 +545,8 @@ export function exitScheduled(ctx: ExitScheduledContext): RenderedEmail {
         'Change your mind any time before then and your plan simply carries on.',
       ],
       cta: { label: 'View your plan', url: ctx.hubUrl },
-    }),
+      marketing: 'member',
+    }, brand),
   }
 }
 
@@ -396,7 +558,7 @@ export interface TermsUpdatedContext {
   termsUrl: string
 }
 
-export function termsUpdated(ctx: TermsUpdatedContext): RenderedEmail {
+export function termsUpdated(ctx: TermsUpdatedContext, brand: BrandContext = {}): RenderedEmail {
   return {
     subject: "We've updated our subscription terms",
     ...layout("We've updated our terms", {
@@ -405,6 +567,7 @@ export function termsUpdated(ctx: TermsUpdatedContext): RenderedEmail {
         `The new terms apply from ${formatDate(ctx.effectiveFrom)}. Your plan and your price are unchanged by this.`,
       ],
       cta: { label: 'Read the new terms', url: ctx.termsUrl },
-    }),
+      marketing: 'member',
+    }, brand),
   }
 }

@@ -105,8 +105,33 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
   await saveOrder(order)
   // An order raised already paid (mock checkout, subscription deliveries) earns
   // its commission here; one that starts pending earns it in `markOrderPaid`.
-  if (status === 'paid') await accrueCommission(order)
+  if (status === 'paid') {
+    await accrueCommission(order)
+    await confirmByEmail(order)
+  }
   return order
+}
+
+/**
+ * Tell the customer their order went through.
+ *
+ * Sits next to the commission accrual and follows the same rule for the same
+ * reason: **one funnel for every path.** Every route to a paid order — Stripe,
+ * mock, the shop, the quiz — passes through `createOrderFromCheckout` or
+ * `markOrderPaid`, so putting the email here means no future checkout can
+ * quietly ship without one. Deduped on the order id inside the outbox, so the
+ * two entry points and a redelivered webhook produce a single receipt.
+ *
+ * NEVER throws and never blocks the order, exactly like the accrual: money has
+ * moved, and an email is not a reason to fail a request that took it.
+ */
+async function confirmByEmail(order: Order): Promise<void> {
+  try {
+    const { queueOrderConfirmation } = await import('@/lib/notify/commerce')
+    await queueOrderConfirmation(order)
+  } catch (err) {
+    console.error('[orders] order confirmation email could not be queued:', err)
+  }
 }
 
 /**
@@ -298,7 +323,14 @@ export async function markOrderPaid(
   })
   // Only on the transition. The accrual is idempotent anyway, but a redelivered
   // webhook should not be doing lookups it does not need.
-  if (becamePaid && order) await accrueCommission(order)
+  if (becamePaid && order) {
+    await accrueCommission(order)
+    // Queued here rather than in the webhook so that every route to a paid
+    // order sends one — see `confirmByEmail`. The email address and the
+    // delivery address only exist on the order from this moment, which is also
+    // why it cannot be sent when the order was raised.
+    await confirmByEmail(order)
+  }
   return order
 }
 

@@ -30,7 +30,10 @@ import type { ReceiptData, ReceiptItem, ReceiptRow } from './types'
 const MERCHANT = {
   name: 'getCHRGD',
   strapline: 'Performance supplement stacks',
-  site: 'getchrgd.com',
+  // The live domain. Printed on every receipt and emailed to every customer, so
+  // it has to be the address that actually resolves — `.com` was neither ours
+  // nor reachable.
+  site: 'getchrgd.co.uk',
 } as const
 
 const FOOTER = 'Thank you — stay charged'

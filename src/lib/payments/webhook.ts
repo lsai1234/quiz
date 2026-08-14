@@ -103,6 +103,19 @@ export async function handleStripeEvent(event: Stripe.Event): Promise<WebhookOut
           const card = await defaultCardFor(stripeSubscriptionId)
           if (card) sub.paymentMethod = card
           await saveSubscription(userId, sub)
+
+          // Confirm the plan now that it is linked, active and has an address —
+          // this handler is the first moment all three are true. Deduped on the
+          // Stripe subscription id, so a redelivery sends nothing.
+          const { queueSubscriptionConfirmation } = await import('@/lib/notify/commerce')
+          await queueSubscriptionConfirmation(userId, sub, {
+            // Stripe's own figure for what came off the card today, coupon and
+            // postage included — not the plan's monthly, which is a different
+            // number in month one.
+            firstPayment: session.amount_total ?? null,
+            email: session.customer_details?.email ?? null,
+            currency: session.currency ?? undefined,
+          })
         }
         return { handled: true, type: event.type, userId }
       }

@@ -296,5 +296,22 @@ export async function finalizeCheckout(
   } catch (err) {
     console.error('[finalizeCheckout] mock subscription order creation failed:', err)
   }
+
+  // The confirmation email, which in live mode is sent from the
+  // `checkout.session.completed` webhook. Mock mode has no webhook, so without
+  // this the one journey you can actually demo end to end would be the one that
+  // never emails anybody.
+  try {
+    const { queueSubscriptionConfirmation } = await import('@/lib/notify/commerce')
+    await queueSubscriptionConfirmation(userId, subscription, {
+      // No money moved, but this is what a real first invoice would have taken —
+      // and it is what the receipt on screen prints, so the email must agree.
+      firstPayment: Math.round((subscription.firstMonth ?? subscription.flatMonthly) * 100),
+      email,
+    })
+  } catch (err) {
+    console.error('[finalizeCheckout] subscription confirmation email failed:', err)
+  }
+
   return { checkoutUrl: '#mock-subscription', mock: true }
 }

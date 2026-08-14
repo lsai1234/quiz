@@ -60,6 +60,49 @@ describe('subscription webhook flow', () => {
     expect(order?.lines.length).toBeGreaterThan(0)
   })
 
+  it('confirms the plan by email as soon as it is linked and active', async () => {
+    // This handler is the first moment the plan has a Stripe id, an `active`
+    // status and an address all at once — which is why the confirmation is sent
+    // from here rather than from wherever the checkout was started.
+    const user = await makeUserWithSub('confirm1@example.com')
+    await handleStripeEvent(subCompletedEvent(user.id, 'sub_confirm_1'))
+
+    const queued = (await listNotifications({ userId: user.id })).filter(
+      (n) => n.template === 'subscription-confirmation',
+    )
+    expect(queued).toHaveLength(1)
+    // The hub link is the whole point of this email: every later notification
+    // leans on "you can change this yourself", and this is where they learn where.
+    expect(queued[0].rendered.text).toContain('/myhub')
+    expect(queued[0].rendered.text).toContain('SUBSCRIPTION RECEIPT')
+  })
+
+  it('cannot confirm the same plan twice when Stripe redelivers the event', async () => {
+    const user = await makeUserWithSub('confirm2@example.com')
+    await handleStripeEvent(subCompletedEvent(user.id, 'sub_confirm_2'))
+    await handleStripeEvent(subCompletedEvent(user.id, 'sub_confirm_2'))
+
+    const queued = (await listNotifications({ userId: user.id })).filter(
+      (n) => n.template === 'subscription-confirmation',
+    )
+    expect(queued).toHaveLength(1)
+  })
+
+  it('does not also send an order confirmation for the signup box', async () => {
+    // The signup box raises a subscription-channel order, and a "your order is
+    // confirmed" alongside the plan confirmation would be two receipts for one
+    // purchase. Every renewal would be another.
+    const user = await makeUserWithSub('confirm3@example.com')
+    const subId = 'sub_confirm_3'
+    await handleStripeEvent(subCompletedEvent(user.id, subId))
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_confirm_3', 'subscription_create'))
+    await handleStripeEvent(invoicePaidEvent(subId, 'in_confirm_3b'))
+
+    const queued = await listNotifications({ userId: user.id })
+    expect(queued.filter((n) => n.template === 'order-confirmation')).toHaveLength(0)
+    expect(queued.filter((n) => n.template === 'subscription-confirmation')).toHaveLength(1)
+  })
+
   it('raises each renewal against the NEXT cycle, not a repeat of the signup box', async () => {
     /**
      * The clock is advanced further down the handler, so `sub.monthsActive` is

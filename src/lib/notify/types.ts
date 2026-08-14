@@ -11,9 +11,20 @@
  * happened and invites them to adjust it. That invitation is only real if the
  * link lands somewhere useful, which is why every context carries a deep link
  * into the hub flow that can act on it rather than the hub's front door.
+ *
+ * The confirmation emails added alongside them follow the same rule from the
+ * other end: they confirm a purchase that has already been paid for, and their
+ * only ask is "here is where you manage it".
  */
+import type { MailStream } from './streams'
+
+export type { MailStream }
 
 export type TemplateId =
+  /** A one-off order is paid: here is your receipt. */
+  | 'order-confirmation'
+  /** A plan has started: here is your receipt, and here is your hub. */
+  | 'subscription-confirmation'
   /** We swapped a product for the closest equivalent. */
   | 'product-substituted'
   /** We took a product off the plan and lowered the monthly. */
@@ -47,6 +58,20 @@ export interface Notification {
   userId: string | null
   email: string
   template: TemplateId
+  /**
+   * Which mail stream this left on — orders, subscriptions or billing. Stored
+   * rather than re-derived from the template so the log keeps telling the truth
+   * about an email sent last March if the mapping changes tomorrow.
+   */
+  stream?: MailStream
+  /**
+   * The From header used, resolved at queue time and stored for the same reason.
+   * "Which address did this actually go out from?" is the first question asked
+   * when one stream's deliverability goes wrong.
+   */
+  from?: string
+  /** Where a reply goes — the monitored inbox behind the noreply sender. */
+  replyTo?: string | null
   /**
    * `<changeEventId>:<template>`. UNIQUE in the database, which is what makes a
    * re-run of the daily job unable to email anyone twice about one change.
@@ -88,7 +113,13 @@ export interface QueueInput {
   dedupeKey?: string
 }
 
+/** Delivery headers, resolved from the notification's stream. */
+export interface SendEnvelope {
+  from?: string
+  replyTo?: string | null
+}
+
 export interface NotificationProvider {
   readonly name: 'mock' | 'resend'
-  send(to: string, email: RenderedEmail): Promise<SendResult>
+  send(to: string, email: RenderedEmail, envelope?: SendEnvelope): Promise<SendResult>
 }

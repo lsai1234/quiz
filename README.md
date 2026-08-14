@@ -106,6 +106,20 @@ credentials are set — add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and
 "Continue with Google" shows up. See `docs/BACKEND.md` (includes the Vercel
 deploy steps).
 
+## Customer emails
+
+Order and subscription confirmations carry the same printed receipt the website
+shows, and every change to someone's plan is written to them too. Everything is
+queued in the database and listed in Founders Hub → Emails, which is both the
+send queue and a searchable log of every email that has ever gone out.
+
+Out of the box nothing sends by itself: emails wait for you to copy them into
+your own inbox and tick them off. Adding a Resend key gives each one a Send
+button; `NOTIFY_SOURCE=auto` sends them unattended. Setting `NOTIFY_DOMAIN` puts
+each kind on its own address — `orderconfirmation.noreply@`,
+`subscriptions.noreply@`, `billing.noreply@` — with replies going to the real
+contact inbox. The runbook, including the DNS records, is `docs/EMAILS.md`.
+
 ## Stack
 
 Next.js 16 · App Router · TypeScript · Tailwind CSS v4 · SQLite / Postgres · PowerBody dropship API · Stripe · OpenAI API · Google Sheets API

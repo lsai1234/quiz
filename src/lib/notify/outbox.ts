@@ -17,7 +17,8 @@
 import { randomUUID } from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
 import { canSendFromHub, getNotifier, isAutoSendEnabled } from './index'
-import type { Notification, NotificationStatus, QueueInput, TemplateId } from './types'
+import { fromAddressFor, replyToAddress, streamFor } from './streams'
+import type { Notification, NotificationStatus, QueueInput, SendEnvelope, TemplateId } from './types'
 
 interface Row {
   data: string
@@ -38,6 +39,21 @@ function parseAll(rows: Row[]): Notification[] {
 
 export function dedupeKeyFor(changeEventId: string, template: TemplateId): string {
   return `${changeEventId}:${template}`
+}
+
+/**
+ * The delivery headers for a queued email.
+ *
+ * Prefers what was stored when it was queued and falls back to the template's
+ * stream, so a notification written before streams existed still leaves from a
+ * sensible address rather than from nothing.
+ */
+function envelopeFor(notification: Notification): SendEnvelope {
+  const stream = notification.stream ?? streamFor(notification.template)
+  return {
+    from: notification.from ?? fromAddressFor(stream),
+    replyTo: notification.replyTo ?? replyToAddress(),
+  }
 }
 
 async function write(notification: Notification): Promise<void> {
@@ -79,11 +95,18 @@ export async function queueNotification(input: QueueInput): Promise<Notification
     (input.changeEventId ? dedupeKeyFor(input.changeEventId, input.template) : `${input.template}:${randomUUID()}`)
 
   const at = now()
+  // Resolved now, not at send time: which address an email went out from is part
+  // of the record of what happened, and re-deriving it later would rewrite the
+  // history of every email already sent the moment the configuration changes.
+  const stream = streamFor(input.template)
   const notification: Notification = {
     id: `ntf_${randomUUID()}`,
     userId: input.userId,
     email: input.email,
     template: input.template,
+    stream,
+    from: fromAddressFor(stream),
+    replyTo: replyToAddress(),
     dedupeKey,
     status: 'queued',
     attempts: 0,
@@ -117,9 +140,17 @@ export async function getNotification(id: string): Promise<Notification | null> 
   return parse(await db.get<Row>('SELECT data FROM notifications WHERE id = ?', [id]))
 }
 
-export async function listNotifications(
-  filter: { status?: NotificationStatus; userId?: string; limit?: number } = {},
-): Promise<Notification[]> {
+export interface NotificationFilter {
+  status?: NotificationStatus
+  userId?: string
+  template?: TemplateId
+  /** Matches the recipient address, case-insensitively. */
+  email?: string
+  limit?: number
+  offset?: number
+}
+
+export async function listNotifications(filter: NotificationFilter = {}): Promise<Notification[]> {
   const db = await getEngine()
   const clauses: string[] = []
   const params: unknown[] = []
@@ -131,12 +162,51 @@ export async function listNotifications(
     clauses.push('user_id = ?')
     params.push(filter.userId)
   }
+  if (filter.template) {
+    clauses.push('template = ?')
+    params.push(filter.template)
+  }
+  if (filter.email) {
+    // `LIKE` rather than equality so "@gmail.com" or a partial address finds the
+    // rows someone is actually looking for. Both engines fold case on LIKE for
+    // ASCII, which is all an email local part can be here.
+    clauses.push('email LIKE ?')
+    params.push(`%${filter.email}%`)
+  }
   const where = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : ''
+  const limit = Math.min(500, Math.max(1, filter.limit ?? 100))
+  const offset = Math.max(0, filter.offset ?? 0)
   const rows = await db.all<Row>(
-    `SELECT data FROM notifications${where} ORDER BY created_at DESC LIMIT ${Math.max(1, filter.limit ?? 100)}`,
+    `SELECT data FROM notifications${where} ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`,
     params,
   )
   return parseAll(rows)
+}
+
+/** How many emails match a filter — the log's "showing 50 of 812". */
+export async function countNotifications(filter: NotificationFilter = {}): Promise<number> {
+  const db = await getEngine()
+  const clauses: string[] = []
+  const params: unknown[] = []
+  if (filter.status) {
+    clauses.push('status = ?')
+    params.push(filter.status)
+  }
+  if (filter.userId) {
+    clauses.push('user_id = ?')
+    params.push(filter.userId)
+  }
+  if (filter.template) {
+    clauses.push('template = ?')
+    params.push(filter.template)
+  }
+  if (filter.email) {
+    clauses.push('email LIKE ?')
+    params.push(`%${filter.email}%`)
+  }
+  const where = clauses.length > 0 ? ` WHERE ${clauses.join(' AND ')}` : ''
+  const row = await db.get<{ n: number | string }>(`SELECT COUNT(*) AS n FROM notifications${where}`, params)
+  return Number(row?.n ?? 0)
 }
 
 export interface FlushResult {
@@ -172,7 +242,7 @@ export async function flushOutbox(
   for (const notification of queued) {
     const attempt = { ...notification, attempts: notification.attempts + 1, updatedAt: now() }
     try {
-      const { providerId } = await notifier.send(notification.email, notification.rendered)
+      const { providerId } = await notifier.send(notification.email, notification.rendered, envelopeFor(notification))
       const sent: Notification = { ...attempt, status: 'sent', providerId: providerId ?? null, error: null, sentAt: now() }
       await write(sent)
       result.sent.push(sent)
@@ -227,7 +297,7 @@ export async function sendNotificationNow(id: string): Promise<Notification | nu
   const attempt = { ...notification, attempts: notification.attempts + 1, updatedAt: now() }
   try {
     const notifier = await getNotifier()
-    const { providerId } = await notifier.send(notification.email, notification.rendered)
+    const { providerId } = await notifier.send(notification.email, notification.rendered, envelopeFor(notification))
     const sent: Notification = {
       ...attempt,
       status: 'sent',
@@ -276,6 +346,30 @@ export async function markSentManually(id: string): Promise<Notification | null>
   }
   await write(sent)
   return sent
+}
+
+/**
+ * Send a copy of a queued email somewhere else, changing nothing.
+ *
+ * The point of it is the sending address: a `noreply` sender on a new domain
+ * either lands in the inbox or it does not, and finding that out by sending a
+ * real receipt to a real customer is the wrong way round. This delivers the
+ * exact bytes a member would get, to whoever asks for it, and deliberately does
+ * NOT mark the notification sent — the customer still has not been told.
+ */
+export async function sendTestCopy(id: string, to: string): Promise<{ ok: boolean; error?: string }> {
+  const notification = await getNotification(id)
+  if (!notification) return { ok: false, error: 'Notification not found' }
+  if (!canSendFromHub()) {
+    return { ok: false, error: 'No email provider is configured, so there is nothing to test yet.' }
+  }
+  try {
+    const notifier = await getNotifier()
+    await notifier.send(to, notification.rendered, envelopeFor(notification))
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
 /** Put a failed notification back in the queue (the hub's resend button). */

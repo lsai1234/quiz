@@ -38,6 +38,53 @@ describe('stripe webhook handler', () => {
     expect(paid?.shippingAddress?.line1).toBe('1 High St')
   })
 
+  it('sends the receipt to the address Stripe collected, not before', async () => {
+    /**
+     * The order is raised BEFORE the redirect, when we have neither an email
+     * address nor a delivery address — Stripe collects both. So the confirmation
+     * can only be queued on the transition to paid, and it has to carry what the
+     * session brought back with it.
+     */
+    const { listNotifications } = await import('@/lib/notify/outbox')
+    const order = await createOrderFromCheckout({
+      channel: 'shop',
+      lines: [{ sku: 'X', productId: 'x', title: 'Creatine', quantity: 1, unitPrice: 10 }],
+      status: 'pending_payment',
+    })
+    expect((await listNotifications({ limit: 500 })).filter((n) => n.email === 'receipt@example.com')).toHaveLength(0)
+
+    await handleStripeEvent(
+      completedEvent(order.id, {
+        customer_details: { email: 'receipt@example.com' },
+        shipping_details: { name: 'Sam Guest', address: { line1: '1 High St', city: 'London', postal_code: 'E1 6AN', country: 'GB' } },
+      } as unknown as Partial<Stripe.Checkout.Session>),
+    )
+
+    const queued = (await listNotifications({ limit: 500 })).filter((n) => n.email === 'receipt@example.com')
+    expect(queued).toHaveLength(1)
+    expect(queued[0].template).toBe('order-confirmation')
+    expect(queued[0].rendered.text).toContain('Creatine')
+    // The address is on the receipt because that is where somebody checks it.
+    expect(queued[0].rendered.text).toContain('E1 6AN')
+  })
+
+  it('does not send a second receipt when Stripe redelivers the event', async () => {
+    const { listNotifications } = await import('@/lib/notify/outbox')
+    const order = await createOrderFromCheckout({
+      channel: 'shop',
+      lines: [{ sku: 'X', productId: 'x', title: 'X', quantity: 1, unitPrice: 10 }],
+      status: 'pending_payment',
+    })
+    const event = completedEvent(order.id, {
+      customer_details: { email: 'once@example.com' },
+    } as unknown as Partial<Stripe.Checkout.Session>)
+
+    await handleStripeEvent(event)
+    await handleStripeEvent(event)
+
+    expect((await listNotifications({ limit: 500 })).filter((n) => n.email === 'once@example.com')).toHaveLength(1)
+  })
+
   it('is idempotent on redelivery', async () => {
     const order = await createOrderFromCheckout({ channel: 'shop', lines: [{ sku: 'X', productId: 'x', title: 'X', quantity: 1, unitPrice: 10 }], status: 'pending_payment' })
     await handleStripeEvent(completedEvent(order.id))

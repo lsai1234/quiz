@@ -97,7 +97,14 @@ export async function getNotifier(): Promise<NotificationProvider> {
   return createMockProvider()
 }
 
-/** The address members see replies going to. */
+/**
+ * The fallback sending address.
+ *
+ * Each email now leaves from its own stream's address — see `./streams` — which
+ * is resolved when it is queued and stored on the row. This remains for the two
+ * cases that have no stream: a notification written before streams existed, and
+ * a deployment that has only ever set `NOTIFY_FROM`.
+ */
 export function fromAddress(): string {
   return process.env.NOTIFY_FROM || 'CHRGD <hello@chrgd.dev>'
 }
@@ -108,3 +115,4 @@ export function appBaseUrl(): string {
 }
 
 export * from './types'
+export * from './streams'
