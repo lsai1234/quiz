@@ -28,7 +28,7 @@
  *
  * Server-only.
  */
-import type { NotificationProvider } from './types'
+import type { NotificationProvider, TemplateId } from './types'
 
 /** Which provider actually delivers — `manual` meaning "a person does". */
 export type NotificationSource = 'manual' | 'mock' | 'resend'
@@ -72,19 +72,71 @@ export function canSendFromHub(): boolean {
   return getNotificationSource() !== 'manual'
 }
 
+// ─── What sends by itself, and what waits for a person ───────────────────────
+
 /**
- * True when queued email sends without anyone pressing anything.
+ * How much leaves without anyone pressing anything.
  *
- * Deliberately narrower than "a provider exists": configuring Resend gives you a
- * Send button, not a hands-off system. You opt into unattended sending
- * separately with `NOTIFY_SOURCE=auto`, because "I can send with one click" and
- * "email leaves without me seeing it" are different levels of trust and should
- * be different decisions.
+ *   `none`          — everything waits in the hub. The default with no provider,
+ *                     because there is nothing to send with.
+ *   `confirmations` — receipts send themselves; everything else waits. **The
+ *                     default once a provider is configured.**
+ *   `all`           — nothing waits.
+ *
+ * The split is not a compromise between the other two, it is the right answer,
+ * and the reason is that the two kinds of email have opposite failure modes:
+ *
+ *  • A **receipt** is expected within seconds of paying. Its content was decided
+ *    entirely by what the customer just did, there is no judgement in it, and a
+ *    human in the loop can only make it late. A confirmation that arrives the
+ *    next morning — because nobody was at a laptop on Sunday — reads as a shop
+ *    that has lost the order, and generates the support email it was meant to
+ *    prevent.
+ *  • Everything else says something we **decided**: a product swapped, a price
+ *    raised, a plan settled. Those have judgement in them, they are occasionally
+ *    wrong, and they are worth a person's eyes before several hundred people
+ *    read them. Nobody is waiting on them by the second.
  */
+export type AutoSendPolicy = 'none' | 'confirmations' | 'all'
+
+/**
+ * The templates that send themselves under the `confirmations` policy.
+ *
+ * Deliberately a short, explicit list rather than a rule about streams or
+ * naming. Adding an email to it means deciding that nobody needs to read it
+ * before a customer does, and that decision should cost a line in this file.
+ */
+const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation']
+
+export function getAutoSendPolicy(): AutoSendPolicy {
+  const raw = (process.env.NOTIFY_AUTO_SEND ?? '').trim().toLowerCase()
+
+  // An explicit setting always wins — including over `NOTIFY_SOURCE=auto`, so
+  // "send everything, except actually send nothing while I look at something"
+  // is one variable rather than a re-plumbing.
+  if (raw === 'none' || raw === 'off') return 'none'
+  if (raw === 'all') return canSendFromHub() ? 'all' : 'none'
+  if (raw === 'confirmations') return canSendFromHub() ? 'confirmations' : 'none'
+
+  // `NOTIFY_SOURCE=auto` predates this setting and meant "all". Still does.
+  if (getNotificationMode() === 'auto' && hasResendCredentials()) return 'all'
+  if (getNotificationSource() === 'mock') return 'all'
+
+  // A provider, but no explicit instruction: receipts go, decisions wait.
+  return canSendFromHub() ? 'confirmations' : 'none'
+}
+
+/** Whether this particular email goes without anyone pressing anything. */
+export function sendsAutomatically(template: TemplateId): boolean {
+  const policy = getAutoSendPolicy()
+  if (policy === 'none') return false
+  if (policy === 'all') return true
+  return SELF_SENDING.includes(template)
+}
+
+/** True when anything at all sends unattended. */
 export function isAutoSendEnabled(): boolean {
-  const mode = getNotificationMode()
-  if (mode === 'mock') return true
-  return mode === 'auto' && hasResendCredentials()
+  return getAutoSendPolicy() !== 'none'
 }
 
 /** Throws in manual mode — nothing should be asking for a provider there. */

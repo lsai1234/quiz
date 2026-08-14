@@ -281,16 +281,54 @@ describe('the Send button', () => {
     expect((global.fetch as jest.Mock).mock.calls).toHaveLength(1)
   })
 
-  it('is available with a provider, without switching on unattended sending', async () => {
-    // Configuring Resend gives you a button, not a hands-off system — those are
-    // different levels of trust and stay different decisions.
+  it('sends receipts by itself, and still asks about anything we decided', async () => {
+    /**
+     * Configuring a provider does not hand the whole outbox over. It splits it:
+     *
+     *  • A receipt has no judgement in it and is expected within seconds of
+     *    paying, so a human in the loop can only make it late.
+     *  • A swapped product or a price rise is something we decided, is
+     *    occasionally wrong, and is worth reading before several hundred people
+     *    do. Nobody is waiting on it by the second.
+     */
     withResend()
-    const { canSendFromHub, isAutoSendEnabled } = await import('@/lib/notify')
+    const { canSendFromHub, getAutoSendPolicy, sendsAutomatically } = await import('@/lib/notify')
     expect(canSendFromHub()).toBe(true)
-    expect(isAutoSendEnabled()).toBe(false)
+    expect(getAutoSendPolicy()).toBe('confirmations')
+
+    expect(sendsAutomatically('order-confirmation')).toBe(true)
+    expect(sendsAutomatically('subscription-confirmation')).toBe(true)
+    expect(sendsAutomatically('price-change-notice')).toBe(false)
+    expect(sendsAutomatically('product-substituted')).toBe(false)
+    expect(sendsAutomatically('exit-receipt')).toBe(false)
+  })
+
+  it('hands the whole outbox over only when asked to', async () => {
+    withResend()
+    const { getAutoSendPolicy, sendsAutomatically } = await import('@/lib/notify')
 
     process.env.NOTIFY_SOURCE = 'auto'
-    expect(isAutoSendEnabled()).toBe(true)
+    expect(getAutoSendPolicy()).toBe('all')
+    expect(sendsAutomatically('price-change-notice')).toBe(true)
+
+    // The newer setting says the same thing without changing which provider mode
+    // you are in, and an explicit `none` overrides even `auto` — which is what
+    // you want at 2am when something is going out wrong.
+    process.env.NOTIFY_AUTO_SEND = 'none'
+    expect(getAutoSendPolicy()).toBe('none')
+    expect(sendsAutomatically('order-confirmation')).toBe(false)
+    delete process.env.NOTIFY_AUTO_SEND
+  })
+
+  it('sends nothing automatically when there is no provider to send with', async () => {
+    // Not a policy decision — there is simply nothing to send with, and marking
+    // a receipt sent that nobody sent would be a lie in the log.
+    delete process.env.NOTIFY_SOURCE
+    process.env.NOTIFY_AUTO_SEND = 'all'
+    const { getAutoSendPolicy, sendsAutomatically } = await import('@/lib/notify')
+    expect(getAutoSendPolicy()).toBe('none')
+    expect(sendsAutomatically('order-confirmation')).toBe(false)
+    delete process.env.NOTIFY_AUTO_SEND
   })
 
   it('does not flush by itself while sending is click-to-send', async () => {

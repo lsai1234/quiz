@@ -16,7 +16,7 @@
  */
 import { randomUUID } from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
-import { canSendFromHub, getNotifier, isAutoSendEnabled } from './index'
+import { canSendFromHub, getNotifier, isAutoSendEnabled, sendsAutomatically } from './index'
 import { fromAddressFor, replyToAddress, streamFor } from './streams'
 import type { Notification, NotificationStatus, QueueInput, SendEnvelope, TemplateId } from './types'
 
@@ -209,31 +209,85 @@ export async function countNotifications(filter: NotificationFilter = {}): Promi
   return Number(row?.n ?? 0)
 }
 
+/**
+ * Deliver this one now, if it is the kind that does not wait for a person.
+ *
+ * Called immediately after queueing, by the callers that raise receipts. The
+ * alternative — leaving it for the daily job — would mean a confirmation
+ * arriving up to a day after the payment, which is the one thing a confirmation
+ * cannot do.
+ *
+ * NEVER throws, and never leaves the caller worse off than not calling it. A
+ * failure is recorded on the row exactly as it would be for a hand-sent email:
+ * the notification stays visible in the hub with its reason, and the daily job
+ * retries it. The webhook that took the money must not fail over a mail server.
+ */
+export async function deliverIfAutomatic(notification: Notification): Promise<Notification> {
+  if (notification.status === 'sent') return notification
+  if (!sendsAutomatically(notification.template)) return notification
+  // No provider: it stays queued for a human, which is the whole manual-mode
+  // workflow and not a failure of anything.
+  if (!canSendFromHub()) return notification
+
+  try {
+    return (await sendNotificationNow(notification.id)) ?? notification
+  } catch (err) {
+    console.error('[notify] automatic send failed:', err)
+    return notification
+  }
+}
+
+/**
+ * How many times an email will be retried unattended before it needs a person.
+ *
+ * A card that declines is retried by Stripe for a fortnight because the money
+ * is worth it. An email is not: past a handful of goes, the address is wrong or
+ * the domain is misconfigured, and continuing is just noise in the log covering
+ * up a thing somebody needs to look at.
+ */
+const MAX_AUTOMATIC_ATTEMPTS = 5
+
 export interface FlushResult {
   sent: Notification[]
   failed: Notification[]
 }
 
 /**
- * Send everything queued, unattended.
+ * Send what is due to send by itself, unattended.
  *
- * **Does nothing unless auto-send is switched on.** With no provider the queue
- * IS the workflow, and with a provider but no `auto` the founder is expected to
- * press Send — flushing behind their back would deliver email they hadn't
- * looked at, or worse, mark unsent messages as delivered.
+ * **Only touches emails the auto-send policy covers.** With no provider the
+ * queue IS the workflow. With a provider, the default policy sends receipts and
+ * leaves everything else for a founder to read first — flushing those behind
+ * their back would deliver email they hadn't looked at, or worse, mark unsent
+ * messages as delivered. See `getAutoSendPolicy`.
  *
- * With a provider configured, a failure marks the row `failed` with the reason
- * and stops there — it does NOT roll anything back. The member's plan has
- * already changed; an email that didn't go out is a delivery problem to retry,
- * not a reason to undo a billing decision. `onSent` lets the caller record that
- * the member has actually been told (the change domain sets `notifiedAt`).
+ * It also picks up **failures worth another go**. The daily job has always been
+ * documented as the thing that retries yesterday's failed email, but it only
+ * ever looked at `queued` rows, so a receipt that failed once stayed failed
+ * until somebody noticed. A transient provider blip must not be how a customer
+ * ends up with no record of what they paid.
+ *
+ * A failure marks the row `failed` with the reason and stops there — it does NOT
+ * roll anything back. The member's plan has already changed; an email that
+ * didn't go out is a delivery problem to retry, not a reason to undo a billing
+ * decision. `onSent` lets the caller record that the member has actually been
+ * told (the change domain sets `notifiedAt`).
  */
 export async function flushOutbox(
   opts: { limit?: number; onSent?: (notification: Notification) => Promise<void> } = {},
 ): Promise<FlushResult> {
   if (!isAutoSendEnabled()) return { sent: [], failed: [] }
 
-  const queued = await listNotifications({ status: 'queued', limit: opts.limit ?? 100 })
+  const limit = opts.limit ?? 100
+  const queued = [
+    ...(await listNotifications({ status: 'queued', limit })),
+    // Retried, but only up to the point where the problem is clearly not going
+    // to fix itself — past that it needs a person, not another attempt.
+    ...(await listNotifications({ status: 'failed', limit })).filter(
+      (n) => n.attempts < MAX_AUTOMATIC_ATTEMPTS,
+    ),
+  ].filter((n) => sendsAutomatically(n.template))
+
   if (queued.length === 0) return { sent: [], failed: [] }
 
   const notifier = await getNotifier()

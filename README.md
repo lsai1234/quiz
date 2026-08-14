@@ -113,12 +113,17 @@ shows, and every change to someone's plan is written to them too. Everything is
 queued in the database and listed in Founders Hub → Emails, which is both the
 send queue and a searchable log of every email that has ever gone out.
 
-Out of the box nothing sends by itself: emails wait for you to copy them into
-your own inbox and tick them off. Adding a Resend key gives each one a Send
-button; `NOTIFY_SOURCE=auto` sends them unattended. Setting `NOTIFY_DOMAIN` puts
-each kind on its own address — `orderconfirmation.noreply@`,
-`subscriptions.noreply@`, `billing.noreply@` — with replies going to the real
-contact inbox. The runbook, including the DNS records, is `docs/EMAILS.md`.
+Once a provider is configured, **receipts send themselves** and everything that
+reports a decision — a swap, a price rise, a plan settled — waits in the hub for
+a founder to read it first. A receipt has no judgement in it and is expected
+within seconds of paying; the rest is occasionally wrong and worth reading before
+several hundred people do. `NOTIFY_AUTO_SEND` moves that line either way. With no
+provider at all, everything waits and is copied out by hand.
+
+Setting `NOTIFY_DOMAIN` puts each kind on its own address —
+`orderconfirmation.noreply@`, `subscriptions.noreply@`, `billing.noreply@` — with
+replies going to the real contact inbox. The setup guide, including the DNS
+records, is `docs/EMAILS.md`.
 
 ## Stack
 

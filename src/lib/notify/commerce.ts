@@ -27,7 +27,7 @@ import type { Order } from '@/lib/orders/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { ConfirmationResponse } from '@/lib/orders/confirmation'
 import { appBaseUrl } from './index'
-import { queueNotification } from './outbox'
+import { deliverIfAutomatic, queueNotification } from './outbox'
 import { marketingSuppressed, optOutUrl } from './marketing'
 import { orderConfirmation, subscriptionConfirmation, type BrandContext } from './templates'
 
@@ -100,7 +100,7 @@ export async function queueOrderConfirmation(order: Order): Promise<void> {
     if (!receipt) return
 
     const reference = orderReference(order)
-    await queueNotification({
+    const queued = await queueNotification({
       userId: order.userId,
       email: order.email,
       template: 'order-confirmation',
@@ -117,6 +117,10 @@ export async function queueOrderConfirmation(order: Order): Promise<void> {
         await brandFor(order.email, base),
       ),
     })
+
+    // Straight out, no waiting. A receipt is expected within seconds of paying,
+    // and there is no judgement in it for anyone to review.
+    await deliverIfAutomatic(queued)
   } catch (err) {
     console.error('[notify] order confirmation could not be queued:', err)
   }
@@ -164,7 +168,7 @@ export async function queueSubscriptionConfirmation(
     const receipt = receiptFromConfirmation(confirmation)
     if (!receipt) return
 
-    await queueNotification({
+    const queued = await queueNotification({
       userId,
       email,
       template: 'subscription-confirmation',
@@ -182,6 +186,8 @@ export async function queueSubscriptionConfirmation(
         await brandFor(email, base),
       ),
     })
+
+    await deliverIfAutomatic(queued)
   } catch (err) {
     console.error('[notify] subscription confirmation could not be queued:', err)
   }

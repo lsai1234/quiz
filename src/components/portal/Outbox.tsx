@@ -192,15 +192,20 @@ function TestSend({ id, onSend }: { id: string; onSend: (id: string, to: string)
  * were they told, and when?".
  *
  * **To send** is a to-do list somebody is waiting on, and it should reach zero.
- * It works the same whether or not a mail provider is configured, which is the
- * point — you can start with no integration at all and add one later without
- * relearning anything:
+ * What lands in it depends on how much is configured, and the header says which
+ * of the three you are on — because a founder who believes receipts are waiting
+ * on them sends duplicates, and one who believes price notices go by themselves
+ * sends nothing at all:
  *
- *   • **No provider.** Copy the address, subject and body into your own inbox,
- *     send it, and tick it off. Nothing else needed.
- *   • **Provider configured.** A Send button appears on every row (and a Send
- *     all at the top). One click delivers it and marks it sent. The copy buttons
- *     stay — sometimes you want to send it yourself with a personal note.
+ *   • **No provider.** Everything is here. Copy the address, subject and body
+ *     into your own inbox, send it, and tick it off. Nothing else needed.
+ *   • **Provider configured** (the usual state). Receipts have already gone by
+ *     themselves and only appear here if sending failed. Everything that reports
+ *     a decision we made — a swap, a price rise, a settlement — waits here with
+ *     a Send button, because it is worth reading before several hundred people
+ *     do. The copy buttons stay: sometimes you want to send it yourself with a
+ *     personal note.
+ *   • **Everything automatic.** Only failures appear.
  *
  * **Log** is the audit trail: every email, searchable by recipient and kind,
  * with what was in it, which address it left from, whether a provider confirmed
@@ -215,7 +220,7 @@ export function Outbox() {
   const [provider, setProvider] = useState<string>('manual')
   const [streams, setStreams] = useState<StreamSummary[]>([])
   const [canSend, setCanSend] = useState(false)
-  const [autoSend, setAutoSend] = useState(false)
+  const [policy, setPolicy] = useState<'none' | 'confirmations' | 'all'>('none')
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -242,7 +247,7 @@ export function Outbox() {
         setProvider(d.provider ?? 'manual')
         setStreams(d.streams ?? [])
         setCanSend(Boolean(d.canSend))
-        setAutoSend(Boolean(d.autoSend))
+        setPolicy(d.autoSendPolicy ?? 'none')
       })
       .catch(() => setNotifications([]))
   }, [tab, logStatus, logTemplate, logEmail])
@@ -322,6 +327,8 @@ export function Outbox() {
   if (!notifications) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const manual = provider === 'manual'
+  // "via resend" reads like a typo in a sentence; it is a product name.
+  const providerName = provider === 'resend' ? 'Resend' : provider
 
   return (
     <div className="space-y-5">
@@ -329,13 +336,24 @@ export function Outbox() {
         <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
           Member emails
         </h1>
+        {/* The one thing this page has to be unambiguous about: which of these
+            somebody is still on the hook for. A founder who thinks receipts are
+            waiting on them sends duplicates; one who thinks price notices go by
+            themselves sends nothing at all. */}
         <p className="text-sm text-[var(--color-muted)]">
           {manual
-            ? 'Written for you to send. Copy each one into your email, send it, then mark it as sent.'
-            : autoSend
-              ? `Sending automatically via ${provider}. Anything here needs a look.`
-              : `Ready to send via ${provider} — press Send, or copy one out and send it yourself.`}
+            ? 'Nothing sends by itself yet — there is no email provider configured. Copy each one into your email, send it, then mark it as sent.'
+            : policy === 'all'
+              ? `Everything sends automatically via ${providerName}. Anything still listed below needs a look.`
+              : policy === 'confirmations'
+                ? `Order and subscription receipts send themselves via ${providerName} and are logged. Everything below is waiting on you.`
+                : `Ready to send via ${providerName} — press Send, or copy one out and send it yourself.`}
         </p>
+        {policy === 'confirmations' && (
+          <p className="text-xs mt-1 text-[var(--color-muted)]">
+            A receipt only appears in the list below if sending it failed.
+          </p>
+        )}
         {note && (
           <p className="text-xs mt-1" style={{ color: ACCENT }}>
             {note}
@@ -366,6 +384,13 @@ export function Outbox() {
             {streams[0]?.replyTo
               ? `Replies to any of them go to ${streams[0].replyTo}.`
               : 'No reply-to address is set — set NOTIFY_REPLY_TO so a customer who replies reaches someone.'}
+          </p>
+          <p className="text-[11px] mt-1" style={{ color: policy === 'none' ? 'var(--color-muted)' : GREEN }}>
+            {policy === 'all'
+              ? 'Every kind of email is sending automatically.'
+              : policy === 'confirmations'
+                ? 'Order and subscription receipts send automatically. Everything else waits for you.'
+                : 'Nothing is sending automatically — every email waits for you.'}
           </p>
         </section>
       )}

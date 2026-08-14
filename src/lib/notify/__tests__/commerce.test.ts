@@ -208,6 +208,104 @@ describe('subscription confirmations', () => {
   })
 })
 
+describe('sending without anyone pressing anything', () => {
+  // `mock` stands in for a configured provider: it exercises the whole delivery
+  // path — attempt, mark sent, record a provider id — without a network call.
+  beforeEach(() => { process.env.NOTIFY_SOURCE = 'mock' })
+  afterEach(() => { delete process.env.NOTIFY_SOURCE })
+
+  it('delivers an order receipt on the spot, not on the next daily run', async () => {
+    // A confirmation that arrives the next morning reads as a shop that lost
+    // the order, and generates the support email it was meant to prevent.
+    await queueOrderConfirmation(order({ email: 'auto-1@example.com' }))
+
+    const [email] = await queuedFor('auto-1@example.com')
+    expect(email.status).toBe('sent')
+    expect(email.sentAt).not.toBeNull()
+    expect(email.providerId).toMatch(/^mock_/)
+    // Not "somebody says they sent it" — the provider took it.
+    expect(email.sentManually).toBe(false)
+  })
+
+  it('delivers a subscription confirmation on the spot too', async () => {
+    await queueSubscriptionConfirmation(await member('auto-2@example.com'), subscription({ customerEmail: 'auto-2@example.com' }))
+
+    const [email] = await queuedFor('auto-2@example.com')
+    expect(email.status).toBe('sent')
+  })
+
+  it('still leaves anything we decided for a person to read first', async () => {
+    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.RESEND_API_KEY = 'test-key'
+    const { queueNotification } = await import('@/lib/notify/outbox')
+
+    await queueNotification({
+      userId: null,
+      email: 'auto-3@example.com',
+      template: 'price-change-notice',
+      dedupeKey: 'price:auto-3',
+      rendered: { subject: 'Your monthly is changing', text: 'x', html: '<p>x</p>' },
+    })
+
+    const [email] = await queuedFor('auto-3@example.com')
+    expect(email.status).toBe('queued')
+    delete process.env.RESEND_API_KEY
+  })
+
+  it('records a receipt that could not be delivered rather than losing it', async () => {
+    // The webhook that took the money must not fail over a mail server, but the
+    // customer is still owed the receipt — so it stays visible and retryable.
+    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.RESEND_API_KEY = 'test-key'
+    const fetchMock = jest.fn().mockResolvedValue({ ok: false, status: 500, text: async () => 'upstream on fire' })
+    const realFetch = global.fetch
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    await queueOrderConfirmation(order({ email: 'auto-4@example.com' }))
+
+    const [email] = await queuedFor('auto-4@example.com')
+    expect(email.status).toBe('failed')
+    expect(email.error).toContain('500')
+    expect(email.attempts).toBe(1)
+
+    global.fetch = realFetch
+    delete process.env.RESEND_API_KEY
+  })
+
+  it('retries the failed receipt on the next run, and leaves the rest alone', async () => {
+    /**
+     * The daily job has always been described as the thing that retries
+     * yesterday's failed email, and until now it only looked at `queued` rows —
+     * so a receipt that failed once stayed failed until somebody noticed. A
+     * provider having one bad minute must not be how a customer ends up with no
+     * record of what they paid.
+     */
+    process.env.NOTIFY_SOURCE = 'resend'
+    process.env.RESEND_API_KEY = 'test-key'
+    const realFetch = global.fetch
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: true, json: async () => ({ id: 'resend_retry_1' }) }) as unknown as typeof fetch
+
+    const { flushOutbox, listNotifications } = await import('@/lib/notify/outbox')
+    expect((await queuedFor('auto-4@example.com'))[0].status).toBe('failed')
+
+    await flushOutbox()
+
+    const [receipt] = await queuedFor('auto-4@example.com')
+    expect(receipt.status).toBe('sent')
+    expect(receipt.attempts).toBe(2)
+
+    // The same sweep must not have quietly posted the price-change notice that
+    // is sitting there waiting for a human to read it.
+    const decided = (await listNotifications({ limit: 500 })).filter((n) => n.email === 'auto-3@example.com')
+    expect(decided[0]?.status).toBe('queued')
+
+    global.fetch = realFetch
+    delete process.env.RESEND_API_KEY
+  })
+})
+
 describe('the promotional strip', () => {
   it('always ships with a way to refuse it', async () => {
     // PECR's soft opt-in only covers marketing to a customer if every message

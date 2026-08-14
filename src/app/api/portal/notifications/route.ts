@@ -12,7 +12,14 @@ import {
   markNotificationSentManually,
   sendNotificationNow,
 } from '@/lib/changes/service'
-import { canSendFromHub, getNotificationSource, isAutoSendEnabled, listStreams } from '@/lib/notify'
+import {
+  canSendFromHub,
+  getAutoSendPolicy,
+  getNotificationSource,
+  isAutoSendEnabled,
+  listStreams,
+  sendsAutomatically,
+} from '@/lib/notify'
 import type { NotificationStatus, TemplateId } from '@/lib/notify/types'
 
 export const dynamic = 'force-dynamic'
@@ -20,10 +27,11 @@ export const dynamic = 'force-dynamic'
 /**
  * The member-email outbox, and the log of everything ever sent.
  *
- * By default nothing is sent automatically: emails are written here and wait for
- * a founder to copy them into their own mail client and tick them off. This
- * endpoint serves that list, takes the tick, and — since every email ever
- * queued is still in the table — doubles as the audit log.
+ * Receipts send themselves as soon as a provider is configured; everything that
+ * reports a decision we made waits here for a founder to read it first. With no
+ * provider at all, everything waits and is copied out by hand. This endpoint
+ * serves that list, takes the tick, and — since every email ever queued is still
+ * in the table — doubles as the audit log.
  *
  * GET  — recent notifications, plus whether this deployment can send at all,
  *        plus the sending address of each mail stream.
@@ -58,6 +66,10 @@ export async function GET(req: Request) {
     // Drives the Send button: no provider, no button.
     canSend: canSendFromHub(),
     autoSend: isAutoSendEnabled(),
+    // `none` · `confirmations` · `all`. The page explains which of the two
+    // groups a founder is still on the hook for.
+    autoSendPolicy: getAutoSendPolicy(),
+    automaticTemplates: (['order-confirmation', 'subscription-confirmation'] as const).filter(sendsAutomatically),
     // Which address each kind of email leaves from, so the page can show it and
     // a misconfigured domain is visible before anyone wonders why nothing lands.
     streams: listStreams(),
