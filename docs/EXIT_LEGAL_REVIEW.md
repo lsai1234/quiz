@@ -43,51 +43,101 @@ term rather than sitting alongside one.
 
 ---
 
-## 4. The five automatic waivers
+## 4. The four automatic waivers
 
 Nothing is charged when any of these hold. Checked in this order, strongest first.
 
 1. **Consent not given** — the member never accepted terms disclosing a settlement.
-2. **Cooling-off** — within 14 days of the **first delivery** (Consumer Contracts
-   Regulations 2013). We run it from delivery, not from signup.
-3. **Price-increase notice** — they are leaving inside a notice period for a rise they did
+2. **Price-increase notice** — they are leaving inside a notice period for a rise they did
    not accept. Our own notice email says *"you can cancel free of charge any time before
    that date"*.
-4. **We changed their plan** — a substitution or removal we made because a product became
+3. **We changed their plan** — a substitution or removal we made because a product became
    unavailable, within the last 60 days.
-5. **Nothing owed** — the arithmetic came to zero, or under the £5 floor.
+4. **Nothing owed** — the arithmetic came to zero, or under the £5 floor.
+
+**Cooling-off was the fifth and is no longer a waiver at all.** It read the regulations as
+"cancel within 14 days and owe nothing", which they do not say — see §4a.
 
 ---
 
 ## 4a. Inside the 14 days, the member chooses
 
-A waiver only ever answered half the question. Being let off a balance is not the same
-thing as the right the Consumer Contracts Regulations actually grant, which is to send the
-goods back and have the money returned — and for a while the only trace of that right was a
-sentence in the waiver copy with nothing behind it.
+The Consumer Contracts Regulations grant one right the rest of the year does not: **cancel
+and send the goods back for a refund**. They do not grant a right to cancel, keep the goods
+and pay nothing — a consumer who keeps what was sent has not returned it, and being paid
+for goods kept is the trader's entitlement.
 
-`quoteExit` now returns a `coolingOff` block whenever the window is open, priced on both
-sides, and the cancel flow offers two buttons rather than one:
+Treating cooling-off as an automatic waiver conflated the two and got it wrong in the
+expensive direction. A member cancelling on day 13 kept every box and owed nothing, so the
+whole month-one gap — a full signup box against one smoothed, discounted payment — was
+written off in silence. Worked example from a live test: £68.80 of product sent, £46.86
+charged, £21.94 written off without either figure appearing on the screen.
+
+So `quoteExit` returns a `coolingOff` block whenever the window is open, priced on both
+sides, and the cancel flow offers two buttons:
 
 | Choice | What the member gets | What we do |
 | --- | --- | --- |
-| **Keep it** | Everything sent is theirs, nothing to pay | `mode: 'now'` — the cooling-off waiver, as before |
+| **Keep it** | Everything sent stays theirs | `mode: 'now'` — the ordinary settlement (`keepSettlement`), reached the ordinary way: intro discount, cap and £5 floor all applied |
 | **Send it back** | Every payment refunded (`returnRefund`) | `mode: 'return'` — cancel, record `exit.returnRequested` + `refundDue`, email the address and deadline, and hold their orders in the fulfilment queue for whoever opens the parcel |
 
-Three things are deliberate:
+Four things are deliberate:
 
 - **The refund is recorded, not paid.** Money goes back when the goods do. Refunding on the
   click would make the returns policy an honour system.
-- **`coolingOff` is offered even when another waiver already applies.** A member who owes
-  nothing for one reason must not lose the right to ask for their money back for another.
+- **`coolingOff` is offered even when a waiver applies.** Being let off a balance and being
+  entitled to your money back are different things; qualifying for one must not cost the
+  other. When a waiver does apply, `keepSettlement` is zero like any other exit.
 - **`mode: 'return'` is refused once the window closes**, rather than quietly downgraded to
   an ordinary cancellation — otherwise someone waits for a refund that was never coming.
+- **The keep card shows both figures it comes from** ("we've sent you £68.80, you've paid
+  £46.86"), because the settlement is only chargeable as a debt for goods rather than as a
+  fee for leaving, and a bare number does not read as one.
+
+**The published Terms were already right, and the code was the thing out of step.** The
+cancellation clause says the statutory right means *"you return any unopened products for a
+refund rather than settling a balance"* — return OR settle, never keep-and-pay-nothing — and
+the three settle-nothing cases it lists are the price-increase notice, a change we made
+ourselves, and payments having covered everything. Cooling-off is not among them. So this
+brings the code back to what members have already been shown and consented to, and
+`SETTLEMENT_TERMS_VERSION` does **not** need moving: nobody is being held to wording they
+did not accept.
+
+One place the code is still more generous than the published Terms: those say *"for hygiene
+reasons we cannot refund opened supplements unless they are faulty"*, and `returnRefund`
+today refunds every payment regardless of what comes back opened. That is the same
+diminished-value decision as below, and it is the direction that costs money rather than
+the direction that causes complaints.
 
 Return postage sits with the member unless the goods arrived damaged or wrong, which is the
 statutory default and is stated in both the flow and the email. **Still to be decided by a
 person:** whether to deduct for diminished value on opened goods. Nothing does today — a
 full refund is paid on everything returned — and the figure to deduct from is on the exit
 statement if that changes.
+
+---
+
+## 4b. The intro discount is never reclaimed — on both paths
+
+`settlement.reclaimIntroDiscount` is `false`, and for a while only one of the two
+arithmetics honoured it:
+
+- **Forecast** (`cancelSettlement`) measures shipped goods against `settlementBasisOf` —
+  what the plan COSTS over the months lived, at the full monthly. Correct.
+- **Ledger** (`exitStatement`), which is what actually bills, measured against `paidTotal` —
+  what the card was CHARGED, i.e. after the discount. So the discount fell into the balance
+  and was billed back at the exit, to precisely the people most likely to dispute it.
+
+The two disagreed by exactly the discount, which is what `ledgerDivergence` had been
+reporting to a founder-only field that nothing acted on.
+
+`introDiscountKeptOf(sub, config)` now computes it — `settlementBasisOf − paidToDateOf` —
+and `quoteExit` hands it to the ledger, which subtracts it **before** the cap (applying it
+after would let the cap bite on money we had already decided not to ask for) and reports it
+as `introKept`. The exit statement shows it as its own line, *"Intro offer — not reclaimed:
+−£5.32"*, which is what `settlementBasisOf`'s own docs always said the split was for.
+
+On the worked example: £21.94 raw gap, less £5.32 kept, **£16.62 to settle**.
 
 ---
 

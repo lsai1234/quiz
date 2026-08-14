@@ -28,6 +28,7 @@ function statement(over: Partial<ExitStatement> = {}): ExitStatement {
     shippedTotal: 53.53,
     paidTotal: 42.2,
     rawGap: 11.33,
+    introKept: 0,
     cappedBy: 0,
     waived: 0,
     settlement: 11.33,

@@ -442,6 +442,23 @@ export function settlementBasisOf(sub: MemberSubscription, config = getPricingCo
 }
 
 /**
+ * The intro discount this member keeps — the gap between what the plan costs and
+ * what their card was actually charged.
+ *
+ * Exactly the difference between the two figures above, named so the LEDGER can
+ * honour the same policy the forecast does. `exitStatement` measures shipped
+ * goods against what was charged, so without this the discount fell straight
+ * into the balance and was billed back at the exit — reclaiming, by arithmetic,
+ * the thing `settlement.reclaimIntroDiscount: false` says we never reclaim.
+ *
+ * Zero when the policy is set to reclaim, because `settlementBasisOf` returns
+ * `paidToDateOf` in that case and the two figures coincide.
+ */
+export function introDiscountKeptOf(sub: MemberSubscription, config = getPricingConfig()): number {
+  return round(Math.max(0, settlementBasisOf(sub, config) - paidToDateOf(sub)))
+}
+
+/**
  * The cancel BUY-OUT: the outstanding balance on goods already delivered.
  *
  * The flat monthly SPREADS the cost of items that last several months, so a

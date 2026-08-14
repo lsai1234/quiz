@@ -13,7 +13,7 @@
 import type { Order } from '@/lib/orders/types'
 import type { MemberSubscription } from './types'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
-import { cancelSettlement, nextFreeExitMonth, paidToDateOf, shippedValueOf } from './mock'
+import { cancelSettlement, introDiscountKeptOf, nextFreeExitMonth, paidToDateOf, shippedValueOf } from './mock'
 import { exitStatement, ledgerDivergence, ledgerIsComplete, type ExitStatement } from './exit-ledger'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -21,16 +21,15 @@ const DAY_MS = 24 * 60 * 60 * 1000
 /**
  * Why this member is leaving without paying.
  *
- * Ordered by precedence in `waiverFor`, strongest first. The order matters: a
- * member inside the cooling-off period who ALSO has an unaccepted price rise
- * should be told about the statutory right, because that is the one with
- * consequences beyond the balance.
+ * Ordered by precedence in `waiverFor`, strongest first.
+ *
+ * Cooling-off used to be one of these and no longer is. Being inside the 14 days
+ * is not a reason to charge nothing — it is a reason to offer a CHOICE, and the
+ * two are not the same thing. See `CoolingOffChoice`.
  */
 export type WaiverReason =
   /** They never agreed to terms that disclose a settlement. E-4, the legal gate. */
   | 'consent-not-given'
-  /** Consumer Contracts Regulations 2013 — 14 days from the first order. */
-  | 'cooling-off'
   /** They are leaving inside a price-increase notice period they did not accept. */
   | 'price-increase-notice'
   /** We changed their plan ourselves, because a product became unavailable. */
@@ -45,34 +44,39 @@ export interface Waiver {
 }
 
 /**
- * The choice a member gets inside the statutory 14 days, which is a genuinely
- * different one from any other exit.
+ * The choice a member gets inside the statutory 14 days.
  *
- * Outside the window, leaving is settle-up-and-keep: the goods are theirs and
- * the only question is the balance. Inside it, the Consumer Contracts
- * Regulations give them a right the rest of the year does not — send it back and
- * have their money returned. Offering only the keep half, as this flow used to,
- * quietly withheld the option the law is actually about, and did it at the one
- * moment a new member is deciding whether they were sold to honestly.
+ * The Consumer Contracts Regulations give a new member one right the rest of the
+ * year does not: **cancel and send the goods back for a refund**. They do not
+ * give a right to cancel, keep the goods and pay nothing — keeping goods and
+ * paying for them is the trader's entitlement, and a consumer who keeps what was
+ * sent has not returned it.
  *
- * Both halves are priced up front so the choice is made on figures rather than
- * on which sentence sounds safer.
+ * Cooling-off was modelled here as an automatic WAIVER, which conflated the two
+ * and got the answer wrong in the expensive direction: a member on day 13 kept
+ * every box, owed nothing, and the month-one gap — the whole first delivery
+ * against one smoothed payment — was written off in silence. Surfacing it as an
+ * option next to a refund made it strictly the better deal in every case.
+ *
+ * So it is a choice, with both halves priced:
+ *
+ *   Keep it     → settle the balance on goods kept (`keepSettlement`)
+ *   Send it back → every payment returned once it arrives (`returnRefund`)
  */
 export interface CoolingOffChoice {
   /** Last day the right runs to (ISO). */
   deadline: string
   /** Refunded when everything comes back — every payment taken so far (£). */
   returnRefund: number
-  /**
-   * What keeping everything is worth, before the waiver (£).
-   *
-   * Shown, not charged: the cooling-off waiver still zeroes the settlement, so a
-   * member who keeps their box owes nothing. It is here so the choice is
-   * informed — "keep £64 of product, pay nothing" is a different decision from
-   * "keep it, pay nothing" — and so the figure already exists if that policy is
-   * ever tightened.
-   */
+  /** Retail value of what has actually been sent (£) — what "keep it" keeps. */
   keepValue: number
+  /**
+   * Owed if they keep it (£): the balance on goods already delivered that the
+   * smoothed monthly has not covered yet. The ordinary settlement, arrived at
+   * the ordinary way — cap, intro discount and small-balance floor included —
+   * because keeping the goods is an ordinary exit however new the member is.
+   */
+  keepSettlement: number
 }
 
 export interface ExitQuote {
@@ -195,19 +199,7 @@ export function waiverFor(input: {
         'You joined under terms that said cancelling was free, so there is nothing to settle.',
     }
   }
-  if (withinCoolingOff(input.sub, input.orders, now)) {
-    return {
-      reason: 'cooling-off',
-      // Describes the KEEP branch, because that is the only one that reaches
-      // this sentence: a member who chose to send everything back gets the
-      // return email instead, which has an address and a deadline in it. This
-      // used to end "send back anything unopened for a refund" — a right with
-      // no way to exercise it, printed on the screen of someone who had just
-      // been given no option to.
-      explanation:
-        'You are within 14 days of your first delivery, so your statutory right to cancel applies — there is nothing to pay, and everything already sent is yours to keep.',
-    }
-  }
+  // NOTE: cooling-off is deliberately NOT a waiver. See `CoolingOffChoice`.
   if (insidePriceIncreaseNotice(input.sub, now)) {
     return {
       reason: 'price-increase-notice',
@@ -251,7 +243,14 @@ export function quoteExit(input: {
   const forecast = cancelSettlement(input.sub, config)
 
   const complete = ledgerIsComplete(input.orders)
-  const statement = input.orders.length > 0 ? exitStatement(input.orders, config) : null
+  const statement =
+    input.orders.length > 0
+      ? exitStatement(input.orders, config, {
+          // The policy the forecast has always honoured, handed to the ledger so
+          // it stops reclaiming the intro discount by arithmetic.
+          introDiscountKept: introDiscountKeptOf(input.sub, config),
+        })
+      : null
   const source: ExitQuote['source'] = complete ? 'ledger' : 'forecast'
   const computed = complete && statement ? statement.settlement : forecast
 
@@ -264,10 +263,9 @@ export function quoteExit(input: {
   })
 
   // The statutory choice, priced. Offered whenever the window is open — even if
-  // some OTHER waiver got there first in `waiverFor`, because the right to send
-  // it back and be refunded is not the same thing as being let off a balance,
-  // and a member who is owed money should not lose the option to ask for it just
-  // because they also happened to owe none.
+  // a waiver applies, because the right to send it back and be refunded is not
+  // the same thing as being let off a balance, and a member who owes nothing
+  // should not lose the option to ask for their money back.
   const deadline = coolingOffDeadline(input.sub, input.orders)
   const inWindow = withinCoolingOff(input.sub, input.orders, input.now)
   const coolingOff: CoolingOffChoice | null =
@@ -276,6 +274,10 @@ export function quoteExit(input: {
           deadline,
           returnRefund: statement?.paidTotal ?? paidToDateOf(input.sub),
           keepValue: statement?.shippedTotal ?? shippedValueOf(input.sub),
+          // The same figure this quote settles at. Keeping the goods inside the
+          // window is an ordinary exit, so it is priced as one — and a waiver
+          // that applies for some other reason still zeroes it.
+          keepSettlement: waiver ? 0 : computed,
         }
       : null
 

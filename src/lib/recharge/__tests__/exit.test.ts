@@ -123,16 +123,40 @@ describe('the statutory cooling-off period', () => {
     expect(withinCoolingOff(plan({ startedAt: '2026-01-01T00:00:00.000Z' }), [], NOW)).toBe(false)
   })
 
-  it('waives the balance inside the window', () => {
+  it('does NOT waive the balance — it offers a choice instead', () => {
+    /**
+     * Cooling-off used to be an automatic waiver, which read the regulations as
+     * "cancel within 14 days and owe nothing". They say no such thing: the right
+     * is to cancel and SEND THE GOODS BACK for a refund. A member who keeps what
+     * was sent has not returned it, and keeping goods and paying for them is
+     * what the rest of the year already does.
+     *
+     * Charging nothing meant the whole month-one gap — a full first box against
+     * one smoothed payment — was written off in silence, and once the choice was
+     * on screen, "keep it" was strictly the better deal in every case.
+     */
     const quote = quoteExit({
       sub: plan(),
       orders: [order({ createdAt: '2026-05-25T00:00:00.000Z' })],
       consentCoversSettlement: true,
       now: NOW,
     })
+    // £60 sent against £20 paid, capped at everything they have paid.
+    expect(quote.settlement).toBe(20)
+    expect(quote.waiver).toBeNull()
+    expect(quote.coolingOff?.keepSettlement).toBe(20)
+  })
+
+  it('still zeroes the keep price when some OTHER waiver applies', () => {
+    const quote = quoteExit({
+      sub: plan(),
+      orders: [order({ createdAt: '2026-05-25T00:00:00.000Z' })],
+      consentCoversSettlement: false,
+      now: NOW,
+    })
+    expect(quote.waiver?.reason).toBe('consent-not-given')
     expect(quote.settlement).toBe(0)
-    expect(quote.waiver?.reason).toBe('cooling-off')
-    expect(quote.waiver?.explanation).toContain('yours to keep')
+    expect(quote.coolingOff?.keepSettlement).toBe(0)
   })
 
   describe('the choice it gives them', () => {
@@ -188,6 +212,44 @@ describe('the statutory cooling-off period', () => {
       })
       expect(quote.coolingOff).toBeNull()
     })
+  })
+})
+
+describe('the intro discount, at the exit', () => {
+  /**
+   * `settlement.reclaimIntroDiscount` is false, and it used to be true of only
+   * one of the two arithmetics. The forecast measured against what the plan
+   * COSTS; the ledger measured against what the card was CHARGED, which is the
+   * discounted figure — so the discount landed in the balance and was billed
+   * back. This pins the whole path, from the plan to the charged figure.
+   */
+  const discounted = () =>
+    plan({ flatMonthly: 20, firstMonth: 14, monthsActive: 0 })
+
+  it('is handed to the ledger and shown as its own line', () => {
+    const quote = quoteExit({
+      sub: discounted(),
+      orders: [order({ createdAt: '2026-05-25T00:00:00.000Z', billedAmount: 14 })],
+      consentCoversSettlement: true,
+      now: NOW,
+    })
+    // £60 sent, £14 paid → £46 raw. £6 of that is the discount we said we would
+    // not reclaim, leaving £40, which the cap then holds to the £14 they paid.
+    expect(quote.statement!.introKept).toBe(6)
+    expect(quote.statement!.rawGap).toBe(46)
+    expect(quote.settlement).toBe(14)
+  })
+
+  it('closes the gap between the ledger and the forecast', () => {
+    // `ledgerDivergence` exists to catch the two disagreeing. It was reporting
+    // exactly this discount, to a founder-only field nothing acted on.
+    const quote = quoteExit({
+      sub: discounted(),
+      orders: [order({ createdAt: '2026-05-25T00:00:00.000Z', billedAmount: 14 })],
+      consentCoversSettlement: true,
+      now: NOW,
+    })
+    expect(quote.divergence?.material).toBe(false)
   })
 })
 

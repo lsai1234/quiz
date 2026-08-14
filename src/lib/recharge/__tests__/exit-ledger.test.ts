@@ -200,6 +200,55 @@ describe('the policies, shown as lines rather than applied silently', () => {
     expect(statement.settlement).toBe(0)
   })
 
+  it('does not reclaim the intro discount it was told to keep', () => {
+    /**
+     * The bug this is the fix for: `settlement.reclaimIntroDiscount` is FALSE,
+     * the forecast has always honoured it by measuring against
+     * `settlementBasisOf`, and the ledger — the side that actually bills —
+     * measured against what the card was CHARGED. The discount therefore fell
+     * straight into the balance and was billed back at the exit, to exactly the
+     * people most likely to dispute it. `ledgerDivergence` had been reporting
+     * the difference to nobody for as long as both paths existed.
+     *
+     * The real numbers from a member one month in: £68.80 of product in the
+     * signup box, £46.86 charged after a £5.32 first-month discount.
+     */
+    const statement = exitStatement(
+      [cycle({ ships: [{ title: 'Signup box', price: 68.8 }], billed: 46.86 })],
+      PRICING_CONFIG,
+      { introDiscountKept: 5.32 },
+    )
+    expect(statement.rawGap).toBe(21.94)
+    expect(statement.introKept).toBe(5.32)
+    expect(statement.settlement).toBe(16.62)
+  })
+
+  it('takes the discount off before the cap, not after', () => {
+    // Otherwise the cap bites on money we had already decided not to ask for,
+    // and the member is charged for the difference between two policies.
+    const statement = exitStatement(
+      [cycle({ ships: [{ title: 'Box', price: 150 }], billed: 70 })],
+      PRICING_CONFIG,
+      { introDiscountKept: 20 },
+    )
+    expect(statement.rawGap).toBe(80)
+    expect(statement.introKept).toBe(20)
+    // £80 − £20 = £60, which is under the £70 cap, so the cap never bites.
+    expect(statement.cappedBy).toBe(0)
+    expect(statement.settlement).toBe(60)
+  })
+
+  it('never turns a discount bigger than the balance into money owed back', () => {
+    const statement = exitStatement(
+      [cycle({ ships: [{ title: 'Box', price: 60 }], billed: 55 })],
+      PRICING_CONFIG,
+      { introDiscountKept: 40 },
+    )
+    expect(statement.introKept).toBe(5)
+    expect(statement.settlement).toBe(0)
+    expect(statement.overpayment).toBe(0)
+  })
+
   it('leaves the gap alone when no cap is configured', () => {
     const uncapped: PricingConfig = {
       ...PRICING_CONFIG,

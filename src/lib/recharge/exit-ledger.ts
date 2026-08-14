@@ -59,6 +59,19 @@ export interface ExitStatement {
   paidTotal: number
   /** `shippedTotal − paidTotal`, before any policy is applied (£). */
   rawGap: number
+  /**
+   * The intro discount granted at signup, which policy says we do not reclaim
+   * (£). 0 when there was none, or when `settlement.reclaimIntroDiscount` is on.
+   *
+   * Without this line the ledger reclaimed it by accident. `rawGap` measures
+   * shipped against what the card was CHARGED, and the card was charged less
+   * than the plan costs — so the discount fell straight into the balance and got
+   * billed back at the exit, to precisely the people most likely to dispute it.
+   * The forecast (`cancelSettlement`) has always measured against
+   * `settlementBasisOf` and never had the problem; the two disagreed by exactly
+   * this amount, which is what `ledgerDivergence` was quietly reporting.
+   */
+  introKept: number
   /** Knocked off by the cap on what they have paid (£). 0 when it did not bite. */
   cappedBy: number
   /** Knocked off by the small-balance waiver (£). 0 when it did not apply. */
@@ -102,6 +115,17 @@ export function billableSubscriptionOrders(orders: Order[]): Order[] {
 export function exitStatement(
   orders: Order[],
   config: PricingConfig = getPricingConfig(),
+  opts: {
+    /**
+     * The intro discount the member keeps (£) — see `ExitStatement.introKept`.
+     *
+     * Supplied by the caller rather than derived here, because working it out
+     * needs the plan's full monthly and this module deliberately never sees the
+     * subscription: its whole point is that the plan's CURRENT state gets no
+     * vote on what already happened. `introDiscountKeptOf` computes it.
+     */
+    introDiscountKept?: number
+  } = {},
 ): ExitStatement {
   const relevant = billableSubscriptionOrders(orders)
 
@@ -135,34 +159,49 @@ export function exitStatement(
     shippedTotal,
     paidTotal,
     rawGap,
-    ...applyPolicies(rawGap, paidTotal, config),
+    ...applyPolicies(rawGap, paidTotal, round(Math.max(0, opts.introDiscountKept ?? 0)), config),
+    // What we owe THEM is measured on the raw gap, not the adjusted one. The
+    // intro discount reduces a debt they owe us; it cannot manufacture one we
+    // owe them.
     overpayment: rawGap < 0 ? round(-rawGap) : 0,
   }
 }
 
 /**
- * The cap and the waiver, applied to a raw gap.
+ * The three policies, applied to a raw gap, in the order they are modelled.
  *
  * Split out and reported line by line so the statement can say WHY the figure is
  * what it is. "We capped this at what you have paid" is a sentence worth showing;
  * silently returning a smaller number is not.
+ *
+ * The intro discount comes off FIRST, before the cap: it is not a reduction of a
+ * debt we are owed, it is an amount that was never part of the debt. Applying it
+ * after the cap would let the cap bite on money we had already decided not to
+ * ask for.
  */
 function applyPolicies(
   rawGap: number,
   paidTotal: number,
+  introDiscountKept: number,
   config: PricingConfig,
-): Pick<ExitStatement, 'cappedBy' | 'waived' | 'settlement'> {
-  if (rawGap <= 0) return { cappedBy: 0, waived: 0, settlement: 0 }
+): Pick<ExitStatement, 'introKept' | 'cappedBy' | 'waived' | 'settlement'> {
+  if (rawGap <= 0) return { introKept: 0, cappedBy: 0, waived: 0, settlement: 0 }
+
+  // Never more than the gap itself — a discount bigger than the balance leaves
+  // nothing owed, not something owed back.
+  const introKept = round(Math.min(rawGap, introDiscountKept))
+  const afterIntro = round(rawGap - introKept)
+  if (afterIntro <= 0) return { introKept, cappedBy: 0, waived: 0, settlement: 0 }
 
   const cap = config.settlement.maxShareOfPaid
   const ceiling = cap == null ? Infinity : Math.max(0, paidTotal * cap)
-  const capped = Math.min(rawGap, ceiling)
-  const cappedBy = round(rawGap - capped)
+  const capped = Math.min(afterIntro, ceiling)
+  const cappedBy = round(afterIntro - capped)
 
   if (settlementIsClear(capped, config)) {
-    return { cappedBy, waived: round(capped), settlement: 0 }
+    return { introKept, cappedBy, waived: round(capped), settlement: 0 }
   }
-  return { cappedBy, waived: 0, settlement: round(capped) }
+  return { introKept, cappedBy, waived: 0, settlement: round(capped) }
 }
 
 /**

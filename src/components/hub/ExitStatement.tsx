@@ -67,6 +67,9 @@ export function ExitStatementView({ statement }: { statement: Statement }) {
       <div className="px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${GLASS.hairline}` }}>
         {/* Only shown when they changed the answer — a line saying "£0.00 was
             knocked off" is noise, and a line saying £10.00 was is reassurance. */}
+        {statement.introKept > 0 && (
+          <MoneyRow label="Intro offer — not reclaimed" value={`−${formatGBP(statement.introKept)}`} color={GREEN} />
+        )}
         {statement.cappedBy > 0 && (
           <MoneyRow label="Capped at what you have paid" value={`−${formatGBP(statement.cappedBy)}`} color={GREEN} />
         )}

@@ -321,21 +321,34 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                       </p>
                       <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
                         Until {new Date(quote.coolingOff.deadline).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} you
-                        can do either of these. There&apos;s nothing to settle either way.
+                        can send everything back for a full refund. Or keep it and settle the balance on what
+                        we&apos;ve already sent — whichever suits you.
                       </p>
                     </Card>
 
                     <Card variant="tone" tone={GREEN} padding="tight">
                       <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
-                        Keep what you&apos;ve got · pay nothing
+                        {quote.coolingOff.keepSettlement > 0
+                          ? `Keep what you've got · settle ${formatGBP(quote.coolingOff.keepSettlement)}`
+                          : 'Keep what you’ve got · nothing to pay'}
                       </p>
                       <p className="text-xs text-[var(--color-text-2)] mt-1.5 leading-relaxed">
-                        {quote.coolingOff.keepValue > 0
-                          ? `The ${formatGBP(quote.coolingOff.keepValue)} of product already sent to you is yours to keep, and there is nothing further to pay.`
-                          : 'Nothing has shipped yet, so there is nothing to send back and nothing to pay.'}
+                        {quote.coolingOff.keepValue <= 0
+                          ? 'Nothing has shipped yet, so there is nothing to send back and nothing to pay.'
+                          : quote.coolingOff.keepSettlement > 0
+                            // The whole basis on which this is chargeable is that
+                            // it is a debt for goods, not a fee for leaving — so
+                            // the sentence has to show the two figures it comes
+                            // from rather than announce a number.
+                            ? `We've sent you ${formatGBP(quote.coolingOff.keepValue)} of product and you've paid ${formatGBP(quote.coolingOff.returnRefund)}, because your monthly spreads the longer-lasting items over the months they last. Keep everything and this settles the difference — ${formatGBP(quote.coolingOff.keepSettlement)} — and nothing else.`
+                            : `The ${formatGBP(quote.coolingOff.keepValue)} of product already sent to you is yours to keep, and your payments have covered it — there is nothing further to pay.`}
                       </p>
                       <Button variant="tone" tone={GREEN} onClick={() => submitExit('now')} disabled={submitting} className="mt-3">
-                        {submitting ? 'One moment…' : 'Cancel and keep it'}
+                        {submitting
+                          ? 'One moment…'
+                          : quote.coolingOff.keepSettlement > 0
+                            ? `Keep it — pay ${formatGBP(quote.coolingOff.keepSettlement)}`
+                            : 'Cancel and keep it'}
                       </Button>
                     </Card>
 
