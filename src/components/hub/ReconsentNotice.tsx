@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { IconButton } from '@/components/ui/IconButton'
 import type { ConsentStanding } from '@/lib/legal/campaign'
 
 const ACCENT = '#00D4FF'
@@ -70,13 +71,7 @@ export function ReconsentNotice() {
         <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
           {payload.notice.headline}
         </p>
-        <button
-          onClick={() => setDismissed(true)}
-          className="text-[var(--color-muted)] text-xs shrink-0"
-          aria-label="Dismiss"
-        >
-          ✕
-        </button>
+        <IconButton icon="x" label="Dismiss" size="sm" onClick={() => setDismissed(true)} className="-mr-1 -mt-1" />
       </div>
 
       {payload.notice.body.map((line) => (

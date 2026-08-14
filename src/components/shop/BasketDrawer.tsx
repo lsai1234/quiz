@@ -9,6 +9,8 @@ import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 import { ProductTile } from '@/components/stack-review/ProductTile'
+import { IconButton } from '@/components/ui/IconButton'
+import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
 
 const ACCENT = '#00D4FF'
@@ -88,7 +90,7 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
           <h2 className="text-lg font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
             Your basket
           </h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 transition-all" aria-label="Close basket">✕</button>
+          <IconButton icon="x" label="Close basket" size="sm" filled onClick={onClose} />
         </div>
 
         {resolved.length === 0 ? (
@@ -109,7 +111,7 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{l.product.title}</p>
-                      <button onClick={() => remove(l.product.id, l.variant.id)} className="text-[11px] flex-shrink-0" style={{ color: 'var(--color-muted)' }} aria-label="Remove">✕</button>
+                      <IconButton icon="x" label={`Remove ${l.product.title}`} size="sm" onClick={() => remove(l.product.id, l.variant.id)} className="-mr-1 -mt-1" />
                     </div>
                     <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{variantLabel(l.variant)}</p>
                     <div className="flex items-center justify-between mt-2">
@@ -132,7 +134,7 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[11px] font-semibold" style={{ color: freeDelivery ? ACCENT : 'var(--color-text-2)' }}>
-                      {freeDelivery ? '✓ Free delivery unlocked' : `${formatGBP(remaining)} away from free delivery`}
+                      {freeDelivery ? <><Icon name="check" size={12} className="inline-block -mt-0.5 mr-1" />Free delivery unlocked</> : `${formatGBP(remaining)} away from free delivery`}
                     </span>
                     {/* What postage actually costs on this basket. It used to say
                         only how far off free delivery was, while charging nothing
@@ -202,7 +204,7 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
               >
                 {checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
                   ? 'Taking you to secure checkout…'
-                  : mockDone ? 'Demo checkout ✓' : 'Checkout →'}
+                  : mockDone ? 'Demo checkout' : 'Checkout →'}
               </button>
 
               {/* Secure-checkout reassurance — honest cues, no surprise steps. */}

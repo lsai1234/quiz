@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconButton } from '@/components/ui/IconButton'
+import { Button } from '@/components/ui/Button'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { CHANGE_REASONS, recommendReplacements, replacementRationale } from '@/lib/feedback'
 import type { ChangeReason } from '@/lib/feedback'
@@ -74,7 +76,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
             </p>
             <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{heading}</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 flex-shrink-0 mt-0.5" aria-label="Close">✕</button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4">
@@ -98,7 +100,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
           {/* Step 2: pick */}
           {step === 'pick' && (
             <div className="space-y-3">
-              <button onClick={() => setReason(null)} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Change reason</button>
+              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setReason(null)} className="mb-1 -ml-2 underline">Change reason</Button>
               {alternatives.length === 0 ? (
                 <p className="text-sm text-[var(--color-muted)] text-center py-10">No alternatives match that for this product. Try a different reason.</p>
               ) : (
@@ -128,7 +130,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
           {/* Step 3: confirm */}
           {step === 'confirm' && selected && impact && (
             <div className="space-y-4">
-              <button onClick={() => setSelected(null)} className="text-xs font-semibold text-[var(--color-muted)] underline">← Back to options</button>
+              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setSelected(null)} className="-ml-2 underline">Back to options</Button>
 
               <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
                 <p className="text-xs text-[var(--color-muted)]">Switching to</p>

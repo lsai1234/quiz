@@ -3,14 +3,13 @@
 import { useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { dimensionForSlot } from '@/lib/feedback'
+import { ChargeScale } from '@/components/ui/ChargeScale'
+import { Icon } from '@/components/ui/Icon'
+import { ACCENT, AMBER, GREEN } from '@/lib/ui/tokens'
 import { StatusBadge, toneColor } from './StatusBadge'
 import { ProgressRing } from './ProgressRing'
 import type { MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { LineRecommendation, FeedbackDimension } from '@/lib/feedback'
-
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
 
 interface Props {
   line: MemberSubscriptionLine
@@ -24,13 +23,6 @@ function cadence(line: MemberSubscriptionLine): string {
   const qty = line.quantity > 1 ? `${line.quantity}× · ` : ''
   return line.deliveryIntervalMonths > 1 ? `${qty}every ${line.deliveryIntervalMonths} months` : `${qty}every month`
 }
-
-// Quick inline check-in faces → 1–5 rating.
-const MICRO = [
-  { emoji: '😞', rating: 1, label: 'Not feeling it' },
-  { emoji: '😐', rating: 3, label: 'So-so' },
-  { emoji: '😄', rating: 5, label: 'Feeling great' },
-]
 
 export function StackItemCard({ line, recommendation: rec, onChange, onManage, onMicroFeedback }: Props) {
   const review = rec.phase === 'review'
@@ -84,27 +76,26 @@ export function StackItemCard({ line, recommendation: rec, onChange, onManage, o
 
       {/* Inline micro check-in — only when the benefit can be felt */}
       {canMicro && (
-        <div className="mt-3 flex items-center gap-2">
+        <div className="mt-3">
           {tapped == null ? (
-            <>
-              <span className="text-[11px] font-semibold text-[var(--color-muted)]">Feeling it?</span>
-              <div className="flex gap-1">
-                {MICRO.map((m) => (
-                  <button
-                    key={m.rating}
-                    onClick={() => micro(m.rating)}
-                    className="w-8 h-8 rounded-lg text-lg flex items-center justify-center active:scale-90 transition-all"
-                    style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
-                    aria-label={m.label}
-                    title={m.label}
-                  >
-                    {m.emoji}
-                  </button>
-                ))}
-              </div>
-            </>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold text-[var(--color-muted)] shrink-0">Feeling it?</span>
+              {/* Three segments, still worth 1 / 3 / 5 — the ratings the three
+                  emoji faces sent, so no stored feedback gets rescaled. */}
+              <ChargeScale
+                steps={3}
+                onChange={micro}
+                label={`How is ${line.productTitle} landing?`}
+                lowLabel="Not feeling it"
+                highLabel="Feeling great"
+                className="flex-1 min-w-0"
+              />
+            </div>
           ) : (
-            <span className="text-[11px] font-semibold" style={{ color: GREEN }}>Thanks — logged ✓</span>
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: GREEN }}>
+              <Icon name="check" size={13} />
+              Thanks — logged
+            </span>
           )}
         </div>
       )}

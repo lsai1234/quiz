@@ -10,6 +10,7 @@
 
 import type { CatalogueProduct, StackSlot, EffectOnset } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
+import type { IconName } from '@/components/ui/Icon'
 
 export type RecommendationBasis = 'objective' | 'subjective'
 
@@ -136,7 +137,13 @@ export type StatusTone = 'good' | 'building' | 'essential' | 'review'
 export interface LineStatus {
   /** Plain, benefit-led label, e.g. "Felt & working", "Building energy · wk 2 of 3". */
   statusLabel: string
-  statusIcon: string
+  /**
+   * A glyph from the house icon set — a name, not a character. This used to be
+   * a `string` holding `⚠`, `↗`, `🌱` or `⚡`, which is how a seedling emoji
+   * ended up on a subscription screen: nothing in the type stopped it. A type-only
+   * import, so this module stays free of any runtime dependency on the UI.
+   */
+  statusIcon: IconName
   statusTone: StatusTone
   /** Set for building items so the UI can show a progress ring. */
   progress?: { weeksElapsed: number; weeksTotal: number; pct: number }
@@ -181,27 +188,27 @@ export function deriveStatus(
 ): LineStatus {
   switch (phase) {
     case 'review':
-      return { statusLabel: "Not landing — let's adjust", statusIcon: '⚠', statusTone: 'review' }
+      return { statusLabel: "Not landing — let's adjust", statusIcon: 'alert-triangle', statusTone: 'review' }
     case 'unfelt':
-      return { statusLabel: 'Daily essential', statusIcon: '✓', statusTone: 'essential' }
+      return { statusLabel: 'Daily essential', statusIcon: 'check', statusTone: 'essential' }
     case 'too-early': {
       const weeksTotal = Math.max(1, Math.round(windowDays / 7))
       const weeksElapsed = Math.min(weeksTotal, Math.floor(tenureDays / 7))
       const pct = windowDays > 0 ? Math.min(1, tenureDays / windowDays) : 1
       return {
         statusLabel: `Building ${benefitLabel(slot)} · wk ${weeksElapsed} of ${weeksTotal}`,
-        statusIcon: '↗',
+        statusIcon: 'trending-up',
         statusTone: 'building',
         progress: { weeksElapsed, weeksTotal, pct },
       }
     }
     case 'check':
-      return { statusLabel: 'Tell us how it’s going', statusIcon: '◔', statusTone: 'building' }
+      return { statusLabel: 'Tell us how it’s going', statusIcon: 'clock', statusTone: 'building' }
     case 'working':
       // A long-onset product is felt only faintly — don't overclaim it.
       return onset === 'long'
-        ? { statusLabel: 'Working quietly · long-term', statusIcon: '🌱', statusTone: 'essential' }
-        : { statusLabel: 'Felt & working', statusIcon: '⚡', statusTone: 'good' }
+        ? { statusLabel: 'Working quietly · long-term', statusIcon: 'leaf', statusTone: 'essential' }
+        : { statusLabel: 'Felt & working', statusIcon: 'bolt', statusTone: 'good' }
   }
 }
 

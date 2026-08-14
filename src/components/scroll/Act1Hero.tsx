@@ -179,7 +179,8 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
                 onClick={() => setLqdOpen(false)}
                 className="text-[12px] text-white/40 underline underline-offset-2 mt-1 self-center focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40 rounded"
               >
-                ← Back to the full stack builder
+                <QuizIcon name="arrow-left" size={13} />
+                Back to the full stack builder
               </button>
             </>
           )}

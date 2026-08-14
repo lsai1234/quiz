@@ -81,6 +81,9 @@ const GLYPHS = {
   check: <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />,
   'alert-triangle': <><path d="M12 4 2.7 20h18.6z" /><path d="M12 10v4" /><path d="M12 17.2h.01" /></>,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.8h.01" /></>,
+  star: <path d="M12 3.5l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8z" />,
+  /** The neutral fallback for a glyph name we don't recognise. */
+  dot: <circle cx="12" cy="12" r="2.5" />,
   lock: <><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></>,
   'log-out': <><path d="M9.5 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4.5" /><path d="M16 8l4 4-4 4" /><path d="M20 12H9.5" /></>,
 

@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconButton } from '@/components/ui/IconButton'
+import { Button } from '@/components/ui/Button'
+import { Icon } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { skipCredit, oneOffUnitPrice } from '@/lib/recharge/schedule'
 import { projectedEconomics } from '@/lib/recharge/mock'
@@ -82,7 +85,7 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
             </p>
             <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{fmtLong(delivery.date)}</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 flex-shrink-0 mt-0.5" aria-label="Close">✕</button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
@@ -105,9 +108,16 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-sm font-black" style={{ color: it.oneOff ? GREEN : ACCENT, fontFamily: 'var(--font-display)' }}>{formatGBP(it.price)}</span>
-                      <button onClick={() => onRemoveItem(it)} className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface)] border border-[var(--color-border)] active:scale-90" aria-label={`Remove ${it.productTitle}`}>−</button>
+                      <IconButton icon="dash" label={`Remove ${it.productTitle}`} size="sm" filled onClick={() => onRemoveItem(it)} />
                       {(() => { const prod = catalogue.find((p) => p.id === it.productId); return prod ? (
-                        <button onClick={() => onAddItem(prod)} className="w-7 h-7 rounded-lg flex items-center justify-center font-black text-[var(--color-bg)] active:scale-90" style={{ background: ACCENT }} aria-label={`Add an extra ${it.productTitle} to this box`} title="Add an extra to this box">+</button>
+                        <IconButton
+                          icon="plus"
+                          label={`Add an extra ${it.productTitle} to this box`}
+                          size="sm"
+                          onClick={() => onAddItem(prod)}
+                          color="var(--color-bg)"
+                          className="bg-[var(--color-accent)]"
+                        />
                       ) : null })()}
                     </div>
                   </div>
@@ -123,9 +133,10 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
           {/* Add to this box */}
           <div>
             {!adding ? (
-              <button onClick={() => setAdding(true)} className="w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all"
+              <button onClick={() => setAdding(true)} className="w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all inline-flex items-center justify-center gap-1.5"
                 style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, fontFamily: 'var(--font-display)' }}>
-                + Add something to this box
+                <Icon name="plus" size={15} />
+                Add something to this box
               </button>
             ) : (
               <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
@@ -165,10 +176,12 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
           <div>
             <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Move this delivery</p>
             <div className="flex gap-2 mb-2">
-              <button onClick={() => onReschedule(addDays(delivery.date, -7))} className="flex-1 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
-                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>← A week earlier</button>
-              <button onClick={() => onReschedule(addDays(delivery.date, 7))} className="flex-1 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all"
-                style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>A week later →</button>
+              <Button size="sm" icon="arrow-left" fullWidth onClick={() => onReschedule(addDays(delivery.date, -7))}>
+                A week earlier
+              </Button>
+              <Button size="sm" iconRight="arrow-right" fullWidth onClick={() => onReschedule(addDays(delivery.date, 7))}>
+                A week later
+              </Button>
             </div>
             <label className="flex items-center justify-between gap-2 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-border)] px-3 py-2.5">
               <span className="text-xs font-semibold text-[var(--color-text-2)]">Pick a date</span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { gsap } from 'gsap'
+import { Icon } from '@/components/ui/Icon'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice } from '@/lib/recharge/schedule'
@@ -239,8 +240,9 @@ export function SubscriptionDashboard() {
                     <button onClick={() => setSelectedDeliveryId(next.id)} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all" style={{ fontFamily: 'var(--font-display)' }}>
                       Edit next box
                     </button>
-                    <button onClick={() => setShowAdd(true)} className="py-2.5 px-4 rounded-xl text-sm font-bold active:scale-95 transition-all" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
-                      + Add
+                    <button onClick={() => setShowAdd(true)} className="py-2.5 px-4 rounded-xl text-sm font-bold active:scale-95 transition-all inline-flex items-center gap-1.5" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                      <Icon name="plus" size={15} />
+                      Add
                     </button>
                   </div>
                 </>
@@ -290,10 +292,11 @@ export function SubscriptionDashboard() {
             </p>
             <button
               onClick={() => setShowAdd(true)}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+              className="text-xs font-bold px-3 py-1.5 rounded-lg active:scale-95 transition-all inline-flex items-center gap-1.5"
               style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, fontFamily: 'var(--font-display)' }}
             >
-              + Add product
+              <Icon name="plus" size={13} />
+              Add product
             </button>
           </div>
           <div className="space-y-3" data-reveal>
@@ -316,8 +319,12 @@ export function SubscriptionDashboard() {
               className="w-full flex items-center justify-between py-3 text-sm font-bold text-[var(--color-text-2)]"
               style={{ fontFamily: 'var(--font-display)' }}
             >
-              <span>Plan & billing settings</span>
-              <span className="text-[var(--color-muted)]">{showSettings ? '▲' : '▼'}</span>
+              <span>Plan &amp; billing settings</span>
+              <Icon
+                name="chevron-down"
+                size={18}
+                className={`text-[var(--color-muted)] transition-transform duration-200 ${showSettings ? 'rotate-180' : ''}`}
+              />
             </button>
 
             {showSettings && (

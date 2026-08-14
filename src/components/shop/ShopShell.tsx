@@ -15,6 +15,7 @@ import { track } from '@/lib/analytics/events'
 import { DIETARY_LABEL } from '@/lib/product-facts'
 import { formatGBP, getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
+import { Icon } from '@/components/ui/Icon'
 import { ShopHeader } from './ShopHeader'
 import { ShopFilterBar } from './ShopFilterBar'
 import { ShopCategoryNav } from './ShopCategoryNav'
@@ -88,7 +89,7 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2.5 px-3.5 rounded-xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
         {summary && (
           <TrustChip>
-            <span style={{ color: accent }} aria-hidden>★</span>
+            <Icon name="star" size={12} className="shrink-0" />
             <span><span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{summary.average.toFixed(1)}</span> from {summary.count.toLocaleString()} reviews</span>
           </TrustChip>
         )}

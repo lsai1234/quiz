@@ -1,34 +1,29 @@
 'use client'
 
+import { Chip } from '@/components/ui/Chip'
+import { TONE } from '@/lib/ui/tokens'
+import type { IconName } from '@/components/ui/Icon'
 import type { StatusTone } from '@/lib/feedback'
 
-const TONE: Record<StatusTone, string> = {
-  good: '#34d399',
-  building: '#00D4FF',
-  essential: '#7dd3fc',
-  review: '#fbbf24',
-}
-
+/** The tone colours moved to `@/lib/ui/tokens`; re-exported so callers don't move. */
 export function toneColor(tone: StatusTone): string {
   return TONE[tone]
 }
 
 interface Props {
   label: string
-  icon: string
+  /** A glyph name — not a character. See `LineStatus.statusIcon`. */
+  icon: IconName
   tone: StatusTone
 }
 
-/** A small, glanceable status pill used on product cards. */
+/**
+ * A small, glanceable status pill used on product cards.
+ *
+ * The `icon` prop used to be a `string` and rendered whatever character it was
+ * handed, which is how `🌱` and `⚡` got onto a subscription screen. It takes a
+ * glyph name now, so an emoji cannot reach this component at all.
+ */
 export function StatusBadge({ label, icon, tone }: Props) {
-  const color = TONE[tone]
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-[9px] font-bold tracking-wide uppercase px-2 py-0.5 rounded-full flex-shrink-0"
-      style={{ color, background: `color-mix(in srgb, ${color} 14%, transparent)`, fontFamily: 'var(--font-display)' }}
-    >
-      <span aria-hidden>{icon}</span>
-      {label}
-    </span>
-  )
+  return <Chip color={TONE[tone]} icon={icon}>{label}</Chip>
 }

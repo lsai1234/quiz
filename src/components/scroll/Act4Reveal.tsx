@@ -110,7 +110,8 @@ export function Act4Reveal({ reducedMotion }: Props) {
                 className="inline-flex items-center gap-1.5 text-[10px] font-bold tracking-[0.18em] uppercase px-2.5 py-1 rounded-full"
                 style={{ fontFamily: 'var(--font-display)', color: '#00D4FF', background: 'rgba(0,212,255,0.1)', border: '1px solid rgba(0,212,255,0.25)' }}
               >
-                ⚡ Fully charged
+                <QuizIcon name="bolt" size={11} />
+                Fully charged
               </span>
               <span
                 className="text-[10px] font-bold tracking-[0.25em] uppercase text-[#00D4FF] mt-3 block"

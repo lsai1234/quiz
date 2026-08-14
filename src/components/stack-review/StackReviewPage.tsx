@@ -1,5 +1,6 @@
 'use client'
 
+import { Icon } from '@/components/ui/Icon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuizStore } from '@/lib/store'
@@ -557,7 +558,7 @@ export function StackReviewPage() {
                   style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
                 >
                   Delivery details — what lands each month
-                  <span className="text-[10px] text-[var(--color-muted)] transition-transform group-open:rotate-180">▾</span>
+                  <Icon name="chevron-down" size={16} className="text-[var(--color-muted)] transition-transform group-open:rotate-180" />
                 </summary>
                 <div className="px-3 pb-3">
                   <SubscriptionProtocol

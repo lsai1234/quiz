@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconButton } from '@/components/ui/IconButton'
 import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import {
   computeRemoveImpact,
@@ -88,7 +89,7 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
             <p className="text-[10px] font-bold tracking-widest uppercase mb-0.5" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{line.slotTitle}</p>
             <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Manage {line.productTitle}</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 flex-shrink-0 mt-0.5" aria-label="Close">✕</button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-6">

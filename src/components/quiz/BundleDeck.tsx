@@ -162,7 +162,7 @@ export function BundleDeck({ options, previews, selectedId, badges, featuredId, 
                   </span>
                 )}
                 <span className={`text-[11px] font-bold tracking-wide ${isActive ? 'text-[#00D4FF]' : 'text-white/30'}`} style={{ fontFamily: 'var(--font-display)' }}>
-                  {isActive ? 'Selected ✓' : 'Choose'}
+                  {isActive ? 'Selected' : 'Choose'}
                 </span>
               </div>
             </button>

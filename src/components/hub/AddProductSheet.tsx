@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconButton } from '@/components/ui/IconButton'
+import { Icon } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
@@ -34,10 +36,11 @@ function ProductCard({
       </p>
       <button
         onClick={() => onAdd(p)}
-        className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"
+        className="mt-3 w-full py-2.5 rounded-xl text-xs font-bold bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all inline-flex items-center justify-center gap-1.5"
         style={{ fontFamily: 'var(--font-display)' }}
       >
-        + Add to every delivery
+        <Icon name="plus" size={14} />
+        Add to every delivery
       </button>
     </div>
   )
@@ -122,7 +125,7 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
             </p>
             <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>What would you like to add?</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 flex-shrink-0 mt-0.5" aria-label="Close">✕</button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-5">
@@ -139,7 +142,7 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
             </div>
           )}
           {grouped.length === 0 && focused.length === 0 && (
-            <p className="text-sm text-[var(--color-muted)] text-center py-10">Your stack already covers everything available to subscribe to. 💪</p>
+            <p className="text-sm text-[var(--color-muted)] text-center py-10">Your stack already covers everything available to subscribe to.</p>
           )}
           {grouped.map(([slot, products]) => (
             <div key={slot}>

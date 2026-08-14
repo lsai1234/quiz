@@ -11,6 +11,7 @@ import { effectOnsetForProduct } from '@/lib/feedback'
 import type { EffectOnset } from '@/lib/catalogue/types'
 import { productFacts, productDietary } from '@/lib/product-facts'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { IconButton } from '@/components/ui/IconButton'
 import { ProductTile } from './ProductTile'
 
 interface Props {
@@ -154,13 +155,7 @@ export function ProductDetailSheet({
               )}
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 transition-all flex-shrink-0"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} />
         </div>
 
         {/* Scrollable body */}

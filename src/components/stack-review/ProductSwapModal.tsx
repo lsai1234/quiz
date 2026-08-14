@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconButton } from '@/components/ui/IconButton'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -94,13 +95,7 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
               </p>
             )}
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 transition-all flex-shrink-0 mt-0.5"
-            aria-label="Close"
-          >
-            ✕
-          </button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
         </div>
 
         {/* Scrollable product list */}

@@ -14,6 +14,7 @@ import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { hasRating } from '@/lib/shop/ratings'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { IconButton } from '@/components/ui/IconButton'
 import { CHRGDBolt } from '@/components/brand/CHRGDLogo'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
@@ -140,7 +141,7 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
               <p className="text-[11px] font-semibold mt-2" style={{ color: 'var(--color-amber)' }}>Back in stock soon</p>
             )}
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 transition-all flex-shrink-0" aria-label="Close">✕</button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} />
         </div>
 
         {/* Body */}
@@ -258,7 +259,7 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
               border: justAdded ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
             }}
           >
-            {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added ✓' : 'Add to basket'}
+            {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add to basket'}
           </button>
           <button
             onClick={handleBuyNow}

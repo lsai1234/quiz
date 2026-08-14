@@ -68,7 +68,7 @@ export function BundleAddOnCard({ addOn, product, added, onAdd, onRemove }: Prop
               }
         }
       >
-        {added ? 'Added to bundle ✓ · Remove' : 'Add to bundle +'}
+        {added ? 'Added to bundle · Remove' : 'Add to bundle'}
       </button>
     </div>
   )

@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { ChargeScale } from '@/components/ui/ChargeScale'
+import { ACCENT } from '@/lib/ui/tokens'
 import type { CheckInPlan, FeedbackDimension } from '@/lib/feedback'
-
-const ACCENT = '#00D4FF'
-const FACES = ['😞', '😕', '😐', '🙂', '😄']
-const SCALE = [1, 2, 3, 4, 5]
 
 interface Props {
   lastCheckIn?: string
@@ -108,23 +106,14 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
         {question.prompt}
       </p>
 
-      <div className="flex gap-1.5">
-        {SCALE.map((n) => (
-          <button
-            key={n}
-            onClick={() => answer(question.dimension, n)}
-            className="flex-1 aspect-square rounded-xl text-2xl flex items-center justify-center transition-all active:scale-90"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-            aria-label={`${n} out of 5`}
-          >
-            {FACES[n - 1]}
-          </button>
-        ))}
-      </div>
-      <div className="flex justify-between mt-1.5 px-1">
-        <span className="text-[10px] text-[var(--color-muted)]">Not great</span>
-        <span className="text-[10px] text-[var(--color-muted)]">Brilliant</span>
-      </div>
+      {/* The five emoji faces this replaces were the loudest cheap thing in the
+          hub. A charge meter says the same thing in the brand's own language —
+          and sends the identical 1–5 rating, so nothing downstream moves. */}
+      <ChargeScale
+        key={question.dimension}
+        label={question.prompt}
+        onChange={(rating) => answer(question.dimension, rating)}
+      />
 
       <button onClick={reset} className="mt-4 w-full text-xs font-semibold text-[var(--color-muted)] underline">
         Cancel

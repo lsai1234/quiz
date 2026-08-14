@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import confetti from 'canvas-confetti'
+import { IconButton } from '@/components/ui/IconButton'
 import { toneColor } from './StatusBadge'
 import type { LineRecommendation, StatusTone } from '@/lib/feedback'
 
@@ -51,14 +52,14 @@ export function CheckInJourney({ recommendations, onChange, onDismiss }: Props) 
       ? `${review.length} thing${review.length === 1 ? '' : 's'} to look at — the rest is on track.`
       : building.length > 0
         ? `On track. ${building.length} still building — give ${building.length === 1 ? 'it' : 'them'} a little time.`
-        : 'Everything’s on track. Nice work. 💪'
+        : 'Everything’s on track. Nice work.'
 
   return (
     <div className="rounded-2xl border p-5 mb-4"
       style={{ background: 'color-mix(in srgb, var(--color-accent) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--color-accent) 25%, transparent)' }}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Here’s where your stack is at</p>
-        <button onClick={onDismiss} className="text-xs text-[var(--color-muted)]" aria-label="Dismiss">✕</button>
+        <IconButton icon="x" label="Dismiss" size="sm" onClick={onDismiss} className="-mr-1 -mt-1" />
       </div>
       <p className="text-xs text-[var(--color-text-2)] leading-relaxed">{headline}</p>
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { IconButton } from '@/components/ui/IconButton'
+import { Button } from '@/components/ui/Button'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { downsizePreview } from '@/lib/recharge/mock'
 import { ExitStatementView } from './ExitStatement'
@@ -178,7 +180,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
             <p className="text-[10px] font-bold tracking-widest uppercase mb-0.5" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>Your subscription</p>
             <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{heading}</h3>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] active:scale-90 flex-shrink-0 mt-0.5" aria-label="Close">✕</button>
+          <IconButton icon="x" label="Close" size="sm" filled onClick={onClose} className="mt-0.5" />
         </div>
 
         <div className="overflow-y-auto flex-1 px-5 py-4 space-y-3">
@@ -199,7 +201,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {/* Step 2: tailored save */}
           {step === 'save' && (
             <>
-              <button onClick={() => setStep('reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
+              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep('reason')} className="mb-1 -ml-2 underline">Back</Button>
 
               {reason === 'expensive' && (
                 <Primary
@@ -260,7 +262,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {/* Step: snooze */}
           {step === 'snooze' && (
             <>
-              <button onClick={() => setStep(reason && reason !== 'break' ? 'save' : 'reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
+              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep(reason && reason !== 'break' ? 'save' : 'reason')} className="mb-1 -ml-2 underline">Back</Button>
               <p className="text-xs text-[var(--color-text-2)] leading-relaxed">Pick how long. Billing and deliveries pause; your stack and prices are untouched; there’s nothing to settle — so you lose nothing.</p>
               <div className="grid grid-cols-3 gap-2 mt-1">
                 {[1, 2, 3].map((m) => {
@@ -280,7 +282,7 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
           {/* Step: cancel */}
           {step === 'cancel' && (
             <>
-              <button onClick={() => setStep(reason ? 'save' : 'reason')} className="text-xs font-semibold text-[var(--color-muted)] underline mb-1">← Back</button>
+              <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setStep(reason ? 'save' : 'reason')} className="mb-1 -ml-2 underline">Back</Button>
 
               {!quote && !quoteError && (
                 <p className="text-sm text-[var(--color-muted)]">Working out where you stand…</p>

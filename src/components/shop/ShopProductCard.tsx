@@ -148,7 +148,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
             border: justAdded ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
           }}
         >
-          {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added ✓' : 'Add to basket'}
+          {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add to basket'}
         </button>
       </div>
     </div>
