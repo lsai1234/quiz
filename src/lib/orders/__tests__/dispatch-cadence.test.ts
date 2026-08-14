@@ -167,6 +167,26 @@ describe('a box the member skipped', () => {
   })
 })
 
+describe('an item the member pulled out of one box', () => {
+  // The other half of the same join. `removedLineIds` was read by the hub's own
+  // calendar and by nothing else, so "remove from this box" removed it from the
+  // member's PICTURE of the box and the supplier shipped it anyway — the member
+  // saw a box they had edited and received one they hadn't.
+  const pulled = plan({
+    startedAt: '2026-01-10T00:00:00.000Z',
+    deliveryOverrides: { '2026-02': { removedLineIds: ['line-protein'] } },
+  })
+
+  it('is actually left out of the box that ships', () => {
+    expect(titlesAt(1, pulled)).toEqual(['Magnesium'])
+  })
+
+  it('comes back in the months either side', () => {
+    expect(titlesAt(0, pulled)).toEqual(['Creatine', 'Magnesium', 'Protein'])
+    expect(titlesAt(2, pulled)).toEqual(['Magnesium', 'Protein'])
+  })
+})
+
 describe('shipsAtCycle', () => {
   const monthly = { deliveryIntervalMonths: 1, joinedAtMonth: 0 }
   const quarterly = { deliveryIntervalMonths: 3, joinedAtMonth: 0 }

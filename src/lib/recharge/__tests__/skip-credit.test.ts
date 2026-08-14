@@ -11,7 +11,7 @@
  * high and we credit for products that were never due, too low and we keep part
  * of a payment for a box we did not send.
  */
-import { creditForSkippedBox, buildDeliverySchedule } from '@/lib/recharge/schedule'
+import { creditForSkippedBox, buildDeliverySchedule, removeItemFromDelivery } from '@/lib/recharge/schedule'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 
 const NOW = new Date('2026-03-15T00:00:00.000Z')
@@ -109,5 +109,42 @@ describe('the calendar and dispatch now agree', () => {
     for (const delivery of schedule) {
       expect(delivery.items.some((i) => i.productId === 'protein')).toBe(true)
     }
+  })
+})
+
+describe('an item pulled out of one box', () => {
+  /**
+   * The same promise, one item down. "Skip next" on a product credits its value;
+   * removing that same product from that same box credited nothing, so which of
+   * two adjacent controls the member used decided whether they got their money
+   * back for an identical outcome.
+   */
+  const box = () => buildDeliverySchedule(plan(), [], 6, NOW).find((d) => d.items.length > 0)!
+  const proteinIn = (deliveryItems: { lineId?: string | null }[]) =>
+    deliveryItems.find((i) => i.lineId === 'line-protein')!
+
+  it('credits what that line was worth for the box', () => {
+    const before = plan()
+    const item = proteinIn(box().items) as never
+    const after = removeItemFromDelivery(before, box().id, item)
+
+    const line = after.lines.find((l) => l.id === 'line-protein')!
+    expect(line.pendingCredit).toBe(36.54)
+  })
+
+  it('credits once, however many times the same item is pulled', () => {
+    const item = proteinIn(box().items) as never
+    const once = removeItemFromDelivery(plan(), box().id, item)
+    const twice = removeItemFromDelivery(once, box().id, item)
+
+    expect(twice.lines.find((l) => l.id === 'line-protein')!.pendingCredit).toBe(36.54)
+  })
+
+  it('does not double-credit when the whole box is then skipped', () => {
+    // `creditForSkippedBox` already excludes removed lines, so the box credit
+    // covers only what is left in it.
+    const item = proteinIn(box().items) as never
+    const after = removeItemFromDelivery(plan(), box().id, item)
+    expect(creditForSkippedBox(after, box().id, NOW)).toBe(12.74)
   })
 })

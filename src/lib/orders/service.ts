@@ -16,7 +16,7 @@ import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
 import { deliverability } from '@/lib/pricing/zones'
 import { shipsAtCycle } from '@/lib/recharge/clock'
-import { cycleIsSkipped } from '@/lib/recharge/schedule'
+import { cycleIsSkipped, removedLinesAtCycle } from '@/lib/recharge/schedule'
 import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@/lib/supplier/types'
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -170,7 +170,11 @@ export function subscriptionOrderLines(
   // what the cadence predicted. That is E-3 fixed by construction rather than by
   // a second subtraction somewhere downstream.
   if (cycleIsSkipped(sub, cycle)) return []
-  return sub.lines.filter((line) => shipsAtCycle(line, cycle)).map((line) => {
+  // An item pulled out of THIS box, same reasoning one item down. `removedLineIds`
+  // was previously read only by the hub's own calendar, so "remove from this box"
+  // removed it from the member's picture of the box and shipped it regardless.
+  const removed = removedLinesAtCycle(sub, cycle)
+  return sub.lines.filter((line) => shipsAtCycle(line, cycle) && !removed.includes(line.id)).map((line) => {
     const product = catalogue.find((p) => p.id === line.productId)
     const variant =
       product?.variants.find((v) => (v.flavour || v.size || v.title) === line.variantTitle) ??

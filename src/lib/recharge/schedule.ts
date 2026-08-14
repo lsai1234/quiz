@@ -93,6 +93,23 @@ export function cycleIsSkipped(sub: MemberSubscription, cycle: number): boolean 
   return id != null && sub.deliveryOverrides?.[id]?.skipped === true
 }
 
+/**
+ * Lines the member pulled out of the box for this billing cycle.
+ *
+ * The twin of `cycleIsSkipped`, and it exists for the same reason: dispatch
+ * counts cycles, the member's overrides are keyed by calendar month, and a
+ * removal only means anything if both ends agree about which box is which.
+ *
+ * Until this existed, `removedLineIds` was read by the hub's own calendar and by
+ * nothing else — so pulling an item out of a box removed it from the picture of
+ * the box, and the supplier shipped it anyway. `subscriptionOrderLines` is the
+ * side that actually packs it.
+ */
+export function removedLinesAtCycle(sub: MemberSubscription, cycle: number): string[] {
+  const id = deliveryIdForCycle(sub, cycle)
+  return (id != null ? sub.deliveryOverrides?.[id]?.removedLineIds : undefined) ?? []
+}
+
 function dispatchDateInMonth(day: number, year: number, monthIndex0: number): Date {
   return new Date(year, monthIndex0, Math.min(Math.max(Math.round(day), 1), 28))
 }
@@ -292,7 +309,19 @@ export function addItemToDelivery(sub: MemberSubscription, id: string, product: 
   return withOverride(sub, id, { addedProductIds: [...cur, product.id] })
 }
 
-/** Remove an item from one box: a recurring line is pulled for that box; one one-off is undone. */
+/**
+ * Remove an item from one box: a recurring line is pulled for that box; one
+ * one-off is undone.
+ *
+ * Pulling a recurring line banks its value as a credit against the next
+ * payment, exactly as "Skip next" does one sheet away — the two controls are
+ * the same act described twice, and only one of them used to be worth anything.
+ * Without it the member paid the same flat monthly for a box with less in it,
+ * which is the opposite of what the Terms promise about a box that doesn't come.
+ *
+ * Undoing a one-off takes nothing back: it was charged on top of the plan and
+ * the charge simply doesn't happen.
+ */
 export function removeItemFromDelivery(sub: MemberSubscription, id: string, item: DeliveryItem): MemberSubscription {
   if (item.oneOff || item.lineId == null) {
     const cur = sub.deliveryOverrides?.[id]?.addedProductIds ?? []
@@ -302,5 +331,12 @@ export function removeItemFromDelivery(sub: MemberSubscription, id: string, item
   }
   const cur = sub.deliveryOverrides?.[id]?.removedLineIds ?? []
   if (cur.includes(item.lineId)) return sub
-  return withOverride(sub, id, { removedLineIds: [...cur, item.lineId] })
+  const lineId = item.lineId
+  const withCredit = {
+    ...sub,
+    lines: sub.lines.map((l) =>
+      l.id === lineId ? { ...l, pendingCredit: round((l.pendingCredit ?? 0) + l.pricePerDelivery) } : l,
+    ),
+  }
+  return withOverride(withCredit, id, { removedLineIds: [...cur, lineId] })
 }

@@ -15,8 +15,9 @@ import { ACCENT, AMBER, GLASS, ordinalSuffix, tint } from '@/lib/ui/tokens'
 import { selectShopAxes } from '@/lib/stack-stats'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
-import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice } from '@/lib/recharge/schedule'
-import { computeAddImpact, computeSkipImpact, computeUsageImpact, projectedEconomics, oneOffCharge } from '@/lib/recharge/mock'
+import { buildDeliverySchedule, nextDelivery, oneOffUnitPrice, skipCredit } from '@/lib/recharge/schedule'
+import { computeAddImpact, computeSkipImpact, computeUsageImpact, projectedEconomics, oneOffCharge, nextDispatchDate } from '@/lib/recharge/mock'
+import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { recommendForSubscription, buildCheckInQuestions } from '@/lib/feedback'
 import { CheckIn } from './CheckIn'
 import { CheckInJourney } from './CheckInJourney'
@@ -34,6 +35,11 @@ import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice
 import { constraintsFor, describeConstraints } from '@/lib/changes/safety'
 
 const DAY_OPTIONS = [1, 5, 10, 15, 20, 25, 28]
+
+/** A date as a change summary says it: "15 September". */
+function fmtDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })
+}
 
 function countdownLabel(iso: string): string {
   const days = Math.ceil((new Date(iso).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
@@ -426,7 +432,19 @@ export function SubscriptionDashboard() {
                           role="radio"
                           aria-checked={active}
                           aria-label={`${day}${ordinalSuffix(day)} of the month`}
-                          onClick={() => setDispatchDay(day)}
+                          onClick={() => {
+                            if (active) return
+                            setPending({
+                              title: 'Change your regular ship day',
+                              subtitle: `The ${sub.dispatchDayOfMonth}${ordinalSuffix(sub.dispatchDayOfMonth)} → the ${day}${ordinalSuffix(day)} of the month`,
+                              monthlyBefore: sub.flatMonthly,
+                              monthlyAfter: sub.flatMonthly,
+                              effectiveFrom: nextDispatchDate(day).toISOString(),
+                              note: 'This moves every future box, not just the next one. Your payment date follows your ship day, and the amount is unchanged.',
+                              confirmLabel: 'Change ship day',
+                              onConfirm: () => setDispatchDay(day),
+                            })
+                          }}
                           className="w-11 h-11 rounded-xl text-sm font-bold transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2"
                           style={{
                             background: active ? tint(ACCENT, 14) : GLASS.surface,
@@ -563,9 +581,51 @@ export function SubscriptionDashboard() {
           subscription={sub}
           delivery={selectedDelivery}
           catalogue={products}
-          onSkip={() => skipDelivery(selectedDelivery.id)}
-          onUnskip={() => unskipDelivery(selectedDelivery.id)}
-          onReschedule={(date) => rescheduleDelivery(selectedDelivery.id, date)}
+          onSkip={() => {
+            const credit = skipCredit(selectedDelivery)
+            setPending({
+              title: 'Skip this box',
+              subtitle: new Date(selectedDelivery.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }),
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: sub.flatMonthly,
+              credit,
+              effectiveFrom: selectedDelivery.date,
+              note: credit > 0.01
+                ? 'Nothing ships and nothing extra is charged — the value of the box is credited against your next payment. Your monthly plan is unchanged.'
+                : 'Nothing was due to ship in this box, so there is nothing to credit. Your monthly plan is unchanged.',
+              confirmLabel: 'Skip this box',
+              onConfirm: () => skipDelivery(selectedDelivery.id),
+            })
+          }}
+          onUnskip={() => {
+            // The credit banked when it was skipped goes back. Worth confirming
+            // for exactly that reason — "restore" sounds free and isn't.
+            const credit = skipCredit(selectedDelivery)
+            setPending({
+              title: 'Restore this delivery',
+              subtitle: new Date(selectedDelivery.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' }),
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: sub.flatMonthly,
+              effectiveFrom: selectedDelivery.date,
+              note: credit > 0.01
+                ? `This box ships again, so the ${formatGBP(credit)} credited for skipping it no longer applies. Your monthly plan is unchanged.`
+                : 'This box ships again. Your monthly plan is unchanged.',
+              confirmLabel: 'Restore it',
+              onConfirm: () => unskipDelivery(selectedDelivery.id),
+            })
+          }}
+          onReschedule={(date) => {
+            setPending({
+              title: 'Move this delivery',
+              subtitle: `${fmtDay(selectedDelivery.date)} → ${fmtDay(date.toISOString())}`,
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: sub.flatMonthly,
+              effectiveFrom: date.toISOString(),
+              note: 'Moving a box changes when it ships, not what you pay — your payment date and monthly amount stay as they are.',
+              confirmLabel: 'Move it',
+              onConfirm: () => rescheduleDelivery(selectedDelivery.id, date),
+            })
+          }}
           onAddItem={(product) => {
             setPending({
               title: 'Add to this box', subtitle: product.title,
@@ -586,7 +646,24 @@ export function SubscriptionDashboard() {
               onConfirm: () => addLine(product, products),
             })
           }}
-          onRemoveItem={(item) => removeItemFromDelivery(selectedDelivery.id, item)}
+          onRemoveItem={(item) => {
+            // A one-off never joined the plan, so undoing it just drops the
+            // extra charge. A recurring line is the member giving up something
+            // they have already paid for in the flat monthly — hence the credit.
+            setPending({
+              title: item.oneOff ? 'Remove this extra' : 'Leave this out of the box',
+              subtitle: item.productTitle,
+              monthlyBefore: sub.flatMonthly,
+              monthlyAfter: sub.flatMonthly,
+              credit: item.oneOff ? 0 : item.price,
+              effectiveFrom: selectedDelivery.date,
+              note: item.oneOff
+                ? `A one-off you added to this box. Removing it takes the ${formatGBP(item.price)} back off this month’s bill; your plan is untouched.`
+                : 'It stays on your plan and comes back next time — this box just won’t include it, and its value is credited against your next payment.',
+              confirmLabel: item.oneOff ? 'Remove it' : 'Leave it out',
+              onConfirm: () => removeItemFromDelivery(selectedDelivery.id, item),
+            })
+          }}
           onClose={() => setSelectedDeliveryId(null)}
         />
       )}

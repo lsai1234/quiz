@@ -105,6 +105,7 @@ export async function PUT(req: Request) {
 
   await saveSubscription(user.id, subscription)
   await creditNewlySkippedBoxes(user.id, previous, subscription)
+  await creditNewlySkippedLines(user.id, previous, subscription)
   return NextResponse.json({ ok: true })
 }
 
@@ -156,3 +157,52 @@ async function creditNewlySkippedBoxes(
     }
   }
 }
+
+/**
+ * Credit a single item the member has just pulled out of their next box.
+ *
+ * The twin of `creditNewlySkippedBoxes`, for the half of the product that skips
+ * ONE line rather than the whole delivery — "Skip next", and pulling an item out
+ * of a box from the delivery sheet. Both bank a `pendingCredit` on the line, the
+ * hub prints it as "credit to next payment", and until now no part of that
+ * reached Stripe: the member was shown a credit, and then billed in full.
+ *
+ * Showing a credit that never arrives is worse than not offering one, and it is
+ * the exact figure the change-confirmation screens put in front of someone
+ * before they commit — so it has to be real.
+ *
+ * The DELTA is what gets credited, never the running total: `pendingCredit`
+ * accumulates on the line, and crediting the balance each time would pay a
+ * member twice for the first skip. Keyed on the line's new ship date, which is
+ * unique per skip of that line, so a replayed PUT cannot stack credits.
+ */
+async function creditNewlySkippedLines(
+  userId: string,
+  previous: MemberSubscription,
+  next: MemberSubscription,
+): Promise<void> {
+  if (!next.stripeCustomerId || getPaymentSource() !== 'stripe') return
+
+  const before = new Map(previous.lines.map((l) => [l.id, l.pendingCredit ?? 0]))
+  const { creditCustomerBalance } = await import('@/lib/payments/stripe')
+
+  for (const line of next.lines) {
+    const delta = round((line.pendingCredit ?? 0) - (before.get(line.id) ?? 0))
+    if (delta <= 0) continue
+    try {
+      await creditCustomerBalance({
+        customerId: next.stripeCustomerId,
+        amount: delta,
+        description: `CHRGD — credit for ${line.productTitle}, not in your next box`,
+        // Keyed on the running TOTAL, not the delta or the ship date: the total
+        // only ever climbs, so every credit event has its own key, while a
+        // replayed PUT carrying identical state lands on the one already spent.
+        idempotencyKey: `skipline:${next.stripeSubscriptionId ?? userId}:${line.id}:${line.pendingCredit ?? 0}`,
+      })
+    } catch (err) {
+      console.error(`[hub] line credit of £${delta} failed to reach Stripe for ${userId}:`, err)
+    }
+  }
+}
+
+const round = (n: number) => Math.round(n * 100) / 100
