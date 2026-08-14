@@ -14,12 +14,17 @@
  *       key, no domain verification, and the promise that a member is told still
  *       holds.
  *
- *   `resend` — a provider is configured, and each email gets a **Send** button.
- *       One click delivers it and marks it sent. Still your decision, still your
- *       eyes on the message, without the copy-paste.
+ *   `gmail` — send through the Google Workspace account the business already
+ *       has. No third-party service and nothing further to pay for: Workspace
+ *       allows 2,000 messages a day, which is far past what this needs. Uses
+ *       Gmail's HTTP API rather than SMTP, because Vercel blocks outbound port
+ *       25 and SMTP from a serverless function hangs rather than fails.
  *
- *   `auto` — the same provider, sending by itself. The daily job flushes the
- *       queue and you only look when something fails.
+ *   `resend` — a dedicated email provider. Worth moving to when volume grows or
+ *       when bounce handling and per-message delivery data start to matter;
+ *       until then it is a second account to run for no gain.
+ *
+ *   `auto` — whichever provider is configured, sending everything by itself.
  *
  * Resolution order: explicit `NOTIFY_SOURCE` env, else MANUAL.
  *
@@ -31,16 +36,30 @@
 import type { NotificationProvider, TemplateId } from './types'
 
 /** Which provider actually delivers — `manual` meaning "a person does". */
-export type NotificationSource = 'manual' | 'mock' | 'resend'
-export type NotificationMode = 'auto' | 'manual' | 'mock' | 'resend'
+export type NotificationSource = 'manual' | 'mock' | 'resend' | 'gmail'
+export type NotificationMode = 'auto' | 'manual' | 'mock' | 'resend' | 'gmail'
 
 export function hasResendCredentials(): boolean {
   return Boolean(process.env.RESEND_API_KEY)
 }
 
+/**
+ * Gmail needs a refresh token; the client id and secret can be the ones the
+ * social login already uses, so the token is the only thing that says
+ * "somebody has actually connected a mailbox".
+ */
+export function hasGmailCredentials(): boolean {
+  return Boolean(
+    process.env.GMAIL_REFRESH_TOKEN &&
+      (process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID) &&
+      (process.env.GMAIL_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET),
+  )
+}
+
 export function getNotificationMode(): NotificationMode {
   const raw = (process.env.NOTIFY_SOURCE ?? 'manual').toString().trim().toLowerCase()
   if (raw === 'resend') return 'resend'
+  if (raw === 'gmail') return 'gmail'
   if (raw === 'auto') return 'auto'
   if (raw === 'mock') return 'mock'
   return 'manual'
@@ -56,7 +75,11 @@ export function getNotificationSource(): NotificationSource {
   const mode = getNotificationMode()
   if (mode === 'manual') return 'manual'
   if (mode === 'mock') return 'mock'
-  return hasResendCredentials() ? 'resend' : 'manual'
+  if (mode === 'gmail') return hasGmailCredentials() ? 'gmail' : 'manual'
+  if (mode === 'resend') return hasResendCredentials() ? 'resend' : 'manual'
+  // `auto` does not name a provider, so take whichever is actually configured.
+  if (hasResendCredentials()) return 'resend'
+  return hasGmailCredentials() ? 'gmail' : 'manual'
 }
 
 /** True when there is no provider at all — copy it out and tick it off. */
@@ -119,7 +142,7 @@ export function getAutoSendPolicy(): AutoSendPolicy {
   if (raw === 'confirmations') return canSendFromHub() ? 'confirmations' : 'none'
 
   // `NOTIFY_SOURCE=auto` predates this setting and meant "all". Still does.
-  if (getNotificationMode() === 'auto' && hasResendCredentials()) return 'all'
+  if (getNotificationMode() === 'auto' && (hasResendCredentials() || hasGmailCredentials())) return 'all'
   if (getNotificationSource() === 'mock') return 'all'
 
   // A provider, but no explicit instruction: receipts go, decisions wait.
@@ -141,9 +164,14 @@ export function isAutoSendEnabled(): boolean {
 
 /** Throws in manual mode — nothing should be asking for a provider there. */
 export async function getNotifier(): Promise<NotificationProvider> {
-  if (getNotificationSource() === 'resend') {
+  const source = getNotificationSource()
+  if (source === 'resend') {
     const { createResendProvider } = await import('./providers/resend')
     return createResendProvider()
+  }
+  if (source === 'gmail') {
+    const { createGmailProvider } = await import('./providers/gmail')
+    return createGmailProvider()
   }
   const { createMockProvider } = await import('./providers/mock')
   return createMockProvider()

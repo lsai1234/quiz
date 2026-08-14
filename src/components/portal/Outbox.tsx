@@ -221,6 +221,7 @@ export function Outbox() {
   const [streams, setStreams] = useState<StreamSummary[]>([])
   const [canSend, setCanSend] = useState(false)
   const [policy, setPolicy] = useState<'none' | 'confirmations' | 'all'>('none')
+  const [canConnectGmail, setCanConnectGmail] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -248,6 +249,7 @@ export function Outbox() {
         setStreams(d.streams ?? [])
         setCanSend(Boolean(d.canSend))
         setPolicy(d.autoSendPolicy ?? 'none')
+        setCanConnectGmail(Boolean(d.canConnectGmail))
       })
       .catch(() => setNotifications([]))
   }, [tab, logStatus, logTemplate, logEmail])
@@ -327,8 +329,8 @@ export function Outbox() {
   if (!notifications) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
 
   const manual = provider === 'manual'
-  // "via resend" reads like a typo in a sentence; it is a product name.
-  const providerName = provider === 'resend' ? 'Resend' : provider
+  // "via resend" reads like a typo in a sentence; these are product names.
+  const providerName = { resend: 'Resend', gmail: 'Gmail', mock: 'the mock sender' }[provider] ?? provider
 
   return (
     <div className="space-y-5">
@@ -360,6 +362,30 @@ export function Outbox() {
           </p>
         )}
       </div>
+
+      {/* ── Nothing can send yet, but Workspace is right there ── */}
+      {manual && canConnectGmail && (
+        <section
+          className="rounded-2xl border p-4"
+          style={{ background: 'var(--color-surface)', borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)` }}
+        >
+          <p className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            Send through your own Google Workspace
+          </p>
+          <p className="text-xs text-[var(--color-muted)] mb-3">
+            No third-party service and nothing more to pay for — Workspace allows 2,000 emails a day, which is far
+            past what this needs. Connecting takes a minute: pick the mailbox, then paste what it gives you into
+            Vercel. The permission it asks for can send email and cannot read your inbox.
+          </p>
+          <a
+            href="/api/portal/gmail-connect"
+            className="inline-block text-xs font-bold px-4 py-2 rounded-xl"
+            style={{ background: ACCENT, color: '#001018' }}
+          >
+            Connect Google Workspace
+          </a>
+        </section>
+      )}
 
       {/* ── Where each kind of email comes from ── */}
       {streams.length > 0 && (

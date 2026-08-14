@@ -120,6 +120,6 @@ export interface SendEnvelope {
 }
 
 export interface NotificationProvider {
-  readonly name: 'mock' | 'resend'
+  readonly name: 'mock' | 'resend' | 'gmail'
   send(to: string, email: RenderedEmail, envelope?: SendEnvelope): Promise<SendResult>
 }

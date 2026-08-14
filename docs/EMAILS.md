@@ -2,10 +2,24 @@
 
 Plain English, in the order you should do it. Follow it top to bottom.
 
-**Time:** about 30 minutes, plus up to an hour of waiting in Step 3 that you can
-walk away from.
+**Two ways to do this. Pick one:**
 
-**You'll need to be logged in to:** Cloudflare, Vercel, and a new Resend account.
+| | **Google Workspace** | **Resend** |
+|---|---|---|
+| Cost | Nothing — you already pay for it | Free to 3,000/month, then paid |
+| New account to run | None | One |
+| Setup | ~10 minutes | ~30 minutes + DNS wait |
+| Sending limit | 2,000 a day | Effectively none |
+| Bounce handling | None | Yes |
+| Separate noreply addresses | Needs aliases setting up | Automatic |
+
+**Start with Google Workspace.** It costs nothing, there's no new account, and
+2,000 emails a day is a very long way past where you are. Move to Resend when you
+outgrow it or when you want bounce data — the emails and the hub page are
+identical either way, so switching later is two environment variables.
+
+- Google Workspace → **[Route A](#route-a--google-workspace)**
+- Resend → **[Route B](#route-b--resend)**
 
 ---
 
@@ -32,7 +46,7 @@ You can change this later with one setting. Step 6 covers it.
 
 ### The addresses
 
-Once set up, emails come from three separate addresses:
+Emails can come from three separate addresses:
 
 | Address | What it sends |
 |---|---|
@@ -52,7 +66,106 @@ Google Workspace inbox as normal. That matters: a noreply with no reply path
 means a customer with a question has nowhere to ask it, and mail providers treat
 it as a spam signal too.
 
+On Resend you get all three automatically. On Google Workspace they need setting
+up as aliases (step A4) — until you do, everything sends from
+`contact@getchrgd.co.uk`, which is perfectly fine to start with.
+
 ---
+
+## Route A — Google Workspace
+
+You already pay for `contact@getchrgd.co.uk`. This sends through it.
+
+It uses Gmail's HTTP API rather than SMTP, because Vercel blocks outbound port 25
+and SMTP from a serverless function hangs until it times out rather than failing
+cleanly — which would mean your payment webhook timing out.
+
+### A1 — Check you have a Google client ID
+
+You probably already do: it's the same one "Continue with Google" uses on your
+sign-in page. In Vercel → Settings → Environment Variables, look for
+`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+
+If they're there, skip to A2.
+
+If not, make them: **console.cloud.google.com** → APIs & Services → Credentials →
+Create Credentials → OAuth client ID → Web application. Add this to
+**Authorised redirect URIs**:
+
+```
+https://getchrgd.co.uk/api/portal/gmail-connect/callback
+```
+
+Copy the client ID and secret into Vercel as `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET`, and redeploy.
+
+> If you already had these for social login, add the redirect URI above to the
+> existing client — you don't need a second one.
+
+### A2 — Enable the Gmail API
+
+In the same Google Cloud project: **APIs & Services → Library**, search "Gmail
+API", press **Enable**. One click, and it's free.
+
+### A3 — Connect the mailbox
+
+1. Open **getchrgd.co.uk/founderhub** → **Emails**.
+2. Press **Connect Google Workspace**.
+3. Pick `contact@getchrgd.co.uk` and approve. The permission it asks for is
+   "Send email on your behalf" — it **cannot read your inbox**.
+4. It prints two or three settings. Paste them into Vercel → Settings →
+   Environment Variables, and **redeploy**.
+
+While you're in Vercel, set `APP_URL` to `https://getchrgd.co.uk` if it isn't
+already. Every link in every email is built from it.
+
+That's it — you're sending. Jump to **[Step 6](#step-6--check-it-before-a-customer-does)**
+to check it.
+
+### A4 — Optional: the three separate addresses
+
+By default everything sends from `contact@getchrgd.co.uk`, which works fine and
+needs nothing further.
+
+If you want `orderconfirmation.noreply@` and friends, Gmail will only send as an
+address set up as a **verified alias** on the account:
+
+1. **admin.google.com** → Directory → Users → your user → **Alternate email
+   addresses**. Add all three noreply addresses. Aliases are free and don't use
+   a seat.
+2. In Gmail → **Settings → Accounts → Send mail as → Add another email address**.
+   Add each one, untick "Treat as an alias" if you prefer, and confirm the code
+   Google emails you — it arrives in the same inbox, because it's an alias of it.
+3. In Vercel, set:
+
+   ```
+   NOTIFY_DOMAIN=getchrgd.co.uk
+   GMAIL_SEND_AS=orderconfirmation.noreply@getchrgd.co.uk,subscriptions.noreply@getchrgd.co.uk,billing.noreply@getchrgd.co.uk
+   ```
+
+   Redeploy.
+
+> **Why `GMAIL_SEND_AS` matters.** If you ask Gmail to send as an address that
+> isn't a verified alias, it doesn't refuse — it quietly swaps in the account's
+> own address. So a typo looks like success and only shows up in a customer's
+> inbox weeks later. Listing them means the site catches it instead and tells you
+> in the log.
+
+### What you give up versus Resend
+
+- **2,000 emails a day**, shared across the whole account including anything you
+  send by hand. Fine at your volume; worth watching if you ever do a mailshot.
+- **No bounce data.** Resend tells you an address is dead; Gmail doesn't, so a
+  bad address just silently doesn't arrive.
+- **Shared reputation.** Automatic mail and your own mail come from the same
+  account, so a spam complaint about one touches the other. At a few emails a
+  day this is theoretical; at a few thousand it isn't.
+
+None of those are reasons not to start here.
+
+---
+
+## Route B — Resend
 
 ## Step 1 — Make a Resend account
 
@@ -62,10 +175,11 @@ which is a long way past where you are.
 1. Go to **resend.com** and sign up.
 2. That's it for now. Don't create an API key yet — Step 4.
 
-> **Why not just send from Google Workspace?** Workspace is built for a person
-> typing an email, not a server sending thousands. Google rate-limits it hard and
-> it makes deliverability problems very difficult to diagnose. Your `contact@`
-> inbox stays exactly as it is — this is only for the automatic ones.
+> **Only do this route if Route A isn't enough for you.** Resend earns its keep
+> when you outgrow 2,000 emails a day, when you want to know which addresses are
+> bouncing, or when you'd rather your automatic mail didn't share a reputation
+> with the mail you type yourself. Below that, it's a second account to run for
+> no gain.
 
 ---
 
@@ -166,15 +280,20 @@ their receipt.
 
 ## Step 6 — Check it, before a customer does
 
+Both routes end here.
+
 1. Open **getchrgd.co.uk/founderhub** → **Emails**.
 
 2. Look at the **Sending addresses** panel at the top. All three should read
    `…@getchrgd.co.uk`. If they say `hello@chrgd.dev`, `NOTIFY_DOMAIN` didn't
    take — check the spelling in Vercel and that you redeployed.
 
+   On Route A without step A4, all three will read `contact@getchrgd.co.uk` —
+   that's correct and fine.
+
 3. Under it, in green: *"Order and subscription receipts send automatically.
    Everything else waits for you."* That's the setting live. If it says nothing
-   is sending automatically, `RESEND_API_KEY` didn't take.
+   is sending automatically, the API key or refresh token didn't take.
 
 4. **Send yourself a real one.** Open any email in the list (or any row in the
    **Log**), press **Send me a copy**, and put in your own address. It sends the
@@ -185,6 +304,10 @@ their receipt.
    looking for: it arrives in the inbox and not junk; the layout holds together;
    the receipt looks like the one on the website; hitting reply addresses to
    `contact@getchrgd.co.uk`.
+
+   **Check who it says it's from.** On Route A this is how you find out whether
+   your aliases are actually set up — Gmail substitutes the account address
+   silently if they aren't.
 
 5. **Then place a real order on your own site** with your own card, and watch the
    receipt arrive by itself. Refund yourself afterwards from the Founders Hub.
@@ -259,9 +382,25 @@ of what they bought, not marketing, and the opt-out page says so plainly.
 `RESEND_API_KEY` is set on **Production** in Vercel, not just locally, and that
 you redeployed afterwards.
 
-**A row says "Failed to send" with a Resend error.** The reason is printed on the
-row, word for word. Nine times out of ten it's the domain not verified yet, or a
-CNAME still on the orange cloud in Cloudflare.
+**A row says "Failed to send".** The reason is printed on the row, word for word.
+
+On Resend, nine times out of ten it's the domain not verified yet, or a CNAME
+still on the orange cloud in Cloudflare.
+
+On Google Workspace:
+- *"Google refused the refresh token … invalid_grant"* — the token has been
+  revoked, the Google account's password changed, or your OAuth app is still in
+  **Testing** in Google Cloud, where refresh tokens expire after seven days.
+  Publish the app (APIs & Services → OAuth consent screen → **Publish**), then
+  press **Connect Google Workspace** again for a fresh token.
+- *"Gmail API has not been used in project …"* — step A2, enable the Gmail API.
+- *"Delegation denied"* — you're authenticated as one account and asking to send
+  as another that isn't a verified alias on it. Step A4.
+
+**Emails arrive from `contact@` instead of the noreply addresses.** The aliases
+aren't verified. Gmail substitutes silently rather than failing. Do step A4, and
+make sure `GMAIL_SEND_AS` lists them so the site warns you next time instead of
+letting it through.
 
 **Emails arrive but links point at localhost.** `APP_URL` isn't set on that
 environment.
@@ -269,10 +408,14 @@ environment.
 **The footer says `[Registered company name]`.** The four legal settings at the
 end of Step 5 aren't filled in.
 
-**Emails land in spam.** Check in this order: domain **Verified** in Resend; DMARC
-record present; CNAMEs on grey cloud not orange. If all three are right, it's
-usually just age — a brand-new sending domain has no reputation, and it settles
-over a week or two of real mail.
+**Emails land in spam.** On Google Workspace this is unlikely — you're sending
+through Google's own infrastructure with your existing domain reputation, which
+is one of the quieter advantages of Route A.
+
+On Resend, check in this order: domain **Verified**; DMARC record present; CNAMEs
+on grey cloud not orange. If all three are right, it's usually just age — a
+brand-new sending domain has no reputation, and it settles over a week or two of
+real mail.
 
 **A customer says they got two receipts.** They didn't. Every confirmation is
 deduplicated on the order or subscription id by a uniqueness constraint in the
@@ -289,8 +432,12 @@ lost — but nothing leaves until you take it off again.
 
 | Variable | What it does |
 |---|---|
-| `NOTIFY_SOURCE` | `manual` · `resend` · `auto`. Who does the sending. |
-| `RESEND_API_KEY` | From Resend. Needed for `resend` and `auto`. |
+| `NOTIFY_SOURCE` | `manual` · `gmail` · `resend` · `auto`. Who does the sending. |
+| `RESEND_API_KEY` | From Resend. Route B only. |
+| `GMAIL_REFRESH_TOKEN` | From the Connect button. Route A only. |
+| `GMAIL_SENDER` | The Workspace account being sent as. |
+| `GMAIL_SEND_AS` | Comma-separated aliases that account may send as. |
+| `GMAIL_CLIENT_ID` / `GMAIL_CLIENT_SECRET` | Optional. Falls back to the `GOOGLE_*` pair the social login uses. |
 | `NOTIFY_AUTO_SEND` | Blank (receipts only) · `all` · `none`. What goes without you. |
 | `NOTIFY_DOMAIN` | Verified sending domain. Creates the three noreply addresses. |
 | `NOTIFY_REPLY_TO` | Where replies land. Falls back to `NEXT_PUBLIC_SUPPORT_EMAIL`, then `contact@NOTIFY_DOMAIN`. |
@@ -300,6 +447,7 @@ lost — but nothing leaves until you take it off again.
 | `NOTIFY_FROM` | One address for everything. Used when `NOTIFY_DOMAIN` is blank. |
 | `APP_URL` | Public origin. Every link in every email is built from it. |
 | `RESEND_API_URL` | Point the sender at a stub or a self-hosted relay. Leave blank. |
+| `GMAIL_TOKEN_URL` / `GMAIL_API_URL` | Same, for Gmail. Leave blank. |
 | `NEXT_PUBLIC_LEGAL_NAME` and the three below it | Printed in the footer of every email. |
 
 ---

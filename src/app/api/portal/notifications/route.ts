@@ -16,6 +16,7 @@ import {
   canSendFromHub,
   getAutoSendPolicy,
   getNotificationSource,
+  hasGmailCredentials,
   isAutoSendEnabled,
   listStreams,
   sendsAutomatically,
@@ -70,6 +71,11 @@ export async function GET(req: Request) {
     // groups a founder is still on the hook for.
     autoSendPolicy: getAutoSendPolicy(),
     automaticTemplates: (['order-confirmation', 'subscription-confirmation'] as const).filter(sendsAutomatically),
+    // Offer the Google Workspace route only when it could actually work: there
+    // is a Google client to authorise against, and no mailbox connected yet.
+    // Dangling a button that 400s is worse than not offering it.
+    canConnectGmail:
+      !hasGmailCredentials() && Boolean(process.env.GMAIL_CLIENT_ID || process.env.GOOGLE_CLIENT_ID),
     // Which address each kind of email leaves from, so the page can show it and
     // a misconfigured domain is visible before anyone wonders why nothing lands.
     streams: listStreams(),

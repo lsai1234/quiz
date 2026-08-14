@@ -120,10 +120,18 @@ within seconds of paying; the rest is occasionally wrong and worth reading befor
 several hundred people do. `NOTIFY_AUTO_SEND` moves that line either way. With no
 provider at all, everything waits and is copied out by hand.
 
+Two ways to actually send. `NOTIFY_SOURCE=gmail` goes through the Google
+Workspace account the business already has — no third-party service, 2,000 a day,
+and the Founders Hub has a **Connect Google Workspace** button that does the
+OAuth round trip for you. `NOTIFY_SOURCE=resend` uses a dedicated provider, worth
+it once bounce data or volume start to matter. Both use an HTTP API rather than
+SMTP, because Vercel blocks outbound port 25 and SMTP from a serverless function
+hangs rather than fails.
+
 Setting `NOTIFY_DOMAIN` puts each kind on its own address —
 `orderconfirmation.noreply@`, `subscriptions.noreply@`, `billing.noreply@` — with
-replies going to the real contact inbox. The setup guide, including the DNS
-records, is `docs/EMAILS.md`.
+replies going to the real contact inbox. The setup guide for both routes is
+`docs/EMAILS.md`.
 
 ## Stack
 
