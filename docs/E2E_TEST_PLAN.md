@@ -373,14 +373,20 @@ Delivery is now **charged**, on a ladder that mirrors PowerBody's own (see
 - [ ] **D.3** £120 basket → free, and the basket says so
 - [ ] **D.4** The number in the basket matches the number on the Stripe page matches
       `order.shipping` in Commerce → Orders. All three came from different places before.
-- [ ] **D.5** Two options appear at Stripe: **UK mainland** and **Highlands, Islands &
-      Isle of Man** (+£2.95). Both appear even on a free-delivery basket, because Zone 2
-      never ships free.
+- [ ] **D.5** *(one-off only)* Two options appear at Stripe: **UK mainland** and
+      **Highlands, Islands & Isle of Man** (+£2.95). Both appear even on a free-delivery
+      basket, because Zone 2 never ships free.
 - [ ] **D.6** Pick **mainland** and give an `IV1 1AA` address → the fulfilment queue shows
       "£2.95 short on postage". Stripe fixes its options before it knows the postcode, so
       this flag is the check on a self-selected zone.
 - [ ] **D.7** Subscription checkout charges delivery too, and it **recurs** — check the
-      second invoice on a test clock carries it, since a box ships every cycle
+      second invoice on a test clock carries it, since a box ships every cycle. It appears
+      as a second **line item** ("Delivery — UK mainland"), *not* as a shipping option:
+      Stripe refuses `shipping_options` in subscription mode, and passing them anyway
+      failed every subscription checkout with "we couldn't start your payment just then".
+      There is no zone pick on a plan — everyone is billed the mainland rate.
+- [ ] **D.7b** A plan over £100/mo shows **no** postage line at all, rather than a £0.00
+      one on every invoice.
 - [ ] **D.8** `order.shipping` reaches PowerBody as `shipping_price` on the picking list
       (phase D7)
 

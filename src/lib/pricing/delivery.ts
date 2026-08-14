@@ -291,6 +291,34 @@ export function deliveryOptions(orderValue: number, config: PricingConfig = getP
   ]
 }
 
+/**
+ * The ONE delivery rate a subscription bills each month.
+ *
+ * Stripe Checkout accepts `shipping_options` in `payment` mode only — a
+ * subscription Session carrying them is refused outright, which is exactly how
+ * every subscription checkout came to die on "we couldn't start your payment".
+ * So a monthly plan cannot offer the mainland-or-Highlands pick that a one-off
+ * basket does. Postage rides as a second recurring line item instead, and this
+ * is the rate it rides at.
+ *
+ * The mainland rate, deliberately: it is the number `PlanReceipt` has already
+ * quoted the member on the way in, and the one ~96% of orders would have picked.
+ * A Highlands plan therefore pays a mainland rate — the same position as a
+ * one-off order where someone picks the cheaper option, which the fulfilment
+ * queue already checks against the address (`deliveryShortfall`), rather than a
+ * new hole in the model.
+ *
+ * Null when this basket ships free, so no £0.00 postage line appears on the
+ * member's invoice every month.
+ */
+export function recurringDeliveryOption(
+  orderValue: number,
+  config: PricingConfig = getPricingConfig(),
+): DeliveryOption | null {
+  const mainland = deliveryOptions(orderValue, config).find((o) => o.zone === 'uk-1')
+  return mainland && mainland.price > 0 ? mainland : null
+}
+
 /** Both sides of one shipment's delivery, and what it leaves us carrying. */
 export function quoteDelivery(shipment: Shipment, config: PricingConfig = getPricingConfig()): DeliveryQuote {
   // A known postcode beats an assumed zone every time.

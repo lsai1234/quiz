@@ -360,6 +360,25 @@ describe('when the payment cannot be started', () => {
     const result = await finalizeCheckout(user.id, user.email, { subscription, consent })
     expect(result).toEqual({ checkoutUrl: 'https://checkout.stripe.com/c/pay/cs_2', mock: false })
   })
+
+  it('asks for ONE delivery rate, not the pair a one-off basket offers', async () => {
+    // A subscription Session carrying `shipping_options` is refused by Stripe
+    // outright — payment mode only — and that refusal is what every member met
+    // at the end of the journey. Postage rides as a recurring line instead, at
+    // the mainland rate the receipt quoted.
+    mockCreateSubscriptionSession.mockResolvedValue({ id: 'cs_3', url: 'https://checkout.stripe.com/c/pay/cs_3' })
+    const user = await createUser({ email: 'posted@example.com', passwordHash: 'h' })
+
+    await finalizeCheckout(user.id, user.email, { subscription, consent })
+
+    const opts = mockCreateSubscriptionSession.mock.calls[0][0] as {
+      shippingOptions?: unknown
+      delivery?: { id: string; price: number } | null
+    }
+    expect(opts.shippingOptions).toBeUndefined()
+    // £42/mo sits on the middle rung of the ladder.
+    expect(opts.delivery).toMatchObject({ id: 'uk-mainland', price: 2.95 })
+  })
 })
 
 describe('claimIntroDiscount', () => {

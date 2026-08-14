@@ -163,11 +163,21 @@ postage would price the small baskets out. The tests also assert we never collec
 *more* than the parcel costs — if that ever needs to change it is a margin
 decision worth saying out loud rather than hiding in a postage line.
 
-**At checkout**, Stripe fixes its shipping options when the session is created —
-before the customer has typed an address — so a rate cannot react to their
-postcode. They pick mainland or Highlands themselves, and the fulfilment queue
-flags a mainland rate paid on a Highlands postcode (`deliveryShortfall`) rather
-than trusting the pick.
+**At a one-off checkout**, Stripe fixes its shipping options when the session is
+created — before the customer has typed an address — so a rate cannot react to
+their postcode. They pick mainland or Highlands themselves, and the fulfilment
+queue flags a mainland rate paid on a Highlands postcode (`deliveryShortfall`)
+rather than trusting the pick.
+
+**On a subscription there is no pick at all.** Stripe accepts `shipping_options`
+in payment mode only; a subscription Session carrying them is refused outright,
+and for a while that refusal was every subscription checkout — the member signed
+in, their plan saved, and the payment never started. Postage rides as a second
+recurring line item instead (`recurringDeliveryOption`), at the **mainland**
+rate, which is the number the plan receipt already quoted them and the one ~96%
+of orders would have chosen. A Highlands subscriber therefore pays a mainland
+rate; that is the same position as a one-off buyer who picks the cheaper option,
+and the queue's shortfall flag is where it shows up.
 
 **Different speeds** would need PowerBody to sell more than one service. Their
 rate card reads as one per zone; `GET /api/portal/supplier/shipping-methods`

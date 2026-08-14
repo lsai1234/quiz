@@ -308,9 +308,11 @@ can fetch would fail the whole catalogue.
 **`shipping_price` is a real number now.** Checkout charges delivery on a customer rate
 ladder (`delivery.customerRates`) that mirrors their supplier ladder, rather than promising
 free delivery and collecting nothing — see `docs/PRICING_GUIDE.md`. Stripe fixes its
-shipping options when the session is created, before it knows the postcode, so the customer
-self-selects mainland vs Highlands and the fulfilment queue flags a mainland rate paid on a
-Highlands address.
+shipping options when the session is created, before it knows the postcode, so on a one-off
+order the customer self-selects mainland vs Highlands and the fulfilment queue flags a
+mainland rate paid on a Highlands address. A subscription gets no such pick — Stripe takes
+shipping options in payment mode only — so postage recurs as a line item at the mainland
+rate.
 
 ### Two guards in the domain, not the screen
 

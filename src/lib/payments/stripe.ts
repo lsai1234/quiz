@@ -22,6 +22,20 @@ const STRIPE_API_VERSION = '2025-09-30.clover'
 /** One currency for the whole app. Every amount we send Stripe is in minor units of this. */
 export const DEFAULT_CURRENCY = 'gbp'
 
+/**
+ * Which recurring line is which, stamped on the product when the subscription
+ * Session is created.
+ *
+ * A subscription now bills TWO recurring lines — the stack and the postage —
+ * and `items.data[0]` is not promised to be either one in particular. Anything
+ * that later rewrites the plan's price has to find the right line by name;
+ * guessing at a position would eventually bill someone £52 of postage and 30p
+ * of supplements. See `updateSubscriptionAmount`.
+ */
+const LINE_TAG_KEY = 'chrgdLine'
+const STACK_LINE = 'stack'
+const DELIVERY_LINE = 'delivery'
+
 let _client: Stripe | null = null
 
 export function getStripeClient(): Stripe {
@@ -145,8 +159,13 @@ export interface CreateSubscriptionSessionOptions {
    * bills at `monthlyTotal`. Omit or 0 for no intro.
    */
   introDiscountRate?: number
-  /** Delivery choices — see `CreateSessionOptions.shippingOptions`. */
-  shippingOptions?: DeliveryOption[]
+  /**
+   * The postage to bill alongside the stack, every month, or null when this
+   * plan ships free. ONE rate rather than the pair a one-off basket offers —
+   * Stripe has no shipping options in subscription mode, so it rides as a
+   * second recurring line item instead. See `recurringDeliveryOption`.
+   */
+  delivery?: DeliveryOption | null
 }
 
 /**
@@ -185,12 +204,27 @@ async function getOrCreateFirstMonthCoupon(rate: number): Promise<string | null>
 }
 
 /**
- * Create a subscription Checkout Session billing a SINGLE monthly recurring
- * price equal to the bundle's flat monthly total. The bundle's contents live in
- * our `MemberSubscription` document (the source of truth); Stripe only holds the
+ * Create a subscription Checkout Session billing the bundle's flat monthly
+ * total, plus postage where it is charged. The bundle's contents live in our
+ * `MemberSubscription` document (the source of truth); Stripe only holds the
  * billing schedule + payment method.
  *
- * A claimed first-month discount rides along as a one-cycle coupon. If the
+ * ── Why postage is a LINE ITEM here and a shipping option on a one-off ──
+ * `shipping_options` is a payment-mode parameter. Stripe refuses a
+ * subscription-mode Session that carries one, and it refuses it before doing
+ * anything else — so from the day delivery started being charged, EVERY
+ * subscription checkout failed with "we couldn't start your payment", while
+ * one-off baskets (payment mode) went through untouched. Delivery recurs as a
+ * second monthly line instead, which is what Stripe's own guidance says to do
+ * for a recurring charge that isn't the plan.
+ *
+ * The cost of that: no mainland-or-Highlands pick on the Stripe page, so the
+ * member is billed the mainland rate `PlanReceipt` already quoted them. See
+ * `recurringDeliveryOption`.
+ *
+ * A claimed first-month discount rides along as a one-cycle coupon. Session
+ * discounts apply to the whole first invoice, postage included — a few pence on
+ * a £2.95 line, and not worth a second billing mechanism to carve out. If the
  * coupon can't be resolved the session is still created at full price rather
  * than dead-ending the member — they'd be owed the difference, so this logs
  * loudly.
@@ -203,19 +237,39 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
   if (rate > 0 && !coupon) {
     console.error(`[stripe] intro discount of ${Math.round(rate * 100)}% could not be applied — billing at full price.`)
   }
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency,
-          unit_amount: Math.round(opts.monthlyTotal * 100),
-          recurring: { interval: 'month' },
-          product_data: { name: 'CHRGD Monthly Stack' },
+
+  const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
+    {
+      quantity: 1,
+      price_data: {
+        currency,
+        unit_amount: Math.round(opts.monthlyTotal * 100),
+        recurring: { interval: 'month' },
+        product_data: { name: 'CHRGD Monthly Stack', metadata: { [LINE_TAG_KEY]: STACK_LINE } },
+      },
+    },
+  ]
+  // Postage, when this plan is under the free line. Its own line so the member
+  // can see what they are paying for it, every month, rather than finding it
+  // folded into a monthly total that no longer matches the receipt they agreed to.
+  if (opts.delivery && opts.delivery.price > 0) {
+    lineItems.push({
+      quantity: 1,
+      price_data: {
+        currency,
+        unit_amount: Math.round(opts.delivery.price * 100),
+        recurring: { interval: 'month' },
+        product_data: {
+          name: `Delivery — ${opts.delivery.label}`,
+          metadata: { [LINE_TAG_KEY]: DELIVERY_LINE, optionId: opts.delivery.id, zone: opts.delivery.zone },
         },
       },
-    ],
+    })
+  }
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'subscription',
+    line_items: lineItems,
     client_reference_id: opts.clientReferenceId,
     ...customerFields(opts),
     discounts: coupon ? [{ coupon }] : undefined,
@@ -223,12 +277,9 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
     // address just as much as a one-off does. Without this the webhook has no
     // address to put on the order, and `submitOrderToSupplier` now refuses an
     // order that has none — i.e. every box stuck in the queue, undeliverable.
+    // Address COLLECTION is supported in subscription mode; shipping RATES are
+    // not, which is the whole reason postage is a line item above.
     shipping_address_collection: { allowed_countries: ['GB'] },
-    // Delivery RECURS on a subscription, because a box ships every cycle. That
-    // matches what the margin model already assumes: a plan under the free line
-    // collects postage like any other order (see `lib/pricing/thresholds.ts`),
-    // and the flat monthly total is the goods alone.
-    shipping_options: shippingOptionsFor(opts.shippingOptions, currency),
     phone_number_collection: { enabled: true },
     success_url: opts.successUrl,
     cancel_url: opts.cancelUrl,
@@ -236,6 +287,30 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
     subscription_data: opts.metadata ? { metadata: opts.metadata } : undefined,
   })
   return { id: session.id, url: session.url }
+}
+
+/** The product a subscription item is priced against, when it was expanded. */
+function productMetadataOf(item: Stripe.SubscriptionItem): Stripe.Metadata | null {
+  const product = item.price.product
+  if (!product || typeof product === 'string' || product.deleted) return null
+  return product.metadata ?? null
+}
+
+/**
+ * The item carrying the PLAN's price, among however many the subscription has.
+ *
+ * Since postage became its own recurring line there are two, and Stripe makes no
+ * promise about their order — writing the new monthly onto the delivery line
+ * would bill a member £52 of postage and 30p of supplements. The line is found
+ * by the tag stamped on its product at checkout; a subscription created before
+ * that tag existed has a single untagged item, which is the plan by definition.
+ */
+function stackItemOf(subscription: Stripe.Subscription): Stripe.SubscriptionItem | undefined {
+  const items = subscription.items.data
+  return (
+    items.find((i) => productMetadataOf(i)?.[LINE_TAG_KEY] === STACK_LINE) ??
+    items.find((i) => productMetadataOf(i)?.[LINE_TAG_KEY] !== DELIVERY_LINE)
+  )
 }
 
 /**
@@ -247,10 +322,17 @@ export async function createSubscriptionSession(opts: CreateSubscriptionSessionO
  * A failure here must leave the local price alone rather than produce a plan
  * that says one thing and a card charge that says another.
  *
- * Replaces the single recurring line's price in place, keeping the billing
- * anchor so the member's payment date doesn't jump. `proration_behavior: 'none'`
- * because the new price is deliberately effective from the next cycle — a
- * reduction is never backdated and an increase has already served its notice.
+ * Replaces the PLAN line's price in place, keeping the billing anchor so the
+ * member's payment date doesn't jump. `proration_behavior: 'none'` because the
+ * new price is deliberately effective from the next cycle — a reduction is never
+ * backdated and an increase has already served its notice.
+ *
+ * A postage line, if there is one, is left exactly as it was: omitting an item
+ * from `items` updates nothing about it (unlike a Checkout Session's
+ * `line_items`, where omission removes). So a plan whose price crosses the
+ * free-delivery line keeps paying the postage it signed up at until someone
+ * changes it deliberately — the conservative direction, and visible in the
+ * member's own invoice rather than quietly re-rated underneath them.
  */
 export async function updateSubscriptionAmount(
   stripeSubscriptionId: string,
@@ -258,8 +340,13 @@ export async function updateSubscriptionAmount(
   opts: { currency?: string } = {},
 ): Promise<void> {
   const stripe = getStripeClient()
-  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId)
-  const item = subscription.items.data[0]
+  // Expanded, because which item is the plan is written on its PRODUCT — see
+  // `stackItemOf`. Unexpanded, `price.product` is a bare id and every item looks
+  // alike.
+  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+    expand: ['items.data.price.product'],
+  })
+  const item = stackItemOf(subscription)
   if (!item) throw new Error(`Stripe subscription ${stripeSubscriptionId} has no billable item`)
 
   // A subscription item's `price_data` takes a product ID, not inline product

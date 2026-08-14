@@ -21,7 +21,7 @@ import { getPaymentSource } from '@/lib/payments'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { clampRate, firstMonthRate, getPricingConfig, resolveIntroDiscount } from '@/lib/stack-blueprint/pricing'
 import { recordIntroClaim } from '@/lib/stack-blueprint/intro-allocation'
-import { deliveryOptions } from '@/lib/pricing/delivery'
+import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
 import {
   consentErrorMessage,
@@ -261,8 +261,10 @@ export async function finalizeCheckout(
       metadata: { userId },
       // Delivery on the monthly total, recurring with the box. The margin model
       // already assumes a plan under the free line collects postage like any
-      // other order; until now nothing actually collected it.
-      shippingOptions: deliveryOptions(subscription.flatMonthly, getPricingConfig()),
+      // other order. ONE rate, as its own monthly line: Stripe has no shipping
+      // options in subscription mode, and passing them anyway is what made every
+      // subscription checkout fail to start.
+      delivery: recurringDeliveryOption(subscription.flatMonthly, getPricingConfig()),
     })
     if (url) return { checkoutUrl: url, mock: false }
     // No session URL under LIVE payments. This used to fall through to the mock

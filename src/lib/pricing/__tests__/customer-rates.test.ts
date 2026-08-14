@@ -17,6 +17,7 @@ import {
   entryDeliveryCharge,
   freeDeliveryImpact,
   quoteDelivery,
+  recurringDeliveryOption,
 } from '@/lib/pricing/delivery'
 import { priceForMargin, unitEconomics } from '@/lib/pricing/unit-economics'
 import { PRICING_CONFIG, getPricingConfig, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
@@ -103,6 +104,22 @@ describe('checkout delivery options', () => {
     const options = deliveryOptions(150, config)
     expect(options[0].price).toBe(0)
     expect(options[1].price).toBe(config.delivery.zone2Surcharge)
+  })
+})
+
+describe('the one rate a subscription can bill', () => {
+  // Stripe takes shipping options in payment mode only, so a monthly plan gets
+  // no choice of zone — it gets a line item at one rate. That rate has to be the
+  // mainland one, because it is what the plan receipt quoted on the way in.
+  it('bills the mainland rate the receipt already quoted', () => {
+    expect(recurringDeliveryOption(45, config)).toMatchObject({ id: 'uk-mainland', price: 2.95 })
+    expect(recurringDeliveryOption(20, config)).toMatchObject({ price: 4.95 })
+  })
+
+  it('bills nothing at all above the free line', () => {
+    // Null rather than a £0.00 line: an invoice that itemises nothing every
+    // month is worse than one that stays quiet about it.
+    expect(recurringDeliveryOption(150, config)).toBeNull()
   })
 })
 
