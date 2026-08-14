@@ -80,6 +80,29 @@ export interface ConfirmationSubscription {
   manageUrl: string | null
   /** Each distinct shipping rhythm, listed separately (OC-F-044). */
   cadenceGroups: { label: string; items: string[] }[]
+
+  // ── What a receipt needs, when the subscription IS the whole confirmation ──
+  //
+  // A subscription signup has no order to print from: the order is raised later
+  // by the `invoice.paid` webhook under its own id, so the confirmation screen
+  // arrives before one exists and, for a while, printed nothing at all — a one-off
+  // buyer got a receipt and a member starting a monthly plan got a heading.
+  //
+  /** Member-facing reference for the plan, e.g. `SUB-7F3A91`. */
+  reference: string
+  /** When the plan started — the receipt's date line. */
+  startedAt: string
+  /** e.g. `l•••@gmail.com`, on the same masking rule as an order's. */
+  emailMasked: string | null
+  currency: string
+  /** What Stripe actually took today, in minor units. Null until it has. */
+  firstPayment: number | null
+  /** Where the boxes go, once Stripe has collected it. */
+  shippingAddress: Order['shippingAddress']
+  /** The plan's lines as a delivery schedule — no amounts. See `receiptFromConfirmation`. */
+  lines: { name: string; qty: number; cadenceMonths: number }[]
+  /** A minimum term, when the plan has one. */
+  minMonths: number
 }
 
 export interface ConfirmationPersonalisation {
@@ -178,10 +201,32 @@ function cadenceLabel(months: number): string {
   return months <= 1 ? 'Every month' : `Every ${months} months`
 }
 
+/**
+ * A member-facing reference for a plan.
+ *
+ * Derived from the Stripe subscription id rather than minted, so the same plan
+ * always prints the same reference however many times the page is loaded — a
+ * receipt whose number changes on refresh is not a receipt. Falls back to the
+ * account id for the window before Stripe's id has landed.
+ */
+export function subscriptionReference(sub: MemberSubscription, userId: string): string {
+  const source = sub.stripeSubscriptionId ?? userId
+  return `SUB-${source.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()}`
+}
+
 /** The member's plan, as the confirmation screen needs it (OC-F-040, OC-F-044). */
 export function toConfirmationSubscription(
   sub: MemberSubscription,
-  opts: { manageUrl?: string | null } = {},
+  opts: {
+    manageUrl?: string | null
+    /** The account the plan belongs to, for the reference fallback. */
+    userId?: string
+    /** What Stripe charged today, in minor units. */
+    firstPayment?: number | null
+    /** Stripe's collected email, when the plan has none of its own yet. */
+    email?: string | null
+    currency?: string
+  } = {},
 ): ConfirmationSubscription {
   // Group lines by shipping rhythm so a plan with mixed cadences lists each one
   // separately rather than averaging them into a single misleading line.
@@ -204,6 +249,19 @@ export function toConfirmationSubscription(
     cadenceGroups: [...groups.entries()]
       .sort((a, b) => a[0] - b[0])
       .map(([months, items]) => ({ label: cadenceLabel(months), items })),
+
+    reference: subscriptionReference(sub, opts.userId ?? sub.id),
+    startedAt: sub.startedAt,
+    emailMasked: maskEmail(sub.customerEmail || opts.email),
+    currency: (opts.currency ?? 'GBP').toUpperCase(),
+    firstPayment: opts.firstPayment ?? null,
+    shippingAddress: sub.shippingAddress ?? null,
+    lines: sub.lines.map((line) => ({
+      name: line.productTitle,
+      qty: line.quantity,
+      cadenceMonths: Math.max(1, line.deliveryIntervalMonths),
+    })),
+    minMonths: sub.minMonths,
   }
 }
 
@@ -302,7 +360,7 @@ export async function resolveConfirmation(input: ResolveInput): Promise<Confirma
   if (!reference) return RECOVERY
 
   if (session.mode === 'subscription') {
-    return buildFromSubscription(reference, state, input.origin)
+    return buildFromSubscription(reference, state, input.origin, session)
   }
 
   const order = await getOrder(reference)
@@ -347,6 +405,7 @@ async function buildFromSubscription(
   userId: string,
   state: ConfirmationState,
   origin: string,
+  session?: Pick<Stripe.Checkout.Session, 'amount_total' | 'currency' | 'customer_details'>,
 ): Promise<ConfirmationResponse> {
   const sub = await getSubscription(userId)
   if (!sub) return { ...RECOVERY, state: 'processing' }
@@ -362,7 +421,17 @@ async function buildFromSubscription(
     state,
     variant,
     order: null,
-    subscription: toConfirmationSubscription(sub, { manageUrl: `${origin}/myhub` }),
+    subscription: toConfirmationSubscription(sub, {
+      manageUrl: `${origin}/myhub`,
+      userId,
+      // Stripe's own figure for what came off the card today — the intro coupon
+      // and the postage line included. Not the plan's monthly, which is a
+      // different number in month one and would print as a charge that never
+      // happened.
+      firstPayment: session?.amount_total ?? null,
+      email: session?.customer_details?.email ?? null,
+      currency: session?.currency ?? undefined,
+    }),
     personalisation: null,
     analytics: {
       transactionId: sub.stripeSubscriptionId ?? userId,

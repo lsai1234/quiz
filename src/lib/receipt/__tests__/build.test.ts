@@ -116,6 +116,14 @@ describe('the confirmed order receipt', () => {
           nextBillingDate: '2026-09-13T00:00:00.000Z',
           nextDispatchDate: '2026-08-15T00:00:00.000Z',
           trial: { endsAt: '2026-08-27T00:00:00.000Z', thenAmount: 4800 },
+          reference: 'SUB-ABC123',
+          startedAt: '2026-08-13T00:00:00.000Z',
+          emailMasked: null,
+          currency: 'GBP',
+          firstPayment: null,
+          shippingAddress: null,
+          lines: [],
+          minMonths: 1,
           manageUrl: null,
           cadenceGroups: [],
         },
@@ -136,6 +144,14 @@ describe('the confirmed order receipt', () => {
           nextBillingDate: null,
           nextDispatchDate: null,
           trial: null,
+          reference: 'SUB-ABC123',
+          startedAt: '2026-08-13T00:00:00.000Z',
+          emailMasked: null,
+          currency: 'GBP',
+          firstPayment: null,
+          shippingAddress: null,
+          lines: [],
+          minMonths: 1,
           manageUrl: null,
           cadenceGroups: [
             { label: 'Every month', items: ['Whey Protein'] },
@@ -269,5 +285,81 @@ describe('the shared printing rules', () => {
       ] as never,
     )
     expect(items).toEqual([{ name: 'Whey Protein', qty: 1, amount: '£42.00' }])
+  })
+})
+
+describe('a subscription that has no order yet', () => {
+  /**
+   * The gap this fills: a subscription signup arrives at the confirmation screen
+   * BEFORE any order exists — the first box's order is raised later, by the
+   * `invoice.paid` webhook, under its own id. `receiptFromConfirmation` returned
+   * null on `!order`, so the one journey that ends in a recurring commitment was
+   * the only one that printed no paperwork at all.
+   */
+  function plan(over: Record<string, unknown> = {}) {
+    return confirmation({
+      variant: 'standard_subscription',
+      order: null,
+      subscription: {
+        cadenceLabel: 'Every month',
+        recurringAmount: 5218,
+        nextBillingDate: '2026-09-15T00:00:00.000Z',
+        nextDispatchDate: '2026-09-15T00:00:00.000Z',
+        trial: null,
+        manageUrl: null,
+        cadenceGroups: [],
+        reference: 'SUB-7F3A91',
+        startedAt: '2026-08-14T00:00:00.000Z',
+        emailMasked: 'l•••@gmail.com',
+        currency: 'GBP',
+        firstPayment: 4174,
+        shippingAddress: null,
+        lines: [
+          { name: 'CHRGD LQD Recover', qty: 1, cadenceMonths: 2 },
+          { name: 'Creatine', qty: 1, cadenceMonths: 1 },
+        ],
+        minMonths: 1,
+        ...over,
+      },
+    })
+  }
+
+  it('prints one, rather than nothing', () => {
+    const receipt = receiptFromConfirmation(plan())
+    expect(receipt).not.toBeNull()
+    expect(receipt!.docTitle).toBe('Subscription receipt')
+    expect(receipt!.reference).toBe('SUB-7F3A91')
+  })
+
+  it('shows what was actually charged today, not the monthly', () => {
+    // Month one carries the intro rate and the partner's code. Printing the
+    // plan's monthly here would state a charge that never happened.
+    const receipt = receiptFromConfirmation(plan())!
+    expect(receipt.total).toEqual({ label: 'Charged today', value: '£41.74' })
+    expect(receipt.charge).toContainEqual({ label: 'Recurring every month', value: '£52.18' })
+  })
+
+  it('prints no total at all when Stripe did not say what it took', () => {
+    const receipt = receiptFromConfirmation(plan({ firstPayment: null }))!
+    expect(receipt.total).toBeNull()
+    // Still stamped: this branch is only reached once Stripe said the session is paid.
+    expect(receipt.stamp).toBe('Payment approved')
+  })
+
+  it('lists the plan as a schedule, with no amounts to mis-add', () => {
+    const receipt = receiptFromConfirmation(plan())!
+    expect(receipt.items).toEqual([
+      { name: 'CHRGD LQD Recover', qty: 1, amount: null, note: 'every 2 months' },
+      { name: 'Creatine', qty: 1, amount: null, note: 'every month' },
+    ])
+  })
+
+  it('still refuses to print before the server has confirmed', () => {
+    expect(receiptFromConfirmation({ ...plan(), state: 'processing' })).toBeNull()
+  })
+
+  it('names a minimum term when there is one', () => {
+    const receipt = receiptFromConfirmation(plan({ minMonths: 3 }))!
+    expect(receipt.notes.join(' ')).toContain('3-month minimum term')
   })
 })

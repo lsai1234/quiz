@@ -103,7 +103,11 @@ function base(overrides: Partial<ReceiptData>): ReceiptData {
 export function receiptFromConfirmation(data: ConfirmationResponse): ReceiptData | null {
   if (data.state !== 'confirmed') return null
   const { order, subscription, personalisation } = data
-  if (!order) return null
+  // A subscription signup has no order to print from — the first box's order is
+  // raised later, by the `invoice.paid` webhook, under its own id. This branch
+  // used to return null for exactly that reason, so the one journey that ends in
+  // a recurring commitment was the one that produced no paperwork.
+  if (!order) return subscription ? subscriptionReceipt(subscription, personalisation) : null
 
   const currency = order.currency
   const isSub = data.variant === 'personalised_subscription' || data.variant === 'standard_subscription'
@@ -200,6 +204,90 @@ export function receiptFromConfirmation(data: ConfirmationResponse): ReceiptData
     stamp: subscription?.trial ? 'Trial started' : 'Payment approved',
     notes,
     reference: order.reference,
+  })
+}
+
+/**
+ * The receipt for a plan that has just started, with no order behind it yet.
+ *
+ * Everything a subscriber is owed in writing at the moment they commit: what
+ * they signed up to, what came off the card today, what recurs and when, where
+ * it ships, and how to stop it. The lines print WITHOUT amounts — rule 2 at the
+ * top of this file — because a flat monthly is not the sum of its products, and
+ * printing per-item prices next to a total they don't reach reads as an error in
+ * the customer's favour.
+ *
+ * The stamp is earned the same way as any other: this is only reached from a
+ * `confirmed` state, which means Stripe itself said the session was paid.
+ */
+function subscriptionReceipt(
+  subscription: NonNullable<ConfirmationResponse['subscription']>,
+  personalisation: ConfirmationResponse['personalisation'],
+): ReceiptData {
+  const currency = subscription.currency
+
+  const meta: ReceiptRow[] = [
+    { label: 'Plan', value: subscription.reference },
+    { label: 'Started', value: receiptDate(subscription.startedAt) },
+  ]
+  if (subscription.emailMasked) meta.push({ label: 'Email', value: subscription.emailMasked })
+  if (personalisation?.goalPathLabel) meta.push({ label: 'Stack', value: personalisation.goalPathLabel })
+
+  const items: ReceiptItem[] = subscription.lines.map((line) => ({
+    name: line.name,
+    qty: line.qty,
+    amount: null,
+    note: deliveryLabel(line.cadenceMonths),
+  }))
+
+  const charge: ReceiptRow[] = [
+    { label: `Recurring ${subscription.cadenceLabel.toLowerCase()}`, value: money(subscription.recurringAmount, currency) },
+  ]
+  if (subscription.nextBillingDate) {
+    charge.push({ label: 'Next payment', value: receiptDate(subscription.nextBillingDate) })
+  }
+  if (subscription.nextDispatchDate) {
+    charge.push({ label: 'Next delivery', value: receiptDate(subscription.nextDispatchDate) })
+  }
+
+  const notes: string[] = []
+  if (subscription.cadenceGroups.length > 1) {
+    notes.push('Your items arrive on their own schedules — one payment covers them all.')
+    for (const group of subscription.cadenceGroups) {
+      notes.push(`${group.label}: ${group.items.join(', ')}`)
+    }
+  }
+  notes.push(
+    subscription.minMonths > 1
+      ? `${subscription.minMonths}-month minimum term, then cancel any time before your next payment.`
+      : 'Cancel any time before your next payment from your account.',
+  )
+
+  const address = subscription.shippingAddress
+  const shipTo = address
+    ? [address.name, address.line1, address.line2 ?? '', `${address.city} ${address.postcode}`.trim()]
+        .filter((line) => line.trim().length > 0)
+    : []
+  if (shipTo.length > 0) {
+    notes.push('Something wrong? Email us within 12 hours and we’ll change it before it ships.')
+  }
+
+  return base({
+    docTitle: 'Subscription receipt',
+    meta,
+    shipTo,
+    items,
+    // What Stripe actually took today — month one is rarely the monthly figure,
+    // with an intro rate or a partner's code on it. Omitted rather than guessed
+    // at when the session didn't say.
+    total:
+      subscription.firstPayment != null
+        ? { label: 'Charged today', value: money(subscription.firstPayment, currency) }
+        : null,
+    charge,
+    stamp: 'Payment approved',
+    notes,
+    reference: subscription.reference,
   })
 }
 
