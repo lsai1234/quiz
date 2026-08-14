@@ -222,10 +222,13 @@ export function CancelSaveFlow({ subscription: sub, catalogue, recommendations, 
                 <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">Before you drop everything, swap the {reviewItems.length === 1 ? 'one product' : 'products'} that hasn’t worked for you:</p>
                 <div className="mt-3 space-y-2">
                   {reviewItems.map((r) => (
-                    <button key={r.lineId} onClick={() => { onSwap(r.lineId); onClose() }} className="w-full flex items-center justify-between gap-2 px-4 py-3 rounded-xl text-left active:scale-[0.98]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-                      <span className="text-sm font-semibold text-[var(--color-text)] truncate">{r.productTitle}</span>
-                      <span className="text-xs font-bold flex-shrink-0" style={{ color: AMBER }}>Find a better fit →</span>
-                    </button>
+                    <OptionRow
+                      key={r.lineId}
+                      label={r.productTitle}
+                      icon="swap"
+                      navigates
+                      onClick={() => { onSwap(r.lineId); onClose() }}
+                    />
                   ))}
                 </div>
               </Card>

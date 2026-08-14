@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Eyebrow } from '@/components/ui/Eyebrow'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { productBars, selectShopAxes, type StatAxis } from '@/lib/stack-stats'
@@ -140,7 +141,9 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
           </div>
         )}
         {grouped.length === 0 && focused.length === 0 && (
-          <p className="text-sm text-[var(--color-muted)] text-center py-10">Your stack already covers everything available to subscribe to.</p>
+          <EmptyState icon="check" title="Your stack is complete">
+            You already subscribe to everything we offer on subscription. New products land here as they launch.
+          </EmptyState>
         )}
         {grouped.map(([slot, products]) => (
           <div key={slot}>

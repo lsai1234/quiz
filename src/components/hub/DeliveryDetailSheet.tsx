@@ -5,6 +5,7 @@ import { IconButton } from '@/components/ui/IconButton'
 import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Eyebrow } from '@/components/ui/Eyebrow'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { GLASS } from '@/lib/ui/tokens'
 import { Icon } from '@/components/ui/Icon'
@@ -68,7 +69,9 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
         <div>
           <Eyebrow className="mb-2">In this box {delivery.items.length > 0 && `· ${delivery.items.length}`}</Eyebrow>
           {delivery.items.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)] py-4 text-center">Nothing ships in this box.</p>
+            <EmptyState icon="box" title="Nothing ships in this box">
+              Everything in your stack is on a longer cycle than this month. Add a one-off below if you want something anyway.
+            </EmptyState>
           ) : (
             <div className="space-y-2">
               {delivery.items.map((it, i) => (
@@ -107,16 +110,14 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
         {/* Add to this box */}
         <div>
           {!adding ? (
-            <button onClick={() => setAdding(true)} className="w-full py-3 rounded-xl text-sm font-bold active:scale-95 transition-all inline-flex items-center justify-center gap-1.5"
-              style={{ background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`, color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              <Icon name="plus" size={15} />
+            <Button variant="tone" tone={ACCENT} icon="plus" onClick={() => setAdding(true)}>
               Add something to this box
-            </button>
+            </Button>
           ) : (
             <div className="rounded-2xl p-3" style={{ background: GLASS.raised, border: `1px solid ${GLASS.hairline}` }}>
               <div className="flex items-center justify-between mb-1">
                 <p className="text-xs font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Add a product</p>
-                <button onClick={() => setAdding(false)} className="text-xs text-[var(--color-muted)]">Done</button>
+                <Button variant="ghost" size="sm" fullWidth={false} onClick={() => setAdding(false)} className="-mr-2">Done</Button>
               </div>
               <p className="text-[11px] text-[var(--color-muted)] mb-2">Just this box (one-off, full price) or every delivery (joins your plan & spreads the cost).</p>
               <div className="space-y-2 max-h-72 overflow-y-auto">
@@ -134,12 +135,12 @@ export function DeliveryDetailSheet({ subscription, delivery, catalogue, onSkip,
                         </p>
                       )}
                       <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button onClick={() => { onAddItem(p); setAdding(false) }} className="py-2 rounded-lg text-xs font-bold active:scale-95 transition-all" style={{ border: '1px solid var(--color-border-2)', color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                        <Button variant="secondary" size="sm" onClick={() => { onAddItem(p); setAdding(false) }}>
                           Just this box · +{formatGBP(oneOffUnitPrice(p))}
-                        </button>
-                        <button onClick={() => { onAddRecurring(p); setAdding(false) }} className="py-2 rounded-lg text-xs font-bold active:scale-95 transition-all" style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
+                        </Button>
+                        <Button variant="primary" size="sm" onClick={() => { onAddRecurring(p); setAdding(false) }}>
                           Every delivery · +{formatGBP(econ.perMonth)}/mo
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )

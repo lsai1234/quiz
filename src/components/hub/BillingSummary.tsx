@@ -3,7 +3,7 @@
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { Card } from '@/components/ui/Card'
 import { Eyebrow } from '@/components/ui/Eyebrow'
-import { ACCENT, GLASS, GREEN } from '@/lib/ui/tokens'
+import { ACCENT, GLASS, GREEN, ordinalSuffix } from '@/lib/ui/tokens'
 import { MoneyRow } from './MoneyRow'
 import { nextChargeBreakdown } from '@/lib/recharge/schedule'
 import { cancelSettlement } from '@/lib/recharge/mock'
@@ -14,11 +14,6 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 function fmtDate(s: string | null): string {
   if (!s) return '—'
   return new Date(s).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long' })
-}
-
-function ordinal(n: number): string {
-  if (n >= 11 && n <= 13) return 'th'
-  switch (n % 10) { case 1: return 'st'; case 2: return 'nd'; case 3: return 'rd'; default: return 'th' }
 }
 
 interface Props {
@@ -41,7 +36,7 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
         </span>
       </div>
       <p className="text-xs text-[var(--color-text-2)] leading-relaxed">
-        One flat amount on the {sub.dispatchDayOfMonth}{ordinal(sub.dispatchDayOfMonth)} each month — it covers your whole stack,
+        One flat amount on the {sub.dispatchDayOfMonth}{ordinalSuffix(sub.dispatchDayOfMonth)} each month — it covers your whole stack,
         spread evenly so you never get a lumpy bill, however often each item ships.
       </p>
 

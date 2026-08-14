@@ -1,6 +1,6 @@
 # myhub — UI consistency redesign
 
-**Status:** proposal / implementation plan. No code changed yet.
+**Status:** delivered. All eight phases shipped on `claude/myhub-ui-design-consistency-fb82q5`, one commit each so any phase can be reverted on its own. The audit below is kept as written, in the present tense, because it is the record of what was wrong and why — see §7 for what each phase actually did.
 **Scope:** `/myhub` (`src/components/hub/**`, 19 files, ~2,900 lines) + the block underneath the printed receipt on the order-confirmation screen (`src/components/order/OrderConfirmation.tsx`, `src/components/stack-review/CheckoutSuccess.tsx`).
 **Rule:** behaviour-preserving. This is a presentation-layer change. No pricing maths, no store logic, no API routes move. Every phase ships and reverts on its own.
 
@@ -307,3 +307,36 @@ If the whole plan is too much at once, the cheapest route to "it stopped looking
 - **Phase 4 is a wide diff over money flows.** Mitigated by the hard constraint that only markup moves, and by doing it after the primitives are proven in Phases 2–3.
 - **`statusIcon` type change** ripples from `lib/feedback.ts` into `StatusBadge`. Small, and covered by existing tests plus the compiler.
 - **Slot glyph coverage.** `slot-visuals.ts` covers all 10 `StackSlot` values with a `hexagon` fallback, so `ProductTile` cannot render broken — but the fallback tile should be reviewed once against real catalogue data before Phase 2 ships.
+
+---
+
+## 7. What shipped
+
+One commit per phase. Nothing in the pricing engine, the change domain or the exit ledger moved: the whole of this is presentation, and the test count going up rather than sideways is the evidence.
+
+| Phase | Commit | What it did |
+|---|---|---|
+| 0 | *Build the pieces the hub should have been assembled from* | `src/lib/ui/tokens.ts`, `src/components/ui/*` — Icon, Button, IconButton, Sheet, Card, Chip, Note, Eyebrow, Skeleton, Disclosure, ChargeScale; `useReducedMotion`. Nothing imported it yet. |
+| 1 | *Stop drawing the interface with characters somebody else designed* | Every emoji and typed glyph gone from the member-facing app. `LineStatus.statusIcon` became `IconName`, so an emoji can no longer reach a status badge. `QuizIcon` collapsed into an adapter over the shared set. |
+| 2 | *Show the member the products they're paying for* | `StackItemCard` rebuilt with `ProductTile` + `StatBars` on stack-wide axes. |
+| 3 | *Give the hub a shell, and stop it greeting people by their login* | `HubShell`, `HubSkeleton`, the real billing portal in place of `alert()`, the next-box hero, `Disclosure` settings, the eyebrow diet. |
+| 4 | *Put the six sheets on one sheet* | All six onto `Sheet` (~190 lines of duplication gone), `OptionRow` for the reason lists, the native range and date inputs replaced, product tiles in both sheets that ask for money. |
+| 5 | *Make the money screens look like the receipt they answer to* | `MoneyRow` — dotted leaders, one axis, tabular numerals — across billing summary, change impact and exit statement. Calendar contents as tiles, plus an edge fade. |
+| 6 | *(with 7 and 8)* | `HubLogin` on the primitives with real focus rings; `EmptyState` for the four bare "there's nothing here" sentences. |
+| 7 | | The block under the receipt: `CtaLink` matching `Button` metrics, and the quiz invitation as a designed aside rather than a third identical pill. |
+| 8 | | Focus rings on every remaining control, 44px targets, confetti behind `prefers-reduced-motion` and in-palette, `--color-muted` lifted from 4.12:1 to 4.88:1. |
+
+### The guards
+
+Four tests exist to stop this coming back, and each fails on source rather than on a rendered snapshot, so they survive refactors:
+
+- `src/components/__tests__/no-emoji.test.ts` — no emoji or icon-substitute characters anywhere in the member-facing tree. Comments are exempt; several quote the removed characters deliberately.
+- `src/components/hub/__tests__/accessibility.test.ts` — every `<button>` in `hub/` and `ui/` carries `focus-visible`; nothing is drawn under 44px without `hit-target`; anything calling `confetti()` or `gsap` checks `prefers-reduced-motion`.
+- `src/components/hub/__tests__/HubPage.test.ts` — no `alert`/`confirm`/`prompt` in the hub, and the login screen never renders before hydration resolves.
+- `src/app/__tests__/contrast.test.ts` — reads the palette out of `globals.css` and holds every text tier to AA, while keeping the tiers distinct from each other.
+
+### Left deliberately
+
+- **The founders' portal** keeps its emoji and its hand-rolled controls. It's an internal tool; holding it to the customer-facing bar is a cost with no reader to benefit.
+- **`→` in CTA copy** and **`✦` on the stat bars** are house typography the good screens already used. `−` before a negative amount is simply correct.
+- **`ProductTile`'s slot-glyph fallback** carries the hub wherever the catalogue has no photograph, which in practice is most of it. Real photography would be the single biggest remaining lift, and it isn't a code change.

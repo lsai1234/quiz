@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { ProviderButtons } from '@/components/auth/ProviderButtons'
-
-const ACCENT = '#00D4FF'
+import { CHRGDMark } from '@/components/brand/CHRGDLogo'
+import { Button } from '@/components/ui/Button'
+import { Eyebrow } from '@/components/ui/Eyebrow'
+import { Note } from '@/components/ui/Note'
+import { ACCENT, GLASS, RED, tint } from '@/lib/ui/tokens'
 
 interface Props {
   /** Sign in or create an account. Resolves to an error message, or null on success. */
@@ -62,17 +65,28 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
     }
   }
 
+  /**
+   * Hairline inputs with a real focus ring. The fields had neither — an opaque
+   * grey box and `outline-none`, which took the browser's focus indicator away
+   * and put nothing back, so a keyboard user could not tell which field they
+   * were in.
+   */
+  const inputClass =
+    'w-full px-4 py-3.5 min-h-13 rounded-2xl text-sm outline-none transition-all duration-200 ' +
+    'focus-visible:ring-2 focus:border-[color:var(--color-accent)]'
   const inputStyle = {
-    background: 'var(--color-surface-2)',
-    border: '1px solid var(--color-border)',
+    background: GLASS.surface,
+    border: `1px solid ${GLASS.hairline}`,
     color: 'var(--color-text)',
+    ['--tw-ring-color' as string]: tint(ACCENT, 45),
   }
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center">
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-        Subscriber hub
-      </p>
+      {/* The one screen in the app that greets a member by name carried no
+          brand mark at all. */}
+      <CHRGDMark size={34} className="mb-5" />
+      <Eyebrow color={ACCENT} className="mb-2">Subscriber hub</Eyebrow>
       <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
         Manage your stack
       </h1>
@@ -83,13 +97,9 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
       </p>
 
       {ssoError && (
-        <p
-          className="w-full mb-4 rounded-2xl px-4 py-3 text-xs font-semibold leading-relaxed text-left"
-          role="alert"
-          style={{ color: '#ff6b6b', background: 'rgba(255,107,107,0.08)', border: '1px solid rgba(255,107,107,0.22)' }}
-        >
+        <Note icon="alert-triangle" color={RED} live className="w-full mb-4 text-left">
           {ssoError}
-        </p>
+        </Note>
       )}
 
       <form
@@ -103,7 +113,7 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
           placeholder="you@email.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none"
+          className={inputClass}
           style={inputStyle}
         />
         <input
@@ -112,42 +122,38 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
           placeholder={mode === 'signup' ? 'Choose a password (8+ characters)' : 'Password'}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none"
+          className={inputClass}
           style={inputStyle}
         />
 
         {error && (
-          <p className="text-xs font-semibold text-left px-1" style={{ color: '#ff6b6b' }} role="alert">
+          <p className="text-xs font-semibold text-left px-1" style={{ color: RED }} role="alert">
             {error}
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={!valid || loading || submitting}
-          className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-50"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
+        <Button type="submit" variant="primary" size="lg" disabled={!valid || loading || submitting}>
           {submitting ? 'One sec…' : mode === 'login' ? 'Sign in →' : 'Create account →'}
-        </button>
+        </Button>
       </form>
 
       <ProviderButtons providers={providers} returnTo="/myhub" />
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
+        size="sm"
+        fullWidth={false}
         onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null) }}
-        className="mt-5 text-xs font-semibold underline text-[var(--color-muted)]"
+        className="mt-4 underline"
       >
         {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
-      </button>
+      </Button>
 
-      <p className="mt-6 text-[11px] leading-relaxed text-[var(--color-muted)]"
-        style={{ background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)`, borderRadius: 12, padding: '10px 14px' }}>
+      <Note icon="lock" className="mt-6 text-left">
         Your account and stack are saved to the app database. In mock mode your first
         sign-in loads a sample subscription; live, this connects to your real
         Recharge subscription.
-      </p>
+      </Note>
     </div>
   )
 }

@@ -6,9 +6,10 @@ import { track } from '@/lib/analytics/events'
 import type { ConfirmationResponse } from '@/lib/orders/confirmation'
 import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
 import { receiptFromConfirmation } from '@/lib/receipt/build'
+import { Card as UICard } from '@/components/ui/Card'
+import { Icon, type IconName } from '@/components/ui/Icon'
+import { ACCENT, AMBER, GLASS, tint } from '@/lib/ui/tokens'
 
-const ACCENT = '#00D4FF'
-const AMBER = '#fbbf24'
 
 /**
  * The order confirmation screen.
@@ -126,43 +127,98 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function Card({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 mt-4">
-      {title && (
-        <h2
-          className="text-[10px] font-bold tracking-widest uppercase mb-3"
-          style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
-        >
-          {title}
-        </h2>
-      )}
+    <UICard as="section" eyebrow={title} className="mt-4">
       {children}
-    </section>
+    </UICard>
   )
 }
 
-/** Never a dead end: every state gets a way back into the shop (OC-F-072). */
-function BackToShop({ label = 'Back to shop' }: { label?: string }) {
+/**
+ * A link that looks and measures like a `Button`.
+ *
+ * It has to stay an anchor — these navigate, and Next's prefetching and
+ * middle-click both depend on it — so the button's metrics are borrowed rather
+ * than the component.
+ */
+function CtaLink({
+  href, label, cta, icon, primary,
+}: {
+  href: string; label: string; cta: string; icon?: IconName; primary?: boolean
+}) {
   return (
     <Link
-      href="/shop"
-      className="block w-full text-center py-3.5 rounded-2xl text-sm font-bold border border-[var(--color-border)] text-[var(--color-text)] mt-3"
-      style={{ fontFamily: 'var(--font-display)' }}
-      onClick={() => track('confirmation_cta', { cta: 'back_to_shop' })}
+      href={href}
+      onClick={() => track('confirmation_cta', { cta })}
+      className={[
+        'flex items-center justify-center gap-2 w-full min-h-13 px-5 py-3.5 rounded-2xl',
+        'text-sm font-bold transition-all duration-200 active:scale-[0.97]',
+        'focus-visible:outline-none focus-visible:ring-2',
+      ].join(' ')}
+      style={{
+        fontFamily: 'var(--font-display)',
+        ['--tw-ring-color' as string]: tint(ACCENT, 45),
+        ...(primary
+          ? { background: ACCENT, color: 'var(--color-bg)' }
+          : { background: GLASS.surface, border: `1px solid ${GLASS.hairline}`, color: 'var(--color-text)' }),
+      }}
     >
+      {icon && <Icon name={icon} size={16} />}
       {label}
     </Link>
   )
 }
 
-function PrimaryCta({ href, label, cta }: { href: string; label: string; cta: string }) {
+/** Never a dead end: every state gets a way back into the shop (OC-F-072). */
+function BackToShop({ label = 'Back to shop' }: { label?: string }) {
+  return <div className="mt-3"><CtaLink href="/shop" label={label} cta="back_to_shop" /></div>
+}
+
+function PrimaryCta({ href, label, cta, icon }: { href: string; label: string; cta: string; icon?: IconName }) {
+  return <div className="mt-5"><CtaLink href={href} label={label} cta={cta} icon={icon} primary /></div>
+}
+
+/**
+ * The quiz invitation, which is a different KIND of thing from "Continue
+ * shopping" and should not look identical to it.
+ *
+ * It used to be a third full-width pill stacked under two others, directly
+ * beneath a receipt that had been carefully art-directed — three identical
+ * grey-and-cyan rectangles reading as leftovers under a piece of paper. This is
+ * the quiz's own aside language instead: a glyph in a tinted disc, a headline,
+ * one line of why, a chevron.
+ */
+function QuizInvitation() {
   return (
     <Link
-      href={href}
-      className="block w-full text-center py-3.5 rounded-2xl text-sm font-bold mt-5"
-      style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-      onClick={() => track('confirmation_cta', { cta })}
+      href="/"
+      onClick={() => track('confirmation_cta', { cta: 'take_quiz' })}
+      className={[
+        'flex items-center gap-3 w-full mt-3 rounded-2xl px-4 py-4',
+        'transition-all duration-200 active:scale-[0.99]',
+        'focus-visible:outline-none focus-visible:ring-2',
+      ].join(' ')}
+      style={{
+        background: `linear-gradient(100deg, ${tint(ACCENT, 12)}, ${tint(ACCENT, 4)})`,
+        border: `1px solid ${tint(ACCENT, 28)}`,
+        boxShadow: `0 8px 30px -14px ${tint(ACCENT, 45)}`,
+        ['--tw-ring-color' as string]: tint(ACCENT, 45),
+      }}
     >
-      {label}
+      <span
+        className="shrink-0 flex items-center justify-center w-9 h-9 rounded-full"
+        style={{ background: tint(ACCENT, 16), color: ACCENT }}
+      >
+        <Icon name="sparkle" size={17} />
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+          Take the quiz
+        </span>
+        <span className="block text-xs text-[var(--color-text-2)] mt-0.5 leading-snug">
+          Two minutes, and we&apos;ll build a stack matched to your goals.
+        </span>
+      </span>
+      <Icon name="chevron-right" size={16} className="shrink-0 text-[var(--color-muted)]" />
     </Link>
   )
 }
@@ -269,7 +325,7 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
         </p>
       )}
 
-      {receipt && <ReceiptPrinter receipt={receipt} className="mt-6 mb-2" />}
+      {receipt && <ReceiptPrinter receipt={receipt} className="mt-6 mb-1" />}
 
       {order?.refunded && (
         <Card>
@@ -306,21 +362,12 @@ function Confirmed({ data }: { data: ConfirmationResponse }) {
       )}
 
       {isSub ? (
-        <PrimaryCta href="/myhub" label="Manage your subscription" cta="manage_subscription" />
+        <PrimaryCta href="/myhub" label="Manage your subscription" cta="manage_subscription" icon="sliders" />
       ) : (
         <PrimaryCta href="/shop" label="Continue shopping" cta="continue_shopping" />
       )}
       {isSub && <BackToShop label="Keep exploring" />}
-      {!isSub && !personalisation && (
-        <Link
-          href="/"
-          className="block w-full text-center py-3 rounded-2xl text-sm font-bold border border-[var(--color-border)] text-[var(--color-text-2)] mt-3"
-          style={{ fontFamily: 'var(--font-display)' }}
-          onClick={() => track('confirmation_cta', { cta: 'take_quiz' })}
-        >
-          Take the quiz — get a stack matched to your goals
-        </Link>
-      )}
+      {!isSub && !personalisation && <QuizInvitation />}
     </Shell>
   )
 }

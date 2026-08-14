@@ -5,6 +5,7 @@ import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Chip } from '@/components/ui/Chip'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { ACCENT, GLASS, GREEN, tint } from '@/lib/ui/tokens'
 import { OptionRow } from '@/components/ui/OptionRow'
@@ -89,7 +90,13 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
           <div className="space-y-3">
             <Button variant="ghost" size="sm" icon="arrow-left" fullWidth={false} onClick={() => setReason(null)} className="mb-1 -ml-2 underline">Change reason</Button>
             {alternatives.length === 0 ? (
-              <p className="text-sm text-[var(--color-muted)] text-center py-10">No alternatives match that for this product. Try a different reason.</p>
+              <EmptyState
+                icon="swap"
+                title="Nothing else fits that"
+                action={<Button variant="secondary" size="sm" icon="arrow-left" onClick={() => setReason(null)}>Try another reason</Button>}
+              >
+                We don&apos;t have an alternative that answers that for this product yet.
+              </EmptyState>
             ) : (
               alternatives.map((alt) => {
                 const imp = computeSwapImpact(subscription, line.id, alt)

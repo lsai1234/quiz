@@ -98,3 +98,20 @@ export const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
 
 /** Standard transition duration, in ms. Matches `duration-200` in the quiz. */
 export const DURATION = 200
+
+/**
+ * "st" / "nd" / "rd" / "th" for a day of the month.
+ *
+ * Lives here because two screens need it — the billing summary's "on the 15th"
+ * and the ship-day picker's accessible names — and a second copy is how they
+ * end up disagreeing about 11, 12 and 13.
+ */
+export function ordinalSuffix(n: number): string {
+  if (n >= 11 && n <= 13) return 'th'
+  switch (n % 10) {
+    case 1: return 'st'
+    case 2: return 'nd'
+    case 3: return 'rd'
+    default: return 'th'
+  }
+}

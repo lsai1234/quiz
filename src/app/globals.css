@@ -6,7 +6,11 @@
   --color-surface-2: #1f1f23;
   --color-border: #27272a;
   --color-border-2: #3f3f46;
-  --color-muted: #71717a;
+  /* Lifted from #71717a, which measured 4.12:1 on --color-bg — under AA, and
+     the hub sets it at 10–11px all over the place, which is the worst place to
+     be under it. #7d7d87 measures 4.88:1 and still reads as the quiet tier.
+     Locked by a test; see src/app/__tests__/contrast.test.ts. */
+  --color-muted: #7d7d87;
   --color-text: #fafafa;
   --color-text-2: #a1a1aa;
   --color-accent: #00D4FF;

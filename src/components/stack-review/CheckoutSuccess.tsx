@@ -6,8 +6,8 @@ import type { ChangePolicy } from '@/lib/recharge/types'
 import type { ReceiptItem } from '@/lib/receipt/types'
 import { demoReference, receiptFromStackCheckout } from '@/lib/receipt/build'
 import { ReceiptPrinter } from '@/components/receipt/ReceiptPrinter'
-
-const ACCENT = '#00D4FF'
+import { Button } from '@/components/ui/Button'
+import { Note } from '@/components/ui/Note'
 
 interface Props {
   plan: 'oneoff' | 'subscription'
@@ -72,21 +72,16 @@ export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto
       <ReceiptPrinter receipt={receipt} className="w-full mt-7" />
 
       {mock && (
-        <div className="mt-6 px-4 py-3 rounded-xl text-xs leading-relaxed max-w-sm"
-          style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)` }}>
+        <Note icon="info" className="mt-6 max-w-sm text-left">
           <strong>Demo mode.</strong> No payment was taken. Add your Stripe keys and switch Payments to
           live in the Founders Hub to take real {isSub ? 'subscriptions' : 'orders'}.
-        </div>
+        </Note>
       )}
 
       {onBack && (
-        <button
-          onClick={onBack}
-          className="mt-7 py-3 px-6 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
+        <Button variant="secondary" icon="arrow-left" fullWidth={false} onClick={onBack} className="mt-7">
           Back to your stack
-        </button>
+        </Button>
       )}
     </div>
   )

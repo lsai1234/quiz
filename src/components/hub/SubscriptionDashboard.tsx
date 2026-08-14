@@ -5,12 +5,13 @@ import { gsap } from 'gsap'
 import { Button } from '@/components/ui/Button'
 import { Card } from '@/components/ui/Card'
 import { Disclosure } from '@/components/ui/Disclosure'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { Eyebrow } from '@/components/ui/Eyebrow'
 import { Icon } from '@/components/ui/Icon'
 import { Note } from '@/components/ui/Note'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
-import { ACCENT, AMBER, GLASS, tint } from '@/lib/ui/tokens'
+import { ACCENT, AMBER, GLASS, ordinalSuffix, tint } from '@/lib/ui/tokens'
 import { selectShopAxes } from '@/lib/stack-stats'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
@@ -263,7 +264,11 @@ export function SubscriptionDashboard() {
                   <p className="text-[11px] text-[var(--color-text-2)] mt-0.5 leading-relaxed">
                     Everything carries on as normal until then, which is what clears your balance.
                   </p>
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    fullWidth={false}
+                    className="mt-1 -ml-2 underline"
                     onClick={() => {
                       void fetch('/api/hub/subscription/cancel', {
                         method: 'POST',
@@ -271,11 +276,9 @@ export function SubscriptionDashboard() {
                         body: JSON.stringify({ mode: 'resume' }),
                       }).then(() => refresh())
                     }}
-                    className="mt-2 text-xs font-bold underline"
-                    style={{ color: ACCENT }}
                   >
                     Actually, keep my plan
-                  </button>
+                  </Button>
                 </div>
               )}
               {sub.status === 'paused' ? (
@@ -336,7 +339,13 @@ export function SubscriptionDashboard() {
                   </div>
                 </>
               ) : (
-                <p className="text-sm text-[var(--color-text-2)]">No upcoming deliveries scheduled.</p>
+                <EmptyState
+                  icon="calendar"
+                  title="No deliveries scheduled"
+                  action={<Button variant="primary" size="sm" icon="plus" onClick={() => setShowAdd(true)}>Add a product</Button>}
+                >
+                  There&apos;s nothing due to ship. Add something to your plan and it&apos;ll appear here.
+                </EmptyState>
               )}
             </div>
           </div>
@@ -407,13 +416,26 @@ export function SubscriptionDashboard() {
                 <Card>
                   <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Regular ship day</p>
                   <p className="text-xs text-[var(--color-muted)] mb-3">Boxes default to the {sub.dispatchDayOfMonth}th. Move any single box from the calendar.</p>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Regular ship day">
                     {DAY_OPTIONS.map((day) => {
                       const active = sub.dispatchDayOfMonth === day
                       return (
-                        <button key={day} onClick={() => setDispatchDay(day)}
-                          className="w-10 h-10 rounded-xl text-sm font-bold transition-all active:scale-90"
-                          style={{ background: active ? 'var(--color-accent)' : 'var(--color-surface)', color: active ? 'var(--color-bg)' : 'var(--color-text-2)', border: '1px solid var(--color-border)' }}>
+                        <button
+                          key={day}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          aria-label={`${day}${ordinalSuffix(day)} of the month`}
+                          onClick={() => setDispatchDay(day)}
+                          className="w-11 h-11 rounded-xl text-sm font-bold transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2"
+                          style={{
+                            background: active ? tint(ACCENT, 14) : GLASS.surface,
+                            border: `1px solid ${active ? tint(ACCENT, 55) : GLASS.hairline}`,
+                            color: active ? ACCENT : 'var(--color-text-2)',
+                            fontFamily: 'var(--font-display)',
+                            ['--tw-ring-color' as string]: tint(ACCENT, 45),
+                          }}
+                        >
                           {day}
                         </button>
                       )

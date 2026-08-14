@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { IconButton } from '@/components/ui/IconButton'
+import { Button } from '@/components/ui/Button'
+import { ACCENT, GLASS, tint } from '@/lib/ui/tokens'
 import type { ConsentStanding } from '@/lib/legal/campaign'
 
-const ACCENT = '#00D4FF'
 
 interface Notice {
   headline: string
@@ -81,25 +82,27 @@ export function ReconsentNotice() {
       ))}
 
       <div className="flex gap-2 mt-3 flex-wrap">
-        <button
-          onClick={accept}
-          disabled={saving}
-          className="px-4 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-60"
-          style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-        >
+        <Button variant="primary" size="sm" onClick={accept} disabled={saving} fullWidth={false}>
           {saving ? 'One moment…' : 'I’ve read these — accept'}
-        </button>
+        </Button>
         <a
           href="/legal/terms"
-          className="px-4 py-2.5 rounded-xl text-xs font-bold border border-[var(--color-border)] text-[var(--color-text-2)]"
+          className="inline-flex items-center px-4 py-2.5 min-h-10 rounded-xl text-xs font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2"
+          style={{
+            background: GLASS.surface,
+            border: `1px solid ${GLASS.hairline}`,
+            color: 'var(--color-text-2)',
+            fontFamily: 'var(--font-display)',
+            ['--tw-ring-color' as string]: tint(ACCENT, 45),
+          }}
         >
           Read the terms
         </a>
         {/* Saying this out loud is the point. A member who does not know they can
             decline has not really been given a choice. */}
-        <button onClick={() => setDismissed(true)} className="text-xs text-[var(--color-muted)] underline px-1">
+        <Button variant="ghost" size="sm" fullWidth={false} onClick={() => setDismissed(true)} className="underline">
           Not now — nothing changes
-        </button>
+        </Button>
       </div>
     </div>
   )
