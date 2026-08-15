@@ -18,7 +18,14 @@ import { Field, controlSurface, fieldControlProps, type FieldProps } from './Fie
  */
 
 export interface InputProps
-  extends Omit<InputHTMLAttributes<HTMLInputElement>, 'className' | 'style' | 'id' | 'required' | 'disabled'>,
+  extends Omit<
+      InputHTMLAttributes<HTMLInputElement>,
+      // `prefix` is a real HTML attribute (RDFa, typed `string`), and ours takes
+      // a node. Without dropping it here the two collide and the whole prop type
+      // silently resolves to something no call site can satisfy — invisible,
+      // because the build sets `typescript.ignoreBuildErrors`.
+      'className' | 'style' | 'id' | 'required' | 'disabled' | 'prefix'
+    >,
     FieldProps {
   /** A unit or symbol shown before the value — currency, for instance. */
   prefix?: ReactNode
