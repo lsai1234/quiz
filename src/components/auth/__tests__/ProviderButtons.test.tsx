@@ -63,4 +63,53 @@ describe('the sign-in buttons', () => {
     // Navigation is what a failed stash must not do; jsdom would record it here.
     expect(window.location.href).not.toContain('/api/auth/google')
   })
+
+  /**
+   * A button that can decline to navigate has to say something, or it reads as
+   * broken — which is exactly how the checkout gate's Google button was reported.
+   */
+  describe('when a pre-step can refuse', () => {
+    it('prints the caller’s reason under the buttons, where the finger is', () => {
+      render(
+        <ProviderButtons
+          providers={ALL.slice(0, 1)}
+          beforeNavigate={jest.fn()}
+          error="Please confirm you’ve read and agree to the terms."
+        />,
+      )
+      expect(screen.getByRole('alert')).toHaveTextContent(/please confirm/i)
+    })
+
+    it('says nothing until there is something to say', () => {
+      render(<ProviderButtons providers={ALL.slice(0, 1)} beforeNavigate={jest.fn()} />)
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('goes busy while the pre-step runs, so a slow stash is not mistaken for a dead button', async () => {
+      let release!: () => void
+      const stash = jest.fn(() => new Promise<void>((resolve) => { release = resolve }))
+      render(<ProviderButtons providers={ALL.slice(0, 2)} beforeNavigate={stash} />)
+
+      await userEvent.click(screen.getByRole('button', { name: /Continue with Google/ }))
+
+      const google = screen.getByRole('button', { name: /Taking you to Google/ })
+      expect(google).toHaveAttribute('aria-busy', 'true')
+      // And nobody starts a second sign-in over the top of the first.
+      expect(screen.getByRole('button', { name: /Continue with Apple/ })).toBeDisabled()
+
+      release()
+    })
+
+    it('hands the button back when the pre-step refuses, so they can fix it and retry', async () => {
+      const stash = jest.fn().mockRejectedValue(new Error('consent required'))
+      render(<ProviderButtons providers={ALL.slice(0, 1)} beforeNavigate={stash} />)
+
+      await userEvent.click(screen.getByRole('button', { name: /Continue with Google/ }))
+
+      const google = screen.getByRole('button', { name: /Continue with Google/ })
+      expect(google).toBeEnabled()
+      await userEvent.click(google)
+      expect(stash).toHaveBeenCalledTimes(2)
+    })
+  })
 })

@@ -11,6 +11,13 @@ import { useState } from 'react'
  * screen and the rest sit behind "More ways to sign in". The checkout gate is a
  * modal at the last step before payment, and a column of nine buttons there
  * pushes the thing they came to do off the bottom of a phone.
+ *
+ * ── When there is a pre-step ─────────────────────────────────────────────────
+ * With `beforeNavigate` these stop being links and become buttons, and a button
+ * that can decline to navigate has to say so. It reports both halves: the
+ * clicked button goes busy for as long as the pre-step runs, and if the pre-step
+ * refuses, the caller's `error` is printed directly under the buttons — where
+ * the finger already is, not at the bottom of a scrolling sheet.
  */
 
 interface Provider {
@@ -94,14 +101,19 @@ export function ProviderButtons({
   providers,
   returnTo,
   beforeNavigate,
+  error,
 }: {
   providers: Provider[]
   returnTo?: string
   /** Runs before the OAuth redirect (e.g. stash the pending checkout). If it
    *  throws, navigation is aborted. */
   beforeNavigate?: () => Promise<void>
+  /** Why the last attempt stayed put, shown under the buttons. Owned by the
+   *  caller because the caller owns `beforeNavigate` and knows what it refused. */
+  error?: string | null
 }) {
   const [expanded, setExpanded] = useState(false)
+  const [pending, setPending] = useState<string | null>(null)
   if (providers.length === 0) return null
 
   const query = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : ''
@@ -120,11 +132,16 @@ export function ProviderButtons({
   } as const
 
   const go = async (id: string) => {
+    if (pending) return
+    setPending(id)
     try {
       if (beforeNavigate) await beforeNavigate()
       window.location.href = `/api/auth/${id}${query}`
+      // Stays busy on purpose: the page is on its way out, and handing the
+      // button back invites a second tap that starts a second sign-in.
     } catch {
-      /* leave the user on the gate if the pre-step failed */
+      // Leave them on the gate — the caller says why, via `error`.
+      setPending(null)
     }
   }
 
@@ -132,10 +149,19 @@ export function ProviderButtons({
     <div className="w-full space-y-2 mt-3">
       {visible.map((p) => {
         const icon = ICONS[p.id] ?? <Monogram id={p.id} label={p.label} />
+        const busy = pending === p.id
         return beforeNavigate ? (
-          <button key={p.id} type="button" onClick={() => void go(p.id)} className={className} style={style}>
+          <button
+            key={p.id}
+            type="button"
+            onClick={() => void go(p.id)}
+            disabled={pending !== null}
+            aria-busy={busy}
+            className={className}
+            style={{ ...style, opacity: pending !== null && !busy ? 0.5 : 1 }}
+          >
             {icon}
-            Continue with {p.label}
+            {busy ? `Taking you to ${p.label}…` : `Continue with ${p.label}`}
           </button>
         ) : (
           <a key={p.id} href={`/api/auth/${p.id}${query}`} className={className} style={style}>
@@ -144,6 +170,12 @@ export function ProviderButtons({
           </a>
         )
       })}
+
+      {error && (
+        <p role="alert" className="text-xs font-semibold px-1 pt-1" style={{ color: '#ff6b6b' }}>
+          {error}
+        </p>
+      )}
 
       {folded && (
         <button

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ForgotPassword } from './ForgotPassword'
 import { ProviderButtons } from './ProviderButtons'
 import { fetchAuthContext, authenticateAccount } from '@/lib/auth-client'
@@ -14,6 +14,8 @@ import { GLASS } from '@/lib/ui/tokens'
 import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import type { ConsentSubmission } from '@/lib/legal/consent'
 import type { CheckoutPayload } from '@/lib/checkout/types'
+
+const CONSENT_REQUIRED = 'Please confirm you’ve read and agree to the terms and health information.'
 
 /**
  * Account gate shown before subscription checkout. Email/password signs in
@@ -41,6 +43,16 @@ import type { CheckoutPayload } from '@/lib/checkout/types'
  * consent points are long enough to push a button off the bottom of a phone, and
  * the one thing this screen exists to do must not be the part you have to scroll
  * to find.
+ *
+ * ── Why the OAuth buttons answer back ────────────────────────────────────────
+ * Those same long consent points are why "Continue with Google" reported dead.
+ * The provider buttons take a pre-step here (`stashPending`) rather than being
+ * plain links, and both ways it can refuse — an unticked box, a failed stash —
+ * used to end in silence: the box's error message renders below the buttons,
+ * under two panels of legal copy, off the bottom of a phone. A tap did nothing
+ * you could see. So every refusal now says so next to the button that was
+ * pressed, and an unticked box additionally scrolls itself into view and takes
+ * focus.
  */
 export function AccountGate({
   payload,
@@ -59,7 +71,9 @@ export function AccountGate({
   const [error, setError] = useState<string | null>(null)
   const [consented, setConsented] = useState(false)
   const [consentError, setConsentError] = useState<string | null>(null)
+  const [providerError, setProviderError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const consentBox = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     void fetchAuthContext().then((ctx) => {
@@ -77,10 +91,16 @@ export function AccountGate({
   const credentialsValid = /\S+@\S+\.\S+/.test(email) && password.length >= (mode === 'signup' ? 8 : 1)
   const valid = credentialsValid && consented
 
-  /** Shared by both paths: refuse to go anywhere until the box is ticked. */
+  /**
+   * Shared by both paths: refuse to go anywhere until the box is ticked — and
+   * put the box in front of them, because it is far enough down the sheet's
+   * scrolling body that an error set on it can be read by nobody.
+   */
   const requireConsent = (): boolean => {
     if (consented) return true
-    setConsentError('Please confirm you’ve read and agree to the terms and health information.')
+    setConsentError(CONSENT_REQUIRED)
+    consentBox.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    consentBox.current?.focus({ preventScroll: true })
     return false
   }
 
@@ -101,14 +121,33 @@ export function AccountGate({
   // Stash the pending order before an OAuth redirect so it survives the
   // round-trip — consent included, since the member won't pass through this
   // component again on the way back.
+  //
+  // Every `throw` here aborts the redirect, so every `throw` first leaves a
+  // reason on `providerError`; otherwise the button simply appears not to work.
   const stashPending = async () => {
-    if (!requireConsent()) throw new Error('consent required')
-    const res = await fetch('/api/checkout/pending', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...payload, consent }),
-    })
-    if (!res.ok) throw new Error('pending stash failed')
+    setProviderError(null)
+    if (!requireConsent()) {
+      setProviderError(CONSENT_REQUIRED)
+      throw new Error('consent required')
+    }
+
+    let res: Response
+    try {
+      res = await fetch('/api/checkout/pending', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, consent }),
+      })
+    } catch {
+      setProviderError('We couldn’t save your stack. Check your connection and try again.')
+      throw new Error('pending stash failed')
+    }
+    if (!res.ok) {
+      setProviderError(
+        'Something went wrong saving your stack. Try again, or create your account with an email address above.',
+      )
+      throw new Error('pending stash failed')
+    }
   }
 
   const inputStyle = {
@@ -204,13 +243,22 @@ export function AccountGate({
               <span className="text-[10px] uppercase tracking-widest text-[var(--color-muted)]">or</span>
               <div className="h-px flex-1" style={{ background: GLASS.hairline }} />
             </div>
-            <ProviderButtons providers={providers} returnTo="/api/checkout/continue" beforeNavigate={stashPending} />
+            <ProviderButtons
+              providers={providers}
+              returnTo="/api/checkout/continue"
+              beforeNavigate={stashPending}
+              error={providerError}
+            />
           </>
         )}
 
         <CheckoutConsent
+          boxRef={consentBox}
           accepted={consented}
-          onChange={(next) => { setConsented(next); if (next) setConsentError(null) }}
+          onChange={(next) => {
+            setConsented(next)
+            if (next) { setConsentError(null); setProviderError(null) }
+          }}
           error={consentError}
         />
 

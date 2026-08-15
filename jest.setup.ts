@@ -11,6 +11,12 @@ if (typeof globalThis.TextEncoder === 'undefined') {
 // explicitly points DATABASE_URL at a Postgres instance).
 process.env.DATABASE_PATH = ':memory:'
 
+// jsdom lays nothing out, so it implements no scrolling either. Components that
+// bring an off-screen field into view call this for real in a browser.
+if (typeof Element !== 'undefined' && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = function scrollIntoView() {}
+}
+
 /**
  * jsdom has no `matchMedia`, and anything that checks `prefers-reduced-motion`
  * needs one. It answers "no preference" — the animated path — so tests exercise

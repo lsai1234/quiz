@@ -93,6 +93,108 @@ describe('AccountGate consent', () => {
   })
 })
 
+/**
+ * The bug this pins: "the Google login button isn't working — it just doesn't
+ * look like it's doing anything."
+ *
+ * It was working exactly as written. The provider buttons carry a pre-step here
+ * (stash the order before OAuth throws the page away), so unlike the hub's they
+ * are buttons rather than links, and the pre-step can refuse. Both refusals were
+ * silent from where the member was standing: an unticked box set an error at the
+ * bottom of the sheet's scrolling body — under two panels of legal copy, off the
+ * bottom of a phone — and a failed stash set nothing anywhere at all. Either way
+ * you tapped Google and the screen did not change.
+ */
+describe('AccountGate sign-in with a provider', () => {
+  const googleButton = () => screen.getByRole('button', { name: /continue with google/i })
+
+  async function setupWithGoogle() {
+    mockAuthContext.mockResolvedValue({
+      providers: [{ id: 'google', label: 'Google' }],
+      canResetPassword: false,
+    })
+    return setup()
+  }
+
+  const realFetch = global.fetch
+  beforeEach(() => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }) as never
+  })
+  afterEach(() => {
+    global.fetch = realFetch
+  })
+
+  it('says why it stayed put when the box is unticked, next to the button pressed', async () => {
+    const { user } = await setupWithGoogle()
+    await user.click(googleButton())
+
+    // Not just the message beside the tick-box, which is where nobody saw it.
+    const alerts = screen.getAllByRole('alert').map((el) => el.textContent ?? '')
+    expect(alerts.filter((text) => /read and agree to the terms/i.test(text)).length)
+      .toBeGreaterThanOrEqual(2)
+  })
+
+  it('takes them to the box it is asking about, and puts the cursor in it', async () => {
+    const { user } = await setupWithGoogle()
+    const scrollIntoView = jest.spyOn(Element.prototype, 'scrollIntoView')
+
+    await user.click(googleButton())
+
+    expect(scrollIntoView).toHaveBeenCalled()
+    expect(consentBox()).toHaveFocus()
+    scrollIntoView.mockRestore()
+  })
+
+  it('does not stash an order it is refusing to send', async () => {
+    const { user } = await setupWithGoogle()
+    await user.click(googleButton())
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it('clears the complaint once the box is ticked', async () => {
+    const { user } = await setupWithGoogle()
+    await user.click(googleButton())
+    await user.click(consentBox())
+    expect(screen.queryByText(/read and agree to the terms/i)).not.toBeInTheDocument()
+  })
+
+  it('stashes the order, consent included, before handing over to the provider', async () => {
+    const { user } = await setupWithGoogle()
+    await user.click(consentBox())
+    await user.click(googleButton())
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(url).toBe('/api/checkout/pending')
+    expect(JSON.parse(init.body)).toMatchObject({
+      subscription: payload.subscription,
+      consent: { accepted: true, termsVersion: TERMS_VERSION, disclaimerVersion: DISCLAIMER_VERSION },
+    })
+  })
+
+  it('says so when the stash fails, instead of swallowing it', async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, json: async () => ({}) }) as never
+    const { user } = await setupWithGoogle()
+    await user.click(consentBox())
+    await user.click(googleButton())
+
+    await waitFor(() =>
+      expect(screen.getByText(/something went wrong saving your stack/i)).toBeInTheDocument(),
+    )
+  })
+
+  it('says so when the network is what failed', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as never
+    const { user } = await setupWithGoogle()
+    await user.click(consentBox())
+    await user.click(googleButton())
+
+    await waitFor(() =>
+      expect(screen.getByText(/check your connection and try again/i)).toBeInTheDocument(),
+    )
+  })
+})
+
 describe('AccountGate placement', () => {
   /**
    * The bug this pins: the gate was a bare `fixed inset-0` div rendered inline

@@ -1,5 +1,6 @@
 'use client'
 
+import type { Ref } from 'react'
 import { CHECKOUT_BILLING_POINTS, CHECKOUT_DISCLAIMER_POINTS } from '@/lib/legal/content'
 
 const ACCENT = '#00D4FF'
@@ -17,10 +18,14 @@ export function CheckoutConsent({
   accepted,
   onChange,
   error,
+  boxRef,
 }: {
   accepted: boolean
   onChange: (accepted: boolean) => void
   error?: string | null
+  /** Lets the checkout gate scroll to and focus the box when an unticked one
+   *  is what stopped a sign-in. See `AccountGate.requireConsent`. */
+  boxRef?: Ref<HTMLInputElement>
 }) {
   const Points = ({ label, points }: { label: string; points: string[] }) => (
     <div
@@ -56,6 +61,7 @@ export function CheckoutConsent({
 
       <label className="flex gap-3 items-start cursor-pointer px-1">
         <input
+          ref={boxRef}
           type="checkbox"
           checked={accepted}
           onChange={(e) => onChange(e.target.checked)}
