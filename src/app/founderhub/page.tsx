@@ -2,13 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { Card, ChargeMeter } from '@/components/system'
 import type { DashboardSummary, MoneyWindow } from '@/lib/portal/dashboard'
 import type { QuizFunnel } from '@/lib/analytics/funnel'
-
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 const money = (n: number) => `£${n.toFixed(2)}`
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`
@@ -38,18 +34,38 @@ export default function HubDashboard() {
       .catch(() => setError('Could not load the dashboard.'))
   }, [])
 
-  if (!data) return <p className="text-sm text-[var(--color-muted)]">{error ?? 'Loading…'}</p>
+  if (!data) {
+    return (
+      <p style={{ fontSize: 'var(--text-body)', color: 'var(--ink-3)' }}>{error ?? 'Loading…'}</p>
+    )
+  }
 
   const { summary, funnel } = data
   const { orders, subscriptions, actionRequired } = summary
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="flex flex-col" style={{ gap: 'var(--space-8)' }}>
       <div>
-        <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h1
+          style={{
+            fontSize: 'var(--text-display)',
+            fontWeight: 'var(--weight-display)',
+            fontFamily: 'var(--font-display)',
+            letterSpacing: 'var(--tracking-display)',
+            lineHeight: 'var(--leading-tight)',
+            color: 'var(--ink-1)',
+          }}
+        >
           Dashboard
         </h1>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">
+        <p
+          style={{
+            fontSize: 'var(--text-body)',
+            lineHeight: 'var(--leading-loose)',
+            color: 'var(--ink-3)',
+            marginTop: 'var(--space-2)',
+          }}
+        >
           What needs you today, what the business did, and where the quiz is losing people.
         </p>
       </div>
@@ -59,47 +75,93 @@ export default function HubDashboard() {
         <SectionTitle>Needs you</SectionTitle>
 
         {/* Notices come first: a VAT deadline outranks any queue. */}
-        {summary.notices.map((n) => (
-          <Link key={n.id} href={n.href} className="block rounded-2xl border p-3.5 mb-2"
-            style={{
-              background: `color-mix(in srgb, ${n.tone === 'act' ? RED : AMBER} 8%, transparent)`,
-              borderColor: `color-mix(in srgb, ${n.tone === 'act' ? RED : AMBER} 35%, transparent)`,
-            }}>
-            <p className="text-sm font-bold" style={{ color: n.tone === 'act' ? RED : AMBER, fontFamily: 'var(--font-display)' }}>{n.label}</p>
-            <p className="text-[11px] text-[var(--color-text-2)] mt-0.5 leading-relaxed">{n.detail}</p>
-          </Link>
-        ))}
+        <div className="flex flex-col" style={{ gap: 'var(--space-2)' }}>
+          {summary.notices.map((n) => (
+            <Link key={n.id} href={n.href} className="block">
+              <Card tone={n.tone === 'act' ? 'critical' : 'attention'} padding="tight" interactive>
+                <p
+                  style={{
+                    fontSize: 'var(--text-body)',
+                    fontWeight: 'var(--weight-strong)',
+                    fontFamily: 'var(--font-display)',
+                    color: n.tone === 'act' ? 'var(--tone-critical)' : 'var(--tone-attention)',
+                  }}
+                >
+                  {n.label}
+                </p>
+                <p
+                  style={{
+                    fontSize: 'var(--text-meta)',
+                    lineHeight: 'var(--leading-loose)',
+                    color: 'var(--ink-2)',
+                    marginTop: 'var(--space-1)',
+                  }}
+                >
+                  {n.detail}
+                </p>
+              </Card>
+            </Link>
+          ))}
 
-        {actionRequired.length === 0 && summary.notices.length === 0 ? (
-          <p className="text-sm rounded-2xl border p-4" style={{ background: `color-mix(in srgb, ${GREEN} 7%, transparent)`, borderColor: `color-mix(in srgb, ${GREEN} 30%, transparent)`, color: GREEN }}>
-            Nothing outstanding. Every order has been reviewed and nothing on a live plan has changed.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {actionRequired.map((a) => (
-              <Link key={a.label} href={a.href}
-                className="flex items-center justify-between gap-3 rounded-2xl border p-3.5"
-                style={{ background: 'var(--color-surface)', borderColor: `color-mix(in srgb, ${AMBER} 30%, transparent)` }}>
-                <span className="text-sm text-[var(--color-text-2)]">{a.label}</span>
-                <span className="text-lg font-black shrink-0" style={{ color: AMBER, fontFamily: 'var(--font-display)' }}>{a.count}</span>
+          {actionRequired.length === 0 && summary.notices.length === 0 ? (
+            <Card tone="positive" padding="tight">
+              <p style={{ fontSize: 'var(--text-body)', color: 'var(--tone-positive)' }}>
+                Nothing outstanding. Every order has been reviewed and nothing on a live plan has changed.
+              </p>
+            </Card>
+          ) : (
+            actionRequired.map((a) => (
+              <Link key={a.label} href={a.href} className="block">
+                <Card tone="attention" padding="tight" interactive>
+                  <div className="flex items-center justify-between" style={{ gap: 'var(--space-3)' }}>
+                    <span style={{ fontSize: 'var(--text-body)', color: 'var(--ink-2)' }}>{a.label}</span>
+                    <span
+                      className="shrink-0"
+                      style={{
+                        fontSize: 'var(--text-title)',
+                        fontWeight: 'var(--weight-display)',
+                        fontFamily: 'var(--font-display)',
+                        color: 'var(--tone-attention)',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {a.count}
+                    </span>
+                  </div>
+                </Card>
               </Link>
-            ))}
-          </div>
-        )}
+            ))
+          )}
+        </div>
       </section>
 
       {/* ── Orders ────────────────────────────────────────────────────────── */}
       <section>
         <SectionTitle href="/founderhub/commerce/queue">Orders</SectionTitle>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <Tile n={orders.today} label="Raised today" colour="var(--color-text)" />
-          <Tile n={orders.awaitingReview} label="Awaiting review" colour={orders.awaitingReview > 0 ? AMBER : 'var(--color-muted)'} />
-          <Tile n={orders.readyToSend} label="Ready to send" colour={orders.readyToSend > 0 ? ACCENT : 'var(--color-muted)'} />
-          <Tile n={orders.inFlight} label="With the supplier" colour="var(--color-muted)" />
+        <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: 'var(--space-3)' }}>
+          <Tile n={orders.today} label="Raised today" colour="var(--ink-1)" />
+          <Tile
+            n={orders.awaitingReview}
+            label="Awaiting review"
+            colour={orders.awaitingReview > 0 ? 'var(--tone-attention)' : 'var(--ink-3)'}
+          />
+          <Tile
+            n={orders.readyToSend}
+            label="Ready to send"
+            colour={orders.readyToSend > 0 ? 'var(--accent)' : 'var(--ink-3)'}
+          />
+          <Tile n={orders.inFlight} label="With the supplier" colour="var(--ink-3)" />
         </div>
         {orders.failed > 0 && (
-          <p className="text-xs mt-2" style={{ color: RED }}>
-            {orders.failed} order{orders.failed === 1 ? '' : 's'} failed to reach PowerBody — retry {orders.failed === 1 ? 'it' : 'them'} from the order page.
+          <p
+            style={{
+              fontSize: 'var(--text-body-sm)',
+              color: 'var(--tone-critical)',
+              marginTop: 'var(--space-2)',
+            }}
+          >
+            {orders.failed} order{orders.failed === 1 ? '' : 's'} failed to reach PowerBody — retry{' '}
+            {orders.failed === 1 ? 'it' : 'them'} from the order page.
           </p>
         )}
       </section>
@@ -108,7 +170,7 @@ export default function HubDashboard() {
       <section>
         <SectionTitle href="/founderhub/commerce/financials">This month</SectionTitle>
         <MonthCard w={summary.month} />
-        <div className="grid grid-cols-2 gap-3 mt-3">
+        <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
           <SmallWindow label="Last 24 hours" w={summary.today} />
           <SmallWindow label="Last 7 days" w={summary.last7} />
         </div>
@@ -117,10 +179,10 @@ export default function HubDashboard() {
       {/* ── Subscriptions ─────────────────────────────────────────────────── */}
       <section>
         <SectionTitle href="/founderhub/commerce/subscriptions">Subscriptions</SectionTitle>
-        <div className="grid grid-cols-3 gap-3">
-          <Tile n={subscriptions.active} label="Active members" colour="var(--color-text)" />
-          <Tile n={money(subscriptions.mrr)} label="Per month" colour={ACCENT} />
-          <Tile n={money(subscriptions.arpu)} label="Each" colour="var(--color-muted)" />
+        <div className="grid grid-cols-3" style={{ gap: 'var(--space-3)' }}>
+          <Tile n={subscriptions.active} label="Active members" colour="var(--ink-1)" />
+          <Tile n={money(subscriptions.mrr)} label="Per month" colour="var(--accent)" />
+          <Tile n={money(subscriptions.arpu)} label="Each" colour="var(--ink-3)" />
         </div>
       </section>
 
@@ -128,43 +190,70 @@ export default function HubDashboard() {
       <section>
         <SectionTitle>Where people fall off</SectionTitle>
         {funnel.started === 0 ? (
-          <p className="text-sm text-[var(--color-muted)] rounded-2xl border border-[var(--color-border)] p-4">
-            No quiz sessions in the last {data.windowDays} days yet. Drop-off appears here as soon as people start
-            answering — measured from our own events, with no third-party tracking.
-          </p>
+          <Card elevation={1}>
+            <p style={{ fontSize: 'var(--text-body)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)' }}>
+              No quiz sessions in the last {data.windowDays} days yet. Drop-off appears here as soon as people start
+              answering — measured from our own events, with no third-party tracking.
+            </p>
+          </Card>
         ) : (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
-              <Tile n={funnel.started} label="Started the quiz" colour="var(--color-text)" />
-              <Tile n={funnel.completed} label="Finished it" colour="var(--color-text)" />
-              <Tile n={funnel.startedCheckout} label="Reached checkout" colour="var(--color-text)" />
-              <Tile n={funnel.purchased} label="Bought" colour={ACCENT} note={pct(funnel.conversionPct)} />
+            <div
+              className="grid grid-cols-2 sm:grid-cols-4"
+              style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-3)' }}
+            >
+              <Tile n={funnel.started} label="Started the quiz" colour="var(--ink-1)" />
+              <Tile n={funnel.completed} label="Finished it" colour="var(--ink-1)" />
+              <Tile n={funnel.startedCheckout} label="Reached checkout" colour="var(--ink-1)" />
+              <Tile n={funnel.purchased} label="Bought" colour="var(--accent)" note={pct(funnel.conversionPct)} />
             </div>
 
             {funnel.worstStep && (
-              <p className="text-xs rounded-xl px-3 py-2 mb-3" style={{ background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 30%, transparent)`, color: AMBER }}>
-                Biggest single drop: <strong>{funnel.worstStep.stepId}</strong> loses {funnel.worstStep.dropped} session
-                {funnel.worstStep.dropped === 1 ? '' : 's'} ({pct(funnel.worstStep.dropOffPct)} of everyone who got there).
-              </p>
+              <div style={{ marginBottom: 'var(--space-3)' }}>
+                <Card tone="attention" padding="tight">
+                  <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--tone-attention)' }}>
+                    Biggest single drop: <strong>{funnel.worstStep.stepId}</strong> loses {funnel.worstStep.dropped}{' '}
+                    session{funnel.worstStep.dropped === 1 ? '' : 's'} ({pct(funnel.worstStep.dropOffPct)} of everyone
+                    who got there).
+                  </p>
+                </Card>
+              </div>
             )}
 
-            <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-2">
-              {funnel.steps.map((s) => (
-                <div key={s.stepId}>
-                  <div className="flex items-baseline justify-between gap-2 text-[11px] mb-1">
-                    <span className="font-semibold text-[var(--color-text)]">{s.stepId}</span>
-                    <span className="text-[var(--color-muted)] whitespace-nowrap">
-                      {s.sessions} left
-                      {s.dropped > 0 && <span style={{ color: AMBER }}> · −{s.dropped} ({pct(s.dropOffPct)})</span>}
-                      {s.medianSeconds != null && ` · ${Math.round(s.medianSeconds)}s`}
-                    </span>
+            <Card elevation={1}>
+              <div className="flex flex-col" style={{ gap: 'var(--space-4)' }}>
+                {funnel.steps.map((s) => (
+                  <div key={s.stepId}>
+                    <div
+                      className="flex items-baseline justify-between"
+                      style={{ gap: 'var(--space-2)', fontSize: 'var(--text-meta)', marginBottom: 'var(--space-2)' }}
+                    >
+                      <span style={{ fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>{s.stepId}</span>
+                      <span className="whitespace-nowrap" style={{ color: 'var(--ink-3)' }}>
+                        {s.sessions} left
+                        {s.dropped > 0 && (
+                          <span style={{ color: 'var(--tone-attention)' }}>
+                            {' '}
+                            · −{s.dropped} ({pct(s.dropOffPct)})
+                          </span>
+                        )}
+                        {s.medianSeconds != null && ` · ${Math.round(s.medianSeconds)}s`}
+                      </span>
+                    </div>
+                    {/* A proportion, so it is poured rather than filled. The row
+                        above already names it and gives the figures, so the
+                        meter carries no text of its own. */}
+                    <ChargeMeter
+                      value={Math.max(2, s.ofStartPct * 100)}
+                      label={`${s.stepId} — ${s.sessions} sessions left`}
+                      tone={s.dropOffPct > 0.2 ? 'attention' : 'accent'}
+                      size="sm"
+                      showValue={false}
+                    />
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-surface-2)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.max(2, s.ofStartPct * 100)}%`, background: s.dropOffPct > 0.2 ? AMBER : ACCENT }} />
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            </Card>
           </>
         )}
       </section>
@@ -174,61 +263,155 @@ export default function HubDashboard() {
 
 function SectionTitle({ children, href }: { children: React.ReactNode; href?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-2 mb-2">
-      <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+    <div
+      className="flex items-baseline justify-between"
+      style={{ gap: 'var(--space-2)', marginBottom: 'var(--space-3)' }}
+    >
+      <h2
+        style={{
+          fontSize: 'var(--text-micro)',
+          fontWeight: 'var(--weight-strong)',
+          fontFamily: 'var(--font-display)',
+          letterSpacing: 'var(--tracking-eyebrow)',
+          textTransform: 'uppercase',
+          color: 'var(--ink-3)',
+        }}
+      >
         {children}
       </h2>
-      {href && <Link href={href} className="text-[11px] font-bold" style={{ color: ACCENT }}>Open →</Link>}
+      {href && (
+        <Link
+          href={href}
+          className="system-focus"
+          style={{
+            fontSize: 'var(--text-meta)',
+            fontWeight: 'var(--weight-strong)',
+            fontFamily: 'var(--font-display)',
+            color: 'var(--accent)',
+            borderRadius: 'var(--radius-chip)',
+          }}
+        >
+          Open →
+        </Link>
+      )}
     </div>
   )
 }
 
 function Tile({ n, label, colour, note }: { n: number | string; label: string; colour: string; note?: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 text-center">
-      <p className="text-xl font-black" style={{ color: colour, fontFamily: 'var(--font-display)' }}>{n}</p>
-      <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{label}</p>
-      {note && <p className="text-[10px]" style={{ color: ACCENT }}>{note}</p>}
-    </div>
+    <Card elevation={1} padding="tight" className="text-center">
+      <p
+        style={{
+          fontSize: 'var(--text-title)',
+          fontWeight: 'var(--weight-display)',
+          fontFamily: 'var(--font-display)',
+          letterSpacing: 'var(--tracking-title)',
+          color: colour,
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {n}
+      </p>
+      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>{label}</p>
+      {note && <p style={{ fontSize: 'var(--text-micro)', color: 'var(--accent)' }}>{note}</p>}
+    </Card>
   )
 }
 
 function MonthCard({ w }: { w: MoneyWindow }) {
-  const colour = w.grossProfit > 0 ? GREEN : w.grossProfit < 0 ? RED : 'var(--color-muted)'
+  const colour =
+    w.grossProfit > 0 ? 'var(--tone-positive)' : w.grossProfit < 0 ? 'var(--tone-critical)' : 'var(--ink-3)'
+
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <div className="flex items-baseline justify-between gap-3 flex-wrap">
+    <Card elevation={2}>
+      <div className="flex items-baseline justify-between flex-wrap" style={{ gap: 'var(--space-4)' }}>
         <div>
-          <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)]">Revenue</p>
-          <p className="text-3xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{money(w.revenue)}</p>
-          <p className="text-[11px] text-[var(--color-muted)]">{w.orders} order{w.orders === 1 ? '' : 's'} · {money(w.aov)} average</p>
+          <Label>Revenue</Label>
+          <Figure colour="var(--ink-1)">{money(w.revenue)}</Figure>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+            {w.orders} order{w.orders === 1 ? '' : 's'} · {money(w.aov)} average
+          </p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)]">Gross profit</p>
-          <p className="text-3xl font-black" style={{ color: colour, fontFamily: 'var(--font-display)' }}>{money(w.grossProfit)}</p>
-          <p className="text-[11px] text-[var(--color-muted)]">
+          <Label>Gross profit</Label>
+          <Figure colour={colour}>{money(w.grossProfit)}</Figure>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
             {pct(w.marginPct)} after {money(w.cogs)} goods + {money(w.delivery)} delivery
           </p>
         </div>
       </div>
       {w.ordersWithUnknownCost > 0 && (
-        <p className="text-[11px] mt-2" style={{ color: AMBER }}>
+        <p
+          style={{
+            fontSize: 'var(--text-meta)',
+            color: 'var(--tone-attention)',
+            marginTop: 'var(--space-3)',
+            lineHeight: 'var(--leading-loose)',
+          }}
+        >
           {w.ordersWithUnknownCost} order{w.ordersWithUnknownCost === 1 ? '' : 's'} have no supplier cost, so they are
           left out of the profit above.
         </p>
       )}
-    </div>
+    </Card>
   )
 }
 
 function SmallWindow({ label, w }: { label: string; w: MoneyWindow }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3.5">
-      <p className="text-[10px] uppercase font-bold text-[var(--color-muted)]">{label}</p>
-      <p className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{money(w.revenue)}</p>
-      <p className="text-[11px] text-[var(--color-muted)]">
+    <Card elevation={1} padding="tight">
+      <Label>{label}</Label>
+      <p
+        style={{
+          fontSize: 'var(--text-title)',
+          fontWeight: 'var(--weight-display)',
+          fontFamily: 'var(--font-display)',
+          letterSpacing: 'var(--tracking-title)',
+          color: 'var(--ink-1)',
+          fontVariantNumeric: 'tabular-nums',
+        }}
+      >
+        {money(w.revenue)}
+      </p>
+      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
         {w.orders} order{w.orders === 1 ? '' : 's'} · {money(w.grossProfit)} profit
       </p>
-    </div>
+    </Card>
+  )
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      style={{
+        fontSize: 'var(--text-micro)',
+        fontWeight: 'var(--weight-strong)',
+        fontFamily: 'var(--font-display)',
+        letterSpacing: 'var(--tracking-eyebrow)',
+        textTransform: 'uppercase',
+        color: 'var(--ink-3)',
+      }}
+    >
+      {children}
+    </p>
+  )
+}
+
+function Figure({ children, colour }: { children: React.ReactNode; colour: string }) {
+  return (
+    <p
+      style={{
+        fontSize: 'var(--text-display)',
+        fontWeight: 'var(--weight-display)',
+        fontFamily: 'var(--font-display)',
+        letterSpacing: 'var(--tracking-display)',
+        lineHeight: 'var(--leading-tight)',
+        color: colour,
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {children}
+    </p>
   )
 }
