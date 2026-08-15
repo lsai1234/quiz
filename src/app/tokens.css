@@ -128,6 +128,12 @@
   --tone-critical: #f87171;   /* genuine failure: auth, payment */
   --tone-info: #7dd3fc;       /* works quietly; not something you feel */
 
+  /* Hover on a solid fill. Brightening rather than darkening, because a fill
+     that dims under the cursor reads as going away. Both stay well clear of AA
+     against `--ink-on-accent`, which only gets easier as they lighten. */
+  --accent-hover: color-mix(in srgb, var(--accent) 86%, #ffffff);
+  --critical-hover: color-mix(in srgb, var(--tone-critical) 86%, #ffffff);
+
   /* ══ Tinted steps ══════════════════════════════════════════════════════════
      Three intents, three values. The hubs currently reach for sixteen different
      percentages here — 6, 7, 8, 10, 12, 14 for a fill; 20 through 40 for a
@@ -215,6 +221,29 @@
 
   --gutter: 20px;          /* page edge, every hub */
   --stack: 12px;           /* default vertical rhythm between siblings */
+
+  /* ══ Controls ══════════════════════════════════════════════════════════════
+     Minimum heights, not fixed ones — a control grows if its label wraps.
+     `--control-md` and up clear the 44px tap target. `--control-sm` is
+     deliberately under it and is only for a secondary action sitting inside a
+     row that is itself tappable. */
+  --control-sm: 36px;
+  --control-md: 44px;
+  --control-lg: 52px;
+
+  /* One focus ring for the whole system. The hubs currently have none at all on
+     most controls, and two input constants set `outline-none` with nothing put
+     back, so a keyboard user gets no visible focus on those fields whatsoever.
+     Tinted rather than solid, so it reads on a tinted card as well as on the
+     page — a single opaque ring colour disappears against amber. */
+  --focus-ring: var(--accent-line);
+  --focus-ring-width: 2px;
+
+  /* Modal widths. Here rather than in the component so "how wide is a dialog"
+     is a system decision with three answers, not a number each caller picks. */
+  --modal-sm: 24rem;
+  --modal-md: 32rem;
+  --modal-lg: 44rem;
 
   /* ══ Elevation shadow ══════════════════════════════════════════════════════
      There is currently no elevation system at all in the three hubs: zero

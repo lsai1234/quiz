@@ -1,0 +1,137 @@
+/**
+ * Interaction states for the primitive layer.
+ *
+ * Everything a component can express as an inline style lives in the component.
+ * What lands here is only what inline styles cannot say: `:hover`, `:active`,
+ * `:disabled`, keyframes, and the media queries that guard them. Each rule reads
+ * its colours from custom properties the component sets, so a variant is still
+ * defined in one place — `src/components/system/Button.tsx` decides what
+ * `--hover-bg` is, this file decides when it applies.
+ *
+ * Hover is guarded behind `@media (hover: hover)` throughout. An unguarded
+ * `:hover` on a touch device sticks after the tap and leaves the last thing you
+ * pressed looking permanently active.
+ */
+
+/* ── Controls: buttons, tabs, anything pressable ──────────────────────────── */
+
+.system-control {
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-settle),
+    border-color var(--duration-fast) var(--ease-settle),
+    color var(--duration-fast) var(--ease-settle),
+    box-shadow var(--duration-fast) var(--ease-settle),
+    opacity var(--duration-fast) var(--ease-settle),
+    transform var(--duration-fast) var(--ease-settle);
+}
+
+.system-control:disabled,
+.system-control[aria-disabled='true'] {
+  opacity: var(--disabled-opacity);
+  pointer-events: none;
+  cursor: default;
+}
+
+/* The press. Small enough to feel like the surface gave, not like the button
+   jumped — and it is the only motion most of these ever make. */
+.system-control:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+@media (hover: hover) {
+  .system-control:hover:not(:disabled) {
+    background: var(--hover-bg);
+    border-color: var(--hover-edge);
+  }
+}
+
+/* ── Fields: inputs, selects, textareas ───────────────────────────────────── */
+
+.system-field {
+  transition:
+    border-color var(--duration-fast) var(--ease-settle),
+    box-shadow var(--duration-fast) var(--ease-settle);
+}
+
+.system-field:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: default;
+}
+
+/* The placeholder is the one piece of text in a field that is not the value,
+   and it has to stay distinguishable from one without dropping under AA. */
+.system-field::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .system-field:hover:not(:disabled):not(:focus) {
+    border-color: var(--edge-strong);
+  }
+}
+
+/* ── Cards that do something when you press them ──────────────────────────── */
+
+.system-card-interactive {
+  cursor: pointer;
+  transition:
+    background-color var(--duration-base) var(--ease-settle),
+    border-color var(--duration-base) var(--ease-settle),
+    transform var(--duration-base) var(--ease-settle);
+}
+
+@media (hover: hover) {
+  .system-card-interactive:hover {
+    background: var(--surface-hover);
+    border-color: var(--edge-strong);
+  }
+}
+
+.system-card-interactive:active {
+  transform: scale(0.995);
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────────── */
+
+/* The panel arrives on a spring and leaves on a straight line. Overshoot on the
+   way in reads as an object settling into place; overshoot on the way out reads
+   as the interface not being sure it meant to close. */
+@keyframes system-panel-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes system-panel-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to   { opacity: 0; transform: translateY(8px) scale(0.99); }
+}
+
+@keyframes system-scrim-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes system-scrim-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────── */
+
+/* State changes still happen, they just stop being animated. The press scale
+   goes entirely: a control that resizes under the finger is exactly the kind of
+   motion this setting is asking us to stop. */
+@media (prefers-reduced-motion: reduce) {
+  .system-control,
+  .system-field,
+  .system-card-interactive {
+    transition: none;
+  }
+
+  .system-control:active:not(:disabled),
+  .system-card-interactive:active {
+    transform: none;
+  }
+}
