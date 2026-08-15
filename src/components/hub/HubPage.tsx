@@ -11,6 +11,7 @@ export function HubPage() {
   const session = useHubStore((s) => s.session)
   const hydrated = useHubStore((s) => s.hydrated)
   const providers = useHubStore((s) => s.providers)
+  const canResetPassword = useHubStore((s) => s.canResetPassword)
   const hydrate = useHubStore((s) => s.hydrate)
   const authenticate = useHubStore((s) => s.authenticate)
   const logout = useHubStore((s) => s.logout)
@@ -36,7 +37,13 @@ export function HubPage() {
   }
 
   if (!session) {
-    return <HubLogin onAuthenticate={authenticate} providers={providers} />
+    return (
+      <HubLogin
+        onAuthenticate={authenticate}
+        providers={providers}
+        canResetPassword={canResetPassword}
+      />
+    )
   }
 
   return (

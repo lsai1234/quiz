@@ -571,3 +571,92 @@ export function termsUpdated(ctx: TermsUpdatedContext, brand: BrandContext = {})
     }, brand),
   }
 }
+
+// ─── Getting back in ──────────────────────────────────────────────────────────
+
+export interface PasswordResetContext {
+  /** The one-time link. Also the reason the stored copy is not this one. */
+  resetUrl: string
+  /** For the greeting, when we know it. */
+  firstName?: string | null
+  /** How long the link lasts, in words: "60 minutes". */
+  expiresIn: string
+  /** Which sign-in this is for — the wording differs, the mechanism doesn't. */
+  realm?: 'account' | 'partner'
+}
+
+/**
+ * The reset link.
+ *
+ * Three things it has to do, and the third is the one usually missed:
+ *
+ *  1. **Be obviously from us and obviously about this.** Someone who has just
+ *     asked to reset a password is primed to click a link in an email, which is
+ *     the exact state a phisher wants them in. Plain, specific and boring.
+ *  2. **Say how long it lasts.** A link that has quietly expired reads as a
+ *     broken website; a link that said "60 minutes" an hour ago reads as a link
+ *     that expired.
+ *  3. **Tell them what to do if it wasn't them.** This is the only warning the
+ *     owner of an account gets that somebody is trying the front door. It says
+ *     nothing has changed yet, because nothing has — the password is still
+ *     theirs until the link is used — so the honest instruction is "ignore it",
+ *     not "act now".
+ *
+ * No promotional strip: somebody locked out of their account is mid-problem, and
+ * this email has exactly one thing to say.
+ */
+export function passwordReset(ctx: PasswordResetContext, brand: BrandContext = {}): RenderedEmail {
+  const partner = ctx.realm === 'partner'
+  const greeting = ctx.firstName ? `${ctx.firstName}, here's your link.` : "Here's your link."
+  return {
+    subject: partner ? 'Reset your partner password' : 'Reset your password',
+    ...layout('Set a new password', {
+      preheader: `Your link works for the next ${ctx.expiresIn}.`,
+      intro: greeting,
+      paragraphs: [
+        partner
+          ? 'Someone asked to reset the password on your CHRGD partner account. Use the button below to set a new one.'
+          : 'Someone asked to reset the password on your CHRGD account. Use the button below to set a new one.',
+        `The link works once, for the next ${ctx.expiresIn}. After that, ask for another one — it takes a second.`,
+        "If this wasn't you, you don't need to do anything. Your password hasn't changed and nobody can change it without this link.",
+      ],
+      cta: { label: 'Set a new password', url: ctx.resetUrl },
+      footnote: 'We will never email you asking for your password, your card details, or a code.',
+      marketing: false,
+    }, brand),
+  }
+}
+
+export interface PasswordChangedContext {
+  /** Where to sign in with it. */
+  signInUrl: string
+  firstName?: string | null
+  /** Who to tell if it wasn't them. Omitted when there is nowhere to point. */
+  supportEmail?: string | null
+}
+
+/**
+ * The receipt for a password change.
+ *
+ * Sent after the fact, to the address on the account, and it is the mechanism by
+ * which a takeover gets noticed: whoever reset the password is reading the reset
+ * email, but the person who owns the mailbox reads this one. Which is why it
+ * goes even though nobody asked for it, and why it names somewhere to complain.
+ */
+export function passwordChanged(ctx: PasswordChangedContext, brand: BrandContext = {}): RenderedEmail {
+  const complain = ctx.supportEmail
+    ? `If this wasn't you, reply to this email or write to ${ctx.supportEmail} straight away and we'll lock the account.`
+    : "If this wasn't you, reply to this email straight away and we'll lock the account."
+  return {
+    subject: 'Your password was changed',
+    ...layout('Your password was changed', {
+      intro: ctx.firstName ? `${ctx.firstName}, this is just a record.` : 'This is just a record.',
+      paragraphs: [
+        'The password on your CHRGD account has been changed, and everywhere that was signed in has been signed out.',
+        complain,
+      ],
+      cta: { label: 'Sign in', url: ctx.signInUrl },
+      marketing: false,
+    }, brand),
+  }
+}

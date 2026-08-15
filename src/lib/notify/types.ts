@@ -43,6 +43,17 @@ export type TemplateId =
   | 'exit-scheduled'
   /** They cancelled inside the 14 days and are sending everything back. */
   | 'exit-return-requested'
+  /**
+   * A one-time link to set a new password.
+   *
+   * The exception to this file's rule that no email asks the member to act —
+   * this one is the act, and they asked for it thirty seconds ago. It is also
+   * the only email whose stored copy is not what was sent: the link is a live
+   * credential and is not kept. See `./account`.
+   */
+  | 'password-reset'
+  /** Their password was changed — the notice that catches it if it wasn't them. */
+  | 'password-changed'
 
 export type NotificationStatus = 'queued' | 'sent' | 'failed'
 

@@ -136,6 +136,19 @@ export async function addIdentity(userId: string, provider: string, sub: string)
   )
 }
 
+/**
+ * Set (or replace) the account's password hash.
+ *
+ * Also the way an OAuth-only account gains a password: `password_hash` starts
+ * null for anyone who signed up with Google, and someone who has proved they
+ * hold the mailbox is entitled to add one. Their provider button keeps working
+ * either way — `identities` is untouched.
+ */
+export async function setPassword(userId: string, passwordHash: string): Promise<void> {
+  const db = await getEngine()
+  await db.run('UPDATE users SET password_hash = ? WHERE id = ?', [passwordHash, userId])
+}
+
 /** Update the stored avatar if the provider supplied a newer one. */
 export async function updatePicture(userId: string, picture: string | null): Promise<void> {
   if (!picture) return

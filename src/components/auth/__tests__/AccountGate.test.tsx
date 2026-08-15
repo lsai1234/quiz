@@ -10,10 +10,18 @@ import { AccountGate } from '../AccountGate'
 import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
+const mockAuthContext = jest.fn()
+
 jest.mock('@/lib/auth-client', () => ({
-  fetchAuthContext: jest.fn().mockResolvedValue({ providers: [] }),
+  fetchAuthContext: () => mockAuthContext(),
   authenticateAccount: jest.fn().mockResolvedValue(null),
+  requestPasswordReset: jest.fn().mockResolvedValue(null),
 }))
+
+beforeEach(() => {
+  mockAuthContext.mockReset()
+  mockAuthContext.mockResolvedValue({ providers: [], canResetPassword: false })
+})
 
 const payload = {
   subscription: { flatMonthly: 52.18, firstMonth: 41.74, lines: [{ id: 'l1' }, { id: 'l2' }] },
@@ -114,5 +122,74 @@ describe('AccountGate placement', () => {
     expect(screen.getByText(/card details are taken on stripe/i)).toBeInTheDocument()
     // Three named steps, so terms-then-Stripe is not a surprise.
     expect(screen.getByRole('list', { name: /checkout progress/i })).toBeInTheDocument()
+  })
+})
+
+/**
+ * Forgetting your password one step from paying.
+ *
+ * This is the journey with the most to lose: a returning member has built a
+ * stack, agreed the terms and reached the last screen before Stripe. Before
+ * this, "sign in" was the only way past it and a forgotten password ended the
+ * purchase there.
+ */
+describe('AccountGate password reset', () => {
+  const forgotLink = () => screen.queryByRole('button', { name: /forgotten it\?/i })
+
+  /** The gate opens in sign-up mode; a returning member switches to sign-in. */
+  async function signInMode(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /already have an account/i }))
+  }
+
+  it('offers no way to reset while creating an account', async () => {
+    mockAuthContext.mockResolvedValue({ providers: [], canResetPassword: true })
+    await setup()
+    expect(forgotLink()).not.toBeInTheDocument()
+  })
+
+  it('offers one to a member signing in', async () => {
+    mockAuthContext.mockResolvedValue({ providers: [], canResetPassword: true })
+    const { user } = await setup()
+    await signInMode(user)
+    expect(forgotLink()).toBeInTheDocument()
+  })
+
+  it('stays hidden when no email provider is configured', async () => {
+    const { user } = await setup() // canResetPassword: false
+    await signInMode(user)
+    expect(forgotLink()).not.toBeInTheDocument()
+  })
+
+  it('says where the link lands, so the checkout isn’t lost silently', async () => {
+    // The link opens the hub, not this sheet — the sheet only exists in this
+    // tab. Better said upfront than discovered.
+    mockAuthContext.mockResolvedValue({ providers: [], canResetPassword: true })
+    const { user } = await setup()
+    await signInMode(user)
+    await user.click(forgotLink()!)
+
+    expect(screen.getByText(/opens your hub in a new page/i)).toBeInTheDocument()
+    expect(screen.getByText(/your stack is still here/i)).toBeInTheDocument()
+  })
+
+  it('carries the typed address into the reset form', async () => {
+    mockAuthContext.mockResolvedValue({ providers: [], canResetPassword: true })
+    const { user } = await setup()
+    await signInMode(user)
+    await user.type(screen.getByPlaceholderText(/you@email.com/i), 'sam@example.com')
+    await user.click(forgotLink()!)
+
+    expect(screen.getByLabelText(/email address/i)).toHaveValue('sam@example.com')
+  })
+
+  it('comes back to the gate with the purchase intact', async () => {
+    mockAuthContext.mockResolvedValue({ providers: [], canResetPassword: true })
+    const { user } = await setup()
+    await signInMode(user)
+    await user.click(forgotLink()!)
+    await user.click(screen.getAllByRole('button', { name: /back to sign in/i })[0])
+
+    expect(screen.getByRole('button', { name: /continue to payment/i })).toBeInTheDocument()
+    expect(screen.getByText('£52.18')).toBeInTheDocument()
   })
 })

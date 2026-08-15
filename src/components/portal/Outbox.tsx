@@ -20,6 +20,8 @@ const TEMPLATE_LABEL: Record<string, string> = {
   'exit-charge-failed': 'Settlement failed',
   'exit-scheduled': 'Exit scheduled',
   'exit-return-requested': 'Return requested',
+  'password-reset': 'Password reset link',
+  'password-changed': 'Password changed',
 }
 
 interface StreamSummary {

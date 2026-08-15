@@ -106,6 +106,8 @@ interface HubStore {
   hydrated: boolean
   /** OAuth providers the server has configured (which buttons to show). */
   providers: { id: string; label: string }[]
+  /** Whether a reset link can actually be emailed — no provider, no link shown. */
+  canResetPassword: boolean
   /**
    * Set when a write-through failed and the local state has been rolled back to
    * what is actually stored. The hub shows it and clears it — a mutation that
@@ -191,6 +193,7 @@ export const useHubStore = create<HubStore>((set) => ({
   feedback: [],
   hydrated: false,
   providers: [],
+  canResetPassword: false,
   saveError: null,
 
   refresh: async () => {
@@ -205,10 +208,12 @@ export const useHubStore = create<HubStore>((set) => ({
       const me = (await (await fetch('/api/auth/me')).json()) as {
         user?: { email: string | null; name: string } | null
         providers?: { id: string; label: string }[]
+        canResetPassword?: boolean
       }
       const providers = me.providers ?? []
+      const canResetPassword = me.canResetPassword ?? false
       if (!me.user) {
-        set({ hydrated: true, providers })
+        set({ hydrated: true, providers, canResetPassword })
         return
       }
       const { subscription, feedback } = await loadAccountData()
@@ -218,6 +223,7 @@ export const useHubStore = create<HubStore>((set) => ({
         feedback,
         hydrated: true,
         providers,
+        canResetPassword,
       })
     } catch {
       set({ hydrated: true })

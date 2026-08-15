@@ -12,6 +12,28 @@ const SCRYPT = { N: 16384, r: 8, p: 1 }
 const KEY_LENGTH = 32
 const SALT_LENGTH = 16
 
+/** The shortest password a customer account will accept. */
+export const MIN_PASSWORD_LENGTH = 8
+
+/**
+ * Why a password is not acceptable, or null.
+ *
+ * One rule, in one place, for every route that sets one. Sign-up and reset used
+ * to answer this question separately, which is how you end up with a reset that
+ * refuses a password sign-up would have taken — or, worse, accepts one it
+ * wouldn't.
+ *
+ * The upper bound is not fussiness: scrypt hashes whatever it is given, and a
+ * megabyte of "password" is a free way to tie up a CPU.
+ */
+export function passwordProblem(password: string): string | null {
+  if (!password || password.length < MIN_PASSWORD_LENGTH) {
+    return `Password must be at least ${MIN_PASSWORD_LENGTH} characters`
+  }
+  if (password.length > 200) return 'That password is too long'
+  return null
+}
+
 export function hashPassword(password: string): string {
   const salt = crypto.randomBytes(SALT_LENGTH)
   const hash = crypto.scryptSync(password, salt, KEY_LENGTH, SCRYPT)

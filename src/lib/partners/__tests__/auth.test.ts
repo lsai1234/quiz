@@ -15,6 +15,17 @@ jest.mock('next/headers', () => ({
   }),
 }))
 
+/** The email layer, captured rather than sent. */
+const mockPartnerResets: { email: string; resetUrl: string; realm?: string }[] = []
+
+jest.mock('@/lib/notify/account', () => ({
+  sendPasswordReset: jest.fn(async (input: { email: string; resetUrl: string; realm?: string }) => {
+    mockPartnerResets.push(input)
+    return true
+  }),
+  sendPasswordChanged: jest.fn(async () => {}),
+}))
+
 import {
   createInviteToken,
   endPartnerSession,
@@ -22,6 +33,7 @@ import {
   login,
   partnerForInvite,
   passwordProblem,
+  requestPartnerPasswordReset,
   setPasswordWithToken,
   startPartnerSession,
 } from '@/lib/partners/auth'
@@ -199,5 +211,100 @@ describe('password rules', () => {
 
   it('refuses something absurd rather than hashing it', () => {
     expect(passwordProblem('x'.repeat(5000))).toMatch(/too long/)
+  })
+})
+
+/**
+ * A partner asking for their own reset link.
+ *
+ * The realm could always MINT one of these — a founder pressing "reissue" in the
+ * hub — but a partner locked out on a Saturday could not see their own
+ * commission until somebody read their email on Monday.
+ */
+describe('forgotten partner passwords', () => {
+  const ENV = { ...process.env }
+
+  beforeEach(() => {
+    mockPartnerResets.length = 0
+    process.env.NOTIFY_SOURCE = 'mock'
+  })
+
+  afterEach(() => {
+    process.env = { ...ENV }
+  })
+
+  const lastToken = () =>
+    new URL(mockPartnerResets[mockPartnerResets.length - 1].resetUrl).searchParams.get('token') ?? ''
+
+  it('emails a link that sets a password', async () => {
+    const { partner } = await onboarded('reset-partner@example.com', 'Reset Partner')
+
+    expect(await requestPartnerPasswordReset('reset-partner@example.com')).toBe('sent')
+    expect(mockPartnerResets[0].realm).toBe('partner')
+    // Lands on the page invites already used — a reset and an invite are the
+    // same act with different wording.
+    expect(mockPartnerResets[0].resetUrl).toContain('/partner/set-password?token=')
+
+    const set = await setPasswordWithToken(lastToken(), 'a-fresh-partner-password')
+    expect(set.ok).toBe(true)
+
+    const check = await login('reset-partner@example.com', 'a-fresh-partner-password')
+    expect(check.ok).toBe(true)
+    expect(partner.id).toBe(set.ok ? set.partner.id : '')
+  })
+
+  it('says nothing and sends nothing for an address that is not a partner', async () => {
+    // Which addresses are partners of ours is commercially interesting, and
+    // this form must not be a way to ask.
+    expect(await requestPartnerPasswordReset('stranger@example.com')).toBe('unknown')
+    expect(mockPartnerResets).toHaveLength(0)
+  })
+
+  it('treats a suspended partner as unknown rather than explaining', async () => {
+    const { partner } = await onboarded('suspended-reset@example.com', 'Suspended One')
+    await setPartnerStatus(partner.id, 'suspended')
+
+    expect(await requestPartnerPasswordReset('suspended-reset@example.com')).toBe('unknown')
+    expect(mockPartnerResets).toHaveLength(0)
+  })
+
+  it('stops at three an hour', async () => {
+    await onboarded('throttled-partner@example.com', 'Throttled')
+
+    for (let i = 0; i < 3; i++) {
+      expect(await requestPartnerPasswordReset('throttled-partner@example.com')).toBe('sent')
+    }
+    expect(await requestPartnerPasswordReset('throttled-partner@example.com')).toBe('throttled')
+  })
+
+  it('retires the previous link when a new one is asked for', async () => {
+    await onboarded('newest-partner@example.com', 'Newest')
+
+    await requestPartnerPasswordReset('newest-partner@example.com')
+    const first = lastToken()
+    await requestPartnerPasswordReset('newest-partner@example.com')
+    const second = lastToken()
+
+    expect(await partnerForInvite(first)).toBeNull()
+    expect(await partnerForInvite(second)).not.toBeNull()
+  })
+
+  it('leaves a founder’s onboarding invite alone', async () => {
+    // A self-serve reset must not quietly void the link somebody was sent to
+    // join in the first place.
+    const created = await createPartner({ email: 'invited-too@example.com', name: 'Invited Too' })
+    const invite = await createInviteToken(created.partner.id, 'invite')
+
+    await requestPartnerPasswordReset('invited-too@example.com')
+
+    expect(await partnerForInvite(invite)).not.toBeNull()
+  })
+
+  it('refuses to pretend when no email provider is configured', async () => {
+    process.env.NOTIFY_SOURCE = 'manual'
+    await onboarded('no-provider@example.com', 'No Provider')
+
+    expect(await requestPartnerPasswordReset('no-provider@example.com')).toBe('unavailable')
+    expect(mockPartnerResets).toHaveLength(0)
   })
 })

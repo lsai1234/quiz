@@ -20,6 +20,8 @@
 import crypto from 'crypto'
 import { cookies } from 'next/headers'
 import { hashPassword, verifyPassword } from '@/lib/auth/password'
+import { appBaseUrl, canSendFromHub } from '@/lib/notify'
+import { sendPasswordReset } from '@/lib/notify/account'
 import * as repo from './repo'
 import type { Partner } from './types'
 
@@ -28,6 +30,21 @@ export const PARTNER_COOKIE = 'partner_session'
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 /** Long enough to act on an email, short enough that a stale one is useless. */
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * A self-serve reset is a much shorter-lived thing than an invite.
+ *
+ * An invite is handed to a founder to pass on, and may sit in an inbox over a
+ * weekend before anyone opens it. A reset was asked for by somebody staring at
+ * a sign-in screen, so the window only has to cover finding the email — and a
+ * week-long one is a week in which a forwarded message or a shared laptop is a
+ * working credential.
+ */
+const RESET_TTL_MS = 60 * 60 * 1000
+const RESET_TTL_WORDS = '60 minutes'
+
+/** How many links one partner can ask for in an hour. */
+const MAX_RESETS_PER_HOUR = 3
 
 function hash(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex')
@@ -125,16 +142,62 @@ export async function login(email: string, password: string): Promise<LoginResul
 export async function createInviteToken(
   partnerId: string,
   kind: 'invite' | 'reset' = 'invite',
+  opts: { ttlMs?: number } = {},
 ): Promise<string> {
   const token = newToken()
   await repo.insertInvite({
     tokenHash: hash(token),
     partnerId,
     kind,
-    expiresAt: new Date(Date.now() + INVITE_TTL_MS).toISOString(),
+    expiresAt: new Date(Date.now() + (opts.ttlMs ?? INVITE_TTL_MS)).toISOString(),
   })
   return token
 }
+
+/**
+ * A partner asking for their own reset link.
+ *
+ * The realm has always been able to MINT one of these — a founder pressing
+ * "reissue" in the hub — but there was no way for a partner to ask, and the
+ * sign-in screen told them to send an email and wait for somebody to be at a
+ * desk. Their commission dashboard is not a thing to be locked out of on a
+ * Sunday.
+ *
+ * Answers identically whatever happened, for the reason `login` gives: which
+ * addresses are partners of ours is theirs to disclose, not ours. A suspended
+ * partner is treated as unknown here rather than told — `login` already explains
+ * suspension to anyone who can prove the account is theirs, and this endpoint
+ * proves nothing.
+ */
+export async function requestPartnerPasswordReset(email: string): Promise<PartnerResetOutcome> {
+  if (!canSendFromHub()) return 'unavailable'
+
+  const partner = await repo.getPartnerByEmail(email ?? '')
+  if (!partner || partner.status === 'suspended') return 'unknown'
+
+  const since = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+  if ((await repo.countInvitesSince(partner.id, since, 'reset')) >= MAX_RESETS_PER_HOUR) {
+    return 'throttled'
+  }
+
+  // Only the newest link works. Untouched: an outstanding `invite`, which is a
+  // founder's onboarding link and not this endpoint's to cancel.
+  await repo.invalidateInvites(partner.id, 'reset')
+
+  const token = await createInviteToken(partner.id, 'reset', { ttlMs: RESET_TTL_MS })
+  const sent = await sendPasswordReset({
+    userId: null,
+    email: partner.email,
+    firstName: partner.name?.trim().split(/\s+/)[0] || null,
+    resetUrl: `${appBaseUrl()}/partner/set-password?token=${encodeURIComponent(token)}`,
+    expiresIn: RESET_TTL_WORDS,
+    realm: 'partner',
+  })
+  return sent ? 'sent' : 'failed'
+}
+
+/** For the server log only — the route collapses all but `unavailable` into one answer. */
+export type PartnerResetOutcome = 'sent' | 'unknown' | 'throttled' | 'failed' | 'unavailable'
 
 /** Who a link belongs to, without spending it — so a form can greet them by name. */
 export async function partnerForInvite(token: string): Promise<Partner | null> {

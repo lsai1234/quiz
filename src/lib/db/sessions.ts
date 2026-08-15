@@ -46,3 +46,16 @@ export async function deleteSession(token: string | undefined | null): Promise<v
   const db = await getEngine()
   await db.run('DELETE FROM sessions WHERE token_hash = ?', [hashToken(token)])
 }
+
+/**
+ * Sign this account out everywhere.
+ *
+ * The point of changing a password is that somebody else may know the old one,
+ * and knowing it may already have got them a session. Leaving those alive would
+ * make a reset a formality — the person who took the account keeps it, and the
+ * owner has changed nothing but their own login.
+ */
+export async function deleteSessionsForUser(userId: string): Promise<void> {
+  const db = await getEngine()
+  await db.run('DELETE FROM sessions WHERE user_id = ?', [userId])
+}

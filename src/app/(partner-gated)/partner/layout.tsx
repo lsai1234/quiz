@@ -1,4 +1,5 @@
 import { getSessionPartner } from '@/lib/partners/auth'
+import { canSendFromHub } from '@/lib/notify'
 import { PartnerLogin } from '@/components/partner/PartnerLogin'
 
 export const dynamic = 'force-dynamic'
@@ -15,6 +16,9 @@ export const dynamic = 'force-dynamic'
  * groups do not appear in the URL, so both still sit under `/partner`.
  */
 export default async function PartnerLayout({ children }: { children: React.ReactNode }) {
-  if (!(await getSessionPartner())) return <PartnerLogin />
+  // Whether a reset link can actually be emailed is resolved here, on the
+  // server, and handed down — the sign-in screen offers a self-serve reset only
+  // when there is something to send it with.
+  if (!(await getSessionPartner())) return <PartnerLogin canResetPassword={canSendFromHub()} />
   return <>{children}</>
 }

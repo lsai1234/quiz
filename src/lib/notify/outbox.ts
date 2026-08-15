@@ -403,6 +403,44 @@ export async function markSentManually(id: string): Promise<Notification | null>
 }
 
 /**
+ * Record the outcome of a send this process performed itself.
+ *
+ * There is exactly one caller, and it should stay that way: `./account` sends
+ * password reset links **without putting them in the outbox first**, because
+ * the link is a live credential and the outbox is a durable store rendered on a
+ * page inside the Founders Hub. A queued reset email would be an account
+ * takeover sitting in an admin screen and in every database backup.
+ *
+ * So the row is written with the link stripped out (an audit record: who asked,
+ * when, did it leave) and this stamps what actually happened to the real one.
+ * `sentManually` stays false — a provider did deliver it — and the body on the
+ * row is deliberately not what was sent, which the redacted copy says on its
+ * face.
+ *
+ * Everything else must go through `sendNotificationNow`, where the thing that
+ * was stored is the thing that was sent.
+ */
+export async function recordDirectSend(
+  id: string,
+  result: { providerId?: string | null; error?: string | null },
+): Promise<Notification | null> {
+  const notification = await getNotification(id)
+  if (!notification) return null
+
+  const stamped: Notification = {
+    ...notification,
+    attempts: notification.attempts + 1,
+    status: result.error ? 'failed' : 'sent',
+    providerId: result.providerId ?? null,
+    error: result.error ?? null,
+    sentAt: result.error ? null : now(),
+    updatedAt: now(),
+  }
+  await write(stamped)
+  return stamped
+}
+
+/**
  * Send a copy of a queued email somewhere else, changing nothing.
  *
  * The point of it is the sending address: a `noreply` sender on a new domain

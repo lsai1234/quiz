@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ForgotPassword } from './ForgotPassword'
 import { ProviderButtons } from './ProviderButtons'
 import { fetchAuthContext, authenticateAccount } from '@/lib/auth-client'
 import { CheckoutConsent } from '@/components/legal/CheckoutConsent'
@@ -51,7 +52,8 @@ export function AccountGate({
   onCancel: () => void
 }) {
   const [providers, setProviders] = useState<{ id: string; label: string }[]>([])
-  const [mode, setMode] = useState<'signup' | 'login'>('signup')
+  const [canResetPassword, setCanResetPassword] = useState(false)
+  const [mode, setMode] = useState<'signup' | 'login' | 'forgot'>('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -60,7 +62,10 @@ export function AccountGate({
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    void fetchAuthContext().then((ctx) => setProviders(ctx.providers))
+    void fetchAuthContext().then((ctx) => {
+      setProviders(ctx.providers)
+      setCanResetPassword(ctx.canResetPassword)
+    })
   }, [])
 
   const consent: ConsentSubmission = {
@@ -80,7 +85,7 @@ export function AccountGate({
   }
 
   const submit = async () => {
-    if (busy || !credentialsValid) return
+    if (busy || !credentialsValid || mode === 'forgot') return
     if (!requireConsent()) return
     setBusy(true)
     setError(null)
@@ -110,6 +115,47 @@ export function AccountGate({
     background: GLASS.surface,
     border: `1px solid ${GLASS.hairline}`,
     color: 'var(--color-text)',
+  }
+
+  /**
+   * Resetting a password without losing the sale.
+   *
+   * The link in the email opens the hub, not this sheet, and there is no way
+   * around that: the sheet lives inside a checkout that exists only in this tab.
+   * So the copy tells them exactly what will happen — set the password over
+   * there, come back here, sign in with it — rather than letting them discover
+   * on their own that the thing they were buying is somewhere else now.
+   *
+   * Their stack survives the round trip; it is held in the store, not in this
+   * component.
+   */
+  if (mode === 'forgot') {
+    return (
+      <Sheet onClose={onCancel} label="Reset your password">
+        <SheetHeader eyebrow="Forgotten password" title="We’ll email you a link">
+          <CheckoutSteps current="account" />
+        </SheetHeader>
+
+        <SheetBody className="space-y-4">
+          <ForgotPassword
+            initialEmail={email}
+            backLabel="Back to sign in"
+            onBack={() => { setMode('login'); setError(null) }}
+          />
+          <Note icon="info">
+            The link opens your hub in a new page. Set your password there, then come back to this
+            tab and sign in with it — your stack is still here.
+          </Note>
+        </SheetBody>
+
+        <SheetFooter>
+          <Button variant="secondary" onClick={onCancel}>Cancel</Button>
+          <Button variant="ghost" onClick={() => { setMode('login'); setError(null) }}>
+            Back to sign in
+          </Button>
+        </SheetFooter>
+      </Sheet>
+    )
   }
 
   return (
@@ -174,13 +220,29 @@ export function AccountGate({
           Card details are taken on Stripe’s secure page — nothing is charged until you finish there.
         </Note>
 
-        <button
-          type="button"
-          onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(null) }}
-          className="text-xs font-semibold underline text-[var(--color-muted)]"
-        >
-          {mode === 'signup' ? 'Already have an account?' : 'New here? Create one'}
-        </button>
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(null) }}
+            className="text-xs font-semibold underline text-[var(--color-muted)]"
+          >
+            {mode === 'signup' ? 'Already have an account?' : 'New here? Create one'}
+          </button>
+
+          {/* Only when signing in, and only when a link can actually be sent.
+              A returning member who cannot remember their password is otherwise
+              stuck one step from paying, with no way forward that keeps the
+              stack they just built. */}
+          {mode === 'login' && canResetPassword && (
+            <button
+              type="button"
+              onClick={() => { setMode('forgot'); setError(null) }}
+              className="text-xs font-semibold underline text-[var(--color-muted)]"
+            >
+              Forgotten it?
+            </button>
+          )}
+        </div>
       </SheetBody>
 
       <SheetFooter>

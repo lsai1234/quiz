@@ -29,7 +29,7 @@
  */
 import type { TemplateId } from './types'
 
-export type MailStream = 'orders' | 'subscriptions' | 'billing'
+export type MailStream = 'orders' | 'subscriptions' | 'billing' | 'account'
 
 interface StreamSpec {
   /** Shown in the Founders Hub, and the display name on the From header. */
@@ -56,6 +56,21 @@ const STREAMS: Record<MailStream, StreamSpec> = {
     localPart: 'billing.noreply',
     purpose: 'Payments, price changes and terms.',
   },
+  /**
+   * Getting into the account: reset links and security notices.
+   *
+   * Its own stream for a reason the others only have in theory. A reset email is
+   * the one email that is useless if it lands in spam — the member is locked out
+   * and cannot be told anything else — and it is also the one that never carries
+   * a promotion, never goes to a list, and is never sent to anyone who did not
+   * ask for it seconds earlier. Keeping it away from everything else is how it
+   * stays that way.
+   */
+  account: {
+    label: 'getCHRGD Account',
+    localPart: 'account.noreply',
+    purpose: 'Password resets and security notices.',
+  },
 }
 
 /**
@@ -77,6 +92,8 @@ const STREAM_FOR_TEMPLATE: Record<TemplateId, MailStream> = {
   'terms-updated': 'billing',
   'payment-failed': 'billing',
   'exit-charge-failed': 'billing',
+  'password-reset': 'account',
+  'password-changed': 'account',
 }
 
 export function streamFor(template: TemplateId): MailStream {
@@ -103,6 +120,7 @@ const ENV_KEY: Record<MailStream, string> = {
   orders: 'NOTIFY_FROM_ORDERS',
   subscriptions: 'NOTIFY_FROM_SUBSCRIPTIONS',
   billing: 'NOTIFY_FROM_BILLING',
+  account: 'NOTIFY_FROM_ACCOUNT',
 }
 
 /** The full From header for a stream, e.g. `getCHRGD Orders <…@getchrgd.co.uk>`. */

@@ -25,7 +25,7 @@ identical either way, so switching later is two environment variables.
 
 ## What you're setting up
 
-Two kinds of email, treated differently on purpose.
+Three kinds of email, treated differently on purpose.
 
 **Receipts send themselves.** The moment someone pays — for a one-off order or a
 subscription — the confirmation goes out. Nobody presses anything. It lands in
@@ -44,6 +44,20 @@ second.
 
 You can change this later with one setting. Step 6 covers it.
 
+**Password resets are the exception to all of it.** They always send themselves,
+they ignore that setting entirely, and — unlike every other email — **the log
+does not keep a copy of the link**. The row records that somebody asked and that
+it went out; the link itself exists only in the email. That is deliberate: a live
+reset link visible on the Emails page would let anyone who can open Founders Hub
+walk into a customer's account, and it would sit in every database backup too.
+
+The knock-on: **with no email provider configured, there is no reset at all.**
+Nothing to copy out, nothing to press. Until you finish this guide, the sign-in
+screens simply don't offer "forgotten your password?", because sending someone
+off to watch an inbox that will never receive anything is worse than not offering
+it. Partners are the same — until then, they email you and you reissue their link
+from Founders Hub → Partners.
+
 ### The addresses
 
 Emails can come from three separate addresses:
@@ -53,8 +67,9 @@ Emails can come from three separate addresses:
 | `orderconfirmation.noreply@getchrgd.co.uk` | Order receipts |
 | `subscriptions.noreply@getchrgd.co.uk` | Plan confirmations, changes to a plan, plans ending |
 | `billing.noreply@getchrgd.co.uk` | Payments, price changes, terms |
+| `account.noreply@getchrgd.co.uk` | Password reset links, and the notice that a password changed |
 
-Three rather than one because Gmail and Outlook score reputation **per address**.
+Four rather than one because Gmail and Outlook score reputation **per address**.
 A price-rise notice occasionally gets marked as spam; an order receipt almost
 never does. If both came from `hello@`, one bad week for the first would start
 putting the second in people's junk folders — including receipts for money
@@ -66,7 +81,7 @@ Google Workspace inbox as normal. That matters: a noreply with no reply path
 means a customer with a question has nowhere to ask it, and mail providers treat
 it as a spam signal too.
 
-On Resend you get all three automatically. On Google Workspace they need setting
+On Resend you get all four automatically. On Google Workspace they need setting
 up as aliases (step A5) — until you do, everything sends from
 `contact@getchrgd.co.uk`, which is perfectly fine to start with.
 
@@ -484,6 +499,7 @@ lost — but nothing leaves until you take it off again.
 | `NOTIFY_FROM_ORDERS` | Override one address, full form: `Name <a@b.uk>`. |
 | `NOTIFY_FROM_SUBSCRIPTIONS` | As above. |
 | `NOTIFY_FROM_BILLING` | As above. |
+| `NOTIFY_FROM_ACCOUNT` | As above — password resets and security notices. |
 | `NOTIFY_FROM` | One address for everything. Used when `NOTIFY_DOMAIN` is blank. |
 | `APP_URL` | Public origin. Every link in every email is built from it. |
 | `RESEND_API_URL` | Point the sender at a stub or a self-hosted relay. Leave blank. |
@@ -507,3 +523,5 @@ lost — but nothing leaves until you take it off again.
 | A card is declined | That Stripe is retrying, and how to fix it | No | `billing.noreply@` |
 | A settlement invoice fails | That the cancellation went through, and how to pay | No | `billing.noreply@` |
 | The terms change materially | What changed, from when | No | `billing.noreply@` |
+| Someone forgets their password | A one-time link, good for 60 minutes | **Yes, always** | `account.noreply@` |
+| A password is changed | That it happened, and how to shout if it wasn't them | **Yes, always** | `account.noreply@` |

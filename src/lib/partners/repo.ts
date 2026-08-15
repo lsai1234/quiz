@@ -585,6 +585,43 @@ export async function insertInvite(input: {
   )
 }
 
+/** How many links this partner has been sent since `sinceIso` — the reset throttle. */
+export async function countInvitesSince(
+  partnerId: string,
+  sinceIso: string,
+  kind?: 'invite' | 'reset',
+): Promise<number> {
+  const db = await getEngine()
+  const row = kind
+    ? await db.get<{ n: number | string }>(
+        'SELECT COUNT(*) AS n FROM partner_invites WHERE partner_id = ? AND created_at >= ? AND kind = ?',
+        [partnerId, sinceIso, kind],
+      )
+    : await db.get<{ n: number | string }>(
+        'SELECT COUNT(*) AS n FROM partner_invites WHERE partner_id = ? AND created_at >= ?',
+        [partnerId, sinceIso],
+      )
+  return Number(row?.n ?? 0)
+}
+
+/**
+ * Retire every outstanding link of a kind, so only the newest one works.
+ *
+ * Stamped rather than deleted: an unused link is still part of the record of
+ * what was sent, and deleting it would take the attempt out of the throttle's
+ * count as well. `used_at IS NULL` is the only test for usability.
+ *
+ * Scoped to `reset` by its only caller — a self-serve reset must not quietly
+ * void the onboarding invite a founder sent last week.
+ */
+export async function invalidateInvites(partnerId: string, kind: 'invite' | 'reset'): Promise<void> {
+  const db = await getEngine()
+  await db.run(
+    'UPDATE partner_invites SET used_at = ? WHERE partner_id = ? AND kind = ? AND used_at IS NULL',
+    [`superseded#${now()}`, partnerId, kind],
+  )
+}
+
 /** An unused, unexpired invite, or null. Single-use is enforced by `used_at`. */
 export async function findUsableInvite(
   tokenHash: string,

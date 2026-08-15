@@ -28,6 +28,7 @@ Everything storage-related lives in **`src/lib/db/`**:
 | `migrations.ts`      | versioned SQL, shared by both engines                    |
 | `users.ts`           | customer accounts (password and/or Google identities)    |
 | `sessions.ts`        | login sessions (hashed opaque tokens, 30-day TTL)        |
+| `password-resets.ts` | one-time reset tokens (hashed, single-use, 60-min TTL)   |
 | `hub-data.ts`        | per-account subscription document + check-in feedback    |
 | `kv.ts`              | JSON key-value store backing the portal's persistence    |
 
@@ -43,6 +44,11 @@ rewrites `?` to `$1…$n`. Adding another backend is one new `*-engine.ts` file.
   `picture`, `created_at`.
 - **`sessions`** — `token_hash` (SHA-256 of the cookie token, so a leaked DB
   can't be replayed), `user_id`, `created_at`, `expires_at`.
+- **`password_resets`** (v11) — `token_hash`, `user_id`, `expires_at`, `used_at`,
+  `created_at`. Hashed for the same reason sessions are; separate from them
+  because a reset token is single-use and short-lived, and mixing the two
+  lifetimes in one table is how a spent token stays alive. `used_at` holds a
+  per-call stamp so two simultaneous callers can tell which of them burnt it.
 - **`subscriptions`** — one row per user: the full `MemberSubscription` JSON.
   The hub's mutation helpers are pure functions over that document, so the row
   is simply the latest result. When Recharge is connected this becomes a
@@ -102,6 +108,21 @@ Sessions are database rows, not JWTs: the `hub_session` httpOnly cookie holds
 a random token whose hash is stored in `sessions` — revocable server-side,
 30-day expiry, `secure` in production. Request-side helpers live in
 `src/lib/auth/session.ts` (`getHubUser()` is the guard for hub APIs).
+
+**Forgotten passwords** (`src/lib/auth/reset.ts`) mint a random token, store only
+its hash, and burn it in SQL before writing anything — so a link opened twice,
+forwarded or replayed can set a password once. Spending one drops every session
+the account had, because the reason to reset a password is that somebody else may
+know the old one and may already be signed in with it. Every request for a link
+answers identically whatever happened; a form that distinguishes an unknown
+address from a known one is a way of asking this site whether a given person is a
+customer. The partner realm has the same flow over `partner_invites`
+(`requestPartnerPasswordReset`), and the Founders Hub — whose accounts come from
+environment variables rather than a table — has none, because there is nothing
+stored to reset.
+
+The reset email is the one email that never goes through the outbox with its
+contents intact: see `src/lib/notify/account.ts`.
 
 The founders' portal keeps its own separate realm (`portal_session`,
 env-configured founder accounts) — customers can never reach `/founderhub`.

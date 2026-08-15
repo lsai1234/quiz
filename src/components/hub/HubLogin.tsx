@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { ForgotPassword } from '@/components/auth/ForgotPassword'
 import { ProviderButtons } from '@/components/auth/ProviderButtons'
 import { CHRGDMark } from '@/components/brand/CHRGDLogo'
 import { Button } from '@/components/ui/Button'
@@ -14,10 +15,17 @@ interface Props {
   loading?: boolean
   /** OAuth providers the server has configured (which buttons to show). */
   providers?: { id: string; label: string }[]
+  /**
+   * Whether a reset link can actually be emailed. False hides the way in
+   * entirely — a "forgot password?" link on a deployment with no mail provider
+   * sends the one member who most needs help to wait for an email that is never
+   * coming.
+   */
+  canResetPassword?: boolean
 }
 
-export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
-  const [mode, setMode] = useState<'login' | 'signup'>('login')
+export function HubLogin({ onAuthenticate, loading, providers = [], canResetPassword = false }: Props) {
+  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -34,14 +42,21 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
    * a stale failure. The *message* is derived at render rather than stored,
    * because the provider list arrives from the server a beat later and the id
    * on its own can't be shown to anyone.
+   *
+   * `?forgot=1` arrives the same way and opens the reset form directly. It is
+   * what the "ask for a new link" button points at — from a dead reset link, and
+   * from the audit copy of a reset email if anyone ever re-sends one by hand.
    */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const failed = params.get('auth_error')
-    if (!failed) return
-    setFailedProviderId(failed)
+    const forgot = params.get('forgot')
+    if (!failed && !forgot) return
+    if (failed) setFailedProviderId(failed)
+    if (forgot) setMode('forgot')
     const url = new URL(window.location.href)
     url.searchParams.delete('auth_error')
+    url.searchParams.delete('forgot')
     window.history.replaceState({}, '', `${url.pathname}${url.search}`)
   }, [])
 
@@ -55,7 +70,7 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
   const valid = /\S+@\S+\.\S+/.test(email) && password.length >= (mode === 'signup' ? 8 : 1)
 
   const submit = async () => {
-    if (!valid || submitting) return
+    if (!valid || submitting || mode === 'forgot') return
     setSubmitting(true)
     setError(null)
     const err = await onAuthenticate(mode, email.trim(), password)
@@ -88,72 +103,105 @@ export function HubLogin({ onAuthenticate, loading, providers = [] }: Props) {
       <CHRGDMark size={34} className="mb-5" />
       <Eyebrow color={ACCENT} className="mb-2">Subscriber hub</Eyebrow>
       <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-        Manage your stack
+        {mode === 'forgot' ? 'Forgotten password' : 'Manage your stack'}
       </h1>
       <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-7">
-        {mode === 'login'
-          ? 'Sign in to swap products, change your dispatch date, and manage your subscription.'
-          : 'Create your account to save your stack, track how it’s working, and manage deliveries.'}
+        {mode === 'forgot'
+          ? 'Happens to everyone. We’ll email you a link and you’ll be back in a minute.'
+          : mode === 'login'
+            ? 'Sign in to swap products, change your dispatch date, and manage your subscription.'
+            : 'Create your account to save your stack, track how it’s working, and manage deliveries.'}
       </p>
 
-      {ssoError && (
-        <Note icon="alert-triangle" color={RED} live className="w-full mb-4 text-left">
-          {ssoError}
-        </Note>
+      {mode === 'forgot' && (
+        <ForgotPassword
+          initialEmail={email}
+          onBack={() => {
+            setMode('login')
+            setError(null)
+          }}
+        />
       )}
 
-      <form
-        onSubmit={(e) => { e.preventDefault(); void submit() }}
-        className="w-full space-y-3"
-      >
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="you@email.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className={inputClass}
-          style={inputStyle}
-        />
-        <input
-          type="password"
-          autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-          placeholder={mode === 'signup' ? 'Choose a password (8+ characters)' : 'Password'}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className={inputClass}
-          style={inputStyle}
-        />
+      {mode !== 'forgot' && (
+        <>
+          {ssoError && (
+            <Note icon="alert-triangle" color={RED} live className="w-full mb-4 text-left">
+              {ssoError}
+            </Note>
+          )}
 
-        {error && (
-          <p className="text-xs font-semibold text-left px-1" style={{ color: RED }} role="alert">
-            {error}
-          </p>
-        )}
+          <form
+            onSubmit={(e) => { e.preventDefault(); void submit() }}
+            className="w-full space-y-3"
+          >
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="you@email.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputClass}
+              style={inputStyle}
+            />
+            <input
+              type="password"
+              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              placeholder={mode === 'signup' ? 'Choose a password (8+ characters)' : 'Password'}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={inputClass}
+              style={inputStyle}
+            />
 
-        <Button type="submit" variant="primary" size="lg" disabled={!valid || loading || submitting}>
-          {submitting ? 'One sec…' : mode === 'login' ? 'Sign in →' : 'Create account →'}
-        </Button>
-      </form>
+            {error && (
+              <p className="text-xs font-semibold text-left px-1" style={{ color: RED }} role="alert">
+                {error}
+              </p>
+            )}
 
-      <ProviderButtons providers={providers} returnTo="/myhub" />
+            <Button type="submit" variant="primary" size="lg" disabled={!valid || loading || submitting}>
+              {submitting ? 'One sec…' : mode === 'login' ? 'Sign in →' : 'Create account →'}
+            </Button>
+          </form>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        fullWidth={false}
-        onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null) }}
-        className="mt-4 underline"
-      >
-        {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
-      </Button>
+          {/* Under the form and only when signing in: it is the answer to a
+              failed attempt, and putting it on the sign-up screen would offer to
+              reset a password nobody has chosen yet. Carries the email already
+              typed across with it — retyping the address you just got wrong is
+              the last thing this screen should ask for. */}
+          {mode === 'login' && canResetPassword && (
+            <Button
+              variant="ghost"
+              size="sm"
+              fullWidth={false}
+              onClick={() => { setMode('forgot'); setError(null) }}
+              className="mt-3 underline"
+            >
+              Forgotten your password?
+            </Button>
+          )}
 
-      <Note icon="lock" className="mt-6 text-left">
-        Your account and stack are saved to the app database. In mock mode your first
-        sign-in loads a sample subscription; live, this connects to your real
-        Recharge subscription.
-      </Note>
+          <ProviderButtons providers={providers} returnTo="/myhub" />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            fullWidth={false}
+            onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null) }}
+            className="mt-4 underline"
+          >
+            {mode === 'login' ? 'New here? Create an account' : 'Already have an account? Sign in'}
+          </Button>
+
+          <Note icon="lock" className="mt-6 text-left">
+            Your account and stack are saved to the app database. In mock mode your first
+            sign-in loads a sample subscription; live, this connects to your real
+            Recharge subscription.
+          </Note>
+        </>
+      )}
     </div>
   )
 }

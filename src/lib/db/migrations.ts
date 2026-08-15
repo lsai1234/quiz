@@ -333,6 +333,27 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX partner_invites_partner ON partner_invites(partner_id);
   `,
+  // v11 — customer password resets.
+  //
+  // The partner realm has had single-use tokens since v10; the customer realm
+  // had nothing, so a forgotten password was a dead account. Same shape, and
+  // separate from `sessions` for the same reason `partner_invites` is separate
+  // from `partner_sessions`: a reset token is single-use and short-lived, and
+  // mixing those two lifetimes in one table is how a spent token stays alive.
+  //
+  // `used_at` is what makes it single-use, and it holds a per-call stamp rather
+  // than a plain timestamp so two simultaneous callers can tell which of them
+  // won the race — see `consumeReset`.
+  `
+  CREATE TABLE password_resets (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX password_resets_user ON password_resets(user_id);
+  `,
 ]
 
 /**

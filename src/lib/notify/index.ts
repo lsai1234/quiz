@@ -128,6 +128,12 @@ export type AutoSendPolicy = 'none' | 'confirmations' | 'all'
  * Deliberately a short, explicit list rather than a rule about streams or
  * naming. Adding an email to it means deciding that nobody needs to read it
  * before a customer does, and that decision should cost a line in this file.
+ *
+ * `password-reset` is NOT here, and its absence is not an oversight: it does not
+ * go through the queue at all. A reset link cannot wait for a policy, a flush or
+ * a person, so `./account` renders it, sends it through the provider in the same
+ * call, and leaves behind an audit row with the link taken out. See the note on
+ * `recordDirectSend`.
  */
 const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation']
 
