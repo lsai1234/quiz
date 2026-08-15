@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Card, Modal, ModalBody, ModalHeader, Tabs } from '@/components/system'
 import { describePayout, describeTerms } from '@/lib/partners/terms'
 import type {
   CodeTerms,
@@ -75,87 +75,94 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
     }
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{ background: 'rgba(0,0,0,0.72)' }}
-    >
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-[var(--color-border)]">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-widest uppercase truncate" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              {partner.status}
-            </p>
-            <h3 className="text-lg font-black text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{partner.name}</h3>
-            <p className="text-[11px] text-[var(--color-muted)] truncate">{partner.email}</p>
+  return (
+    <Modal onClose={onClose} size="lg" label={`${partner.name} — partner`}>
+      <ModalHeader title={partner.name} subtitle={`${partner.status} · ${partner.email}`} />
+      <ModalBody>
+        {/* Announced when they appear: both report the outcome of an action the
+            founder just took, and neither used to be. */}
+        {error && (
+          <div role="status" style={{ marginBottom: 'var(--space-3)' }}>
+            <Card tone="critical" padding="tight">
+              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--tone-critical)' }}>
+                {error}
+              </p>
+            </Card>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] flex-shrink-0">✕</button>
-        </div>
+        )}
+        {notice && (
+          <div role="status" style={{ marginBottom: 'var(--space-3)' }}>
+            <Card tone="accent" padding="tight">
+              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--accent)' }}>
+                {notice}
+              </p>
+            </Card>
+          </div>
+        )}
 
-        <div className="px-5 pt-3 flex gap-1">
-          {(['code', 'money', 'terms', 'history'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => { setTab(t); setError(null); setNotice(null) }}
-              className="px-3 py-1.5 rounded-full text-xs font-bold"
-              style={{
-                background: tab === t ? ACCENT : 'var(--color-surface-2)',
-                color: tab === t ? 'var(--color-bg)' : 'var(--color-muted)',
-                border: '1px solid var(--color-border)',
-              }}
-            >
-              {t === 'code' ? 'Code' : t === 'money' ? 'Money' : t === 'terms' ? 'Their deal' : `History (${termsHistory.length})`}
-            </button>
-          ))}
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-5 py-4">
-          {error && <p className="text-xs font-semibold mb-3 px-3 py-2 rounded-xl" style={{ color: '#f87171', background: 'color-mix(in srgb, #f87171 12%, transparent)' }}>{error}</p>}
-          {notice && <p className="text-xs font-semibold mb-3 px-3 py-2 rounded-xl" style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}>{notice}</p>}
-
-          {tab === 'code' && (
-            <>
-              <AccountPanel
-                status={partner.status}
-                busy={busy}
-                partnerId={partner.id}
-                onStatus={(status) => post({ action: 'status', status }, status === 'suspended' ? 'Suspended — their code stops working now.' : 'Reinstated.')}
-              />
-              {codes.map((code) => (
-                <CodePanel
-                  key={code.code}
-                  code={code}
+        {/* A real `Tabs`, unlike the hub's navigations: these switch panels
+            inside one dialog rather than routing, so `role="tablist"` is the
+            truth here. It brings arrow-key movement and Home/End with it. */}
+        <Tabs
+          label="Partner details"
+          value={tab}
+          onChange={(id) => { setTab(id as typeof tab); setError(null); setNotice(null) }}
+          tabs={[
+            {
+              id: 'code',
+              label: 'Code',
+              content: (
+                <>
+                  <AccountPanel
+                    status={partner.status}
+                    busy={busy}
+                    partnerId={partner.id}
+                    onStatus={(status) => post({ action: 'status', status }, status === 'suspended' ? 'Suspended — their code stops working now.' : 'Reinstated.')}
+                  />
+                  {codes.map((code) => (
+                    <CodePanel
+                      key={code.code}
+                      code={code}
+                      busy={busy}
+                      onSave={(patch) => post({ action: 'code', targetCode: code.code, codePatch: patch }, 'Code updated.')}
+                    />
+                  ))}
+                </>
+              ),
+            },
+            {
+              id: 'money',
+              label: 'Money',
+              content: (
+                <MoneyPanel
+                  partnerId={partner.id}
                   busy={busy}
-                  onSave={(patch) => post({ action: 'code', targetCode: code.code, codePatch: patch }, 'Code updated.')}
+                  onSettle={(ignoreMinimum) =>
+                    post({ action: 'settle', ignoreMinimum }, 'Payout raised. Mark it paid once the money has gone.')
+                  }
                 />
-              ))}
-            </>
-          )}
-
-          {tab === 'money' && (
-            <MoneyPanel
-              partnerId={partner.id}
-              busy={busy}
-              onSettle={(ignoreMinimum) =>
-                post({ action: 'settle', ignoreMinimum }, 'Payout raised. Mark it paid once the money has gone.')
-              }
-            />
-          )}
-
-          {tab === 'terms' && (
-            <TermsPanel
-              terms={terms}
-              busy={busy}
-              onSave={(next) => post({ action: 'terms', terms: next }, 'New terms recorded. The partner sees the reason.')}
-            />
-          )}
-
-          {tab === 'history' && <HistoryPanel history={termsHistory} />}
-        </div>
-      </div>
-    </div>,
-    document.body,
+              ),
+            },
+            {
+              id: 'terms',
+              label: 'Their deal',
+              content: (
+                <TermsPanel
+                  terms={terms}
+                  busy={busy}
+                  onSave={(next) => post({ action: 'terms', terms: next }, 'New terms recorded. The partner sees the reason.')}
+                />
+              ),
+            },
+            {
+              id: 'history',
+              label: `History (${termsHistory.length})`,
+              content: <HistoryPanel history={termsHistory} />,
+            },
+          ]}
+        />
+      </ModalBody>
+    </Modal>
   )
 }
 

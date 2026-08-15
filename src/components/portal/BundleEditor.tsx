@@ -10,6 +10,7 @@ import { assembleBundle, bundleToDraft, emptyDraft, type BundleDraft } from '@/l
 import { bundleReadiness } from '@/lib/bundles/readiness'
 import { calculatePricing, formatGBP } from '@/lib/stack-blueprint/pricing'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
+import { Input, Modal, ModalBody, ModalHeader } from '@/components/system'
 
 const DOT: Record<'ok' | 'warn' | 'fail', string> = { ok: '#34d399', warn: '#fbbf24', fail: '#f87171' }
 const GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
@@ -290,13 +291,14 @@ export function BundleEditor({ initial, isNew }: Props) {
 
       {/* Full-page preview overlay */}
       {preview && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)]" style={{ background: 'var(--color-surface)' }}>
-            <span className="text-xs font-bold text-[var(--color-muted)]">Preview — not saved</span>
-            <button onClick={() => setPreview(false)} className="text-xs font-bold px-3 py-1.5 rounded-xl" style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>Close preview</button>
-          </div>
-          <BundleLandingPage bundle={assembled} />
-        </div>
+        <Modal onClose={() => setPreview(false)} size="lg" label="Bundle preview">
+          <ModalHeader title="Preview" subtitle="Not saved — this is what the page would look like." />
+          {/* `padding="none"`: the landing page brings its own layout, and a
+              modal's inset around a full page reads as a frame around a frame. */}
+          <ModalBody className="p-0">
+            <BundleLandingPage bundle={assembled} />
+          </ModalBody>
+        </Modal>
       )}
     </div>
   )
@@ -307,12 +309,17 @@ function ProductPicker({ products, disabledIds, onPick, onClose }: { products: C
   const [q, setQ] = useState('')
   const filtered = products.filter((p) => p.title.toLowerCase().includes(q.toLowerCase()) || p.category.toLowerCase().includes(q.toLowerCase()))
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
-      <div className="w-full max-w-lg max-h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} onClick={(e) => e.stopPropagation()}>
-        <div className="p-4 border-b border-[var(--color-border)]">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className={inputCls} style={inputStyle} />
-        </div>
-        <div className="overflow-y-auto p-2">
+    <Modal onClose={onClose} size="md" label="Add a product to this bundle">
+      <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--edge)' }}>
+        <Input
+          label="Search products"
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search products…"
+        />
+      </div>
+      <ModalBody>
           {filtered.map((p) => {
             const disabled = disabledIds.has(p.id)
             return (
@@ -325,9 +332,12 @@ function ProductPicker({ products, disabledIds, onPick, onClose }: { products: C
               </button>
             )
           })}
-          {filtered.length === 0 && <p className="text-sm text-[var(--color-muted)] text-center py-8">No products match.</p>}
-        </div>
-      </div>
-    </div>
+        {filtered.length === 0 && (
+          <p className="text-center" style={{ fontSize: 'var(--text-body)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
+            No products match.
+          </p>
+        )}
+      </ModalBody>
+    </Modal>
   )
 }
