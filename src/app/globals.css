@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* The design token set. Additive and not yet consumed — components move onto it
+   in the primitive and migration passes. See docs/DESIGN_AUDIT.md. */
+@import "./tokens.css";
+
 @theme inline {
   --color-bg: #09090b;
   --color-surface: #18181b;
@@ -35,10 +39,9 @@
   --color-tone-essential: #7dd3fc;
   --color-tone-review: #fbbf24;
 
-  /* One radius per role, so adjacent elements stop disagreeing. */
-  --radius-row: 0.75rem;
-  --radius-card: 1rem;
-  --radius-sheet: 1.5rem;
+  /* The radius roles moved to tokens.css, which owns the whole set including
+     the pill and chip sizes these three never covered. Same values; they had no
+     call sites here, in a utility or a var(). */
 
   /* The house easing — a soft, overshoot-free settle. */
   --ease-brand: cubic-bezier(0.22, 1, 0.36, 1);
