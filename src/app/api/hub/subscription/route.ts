@@ -3,6 +3,7 @@ import { getHubUser } from '@/lib/auth/session'
 import { getSubscription, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { createMockSubscription } from '@/lib/recharge/mock'
+import { seedsDemoSubscription } from '@/lib/recharge/demo-seed'
 import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { getPaymentSource } from '@/lib/payments'
@@ -11,11 +12,18 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/hub/subscription → { subscription, feedback, seeded? }
- * The member's stored subscription + check-in history. First sign-in has no
- * stored subscription yet, so one is seeded from the sample blueprint (the
- * previous demo behaviour, now persisted per account). Live, the seed is
- * replaced by the member's real Recharge contract.
+ * GET /api/hub/subscription → { subscription, feedback, quiz, seeded }
+ *
+ * The member's stored subscription + check-in history. `subscription` is **null**
+ * for an account that has never subscribed, and the hub renders `NoSubscription`
+ * for that — which is a real state, not an error.
+ *
+ * It was not always null. This route used to seed the sample blueprint for any
+ * account without one and save it, so somebody who had signed up and bought
+ * nothing opened the hub to a stack, a monthly figure and delivery dates that
+ * were invented, stored, and manageable. The seed is now confined to deployments
+ * that cannot take money — see `seedsDemoSubscription`, which is also what keeps
+ * `npm run dev` demoable with no credentials.
  */
 export async function GET() {
   const user = await getHubUser()
@@ -23,10 +31,7 @@ export async function GET() {
 
   let subscription = await getSubscription(user.id)
   let seeded = false
-  if (!subscription) {
-    // No stored bundle (a direct hub sign-up that never subscribed) — seed the
-    // demo bundle so the hub isn't empty. A member who subscribed via checkout
-    // already has their real bundle stored, so this branch is skipped for them.
+  if (!subscription && seedsDemoSubscription()) {
     const { products } = await getResolvedCatalogue()
     subscription = createMockSubscription(products, user.email ?? '')
     await saveSubscription(user.id, subscription)
@@ -34,7 +39,7 @@ export async function GET() {
   }
 
   const [feedback, quiz] = await Promise.all([listFeedback(user.id), getQuiz(user.id)])
-  return NextResponse.json({ subscription, feedback, quiz, seeded })
+  return NextResponse.json({ subscription: subscription ?? null, feedback, quiz, seeded })
 }
 
 /**

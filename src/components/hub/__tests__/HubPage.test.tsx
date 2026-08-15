@@ -16,6 +16,7 @@ function withState(state: Record<string, unknown>) {
   mockStore.mockImplementation((selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       session: null,
+      subscription: null,
       hydrated: false,
       providers: [],
       hydrate: jest.fn(),
@@ -25,6 +26,10 @@ function withState(state: Record<string, unknown>) {
     }),
   )
 }
+
+const SESSION = { email: 'member@example.com', name: 'Sam Reed' }
+/** Enough of a plan to pick the dashboard branch; the dashboard itself is mocked. */
+const PLAN = { status: 'active', lines: [] }
 
 describe('HubPage', () => {
   afterEach(() => mockStore.mockReset())
@@ -47,12 +52,44 @@ describe('HubPage', () => {
   })
 
   it('shows the dashboard, with somewhere to sign out, once the session lands', () => {
-    withState({ hydrated: true, session: { email: 'member@example.com', name: 'Sam Reed' } })
+    withState({ hydrated: true, session: SESSION, subscription: PLAN })
     render(<HubPage />)
 
     expect(screen.getByText('Your next box')).toBeInTheDocument()
     // Sign-out was a naked underlined link floating next to the greeting.
     expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
+
+  /**
+   * Signed in with no plan.
+   *
+   * `SubscriptionDashboard` renders nothing at all without a subscription, so
+   * this was a header over an empty page — invisible only because the API used
+   * to invent a plan for anyone who lacked one.
+   */
+  it('shows the no-plan screen rather than an empty page', () => {
+    withState({ hydrated: true, session: SESSION, subscription: null })
+    render(<HubPage />)
+
+    expect(screen.getByRole('heading', { name: /hi sam/i })).toBeInTheDocument()
+    expect(screen.getByText(/no plan on this account yet/i)).toBeInTheDocument()
+    expect(screen.queryByText('Your next box')).not.toBeInTheDocument()
+  })
+
+  it('keeps the sign-out action on the no-plan screen', () => {
+    // Getting to a different account is the fix for the member whose plan is
+    // under another email — it must not need a sign-out that isn't there.
+    withState({ hydrated: true, session: SESSION, subscription: null })
+    render(<HubPage />)
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+  })
+
+  it('never shows the no-plan screen while it is still finding out', () => {
+    // Hydration starts with `subscription: null`, and flashing "you have no
+    // plan" at a paying member is the same bug the login screen had.
+    withState({ hydrated: false, session: SESSION, subscription: null })
+    render(<HubPage />)
+    expect(screen.queryByText(/no plan on this account yet/i)).not.toBeInTheDocument()
   })
 })
 

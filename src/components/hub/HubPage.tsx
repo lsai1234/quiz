@@ -5,10 +5,12 @@ import { useHubStore } from '@/lib/hub-store'
 import { HubLogin } from './HubLogin'
 import { HubShell } from './HubShell'
 import { HubSkeleton } from './HubSkeleton'
+import { NoSubscription } from './NoSubscription'
 import { SubscriptionDashboard } from './SubscriptionDashboard'
 
 export function HubPage() {
   const session = useHubStore((s) => s.session)
+  const subscription = useHubStore((s) => s.subscription)
   const hydrated = useHubStore((s) => s.hydrated)
   const providers = useHubStore((s) => s.providers)
   const canResetPassword = useHubStore((s) => s.canResetPassword)
@@ -43,6 +45,23 @@ export function HubPage() {
         providers={providers}
         canResetPassword={canResetPassword}
       />
+    )
+  }
+
+  /**
+   * Signed in, no plan.
+   *
+   * `SubscriptionDashboard` renders nothing at all without a subscription, so
+   * this used to be a header over an empty page — and the only reason nobody
+   * saw it is that the API invented a plan for anyone who lacked one. It no
+   * longer does that where real money is involved, so the state is now real and
+   * needs a screen of its own.
+   */
+  if (!subscription) {
+    return (
+      <HubShell onSignOut={logout}>
+        <NoSubscription name={session.name} email={session.email} onSignOut={logout} />
+      </HubShell>
     )
   }
 

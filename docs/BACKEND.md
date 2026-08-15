@@ -163,10 +163,16 @@ that's connected).
 
 ### What persists per account
 
-- **Subscription** — on first sign-in the server seeds the sample subscription
-  (previous demo behaviour, now durable). Every hub action (swap, cadence,
-  skip, pause, calendar edits…) still runs the pure local mutation, then
-  writes the result through `PUT /api/hub/subscription`.
+- **Subscription** — on first sign-in the server seeds the sample subscription,
+  **but only where payments resolve to mock** (`seedsDemoSubscription`, override
+  `HUB_DEMO_SUBSCRIPTION=off`). That keeps `npm run dev` demoable with no
+  credentials without ever showing a real customer a stack, a monthly price and
+  delivery dates that were invented for them and then saved to their account.
+  Where it doesn't seed, `GET /api/hub/subscription` returns
+  `subscription: null` and the hub renders `NoSubscription` — a real state with
+  a real screen, not an error. Every hub action (swap, cadence, skip, pause,
+  calendar edits…) still runs the pure local mutation, then writes the result
+  through `PUT /api/hub/subscription`.
 - **Check-in feedback** — each check-in (full form or inline tap) is appended
   via `POST /api/hub/feedback`, so onset-aware advice has history across
   devices and reloads.
