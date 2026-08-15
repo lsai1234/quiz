@@ -176,6 +176,14 @@ Review them at **`/styleguide`** — every primitive in every state, on the real
 ground. Approve changes there before rolling them out, and check them there when
 a token moves.
 
+**`/styleguide/compare`** is the other half: My Hub's dashboard rendered both
+ways — the current design and this one — from one set of data and one set of
+copy. A styleguide cannot tell you whether the design is better, because nobody
+can prefer a component gallery; a real screen can. Use `?blind=1` when showing it
+to anyone, and `&swap=1` for half of them, so you are measuring the design rather
+than the label on it. `compare.test.tsx` asserts both arms render identical text,
+which is what keeps the answer meaningful.
+
 ### `destructive` is not "the member cancelling something"
 
 `destructive` is the critical tone — actual red — for actions that destroy data:

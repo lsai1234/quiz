@@ -169,7 +169,10 @@ export function Button({
       disabled={blocked}
       aria-busy={loading || undefined}
       className={[
-        'system-control system-sheen inline-flex items-center justify-center shrink-0',
+        // No `shrink-0`: a button that cannot shrink, sitting in a flex row
+        // beside a `fullWidth` one, pushes itself off the end of the container.
+        // That is how the "Add" button left the screen in the hub comparison.
+        'system-control system-sheen inline-flex items-center justify-center',
         variant === 'destructive' ? 'system-focus-critical' : 'system-focus',
         fullWidth ? 'w-full' : '',
         className ?? '',
