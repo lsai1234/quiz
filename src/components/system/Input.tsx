@@ -48,7 +48,9 @@ export function Input({
       {...rest}
       {...fieldControlProps(id, field)}
       ref={ref}
-      className="system-field w-full min-w-0 focus-visible:outline-none focus-visible:ring-2"
+      // With a unit, the box belongs to the wrapper and so does the ring —
+      // otherwise focusing draws two, one inside the other.
+      className={`system-field w-full min-w-0 ${prefix || suffix ? '' : 'system-focus'}`}
       style={
         prefix || suffix
           ? // The box is drawn by the wrapper in this case, so the input itself
@@ -72,7 +74,7 @@ export function Input({
         <div
           // `focus-within` rather than `focus`: the ring belongs to the box the
           // member sees, and the thing taking focus is the bare input inside it.
-          className="system-field flex items-center focus-within:ring-2"
+          className="system-field system-focus-within flex items-center"
           style={surface}
         >
           {prefix && (

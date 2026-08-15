@@ -322,6 +322,15 @@ one.
 
 ## 5. Proposed token set
 
+> **Superseded by what shipped.** This section is the pass-1 proposal, kept as
+> the record of what was argued for and why. Building the primitives against a
+> real background showed the palette was far too timid — and, more importantly,
+> that a specular highlight run as a *wash* rather than a *band* costs more
+> contrast than the entire mesh does. Confining it bought a much stronger ground
+> (blooms at 12%, surfaces at 5/8/11%, brighter cool inks) at no cost in
+> legibility. `DESIGN.md` has the shipped values and the measurements behind
+> them; §4's method still stands, only its numbers moved.
+
 Landed as `src/app/tokens.css`, imported by `globals.css`, **consumed by
 nothing**. It is additive: no existing custom property changes value, so the
 rendered app is byte-identical today.

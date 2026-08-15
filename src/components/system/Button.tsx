@@ -12,10 +12,17 @@ import { Icon, type IconName } from '@/components/ui/Icon'
  * differ in radius and press behaviour. Most have no focus ring, so a keyboard
  * user gets the user-agent outline over a dark surface, or nothing.
  *
+ * ── Why a solid button is never one flat colour ─────────────────────────────
+ * Light falls from above, so a raised face is brighter at the top. A `primary`
+ * here is a vertical gradient, an inset white highlight along its top edge, and
+ * a coloured bloom underneath — the three things that make it read as an object
+ * sitting on the page rather than as a coloured rectangle drawn on it. On hover
+ * it lifts a pixel, the bloom grows, and a band of light crosses the face once.
+ *
  * Variants are named for the job they do, not for how they look:
  *
  * - `primary`     the one thing this screen wants. Accent fill. One per view.
- * - `secondary`   a real alternative. Glass and a hairline, no fill.
+ * - `secondary`   a real alternative. Glass, a lit top edge, no fill.
  * - `ghost`       navigation and dismissal. Text only.
  * - `destructive` deletes something that does not come back.
  *
@@ -66,23 +73,23 @@ const SIZES: Record<Size, { padding: string; font: string; radius: string; minHe
   sm: {
     padding: 'var(--space-2) var(--space-3)',
     font: 'var(--text-meta)',
-    radius: 'var(--radius-row)',
+    radius: 'var(--radius-chip)',
     minHeight: 'var(--control-sm)',
     gap: 'var(--space-1)',
     glyph: 14,
   },
   md: {
-    padding: 'var(--space-3) var(--space-4)',
+    padding: 'var(--space-3) var(--space-5)',
     font: 'var(--text-body)',
-    radius: 'var(--radius-card)',
+    radius: 'var(--radius-row)',
     minHeight: 'var(--control-md)',
     gap: 'var(--space-2)',
     glyph: 16,
   },
   lg: {
-    padding: 'var(--space-3) var(--space-5)',
-    font: 'var(--text-body)',
-    radius: 'var(--radius-card)',
+    padding: 'var(--space-4) var(--space-6)',
+    font: 'var(--text-lead)',
+    radius: 'var(--radius-row)',
     minHeight: 'var(--control-lg)',
     gap: 'var(--space-2)',
     glyph: 18,
@@ -90,50 +97,51 @@ const SIZES: Record<Size, { padding: string; font: string; radius: string; minHe
 }
 
 /**
- * `--hover-bg` and `--hover-edge` are read by `.system-control:hover` in
- * `system.css`, which is where the `@media (hover: hover)` guard lives — an
- * unguarded hover sticks after a tap on a touch screen.
+ * `--hover-*` and `--rest-shadow` are read by `system.css`, which is where the
+ * `@media (hover: hover)` guard and the focus ring live. An unguarded hover
+ * sticks after a tap on a touch screen; a focus ring that replaces the resting
+ * shadow flattens the button the moment you tab to it.
  */
 const PAINT: Record<Variant, CSSProperties> = {
   primary: {
-    background: 'var(--accent)',
+    background: 'var(--fill-accent)',
     color: 'var(--ink-on-accent)',
     border: '1px solid transparent',
-    ['--hover-bg' as string]: 'var(--accent-hover)',
+    ['--rest-shadow' as string]: 'var(--inset-highlight), var(--glow-accent)',
+    ['--hover-bg' as string]: 'var(--fill-accent)',
     ['--hover-edge' as string]: 'transparent',
+    ['--hover-shadow' as string]: 'var(--inset-highlight), var(--glow-accent-strong)',
   },
   secondary: {
-    background: 'var(--surface-2)',
+    background: 'var(--fill-glass)',
     color: 'var(--ink-1)',
     // The top edge catches the light; the rest is a plain hairline. Ringing all
     // four sides with the bright value turns the button into a drawn outline.
     border: '1px solid var(--edge)',
     borderTopColor: 'var(--edge-top)',
-    ['--hover-bg' as string]: 'var(--surface-3)',
+    ['--rest-shadow' as string]: 'var(--inset-hairline), var(--shadow-card)',
+    ['--hover-bg' as string]: 'var(--surface-hover)',
     ['--hover-edge' as string]: 'var(--edge-strong)',
+    ['--hover-shadow' as string]: 'var(--inset-hairline), var(--shadow-raised)',
   },
   ghost: {
     background: 'transparent',
     color: 'var(--ink-2)',
     border: '1px solid transparent',
-    ['--hover-bg' as string]: 'var(--surface-hover)',
-    ['--hover-edge' as string]: 'transparent',
+    ['--rest-shadow' as string]: 'var(--shadow-none)',
+    ['--hover-bg' as string]: 'var(--surface-2)',
+    ['--hover-edge' as string]: 'var(--edge)',
+    ['--hover-shadow' as string]: 'var(--shadow-none)',
   },
   destructive: {
-    background: 'var(--tone-critical)',
+    background: 'var(--fill-critical)',
     color: 'var(--ink-on-accent)',
     border: '1px solid transparent',
-    ['--hover-bg' as string]: 'var(--critical-hover)',
+    ['--rest-shadow' as string]: 'var(--inset-highlight), var(--glow-critical)',
+    ['--hover-bg' as string]: 'var(--fill-critical)',
     ['--hover-edge' as string]: 'transparent',
+    ['--hover-shadow' as string]: 'var(--inset-highlight), var(--glow-critical)',
   },
-}
-
-/** The ring takes the variant's own colour so it survives a tinted background. */
-const RING: Record<Variant, string> = {
-  primary: 'var(--accent-line)',
-  secondary: 'var(--accent-line)',
-  ghost: 'var(--accent-line)',
-  destructive: 'var(--critical-line)',
 }
 
 export function Button({
@@ -161,8 +169,8 @@ export function Button({
       disabled={blocked}
       aria-busy={loading || undefined}
       className={[
-        'system-control inline-flex items-center justify-center shrink-0',
-        'focus-visible:outline-none focus-visible:ring-2',
+        'system-control system-sheen inline-flex items-center justify-center shrink-0',
+        variant === 'destructive' ? 'system-focus-critical' : 'system-focus',
         fullWidth ? 'w-full' : '',
         className ?? '',
       ]
@@ -177,19 +185,21 @@ export function Button({
         gap: s.gap,
         fontFamily: 'var(--font-display)',
         fontWeight: 'var(--weight-strong)',
-        // Tailwind's ring utilities cannot read a custom property through their
-        // own scale, so the colour is set here and the class switches it on.
-        ['--tw-ring-color' as string]: RING[variant],
+        letterSpacing: 'var(--tracking-title)',
         ...PAINT[variant],
       }}
     >
-      {loading ? (
-        <Spinner size={s.glyph} />
-      ) : (
-        icon && <Icon name={icon} size={s.glyph} className="shrink-0" />
-      )}
-      {children}
-      {iconRight && !loading && <Icon name={iconRight} size={s.glyph} className="shrink-0" />}
+      {/* One element, so `.system-sheen > *` lifts the whole label above the
+          travelling highlight rather than only its first child. */}
+      <span className="inline-flex items-center justify-center" style={{ gap: s.gap }}>
+        {loading ? (
+          <Spinner size={s.glyph} />
+        ) : (
+          icon && <Icon name={icon} size={s.glyph} className="shrink-0" />
+        )}
+        {children}
+        {iconRight && !loading && <Icon name={iconRight} size={s.glyph} className="shrink-0" />}
+      </span>
     </button>
   )
 }

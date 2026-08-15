@@ -5,20 +5,17 @@
  * long does a thing take to move" are decided, so that forty components stop
  * each deciding for themselves. The audit that produced it — every value
  * currently in use across Founders Hub, My Hub and Partners Hub, and which
- * duplicates each token retires — is `docs/DESIGN_AUDIT.md`.
+ * duplicates each token retires — is `docs/DESIGN_AUDIT.md`. The design it
+ * describes is `DESIGN.md`.
  *
- * ── Nothing consumes this file yet ──────────────────────────────────────────
- * It is additive on purpose. No custom property defined here shares a name with
- * one in `globals.css`, so pass 1 changes no pixels. Components move onto these
- * names in passes 2 and 3, and the old ones are deleted as the last hub lands.
+ * ── Nothing consumes this file outside the primitive layer ──────────────────
+ * No custom property here shares a name with one in `globals.css`, so the hubs
+ * still render on the old palette until they are migrated.
  *
  * ── Why `:root` and not `@theme` ────────────────────────────────────────────
  * Tailwind v4 turns `@theme` entries into utilities, and its namespaces overlap
  * these names: `--spacing-1` would redefine the `p-1` utility app-wide, and
- * `--text-sm` would redefine `text-sm`. Plain custom properties can't collide
- * with anything. Call sites read them the way the app already reads the
- * existing palette — `style={{ background: 'var(--surface-1)' }}`, or
- * `className="text-[var(--ink-2)]"`.
+ * `--text-sm` would redefine `text-sm`. Plain custom properties can't collide.
  *
  * ── Why the names are roles, not sizes ──────────────────────────────────────
  * `--text-sm` would be 14px to Tailwind and 11px here. Roles — `--text-meta`,
@@ -27,118 +24,135 @@
 
 :root {
   /* ══ Ground ════════════════════════════════════════════════════════════════
-     Glass only reads as glass when there is something behind it worth blurring.
-     Over a flat colour, `backdrop-filter` is grey haze. These three blooms are
-     what the surfaces above them refract.
+     The layered background the glass refracts. `backdrop-filter` over a flat
+     colour is grey haze — there is nothing behind the surface to bend — so this
+     is load-bearing rather than decoration.
 
-     The brightness cap is not taste — it is contrast. Every value above raises
-     the floor under `--ink-3`, and at more than 6% cyan the quiet text tier
-     falls under AA on a translucent panel. See DESIGN_AUDIT.md §4. */
-  --ground-base: #09090b;
-  --ground-tint-a: color-mix(in srgb, #00d4ff 6%, transparent);
-  --ground-tint-b: color-mix(in srgb, #7c5cff 5%, transparent);
-  --ground-tint-c: color-mix(in srgb, #00d4ff 4%, transparent);
+     Three blooms, drifting slowly and independently, over a base that is nearly
+     black and slightly cool. They are far stronger than a "safe" mesh would be,
+     and they can be: the contrast budget is spent at the plane where text sits,
+     and text sits on a surface above the ground, never on the ground itself. */
+  --ground-base: #07070a;
 
-  /* Fixed rather than scrolling: the mesh is the room the content moves
-     through, not part of the content. */
-  --ground:
-    radial-gradient(1100px 760px at 12% -8%, var(--ground-tint-a), transparent 62%),
-    radial-gradient(900px 680px at 88% 4%, var(--ground-tint-b), transparent 58%),
-    radial-gradient(1000px 700px at 50% 108%, var(--ground-tint-c), transparent 60%);
+  --bloom-accent: #00d4ff;
+  --bloom-violet: #7c5cff;
+  --bloom-teal: #00ffc8;
+
+  /* Peak opacity of each bloom. The cap that matters is the two that overlap:
+     cyan at 12% under violet at 5% is the brightest point the ground reaches,
+     and every ink and tone below is measured against it. */
+  --bloom-1-alpha: 0.12;
+  --bloom-2-alpha: 0.05;
+  --bloom-3-alpha: 0.05;
+
+  /* Film grain. The single cheapest thing that separates a premium surface from
+     a flat one: it breaks up the banding that large soft gradients always show
+     on an 8-bit display, and gives the black something to be made of. */
+  --grain-opacity: 0.035;
 
   /* ══ Elevation ═════════════════════════════════════════════════════════════
-     Three planes. Not five — a scale nobody can tell apart is a scale that gets
-     used at random, which is how the hubs ended up with two opaque greys, two
-     glass levels and six ad-hoc tints all meaning "a card".
+     Three planes. A translucent white over the ground recedes and stacks: a card
+     on a panel on the page reads as three planes without three greys being
+     invented for it.
 
-     Translucent white over the ground, so surfaces recede and stack: a card on
-     a panel on the page reads as three planes without three greys being
-     invented. Capped at 8% — 9% and up puts `--ink-3` under AA. */
-  --surface-1: rgba(255, 255, 255, 0.03);
-  --surface-2: rgba(255, 255, 255, 0.06);
-  --surface-3: rgba(255, 255, 255, 0.08);
-  --surface-hover: rgba(255, 255, 255, 0.06);
-
-  /* Transient only. Above the 8% cap, so nothing that carries body text may
-     rest here — a press state lasts 100ms and holds no reading. */
-  --surface-press: rgba(255, 255, 255, 0.09);
+     These are the *text* planes. The specular highlight that makes each surface
+     read as glass sits above them as a thin band at the top edge — see
+     `--specular-*` — and text never sits inside it, which is what lets both the
+     ground and the highlight be as strong as they are. */
+  --surface-1: rgba(255, 255, 255, 0.05);
+  --surface-2: rgba(255, 255, 255, 0.08);
+  --surface-3: rgba(255, 255, 255, 0.11);
+  --surface-hover: rgba(255, 255, 255, 0.10);
+  --surface-press: rgba(255, 255, 255, 0.14);
 
   /* Opaque, for the places glass is banned: rows inside a scrolling list, and
-     anything virtualised. Matched to `--surface-2` composited on the ground, so
-     a solid row and a glass card sit at the same visual weight. */
-  --surface-solid: #131317;
+     anything virtualised. Cool, but only just — matched by eye against a glass
+     card over an unlit part of the ground, because that is where most lists
+     actually sit. Any bluer and a solid row reads as a different component from
+     the glass card beside it. */
+  --surface-solid: #16181d;
 
   /* Inputs stay solid. A translucent field over a moving background is where
-     glass designs become unreadable, and it is the one surface a member stares
-     at while typing. */
-  --surface-input: #131317;
+     glass interfaces become unreadable, and it is the one surface someone
+     stares at while typing. */
+  --surface-input: #10141c;
 
-  --surface-scrim: rgba(0, 0, 0, 0.72);
+  --surface-scrim: rgba(4, 6, 12, 0.62);
 
-  /* ══ Edges ═════════════════════════════════════════════════════════════════
-     A hairline of light, not a grey box. `--edge-top` is brighter and belongs
-     on the top edge alone — it is the highlight that makes a translucent panel
-     read as a physical sheet catching the light, and it stops working the
-     moment it is drawn on all four sides. */
-  --edge: rgba(255, 255, 255, 0.08);
-  --edge-strong: rgba(255, 255, 255, 0.16);
-  --edge-top: rgba(255, 255, 255, 0.14);
+  /* ══ Specular ══════════════════════════════════════════════════════════════
+     What actually makes a surface read as glass rather than as a lighter box: a
+     bright hairline where the light catches the top edge, and a short gradient
+     falling away beneath it.
+
+     `--specular-depth` is the falloff, and it is pinned to `--space-3` — the
+     tightest padding any card offers — so body text begins exactly where the
+     highlight has finished. That equality is the invariant the whole design
+     rests on: it is what lets the ground and the surfaces be as strong as they
+     are, because the brightest part of a surface is never a part that carries
+     words. Run the same gradient as a wash instead and even `--ink-2` falls to
+     3.1:1; at a 56px falloff the critical tone measures 3.65:1 on the deepest
+     plane. `tokens.test.ts` holds the equality.
+
+     The exception is `padding="none"`, where the caller owns the inset and
+     therefore owns this rule. */
+  --specular-depth: 12px;
+  --specular-strength: 0.14;
+  --specular-line: rgba(255, 255, 255, 0.28);
+
+  /* ══ Edges ═════════════════════════════════════════════════════════════════ */
+  --edge: rgba(255, 255, 255, 0.09);
+  --edge-strong: rgba(255, 255, 255, 0.18);
+  --edge-top: rgba(255, 255, 255, 0.16);
 
   /* ══ Blur ══════════════════════════════════════════════════════════════════
      `backdrop-filter` costs a full-surface recomposite every frame it changes.
-     The budget is three blurred surfaces at once, all of them persistent
-     chrome: the sticky header, an open panel, its scrim.
+     The budget is three blurred surfaces at once, all persistent chrome: the
+     sticky header, an open panel, its scrim.
 
-     Never inside a scrolling list. Thirty glass cards is thirty backdrop
-     filters recompositing per scroll frame; `--surface-solid` is what those
-     rows use instead. */
-  --blur-nav: 16px;
-  --blur-panel: 24px;
-  --blur-scrim: 8px;
+     Never inside a scrolling list. Thirty glass cards is thirty backdrop filters
+     per scroll frame; `--surface-solid` is what those rows use instead.
+
+     The saturate is the trick that stops blurred glass going grey — it pulls the
+     colour back up out of the blur so the ground's cyan still reads through it. */
+  --blur-nav: 20px;
+  --blur-panel: 32px;
+  --blur-scrim: 10px;
+  --blur-saturate: 1.6;
 
   /* ══ Ink ═══════════════════════════════════════════════════════════════════
      Three tiers, and they have to stay three: lifting the quiet tier for
      contrast is only safe while it stays quieter than the one above it.
 
-     `--ink-3` is `#909099`, not the `#7d7d87` of `--color-muted`. That value
-     clears AA against the flat page background and fails it against every
-     translucent panel — 4.10:1 at 3% white, 3.45:1 at 9% — and it is the app's
-     largest tier of copy, used at 10 and 11px. `#909099` measures 5.07:1 on a
-     6% panel and 4.78:1 on the 8% cap. The lift ships with the first hub that
-     turns a surface translucent, never after. */
-  --ink-1: #fafafa;
-  --ink-2: #a1a1aa;
-  --ink-3: #909099;
+     All three are cool rather than neutral grey — a warm grey over a cyan-lit
+     ground reads as dirty. `--ink-3` is the tier the audit found failing: the
+     old `#7d7d87` measured 4.10:1 on a translucent panel and is used 447 times,
+     mostly at 10 and 11px. `#a2a8b4` measures 5.38:1 on `--surface-2` and
+     4.88:1 on the deepest plane, over the brightest point of the ground. */
+  --ink-1: #f4f6fb;
+  --ink-2: #c3c8d2;
+  --ink-3: #a2a8b4;
 
-  /* Labels on an accent or tone fill. 11.24:1 on cyan, 11.92:1 on amber —
-     better than the `#001018` this retires, and it is a colour the system
-     already has. */
-  --ink-on-accent: #09090b;
+  /* Labels on an accent or tone fill. 11.36:1 on cyan, 13.08:1 on amber. */
+  --ink-on-accent: #07070a;
 
-  /* ══ Accent and tone ═══════════════════════════════════════════════════════ */
+  /* ══ Accent and tone ═══════════════════════════════════════════════════════
+     The brand cyan, and the four things a status can mean. Brightened from the
+     values in the old palette: over a lit ground, a dim tone reads as muddy
+     rather than as quiet. */
   --accent: #00d4ff;
-  --accent-dim: #00aacc;
+  --accent-bright: #5ce4ff;   /* the top of a gradient fill; specular highlights */
+  --accent-deep: #00a8d4;     /* the bottom of a gradient fill */
 
-  /* Mesh only. Never text, never a fill — it exists to stop the ground being
-     one flat wash of cyan. */
-  --accent-violet: #7c5cff;
-
-  --tone-positive: #34d399;   /* money back: credits, savings, refunds, done */
-  --tone-attention: #fbbf24;  /* needs a decision — never "error" */
-  --tone-critical: #f87171;   /* genuine failure: auth, payment */
+  --tone-positive: #3ddc97;   /* money back: credits, savings, refunds, done */
+  --tone-attention: #ffc857;  /* needs a decision — never "error" */
+  --tone-critical: #ff8891;   /* genuine failure: auth, payment */
   --tone-info: #7dd3fc;       /* works quietly; not something you feel */
-
-  /* Hover on a solid fill. Brightening rather than darkening, because a fill
-     that dims under the cursor reads as going away. Both stay well clear of AA
-     against `--ink-on-accent`, which only gets easier as they lighten. */
-  --accent-hover: color-mix(in srgb, var(--accent) 86%, #ffffff);
-  --critical-hover: color-mix(in srgb, var(--tone-critical) 86%, #ffffff);
 
   /* ══ Tinted steps ══════════════════════════════════════════════════════════
      Three intents, three values. The hubs currently reach for sixteen different
      percentages here — 6, 7, 8, 10, 12, 14 for a fill; 20 through 40 for a
-     border; 40 through 60 for a glow — and 12% versus 14% at this alpha is not
-     a perceptible difference, just an unreviewed decision made 31 times.
+     border; 40 through 60 for a glow — and 12% versus 14% at this alpha is not a
+     perceptible difference, just an unreviewed decision made 31 times.
 
      `srgb` rather than `oklch`: the accent is a near-cyan, and oklch
      interpolation towards transparent takes it visibly green on the way. */
@@ -162,50 +176,64 @@
   --info-line: color-mix(in srgb, var(--tone-info) 35%, transparent);
   --info-glow: color-mix(in srgb, var(--tone-info) 45%, transparent);
 
+  /* ══ Fills ═════════════════════════════════════════════════════════════════
+     A solid control is never one flat colour. Light falls on it from above, so
+     it is lighter at the top — which is the difference between a button that
+     looks like an object and a button that looks like a coloured rectangle. */
+  --fill-accent: linear-gradient(180deg, var(--accent-bright) 0%, var(--accent) 52%, var(--accent-deep) 100%);
+  --fill-positive: linear-gradient(180deg, #6ae9b4 0%, var(--tone-positive) 100%);
+  --fill-attention: linear-gradient(180deg, #ffd987 0%, var(--tone-attention) 100%);
+  --fill-critical: linear-gradient(180deg, #ffabb2 0%, var(--tone-critical) 52%, #ec6f7a 100%);
+  --fill-info: linear-gradient(180deg, #a5e4fd 0%, var(--tone-info) 100%);
+  --fill-neutral: linear-gradient(180deg, var(--ink-2) 0%, var(--ink-3) 100%);
+  --fill-glass: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.05) 100%);
+
   /* ══ Type ══════════════════════════════════════════════════════════════════
      Thirteen sizes become eight. Four of the thirteen — 9, 10, 11 and 12px —
-     were all doing the same job, and 11px alone appears 260 times.
+     were doing the same job, and 11px alone appears 260 times.
 
-     Hard rule, and the reason §4 of the audit exists: `--text-micro` and
-     `--text-meta` may only carry `--ink-2` or brighter, or `--ink-3` on
-     `--surface-1`. Small text on a deep glass panel is where this design
-     fails accessibility, and it fails silently. */
+     Hard rule: `--text-micro` and `--text-meta` may only carry `--ink-2` or
+     brighter, or `--ink-3` on `--surface-1` or `--surface-2`. Small text on a
+     deep panel is where this design fails accessibility, and it fails silently. */
   --text-micro: 10px;      /* badges, uppercase eyebrows */
   --text-meta: 11px;       /* quiet metadata — the largest tier in the app */
   --text-body-sm: 12px;    /* dense body */
   --text-body: 14px;       /* the default */
   --text-lead: 16px;       /* emphasised body, list titles */
-  --text-title: 18px;      /* card and section headings */
-  --text-display: 24px;    /* page headings */
-  --text-hero: clamp(2rem, 4vw + 1.2rem, 2.75rem);
+  --text-title: 19px;      /* card and section headings */
+  --text-display: 26px;    /* page headings */
+  --text-hero: clamp(2.25rem, 4.4vw + 1.2rem, 3.25rem);
 
-  --leading-tight: 1.15;   /* display and titles */
+  --leading-tight: 1.08;   /* display and titles */
   --leading-snug: 1.35;    /* body */
-  --leading-loose: 1.55;   /* long-form paragraphs */
+  --leading-loose: 1.6;    /* long-form paragraphs */
 
-  /* Uppercase micro-copy needs the extra tracking to stay legible; nothing
-     else does. */
-  --tracking-eyebrow: 0.08em;
+  /* Display type is set tight — the brand face is geometric and opens up badly
+     at large sizes on default tracking. Uppercase micro-copy goes the other way
+     and needs the air to stay legible at 10px. */
+  --tracking-display: -0.03em;
+  --tracking-title: -0.015em;
+  --tracking-eyebrow: 0.16em;
 
-  /* Three weights. `font-semibold` (56 uses) folds into `--weight-strong` —
-     600 and 700 do not read as different jobs at 11px. */
+  /* Three weights. `font-semibold` (56 uses) folds into `--weight-strong` — 600
+     and 700 do not read as different jobs at 11px. */
   --weight-body: 500;
   --weight-strong: 700;
   --weight-display: 900;
 
   /* ══ Radius ════════════════════════════════════════════════════════════════
      One per role, so adjacent elements stop disagreeing. Nine values are
-     currently in use, with `rounded-lg`, `-xl` and `-2xl` all meaning "card"
-     on elements sitting side by side.
+     currently in use, with `rounded-lg`, `-xl` and `-2xl` all meaning "card" on
+     elements sitting side by side.
 
-     Row, card and sheet moved here from the `@theme` block in globals.css at
-     the same values — they had no call sites in either form, and a radius scale
-     split across two files is how the third and fourth values get invented. */
+     Row, card and sheet moved here from the `@theme` block in globals.css —
+     they had no call sites in either form, and a radius scale split across two
+     files is how the third and fourth values get invented. */
   --radius-pill: 9999px;   /* chips, toggles, avatars */
-  --radius-chip: 8px;      /* badges, small inputs */
-  --radius-row: 12px;      /* a row inside a card; a compact button */
-  --radius-card: 16px;     /* a card; a full-width button */
-  --radius-sheet: 24px;    /* sheet top corners; a modal panel */
+  --radius-chip: 10px;     /* badges, small inputs */
+  --radius-row: 14px;      /* a row inside a card; a compact button */
+  --radius-card: 18px;     /* a card; a full-width button */
+  --radius-sheet: 26px;    /* sheet top corners; a modal panel */
 
   /* ══ Space ═════════════════════════════════════════════════════════════════
      Ninety-two distinct spacing values are in use across the three hubs. The
@@ -231,43 +259,68 @@
   --control-md: 44px;
   --control-lg: 52px;
 
-  /* One focus ring for the whole system. The hubs currently have none at all on
-     most controls, and two input constants set `outline-none` with nothing put
-     back, so a keyboard user gets no visible focus on those fields whatsoever.
-     Tinted rather than solid, so it reads on a tinted card as well as on the
-     page — a single opaque ring colour disappears against amber. */
-  --focus-ring: var(--accent-line);
-  --focus-ring-width: 2px;
+  /* One focus ring for the whole system, and it is three layers: a dark cut-in
+     that separates the ring from whatever is under it, the ring itself, and a
+     bloom so it reads on a bright fill as well as on the page. The hubs
+     currently have no focus ring on most controls, and two input constants set
+     `outline-none` with nothing put back at all. */
+  --focus-ring:
+    0 0 0 2px var(--ground-base),
+    0 0 0 4px var(--accent),
+    0 0 18px 0 var(--accent-glow);
+  --focus-ring-critical:
+    0 0 0 2px var(--ground-base),
+    0 0 0 4px var(--tone-critical),
+    0 0 18px 0 var(--critical-glow);
 
-  /* Modal widths. Here rather than in the component so "how wide is a dialog"
-     is a system decision with three answers, not a number each caller picks. */
-  --modal-sm: 24rem;
-  --modal-md: 32rem;
-  --modal-lg: 44rem;
+  /* Modal widths. Here rather than in the component so "how wide is a dialog" is
+     a system decision with three answers, not a number each caller picks. */
+  --modal-sm: 25rem;
+  --modal-md: 34rem;
+  --modal-lg: 46rem;
 
   /* ══ Elevation shadow ══════════════════════════════════════════════════════
-     There is currently no elevation system at all in the three hubs: zero
-     shadow utilities, three inline accent glows. Depth is doing nothing, which
-     is half of why every card reads at the same weight. */
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-raised: 0 8px 24px -12px rgba(0, 0, 0, 0.6);
-  --shadow-panel: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
-  --shadow-glow-accent: 0 8px 30px -12px var(--accent-glow);
+     There is currently no elevation system at all in the three hubs: zero shadow
+     utilities, three inline accent glows. Depth is doing nothing, which is half
+     of why every card reads at the same weight.
+
+     Each is two shadows — a tight contact shadow that anchors the element, and a
+     wide soft one that lifts it. One shadow alone reads as a sticker. */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px -10px rgba(0, 0, 0, 0.7);
+  --shadow-raised: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 32px -18px rgba(0, 0, 0, 0.8);
+  --shadow-panel: 0 4px 8px rgba(0, 0, 0, 0.5), 0 40px 80px -24px rgba(0, 0, 0, 0.9);
+
+  /* The house glow. A coloured bloom under a lit element, in the quiz's idiom. */
+  --glow-accent: 0 8px 28px -8px var(--accent-glow);
+  --glow-accent-strong: 0 10px 38px -8px color-mix(in srgb, var(--accent) 62%, transparent);
+  --glow-critical: 0 8px 28px -8px var(--critical-glow);
+
+  /* "No shadow", in a form that can sit in a comma-separated shadow list. CSS
+     rejects `none` there, so the focus ring composing over a resting shadow
+     needs a real value to compose against. */
+  --shadow-none: 0 0 transparent;
+
+  /* The inner top highlight on a solid fill — light landing on a raised face. */
+  --inset-highlight: inset 0 1px 0 0 rgba(255, 255, 255, 0.42);
+  --inset-hairline: inset 0 1px 0 0 var(--specular-line);
+  /* Fields are lit from outside, so they read as a recess rather than a face. */
+  --inset-well: inset 0 1px 3px 0 rgba(0, 0, 0, 0.45);
 
   /* ══ Motion ════════════════════════════════════════════════════════════════
      Spring, not linear. A translucent panel that slides in on a linear curve
      reads as a texture being dragged; one that settles reads as an object
-     arriving. `--ease-spring` overshoots slightly and is for things that enter;
-     `--ease-settle` is the house default for everything else; leaving is always
-     faster than arriving. */
+     arriving. `--ease-spring` overshoots and is for things that enter;
+     `--ease-settle` is the house default; leaving is always faster than
+     arriving. */
   --ease-settle: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
 
-  --duration-fast: 120ms;  /* hover, colour */
-  --duration-base: 200ms;  /* the default */
-  --duration-slow: 320ms;  /* panels, sheets */
+  --duration-fast: 140ms;  /* hover, colour */
+  --duration-base: 240ms;  /* the default */
+  --duration-slow: 420ms;  /* panels, sheets */
+  --duration-drift: 34s;   /* the ground's blooms */
 
   /* One value for one state. Four are currently in use. */
-  --disabled-opacity: 0.4;
+  --disabled-opacity: 0.38;
 }

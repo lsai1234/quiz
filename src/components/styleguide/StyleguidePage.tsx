@@ -5,6 +5,7 @@ import {
   Badge,
   Button,
   Card,
+  ChargeMeter,
   Ground,
   Input,
   Modal,
@@ -41,9 +42,10 @@ export function StyleguidePage() {
               fontSize: 'var(--text-hero)',
               fontWeight: 'var(--weight-display)',
               fontFamily: 'var(--font-display)',
+              letterSpacing: 'var(--tracking-display)',
               lineHeight: 'var(--leading-tight)',
               color: 'var(--ink-1)',
-              marginTop: 'var(--space-3)',
+              marginTop: 'var(--space-4)',
             }}
           >
             Primitives
@@ -90,8 +92,22 @@ export function StyleguidePage() {
             <Card solid>
               <Label>solid</Label>
               <Body>
-                Opaque, for rows inside a scrolling list. Tuned to sit at the same weight as
-                the glass beside it — compare the two.
+                Opaque, for rows inside a scrolling list, where a backdrop filter per row
+                would cost a recomposite per scroll frame.
+              </Body>
+            </Card>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2" style={{ marginTop: 'var(--space-4)' }}>
+            <Card elevation={1} interactive>
+              <Label>interactive</Label>
+              <Body>Hover me. The card lifts, the edge brightens, the shadow deepens.</Body>
+            </Card>
+            <Card elevation={1} padding="tight">
+              <Label>tight padding</Label>
+              <Body>
+                The tightest inset the system offers, and the reason the specular highlight
+                stops where it does — text begins exactly where the light has finished.
               </Body>
             </Card>
           </div>
@@ -290,6 +306,42 @@ export function StyleguidePage() {
             <Button variant="secondary" onClick={() => setModal('md')}>Medium</Button>
             <Button variant="secondary" onClick={() => setModal('lg')}>Large</Button>
           </Row>
+        </Section>
+
+        <Section
+          title="Charge"
+          note="The house signature. Anywhere a hub shows a proportion, it is poured rather than filled — a drifting meniscus at the leading edge, charge travelling through the fill, and a bloom the colour of the level."
+        >
+          <Card elevation={2}>
+            <div className="flex flex-col" style={{ gap: 'var(--space-5)' }}>
+              <ChargeMeter value={72} label="Stack completeness" />
+              <ChargeMeter value={44} label="Payout threshold" tone="positive" valueText="£220 of £500" />
+              <ChargeMeter value={91} label="Stock cover" tone="attention" size="sm" />
+              <ChargeMeter value={12} label="Failed payments" tone="critical" size="sm" />
+            </div>
+          </Card>
+        </Section>
+
+        <Section
+          title="Glow"
+          note="For the one card on a screen that is the point of the screen. More than one and it stops meaning anything."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card elevation={2} glow="accent">
+              <Badge tone="accent" variant="solid">Recommended</Badge>
+              <p style={{ fontSize: 'var(--text-display)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-display)', color: 'var(--ink-1)', marginTop: 'var(--space-3)' }}>
+                £48<span style={{ fontSize: 'var(--text-body)', color: 'var(--ink-3)' }}>/mo</span>
+              </p>
+              <Body>Four products, delivered monthly. Cancel or change any time.</Body>
+            </Card>
+            <Card elevation={1}>
+              <Badge>Standard</Badge>
+              <p style={{ fontSize: 'var(--text-display)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-display)', color: 'var(--ink-1)', marginTop: 'var(--space-3)' }}>
+                £32<span style={{ fontSize: 'var(--text-body)', color: 'var(--ink-3)' }}>/mo</span>
+              </p>
+              <Body>The same card without the bloom, for comparison.</Body>
+            </Card>
+          </div>
         </Section>
 
         <Section title="Type" note="Thirteen sizes across the hubs became eight roles.">

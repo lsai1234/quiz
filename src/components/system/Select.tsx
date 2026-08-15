@@ -45,7 +45,7 @@ export function Select({
           {...rest}
           {...fieldControlProps(id, field)}
           ref={ref}
-          className="system-field w-full appearance-none focus-visible:outline-none focus-visible:ring-2"
+          className="system-field system-focus w-full appearance-none"
           style={{
             ...controlSurface(Boolean(error)),
             fontFamily: 'var(--font-body)',

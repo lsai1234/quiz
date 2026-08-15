@@ -115,26 +115,38 @@ export function Tabs({ tabs, value, onChange, defaultValue, label, className }: 
               tabIndex={selected ? 0 : -1}
               disabled={tab.disabled}
               onClick={() => select(tab.id)}
-              className="system-control shrink-0 whitespace-nowrap focus-visible:outline-none focus-visible:ring-2"
+              className="system-control system-focus relative shrink-0 whitespace-nowrap"
               style={{
-                padding: 'var(--space-2) var(--space-3)',
+                padding: 'var(--space-3) var(--space-4)',
                 fontSize: 'var(--text-body-sm)',
                 fontWeight: 'var(--weight-strong)',
                 fontFamily: 'var(--font-display)',
+                letterSpacing: 'var(--tracking-title)',
                 color: selected ? 'var(--ink-1)' : 'var(--ink-3)',
-                background: 'transparent',
-                // The indicator is a bottom border on the tab itself, sitting on
-                // the strip's own border. Drawn as a transparent border rather
-                // than added on selection, so the label never shifts by 2px when
-                // you pick it.
-                borderBottom: `2px solid ${selected ? 'var(--accent)' : 'transparent'}`,
+                background: selected ? 'var(--surface-1)' : 'transparent',
+                border: 'none',
                 borderRadius: 'var(--radius-chip) var(--radius-chip) 0 0',
+                ['--rest-shadow' as string]: 'var(--shadow-none)',
                 ['--hover-bg' as string]: 'var(--surface-hover)',
-                ['--hover-edge' as string]: selected ? 'var(--accent)' : 'transparent',
-                ['--tw-ring-color' as string]: 'var(--focus-ring)',
+                ['--hover-shadow' as string]: 'var(--shadow-none)',
               }}
             >
               {tab.label}
+              {/* The indicator is its own element rather than a bottom border,
+                  so it can carry a bloom — a 2px line the accent colour is a
+                  line, the same line with light coming off it is a filament.
+                  Absolutely positioned so selecting a tab never shifts a label. */}
+              <span
+                aria-hidden
+                className={`absolute inset-x-0 bottom-0 ${selected ? 'system-tab-glow' : ''}`}
+                style={{
+                  height: '2px',
+                  borderRadius: 'var(--radius-pill)',
+                  background: selected ? 'var(--fill-accent)' : 'transparent',
+                  opacity: selected ? 1 : 0,
+                  transition: 'opacity var(--duration-base) var(--ease-settle)',
+                }}
+              />
             </button>
           )
         })}

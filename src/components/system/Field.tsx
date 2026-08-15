@@ -72,10 +72,12 @@ export function Field({
       <label
         htmlFor={id}
         style={{
-          fontSize: 'var(--text-meta)',
+          fontSize: 'var(--text-micro)',
           fontWeight: 'var(--weight-strong)',
           fontFamily: 'var(--font-display)',
-          color: 'var(--ink-2)',
+          letterSpacing: 'var(--tracking-eyebrow)',
+          textTransform: 'uppercase',
+          color: 'var(--ink-3)',
           lineHeight: 'var(--leading-snug)',
         }}
       >
@@ -130,6 +132,11 @@ export function Field({
  * Solid, never glass. A translucent field over a moving background is where
  * glass interfaces become unreadable, and it is the one surface a member stares
  * at while typing.
+ *
+ * Lit from outside rather than from within: `--inset-well` is a soft shadow
+ * along the top inner edge, which reads as a recess cut into the surface. Every
+ * other control in the system is a raised face with a highlight on top; a field
+ * is the one thing that should look like a hole you put something into.
  */
 export function controlSurface(error: boolean): CSSProperties {
   return {
@@ -140,7 +147,8 @@ export function controlSurface(error: boolean): CSSProperties {
     color: 'var(--ink-1)',
     fontSize: 'var(--text-body)',
     lineHeight: 'var(--leading-snug)',
-    padding: 'var(--space-2) var(--space-3)',
-    ['--tw-ring-color' as string]: error ? 'var(--critical-line)' : 'var(--focus-ring)',
+    padding: 'var(--space-3) var(--space-4)',
+    boxShadow: 'var(--inset-well)',
+    ['--rest-shadow' as string]: 'var(--inset-well)',
   }
 }

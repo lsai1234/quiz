@@ -72,7 +72,14 @@ describe('Button', () => {
 
   it('takes a focus ring — which almost none of the buttons it replaces had', () => {
     render(<Button>Manage</Button>)
-    expect(screen.getByRole('button').className).toContain('focus-visible:ring-2')
+    expect(screen.getByRole('button').className).toContain('system-focus')
+  })
+
+  it('rings a destructive action in its own colour, not the accent', () => {
+    // One ring colour for everything disappears against a coloured fill, which
+    // is the state a keyboard user most needs to see on a delete.
+    render(<Button variant="destructive">Delete</Button>)
+    expect(screen.getByRole('button').className).toContain('system-focus-critical')
   })
 })
 

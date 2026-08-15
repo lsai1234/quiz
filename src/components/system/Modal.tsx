@@ -155,8 +155,11 @@ export function Modal({ children, onClose, size = 'md', label, className }: Moda
       }}
       style={{
         background: 'var(--surface-scrim)',
-        backdropFilter: `blur(var(--blur-scrim))`,
-        WebkitBackdropFilter: `blur(var(--blur-scrim))`,
+        // The saturate is what stops blurred glass going grey — it pulls the
+        // colour back up out of the blur so the ground's cyan still reads
+        // through the panel instead of washing out to a neutral haze.
+        backdropFilter: 'blur(var(--blur-scrim)) saturate(var(--blur-saturate))',
+        WebkitBackdropFilter: 'blur(var(--blur-scrim)) saturate(var(--blur-saturate))',
         padding: 'var(--space-4)',
         animation: reduced
           ? undefined
@@ -169,13 +172,13 @@ export function Modal({ children, onClose, size = 'md', label, className }: Moda
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className={`w-full flex flex-col overflow-hidden outline-none ${className ?? ''}`}
+        className={`system-glass w-full flex flex-col overflow-hidden outline-none ${className ?? ''}`}
         style={{
           maxWidth: WIDTH[size],
           maxHeight: '86dvh',
           background: 'var(--surface-3)',
-          backdropFilter: `blur(var(--blur-panel))`,
-          WebkitBackdropFilter: `blur(var(--blur-panel))`,
+          backdropFilter: 'blur(var(--blur-panel)) saturate(var(--blur-saturate))',
+          WebkitBackdropFilter: 'blur(var(--blur-panel)) saturate(var(--blur-saturate))',
           border: '1px solid var(--edge)',
           borderTopColor: 'var(--edge-top)',
           borderRadius: 'var(--radius-sheet)',
@@ -213,6 +216,7 @@ export function ModalHeader({ title, subtitle }: { title: ReactNode; subtitle?: 
             fontSize: 'var(--text-title)',
             fontWeight: 'var(--weight-display)',
             fontFamily: 'var(--font-display)',
+            letterSpacing: 'var(--tracking-title)',
             lineHeight: 'var(--leading-tight)',
             color: 'var(--ink-1)',
           }}
@@ -237,17 +241,19 @@ export function ModalHeader({ title, subtitle }: { title: ReactNode; subtitle?: 
           type="button"
           onClick={close}
           aria-label="Close"
-          className="system-control shrink-0 inline-flex items-center justify-center focus-visible:outline-none focus-visible:ring-2"
+          className="system-control system-focus shrink-0 inline-flex items-center justify-center"
           style={{
             width: 'var(--control-sm)',
             height: 'var(--control-sm)',
             borderRadius: 'var(--radius-pill)',
-            background: 'var(--surface-2)',
+            background: 'var(--fill-glass)',
             border: '1px solid var(--edge)',
+            borderTopColor: 'var(--edge-top)',
             color: 'var(--ink-2)',
-            ['--hover-bg' as string]: 'var(--surface-3)',
+            ['--rest-shadow' as string]: 'var(--inset-hairline)',
+            ['--hover-bg' as string]: 'var(--surface-hover)',
             ['--hover-edge' as string]: 'var(--edge-strong)',
-            ['--tw-ring-color' as string]: 'var(--focus-ring)',
+            ['--hover-shadow' as string]: 'var(--inset-hairline)',
           }}
         >
           <Icon name="x" size={16} />
