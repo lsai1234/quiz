@@ -3,8 +3,6 @@
 import { ZONE_LABELS, selectService } from '@/lib/pricing/delivery'
 import type { PricingConfig, DeliveryService, DeliveryZone } from '@/lib/stack-blueprint/pricing'
 
-const ACCENT = '#00D4FF'
-const RED = '#f87171'
 
 const ZONES: DeliveryZone[] = ['uk-1', 'uk-2', 'eu']
 
@@ -45,17 +43,17 @@ export function RateCard({
         return (
           <div key={zone}>
             <div className="flex items-baseline justify-between gap-2 mb-1">
-              <p className="text-[11px] font-bold text-[var(--color-text)]">{ZONE_LABELS[zone]}</p>
+              <p className="text-[11px] font-bold text-[var(--ink-1)]">{ZONE_LABELS[zone]}</p>
               {applicable ? (
-                <p className="text-[10px]" style={{ color: ACCENT }}>
+                <p className="text-[10px]" style={{ color: 'var(--accent)' }}>
                   £{supplierValue.toFixed(2)} wholesale → {applicable.price === 0 ? 'free' : `£${applicable.price.toFixed(2)}`}
                 </p>
               ) : (
-                <p className="text-[10px]" style={{ color: RED }}>no band covers £{supplierValue.toFixed(2)}</p>
+                <p className="text-[10px]" style={{ color: 'var(--tone-critical)' }}>no band covers £{supplierValue.toFixed(2)}</p>
               )}
             </div>
 
-            {services.length === 0 && <p className="text-[10px] text-[var(--color-muted)]">No services for this zone.</p>}
+            {services.length === 0 && <p className="text-[10px] text-[var(--ink-3)]">No services for this zone.</p>}
 
             <div className="space-y-1">
               {services.map((s) => {
@@ -65,37 +63,37 @@ export function RateCard({
                     key={s.id}
                     className="flex items-center gap-1.5 rounded-lg px-2 py-1.5"
                     style={{
-                      background: isApplicable ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'var(--color-surface-2)',
-                      border: `1px solid ${isApplicable ? `color-mix(in srgb, ${ACCENT} 35%, transparent)` : 'var(--color-border)'}`,
+                      background: isApplicable ? `var(--accent-fill)` : 'var(--surface-2)',
+                      border: `1px solid ${isApplicable ? `var(--accent-line)` : 'var(--edge)'}`,
                     }}
                   >
                     <input
                       value={s.name}
                       onChange={(e) => update(s.id, { name: e.target.value })}
-                      className="flex-1 min-w-0 bg-transparent text-[11px] outline-none text-[var(--color-text)]"
+                      className="flex-1 min-w-0 bg-transparent text-[11px] outline-none text-[var(--ink-1)]"
                       aria-label="Service name"
                     />
-                    <span className="text-[10px] text-[var(--color-muted)]">up to £</span>
+                    <span className="text-[10px] text-[var(--ink-3)]">up to £</span>
                     <input
                       type="number"
                       value={s.maxOrderValue ?? ''}
                       placeholder="∞"
                       onChange={(e) => update(s.id, { maxOrderValue: e.target.value === '' ? null : parseFloat(e.target.value) || 0 })}
                       className="w-16 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                      style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
                       aria-label="Maximum order value (blank for no limit)"
                     />
-                    <span className="text-[10px] text-[var(--color-muted)]">wholesale · costs £</span>
+                    <span className="text-[10px] text-[var(--ink-3)]">wholesale · costs £</span>
                     <input
                       type="number"
                       step="0.01"
                       value={s.price}
                       onChange={(e) => update(s.id, { price: parseFloat(e.target.value) || 0 })}
                       className="w-14 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+                      style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
                       aria-label="Price ex VAT"
                     />
-                    <button onClick={() => remove(s.id)} className="text-[var(--color-muted)] text-xs px-0.5" aria-label={`Remove ${s.name}`}>✕</button>
+                    <button onClick={() => remove(s.id)} className="text-[var(--ink-3)] text-xs px-0.5" aria-label={`Remove ${s.name}`}>✕</button>
                   </div>
                 )
               })}
@@ -104,8 +102,8 @@ export function RateCard({
         )
       })}
 
-      <button onClick={add} className="text-xs font-bold" style={{ color: ACCENT }}>+ Add a service</button>
-      <p className="text-[10px] text-[var(--color-muted)] leading-snug">
+      <button onClick={add} className="text-xs font-bold" style={{ color: 'var(--accent)' }}>+ Add a service</button>
+      <p className="text-[10px] text-[var(--ink-3)] leading-snug">
         Banded on what <strong>we</strong> pay PowerBody for the order, ex VAT — not on weight, and not on what the
         member pays us. Leave the limit blank for the open-ended top band. The cheapest band an order qualifies for is
         the one they charge, so a basket that clears the free line costs nothing to deliver.

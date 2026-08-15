@@ -2,9 +2,6 @@
 
 import type { PricingThresholds } from '@/lib/pricing/thresholds'
 
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 const money = (n: number) => `£${n.toFixed(2)}`
 
@@ -27,7 +24,7 @@ const money = (n: number) => `£${n.toFixed(2)}`
  */
 export function CutOffs({ thresholds, introDiscount }: { thresholds: PricingThresholds; introDiscount: number }) {
   const problems = thresholds.thresholds.filter((t) => t.enforcedBy != null && !t.enforcedBy.ok)
-  const tone = problems.length > 0 ? RED : GREEN
+  const tone = problems.length > 0 ? 'var(--tone-critical)' : 'var(--tone-positive)'
 
   return (
     <div className="space-y-3">
@@ -38,7 +35,7 @@ export function CutOffs({ thresholds, introDiscount }: { thresholds: PricingThre
           borderColor: `color-mix(in srgb, ${tone} 40%, transparent)`,
         }}
       >
-        <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)]">
+        <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)]">
           What we can afford to sell
         </p>
         <p className="text-2xl font-black my-1" style={{ color: tone, fontFamily: 'var(--font-display)' }}>
@@ -46,7 +43,7 @@ export function CutOffs({ thresholds, introDiscount }: { thresholds: PricingThre
             ? 'Nothing on sale loses money'
             : `${problems.length} setting${problems.length === 1 ? '' : 's'} lets loss-making orders through`}
         </p>
-        <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed">
+        <p className="text-[11px] text-[var(--ink-2)] leading-relaxed">
           Two different tests, on purpose. <strong>A one-off has to pay every time</strong> — there is no renewal
           behind it, so if the checkout allows a losing basket we simply lose the money.{' '}
           {introDiscount > 0 ? (
@@ -71,21 +68,21 @@ export function CutOffs({ thresholds, introDiscount }: { thresholds: PricingThre
               key={t.id}
               className="rounded-2xl p-4"
               style={{
-                background: 'var(--color-surface)',
-                border: `1px solid ${bad ? RED : 'var(--color-border)'}`,
+                background: 'var(--surface-1)',
+                border: `1px solid ${bad ? 'var(--tone-critical)' : 'var(--edge)'}`,
               }}
             >
-              <p className="text-[11px] font-bold text-[var(--color-text)] leading-snug">{t.label}</p>
+              <p className="text-[11px] font-bold text-[var(--ink-1)] leading-snug">{t.label}</p>
               <p
                 className="text-3xl font-black my-1"
-                style={{ color: bad ? RED : 'var(--color-text)', fontFamily: 'var(--font-display)' }}
+                style={{ color: bad ? 'var(--tone-critical)' : 'var(--ink-1)', fontFamily: 'var(--font-display)' }}
               >
                 {t.value == null ? '—' : money(t.value)}
               </p>
-              <p className="text-[11px] text-[var(--color-muted)] leading-relaxed">{t.meaning}</p>
+              <p className="text-[11px] text-[var(--ink-3)] leading-relaxed">{t.meaning}</p>
 
               {t.lossBands.map((b) => (
-                <p key={`${b.from}`} className="text-[11px] mt-2 rounded-lg px-2 py-1.5 leading-snug" style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
+                <p key={`${b.from}`} className="text-[11px] mt-2 rounded-lg px-2 py-1.5 leading-snug" style={{ background: `var(--attention-fill)`, color: 'var(--tone-attention)' }}>
                   <strong>
                     {money(b.from)}–{money(b.to)} also loses money.
                   </strong>{' '}
@@ -97,8 +94,8 @@ export function CutOffs({ thresholds, introDiscount }: { thresholds: PricingThre
                 <p
                   className="text-[11px] mt-2 rounded-lg px-2 py-1.5 leading-snug"
                   style={{
-                    background: `color-mix(in srgb, ${bad ? RED : GREEN} 12%, transparent)`,
-                    color: bad ? RED : GREEN,
+                    background: `color-mix(in srgb, ${bad ? 'var(--tone-critical)' : 'var(--tone-positive)'} 12%, transparent)`,
+                    color: bad ? 'var(--tone-critical)' : 'var(--tone-positive)',
                   }}
                 >
                   {bad ? (

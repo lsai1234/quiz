@@ -6,7 +6,6 @@ import { PriceChanges } from './PriceChanges'
 import type { ChangeEvent } from '@/lib/changes/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
-const ACCENT = '#00D4FF'
 
 interface RunSummary {
   scanned: number
@@ -107,10 +106,10 @@ export function ActionsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Requires action
         </h1>
-        <p className="text-sm text-[var(--color-muted)]">
+        <p className="text-sm text-[var(--ink-3)]">
           Products that have gone away or moved price on a live subscription. Each one already has an
           answer and a deadline — you&apos;re here to overrule it, not to unblock it.
         </p>
@@ -119,7 +118,7 @@ export function ActionsPage() {
       <div className="flex flex-wrap items-end gap-2 justify-between">
         <div className="flex items-end gap-2">
           <div>
-            <label className="text-[10px] uppercase font-bold text-[var(--color-muted)] block mb-1">
+            <label className="text-[10px] uppercase font-bold text-[var(--ink-3)] block mb-1">
               Force a SKU out of stock (demo)
             </label>
             <input
@@ -127,14 +126,14 @@ export function ActionsPage() {
               onChange={(e) => setForceSku(e.target.value)}
               placeholder="e.g. ON-GOLD-WHEY-2270"
               className="text-sm rounded-xl px-3 py-2 border"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
             />
           </div>
           <button
             onClick={() => run(false)}
             disabled={running}
             className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40"
-            style={{ background: ACCENT, color: '#001018' }}
+            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
           >
             {running ? 'Checking…' : 'Run check'}
           </button>
@@ -142,7 +141,7 @@ export function ActionsPage() {
             onClick={() => run(true)}
             disabled={running}
             className="text-xs font-bold px-4 py-2 rounded-xl border disabled:opacity-40"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+            style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
             title="Compute and preview without writing anything"
           >
             Dry run
@@ -150,10 +149,10 @@ export function ActionsPage() {
         </div>
       </div>
 
-      {summary && <p className="text-xs text-[var(--color-muted)]">{summary}</p>}
+      {summary && <p className="text-xs text-[var(--ink-3)]">{summary}</p>}
 
       {!events ? (
-        <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
       ) : (
         <ActionQueue
           events={events.filter((e) => e.kind === 'out-of-stock' || e.kind === 'discontinued')}
@@ -168,10 +167,10 @@ export function ActionsPage() {
           against member impact — so they get their own section rather than
           being squeezed into a row built for "this product has gone". */}
       <div className="pt-2">
-        <h2 className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-sm font-bold mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Supplier price moves
         </h2>
-        <p className="text-[11px] text-[var(--color-muted)] mb-3">
+        <p className="text-[11px] text-[var(--ink-3)] mb-3">
           Absorbed unless you say otherwise, so leaving this alone never costs a member anything.
         </p>
         <PriceChanges />

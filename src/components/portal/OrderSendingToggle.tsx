@@ -2,10 +2,6 @@
 
 import { useEffect, useState } from 'react'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 interface State {
   mode: 'simulate' | 'live'
@@ -61,7 +57,7 @@ export function OrderSendingToggle() {
     }
   }
 
-  if (!data) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!data) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const isLive = data.effective === 'live'
   const wantsLiveButSimulating = data.mode === 'live' && !isLive
@@ -72,7 +68,7 @@ export function OrderSendingToggle() {
         {OPTIONS.map((o) => {
           const active = data.mode === o.mode
           const danger = o.mode === 'live'
-          const tint = danger ? AMBER : GREEN
+          const tint = danger ? 'var(--tone-attention)' : 'var(--tone-positive)'
           return (
             <button
               key={o.mode}
@@ -80,13 +76,13 @@ export function OrderSendingToggle() {
               disabled={saving}
               className="w-full text-left rounded-2xl border p-4 transition-all active:scale-[0.99] disabled:opacity-50"
               style={{
-                background: active ? `color-mix(in srgb, ${tint} 10%, transparent)` : 'var(--color-surface)',
-                borderColor: active ? `color-mix(in srgb, ${tint} 45%, transparent)` : 'var(--color-border)',
+                background: active ? `color-mix(in srgb, ${tint} 10%, transparent)` : 'var(--surface-1)',
+                borderColor: active ? `color-mix(in srgb, ${tint} 45%, transparent)` : 'var(--edge)',
               }}
             >
               <div className="flex items-center justify-between gap-2">
                 <span
-                  className="text-sm font-bold text-[var(--color-text)]"
+                  className="text-sm font-bold text-[var(--ink-1)]"
                   style={{ fontFamily: 'var(--font-display)' }}
                 >
                   {o.label}
@@ -97,7 +93,7 @@ export function OrderSendingToggle() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[var(--color-muted)] mt-0.5 leading-relaxed">{o.desc}</p>
+              <p className="text-xs text-[var(--ink-3)] mt-0.5 leading-relaxed">{o.desc}</p>
             </button>
           )
         })}
@@ -107,11 +103,11 @@ export function OrderSendingToggle() {
         <div
           className="text-xs rounded-xl p-3.5 space-y-2.5"
           style={{
-            background: `color-mix(in srgb, ${AMBER} 12%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${AMBER} 45%, transparent)`,
+            background: `var(--attention-fill)`,
+            border: `1px solid color-mix(in srgb, var(--tone-attention) 45%, transparent)`,
           }}
         >
-          <p style={{ color: AMBER }} className="leading-relaxed">
+          <p style={{ color: 'var(--tone-attention)' }} className="leading-relaxed">
             <strong>This arms real ordering.</strong> From now on, Send in the fulfilment queue places a genuine
             dropship order with PowerBody — stock is committed, you are invoiced, and a parcel goes to the customer.
             Orders already sent as simulations are unaffected.
@@ -121,7 +117,7 @@ export function OrderSendingToggle() {
               onClick={() => choose('live')}
               disabled={saving}
               className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-              style={{ background: AMBER, borderColor: AMBER, color: '#1a1200' }}
+              style={{ background: 'var(--tone-attention)', borderColor: 'var(--tone-attention)', color: 'var(--ink-on-accent)' }}
             >
               {saving ? 'Switching…' : 'Yes, send real orders'}
             </button>
@@ -129,7 +125,7 @@ export function OrderSendingToggle() {
               onClick={() => setConfirming(false)}
               disabled={saving}
               className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+              style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
             >
               Cancel
             </button>
@@ -139,20 +135,20 @@ export function OrderSendingToggle() {
 
       <div
         className="text-xs rounded-xl p-3.5 space-y-1.5"
-        style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}
       >
-        <p className="text-[var(--color-text-2)]">
+        <p className="text-[var(--ink-2)]">
           Send will:{' '}
-          <strong style={{ color: isLive ? AMBER : GREEN }}>
+          <strong style={{ color: isLive ? 'var(--tone-attention)' : 'var(--tone-positive)' }}>
             {isLive ? 'place real orders with PowerBody' : 'simulate only — nothing ships'}
           </strong>
         </p>
         {wantsLiveButSimulating ? (
-          <p style={{ color: RED }} className="leading-relaxed pt-1">
+          <p style={{ color: 'var(--tone-critical)' }} className="leading-relaxed pt-1">
             <strong>Set to live, but still simulating.</strong> {data.blockedReason}
           </p>
         ) : (
-          <p className="text-[var(--color-muted)] pt-1">
+          <p className="text-[var(--ink-3)] pt-1">
             Applies on the next send — no redeploy needed. Pulling products and stock is unaffected by this setting.
           </p>
         )}
@@ -166,7 +162,7 @@ export function OrderSendingToggle() {
 export function OrderingModeBanner({ ordering }: { ordering: 'simulate' | 'live' | undefined }) {
   if (!ordering) return null
   const live = ordering === 'live'
-  const colour = live ? AMBER : ACCENT
+  const colour = live ? 'var(--tone-attention)' : 'var(--accent)'
   return (
     <p
       className="text-xs rounded-xl px-3 py-2 leading-relaxed"

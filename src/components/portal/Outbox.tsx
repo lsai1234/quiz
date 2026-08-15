@@ -3,10 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Notification } from '@/lib/notify/types'
 
-const ACCENT = '#00D4FF'
-const AMBER = '#fbbf24'
-const RED = '#ff6b6b'
-const GREEN = '#34d399'
 
 const TEMPLATE_LABEL: Record<string, string> = {
   'order-confirmation': 'Order confirmation',
@@ -78,8 +74,8 @@ function CopyButton({
       className="text-xs font-bold px-3 py-1.5 rounded-xl border transition-colors"
       style={
         primary
-          ? { background: done ? GREEN : ACCENT, color: '#001018', borderColor: 'transparent' }
-          : { borderColor: done ? GREEN : 'var(--color-border)', color: done ? GREEN : 'var(--color-text-2)' }
+          ? { background: done ? 'var(--tone-positive)' : 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'transparent' }
+          : { borderColor: done ? 'var(--tone-positive)' : 'var(--edge)', color: done ? 'var(--tone-positive)' : 'var(--ink-2)' }
       }
     >
       {done ? '✓ Copied' : label}
@@ -88,7 +84,7 @@ function CopyButton({
 }
 
 function StatusPill({ status }: { status: Notification['status'] }) {
-  const colour = status === 'sent' ? GREEN : status === 'failed' ? RED : AMBER
+  const colour = status === 'sent' ? 'var(--tone-positive)' : status === 'failed' ? 'var(--tone-critical)' : 'var(--tone-attention)'
   const label = status === 'sent' ? 'Sent' : status === 'failed' ? 'Failed' : 'To send'
   return (
     <span
@@ -121,8 +117,8 @@ function EmailPreview({ notification }: { notification: Notification }) {
             className="text-[11px] font-bold px-2.5 py-1 rounded-lg border"
             style={
               mode === option
-                ? { background: ACCENT, color: '#001018', borderColor: 'transparent' }
-                : { borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }
+                ? { background: 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'transparent' }
+                : { borderColor: 'var(--edge)', color: 'var(--ink-2)' }
             }
           >
             {option === 'html' ? 'As designed' : 'Plain text'}
@@ -134,13 +130,13 @@ function EmailPreview({ notification }: { notification: Notification }) {
           title={`Preview of “${notification.rendered.subject}”`}
           srcDoc={notification.rendered.html}
           sandbox=""
-          className="w-full rounded-xl border border-[var(--color-border)]"
+          className="w-full rounded-xl border border-[var(--edge)]"
           style={{ height: 520, background: '#fff' }}
         />
       ) : (
         <pre
           className="text-[11px] whitespace-pre-wrap rounded-xl p-3 overflow-x-auto"
-          style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-2)', fontFamily: 'inherit' }}
+          style={{ background: 'var(--surface-2)', color: 'var(--ink-2)', fontFamily: 'inherit' }}
         >
           {notification.rendered.text}
         </pre>
@@ -163,7 +159,7 @@ function TestSend({ id, onSend }: { id: string; onSend: (id: string, to: string)
         onChange={(e) => setTo(e.target.value)}
         placeholder="you@getchrgd.co.uk"
         className="text-xs px-3 py-1.5 rounded-xl border bg-transparent"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
       />
       <button
         onClick={async () => {
@@ -173,12 +169,12 @@ function TestSend({ id, onSend }: { id: string; onSend: (id: string, to: string)
         }}
         disabled={busy || !to.includes('@')}
         className="text-xs font-bold px-3 py-1.5 rounded-xl border disabled:opacity-40"
-        style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+        style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
       >
         {busy ? 'Sending…' : 'Send me a copy'}
       </button>
       {state && (
-        <span className="text-[11px]" style={{ color: state.startsWith('Sent') ? GREEN : RED }}>
+        <span className="text-[11px]" style={{ color: state.startsWith('Sent') ? 'var(--tone-positive)' : 'var(--tone-critical)' }}>
           {state}
         </span>
       )}
@@ -334,7 +330,7 @@ export function Outbox() {
     [toSend],
   )
 
-  if (!notifications) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!notifications) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const manual = provider === 'manual'
   // "via resend" reads like a typo in a sentence; these are product names.
@@ -343,14 +339,14 @@ export function Outbox() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Member emails
         </h1>
         {/* The one thing this page has to be unambiguous about: which of these
             somebody is still on the hook for. A founder who thinks receipts are
             waiting on them sends duplicates; one who thinks price notices go by
             themselves sends nothing at all. */}
-        <p className="text-sm text-[var(--color-muted)]">
+        <p className="text-sm text-[var(--ink-3)]">
           {manual
             ? 'Nothing sends by itself yet — there is no email provider configured. Copy each one into your email, send it, then mark it as sent.'
             : policy === 'all'
@@ -360,12 +356,12 @@ export function Outbox() {
                 : `Ready to send via ${providerName} — press Send, or copy one out and send it yourself.`}
         </p>
         {policy === 'confirmations' && (
-          <p className="text-xs mt-1 text-[var(--color-muted)]">
+          <p className="text-xs mt-1 text-[var(--ink-3)]">
             A receipt only appears in the list below if sending it failed.
           </p>
         )}
         {note && (
-          <p className="text-xs mt-1" style={{ color: ACCENT }}>
+          <p className="text-xs mt-1" style={{ color: 'var(--accent)' }}>
             {note}
           </p>
         )}
@@ -375,12 +371,12 @@ export function Outbox() {
       {manual && canConnectGmail && (
         <section
           className="rounded-2xl border p-4"
-          style={{ background: 'var(--color-surface)', borderColor: `color-mix(in srgb, ${ACCENT} 35%, transparent)` }}
+          style={{ background: 'var(--surface-1)', borderColor: `var(--accent-line)` }}
         >
-          <p className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          <p className="text-sm font-bold mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
             Send through your own Google Workspace
           </p>
-          <p className="text-xs text-[var(--color-muted)] mb-3">
+          <p className="text-xs text-[var(--ink-3)] mb-3">
             No third-party service and nothing more to pay for — Workspace allows 2,000 emails a day, which is far
             past what this needs. The permission it asks for can send email and cannot read your inbox.
           </p>
@@ -390,11 +386,11 @@ export function Outbox() {
               otherwise — which is where everybody's first attempt ends. The
               address depends on APP_URL, so it cannot be written in a document;
               it has to be shown here, from the running deployment. */}
-          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--color-surface-2)' }}>
-            <p className="text-[11px] font-bold mb-1" style={{ color: 'var(--color-text)' }}>
+          <div className="rounded-xl p-3 mb-3" style={{ background: 'var(--surface-2)' }}>
+            <p className="text-[11px] font-bold mb-1" style={{ color: 'var(--ink-1)' }}>
               First, in Google Cloud → APIs &amp; Services → Credentials
             </p>
-            <p className="text-[11px] text-[var(--color-muted)] mb-2">
+            <p className="text-[11px] text-[var(--ink-3)] mb-2">
               Open your OAuth client and add this to <strong>Authorised redirect URIs</strong>, exactly as written —
               Google matches it character for character, and refuses with <em>redirect_uri_mismatch</em> if it is not
               already on the list.
@@ -402,7 +398,7 @@ export function Outbox() {
             <div className="flex flex-wrap items-center gap-2">
               <code
                 className="text-[11px] px-2 py-1 rounded-lg break-all"
-                style={{ background: 'var(--color-surface)', color: ACCENT }}
+                style={{ background: 'var(--surface-1)', color: 'var(--accent)' }}
               >
                 {gmailRedirectUri || '…'}
               </code>
@@ -415,19 +411,19 @@ export function Outbox() {
               />
             </div>
             {gmailClientId && (
-              <p className="text-[11px] text-[var(--color-muted)] mt-2">
+              <p className="text-[11px] text-[var(--ink-3)] mt-2">
                 The client to edit is the one whose ID starts{' '}
-                <code style={{ color: 'var(--color-text-2)' }}>{gmailClientId.slice(0, 18)}…</code>
+                <code style={{ color: 'var(--ink-2)' }}>{gmailClientId.slice(0, 18)}…</code>
               </p>
             )}
             {!appUrlSet && (
-              <p className="text-[11px] mt-2" style={{ color: AMBER }}>
+              <p className="text-[11px] mt-2" style={{ color: 'var(--tone-attention)' }}>
                 APP_URL is not set, so this address is guessed from whichever URL you are browsing — on Vercel that is
                 a per-deployment address that changes on every push and can never stay registered. Set APP_URL to
                 https://getchrgd.co.uk and redeploy before registering anything.
               </p>
             )}
-            <p className="text-[11px] text-[var(--color-muted)] mt-2">
+            <p className="text-[11px] text-[var(--ink-3)] mt-2">
               Also enable the <strong>Gmail API</strong>{' '}for that project, under APIs &amp; Services → Library.
             </p>
           </div>
@@ -435,7 +431,7 @@ export function Outbox() {
           <a
             href="/api/portal/gmail-connect"
             className="inline-block text-xs font-bold px-4 py-2 rounded-xl"
-            style={{ background: ACCENT, color: '#001018' }}
+            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
           >
             Then connect Google Workspace
           </a>
@@ -444,29 +440,29 @@ export function Outbox() {
 
       {/* ── Where each kind of email comes from ── */}
       {streams.length > 0 && (
-        <section className="rounded-2xl border border-[var(--color-border)] p-4" style={{ background: 'var(--color-surface)' }}>
-          <h2 className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--color-muted)' }}>
+        <section className="rounded-2xl border border-[var(--edge)] p-4" style={{ background: 'var(--surface-1)' }}>
+          <h2 className="text-[11px] font-bold uppercase tracking-wider mb-3" style={{ color: 'var(--ink-3)' }}>
             Sending addresses
           </h2>
           <div className="grid gap-3 sm:grid-cols-3">
             {streams.map((stream) => (
               <div key={stream.id}>
-                <p className="text-xs font-bold" style={{ color: 'var(--color-text)' }}>
+                <p className="text-xs font-bold" style={{ color: 'var(--ink-1)' }}>
                   {stream.label}
                 </p>
-                <p className="text-[11px] break-all mt-0.5" style={{ color: ACCENT }}>
+                <p className="text-[11px] break-all mt-0.5" style={{ color: 'var(--accent)' }}>
                   {stream.from}
                 </p>
-                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{stream.purpose}</p>
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">{stream.purpose}</p>
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[var(--color-muted)] mt-3">
+          <p className="text-[11px] text-[var(--ink-3)] mt-3">
             {streams[0]?.replyTo
               ? `Replies to any of them go to ${streams[0].replyTo}.`
               : 'No reply-to address is set — set NOTIFY_REPLY_TO so a customer who replies reaches someone.'}
           </p>
-          <p className="text-[11px] mt-1" style={{ color: policy === 'none' ? 'var(--color-muted)' : GREEN }}>
+          <p className="text-[11px] mt-1" style={{ color: policy === 'none' ? 'var(--ink-3)' : 'var(--tone-positive)' }}>
             {policy === 'all'
               ? 'Every kind of email is sending automatically.'
               : policy === 'confirmations'
@@ -477,7 +473,7 @@ export function Outbox() {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex gap-2 border-b border-[var(--color-border)]">
+      <div className="flex gap-2 border-b border-[var(--edge)]">
         {([
           ['queue', `To send${toSend.length > 0 && tab === 'queue' ? ` · ${toSend.length}` : ''}`],
           ['log', 'Log'],
@@ -491,8 +487,8 @@ export function Outbox() {
             }}
             className="text-sm font-bold px-3 py-2 -mb-px border-b-2"
             style={{
-              borderColor: tab === id ? ACCENT : 'transparent',
-              color: tab === id ? 'var(--color-text)' : 'var(--color-muted)',
+              borderColor: tab === id ? 'var(--accent)' : 'transparent',
+              color: tab === id ? 'var(--ink-1)' : 'var(--ink-3)',
               fontFamily: 'var(--font-display)',
             }}
           >
@@ -506,7 +502,7 @@ export function Outbox() {
           {/* ── To send ── */}
           <section>
             <div className="flex items-center justify-between gap-3 mb-2">
-              <h2 className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
                 To send{toSend.length > 0 ? ` · ${toSend.length}` : ''}
               </h2>
               <div className="flex gap-2">
@@ -524,7 +520,7 @@ export function Outbox() {
                     onClick={sendAll}
                     disabled={busy !== null}
                     className="text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-40"
-                    style={{ background: ACCENT, color: '#001018' }}
+                    style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
                   >
                     {busy === 'all' ? 'Sending…' : `Send all ${toSend.length}`}
                   </button>
@@ -533,11 +529,11 @@ export function Outbox() {
             </div>
 
             {toSend.length === 0 ? (
-              <div className="rounded-2xl border border-[var(--color-border)] p-8 text-center" style={{ background: 'var(--color-surface)' }}>
-                <p className="text-sm font-bold mb-1" style={{ color: GREEN, fontFamily: 'var(--font-display)' }}>
+              <div className="rounded-2xl border border-[var(--edge)] p-8 text-center" style={{ background: 'var(--surface-1)' }}>
+                <p className="text-sm font-bold mb-1" style={{ color: 'var(--tone-positive)', fontFamily: 'var(--font-display)' }}>
                   Nothing waiting
                 </p>
-                <p className="text-xs text-[var(--color-muted)]">
+                <p className="text-xs text-[var(--ink-3)]">
                   Every member with something to be told has been told.
                 </p>
               </div>
@@ -548,26 +544,26 @@ export function Outbox() {
                     key={n.id}
                     className="rounded-2xl border p-4"
                     style={{
-                      background: 'var(--color-surface)',
+                      background: 'var(--surface-1)',
                       borderColor:
                         n.status === 'failed'
-                          ? `color-mix(in srgb, ${RED} 40%, transparent)`
-                          : `color-mix(in srgb, ${AMBER} 35%, transparent)`,
+                          ? `var(--critical-line)`
+                          : `var(--attention-line)`,
                     }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
                           {n.rendered.subject}
                         </p>
-                        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                           {n.email} · {templateLabel(n.template)} · {when(n.createdAt)}
                         </p>
                         {n.from && (
-                          <p className="text-[11px] text-[var(--color-muted)] mt-0.5">From {n.from}</p>
+                          <p className="text-[11px] text-[var(--ink-3)] mt-0.5">From {n.from}</p>
                         )}
                         {n.error && (
-                          <p className="text-[11px] mt-1" style={{ color: RED }}>
+                          <p className="text-[11px] mt-1" style={{ color: 'var(--tone-critical)' }}>
                             Failed to send: {n.error}
                           </p>
                         )}
@@ -578,7 +574,7 @@ export function Outbox() {
                     {/* The body, always visible — you're about to send it, so read it. */}
                     <pre
                       className="mt-3 text-[11px] whitespace-pre-wrap rounded-xl p-3 overflow-x-auto"
-                      style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-2)', fontFamily: 'inherit' }}
+                      style={{ background: 'var(--surface-2)', color: 'var(--ink-2)', fontFamily: 'inherit' }}
                     >
                       {n.rendered.text}
                     </pre>
@@ -586,7 +582,7 @@ export function Outbox() {
                     <button
                       onClick={() => setExpanded(expanded === n.id ? null : n.id)}
                       className="mt-2 text-[11px] font-bold underline"
-                      style={{ color: 'var(--color-text-2)' }}
+                      style={{ color: 'var(--ink-2)' }}
                     >
                       {expanded === n.id ? 'Hide the designed version' : 'See the designed version'}
                     </button>
@@ -617,7 +613,7 @@ export function Outbox() {
                             onClick={() => act(n.id, 'send')}
                             disabled={busy !== null}
                             className="text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-40"
-                            style={{ background: ACCENT, color: '#001018' }}
+                            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
                           >
                             {busy === n.id ? 'Sending…' : n.status === 'failed' ? '↻ Try again' : '→ Send email'}
                           </button>
@@ -628,8 +624,8 @@ export function Outbox() {
                           className="text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-40"
                           style={
                             canSend
-                              ? { border: '1px solid var(--color-border)', color: 'var(--color-text-2)' }
-                              : { background: GREEN, color: '#00180e' }
+                              ? { border: '1px solid var(--edge)', color: 'var(--ink-2)' }
+                              : { background: 'var(--tone-positive)', color: 'var(--ink-on-accent)' }
                           }
                           title={canSend ? 'I sent this one myself' : undefined}
                         >
@@ -639,7 +635,7 @@ export function Outbox() {
                     </div>
 
                     {canSend && (
-                      <div className="mt-3 pt-3 border-t border-[var(--color-border)]">
+                      <div className="mt-3 pt-3 border-t border-[var(--edge)]">
                         <TestSend id={n.id} onSend={testSend} />
                       </div>
                     )}
@@ -652,16 +648,16 @@ export function Outbox() {
           {/* ── Already sent ── */}
           {done.length > 0 && (
             <section>
-              <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
                 Sent recently · {done.length}
               </h2>
               <div className="space-y-2">
                 {done.map((n) => (
-                  <div key={n.id} className="rounded-2xl border border-[var(--color-border)] p-4" style={{ background: 'var(--color-surface)' }}>
+                  <div key={n.id} className="rounded-2xl border border-[var(--edge)] p-4" style={{ background: 'var(--surface-1)' }}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[var(--color-text-2)] truncate">{n.rendered.subject}</p>
-                        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                        <p className="text-sm font-semibold text-[var(--ink-2)] truncate">{n.rendered.subject}</p>
+                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                           {n.email} · {when(n.sentAt ?? n.createdAt)}
                           {n.sentManually ? ' · sent by hand' : n.providerId ? ' · delivered' : ''}
                         </p>
@@ -684,13 +680,13 @@ export function Outbox() {
               onChange={(e) => setLogEmail(e.target.value)}
               placeholder="Search recipient…"
               className="text-xs px-3 py-1.5 rounded-xl border bg-transparent flex-1 min-w-[180px]"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
             />
             <select
               value={logTemplate}
               onChange={(e) => setLogTemplate(e.target.value)}
               className="text-xs px-3 py-1.5 rounded-xl border bg-transparent"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
             >
               <option value="">All kinds</option>
               {Object.entries(TEMPLATE_LABEL).map(([id, label]) => (
@@ -703,7 +699,7 @@ export function Outbox() {
               value={logStatus}
               onChange={(e) => setLogStatus(e.target.value)}
               className="text-xs px-3 py-1.5 rounded-xl border bg-transparent"
-              style={{ borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+              style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
             >
               <option value="">Any status</option>
               <option value="sent">Sent</option>
@@ -712,7 +708,7 @@ export function Outbox() {
             </select>
           </div>
 
-          <p className="text-[11px] text-[var(--color-muted)] mb-2">
+          <p className="text-[11px] text-[var(--ink-3)] mb-2">
             {total === 0
               ? 'Nothing matches.'
               : `Showing ${notifications.length} of ${total}${total > notifications.length ? ' — narrow the search to see the rest' : ''}.`}
@@ -720,19 +716,19 @@ export function Outbox() {
 
           <div className="space-y-2">
             {notifications.map((n) => (
-              <div key={n.id} className="rounded-2xl border border-[var(--color-border)]" style={{ background: 'var(--color-surface)' }}>
+              <div key={n.id} className="rounded-2xl border border-[var(--edge)]" style={{ background: 'var(--surface-1)' }}>
                 <button
                   onClick={() => setExpanded(expanded === n.id ? null : n.id)}
                   className="w-full text-left p-4 flex items-start justify-between gap-3"
                 >
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--color-text)' }}>
+                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink-1)' }}>
                       {n.rendered.subject}
                     </p>
-                    <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                    <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                       {n.email} · {templateLabel(n.template)} · {when(n.sentAt ?? n.createdAt)}
                     </p>
-                    <p className="text-[11px] text-[var(--color-muted)] mt-0.5 break-all">
+                    <p className="text-[11px] text-[var(--ink-3)] mt-0.5 break-all">
                       {n.from ? `From ${n.from}` : 'From the default address'}
                       {/* The distinction is the whole point of keeping a log:
                           "a provider confirmed this" and "somebody said they
@@ -746,7 +742,7 @@ export function Outbox() {
                       {n.attempts > 1 ? ` · ${n.attempts} attempts` : ''}
                     </p>
                     {n.error && (
-                      <p className="text-[11px] mt-1" style={{ color: RED }}>
+                      <p className="text-[11px] mt-1" style={{ color: 'var(--tone-critical)' }}>
                         {n.error}
                       </p>
                     )}
@@ -764,7 +760,7 @@ export function Outbox() {
                           onClick={() => act(n.id, 'retry')}
                           disabled={busy !== null}
                           className="text-xs font-bold px-3 py-1.5 rounded-xl border disabled:opacity-40"
-                          style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+                          style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
                         >
                           ↻ Put back in the queue
                         </button>

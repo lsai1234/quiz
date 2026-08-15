@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react'
 import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
-const ACCENT = '#00D4FF'
 
 type Sug = Partial<CatalogueProduct> & { consumption?: { cadence: string; servingsPerUnit: number } }
 interface Result { id: string; title: string; suggestion: Sug; current: Partial<CatalogueProduct>; source: string }
@@ -75,7 +74,7 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
     const isOff = off(id, fkey)
     return (
       <button onClick={() => toggle(id, fkey)} className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
-        style={{ background: isOff ? 'transparent' : `color-mix(in srgb, ${ACCENT} 12%, transparent)`, color: isOff ? 'var(--color-muted)' : ACCENT, border: `1px solid ${isOff ? 'var(--color-border)' : `color-mix(in srgb, ${ACCENT} 30%, transparent)`}`, textDecoration: isOff ? 'line-through' : 'none' }}>
+        style={{ background: isOff ? 'transparent' : `var(--accent-fill)`, color: isOff ? 'var(--ink-3)' : 'var(--accent)', border: `1px solid ${isOff ? 'var(--edge)' : `var(--accent-line)`}`, textDecoration: isOff ? 'line-through' : 'none' }}>
         {label}
       </button>
     )
@@ -84,10 +83,10 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
   function FieldRow({ r, fkey, title, children }: { r: Result; fkey: string; title: string; children: React.ReactNode }) {
     return (
       <div className="flex items-start gap-2 py-1.5">
-        <input type="checkbox" checked={!off(r.id, fkey)} onChange={() => toggle(r.id, fkey)} className="mt-1 accent-[var(--color-accent)]" />
+        <input type="checkbox" checked={!off(r.id, fkey)} onChange={() => toggle(r.id, fkey)} className="mt-1 accent-[var(--accent)]" />
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">{title}</p>
-          <div className="text-sm text-[var(--color-text)]">{children}</div>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{title}</p>
+          <div className="text-sm text-[var(--ink-1)]">{children}</div>
         </div>
       </div>
     )
@@ -101,11 +100,11 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
       />
       <ModalBody>
           {loading ? (
-            <p className="text-sm text-[var(--color-muted)] py-8 text-center">Analysing your catalogue…</p>
+            <p className="text-sm text-[var(--ink-3)] py-8 text-center">Analysing your catalogue…</p>
           ) : pending.length === 0 ? (
-            <p className="text-sm text-[var(--color-muted)] py-8 text-center">{results.length ? 'All suggestions applied ✓' : 'Nothing to suggest.'}</p>
+            <p className="text-sm text-[var(--ink-3)] py-8 text-center">{results.length ? 'All suggestions applied ✓' : 'Nothing to suggest.'}</p>
           ) : (
-            <p className="text-xs text-[var(--color-muted)] mb-3 leading-relaxed">Untick anything you don’t want, then apply. {pending.length} product{pending.length === 1 ? '' : 's'} to review.</p>
+            <p className="text-xs text-[var(--ink-3)] mb-3 leading-relaxed">Untick anything you don’t want, then apply. {pending.length} product{pending.length === 1 ? '' : 's'} to review.</p>
           )}
 
           <div className="space-y-3">
@@ -114,14 +113,14 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
               const s = r.suggestion
               const subText = s.subscriptionEligible === false ? 'Not subscribable' : 'Subscribable'
               return (
-                <div key={r.id} className="rounded-2xl border p-4" style={{ background: 'var(--color-surface-2)', borderColor: done ? 'color-mix(in srgb, #34d399 40%, transparent)' : 'var(--color-border)', opacity: done ? 0.6 : 1 }}>
+                <div key={r.id} className="rounded-2xl border p-4" style={{ background: 'var(--surface-2)', borderColor: done ? 'color-mix(in srgb, var(--tone-positive) 40%, transparent)' : 'var(--edge)', opacity: done ? 0.6 : 1 }}>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.title}</p>
-                    {done && <span className="text-[10px] font-bold" style={{ color: '#34d399' }}>Applied ✓</span>}
+                    <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.title}</p>
+                    {done && <span className="text-[10px] font-bold" style={{ color: 'var(--tone-positive)' }}>Applied ✓</span>}
                   </div>
 
                   {!done && (
-                    <div className="divide-y divide-[var(--color-border)]">
+                    <div className="divide-y divide-[var(--edge)]">
                       <FieldRow r={r} fkey="stackSlots" title="Slots">
                         <span className="flex flex-wrap gap-1.5">{(s.stackSlots ?? []).map((x) => <Chip key={x} id={r.id} fkey="stackSlots" label={x} />)}</span>
                       </FieldRow>
@@ -131,7 +130,7 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
                       <FieldRow r={r} fkey="swapGroup" title="Swap group (alternatives)">{s.swapGroup}</FieldRow>
                       <FieldRow r={r} fkey="subscriptionEligible" title="Subscription">{subText}</FieldRow>
                       <FieldRow r={r} fkey="other" title="Other details">
-                        <span className="text-xs text-[var(--color-muted)]">{otherSummary(s) || '—'}</span>
+                        <span className="text-xs text-[var(--ink-3)]">{otherSummary(s) || '—'}</span>
                       </FieldRow>
                     </div>
                   )}

@@ -14,14 +14,14 @@ const PAYMENT_OPTIONS = [
   { mode: 'stripe', label: 'Live Stripe', desc: 'Always use Stripe. Falls back to mock if no credentials.' },
 ]
 
-const heading = { color: 'var(--color-text)', fontFamily: 'var(--font-display)' } as const
+const heading = { color: 'var(--ink-1)', fontFamily: 'var(--font-display)' } as const
 
 export default function SettingsPage() {
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-black mb-1" style={heading}>Settings</h1>
-        <p className="text-sm text-[var(--color-muted)]">Choose where the app reads products, stock and payments from. Each defaults to mock while we build.</p>
+        <p className="text-sm text-[var(--ink-3)]">Choose where the app reads products, stock and payments from. Each defaults to mock while we build.</p>
       </div>
 
       <section>
@@ -31,7 +31,7 @@ export default function SettingsPage() {
 
       <section>
         <h2 className="text-sm font-bold mb-2" style={heading}>Supplier (PowerBody)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-2">Where the catalogue and live stock/prices are read from. Reading only — whether orders are actually placed is the separate switch below.</p>
+        <p className="text-xs text-[var(--ink-3)] mb-2">Where the catalogue and live stock/prices are read from. Reading only — whether orders are actually placed is the separate switch below.</p>
         <IntegrationToggle
           endpoint="/api/portal/supplier-source"
           options={SUPPLIER_OPTIONS}
@@ -42,7 +42,7 @@ export default function SettingsPage() {
 
       <section>
         <h2 className="text-sm font-bold mb-2" style={heading}>Order sending</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-2">
+        <p className="text-xs text-[var(--ink-3)] mb-2">
           What the Send button in the fulfilment queue actually does. Deliberately separate from the supplier
           setting above, so the catalogue can run fully live while orders are still simulated.
         </p>
@@ -51,7 +51,7 @@ export default function SettingsPage() {
 
       <section>
         <h2 className="text-sm font-bold mb-2" style={heading}>Payments (Stripe)</h2>
-        <p className="text-xs text-[var(--color-muted)] mb-2">How the shop, quiz and subscriptions take payment.</p>
+        <p className="text-xs text-[var(--ink-3)] mb-2">How the shop, quiz and subscriptions take payment.</p>
         <IntegrationToggle
           endpoint="/api/portal/payment-source"
           options={PAYMENT_OPTIONS}

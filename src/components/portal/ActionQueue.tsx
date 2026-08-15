@@ -7,9 +7,6 @@ import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { NO_CONSTRAINTS, describeConstraints, failedConstraints } from '@/lib/changes/safety'
 
-const ACCENT = '#00D4FF'
-const AMBER = '#fbbf24'
-const GREEN = '#34d399'
 
 const KIND_LABEL: Record<ChangeKind, string> = {
   'out-of-stock': 'Out of stock',
@@ -43,7 +40,7 @@ function IntentLine({ event }: { event: ChangeEvent }) {
   const countdown = countdownTo(event.autoApplyAt)
 
   return (
-    <p className="text-[11px] mt-1.5" style={{ color: ACCENT }}>
+    <p className="text-[11px] mt-1.5" style={{ color: 'var(--accent)' }}>
       {action}
       {target}
       {countdown ? ` · applies ${countdown}` : ''}
@@ -56,7 +53,7 @@ function Money({ event }: { event: ChangeEvent }) {
   if (!p) return null
   const changed = Math.abs(p.newMonthly - p.currentMonthly) >= 0.01
   return (
-    <p className="text-[11px] text-[var(--color-muted)] mt-1">
+    <p className="text-[11px] text-[var(--ink-3)] mt-1">
       {changed
         ? `${formatGBP(p.currentMonthly)}/mo → ${formatGBP(p.newMonthly)}/mo`
         : `${formatGBP(p.currentMonthly)}/mo unchanged`}
@@ -88,9 +85,9 @@ export function ActionQueue({ events, catalogue, busyId, onResolve, onBulk }: Pr
 
   if (events.length === 0) {
     return (
-      <div className="rounded-2xl border border-[var(--color-border)] p-8 text-center" style={{ background: 'var(--color-surface)' }}>
-        <p className="text-sm font-bold mb-1" style={{ color: GREEN, fontFamily: 'var(--font-display)' }}>Nothing needs you</p>
-        <p className="text-xs text-[var(--color-muted)]">
+      <div className="rounded-2xl border border-[var(--edge)] p-8 text-center" style={{ background: 'var(--surface-1)' }}>
+        <p className="text-sm font-bold mb-1" style={{ color: 'var(--tone-positive)', fontFamily: 'var(--font-display)' }}>Nothing needs you</p>
+        <p className="text-xs text-[var(--ink-3)]">
           Every subscribed product is available, and anything that did change has already been handled and the member told.
         </p>
       </div>
@@ -135,21 +132,21 @@ function ProductGroup({
   return (
     <div
       className="rounded-2xl border overflow-hidden"
-      style={{ background: 'var(--color-surface)', borderColor: `color-mix(in srgb, ${AMBER} 35%, transparent)` }}
+      style={{ background: 'var(--surface-1)', borderColor: `var(--attention-line)` }}
     >
-      <div className="p-4 border-b border-[var(--color-border)]">
+      <div className="p-4 border-b border-[var(--edge)]">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+            <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
               {first.productTitle}
             </p>
-            <p className="text-[11px] text-[var(--color-muted)]">
+            <p className="text-[11px] text-[var(--ink-3)]">
               {first.slotTitle} · SKU {first.sku ?? '—'} · affecting {events.length} member{events.length === 1 ? '' : 's'}
             </p>
           </div>
           <span
             className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
-            style={{ color: AMBER, background: `color-mix(in srgb, ${AMBER} 14%, transparent)` }}
+            style={{ color: 'var(--tone-attention)', background: `var(--attention-fill)` }}
           >
             {KIND_LABEL[first.kind]}
           </span>
@@ -157,7 +154,7 @@ function ProductGroup({
 
         {many && (
           <div className="mt-3">
-            <p className="text-[11px] text-[var(--color-muted)] mb-2">
+            <p className="text-[11px] text-[var(--ink-3)] mb-2">
               Resolve for everyone at once.
               {removeOnly > 0 && ` ${removeOnly} of them asked us to remove rather than swap — they'll be removed whatever you pick here.`}
             </p>
@@ -176,7 +173,7 @@ function ProductGroup({
         )}
       </div>
 
-      <div className="divide-y divide-[var(--color-border)]">
+      <div className="divide-y divide-[var(--edge)]">
         {events.map((event) => (
           <EventRow
             key={event.id}
@@ -202,8 +199,8 @@ function BulkButton({ label, onClick, disabled, primary }: { label: string; onCl
       className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
       style={
         primary
-          ? { background: ACCENT, color: '#001018', borderColor: ACCENT }
-          : { borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }
+          ? { background: 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'var(--accent)' }
+          : { borderColor: 'var(--edge)', color: 'var(--ink-2)' }
       }
     >
       {label}
@@ -226,15 +223,15 @@ function EventRow({
 
   return (
     <div className="p-4">
-      <p className="text-xs font-semibold text-[var(--color-text-2)]">{event.customerEmail ?? 'member'}</p>
-      <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+      <p className="text-xs font-semibold text-[var(--ink-2)]">{event.customerEmail ?? 'member'}</p>
+      <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
         {REASON_LABEL[event.intendedAction.reason] ?? event.intendedAction.reason}
       </p>
       <IntentLine event={event} />
       <Money event={event} />
 
       {event.intendedAction.breaksPlan && (
-        <p className="text-[11px] mt-1.5" style={{ color: AMBER }}>
+        <p className="text-[11px] mt-1.5" style={{ color: 'var(--tone-attention)' }}>
           Removing this would leave their plan below the minimum — worth a look before it lands.
         </p>
       )}
@@ -245,23 +242,23 @@ function EventRow({
             onClick={() => onResolve(event.id, 'substitute', event.suggestedReplacementId!)}
             disabled={disabled}
             className={btn}
-            style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+            style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
           >
             {busy ? 'Working…' : `Swap to ${event.suggestedReplacementTitle}`}
           </button>
         )}
-        <button onClick={onTogglePicker} disabled={disabled} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>
+        <button onClick={onTogglePicker} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
           Choose another
         </button>
-        <button onClick={() => onResolve(event.id, 'remove')} disabled={disabled} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>
+        <button onClick={() => onResolve(event.id, 'remove')} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
           Remove from plan
         </button>
         {event.kind === 'out-of-stock' && (
-          <button onClick={() => onResolve(event.id, 'hold')} disabled={disabled} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>
+          <button onClick={() => onResolve(event.id, 'hold')} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
             Hold next box
           </button>
         )}
-        <button onClick={() => onResolve(event.id, 'dismiss')} disabled={disabled} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}>
+        <button onClick={() => onResolve(event.id, 'dismiss')} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-3)' }}>
           Dismiss
         </button>
       </div>
@@ -302,9 +299,9 @@ function ReplacementPicker({
   }, [catalogue, event, query])
 
   return (
-    <div className="mt-3 rounded-xl border border-[var(--color-border)] p-3" style={{ background: 'var(--color-surface-2)' }}>
+    <div className="mt-3 rounded-xl border border-[var(--edge)] p-3" style={{ background: 'var(--surface-2)' }}>
       {constraintsLabel && (
-        <p className="text-[11px] mb-2" style={{ color: ACCENT }}>
+        <p className="text-[11px] mb-2" style={{ color: 'var(--accent)' }}>
           This member needs {constraintsLabel} products.
         </p>
       )}
@@ -313,10 +310,10 @@ function ReplacementPicker({
         onChange={(e) => setQuery(e.target.value)}
         placeholder={`Search ${event.slotTitle.toLowerCase()}…`}
         className="w-full text-xs rounded-lg px-3 py-2 mb-2 border"
-        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+        style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
       />
       {candidates.length === 0 ? (
-        <p className="text-[11px] text-[var(--color-muted)] py-2">Nothing else in this category.</p>
+        <p className="text-[11px] text-[var(--ink-3)] py-2">Nothing else in this category.</p>
       ) : (
         <div className="space-y-1">
           {candidates.map((p) => {
@@ -336,13 +333,13 @@ function ReplacementPicker({
                   }
                   onPick(p.id)
                 }}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-xs hover:bg-[var(--color-surface)]"
-                style={{ color: 'var(--color-text-2)' }}
+                className="w-full text-left px-2.5 py-2 rounded-lg text-xs hover:bg-[var(--surface-1)]"
+                style={{ color: 'var(--ink-2)' }}
               >
                 <span className="font-semibold">{p.title}</span>
-                <span className="text-[var(--color-muted)]"> · {formatGBP(p.basePrice)}</span>
+                <span className="text-[var(--ink-3)]"> · {formatGBP(p.basePrice)}</span>
                 {failures.length > 0 && (
-                  <span className="block text-[10px] font-semibold mt-0.5" style={{ color: AMBER }}>
+                  <span className="block text-[10px] font-semibold mt-0.5" style={{ color: 'var(--tone-attention)' }}>
                     ⚠ {failures.join(' · ')}
                   </span>
                 )}

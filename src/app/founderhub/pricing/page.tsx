@@ -15,10 +15,6 @@ import { VatPanel } from '@/components/portal/pricing/VatPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 const LEVELS: StackLevel[] = ['essentials', 'performance', 'complete']
 const LEVEL_LABEL: Record<StackLevel, string> = {
@@ -31,7 +27,7 @@ const BUDGETS: Budget[] = ['under-30', '30-50', '50-80', '80-plus']
 const pct = (n: number) => Math.round(n * 1000) / 10
 const money = (n: number) => `£${n.toFixed(2)}`
 
-const INPUT_STYLE = { background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' } as const
+const INPUT_STYLE = { background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
 const SMALL_INPUT = 'w-16 px-2 py-1.5 rounded-lg text-xs text-right outline-none'
 
 type Tab = 'overview' | 'products' | 'rules'
@@ -97,7 +93,7 @@ export default function PricingPage() {
     return checkScenarios({ listPrice: avgPrice * n, supplierCost: avgCost * n }, draft)
   }, [draft, catalogue])
 
-  if (!draft || !cutOffs || !ladder || !typicalBox) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!draft || !cutOffs || !ladder || !typicalBox) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
   const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'>(
@@ -131,21 +127,21 @@ export default function PricingPage() {
     <div className="pb-10">
       <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
         <div>
-          <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Pricing</h1>
-          <p className="text-sm text-[var(--color-muted)] mt-0.5">
-            Every price is <strong style={{ color: 'var(--color-text)' }}>what we pay, doubled</strong>. This page shows what that leaves us.
+          <h1 className="text-2xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Pricing</h1>
+          <p className="text-sm text-[var(--ink-3)] mt-0.5">
+            Every price is <strong style={{ color: 'var(--ink-1)' }}>what we pay, doubled</strong>. This page shows what that leaves us.
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
-          <button onClick={reset} disabled={saving} className="text-xs font-semibold px-3 py-2 rounded-xl border border-[var(--color-border)] text-[var(--color-muted)]">Reset</button>
-          <button onClick={save} disabled={saving || !dirty} className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40" style={{ background: ACCENT, color: '#001018', fontFamily: 'var(--font-display)' }}>
+          <button onClick={reset} disabled={saving} className="text-xs font-semibold px-3 py-2 rounded-xl border border-[var(--edge)] text-[var(--ink-3)]">Reset</button>
+          <button onClick={save} disabled={saving || !dirty} className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40" style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }}>
             {saving ? 'Saving…' : savedFlag && !dirty ? 'Saved ✓' : 'Save'}
           </button>
         </div>
       </div>
 
       {dirty && (
-        <p className="text-[11px] rounded-lg px-2.5 py-1.5 mb-3 inline-block" style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
+        <p className="text-[11px] rounded-lg px-2.5 py-1.5 mb-3 inline-block" style={{ background: `var(--attention-fill)`, color: 'var(--tone-attention)' }}>
           Unsaved changes — the figures below already reflect them; the live site does not.
         </p>
       )}
@@ -154,12 +150,12 @@ export default function PricingPage() {
         {TABS.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
-            style={{ background: tab === t.id ? ACCENT : 'var(--color-surface-2)', color: tab === t.id ? 'var(--color-bg)' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+            style={{ background: tab === t.id ? 'var(--accent)' : 'var(--surface-2)', color: tab === t.id ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
             {t.label}
           </button>
         ))}
       </nav>
-      <p className="text-[11px] text-[var(--color-muted)] mb-4">{TABS.find((t) => t.id === tab)!.blurb}</p>
+      <p className="text-[11px] text-[var(--ink-3)] mb-4">{TABS.find((t) => t.id === tab)!.blurb}</p>
 
       {/* ══ OVERVIEW ═══════════════════════════════════════════════════════ */}
       {tab === 'overview' && (
@@ -176,18 +172,18 @@ export default function PricingPage() {
           {products && <ProductTable review={products} />}
 
           <Card>
-            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-2">Price anything</p>
+            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)] mb-2">Price anything</p>
             <div className="grid grid-cols-2 gap-3 mb-3">
               <Input label="PowerBody charge us" prefix="£" value={assetPrice} step="0.01" onChange={setAssetPrice} help="ex VAT" />
               <Input label="In a box of" suffix="items" value={parcelItems} onChange={(n) => setParcelItems(Math.max(1, Math.round(n)))}
                 help={parcelItems > 1 ? 'postage shared' : 'ships on its own'} />
             </div>
             <div className="grid grid-cols-3 gap-3">
-              <Headline label="We charge" value={money(example.listPrice)} colour="var(--color-text)" note={`${money(assetPrice)} × ${draft.listPricing.markupOnCost}`} small />
-              <Headline label="A subscriber pays" value={money(example.subscriberPrice)} colour={ACCENT} note="middle bundle" small />
-              <Headline label="We keep" value={money(example.keeps)} colour={example.viable ? GREEN : RED} note={`${pct(example.marginPct)}% a month`} small />
+              <Headline label="We charge" value={money(example.listPrice)} colour="var(--ink-1)" note={`${money(assetPrice)} × ${draft.listPricing.markupOnCost}`} small />
+              <Headline label="A subscriber pays" value={money(example.subscriberPrice)} colour={'var(--accent)'} note="middle bundle" small />
+              <Headline label="We keep" value={money(example.keeps)} colour={example.viable ? 'var(--tone-positive)' : 'var(--tone-critical)'} note={`${pct(example.marginPct)}% a month`} small />
             </div>
-            {example.warning && <p className="text-[11px] mt-2" style={{ color: AMBER }}>{example.warning}</p>}
+            {example.warning && <p className="text-[11px] mt-2" style={{ color: 'var(--tone-attention)' }}>{example.warning}</p>}
           </Card>
 
           <ScenarioTable check={exampleScenarios} title="…and every way that product can be bought" />
@@ -289,14 +285,14 @@ export default function PricingPage() {
                   return (
                     <div key={i} className="flex items-center gap-2">
                       <input type="number" value={pct(o.discount)} onChange={(e) => update({ discount: (parseFloat(e.target.value) || 0) / 100 })} className={SMALL_INPUT} style={INPUT_STYLE} />
-                      <span className="text-[11px] text-[var(--color-muted)]">% off, weight</span>
+                      <span className="text-[11px] text-[var(--ink-3)]">% off, weight</span>
                       <input type="number" value={o.weight} onChange={(e) => update({ weight: Math.max(0, parseFloat(e.target.value) || 0) })} className={SMALL_INPUT} style={INPUT_STYLE} />
-                      <span className="text-[11px] text-[var(--color-muted)] flex-1">≈ 1 in {Math.round(total / Math.max(0.0001, o.weight))}</span>
-                      <button onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: draft.introOffer.scratchReveal.outcomes.filter((_, idx) => idx !== i) } })} className="text-[var(--color-muted)] text-sm px-1">✕</button>
+                      <span className="text-[11px] text-[var(--ink-3)] flex-1">≈ 1 in {Math.round(total / Math.max(0.0001, o.weight))}</span>
+                      <button onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: draft.introOffer.scratchReveal.outcomes.filter((_, idx) => idx !== i) } })} className="text-[var(--ink-3)] text-sm px-1">✕</button>
                     </div>
                   )
                 })}
-                <button onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: [...draft.introOffer.scratchReveal.outcomes, { discount: 0.1, weight: 10 }] } })} className="text-xs font-bold" style={{ color: ACCENT }}>+ Add a card</button>
+                <button onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: [...draft.introOffer.scratchReveal.outcomes, { discount: 0.1, weight: 10 }] } })} className="text-xs font-bold" style={{ color: 'var(--accent)' }}>+ Add a card</button>
               </div>
             )}
           </Section>
@@ -356,26 +352,26 @@ export default function PricingPage() {
  * meant to.
  */
 function ScenarioTable({ check, title }: { check: ScenarioCheck; title: string }) {
-  const tone = check.ok ? GREEN : RED
+  const tone = check.ok ? 'var(--tone-positive)' : 'var(--tone-critical)'
   return (
     <Card>
-      <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] mb-1">{title}</p>
+      <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)] mb-1">{title}</p>
       <p className="text-base font-black mb-2" style={{ color: tone, fontFamily: 'var(--font-display)' }}>
         {check.ok ? 'Every way of buying pays' : `${check.problems.length} way${check.problems.length === 1 ? '' : 's'} of buying loses money`}
       </p>
       <div className="space-y-1">
         {check.scenarios.map((s) => {
           const bad = s.keeps < 0
-          const colour = bad ? (s.promotional ? AMBER : RED) : GREEN
+          const colour = bad ? (s.promotional ? 'var(--tone-attention)' : 'var(--tone-critical)') : 'var(--tone-positive)'
           return (
-            <div key={s.id} className="flex items-baseline justify-between gap-2 py-1.5 border-b border-[var(--color-border)] last:border-0">
-              <span className="text-[11px] text-[var(--color-text-2)] min-w-0">
+            <div key={s.id} className="flex items-baseline justify-between gap-2 py-1.5 border-b border-[var(--edge)] last:border-0">
+              <span className="text-[11px] text-[var(--ink-2)] min-w-0">
                 {s.label}
-                {s.discount > 0 && <span className="text-[var(--color-muted)]"> · {pct(s.discount)}% off</span>}
-                {s.promotional && bad && <span style={{ color: AMBER }}> · meant to lose, ~1 in 21</span>}
+                {s.discount > 0 && <span className="text-[var(--ink-3)]"> · {pct(s.discount)}% off</span>}
+                {s.promotional && bad && <span style={{ color: 'var(--tone-attention)' }}> · meant to lose, ~1 in 21</span>}
               </span>
               <span className="text-[11px] whitespace-nowrap">
-                <span className="text-[var(--color-muted)]">pays {money(s.paid)} → </span>
+                <span className="text-[var(--ink-3)]">pays {money(s.paid)} → </span>
                 <strong style={{ color: colour }}>{money(s.keeps)}</strong>
               </span>
             </div>
@@ -397,21 +393,21 @@ function ProductTable({ review }: { review: CatalogueReview }) {
   return (
     <div className="space-y-3">
       <Card>
-        <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed">
-          <strong className="text-[var(--color-text)]">Every price is what we pay × {review.markupOnCost}</strong>, rounded
+        <p className="text-[11px] text-[var(--ink-2)] leading-relaxed">
+          <strong className="text-[var(--ink-1)]">Every price is what we pay × {review.markupOnCost}</strong>, rounded
           down to .99. Margins assume the product sits in a box with others, because that is how the quiz sells — each
           one carries a share of a single delivery rather than a whole one.
         </p>
       </Card>
 
       <div className="grid grid-cols-3 gap-3">
-        <Headline label="Products" value={String(review.rows.length)} colour="var(--color-text)" note="priced by the rule" small />
-        <Headline label="We keep, typically" value={`${pct(review.averageMargin)}%`} colour={review.averageMargin > 0.1 ? GREEN : AMBER} note="of a subscriber's price" small />
-        <Headline label="Losing money" value={String(review.losing)} colour={review.losing > 0 ? RED : GREEN} note="best off subscription" small />
+        <Headline label="Products" value={String(review.rows.length)} colour="var(--ink-1)" note="priced by the rule" small />
+        <Headline label="We keep, typically" value={`${pct(review.averageMargin)}%`} colour={review.averageMargin > 0.1 ? 'var(--tone-positive)' : 'var(--tone-attention)'} note="of a subscriber's price" small />
+        <Headline label="Losing money" value={String(review.losing)} colour={review.losing > 0 ? 'var(--tone-critical)' : 'var(--tone-positive)'} note="best off subscription" small />
       </div>
 
       <Card>
-        <div className="flex text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)] pb-2 border-b border-[var(--color-border)]">
+        <div className="flex text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)] pb-2 border-b border-[var(--edge)]">
           <span className="flex-1">Product</span>
           <span className="w-20 text-right">We pay</span>
           <span className="w-20 text-right">We charge</span>
@@ -420,15 +416,15 @@ function ProductTable({ review }: { review: CatalogueReview }) {
         </div>
         <div className="max-h-[28rem] overflow-y-auto">
           {review.rows.map((r) => (
-            <div key={r.title} className="py-2 border-b border-[var(--color-border)] last:border-0">
+            <div key={r.title} className="py-2 border-b border-[var(--edge)] last:border-0">
               <div className="flex items-baseline text-[11px]">
-                <span className="flex-1 truncate text-[var(--color-text-2)] pr-2">{r.title}</span>
-                <span className="w-20 text-right text-[var(--color-muted)]">{money(r.cost)}</span>
-                <span className="w-20 text-right text-[var(--color-text)]">{money(r.listPrice)}</span>
-                <span className="w-24 text-right text-[var(--color-text)]">{money(r.subscriberPrice)}</span>
-                <span className="w-20 text-right font-bold" style={{ color: r.viable ? GREEN : RED }}>{money(r.keeps)}</span>
+                <span className="flex-1 truncate text-[var(--ink-2)] pr-2">{r.title}</span>
+                <span className="w-20 text-right text-[var(--ink-3)]">{money(r.cost)}</span>
+                <span className="w-20 text-right text-[var(--ink-1)]">{money(r.listPrice)}</span>
+                <span className="w-24 text-right text-[var(--ink-1)]">{money(r.subscriberPrice)}</span>
+                <span className="w-20 text-right font-bold" style={{ color: r.viable ? 'var(--tone-positive)' : 'var(--tone-critical)' }}>{money(r.keeps)}</span>
               </div>
-              {r.warning && <p className="text-[10px] mt-0.5" style={{ color: r.viable ? AMBER : RED }}>{r.warning}</p>}
+              {r.warning && <p className="text-[10px] mt-0.5" style={{ color: r.viable ? 'var(--tone-attention)' : 'var(--tone-critical)' }}>{r.warning}</p>}
             </div>
           ))}
         </div>
@@ -438,15 +434,15 @@ function ProductTable({ review }: { review: CatalogueReview }) {
 }
 
 function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">{children}</div>
+  return <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4">{children}</div>
 }
 
 function Headline({ label, value, note, colour, small }: { label: string; value: string; note?: string; colour: string; small?: boolean }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3.5 text-center">
-      <p className="text-[10px] uppercase font-bold text-[var(--color-muted)]">{label}</p>
+    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-3.5 text-center">
+      <p className="text-[10px] uppercase font-bold text-[var(--ink-3)]">{label}</p>
       <p className={`${small ? 'text-xl' : 'text-2xl'} font-black my-0.5`} style={{ color: colour, fontFamily: 'var(--font-display)' }}>{value}</p>
-      {note && <p className="text-[10px] text-[var(--color-muted)] leading-snug">{note}</p>}
+      {note && <p className="text-[10px] text-[var(--ink-3)] leading-snug">{note}</p>}
     </div>
   )
 }
@@ -456,14 +452,14 @@ function Input({ label, value, onChange, prefix, suffix, help, step }: {
 }) {
   return (
     <label className="block">
-      <span className="text-[10px] uppercase font-bold text-[var(--color-muted)] block mb-1">{label}</span>
+      <span className="text-[10px] uppercase font-bold text-[var(--ink-3)] block mb-1">{label}</span>
       <span className="flex items-center gap-1">
-        {prefix && <span className="text-xs text-[var(--color-muted)]">{prefix}</span>}
+        {prefix && <span className="text-xs text-[var(--ink-3)]">{prefix}</span>}
         <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
           className="w-full min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none" style={INPUT_STYLE} />
-        {suffix && <span className="text-xs text-[var(--color-muted)]">{suffix}</span>}
+        {suffix && <span className="text-xs text-[var(--ink-3)]">{suffix}</span>}
       </span>
-      {help && <span className="text-[10px] text-[var(--color-muted)] block mt-0.5">{help}</span>}
+      {help && <span className="text-[10px] text-[var(--ink-3)] block mt-0.5">{help}</span>}
     </label>
   )
 }
@@ -476,30 +472,30 @@ function TierEditor({ tiers, onChange, onAdd, onRemove }: {
 }) {
   return (
     <div className="space-y-2">
-      {tiers.length === 0 && <p className="text-[11px] text-[var(--color-muted)]">None set.</p>}
+      {tiers.length === 0 && <p className="text-[11px] text-[var(--ink-3)]">None set.</p>}
       {tiers.map((t, i) => (
         <div key={t.id} className="flex items-center gap-2">
           <input value={t.label} onChange={(e) => onChange(i, { label: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs outline-none" style={INPUT_STYLE} />
-          <span className="text-[11px] text-[var(--color-muted)]">spend £</span>
+          <span className="text-[11px] text-[var(--ink-3)]">spend £</span>
           <input type="number" value={t.minSubtotal ?? 0} onChange={(e) => onChange(i, { minSubtotal: parseFloat(e.target.value) })} className="w-14 px-2 py-1.5 rounded-lg text-xs text-right outline-none" style={INPUT_STYLE} />
           <input type="number" value={pct(t.discountPct)} onChange={(e) => onChange(i, { discountPct: parseFloat(e.target.value) / 100 })} className="w-12 px-2 py-1.5 rounded-lg text-xs text-right outline-none" style={INPUT_STYLE} />
-          <span className="text-[11px] text-[var(--color-muted)]">% off</span>
-          <button onClick={() => onRemove(i)} className="text-[var(--color-muted)] text-sm px-1">✕</button>
+          <span className="text-[11px] text-[var(--ink-3)]">% off</span>
+          <button onClick={() => onRemove(i)} className="text-[var(--ink-3)] text-sm px-1">✕</button>
         </div>
       ))}
-      <button onClick={onAdd} className="text-xs font-bold mt-1" style={{ color: ACCENT }}>+ Add a tier</button>
+      <button onClick={onAdd} className="text-xs font-bold mt-1" style={{ color: 'var(--accent)' }}>+ Add a tier</button>
     </div>
   )
 }
 
 function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
-    <div className="py-2.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="py-2.5 border-b border-[var(--edge)] last:border-0">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-[var(--color-text)]">{label}</span>
+        <span className="text-sm font-semibold text-[var(--ink-1)]">{label}</span>
         <span className="flex items-center gap-1 flex-shrink-0">{children}</span>
       </div>
-      {help && <p className="text-[11px] text-[var(--color-muted)] mt-1 leading-snug pr-24">{help}</p>}
+      {help && <p className="text-[11px] text-[var(--ink-3)] mt-1 leading-snug pr-24">{help}</p>}
     </div>
   )
 }
@@ -508,7 +504,7 @@ function Num({ label, value, onChange, suffix, help }: { label: string; value: n
   return (
     <Field label={label} help={help}>
       <input type="number" value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-20 px-2 py-1.5 rounded-lg text-sm text-right outline-none" style={INPUT_STYLE} />
-      {suffix && <span className="text-[11px] text-[var(--color-muted)] w-16">{suffix}</span>}
+      {suffix && <span className="text-[11px] text-[var(--ink-3)] w-16">{suffix}</span>}
     </Field>
   )
 }
@@ -517,7 +513,7 @@ function Toggle({ label, value, onChange, help }: { label: string; value: boolea
   return (
     <Field label={label} help={help}>
       <button onClick={() => onChange(!value)} className="text-xs font-bold px-3 py-1.5 rounded-lg"
-        style={{ background: value ? ACCENT : 'var(--color-surface-2)', color: value ? 'var(--color-bg)' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+        style={{ background: value ? 'var(--accent)' : 'var(--surface-2)', color: value ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
         {value ? 'On' : 'Off'}
       </button>
     </Field>
@@ -536,9 +532,9 @@ function Choice({ label, value, options, onChange, help }: { label: string; valu
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 mb-4">
-      <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{title}</p>
-      {desc && <p className="text-[11px] text-[var(--color-muted)] mb-2 mt-0.5 leading-snug">{desc}</p>}
+    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 mb-4">
+      <p className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{title}</p>
+      {desc && <p className="text-[11px] text-[var(--ink-3)] mb-2 mt-0.5 leading-snug">{desc}</p>}
       <div className="mt-1">{children}</div>
     </div>
   )

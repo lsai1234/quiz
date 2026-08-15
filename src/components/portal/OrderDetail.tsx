@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { StatusBadge, statusLabel } from './OrdersList'
 
-const ACCENT = '#00D4FF'
 
 interface OrderLine {
   sku: string | null
@@ -51,10 +50,10 @@ const REVIEW_LABEL: Record<string, string> = {
   rejected: 'Rejected — will not be fulfilled',
 }
 const REVIEW_COLOUR: Record<string, string> = {
-  pending: '#fbbf24',
-  approved: '#34d399',
-  held: '#fbbf24',
-  rejected: '#f87171',
+  pending: 'var(--tone-attention)',
+  approved: 'var(--tone-positive)',
+  held: 'var(--tone-attention)',
+  rejected: 'var(--tone-critical)',
 }
 
 export function OrderDetail({ id }: { id: string }) {
@@ -86,8 +85,8 @@ export function OrderDetail({ id }: { id: string }) {
     setBusy(null)
   }, [id])
 
-  if (notFound) return <p className="text-sm text-[var(--color-muted)]">Order not found. <Link href={BACK_HREF} className="underline">Back to orders</Link></p>
-  if (!order) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (notFound) return <p className="text-sm text-[var(--ink-3)]">Order not found. <Link href={BACK_HREF} className="underline">Back to orders</Link></p>
+  if (!order) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const canSubmit = order.status === 'paid' || order.status === 'failed'
   const canSync = !!order.supplierOrderId
@@ -98,34 +97,34 @@ export function OrderDetail({ id }: { id: string }) {
 
   return (
     <div className="space-y-5">
-      <Link href={BACK_HREF} className="text-xs text-[var(--color-muted)] underline">← All orders</Link>
+      <Link href={BACK_HREF} className="text-xs text-[var(--ink-3)] underline">← All orders</Link>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h1 className="text-xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{order.id}</h1>
-          <p className="text-[11px] text-[var(--color-muted)]">{order.channel} · {order.email ?? 'guest'} · {new Date(order.createdAt).toLocaleString()}</p>
+          <h1 className="text-xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{order.id}</h1>
+          <p className="text-[11px] text-[var(--ink-3)]">{order.channel} · {order.email ?? 'guest'} · {new Date(order.createdAt).toLocaleString()}</p>
         </div>
         <StatusBadge status={order.status} />
       </div>
 
       {/* Fulfilment review — nothing reaches PowerBody until this says approved. */}
       {awaitingReview && (
-        <div className="rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: `color-mix(in srgb, ${REVIEW_COLOUR[review] ?? ACCENT} 35%, transparent)` }}>
+        <div className="rounded-2xl border p-3.5" style={{ background: 'var(--surface-1)', borderColor: `color-mix(in srgb, ${REVIEW_COLOUR[review] ?? 'var(--accent)'} 35%, transparent)` }}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <p className="text-sm font-bold" style={{ color: REVIEW_COLOUR[review] ?? ACCENT, fontFamily: 'var(--font-display)' }}>
+              <p className="text-sm font-bold" style={{ color: REVIEW_COLOUR[review] ?? 'var(--accent)', fontFamily: 'var(--font-display)' }}>
                 {REVIEW_LABEL[review] ?? review}
               </p>
-              <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+              <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                 We ask PowerBody for nothing until you confirm it.
                 {order.review?.by && ` Last set by ${order.review.by}.`}
                 {order.review?.note && ` “${order.review.note}”`}
               </p>
             </div>
             <div className="flex gap-2">
-              {review !== 'held' && <button onClick={() => act('hold')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: '#fbbf24' }}>Hold</button>}
-              {review !== 'pending' && <button onClick={() => act('return')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>Back to queue</button>}
-              {review !== 'rejected' && <button onClick={() => act('reject')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-red)' }}>Reject</button>}
+              {review !== 'held' && <button onClick={() => act('hold')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-attention)' }}>Hold</button>}
+              {review !== 'pending' && <button onClick={() => act('return')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>Back to queue</button>}
+              {review !== 'rejected' && <button onClick={() => act('reject')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>Reject</button>}
             </div>
           </div>
         </div>
@@ -133,68 +132,68 @@ export function OrderDetail({ id }: { id: string }) {
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => act('submit')} disabled={!canSubmit || busy !== null} className={btn} style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}>
+        <button onClick={() => act('submit')} disabled={!canSubmit || busy !== null} className={btn} style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}>
           {busy === 'submit' ? 'Sending…' : order.status === 'failed' ? 'Retry send to PowerBody' : 'Confirm & send to PowerBody'}
         </button>
-        <button onClick={() => act('sync')} disabled={!canSync || busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>
+        <button onClick={() => act('sync')} disabled={!canSync || busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
           {busy === 'sync' ? 'Syncing…' : 'Sync status'}
         </button>
-        <button onClick={() => act('refund')} disabled={terminal || busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-red)' }}>Refund</button>
-        <button onClick={() => act('cancel')} disabled={terminal || busy !== null} className={btn} style={{ borderColor: 'var(--color-border)', color: 'var(--color-red)' }}>Cancel</button>
+        <button onClick={() => act('refund')} disabled={terminal || busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>Refund</button>
+        <button onClick={() => act('cancel')} disabled={terminal || busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>Cancel</button>
       </div>
-      {error && <p className="text-xs" style={{ color: 'var(--color-red)' }}>{error}</p>}
+      {error && <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
 
       {/* Lines */}
       <section>
-        <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Items</h2>
-        <div className="rounded-2xl border divide-y" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+        <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Items</h2>
+        <div className="rounded-2xl border divide-y" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
           {order.lines.map((l, i) => (
             <div key={i} className="p-3 flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-[var(--color-text)] truncate">{l.title}{l.variantTitle ? <span className="text-[var(--color-muted)]"> · {l.variantTitle}</span> : null}</p>
-                <p className="text-[11px] text-[var(--color-muted)]">SKU {l.sku ?? '—'} · qty {l.quantity}{l.supplierCost != null ? ` · cost ${money(l.supplierCost, order.currency)}` : ''}</p>
+                <p className="text-sm font-semibold text-[var(--ink-1)] truncate">{l.title}{l.variantTitle ? <span className="text-[var(--ink-3)]"> · {l.variantTitle}</span> : null}</p>
+                <p className="text-[11px] text-[var(--ink-3)]">SKU {l.sku ?? '—'} · qty {l.quantity}{l.supplierCost != null ? ` · cost ${money(l.supplierCost, order.currency)}` : ''}</p>
               </div>
-              <span className="text-sm text-[var(--color-text)] shrink-0">{money(l.unitPrice * l.quantity, order.currency)}</span>
+              <span className="text-sm text-[var(--ink-1)] shrink-0">{money(l.unitPrice * l.quantity, order.currency)}</span>
             </div>
           ))}
           {order.partnerCode && (
             <div className="p-3 flex items-center justify-between">
-              <span className="text-xs text-[var(--color-muted)]">
-                Came in on <span className="font-bold" style={{ color: ACCENT }}>{order.partnerCode}</span>
+              <span className="text-xs text-[var(--ink-3)]">
+                Came in on <span className="font-bold" style={{ color: 'var(--accent)' }}>{order.partnerCode}</span>
                 {order.partnerDiscountPct ? ` · ${Math.round(order.partnerDiscountPct * 100)}% off` : ''}
               </span>
-              <span className="text-[11px] text-[var(--color-muted)]">partner order</span>
+              <span className="text-[11px] text-[var(--ink-3)]">partner order</span>
             </div>
           )}
           <div className="p-3 flex items-center justify-between">
-            <span className="text-sm font-bold text-[var(--color-text)]">Total</span>
-            <span className="text-sm font-bold text-[var(--color-text)]">{money(order.total, order.currency)}</span>
+            <span className="text-sm font-bold text-[var(--ink-1)]">Total</span>
+            <span className="text-sm font-bold text-[var(--ink-1)]">{money(order.total, order.currency)}</span>
           </div>
         </div>
       </section>
 
       {/* Fulfilment + payment */}
       <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="rounded-2xl border p-3.5 text-xs space-y-1" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <p className="font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Supplier</p>
-          <p className="text-[var(--color-muted)]">Order id: <span className="text-[var(--color-text-2)]">{order.supplierOrderId ?? 'not submitted'}</span></p>
-          <p className="text-[var(--color-muted)]">Supplier status: <span className="text-[var(--color-text-2)]">{order.supplierStatus ? statusLabel(order.supplierStatus) : '—'}</span></p>
-          <p className="text-[var(--color-muted)]">Tracking: <span className="text-[var(--color-text-2)]">{order.trackingNumber ?? '—'}</span></p>
+        <div className="rounded-2xl border p-3.5 text-xs space-y-1" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+          <p className="font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Supplier</p>
+          <p className="text-[var(--ink-3)]">Order id: <span className="text-[var(--ink-2)]">{order.supplierOrderId ?? 'not submitted'}</span></p>
+          <p className="text-[var(--ink-3)]">Supplier status: <span className="text-[var(--ink-2)]">{order.supplierStatus ? statusLabel(order.supplierStatus) : '—'}</span></p>
+          <p className="text-[var(--ink-3)]">Tracking: <span className="text-[var(--ink-2)]">{order.trackingNumber ?? '—'}</span></p>
         </div>
-        <div className="rounded-2xl border p-3.5 text-xs space-y-1" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
-          <p className="font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Payment</p>
-          <p className="text-[var(--color-muted)]">Stripe session: <span className="text-[var(--color-text-2)] break-all">{order.stripeSessionId ?? '— (mock)'}</span></p>
-          <p className="text-[var(--color-muted)]">Payment intent: <span className="text-[var(--color-text-2)] break-all">{order.stripePaymentIntentId ?? '—'}</span></p>
+        <div className="rounded-2xl border p-3.5 text-xs space-y-1" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+          <p className="font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Payment</p>
+          <p className="text-[var(--ink-3)]">Stripe session: <span className="text-[var(--ink-2)] break-all">{order.stripeSessionId ?? '— (mock)'}</span></p>
+          <p className="text-[var(--ink-3)]">Payment intent: <span className="text-[var(--ink-2)] break-all">{order.stripePaymentIntentId ?? '—'}</span></p>
         </div>
       </section>
 
       {/* Timeline */}
       <section>
-        <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Timeline</h2>
+        <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Timeline</h2>
         <div className="space-y-1.5">
           {order.events.slice().reverse().map((e, i) => (
-            <div key={i} className="text-[11px] text-[var(--color-muted)] flex gap-2">
-              <span className="text-[var(--color-text-2)] font-semibold whitespace-nowrap">{statusLabel(e.type)}</span>
+            <div key={i} className="text-[11px] text-[var(--ink-3)] flex gap-2">
+              <span className="text-[var(--ink-2)] font-semibold whitespace-nowrap">{statusLabel(e.type)}</span>
               <span>{new Date(e.at).toLocaleString()}</span>
               {e.detail && <span className="truncate">· {e.detail}</span>}
             </div>

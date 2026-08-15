@@ -4,9 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { PriceGroupImpact } from '@/lib/changes/price'
 
-const ACCENT = '#00D4FF'
-const AMBER = '#fbbf24'
-const RED = '#ff6b6b'
 
 type Group = PriceGroupImpact & { suggestedPassOnPct: number | null; noticeDays: number }
 
@@ -58,10 +55,10 @@ export function PriceChanges() {
     [load],
   )
 
-  if (!groups) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!groups) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
   if (groups.length === 0) {
     return (
-      <p className="text-sm text-[var(--color-muted)] py-6 text-center">
+      <p className="text-sm text-[var(--ink-3)] py-6 text-center">
         No supplier price moves outstanding.
       </p>
     )
@@ -69,7 +66,7 @@ export function PriceChanges() {
 
   return (
     <div className="space-y-4">
-      {note && <p className="text-xs" style={{ color: ACCENT }}>{note}</p>}
+      {note && <p className="text-xs" style={{ color: 'var(--accent)' }}>{note}</p>}
 
       {groups.map((g) => {
         const share = shares[g.productId] ?? g.suggestedPassOnPct ?? 1
@@ -79,18 +76,18 @@ export function PriceChanges() {
             key={g.productId}
             className="rounded-2xl border p-4"
             style={{
-              background: 'var(--color-surface)',
+              background: 'var(--surface-1)',
               borderColor: g.absorbLosesMoney
-                ? `color-mix(in srgb, ${RED} 45%, transparent)`
-                : `color-mix(in srgb, ${AMBER} 35%, transparent)`,
+                ? `color-mix(in srgb, var(--tone-critical) 45%, transparent)`
+                : `var(--attention-line)`,
             }}
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
                   {g.productTitle}
                 </p>
-                <p className="text-[11px] text-[var(--color-muted)]">
+                <p className="text-[11px] text-[var(--ink-3)]">
                   SKU {g.sku ?? '—'} · cost {formatGBP(g.currentCost)} → {formatGBP(g.newCost)} (
                   {rising ? '+' : ''}{pct(g.move.wholesaleDeltaPct)}) · {g.affectedCount} member
                   {g.affectedCount === 1 ? '' : 's'}
@@ -98,7 +95,7 @@ export function PriceChanges() {
               </div>
               <span
                 className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
-                style={{ color: rising ? AMBER : ACCENT, background: `color-mix(in srgb, ${rising ? AMBER : ACCENT} 14%, transparent)` }}
+                style={{ color: rising ? 'var(--tone-attention)' : 'var(--accent)', background: `color-mix(in srgb, ${rising ? 'var(--tone-attention)' : 'var(--accent)'} 14%, transparent)` }}
               >
                 {rising ? 'Cost up' : 'Cost down'}
               </span>
@@ -106,26 +103,26 @@ export function PriceChanges() {
 
             {/* Both sides of the call, side by side. */}
             <div className="grid grid-cols-2 gap-3 mt-4">
-              <div className="rounded-xl p-3" style={{ background: 'var(--color-surface-2)' }}>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)] mb-1">If you absorb it</p>
-                <p className="text-sm font-black" style={{ color: g.absorbLosesMoney ? RED : g.absorbBreachesFloor ? AMBER : 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              <div className="rounded-xl p-3" style={{ background: 'var(--surface-2)' }}>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)] mb-1">If you absorb it</p>
+                <p className="text-sm font-black" style={{ color: g.absorbLosesMoney ? 'var(--tone-critical)' : g.absorbBreachesFloor ? 'var(--tone-attention)' : 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
                   {pct(g.marginIfAbsorbed)} margin
                 </p>
-                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">was {pct(g.marginNow)} · nobody&apos;s price moves</p>
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">was {pct(g.marginNow)} · nobody&apos;s price moves</p>
                 {g.absorbLosesMoney && (
-                  <p className="text-[11px] font-semibold mt-1" style={{ color: RED }}>You&apos;d sell at a loss.</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: 'var(--tone-critical)' }}>You&apos;d sell at a loss.</p>
                 )}
                 {!g.absorbLosesMoney && g.absorbBreachesFloor && (
-                  <p className="text-[11px] font-semibold mt-1" style={{ color: AMBER }}>Below your margin floor.</p>
+                  <p className="text-[11px] font-semibold mt-1" style={{ color: 'var(--tone-attention)' }}>Below your margin floor.</p>
                 )}
               </div>
 
-              <div className="rounded-xl p-3" style={{ background: 'var(--color-surface-2)' }}>
-                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)] mb-1">If you pass on {pct(share)}</p>
-                <p className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              <div className="rounded-xl p-3" style={{ background: 'var(--surface-2)' }}>
+                <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)] mb-1">If you pass on {pct(share)}</p>
+                <p className="text-sm font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
                   {formatGBP(g.passOnUnitPrice)} list
                 </p>
-                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                   was {formatGBP(g.currentUnitPrice)} · {g.totalMonthlyDelta >= 0 ? '+' : ''}
                   {formatGBP(g.totalMonthlyDelta)}/mo across everyone
                 </p>
@@ -133,7 +130,7 @@ export function PriceChanges() {
             </div>
 
             {g.suggestedPassOnPct !== null && (
-              <p className="text-[11px] mt-2" style={{ color: ACCENT }}>
+              <p className="text-[11px] mt-2" style={{ color: 'var(--accent)' }}>
                 Passing on {pct(g.suggestedPassOnPct)} is the least that keeps this above your floor.
               </p>
             )}
@@ -143,13 +140,13 @@ export function PriceChanges() {
             {g.members.length > 0 && (
               <div className="mt-3 space-y-1">
                 {g.members.slice(0, 5).map((m) => (
-                  <p key={m.eventId} className="text-[11px] text-[var(--color-muted)]">
+                  <p key={m.eventId} className="text-[11px] text-[var(--ink-3)]">
                     {m.email ?? m.userId} · {formatGBP(m.monthlyBefore)} → {formatGBP(m.monthlyAfter)}/mo
                     {m.monthlyDelta !== 0 && ` (${m.monthlyDelta > 0 ? '+' : ''}${formatGBP(m.monthlyDelta)})`}
                   </p>
                 ))}
                 {g.members.length > 5 && (
-                  <p className="text-[11px] text-[var(--color-muted)]">…and {g.members.length - 5} more.</p>
+                  <p className="text-[11px] text-[var(--ink-3)]">…and {g.members.length - 5} more.</p>
                 )}
               </div>
             )}
@@ -159,7 +156,7 @@ export function PriceChanges() {
                 onClick={() => act(g.productId, 'absorb')}
                 disabled={busy !== null}
                 className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40"
-                style={{ background: ACCENT, color: '#001018' }}
+                style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
               >
                 {busy === g.productId ? 'Working…' : 'Absorb it'}
               </button>
@@ -170,7 +167,7 @@ export function PriceChanges() {
                   value={Math.round(share * 100)}
                   onChange={(e) => setShares({ ...shares, [g.productId]: Number(e.target.value) / 100 })}
                   className="w-28"
-                  style={{ accentColor: ACCENT }}
+                  style={{ accentColor: 'var(--accent)' }}
                   aria-label="Share to pass on"
                 />
                 <button
@@ -185,7 +182,7 @@ export function PriceChanges() {
                   }}
                   disabled={busy !== null}
                   className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-                  style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+                  style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
                 >
                   Pass on {pct(share)}
                 </button>

@@ -5,11 +5,7 @@ import { ProductEditor } from '@/components/portal/ProductEditor'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
-const DOT: Record<CheckStatus, string> = { ok: GREEN, warn: AMBER, fail: RED }
+const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
 
 /** What the roster API reports about a product's economics. */
 type PriceAudit = {
@@ -88,7 +84,7 @@ export default function TopProductsPage() {
     return q ? list.filter((c) => c.title.toLowerCase().includes(q) || c.category.toLowerCase().includes(q)) : list
   }, [data, query])
 
-  if (!data) return <p className="text-sm text-[var(--color-muted)]">{error ?? 'Loading…'}</p>
+  if (!data) return <p className="text-sm text-[var(--ink-3)]">{error ?? 'Loading…'}</p>
 
   const full = data.roster.length >= data.limit
   const problems = data.roster.filter((s) => !s.product || s.readiness?.overall === 'fail').length
@@ -97,30 +93,30 @@ export default function TopProductsPage() {
   return (
     <div className="space-y-5 pb-10">
       <div>
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Top {data.limit}
         </h2>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">
+        <p className="text-sm text-[var(--ink-3)] mt-0.5">
           The products the quiz reaches for first. Everything we sell is still in the shop and still swappable —
           this is what the engine prefers when several products could fill the same slot, ranked so #1 wins ties over #{data.limit}.
         </p>
-        <p className="text-[11px] text-[var(--color-muted)] mt-1">
+        <p className="text-[11px] text-[var(--ink-3)] mt-1">
           There are {data.limit} places on purpose: being here is a promise that this product&apos;s data is
           maintained, so the columns below are that promise, kept or broken.
         </p>
       </div>
 
       <div className="grid grid-cols-3 gap-3">
-        <Stat n={`${data.roster.length}/${data.limit}`} label="Places filled" colour={full ? GREEN : ACCENT} />
-        <Stat n={problems} label="Not ready to sell" colour={problems > 0 ? RED : GREEN} />
-        <Stat n={unprofitable} label="Losing money" colour={unprofitable > 0 ? RED : GREEN} />
+        <Stat n={`${data.roster.length}/${data.limit}`} label="Places filled" colour={full ? 'var(--tone-positive)' : 'var(--accent)'} />
+        <Stat n={problems} label="Not ready to sell" colour={problems > 0 ? 'var(--tone-critical)' : 'var(--tone-positive)'} />
+        <Stat n={unprofitable} label="Losing money" colour={unprofitable > 0 ? 'var(--tone-critical)' : 'var(--tone-positive)'} />
       </div>
 
-      {error && <p className="text-xs" style={{ color: RED }}>{error}</p>}
+      {error && <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
 
       {/* The roster */}
       {data.roster.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted)] py-6 text-center rounded-2xl border border-[var(--color-border)]">
+        <p className="text-sm text-[var(--ink-3)] py-6 text-center rounded-2xl border border-[var(--edge)]">
           Nothing on the roster yet. Until you pick some, the quiz scores the whole catalogue evenly.
         </p>
       ) : (
@@ -130,25 +126,25 @@ export default function TopProductsPage() {
             const verdict = slot.price
             return (
               <div key={slot.productId} className="rounded-2xl border p-3.5"
-                style={{ background: 'var(--color-surface)', borderColor: !p ? `color-mix(in srgb, ${RED} 40%, transparent)` : 'var(--color-border)' }}>
+                style={{ background: 'var(--surface-1)', borderColor: !p ? `var(--critical-line)` : 'var(--edge)' }}>
                 <div className="flex items-start gap-3">
-                  <span className="text-sm font-black w-6 text-right shrink-0" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{slot.rank}</span>
+                  <span className="text-sm font-black w-6 text-right shrink-0" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>{slot.rank}</span>
 
                   <div className="min-w-0 flex-1">
                     {p ? (
                       <>
                         <div className="flex items-center gap-2">
                           {slot.readiness && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: DOT[slot.readiness.overall] }} />}
-                          <button onClick={() => setEditing(p)} className="text-sm font-bold text-[var(--color-text)] truncate underline decoration-dotted" style={{ fontFamily: 'var(--font-display)' }}>
+                          <button onClick={() => setEditing(p)} className="text-sm font-bold text-[var(--ink-1)] truncate underline decoration-dotted" style={{ fontFamily: 'var(--font-display)' }}>
                             {p.title}
                           </button>
                         </div>
-                        <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                           {p.category} · {p.subscriptionEligible ? 'subscribable' : 'one-off'} · {p.servings} servings ·{' '}
                           {money(p.basePrice)}{p.cost != null ? ` · costs ${money(p.cost)}` : ' · no cost set'}
                         </p>
                         {verdict && (
-                          <p className="text-[11px] mt-1" style={{ color: !verdict.viable ? RED : !verdict.scenariosOk ? AMBER : GREEN }}>
+                          <p className="text-[11px] mt-1" style={{ color: !verdict.viable ? 'var(--tone-critical)' : !verdict.scenariosOk ? 'var(--tone-attention)' : 'var(--tone-positive)' }}>
                             {verdict.viable
                               ? `We keep ${money(verdict.keeps)} a month (${pct(verdict.marginPct)})`
                               : 'Loses money as a stack line'}
@@ -163,7 +159,7 @@ export default function TopProductsPage() {
                         )}
                       </>
                     ) : (
-                      <p className="text-sm font-semibold" style={{ color: RED }}>
+                      <p className="text-sm font-semibold" style={{ color: 'var(--tone-critical)' }}>
                         {slot.productId} — no longer in the catalogue. Take it off.
                       </p>
                     )}
@@ -172,7 +168,7 @@ export default function TopProductsPage() {
                   <div className="flex items-center gap-1 shrink-0">
                     <button onClick={() => act({ action: 'move', productId: slot.productId, direction: -1 })} disabled={busy || i === 0} className={ICON} aria-label="Move up">↑</button>
                     <button onClick={() => act({ action: 'move', productId: slot.productId, direction: 1 })} disabled={busy || i === data.roster.length - 1} className={ICON} aria-label="Move down">↓</button>
-                    <button onClick={() => act({ action: 'remove', productId: slot.productId })} disabled={busy} className={ICON} style={{ color: RED }} aria-label="Remove">✕</button>
+                    <button onClick={() => act({ action: 'remove', productId: slot.productId })} disabled={busy} className={ICON} style={{ color: 'var(--tone-critical)' }} aria-label="Remove">✕</button>
                   </div>
                 </div>
               </div>
@@ -183,39 +179,39 @@ export default function TopProductsPage() {
 
       {/* Candidates */}
       <section>
-        <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Everything else ({data.candidates.length})
         </h3>
-        <p className="text-[11px] text-[var(--color-muted)] mb-2">
+        <p className="text-[11px] text-[var(--ink-3)] mb-2">
           {full
             ? `The Top ${data.limit} is full — take something off before adding.`
             : `${data.limit - data.roster.length} place${data.limit - data.roster.length === 1 ? '' : 's'} left.`}
         </p>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the catalogue…"
           className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-2"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }} />
 
         <div className="space-y-1.5 max-h-96 overflow-y-auto">
           {candidates.map((c) => (
             <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
-              style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+              style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
               <div className="min-w-0 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full shrink-0" style={{ background: DOT[c.readiness] }} />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[var(--color-text)] truncate">{c.title}</p>
-                  <p className="text-[10px] text-[var(--color-muted)]">
+                  <p className="text-xs font-semibold text-[var(--ink-1)] truncate">{c.title}</p>
+                  <p className="text-[10px] text-[var(--ink-3)]">
                     {c.category} · {money(c.basePrice)}{c.cost == null && ' · no cost set'}
                   </p>
                 </div>
               </div>
               <button onClick={() => act({ action: 'add', productId: c.id })} disabled={busy || full}
                 className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-30 shrink-0"
-                style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}>
+                style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}>
                 Add
               </button>
             </div>
           ))}
-          {candidates.length === 0 && <p className="text-xs text-[var(--color-muted)] py-4 text-center">Nothing matches.</p>}
+          {candidates.length === 0 && <p className="text-xs text-[var(--ink-3)] py-4 text-center">Nothing matches.</p>}
         </div>
       </section>
 
@@ -226,13 +222,13 @@ export default function TopProductsPage() {
   )
 }
 
-const ICON = 'text-xs font-bold w-7 h-7 rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] disabled:opacity-25'
+const ICON = 'text-xs font-bold w-7 h-7 rounded-lg border border-[var(--edge)] text-[var(--ink-3)] disabled:opacity-25'
 
 function Stat({ n, label, colour }: { n: number | string; label: string; colour: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 text-center">
+    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 text-center">
       <p className="text-2xl font-black" style={{ color: colour, fontFamily: 'var(--font-display)' }}>{n}</p>
-      <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{label}</p>
+      <p className="text-[11px] text-[var(--ink-3)] mt-0.5">{label}</p>
     </div>
   )
 }

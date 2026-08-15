@@ -13,10 +13,10 @@ export default function OrdersPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Single orders
         </h2>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">
+        <p className="text-sm text-[var(--ink-3)] mt-0.5">
           Every one-off purchase from the shop and the quiz. Open one to approve it, send it to PowerBody,
           sync its status, or refund it.
         </p>

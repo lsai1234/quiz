@@ -3,10 +3,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 interface Change {
   productId: string
@@ -96,14 +92,14 @@ export function SupplierSyncPanel() {
   return (
     <section
       className="rounded-2xl border p-4 space-y-3"
-      style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+      style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h2 className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          <h2 className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
             Supplier check
           </h2>
-          <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+          <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
             {report
               ? `Last run ${when(report.at)} · ${report.scanned} product${report.scanned === 1 ? '' : 's'} checked${
                   report.source === 'mock' ? ' (mock supplier)' : ''
@@ -115,16 +111,16 @@ export function SupplierSyncPanel() {
           onClick={runNow}
           disabled={busy}
           className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-          style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+          style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
         >
           {busy ? 'Checking…' : 'Check now'}
         </button>
       </div>
 
-      {error && <p className="text-xs" style={{ color: RED }}>{error}</p>}
+      {error && <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
 
       {report && report.updated === 0 && report.missing.length === 0 && (
-        <p className="text-xs" style={{ color: GREEN }}>
+        <p className="text-xs" style={{ color: 'var(--tone-positive)' }}>
           Nothing moved — every product is at the price and stock we already had.
         </p>
       )}
@@ -133,9 +129,9 @@ export function SupplierSyncPanel() {
         <p
           className="text-xs rounded-xl px-3 py-2 leading-relaxed"
           style={{
-            background: `color-mix(in srgb, ${RED} 12%, transparent)`,
-            border: `1px solid color-mix(in srgb, ${RED} 40%, transparent)`,
-            color: '#fca5a5',
+            background: `var(--critical-fill)`,
+            border: `1px solid var(--critical-line)`,
+            color: 'var(--tone-critical)',
           }}
         >
           <strong>
@@ -148,28 +144,28 @@ export function SupplierSyncPanel() {
 
       {priceMoves.length > 0 && (
         <div className="space-y-1.5">
-          <p className="text-[11px] font-bold uppercase text-[var(--color-muted)]">
+          <p className="text-[11px] font-bold uppercase text-[var(--ink-3)]">
             Cost changes ({priceMoves.length})
           </p>
           {priceMoves.map((c) => (
             <div
               key={c.productId}
               className="rounded-xl border px-3 py-2 flex items-center justify-between gap-3"
-              style={{ background: 'var(--color-surface-2)', borderColor: c.belowFloor ? `color-mix(in srgb, ${RED} 35%, transparent)` : 'var(--color-border)' }}
+              style={{ background: 'var(--surface-2)', borderColor: c.belowFloor ? `var(--critical-line)` : 'var(--edge)' }}
             >
               <div className="min-w-0">
-                <p className="text-xs font-bold text-[var(--color-text)] truncate">{c.title}</p>
-                <p className="text-[11px] text-[var(--color-muted)]">{c.sku}</p>
+                <p className="text-xs font-bold text-[var(--ink-1)] truncate">{c.title}</p>
+                <p className="text-[11px] text-[var(--ink-3)]">{c.sku}</p>
               </div>
               <div className="text-right shrink-0">
-                <p className="text-xs text-[var(--color-text-2)]">
+                <p className="text-xs text-[var(--ink-2)]">
                   {c.costWas != null ? money(c.costWas) : '—'} → <strong>{money(c.costNow!)}</strong>
                   {c.costDeltaPct != null && (
-                    <span style={{ color: c.costDeltaPct > 0 ? RED : GREEN }}> {signedPct(c.costDeltaPct)}</span>
+                    <span style={{ color: c.costDeltaPct > 0 ? 'var(--tone-critical)' : 'var(--tone-positive)' }}> {signedPct(c.costDeltaPct)}</span>
                   )}
                 </p>
                 {c.marginPctNow != null && (
-                  <p className="text-[11px]" style={{ color: c.belowFloor ? RED : 'var(--color-muted)' }}>
+                  <p className="text-[11px]" style={{ color: c.belowFloor ? 'var(--tone-critical)' : 'var(--ink-3)' }}>
                     margin {c.marginPctWas != null ? `${pct(c.marginPctWas)} → ` : ''}
                     {pct(c.marginPctNow)}
                   </p>
@@ -181,19 +177,19 @@ export function SupplierSyncPanel() {
       )}
 
       {stockFlips.length > 0 && (
-        <p className="text-xs text-[var(--color-text-2)]">
-          <span style={{ color: AMBER }}>
+        <p className="text-xs text-[var(--ink-2)]">
+          <span style={{ color: 'var(--tone-attention)' }}>
             {stockFlips.filter((c) => c.nowInStock === false).length} went out of stock
           </span>
           {' · '}
-          <span style={{ color: GREEN }}>
+          <span style={{ color: 'var(--tone-positive)' }}>
             {stockFlips.filter((c) => c.nowInStock === true).length} came back
           </span>
         </p>
       )}
 
       {report && report.missing.length > 0 && (
-        <p className="text-xs" style={{ color: AMBER }}>
+        <p className="text-xs" style={{ color: 'var(--tone-attention)' }}>
           <strong>{report.missing.length} product{report.missing.length === 1 ? '' : 's'} no longer in the feed.</strong>{' '}
           PowerBody have most likely delisted {report.missing.length === 1 ? 'it' : 'them'} — worth removing from the
           catalogue.

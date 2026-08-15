@@ -8,7 +8,7 @@ import type { BundlePriceSummary } from '@/lib/bundles/pricing'
 import type { BundleReadiness, CheckStatus } from '@/lib/bundles/readiness'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 
-const DOT: Record<CheckStatus, string> = { ok: '#34d399', warn: '#fbbf24', fail: '#f87171' }
+const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
 
 interface Row {
   bundle: ResolvedBundle
@@ -81,48 +81,48 @@ export default function PortalBundlesPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-1">
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Bundles</h2>
+        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Bundles</h2>
         <Link
           href="/founderhub/products/bundles/new"
-          className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all"
+          className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--accent)] text-[var(--ink-on-accent)] active:scale-95 transition-all"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           + New bundle
         </Link>
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] mb-4">
+      <p className="text-[11px] text-[var(--ink-3)] mb-4">
         Prebuilt bundles shown in the shop, top to bottom. Reorder, publish, edit or remove them.
       </p>
 
       {error && (
-        <div className="mb-3 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-2.5 text-xs text-[var(--color-red)]">
+        <div className="mb-3 rounded-xl border border-[var(--tone-critical)]/30 bg-[var(--tone-critical)]/8 px-4 py-2.5 text-xs text-[var(--tone-critical)]">
           {error}
         </div>
       )}
 
       {rows === null ? (
-        <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
       ) : (
         <div className="space-y-2">
           {visible.map((row, i) => {
             const { bundle, price, readiness } = row
             const isOpen = expanded === bundle.slug
             return (
-              <div key={bundle.slug} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
+              <div key={bundle.slug} className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] overflow-hidden">
                 <div className="p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[readiness.overall] }} />
-                        <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{bundle.name}</p>
+                        <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{bundle.name}</p>
                         {!bundle.published && (
-                          <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ color: 'var(--color-muted)', border: '1px solid var(--color-border-2)' }}>Draft</span>
+                          <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ color: 'var(--ink-3)', border: '1px solid var(--edge-strong)' }}>Draft</span>
                         )}
                         {bundle.custom && (
-                          <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }}>Custom</span>
+                          <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ color: 'var(--accent)', background: 'var(--accent-fill)' }}>Custom</span>
                         )}
                       </div>
-                      <p className="text-[11px] text-[var(--color-muted)] mt-1">
+                      <p className="text-[11px] text-[var(--ink-3)] mt-1">
                         {bundle.seriesName} · {formatGBP(price.price)}
                         {price.saving > 0 && ` · save ${formatGBP(price.saving)}`} · {bundle.blueprint.slots.length} products
                         {!readiness.sellable && ' · ⚠ product unavailable'}
@@ -131,8 +131,8 @@ export default function PortalBundlesPage() {
 
                     {/* Reorder */}
                     <div className="flex flex-col gap-1 flex-shrink-0">
-                      <button onClick={() => move(bundle.slug, -1)} disabled={i === 0 || !!busy} aria-label="Move up" className="w-7 h-6 rounded-lg text-xs disabled:opacity-30" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>↑</button>
-                      <button onClick={() => move(bundle.slug, 1)} disabled={i === visible.length - 1 || !!busy} aria-label="Move down" className="w-7 h-6 rounded-lg text-xs disabled:opacity-30" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>↓</button>
+                      <button onClick={() => move(bundle.slug, -1)} disabled={i === 0 || !!busy} aria-label="Move up" className="w-7 h-6 rounded-lg text-xs disabled:opacity-30" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>↑</button>
+                      <button onClick={() => move(bundle.slug, 1)} disabled={i === visible.length - 1 || !!busy} aria-label="Move down" className="w-7 h-6 rounded-lg text-xs disabled:opacity-30" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>↓</button>
                     </div>
                   </div>
 
@@ -143,32 +143,32 @@ export default function PortalBundlesPage() {
                       disabled={!!busy}
                       className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg"
                       style={{
-                        background: bundle.published ? 'var(--color-surface-2)' : 'var(--color-accent)',
-                        color: bundle.published ? 'var(--color-muted)' : 'var(--color-bg)',
-                        border: '1px solid var(--color-border)',
+                        background: bundle.published ? 'var(--surface-2)' : 'var(--accent)',
+                        color: bundle.published ? 'var(--ink-3)' : 'var(--ground-base)',
+                        border: '1px solid var(--edge)',
                         fontFamily: 'var(--font-display)',
                       }}
                     >
                       {bundle.published ? 'Unpublish' : 'Publish'}
                     </button>
-                    <Link href={`/founderhub/products/bundles/${bundle.slug}`} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Edit</Link>
-                    <Link href={`/bundles/${bundle.slug}`} target="_blank" className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Preview ↗</Link>
-                    <button onClick={() => duplicate(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>Duplicate</button>
-                    <button onClick={() => setExpanded(isOpen ? null : bundle.slug)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>{isOpen ? 'Hide checks' : 'Checks'}</button>
+                    <Link href={`/founderhub/products/bundles/${bundle.slug}`} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>Edit</Link>
+                    <Link href={`/bundles/${bundle.slug}`} target="_blank" className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>Preview ↗</Link>
+                    <button onClick={() => duplicate(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>Duplicate</button>
+                    <button onClick={() => setExpanded(isOpen ? null : bundle.slug)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-display)' }}>{isOpen ? 'Hide checks' : 'Checks'}</button>
                     <div className="flex-1" />
-                    <button onClick={() => remove(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--color-red)', fontFamily: 'var(--font-display)' }}>Remove</button>
+                    <button onClick={() => remove(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>Remove</button>
                     {bundle.custom && (
-                      <button onClick={() => del(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--color-red)', fontFamily: 'var(--font-display)' }}>Delete</button>
+                      <button onClick={() => del(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>Delete</button>
                     )}
                   </div>
 
                   {isOpen && (
-                    <div className="mt-3 pt-3 space-y-1.5" style={{ borderTop: '1px solid var(--color-border)' }}>
+                    <div className="mt-3 pt-3 space-y-1.5" style={{ borderTop: '1px solid var(--edge)' }}>
                       {readiness.checks.map((c) => (
                         <div key={c.id} className="flex items-center gap-2 text-[11px]">
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[c.status] }} />
-                          <span className="text-[var(--color-text-2)] font-semibold">{c.label}</span>
-                          {c.detail && <span className="text-[var(--color-muted)]">— {c.detail}</span>}
+                          <span className="text-[var(--ink-2)] font-semibold">{c.label}</span>
+                          {c.detail && <span className="text-[var(--ink-3)]">— {c.detail}</span>}
                         </div>
                       ))}
                     </div>
@@ -177,20 +177,20 @@ export default function PortalBundlesPage() {
               </div>
             )
           })}
-          {visible.length === 0 && <p className="text-sm text-[var(--color-muted)] text-center py-8">No bundles yet.</p>}
+          {visible.length === 0 && <p className="text-sm text-[var(--ink-3)] text-center py-8">No bundles yet.</p>}
 
           {/* Removed bundles — restorable */}
           {removed.length > 0 && (
             <div className="mt-6">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--color-muted)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Removed</p>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-3)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Removed</p>
               <div className="space-y-2">
                 {removed.map(({ bundle }) => (
-                  <div key={bundle.slug} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-[var(--color-muted)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{bundle.name}</p>
+                  <div key={bundle.slug} className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 flex items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-[var(--ink-3)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{bundle.name}</p>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => post({ action: 'restore', slug: bundle.slug })} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>Restore</button>
+                      <button onClick={() => post({ action: 'restore', slug: bundle.slug })} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }}>Restore</button>
                       {bundle.custom && (
-                        <button onClick={() => del(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--color-red)', fontFamily: 'var(--font-display)' }}>Delete</button>
+                        <button onClick={() => del(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>Delete</button>
                       )}
                     </div>
                   </div>
