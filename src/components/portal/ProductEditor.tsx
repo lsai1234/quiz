@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
 import { STACK_SLOTS, SLOT_LABELS, type StackSlot } from '@/lib/catalogue/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -59,18 +59,10 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
       <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: value ? '22px' : '2px' }} />
     </button>
   )
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose() }} style={{ background: 'rgba(0,0,0,0.72)' }}>
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-[var(--color-border)]">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-widest uppercase truncate" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{d.category}</p>
-            <h3 className="text-lg font-black text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{d.title}</h3>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] flex-shrink-0">✕</button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-5 py-3">
+  return (
+    <Modal onClose={onClose} size="lg">
+      <ModalHeader title={d.title} subtitle={d.category} />
+      <ModalBody>
           {/* Tags */}
           <Group title="Tags" desc="These decide when the quiz recommends this product.">
             <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-muted)] mb-1.5">What it’s for</p>
@@ -145,16 +137,25 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
               <Row label="Can be a booster">{toggle(d.isBoosterEligible, (b) => set({ isBoosterEligible: b }))}</Row>
             </Group>
           )}
-        </div>
-
-        <div className="px-5 py-3 border-t border-[var(--color-border)] flex items-center gap-2">
-          {result && <span className="text-[11px] text-[var(--color-text-2)] flex-1 leading-snug">{result}</span>}
-          <button onClick={aiSuggest} disabled={suggesting} className="ml-auto py-2.5 px-3 rounded-2xl text-xs font-bold border border-[var(--color-border-2)] text-[var(--color-text-2)]" style={{ fontFamily: 'var(--font-display)' }}>{suggesting ? '…' : '✨ AI suggest'}</button>
-          <button onClick={save} disabled={saving} className="py-2.5 px-5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>{saving ? 'Saving…' : 'Save'}</button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+      </ModalBody>
+      <ModalFooter>
+        {result && (
+          <span
+            className="flex-1"
+            // `role="status"` so a save result is announced rather than only
+            // appearing — this line reports both success and failure.
+            role="status"
+            style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' }}
+          >
+            {result}
+          </span>
+        )}
+        <Button variant="secondary" size="sm" icon="sparkle" onClick={aiSuggest} loading={suggesting}>
+          AI suggest
+        </Button>
+        <Button variant="primary" onClick={save} loading={saving}>Save</Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 

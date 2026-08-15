@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 const ACCENT = '#00D4FF'
@@ -93,18 +93,13 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
     )
   }
 
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose() }} style={{ background: 'rgba(0,0,0,0.72)' }}>
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-[var(--color-border)]">
-          <div>
-            <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>✨ AI tagging {usedAI ? '· OpenAI' : '· built-in rules'}</p>
-            <h3 className="text-lg font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Review suggested tags</h3>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)]">✕</button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-5 py-3">
+  return (
+    <Modal onClose={onClose} size="lg">
+      <ModalHeader
+        title="Review suggested tags"
+        subtitle={`AI tagging · ${usedAI ? 'OpenAI' : 'built-in rules'}`}
+      />
+      <ModalBody>
           {loading ? (
             <p className="text-sm text-[var(--color-muted)] py-8 text-center">Analysing your catalogue…</p>
           ) : pending.length === 0 ? (
@@ -142,21 +137,24 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
                   )}
 
                   {!done && (
-                    <button onClick={() => apply(r)} disabled={busy} className="mt-3 text-xs font-bold px-3 py-2 rounded-xl border border-[var(--color-border-2)] text-[var(--color-text-2)]" style={{ fontFamily: 'var(--font-display)' }}>Apply to this product</button>
+                    <div style={{ marginTop: 'var(--space-3)' }}>
+                      <Button variant="secondary" size="sm" onClick={() => apply(r)} disabled={busy}>
+                        Apply to this product
+                      </Button>
+                    </div>
                   )}
                 </div>
               )
             })}
           </div>
-        </div>
-
-        {pending.length > 0 && (
-          <div className="px-5 py-3 border-t border-[var(--color-border)]">
-            <button onClick={applyAll} disabled={busy} className="w-full py-3 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>{busy ? 'Applying…' : `Apply all (${pending.length})`}</button>
-          </div>
-        )}
-      </div>
-    </div>,
-    document.body,
+      </ModalBody>
+      {pending.length > 0 && (
+        <ModalFooter>
+          <Button variant="primary" fullWidth onClick={applyAll} loading={busy}>
+            {busy ? 'Applying' : `Apply all (${pending.length})`}
+          </Button>
+        </ModalFooter>
+      )}
+    </Modal>
   )
 }
