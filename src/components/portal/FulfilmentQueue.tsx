@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/system'
 import type { FulfilmentQueue as Queue, QueueKind, QueueOrder } from '@/lib/orders/queue'
 import { OrderingModeBanner } from './OrderSendingToggle'
 
@@ -138,26 +139,26 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
 
       {/* Bulk actions */}
       <div className="flex flex-wrap gap-2 items-center">
-        <button onClick={() => setSelected(new Set(allPending))} disabled={allPending.length === 0} className={BTN} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
+        <Button variant="secondary" size="sm" onClick={() => setSelected(new Set(allPending))} disabled={allPending.length === 0}>
           Select all needing review ({allPending.length})
-        </button>
-        <button onClick={() => act(selectedIds, 'approve')} disabled={busy || selectedIds.length === 0} className={BTN} style={{ borderColor: `var(--positive-line)`, color: 'var(--tone-positive)' }}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => act(selectedIds, 'approve')} disabled={busy || selectedIds.length === 0}>
           Approve {selectedIds.length || ''}
-        </button>
-        <button onClick={() => act(selectedIds, 'hold')} disabled={busy || selectedIds.length === 0} className={BTN} style={{ borderColor: 'var(--edge)', color: 'var(--tone-attention)' }}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => act(selectedIds, 'hold')} disabled={busy || selectedIds.length === 0}>
           Hold
-        </button>
-        <button onClick={() => act(selectedIds, 'reject')} disabled={busy || selectedIds.length === 0} className={BTN} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>
+        </Button>
+        <Button variant="destructive" size="sm" onClick={() => act(selectedIds, 'reject')} disabled={busy || selectedIds.length === 0}>
           Reject
-        </button>
+        </Button>
         <span className="flex-1" />
-        <button onClick={() => act(readyIds, 'send')} disabled={busy || readyIds.length === 0} className={BTN} style={{ background: 'var(--accent)', borderColor: 'var(--accent)', color: 'var(--ink-on-accent)' }}>
+        <Button variant="primary" size="sm" onClick={() => act(readyIds, 'send')} disabled={busy || readyIds.length === 0}>
           {busy
             ? 'Working…'
             : queue.ordering === 'simulate'
               ? `Simulate sending ${readyIds.length} approved`
               : `Send ${readyIds.length} approved to PowerBody`}
-        </button>
+        </Button>
       </div>
 
       {message && <p className="text-xs text-[var(--ink-3)]">{message}</p>}
@@ -223,13 +224,13 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                         <p className="text-sm font-bold text-[var(--ink-1)]">{money(o.total, o.currency)}</p>
                         <div className="flex gap-1.5 mt-1.5 justify-end">
                           {o.review === 'pending' && (
-                            <button onClick={() => act([o.id], 'approve')} disabled={busy} className={SMALL} style={{ color: 'var(--tone-positive)', borderColor: `var(--positive-line)` }}>Approve</button>
+                            <Button variant="secondary" size="sm" onClick={() => act([o.id], 'approve')} disabled={busy}>Approve</Button>
                           )}
                           {o.review === 'approved' && (
-                            <button onClick={() => act([o.id], 'send')} disabled={busy} className={SMALL} style={{ color: 'var(--ink-on-accent)', background: 'var(--accent)', borderColor: 'var(--accent)' }}>Send</button>
+                            <Button variant="primary" size="sm" onClick={() => act([o.id], 'send')} disabled={busy}>Send</Button>
                           )}
                           {(o.review === 'held' || o.review === 'rejected') && (
-                            <button onClick={() => act([o.id], 'return')} disabled={busy} className={SMALL} style={{ color: 'var(--ink-2)', borderColor: 'var(--edge)' }}>Reopen</button>
+                            <Button variant="secondary" size="sm" onClick={() => act([o.id], 'return')} disabled={busy}>Reopen</Button>
                           )}
                         </div>
                       </div>
@@ -245,8 +246,6 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
   )
 }
 
-const BTN = 'text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40'
-const SMALL = 'text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-40'
 
 const PAST: Record<string, string> = {
   approve: 'approved',

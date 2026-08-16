@@ -304,6 +304,35 @@ primitive layer is allowed to take from outside itself.
 
 ---
 
+## Known gap: there is no compact field
+
+`Input` and `Select` render a label above the control, which is right for a form
+and wrong for a dense table row. The Founders Hub pricing screens are full of
+16-to-20px-wide right-aligned number inputs sitting inside label/value rows that
+already name them — `w-16 px-2 py-1.5 text-xs text-right` — and dropping `Input`
+into those would put a second label above every one and break the layout that
+makes the page readable.
+
+So they are still raw `<input>`s, deliberately, and they are covered by the
+focus-ring floor (see below) rather than by the primitive. Closing this properly
+means adding a compact variant that takes its accessible name from an existing
+label rather than drawing its own — not forcing the current one in.
+
+Flagged here rather than worked around, per the rule below.
+
+## The Founders Hub focus floor
+
+`.founder-hub` on the hub's roots, plus a rule in `system.css`, gives every
+button, link and field inside the region a focus ring whether or not it has been
+converted to a primitive. The hub had none at all — 131 controls, no visible
+focus anywhere, including the two password fields guarding it.
+
+It is a floor under a migration in progress, not a licence to skip the
+primitives: converting a control changes nothing about how it focuses, and the
+floor means a raw control added tomorrow is covered the day it lands.
+`founder-hub.test.ts` holds it, along with the ban on hex colours, local palette
+constants and retired `--color-*` variables anywhere in the hub.
+
 ## If you need something the system doesn't have
 
 In order of preference:
