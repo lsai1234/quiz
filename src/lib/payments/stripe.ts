@@ -373,6 +373,101 @@ export async function updateSubscriptionAmount(
 }
 
 /**
+ * Bring a live subscription's postage line into line with what its plan now costs.
+ *
+ * `updateSubscriptionAmount` deliberately leaves postage alone — omitting an item
+ * from `items` updates nothing about it — which meant a plan that grew or shrank
+ * kept billing whatever rate it signed up at, forever. Three ways that went
+ * wrong, and they are not symmetrical:
+ *
+ *   £38 → £45   still billed £4.95, owes £2.95   — member overcharged
+ *   £90 → £110  still billed £2.95, owes £0      — member overcharged
+ *   £110 → £90  no postage line exists at all    — nothing ever billed
+ *
+ * The third is the one that could not be fixed by "updating": a plan that
+ * qualified for free delivery at signup has no delivery item, and nothing
+ * outside `createSubscriptionSession` ever created one. So this adds, updates
+ * and removes.
+ *
+ * `proration_behavior: 'none'` throughout, matching the plan line: the new rate
+ * is effective from the next cycle. A member is never back-billed for postage on
+ * a cycle that has already been invoiced.
+ *
+ * Removing is `deleted: true` rather than a £0 price, so the member's invoice
+ * stops showing a postage line at all rather than showing one for nothing.
+ */
+export async function updateSubscriptionDelivery(
+  stripeSubscriptionId: string,
+  delivery: DeliveryOption | null,
+  opts: { currency?: string } = {},
+): Promise<void> {
+  const stripe = getStripeClient()
+  const subscription = await stripe.subscriptions.retrieve(stripeSubscriptionId, {
+    expand: ['items.data.price.product'],
+  })
+  const existing = subscription.items.data.find(
+    (i) => productMetadataOf(i)?.[LINE_TAG_KEY] === DELIVERY_LINE,
+  )
+  const currency = (opts.currency ?? subscription.items.data[0]?.price.currency ?? DEFAULT_CURRENCY).toLowerCase()
+  const wanted = delivery && delivery.price > 0 ? Math.round(delivery.price * 100) : 0
+
+  // Nothing owed and nothing billed — the common case for a plan that has always
+  // been above the free line.
+  if (!existing && wanted === 0) return
+
+  if (existing && wanted === 0) {
+    await stripe.subscriptions.update(stripeSubscriptionId, {
+      items: [{ id: existing.id, deleted: true }],
+      proration_behavior: 'none',
+    })
+    return
+  }
+
+  if (existing) {
+    if (existing.price.unit_amount === wanted) return
+    // Reuse the product the current postage price points at, so the member's
+    // billing history keeps every postage rate under one product — the same
+    // reasoning as the plan line.
+    const product = existing.price.product
+    const productId = typeof product === 'string' ? product : product.id
+    await stripe.subscriptions.update(stripeSubscriptionId, {
+      items: [
+        {
+          id: existing.id,
+          price_data: { currency, product: productId, unit_amount: wanted, recurring: { interval: 'month' } },
+        },
+      ],
+      proration_behavior: 'none',
+    })
+    return
+  }
+
+  // No line yet, and postage is now owed. A subscription item's `price_data`
+  // takes a product ID and will not accept inline `product_data` the way a
+  // Checkout Session's line items do — so the product has to exist first. It
+  // carries the tag, because that is where `stackItemOf` and every future call
+  // here look to tell the plan and the postage apart.
+  const product = await stripe.products.create({
+    name: `Delivery — ${delivery!.label}`,
+    metadata: { [LINE_TAG_KEY]: DELIVERY_LINE, optionId: delivery!.id, zone: delivery!.zone },
+  })
+
+  await stripe.subscriptions.update(stripeSubscriptionId, {
+    items: [
+      {
+        price_data: {
+          currency,
+          product: product.id,
+          unit_amount: wanted,
+          recurring: { interval: 'month' },
+        },
+      },
+    ],
+    proration_behavior: 'none',
+  })
+}
+
+/**
  * End a subscription in Stripe, immediately.
  *
  * Immediate rather than `cancel_at_period_end` on purpose: the offer is "cancel

@@ -90,6 +90,42 @@ export async function syncCancellation(sub: MemberSubscription): Promise<SyncOut
   }
 }
 
+/**
+ * Re-rate the postage line when a plan's monthly moves across a delivery band.
+ *
+ * Runs after `syncMonthlyAmount` and is deliberately separate from it: the plan
+ * price and the postage price are two Stripe items, and conflating them is the
+ * bug that made `updateSubscriptionAmount` careful about which item it writes to
+ * in the first place.
+ *
+ * Skips when the rate has not actually changed, so an ordinary hub save that
+ * moves the monthly within a band does not touch Stripe twice.
+ *
+ * A failure here is reported, but the caller treats it the way it treats a
+ * failed price change — see `syncSubscriptionToStripe`, which refuses to persist
+ * a plan Stripe would not accept.
+ */
+export async function syncDeliveryLine(
+  sub: MemberSubscription,
+  previousMonthly: number,
+): Promise<SyncOutcome> {
+  const id = stripeIdFor(sub)
+  if (!id) return { ok: true }
+
+  const { recurringDeliveryOption } = await import('@/lib/pricing/delivery')
+  const before = recurringDeliveryOption(previousMonthly)?.price ?? 0
+  const after = recurringDeliveryOption(sub.flatMonthly)
+  if (Math.abs((after?.price ?? 0) - before) < 0.01) return { ok: true }
+
+  try {
+    const { updateSubscriptionDelivery } = await import('./stripe')
+    await updateSubscriptionDelivery(id, after)
+    return { ok: true }
+  } catch (err) {
+    return failure('the new delivery rate', err)
+  }
+}
+
 /** Pause billing in Stripe. Invoices raised while paused are voided, not banked. */
 export async function syncPause(sub: MemberSubscription): Promise<SyncOutcome> {
   const id = stripeIdFor(sub)
@@ -159,5 +195,13 @@ export async function syncSubscriptionToStripe(
   // move — and Stripe would reject the attempt on a cancelled subscription.
   if (next.status === 'cancelled') return { ok: true }
 
-  return syncMonthlyAmount(next, previous.flatMonthly)
+  const amount = await syncMonthlyAmount(next, previous.flatMonthly)
+  if (!amount.ok) return amount
+
+  // Postage second, and only once the plan price is safely on Stripe. Both are
+  // driven by the same number, so a plan that crossed a delivery band needs both
+  // — and until this ran, it got the first and never the second: a plan that
+  // grew past the free line kept paying postage, and one that shrank below it
+  // was never charged any, in both cases for as long as it lived.
+  return syncDeliveryLine(next, previous.flatMonthly)
 }

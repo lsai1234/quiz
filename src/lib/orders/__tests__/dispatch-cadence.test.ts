@@ -200,3 +200,63 @@ describe('shipsAtCycle', () => {
       .toEqual([true, false, false, true, false, false, true])
   })
 })
+
+
+/**
+ * The postage a subscription order records.
+ *
+ * It was left at zero, which was wrong in three directions at once: the order's
+ * `total` understated what was actually taken, every financial reading of
+ * delivery revenue counted subscriptions as contributing nothing, and the
+ * fulfilment queue compared a Zone 2 order's full due against a recorded £0 and
+ * reported the whole charge as unpaid — when the member had in fact paid the
+ * mainland rate and only the surcharge was short.
+ */
+describe('what a subscription order records for delivery', () => {
+  const plan = (flatMonthly: number): MemberSubscription => ({
+    id: 'sub-post',
+    status: 'active',
+    customerEmail: 'a@b.c',
+    flatMonthly,
+    dispatchDayOfMonth: 15,
+    minMonths: 1,
+    monthsActive: 0,
+    startedAt: new Date().toISOString(),
+    paymentMethod: null,
+    lines: [line({ productId: 'protein', deliveryIntervalMonths: 1 })],
+  }) as unknown as MemberSubscription
+
+  it('records the postage the plan is actually billed', async () => {
+    const order = await createSubscriptionOrder({
+      id: 'ord_post_1',
+      sub: plan(45),
+      catalogue: CATALOGUE,
+      cycle: 0,
+    })
+    expect(order.shipping).toBeCloseTo(2.95, 2)
+    // And it reaches the total, which is what the ledger and the queue read.
+    expect(order.total).toBeCloseTo(order.subtotal + 2.95, 2)
+  })
+
+  it('records nothing for a plan that ships free', async () => {
+    const order = await createSubscriptionOrder({
+      id: 'ord_post_2',
+      sub: plan(150),
+      catalogue: CATALOGUE,
+      cycle: 0,
+    })
+    expect(order.shipping).toBe(0)
+    expect(order.total).toBeCloseTo(order.subtotal, 2)
+  })
+
+  it('matches the rate the Stripe line was created at', async () => {
+    const { recurringDeliveryOption } = await import('@/lib/pricing/delivery')
+    const order = await createSubscriptionOrder({
+      id: 'ord_post_3',
+      sub: plan(30),
+      catalogue: CATALOGUE,
+      cycle: 0,
+    })
+    expect(order.shipping).toBeCloseTo(recurringDeliveryOption(30)!.price, 2)
+  })
+})

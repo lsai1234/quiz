@@ -25,19 +25,22 @@ interface Props {
 export function BillingSummary({ subscription: sub, deliveries }: Props) {
   const charge = nextChargeBreakdown(sub, deliveries)
   const settlement = cancelSettlement(sub)
-  const hasAdjustments = charge.extras > 0.01 || charge.credits > 0.01
+  // Postage is not an "adjustment" — it is billed every cycle, so the breakdown
+  // has to open whenever there is any, not only when something unusual happened.
+  const hasAdjustments = charge.extras > 0.01 || charge.credits > 0.01 || charge.delivery > 0.01
 
   return (
     <Card>
       <div className="flex items-baseline justify-between gap-3 mb-1">
         <Eyebrow>How you’re billed</Eyebrow>
         <span className="text-lg font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums' }}>
-          {formatGBP(sub.flatMonthly)}/mo
+          {formatGBP(sub.flatMonthly + charge.delivery)}/mo
         </span>
       </div>
       <p className="text-xs text-[var(--color-text-2)] leading-relaxed">
         One flat amount on the {sub.dispatchDayOfMonth}{ordinalSuffix(sub.dispatchDayOfMonth)} each month — it covers your whole stack,
         spread evenly so you never get a lumpy bill, however often each item ships.
+        {charge.delivery > 0.01 && ' Postage is billed alongside it, as its own line.'}
       </p>
 
       {/* Next charge */}
@@ -48,6 +51,10 @@ export function BillingSummary({ subscription: sub, deliveries }: Props) {
         {hasAdjustments && (
           <div className="space-y-2 mb-3 pb-3" style={{ borderBottom: `1px solid ${GLASS.hairline}` }}>
             <MoneyRow label="Monthly plan" value={formatGBP(charge.plan)} />
+            {/* Its own row because it is its own line on the invoice. Folding it
+                into the plan figure is what let the two disagree in the first
+                place. */}
+            {charge.delivery > 0.01 && <MoneyRow label="Delivery" value={`+${formatGBP(charge.delivery)}`} />}
             {charge.extras > 0.01 && <MoneyRow label="One-off extras this box" value={`+${formatGBP(charge.extras)}`} />}
             {charge.credits > 0.01 && <MoneyRow label="Credit (from a skip)" value={`−${formatGBP(charge.credits)}`} color={GREEN} />}
           </div>
