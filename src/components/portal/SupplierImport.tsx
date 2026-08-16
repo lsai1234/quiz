@@ -4,7 +4,6 @@ import { useCallback, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import type { SupplierRow } from '@/lib/supplier/row'
 
-const ACCENT = '#00D4FF'
 
 /**
  * Import PowerBody products by SKU.
@@ -120,22 +119,22 @@ export function SupplierImport() {
   return (
     <div className="space-y-4">
       {notice && (
-        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, color: 'var(--color-text-2)', border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)` }}>
+        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: `var(--accent-fill)`, color: 'var(--ink-2)', border: `1px solid var(--accent-line)` }}>
           {notice}
         </p>
       )}
       {error && (
-        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--color-surface-2)', color: 'var(--color-red)', border: '1px solid color-mix(in srgb, var(--color-red) 30%, transparent)' }}>
+        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', color: 'var(--tone-critical)', border: '1px solid var(--critical-line)' }}>
           {error}
         </p>
       )}
 
-      <div className="rounded-2xl border p-3.5 space-y-2.5" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+      <div className="rounded-2xl border p-3.5 space-y-2.5" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
         <div>
-          <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+          <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
             Add by SKU
           </p>
-          <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+          <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
             Paste one or more SKUs — commas, spaces or new lines. Each one comes back with its picture, name, brand,
             live stock and real cost, so you can check it before adding.
           </p>
@@ -155,13 +154,13 @@ export function SupplierImport() {
             rows={2}
             placeholder="e.g. ON-GOLD-WHEY-2270, APP-CREA-250"
             className="flex-1 min-w-[220px] text-sm rounded-xl px-3 py-2 border resize-y"
-            style={{ background: 'var(--color-surface-2)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}
+            style={{ background: 'var(--surface-2)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
           />
           <button
             onClick={lookup}
             disabled={looking || !input.trim()}
             className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40 self-start"
-            style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+            style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
           >
             {looking ? 'Looking…' : 'Look up'}
           </button>
@@ -172,22 +171,22 @@ export function SupplierImport() {
             onClick={loadSamples}
             disabled={sampling}
             className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-40"
-            style={{ borderColor: 'var(--color-border)', color: 'var(--color-muted)' }}
+            style={{ borderColor: 'var(--edge)', color: 'var(--ink-3)' }}
           >
             {sampling ? 'Reading the feed…' : 'Show me some SKUs'}
           </button>
           {source && results && (
-            <span className="text-[10px] text-[var(--color-muted)]">Answered by the {source} supplier.</span>
+            <span className="text-[10px] text-[var(--ink-3)]">Answered by the {source} supplier.</span>
           )}
         </div>
 
         {samples && (
-          <div className="rounded-xl p-2.5 space-y-2" style={{ background: 'var(--color-surface-2)' }}>
+          <div className="rounded-xl p-2.5 space-y-2" style={{ background: 'var(--surface-2)' }}>
             {samples.length === 0 ? (
-              <p className="text-[11px] text-[var(--color-muted)]">The feed came back empty.</p>
+              <p className="text-[11px] text-[var(--ink-3)]">The feed came back empty.</p>
             ) : (
               <>
-                <p className="text-[10px] text-[var(--color-muted)]">
+                <p className="text-[10px] text-[var(--ink-3)]">
                   {samples.length} codes from the feed — tap to add one to the box. Codes only: names and prices come
                   from looking them up.
                 </p>
@@ -197,7 +196,7 @@ export function SupplierImport() {
                       key={sku}
                       onClick={() => setInput((v) => (v.trim() ? `${v.trim()}, ${sku}` : sku))}
                       className="text-[10px] font-semibold px-2 py-1 rounded-md border"
-                      style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}
+                      style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
                     >
                       {sku}
                     </button>
@@ -206,7 +205,7 @@ export function SupplierImport() {
                 <button
                   onClick={() => setInput(samples.join(', '))}
                   className="text-[10px] font-bold underline"
-                  style={{ color: ACCENT }}
+                  style={{ color: 'var(--accent)' }}
                 >
                   Put all {samples.length} in the box
                 </button>
@@ -217,13 +216,13 @@ export function SupplierImport() {
       </div>
 
       {notFound.length > 0 && (
-        <p className="text-xs" style={{ color: 'var(--color-red)' }}>
+        <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>
           Not in the feed: {notFound.join(', ')}
         </p>
       )}
 
       {results && results.length === 0 && notFound.length === 0 && (
-        <p className="text-sm text-[var(--color-muted)]">Nothing found for those SKUs.</p>
+        <p className="text-sm text-[var(--ink-3)]">Nothing found for those SKUs.</p>
       )}
 
       {results && results.length > 0 && (
@@ -238,7 +237,7 @@ export function SupplierImport() {
                 onClick={() => add(addable.map((r) => r.sku))}
                 disabled={adding}
                 className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
-                style={{ background: ACCENT, color: '#001018' }}
+                style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
               >
                 {adding ? 'Adding…' : `Add all ${addable.length} separately`}
               </button>
@@ -248,14 +247,14 @@ export function SupplierImport() {
                 onClick={() => add(addable.map((r) => r.sku), true)}
                 disabled={adding}
                 className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-                style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+                style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
               >
                 Add as ONE product ({addable.length} variants)
               </button>
             </div>
           )}
           {addable.length > 1 && (
-            <p className="text-[10px] text-[var(--color-muted)]">
+            <p className="text-[10px] text-[var(--ink-3)]">
               Combine when these are flavours of the same tub. Different sizes stay separate — a variant carries its own
               price and SKU but not its own cost, servings or weight.
             </p>
@@ -271,22 +270,22 @@ const money = (n: number) => `£${n.toFixed(2)}`
 /** One looked-up product, in full: what it is and what it would make us. */
 function ProductCard({ row: r, adding, onAdd }: { row: SupplierRow; adding: boolean; onAdd: () => void }) {
   return (
-    <div className="rounded-2xl border p-3.5 flex items-start gap-3" style={{ background: 'var(--color-surface)', borderColor: 'var(--color-border)' }}>
+    <div className="rounded-2xl border p-3.5 flex items-start gap-3" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {r.imageUrl ? (
         <img src={r.imageUrl} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
       ) : (
-        <div className="w-16 h-16 rounded-xl shrink-0 grid place-items-center text-[9px] text-[var(--color-muted)]" style={{ background: 'var(--color-surface-2)' }}>
+        <div className="w-16 h-16 rounded-xl shrink-0 grid place-items-center text-[9px] text-[var(--ink-3)]" style={{ background: 'var(--surface-2)' }}>
           No image
         </div>
       )}
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{r.name}</span>
-          {r.brand && <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">{r.brand}</span>}
+          <span className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>{r.name}</span>
+          {r.brand && <span className="text-[10px] font-semibold uppercase text-[var(--ink-3)]">{r.brand}</span>}
         </div>
-        <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--color-muted)]">
+        <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--ink-3)]">
           <span>{r.sku}</span>
           {r.category && (
             <>
@@ -295,14 +294,14 @@ function ProductCard({ row: r, adding, onAdd }: { row: SupplierRow; adding: bool
             </>
           )}
           <span>·</span>
-          <span style={{ color: r.inStock ? 'var(--color-text-2)' : 'var(--color-red)' }}>
+          <span style={{ color: r.inStock ? 'var(--ink-2)' : 'var(--tone-critical)' }}>
             {r.inStock ? `${r.stock} in stock` : 'Out of stock'}
           </span>
         </div>
-        <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--color-muted)]">
+        <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--ink-3)]">
           {/* What we pay → what we would charge → what we would keep. */}
           <span>Cost {money(r.wholesalePrice)} → sell {money(r.sellPrice)}</span>
-          <span className="font-bold" style={{ color: r.marginPct > 0 ? ACCENT : 'var(--color-red)' }}>
+          <span className="font-bold" style={{ color: r.marginPct > 0 ? 'var(--accent)' : 'var(--tone-critical)' }}>
             {r.marginEstimated ? '≈' : ''}{r.marginPct}% margin
           </span>
           {r.rrp !== null && <span>RRP {money(r.rrp)}</span>}
@@ -310,13 +309,13 @@ function ProductCard({ row: r, adding, onAdd }: { row: SupplierRow; adding: bool
       </div>
 
       {r.alreadyAdded ? (
-        <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: ACCENT }}>Added</span>
+        <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: 'var(--accent)' }}>Added</span>
       ) : (
         <button
           onClick={onAdd}
           disabled={adding}
           className="text-xs font-bold px-3 py-1.5 rounded-xl border shrink-0 disabled:opacity-40"
-          style={{ borderColor: `color-mix(in srgb, ${ACCENT} 40%, transparent)`, color: ACCENT }}
+          style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
         >
           Add
         </button>

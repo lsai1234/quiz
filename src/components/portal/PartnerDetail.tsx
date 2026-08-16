@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Card, Modal, ModalBody, ModalHeader, Tabs } from '@/components/system'
 import { describePayout, describeTerms } from '@/lib/partners/terms'
 import type {
   CodeTerms,
@@ -15,7 +15,6 @@ import type {
 
 const money = (n: number) => `£${n.toFixed(2)}`
 
-const ACCENT = '#00D4FF'
 
 interface Props {
   record: PartnerRecord
@@ -75,95 +74,102 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
     }
   }
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-      style={{ background: 'rgba(0,0,0,0.72)' }}
-    >
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-[var(--color-border)]">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-widest uppercase truncate" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-              {partner.status}
-            </p>
-            <h3 className="text-lg font-black text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{partner.name}</h3>
-            <p className="text-[11px] text-[var(--color-muted)] truncate">{partner.email}</p>
+  return (
+    <Modal onClose={onClose} size="lg" label={`${partner.name} — partner`}>
+      <ModalHeader title={partner.name} subtitle={`${partner.status} · ${partner.email}`} />
+      <ModalBody>
+        {/* Announced when they appear: both report the outcome of an action the
+            founder just took, and neither used to be. */}
+        {error && (
+          <div role="status" style={{ marginBottom: 'var(--space-3)' }}>
+            <Card tone="critical" padding="tight">
+              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--tone-critical)' }}>
+                {error}
+              </p>
+            </Card>
           </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] flex-shrink-0">✕</button>
-        </div>
+        )}
+        {notice && (
+          <div role="status" style={{ marginBottom: 'var(--space-3)' }}>
+            <Card tone="accent" padding="tight">
+              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--accent)' }}>
+                {notice}
+              </p>
+            </Card>
+          </div>
+        )}
 
-        <div className="px-5 pt-3 flex gap-1">
-          {(['code', 'money', 'terms', 'history'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => { setTab(t); setError(null); setNotice(null) }}
-              className="px-3 py-1.5 rounded-full text-xs font-bold"
-              style={{
-                background: tab === t ? ACCENT : 'var(--color-surface-2)',
-                color: tab === t ? 'var(--color-bg)' : 'var(--color-muted)',
-                border: '1px solid var(--color-border)',
-              }}
-            >
-              {t === 'code' ? 'Code' : t === 'money' ? 'Money' : t === 'terms' ? 'Their deal' : `History (${termsHistory.length})`}
-            </button>
-          ))}
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-5 py-4">
-          {error && <p className="text-xs font-semibold mb-3 px-3 py-2 rounded-xl" style={{ color: '#f87171', background: 'color-mix(in srgb, #f87171 12%, transparent)' }}>{error}</p>}
-          {notice && <p className="text-xs font-semibold mb-3 px-3 py-2 rounded-xl" style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 12%, transparent)` }}>{notice}</p>}
-
-          {tab === 'code' && (
-            <>
-              <AccountPanel
-                status={partner.status}
-                busy={busy}
-                partnerId={partner.id}
-                onStatus={(status) => post({ action: 'status', status }, status === 'suspended' ? 'Suspended — their code stops working now.' : 'Reinstated.')}
-              />
-              {codes.map((code) => (
-                <CodePanel
-                  key={code.code}
-                  code={code}
+        {/* A real `Tabs`, unlike the hub's navigations: these switch panels
+            inside one dialog rather than routing, so `role="tablist"` is the
+            truth here. It brings arrow-key movement and Home/End with it. */}
+        <Tabs
+          label="Partner details"
+          value={tab}
+          onChange={(id) => { setTab(id as typeof tab); setError(null); setNotice(null) }}
+          tabs={[
+            {
+              id: 'code',
+              label: 'Code',
+              content: (
+                <>
+                  <AccountPanel
+                    status={partner.status}
+                    busy={busy}
+                    partnerId={partner.id}
+                    onStatus={(status) => post({ action: 'status', status }, status === 'suspended' ? 'Suspended — their code stops working now.' : 'Reinstated.')}
+                  />
+                  {codes.map((code) => (
+                    <CodePanel
+                      key={code.code}
+                      code={code}
+                      busy={busy}
+                      onSave={(patch) => post({ action: 'code', targetCode: code.code, codePatch: patch }, 'Code updated.')}
+                    />
+                  ))}
+                </>
+              ),
+            },
+            {
+              id: 'money',
+              label: 'Money',
+              content: (
+                <MoneyPanel
+                  partnerId={partner.id}
                   busy={busy}
-                  onSave={(patch) => post({ action: 'code', targetCode: code.code, codePatch: patch }, 'Code updated.')}
+                  onSettle={(ignoreMinimum) =>
+                    post({ action: 'settle', ignoreMinimum }, 'Payout raised. Mark it paid once the money has gone.')
+                  }
                 />
-              ))}
-            </>
-          )}
-
-          {tab === 'money' && (
-            <MoneyPanel
-              partnerId={partner.id}
-              busy={busy}
-              onSettle={(ignoreMinimum) =>
-                post({ action: 'settle', ignoreMinimum }, 'Payout raised. Mark it paid once the money has gone.')
-              }
-            />
-          )}
-
-          {tab === 'terms' && (
-            <TermsPanel
-              terms={terms}
-              busy={busy}
-              onSave={(next) => post({ action: 'terms', terms: next }, 'New terms recorded. The partner sees the reason.')}
-            />
-          )}
-
-          {tab === 'history' && <HistoryPanel history={termsHistory} />}
-        </div>
-      </div>
-    </div>,
-    document.body,
+              ),
+            },
+            {
+              id: 'terms',
+              label: 'Their deal',
+              content: (
+                <TermsPanel
+                  terms={terms}
+                  busy={busy}
+                  onSave={(next) => post({ action: 'terms', terms: next }, 'New terms recorded. The partner sees the reason.')}
+                />
+              ),
+            },
+            {
+              id: 'history',
+              label: `History (${termsHistory.length})`,
+              content: <HistoryPanel history={termsHistory} />,
+            },
+          ]}
+        />
+      </ModalBody>
+    </Modal>
   )
 }
 
 function Group({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] p-4 mb-3" style={{ background: 'var(--color-surface-2)' }}>
-      <p className="text-xs font-black text-[var(--color-text)] mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
-      {desc && <p className="text-[11px] text-[var(--color-muted)] mb-3 leading-snug">{desc}</p>}
+    <div className="rounded-2xl border border-[var(--edge)] p-4 mb-3" style={{ background: 'var(--surface-2)' }}>
+      <p className="text-xs font-black text-[var(--ink-1)] mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
+      {desc && <p className="text-[11px] text-[var(--ink-3)] mb-3 leading-snug">{desc}</p>}
       {children}
     </div>
   )
@@ -172,17 +178,17 @@ function Group({ title, desc, children }: { title: string; desc?: string; childr
 function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <label className="block mb-3">
-      <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">{label}</span>
+      <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">{label}</span>
       {children}
-      {hint && <span className="text-[10px] text-[var(--color-muted)] block mt-1 leading-snug">{hint}</span>}
+      {hint && <span className="text-[10px] text-[var(--ink-3)] block mt-1 leading-snug">{hint}</span>}
     </label>
   )
 }
 
 const inputStyle = {
-  background: 'var(--color-surface)',
-  border: '1px solid var(--color-border)',
-  color: 'var(--color-text)',
+  background: 'var(--surface-1)',
+  border: '1px solid var(--edge)',
+  color: 'var(--ink-1)',
 } as const
 
 const INPUT = 'w-full px-3 py-2 rounded-xl text-sm outline-none'
@@ -212,11 +218,11 @@ function AccountPanel({
     >
       <div className="flex flex-wrap gap-2 mb-3">
         {status === 'suspended' ? (
-          <button disabled={busy} onClick={() => onStatus('active')} className={BTN} style={{ background: ACCENT, color: 'var(--color-bg)' }}>
+          <button disabled={busy} onClick={() => onStatus('active')} className={BTN} style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}>
             Reinstate
           </button>
         ) : (
-          <button disabled={busy} onClick={() => onStatus('suspended')} className={BTN} style={{ background: 'var(--color-surface)', color: '#f87171', border: '1px solid var(--color-border)' }}>
+          <button disabled={busy} onClick={() => onStatus('suspended')} className={BTN} style={{ background: 'var(--surface-1)', color: 'var(--tone-critical)', border: '1px solid var(--edge)' }}>
             Suspend
           </button>
         )}
@@ -269,12 +275,12 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
           disabled={busy}
           onClick={mint}
           className={BTN}
-          style={{ background: 'var(--color-surface)', color: ACCENT, border: '1px solid var(--color-border)' }}
+          style={{ background: 'var(--surface-1)', color: 'var(--accent)', border: '1px solid var(--edge)' }}
         >
           {busy ? 'Creating…' : isNew ? 'Create sign-in link' : 'Create a password-reset link'}
         </button>
-        {error && <p className="text-[11px] mt-1.5" style={{ color: '#f87171' }}>{error}</p>}
-        <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-1.5">
+        {error && <p className="text-[11px] mt-1.5" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
+        <p className="text-[10px] text-[var(--ink-3)] leading-snug mt-1.5">
           Send it to them yourself. It works once and expires in 7 days.
         </p>
       </div>
@@ -283,7 +289,7 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
 
   return (
     <div>
-      <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Send them this — you won’t see it again</span>
+      <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Send them this — you won’t see it again</span>
       <div className="flex gap-2">
         <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className={INPUT} style={{ ...inputStyle, fontSize: '11px' }} />
         <button
@@ -298,12 +304,12 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
             }
           }}
           className={BTN}
-          style={{ background: ACCENT, color: 'var(--color-bg)' }}
+          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
         >
           {copied ? 'Copied' : 'Copy'}
         </button>
       </div>
-      <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-1.5">
+      <p className="text-[10px] text-[var(--ink-3)] leading-snug mt-1.5">
         Only a hash is stored, so this cannot be looked up later — if it goes missing, issue another.
       </p>
     </div>
@@ -339,8 +345,8 @@ function CodePanel({ code, busy, onSave }: { code: PartnerCode; busy: boolean; o
 
       <label className="flex items-start gap-2 mb-3">
         <input type="checkbox" className="mt-0.5" checked={t.firstOrderOnly} onChange={(e) => setTerms({ firstOrderOnly: e.target.checked })} />
-        <span className="text-[11px] text-[var(--color-muted)] leading-snug">
-          <span className="font-bold text-[var(--color-text)]">First order only.</span> Leave this on unless you mean it —
+        <span className="text-[11px] text-[var(--ink-3)] leading-snug">
+          <span className="font-bold text-[var(--ink-1)]">First order only.</span> Leave this on unless you mean it —
           without it the code is a permanent site-wide discount the moment it reaches a deal site.
         </span>
       </label>
@@ -364,7 +370,7 @@ function CodePanel({ code, busy, onSave }: { code: PartnerCode; busy: boolean; o
         disabled={busy}
         onClick={() => onSave({ discountPct: pctOut(Number(discount) || 0), status, terms: t })}
         className={BTN}
-        style={{ background: ACCENT, color: 'var(--color-bg)' }}
+        style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
       >
         {busy ? 'Saving…' : 'Save code'}
       </button>
@@ -387,7 +393,7 @@ function ShareLink({ code }: { code: string }) {
 
   return (
     <div className="mb-3">
-      <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Their link</span>
+      <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Their link</span>
       <div className="flex gap-2">
         <input
           readOnly
@@ -408,7 +414,7 @@ function ShareLink({ code }: { code: string }) {
             }
           }}
           className={BTN}
-          style={{ background: 'var(--color-surface)', color: ACCENT, border: '1px solid var(--color-border)' }}
+          style={{ background: 'var(--surface-1)', color: 'var(--accent)', border: '1px solid var(--edge)' }}
         >
           {copied ? 'Copied' : 'Copy'}
         </button>
@@ -416,7 +422,7 @@ function ShareLink({ code }: { code: string }) {
       {/* The 30 days is the LINK's memory — how long a browser holds the
           referral — not how long the code works. Read the other way round it
           says a partner's deal expires in a month. */}
-      <span className="text-[10px] text-[var(--color-muted)] block mt-1 leading-snug">
+      <span className="text-[10px] text-[var(--ink-3)] block mt-1 leading-snug">
         Anyone following this gets the code applied at checkout without typing it. Their browser remembers it for 30
         days. The code itself does not expire — it works while the partner is active, unless you cap or end it above.
       </span>
@@ -441,8 +447,8 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
   return (
     <>
       <Group title="In force now" desc={`Since ${terms.effectiveFrom.slice(0, 10)}${terms.createdBy ? `, set by ${terms.createdBy}` : ''}.`}>
-        <p className="text-sm text-[var(--color-text)] leading-snug mb-1">{describeTerms(terms)}</p>
-        <p className="text-[11px] text-[var(--color-muted)] leading-snug">{describePayout(terms.payout)}</p>
+        <p className="text-sm text-[var(--ink-1)] leading-snug mb-1">{describeTerms(terms)}</p>
+        <p className="text-[11px] text-[var(--ink-3)] leading-snug">{describePayout(terms.payout)}</p>
       </Group>
 
       <Group
@@ -475,11 +481,11 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
 
         <label className="flex items-center gap-2 mb-2">
           <input type="checkbox" checked={payout.selfBilled} onChange={(e) => setPayout({ ...payout, selfBilled: e.target.checked })} />
-          <span className="text-[11px] text-[var(--color-muted)]">We raise the invoice for them (self-billed)</span>
+          <span className="text-[11px] text-[var(--ink-3)]">We raise the invoice for them (self-billed)</span>
         </label>
         <label className="flex items-center gap-2 mb-3">
           <input type="checkbox" checked={payout.chargesVat} onChange={(e) => setPayout({ ...payout, chargesVat: e.target.checked })} />
-          <span className="text-[11px] text-[var(--color-muted)]">
+          <span className="text-[11px] text-[var(--ink-3)]">
             VAT-registered — their commission costs 20% more than the rate says
           </span>
         </label>
@@ -487,7 +493,7 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
         {/* Not a <Field>: that renders a <label>, and a <button> inside a label
             is invalid markup that hands clicks to the wrong control. */}
         <div className="mb-3">
-          <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Takes effect</span>
+          <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Takes effect</span>
           <div className="flex gap-2 mb-2">
             {(['now', 'date'] as const).map((w) => (
               <button
@@ -496,9 +502,9 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
                 onClick={() => setWhen(w)}
                 className="px-3 py-1.5 rounded-full text-xs font-bold"
                 style={{
-                  background: when === w ? ACCENT : 'var(--color-surface)',
-                  color: when === w ? 'var(--color-bg)' : 'var(--color-muted)',
-                  border: '1px solid var(--color-border)',
+                  background: when === w ? 'var(--accent)' : 'var(--surface-1)',
+                  color: when === w ? 'var(--ground-base)' : 'var(--ink-3)',
+                  border: '1px solid var(--edge)',
                 }}
               >
                 {w === 'now' ? 'Immediately' : 'On a date'}
@@ -508,7 +514,7 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
           {when === 'date' && (
             <input type="date" className={INPUT} style={inputStyle} value={on} onChange={(e) => setOn(e.target.value)} />
           )}
-          <span className="text-[10px] text-[var(--color-muted)] block mt-1 leading-snug">
+          <span className="text-[10px] text-[var(--ink-3)] block mt-1 leading-snug">
             Cannot start before commission already earned at the current rate, or before the terms already recorded.
           </span>
         </div>
@@ -532,7 +538,7 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
             })
           }
           className={BTN}
-          style={{ background: ACCENT, color: 'var(--color-bg)' }}
+          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
         >
           {busy ? 'Saving…' : 'Record new terms'}
         </button>
@@ -577,7 +583,7 @@ function MoneyPanel({
 
   useEffect(() => { void load() }, [load])
 
-  if (!data) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!data) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const { balance, commissions, payouts } = data
 
@@ -588,17 +594,17 @@ function MoneyPanel({
         desc="Only money past the return window is payable. Anything newer could still be refunded away."
       >
         <div className="grid grid-cols-2 gap-2 mb-3">
-          <Figure label="Payable now" value={balance.payableNow} tone={balance.payableNow > 0 ? ACCENT : undefined} />
+          <Figure label="Payable now" value={balance.payableNow} tone={balance.payableNow > 0 ? 'var(--accent)' : undefined} />
           <Figure label="In the window" value={balance.accrued} />
           <Figure label="Paid to date" value={balance.paid} />
-          <Figure label="Reversed" value={balance.reversed} tone={balance.reversed > 0 ? '#f87171' : undefined} />
+          <Figure label="Reversed" value={balance.reversed} tone={balance.reversed > 0 ? 'var(--tone-critical)' : undefined} />
         </div>
         <div className="flex gap-2">
           <button
             disabled={busy || balance.payableNow <= 0}
             onClick={async () => { if (await onSettle(false)) await load() }}
             className={BTN}
-            style={{ background: ACCENT, color: 'var(--color-bg)' }}
+            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
           >
             {busy ? 'Working…' : 'Raise a payout'}
           </button>
@@ -606,7 +612,7 @@ function MoneyPanel({
             disabled={busy || balance.payableNow <= 0}
             onClick={async () => { if (await onSettle(true)) await load() }}
             className={BTN}
-            style={{ background: 'var(--color-surface)', color: 'var(--color-muted)', border: '1px solid var(--color-border)' }}
+            style={{ background: 'var(--surface-1)', color: 'var(--ink-3)', border: '1px solid var(--edge)' }}
             title="Pay it even though it is under their agreed minimum"
           >
             Ignore the minimum
@@ -616,17 +622,17 @@ function MoneyPanel({
 
       <Group title={`Payouts (${payouts.length})`} desc="Raised here; marked paid once the money has actually gone.">
         {payouts.length === 0 ? (
-          <p className="text-[11px] text-[var(--color-muted)]">None yet.</p>
+          <p className="text-[11px] text-[var(--ink-3)]">None yet.</p>
         ) : (
           <div className="space-y-1.5">
             {payouts.map((p) => (
               <div key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-[var(--color-text-2)]">{p.period} · {money(p.amount)}</span>
+                <span className="text-[var(--ink-2)]">{p.period} · {money(p.amount)}</span>
                 <span
                   className="font-bold px-2 py-0.5 rounded-full"
                   style={{
-                    color: p.state === 'paid' ? '#34d399' : '#fbbf24',
-                    background: `color-mix(in srgb, ${p.state === 'paid' ? '#34d399' : '#fbbf24'} 14%, transparent)`,
+                    color: p.state === 'paid' ? 'var(--tone-positive)' : 'var(--tone-attention)',
+                    background: `color-mix(in srgb, ${p.state === 'paid' ? 'var(--tone-positive)' : 'var(--tone-attention)'} 14%, transparent)`,
                   }}
                 >
                   {p.state === 'paid' ? 'paid' : 'due'}
@@ -639,22 +645,22 @@ function MoneyPanel({
 
       <Group title={`Commissions (${commissions.length})`} desc="The rate stored is the one that applied on the day, not today's.">
         {commissions.length === 0 ? (
-          <p className="text-[11px] text-[var(--color-muted)]">Nothing earned yet.</p>
+          <p className="text-[11px] text-[var(--ink-3)]">Nothing earned yet.</p>
         ) : (
           <div className="space-y-1.5">
             {commissions.slice(0, 40).map((c) => (
               <div key={c.id} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-[var(--color-text-2)] truncate">
+                <span className="text-[var(--ink-2)] truncate">
                   {c.createdAt.slice(0, 10)} · {c.kind} · {Math.round(c.rate * 100)}% of {money(c.netBasis)}
                 </span>
                 <span className="flex items-center gap-2 flex-shrink-0">
                   <span
                     className="font-semibold"
-                    style={{ color: c.state === 'reversed' ? '#f87171' : 'var(--color-text)', textDecoration: c.state === 'reversed' ? 'line-through' : undefined }}
+                    style={{ color: c.state === 'reversed' ? 'var(--tone-critical)' : 'var(--ink-1)', textDecoration: c.state === 'reversed' ? 'line-through' : undefined }}
                   >
                     {money(c.amount)}
                   </span>
-                  <span className="text-[10px] text-[var(--color-muted)]">{c.state}</span>
+                  <span className="text-[10px] text-[var(--ink-3)]">{c.state}</span>
                 </span>
               </div>
             ))}
@@ -667,9 +673,9 @@ function MoneyPanel({
 
 function Figure({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
-    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">{label}</p>
-      <p className="text-sm font-black" style={{ color: tone ?? 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)' }}>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{label}</p>
+      <p className="text-sm font-black" style={{ color: tone ?? 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
         {money(value)}
       </p>
     </div>
@@ -685,31 +691,31 @@ function HistoryPanel({ history }: { history: PartnerTerms[] }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-[var(--color-muted)] leading-snug mb-1">
+      <p className="text-[11px] text-[var(--ink-3)] leading-snug mb-1">
         Every deal this partner has been on, newest first. Nothing here is ever edited or removed — it is what we told a
         counterparty, and they can read the same list.
       </p>
       {history.map((t, i) => (
-        <div key={t.id} className="rounded-2xl border border-[var(--color-border)] p-4" style={{ background: 'var(--color-surface-2)' }}>
+        <div key={t.id} className="rounded-2xl border border-[var(--edge)] p-4" style={{ background: 'var(--surface-2)' }}>
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-xs font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+            <p className="text-xs font-black text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
               From {when(t.effectiveFrom)}
             </p>
             {i === 0 && new Date(t.effectiveFrom) <= new Date() && (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 14%, transparent)` }}>
+              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: 'var(--accent)', background: `var(--accent-fill)` }}>
                 In force
               </span>
             )}
             {i === 0 && new Date(t.effectiveFrom) > new Date() && (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: '#fbbf24', background: 'color-mix(in srgb, #fbbf24 14%, transparent)' }}>
+              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: 'var(--tone-attention)', background: 'color-mix(in srgb, var(--tone-attention) 14%, transparent)' }}>
                 Starts later
               </span>
             )}
           </div>
-          <p className="text-[12px] text-[var(--color-text)] leading-snug">{describeTerms(t)}</p>
-          <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-1">{describePayout(t.payout)}</p>
-          {t.note && <p className="text-[11px] text-[var(--color-muted)] leading-snug mt-2 italic">“{t.note}”</p>}
-          {t.createdBy && <p className="text-[10px] text-[var(--color-muted)] mt-1">— {t.createdBy}</p>}
+          <p className="text-[12px] text-[var(--ink-1)] leading-snug">{describeTerms(t)}</p>
+          <p className="text-[11px] text-[var(--ink-3)] leading-snug mt-1">{describePayout(t.payout)}</p>
+          {t.note && <p className="text-[11px] text-[var(--ink-3)] leading-snug mt-2 italic">“{t.note}”</p>}
+          {t.createdBy && <p className="text-[10px] text-[var(--ink-3)] mt-1">— {t.createdBy}</p>}
         </div>
       ))}
     </div>

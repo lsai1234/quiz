@@ -2,9 +2,6 @@
 
 import type { LadderCheck } from '@/lib/pricing/ladder'
 
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 const money = (n: number) => `£${n.toFixed(2)}`
 const pct = (n: number) => `${Math.round(n * 1000) / 10}%`
@@ -32,7 +29,7 @@ const LABEL: Record<string, string> = {
  * it — change a rate and the verdict moves under your hand.
  */
 export function LadderPanel({ check, compact = false }: { check: LadderCheck; compact?: boolean }) {
-  const tone = check.coherent ? GREEN : RED
+  const tone = check.coherent ? 'var(--tone-positive)' : 'var(--tone-critical)'
 
   return (
     <div
@@ -42,7 +39,7 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
         borderColor: `color-mix(in srgb, ${tone} 40%, transparent)`,
       }}
     >
-      <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--color-muted)]">
+      <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)]">
         Is there a reason to subscribe?
       </p>
       <p
@@ -51,28 +48,28 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
       >
         {check.coherent ? 'Yes — every bundle beats buying once' : 'Not on every bundle'}
       </p>
-      <p className="text-[11px] text-[var(--color-text-2)] leading-relaxed mb-3">{check.summary}</p>
+      <p className="text-[11px] text-[var(--ink-2)] leading-relaxed mb-3">{check.summary}</p>
 
       <div className="space-y-1.5">
         {check.rungs.map((r) => {
-          const rowTone = !r.healthy ? (r.advantage < 0 ? RED : AMBER) : GREEN
+          const rowTone = !r.healthy ? (r.advantage < 0 ? 'var(--tone-critical)' : 'var(--tone-attention)') : 'var(--tone-positive)'
           return (
-            <div key={r.level} className="border-b border-[var(--color-border)] last:border-0 pb-1.5 last:pb-0">
+            <div key={r.level} className="border-b border-[var(--edge)] last:border-0 pb-1.5 last:pb-0">
               <div className="flex items-baseline justify-between gap-2 flex-wrap">
-                <span className="text-[11px] text-[var(--color-text-2)]">
-                  <strong className="text-[var(--color-text)]">{LABEL[r.level] ?? r.level}</strong>{' '}
-                  <span className="text-[var(--color-muted)]">
+                <span className="text-[11px] text-[var(--ink-2)]">
+                  <strong className="text-[var(--ink-1)]">{LABEL[r.level] ?? r.level}</strong>{' '}
+                  <span className="text-[var(--ink-3)]">
                     {r.items} items, {money(r.listPrice)}
                   </span>
                 </span>
                 <span className="text-[11px] whitespace-nowrap">
-                  <span className="text-[var(--color-muted)]">
+                  <span className="text-[var(--ink-3)]">
                     buy once {pct(r.oneOffPct)} → subscribe {pct(r.subscriptionPct)}
                   </span>{' '}
                   <strong style={{ color: rowTone }}>{pp(r.advantage)}</strong>
                 </span>
               </div>
-              <p className="text-[10px] text-[var(--color-muted)]">
+              <p className="text-[10px] text-[var(--ink-3)]">
                 On a {money(r.listPrice)} box: {money(r.paysSubscribed)} on a plan against{' '}
                 {money(r.paysOneOff)} buying once — {money(round2(r.paysOneOff - r.paysSubscribed))} a month better off.
               </p>
@@ -88,7 +85,7 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
 
       {check.clipped && (
         <p className="text-[11px] mt-2.5 rounded-lg px-2.5 py-2 leading-relaxed"
-          style={{ background: `color-mix(in srgb, ${AMBER} 12%, transparent)`, color: AMBER }}>
+          style={{ background: `var(--attention-fill)`, color: 'var(--tone-attention)' }}>
           <strong>The biggest bundle plus the deepest first month promises more than we can give.</strong> Together
           they ask for {pct(check.clipped.advertised)} off, but a price set at {check.markupOnCost}× what we pay can
           only go to {pct(check.clipped.delivered)} before it is below cost. Someone taking the deepest first month
@@ -96,7 +93,7 @@ export function LadderPanel({ check, compact = false }: { check: LadderCheck; co
           down, or accept selling that month nearer cost.
         </p>
       )}
-      <p className="text-[10px] text-[var(--color-muted)] mt-2.5 leading-relaxed">
+      <p className="text-[10px] text-[var(--ink-3)] mt-2.5 leading-relaxed">
         Prices are {check.markupOnCost}× what we pay, and nothing is ever sold below cost plus a little — so the most
         that can come off any product is <strong>{pct(check.deepestPossibleDiscount)}</strong>, whatever the discounts
         add up to. The deepest we currently offer is {pct(check.deepestOffered)}.

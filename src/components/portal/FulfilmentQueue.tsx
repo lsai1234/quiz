@@ -2,22 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { Button } from '@/components/system'
 import type { FulfilmentQueue as Queue, QueueKind, QueueOrder } from '@/lib/orders/queue'
 import { OrderingModeBanner } from './OrderSendingToggle'
 
 /** The queue endpoint adds the current ordering mode to the queue payload. */
 type QueueWithOrdering = Queue & { ordering?: 'simulate' | 'live' }
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
 
 const REVIEW: Record<string, { label: string; colour: string }> = {
-  pending: { label: 'Needs review', colour: AMBER },
-  approved: { label: 'Ready to send', colour: GREEN },
-  held: { label: 'On hold', colour: AMBER },
-  rejected: { label: 'Rejected', colour: RED },
+  pending: { label: 'Needs review', colour: 'var(--tone-attention)' },
+  approved: { label: 'Ready to send', colour: 'var(--tone-positive)' },
+  held: { label: 'On hold', colour: 'var(--tone-attention)' },
+  rejected: { label: 'Rejected', colour: 'var(--tone-critical)' },
 }
 
 const money = (n: number, ccy = 'GBP') => `${ccy === 'GBP' ? '£' : ''}${n.toFixed(2)}`
@@ -110,7 +107,7 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
       return next
     })
 
-  if (!queue) return <p className="text-sm text-[var(--color-muted)]">Loading the queue…</p>
+  if (!queue) return <p className="text-sm text-[var(--ink-3)]">Loading the queue…</p>
 
   const selectedIds = [...selected]
 
@@ -118,15 +115,15 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
     <div className="space-y-4">
       {/* Counts */}
       <div className="grid grid-cols-3 gap-3">
-        <Stat n={queue.pending} label="Need review" colour={queue.pending > 0 ? AMBER : GREEN} />
-        <Stat n={queue.readyToSend} label="Ready to send" colour={queue.readyToSend > 0 ? ACCENT : 'var(--color-muted)'} />
-        <Stat n={queue.held + queue.rejected} label="Held / rejected" colour={queue.held + queue.rejected > 0 ? RED : 'var(--color-muted)'} />
+        <Stat n={queue.pending} label="Need review" colour={queue.pending > 0 ? 'var(--tone-attention)' : 'var(--tone-positive)'} />
+        <Stat n={queue.readyToSend} label="Ready to send" colour={queue.readyToSend > 0 ? 'var(--accent)' : 'var(--ink-3)'} />
+        <Stat n={queue.held + queue.rejected} label="Held / rejected" colour={queue.held + queue.rejected > 0 ? 'var(--tone-critical)' : 'var(--ink-3)'} />
       </div>
 
       <OrderingModeBanner ordering={queue.ordering} />
 
       {queue.undeliverable > 0 && (
-        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${RED} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${RED} 40%, transparent)`, color: '#fca5a5' }}>
+        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `var(--critical-fill)`, border: `1px solid var(--critical-line)`, color: 'var(--tone-critical)' }}>
           <strong>{queue.undeliverable} order{queue.undeliverable === 1 ? '' : 's'} PowerBody will not ship to.</strong>{' '}
           Northern Ireland, Guernsey, Jersey and anywhere outside the UK are off-limits on a UK dropshipping account.
           These look like ordinary UK orders — refund {queue.undeliverable === 1 ? 'it' : 'them'} rather than leaving
@@ -135,53 +132,53 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
       )}
 
       {queue.blocked > queue.undeliverable && (
-        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, ${AMBER} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${AMBER} 30%, transparent)`, color: AMBER }}>
+        <p className="text-xs rounded-xl px-3 py-2" style={{ background: `var(--attention-fill)`, border: `1px solid var(--attention-line)`, color: 'var(--tone-attention)' }}>
           {queue.blocked - queue.undeliverable} more can&apos;t be sent as {queue.blocked - queue.undeliverable === 1 ? 'it stands' : 'they stand'} — missing a supplier SKU or a delivery address.
         </p>
       )}
 
       {/* Bulk actions */}
       <div className="flex flex-wrap gap-2 items-center">
-        <button onClick={() => setSelected(new Set(allPending))} disabled={allPending.length === 0} className={BTN} style={{ borderColor: 'var(--color-border)', color: 'var(--color-text-2)' }}>
+        <Button variant="secondary" size="sm" onClick={() => setSelected(new Set(allPending))} disabled={allPending.length === 0}>
           Select all needing review ({allPending.length})
-        </button>
-        <button onClick={() => act(selectedIds, 'approve')} disabled={busy || selectedIds.length === 0} className={BTN} style={{ borderColor: `color-mix(in srgb, ${GREEN} 40%, transparent)`, color: GREEN }}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => act(selectedIds, 'approve')} disabled={busy || selectedIds.length === 0}>
           Approve {selectedIds.length || ''}
-        </button>
-        <button onClick={() => act(selectedIds, 'hold')} disabled={busy || selectedIds.length === 0} className={BTN} style={{ borderColor: 'var(--color-border)', color: AMBER }}>
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => act(selectedIds, 'hold')} disabled={busy || selectedIds.length === 0}>
           Hold
-        </button>
-        <button onClick={() => act(selectedIds, 'reject')} disabled={busy || selectedIds.length === 0} className={BTN} style={{ borderColor: 'var(--color-border)', color: RED }}>
+        </Button>
+        <Button variant="destructive" size="sm" onClick={() => act(selectedIds, 'reject')} disabled={busy || selectedIds.length === 0}>
           Reject
-        </button>
+        </Button>
         <span className="flex-1" />
-        <button onClick={() => act(readyIds, 'send')} disabled={busy || readyIds.length === 0} className={BTN} style={{ background: ACCENT, borderColor: ACCENT, color: '#001018' }}>
+        <Button variant="primary" size="sm" onClick={() => act(readyIds, 'send')} disabled={busy || readyIds.length === 0}>
           {busy
             ? 'Working…'
             : queue.ordering === 'simulate'
               ? `Simulate sending ${readyIds.length} approved`
               : `Send ${readyIds.length} approved to PowerBody`}
-        </button>
+        </Button>
       </div>
 
-      {message && <p className="text-xs text-[var(--color-muted)]">{message}</p>}
-      {error && <p className="text-xs" style={{ color: RED }}>{error}</p>}
+      {message && <p className="text-xs text-[var(--ink-3)]">{message}</p>}
+      {error && <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
 
       {/* Days */}
       {queue.days.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted)] py-8 text-center">
+        <p className="text-sm text-[var(--ink-3)] py-8 text-center">
           Nothing waiting. Every paid order has been reviewed and sent.
         </p>
       ) : (
         queue.days.map((day) => (
           <section key={day.date}>
             <div className="flex items-baseline justify-between gap-2 mb-2">
-              <h2 className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              <h2 className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
                 {dayLabel(day.date)}
               </h2>
-              <p className="text-[11px] text-[var(--color-muted)]">
+              <p className="text-[11px] text-[var(--ink-3)]">
                 {day.orders.length} order{day.orders.length === 1 ? '' : 's'} · {money(day.total)}
-                {day.pending > 0 && <span style={{ color: AMBER }}> · {day.pending} to review</span>}
+                {day.pending > 0 && <span style={{ color: 'var(--tone-attention)' }}> · {day.pending} to review</span>}
               </p>
             </div>
 
@@ -190,15 +187,15 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                 const blocked = blockedReason(o)
                 const meta = REVIEW[o.review] ?? REVIEW.pending
                 return (
-                  <div key={o.id} className="rounded-2xl border p-3.5" style={{ background: 'var(--color-surface)', borderColor: blocked && o.review === 'pending' ? `color-mix(in srgb, ${RED} 35%, transparent)` : 'var(--color-border)' }}>
+                  <div key={o.id} className="rounded-2xl border p-3.5" style={{ background: 'var(--surface-1)', borderColor: blocked && o.review === 'pending' ? `var(--critical-line)` : 'var(--edge)' }}>
                     <div className="flex items-start gap-3">
                       <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} className="mt-1 shrink-0" aria-label={`Select ${o.reference ?? o.id}`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <Link href={`/founderhub/commerce/orders/${o.id}`} className="text-sm font-bold text-[var(--color-text)] underline" style={{ fontFamily: 'var(--font-display)' }}>
+                          <Link href={`/founderhub/commerce/orders/${o.id}`} className="text-sm font-bold text-[var(--ink-1)] underline" style={{ fontFamily: 'var(--font-display)' }}>
                             {o.reference ?? o.id}
                           </Link>
-                          <span className="text-[10px] font-semibold uppercase text-[var(--color-muted)]">
+                          <span className="text-[10px] font-semibold uppercase text-[var(--ink-3)]">
                             {o.kind === 'subscription' ? 'subscription' : o.channel}
                           </span>
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
@@ -206,10 +203,10 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                             {meta.label}
                           </span>
                         </div>
-                        <p className="text-[11px] text-[var(--color-muted)] mt-0.5 truncate">
+                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5 truncate">
                           {o.email ?? 'guest'} · {o.itemCount} item{o.itemCount === 1 ? '' : 's'} · {new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           {o.deliveryZone === 'uk-2' && (
-                            <span style={{ color: AMBER }}>
+                            <span style={{ color: 'var(--tone-attention)' }}>
                               {' '}
                               · Highlands rate
                               {/* They picked their own zone at checkout, before Stripe knew
@@ -220,20 +217,20 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                           )}
                           {o.supplierCost != null && ` · costs us ${money(o.supplierCost, o.currency)}`}
                         </p>
-                        {blocked && <p className="text-[11px] mt-1" style={{ color: RED }}>Can&apos;t send — {blocked}.</p>}
-                        {o.reviewNote && <p className="text-[11px] mt-1 text-[var(--color-text-2)]">“{o.reviewNote}”</p>}
+                        {blocked && <p className="text-[11px] mt-1" style={{ color: 'var(--tone-critical)' }}>Can&apos;t send — {blocked}.</p>}
+                        {o.reviewNote && <p className="text-[11px] mt-1 text-[var(--ink-2)]">“{o.reviewNote}”</p>}
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-bold text-[var(--color-text)]">{money(o.total, o.currency)}</p>
+                        <p className="text-sm font-bold text-[var(--ink-1)]">{money(o.total, o.currency)}</p>
                         <div className="flex gap-1.5 mt-1.5 justify-end">
                           {o.review === 'pending' && (
-                            <button onClick={() => act([o.id], 'approve')} disabled={busy} className={SMALL} style={{ color: GREEN, borderColor: `color-mix(in srgb, ${GREEN} 40%, transparent)` }}>Approve</button>
+                            <Button variant="secondary" size="sm" onClick={() => act([o.id], 'approve')} disabled={busy}>Approve</Button>
                           )}
                           {o.review === 'approved' && (
-                            <button onClick={() => act([o.id], 'send')} disabled={busy} className={SMALL} style={{ color: '#001018', background: ACCENT, borderColor: ACCENT }}>Send</button>
+                            <Button variant="primary" size="sm" onClick={() => act([o.id], 'send')} disabled={busy}>Send</Button>
                           )}
                           {(o.review === 'held' || o.review === 'rejected') && (
-                            <button onClick={() => act([o.id], 'return')} disabled={busy} className={SMALL} style={{ color: 'var(--color-text-2)', borderColor: 'var(--color-border)' }}>Reopen</button>
+                            <Button variant="secondary" size="sm" onClick={() => act([o.id], 'return')} disabled={busy}>Reopen</Button>
                           )}
                         </div>
                       </div>
@@ -249,8 +246,6 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
   )
 }
 
-const BTN = 'text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40'
-const SMALL = 'text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-40'
 
 const PAST: Record<string, string> = {
   approve: 'approved',
@@ -269,9 +264,9 @@ const SIMULATED_PAST: Record<string, string> = {
 
 function Stat({ n, label, colour }: { n: number; label: string; colour: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 text-center">
+    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 text-center">
       <p className="text-2xl font-black" style={{ color: colour, fontFamily: 'var(--font-display)' }}>{n}</p>
-      <p className="text-[11px] text-[var(--color-muted)] mt-0.5">{label}</p>
+      <p className="text-[11px] text-[var(--ink-3)] mt-0.5">{label}</p>
     </div>
   )
 }

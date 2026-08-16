@@ -19,13 +19,13 @@ export default function Page() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Exits &amp; returns
         </h2>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">
+        <p className="text-sm text-[var(--ink-3)] mt-0.5">
           Every plan that has ended, what it settled, what is still outstanding, and every parcel on its way back.
         </p>
-        <p className="text-[11px] text-[var(--color-muted)] mt-1">
+        <p className="text-[11px] text-[var(--ink-3)] mt-1">
           Waiving, writing off and settling a return all take a note — they are decisions, and someone will ask
           about them later.
         </p>

@@ -9,12 +9,11 @@ import type { PartnerRecord } from '@/lib/partners/types'
 import type { PartnerPerformance } from '@/lib/partners/performance'
 import type { PartnerBalance } from '@/lib/partners/types'
 
-const ACCENT = '#00D4FF'
 
 const STATUS_COLOUR: Record<string, string> = {
-  active: '#34d399',
-  invited: '#fbbf24',
-  suspended: '#f87171',
+  active: 'var(--tone-positive)',
+  invited: 'var(--tone-attention)',
+  suspended: 'var(--tone-critical)',
 }
 
 interface PerfRow { partnerId: string; codes: PartnerPerformance[]; balance?: PartnerBalance }
@@ -82,7 +81,7 @@ export function PartnersPage() {
         <button
           onClick={() => setCreating((c) => !c)}
           className="text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all"
-          style={{ background: creating ? 'var(--color-surface-2)' : ACCENT, color: creating ? 'var(--color-muted)' : 'var(--color-bg)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}
+          style={{ background: creating ? 'var(--surface-2)' : 'var(--accent)', color: creating ? 'var(--ink-3)' : 'var(--ground-base)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}
         >
           {creating ? 'Cancel' : '+ New partner'}
         </button>
@@ -104,14 +103,14 @@ export function PartnersPage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search name, email or code…"
           className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-3"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
       )}
 
       {records === null ? (
-        <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-[var(--color-muted)] text-center py-8">
+        <p className="text-sm text-[var(--ink-3)] text-center py-8">
           {records.length === 0 ? 'No partners yet. Create one to generate their code.' : 'Nobody matches.'}
         </p>
       ) : (
@@ -122,21 +121,21 @@ export function PartnersPage() {
               <button
                 key={r.partner.id}
                 onClick={() => setOpen(r.partner.id)}
-                className="w-full text-left rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 active:scale-[0.99] transition-all"
+                className="w-full text-left rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 active:scale-[0.99] transition-all"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: STATUS_COLOUR[r.partner.status] ?? 'var(--color-muted)' }} />
-                      <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.partner.name}</p>
+                      <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: STATUS_COLOUR[r.partner.status] ?? 'var(--ink-3)' }} />
+                      <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{r.partner.name}</p>
                       {code && (
                         <span className="text-[10px] font-black tracking-wide px-2 py-0.5 rounded-full flex-shrink-0"
-                          style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 14%, transparent)` }}>
+                          style={{ color: 'var(--accent)', background: `var(--accent-fill)` }}>
                           {code.code}
                         </span>
                       )}
                     </div>
-                    <p className="text-[11px] text-[var(--color-muted)] mt-0.5 truncate">
+                    <p className="text-[11px] text-[var(--ink-3)] mt-0.5 truncate">
                       {code ? `${Math.round(code.discountPct * 100)}% off` : 'no code'} · {describeTerms(r.terms)}
                     </p>
                     {(() => {
@@ -145,7 +144,7 @@ export function PartnersPage() {
                       const owed = perf?.balance
                       if (!t) return null
                       return (
-                        <p className="text-[11px] mt-1 font-semibold" style={{ color: t.orders > 0 ? ACCENT : 'var(--color-muted)' }}>
+                        <p className="text-[11px] mt-1 font-semibold" style={{ color: t.orders > 0 ? 'var(--accent)' : 'var(--ink-3)' }}>
                           {t.orders === 0
                             ? 'No orders yet'
                             : `${t.orders} order${t.orders === 1 ? '' : 's'} · £${t.revenue.toFixed(2)}` +
@@ -154,16 +153,16 @@ export function PartnersPage() {
                           {/* Owed is a different question from brought in — only
                               money past the return window is actually payable. */}
                           {owed && owed.payableNow > 0 && (
-                            <span style={{ color: '#34d399' }}> · £{owed.payableNow.toFixed(2)} owed</span>
+                            <span style={{ color: 'var(--tone-positive)' }}> · £{owed.payableNow.toFixed(2)} owed</span>
                           )}
                           {owed && owed.payableNow === 0 && owed.accrued > 0 && (
-                            <span style={{ color: 'var(--color-muted)' }}> · £{owed.accrued.toFixed(2)} in the window</span>
+                            <span style={{ color: 'var(--ink-3)' }}> · £{owed.accrued.toFixed(2)} in the window</span>
                           )}
                         </p>
                       )
                     })()}
                   </div>
-                  <span className="text-xs font-bold text-[var(--color-muted)] flex-shrink-0">Manage →</span>
+                  <span className="text-xs font-bold text-[var(--ink-3)] flex-shrink-0">Manage →</span>
                 </div>
               </button>
             )
@@ -226,33 +225,33 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
   }
 
   const input = 'w-full px-3 py-2 rounded-xl text-sm outline-none'
-  const style = { background: 'var(--color-surface)', border: '1px solid var(--color-border)', color: 'var(--color-text)' } as const
+  const style = { background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
 
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] p-4 mb-4" style={{ background: 'var(--color-surface-2)' }}>
-      <p className="text-xs font-black text-[var(--color-text)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>New partner</p>
+    <div className="rounded-2xl border border-[var(--edge)] p-4 mb-4" style={{ background: 'var(--surface-2)' }}>
+      <p className="text-xs font-black text-[var(--ink-1)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>New partner</p>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <label className="block">
-          <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Name</span>
+          <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Name</span>
           <input className={input} style={style} value={name} onChange={(e) => setName(e.target.value)} placeholder="Sarah Jones" />
         </label>
         <label className="block">
-          <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Email</span>
+          <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Email</span>
           <input className={input} style={style} type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="sarah@example.com" />
         </label>
         <label className="block">
-          <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Follower discount (%)</span>
+          <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Follower discount (%)</span>
           <input className={input} style={style} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
         </label>
         <label className="block">
-          <span className="text-[11px] font-bold text-[var(--color-muted)] block mb-1">Code</span>
+          <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Code</span>
           <input className={input} style={style} value={code} onChange={(e) => setCode(e.target.value)} placeholder={suggested || 'auto'} />
         </label>
       </div>
 
-      <p className="text-[11px] text-[var(--color-muted)] leading-snug mb-3">
-        {suggested && !code.trim() ? <>Their code will be <strong className="text-[var(--color-text)]">{suggested}</strong>. </> : null}
+      <p className="text-[11px] text-[var(--ink-3)] leading-snug mb-3">
+        {suggested && !code.trim() ? <>Their code will be <strong className="text-[var(--ink-1)]">{suggested}</strong>. </> : null}
         It takes that much off the regular price of stacks, curated bundles and subscriptions — replacing the
         bundle deal or the first month of Subscribe &amp; Save, not stacking on top — and does nothing on
         single products from the shop.{' '}
@@ -263,13 +262,13 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
         })} Change it per partner once they exist.
       </p>
 
-      {error && <p className="text-xs font-semibold mb-3 px-3 py-2 rounded-xl" style={{ color: '#f87171', background: 'color-mix(in srgb, #f87171 12%, transparent)' }}>{error}</p>}
+      {error && <p className="text-xs font-semibold mb-3 px-3 py-2 rounded-xl" style={{ color: 'var(--tone-critical)', background: 'color-mix(in srgb, var(--tone-critical) 12%, transparent)' }}>{error}</p>}
 
       <button
         disabled={busy || !name.trim() || !email.trim()}
         onClick={create}
         className="text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all disabled:opacity-40"
-        style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+        style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }}
       >
         {busy ? 'Creating…' : 'Create partner & code'}
       </button>

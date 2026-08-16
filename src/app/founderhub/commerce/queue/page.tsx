@@ -24,11 +24,11 @@ export default function QueuePage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Daily review queue
         </h2>
-        <p className="text-sm text-[var(--color-muted)] mt-0.5">{active.blurb}</p>
-        <p className="text-[11px] text-[var(--color-muted)] mt-1">
+        <p className="text-sm text-[var(--ink-3)] mt-0.5">{active.blurb}</p>
+        <p className="text-[11px] text-[var(--ink-3)] mt-1">
           Nothing is ordered from PowerBody until you approve it — including subscription renewals.
         </p>
       </div>
@@ -40,9 +40,9 @@ export default function QueuePage() {
             onClick={() => setTab(t.value)}
             className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
             style={{
-              background: tab === t.value ? 'var(--color-accent)' : 'var(--color-surface-2)',
-              color: tab === t.value ? 'var(--color-bg)' : 'var(--color-muted)',
-              border: '1px solid var(--color-border)',
+              background: tab === t.value ? 'var(--accent)' : 'var(--surface-2)',
+              color: tab === t.value ? 'var(--ground-base)' : 'var(--ink-3)',
+              border: '1px solid var(--edge)',
             }}
           >
             {t.label}

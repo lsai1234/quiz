@@ -4,8 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { setDataSourceOverride, type DataSourceMode } from '@/lib/data-source'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 
-const ACCENT = '#00D4FF'
-const AMBER = '#fbbf24'
 
 const OPTIONS: { mode: DataSourceMode; label: string; desc: string }[] = [
   {
@@ -80,7 +78,7 @@ export function DataSourceToggle() {
     }
   }
 
-  if (!data) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!data) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const isReal = data.effective === 'real'
   const realButEmpty = isReal && data.importedCount === 0
@@ -97,21 +95,21 @@ export function DataSourceToggle() {
               disabled={saving}
               className="w-full text-left rounded-2xl border p-4 transition-all active:scale-[0.99] disabled:opacity-50"
               style={{
-                background: active ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'var(--color-surface)',
-                borderColor: active ? `color-mix(in srgb, ${ACCENT} 40%, transparent)` : 'var(--color-border)',
+                background: active ? `var(--accent-fill)` : 'var(--surface-1)',
+                borderColor: active ? `var(--accent-line)` : 'var(--edge)',
               }}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                <span className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
                   {o.label}
                 </span>
                 {active && (
-                  <span className="text-[10px] font-bold uppercase whitespace-nowrap" style={{ color: ACCENT }}>
+                  <span className="text-[10px] font-bold uppercase whitespace-nowrap" style={{ color: 'var(--accent)' }}>
                     Selected
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[var(--color-muted)] mt-0.5 leading-relaxed">{o.desc}</p>
+              <p className="text-xs text-[var(--ink-3)] mt-0.5 leading-relaxed">{o.desc}</p>
             </button>
           )
         })}
@@ -120,27 +118,27 @@ export function DataSourceToggle() {
       {/* What's actually being served */}
       <div
         className="text-xs rounded-xl p-3.5 space-y-1.5"
-        style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+        style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}
       >
-        <p className="text-[var(--color-text-2)]">
+        <p className="text-[var(--ink-2)]">
           Now serving:{' '}
-          <strong style={{ color: isReal ? ACCENT : 'var(--color-text)' }}>
+          <strong style={{ color: isReal ? 'var(--accent)' : 'var(--ink-1)' }}>
             {isReal ? 'Real catalogue' : 'Mock catalogue'}
           </strong>
         </p>
         {sample && (
-          <p className="text-[var(--color-muted)]">
+          <p className="text-[var(--ink-3)]">
             {sample.count} product{sample.count === 1 ? '' : 's'}
             {sample.titles.length ? ` — e.g. ${sample.titles.join(', ')}` : ''}.
           </p>
         )}
         {realButEmpty ? (
-          <p style={{ color: AMBER }} className="leading-relaxed pt-1">
+          <p style={{ color: 'var(--tone-attention)' }} className="leading-relaxed pt-1">
             <strong>Nothing added yet, so the shop is empty.</strong> Go to Products → PowerBody and add the products
             you want to sell. They appear here as soon as you do.
           </p>
         ) : (
-          <p className="text-[var(--color-muted)] pt-1">The quiz, hub and subscriptions use this on their next page load.</p>
+          <p className="text-[var(--ink-3)] pt-1">The quiz, hub and subscriptions use this on their next page load.</p>
         )}
       </div>
     </div>

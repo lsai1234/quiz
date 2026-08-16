@@ -10,8 +10,9 @@ import { assembleBundle, bundleToDraft, emptyDraft, type BundleDraft } from '@/l
 import { bundleReadiness } from '@/lib/bundles/readiness'
 import { calculatePricing, formatGBP } from '@/lib/stack-blueprint/pricing'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
+import { Input, Modal, ModalBody, ModalHeader } from '@/components/system'
 
-const DOT: Record<'ok' | 'warn' | 'fail', string> = { ok: '#34d399', warn: '#fbbf24', fail: '#f87171' }
+const DOT: Record<'ok' | 'warn' | 'fail', string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
 const GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
 interface Props {
@@ -23,18 +24,18 @@ interface Props {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
+      <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--ink-3)]" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
       <div className="mt-1">{children}</div>
     </label>
   )
 }
 const inputCls = 'w-full px-3 py-2 rounded-xl text-sm outline-none'
-const inputStyle = { background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' } as const
+const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3">
-      <h2 className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{title}</h2>
+    <section className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 space-y-3">
+      <h2 className="text-sm font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{title}</h2>
       {children}
     </section>
   )
@@ -106,8 +107,8 @@ export function BundleEditor({ initial, isNew }: Props) {
     <div className="space-y-4 pb-24">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <button onClick={() => router.push('/founderhub/products/bundles')} className="text-[11px] font-semibold text-[var(--color-muted)] mb-1">← Bundles</button>
-          <h1 className="text-2xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          <button onClick={() => router.push('/founderhub/products/bundles')} className="text-[11px] font-semibold text-[var(--ink-3)] mb-1">← Bundles</button>
+          <h1 className="text-2xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
             {isNew ? 'New bundle' : `Edit — ${initial?.name}`}
           </h1>
         </div>
@@ -115,28 +116,28 @@ export function BundleEditor({ initial, isNew }: Props) {
           onClick={() => setPreview(true)}
           disabled={draft.cores.length === 0}
           className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
-          style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}
+          style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}
         >
           Preview
         </button>
       </div>
 
-      {error && <div className="rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-2.5 text-xs text-[var(--color-red)]">{error}</div>}
+      {error && <div className="rounded-xl border border-[var(--tone-critical)]/30 bg-[var(--tone-critical)]/8 px-4 py-2.5 text-xs text-[var(--tone-critical)]">{error}</div>}
 
       {/* Live readiness + price */}
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4 flex items-center justify-between gap-3 flex-wrap">
+      <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3 text-xs">
           {pricing ? (
             <>
-              <span className="font-black" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>{formatGBP(pricing.oneOffTotal)}</span>
-              <span className="text-[var(--color-muted)]">one-off · {pricing.subscriptionMinOrderMet ? `${formatGBP(pricing.subscriptionTotal)}/mo` : 'no monthly'}</span>
+              <span className="font-black" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>{formatGBP(pricing.oneOffTotal)}</span>
+              <span className="text-[var(--ink-3)]">one-off · {pricing.subscriptionMinOrderMet ? `${formatGBP(pricing.subscriptionTotal)}/mo` : 'no monthly'}</span>
             </>
-          ) : <span className="text-[var(--color-muted)]">Add a product to price the bundle</span>}
+          ) : <span className="text-[var(--ink-3)]">Add a product to price the bundle</span>}
         </div>
         {readiness && (
           <div className="flex items-center gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full" style={{ background: DOT[readiness.overall] }} />
-            <span className="text-[11px] font-bold text-[var(--color-text-2)]">{readiness.sellable ? 'Sellable' : 'Not sellable'}</span>
+            <span className="text-[11px] font-bold text-[var(--ink-2)]">{readiness.sellable ? 'Sellable' : 'Not sellable'}</span>
           </div>
         )}
       </div>
@@ -164,13 +165,13 @@ export function BundleEditor({ initial, isNew }: Props) {
         {draft.cores.map((core, i) => {
           const product = products.find((p) => p.id === core.productId)
           return (
-            <div key={core.productId} className="rounded-xl border border-[var(--color-border)] p-3 space-y-2" style={{ background: 'var(--color-surface-2)' }}>
+            <div key={core.productId} className="rounded-xl border border-[var(--edge)] p-3 space-y-2" style={{ background: 'var(--surface-2)' }}>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product?.title ?? core.productId}</p>
+                <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product?.title ?? core.productId}</p>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <button onClick={() => setDraft((d) => { const c = [...d.cores]; if (i > 0) [c[i - 1], c[i]] = [c[i], c[i - 1]]; return { ...d, cores: c } })} disabled={i === 0} className="w-6 h-6 rounded text-xs disabled:opacity-30" style={inputStyle}>↑</button>
                   <button onClick={() => setDraft((d) => { const c = [...d.cores]; if (i < c.length - 1) [c[i + 1], c[i]] = [c[i], c[i + 1]]; return { ...d, cores: c } })} disabled={i === draft.cores.length - 1} className="w-6 h-6 rounded text-xs disabled:opacity-30" style={inputStyle}>↓</button>
-                  <button onClick={() => setDraft((d) => ({ ...d, cores: d.cores.filter((_, j) => j !== i) }))} className="w-6 h-6 rounded text-xs" style={{ ...inputStyle, color: 'var(--color-red)' }}>✕</button>
+                  <button onClick={() => setDraft((d) => ({ ...d, cores: d.cores.filter((_, j) => j !== i) }))} className="w-6 h-6 rounded text-xs" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
                 </div>
               </div>
               <input value={core.title} onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], title: e.target.value }; return { ...d, cores: c } })} className={inputCls} style={inputStyle} placeholder="Slot label, e.g. Hydration" />
@@ -178,7 +179,7 @@ export function BundleEditor({ initial, isNew }: Props) {
             </div>
           )
         })}
-        <button onClick={() => setPicker('core')} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)', color: 'var(--color-accent)', border: '1px dashed color-mix(in srgb, var(--color-accent) 40%, transparent)', fontFamily: 'var(--font-display)' }}>+ Add product</button>
+        <button onClick={() => setPicker('core')} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: 'var(--accent-fill)', color: 'var(--accent)', border: '1px dashed var(--accent-line)', fontFamily: 'var(--font-display)' }}>+ Add product</button>
       </Section>
 
       {/* Add-ons */}
@@ -186,17 +187,17 @@ export function BundleEditor({ initial, isNew }: Props) {
         {draft.addOns.map((addon, i) => {
           const product = products.find((p) => p.id === addon.productId)
           return (
-            <div key={addon.productId} className="rounded-xl border border-[var(--color-border)] p-3 space-y-2" style={{ background: 'var(--color-surface-2)' }}>
+            <div key={addon.productId} className="rounded-xl border border-[var(--edge)] p-3 space-y-2" style={{ background: 'var(--surface-2)' }}>
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product?.title ?? addon.productId}</p>
-                <button onClick={() => setDraft((d) => ({ ...d, addOns: d.addOns.filter((_, j) => j !== i) }))} className="w-6 h-6 rounded text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--color-red)' }}>✕</button>
+                <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product?.title ?? addon.productId}</p>
+                <button onClick={() => setDraft((d) => ({ ...d, addOns: d.addOns.filter((_, j) => j !== i) }))} className="w-6 h-6 rounded text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
               </div>
               <input value={addon.title} onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], title: e.target.value }; return { ...d, addOns: a } })} className={inputCls} style={inputStyle} placeholder="Add-on label, e.g. Evening Reset" />
               <textarea value={addon.reason} onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], reason: e.target.value }; return { ...d, addOns: a } })} rows={2} className={inputCls} style={inputStyle} placeholder="Why someone might add it…" />
             </div>
           )
         })}
-        <button onClick={() => setPicker('addon')} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text-2)', border: '1px dashed var(--color-border-2)', fontFamily: 'var(--font-display)' }}>+ Add optional product</button>
+        <button onClick={() => setPicker('addon')} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px dashed var(--edge-strong)', fontFamily: 'var(--font-display)' }}>+ Add optional product</button>
       </Section>
 
       {/* Workout */}
@@ -207,16 +208,16 @@ export function BundleEditor({ initial, isNew }: Props) {
         </div>
         <Field label="Intro"><textarea value={draft.workout.intro} onChange={(e) => set('workout', { ...draft.workout, intro: e.target.value })} rows={2} className={inputCls} style={inputStyle} /></Field>
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>Exercises</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--ink-3)]" style={{ fontFamily: 'var(--font-display)' }}>Exercises</span>
           <div className="mt-1 space-y-2">
             {draft.workout.exercises.map((ex, i) => (
               <div key={i} className="flex gap-2">
                 <input value={ex.name} onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })} className={inputCls} style={inputStyle} placeholder="Goblet squat" />
                 <input value={ex.prescription} onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, prescription: e.target.value } : x) })} className="w-28 px-3 py-2 rounded-xl text-sm outline-none flex-shrink-0" style={inputStyle} placeholder="3 × 10" />
-                <button onClick={() => set('workout', { ...draft.workout, exercises: draft.workout.exercises.filter((_, j) => j !== i) })} className="w-9 rounded-xl text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--color-red)' }}>✕</button>
+                <button onClick={() => set('workout', { ...draft.workout, exercises: draft.workout.exercises.filter((_, j) => j !== i) })} className="w-9 rounded-xl text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
               </div>
             ))}
-            <button onClick={() => set('workout', { ...draft.workout, exercises: [...draft.workout.exercises, { name: '', prescription: '' }] })} className="text-[11px] font-bold text-[var(--color-accent)]">+ Add exercise</button>
+            <button onClick={() => set('workout', { ...draft.workout, exercises: [...draft.workout.exercises, { name: '', prescription: '' }] })} className="text-[11px] font-bold text-[var(--accent)]">+ Add exercise</button>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -232,10 +233,10 @@ export function BundleEditor({ initial, isNew }: Props) {
           <div key={i} className="flex gap-2">
             <input value={step.title} onChange={(e) => set('howToUse', draft.howToUse.map((s, j) => j === i ? { ...s, title: e.target.value } : s))} className="w-40 px-3 py-2 rounded-xl text-sm outline-none flex-shrink-0" style={inputStyle} placeholder="Step title" />
             <input value={step.detail} onChange={(e) => set('howToUse', draft.howToUse.map((s, j) => j === i ? { ...s, detail: e.target.value } : s))} className={inputCls} style={inputStyle} placeholder="Detail" />
-            <button onClick={() => set('howToUse', draft.howToUse.filter((_, j) => j !== i))} className="w-9 rounded-xl text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--color-red)' }}>✕</button>
+            <button onClick={() => set('howToUse', draft.howToUse.filter((_, j) => j !== i))} className="w-9 rounded-xl text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
           </div>
         ))}
-        <button onClick={() => set('howToUse', [...draft.howToUse, { title: '', detail: '' }])} className="text-[11px] font-bold text-[var(--color-accent)]">+ Add step</button>
+        <button onClick={() => set('howToUse', [...draft.howToUse, { title: '', detail: '' }])} className="text-[11px] font-bold text-[var(--accent)]">+ Add step</button>
       </Section>
 
       {/* SEO */}
@@ -251,8 +252,8 @@ export function BundleEditor({ initial, isNew }: Props) {
             {readiness.checks.map((c) => (
               <div key={c.id} className="flex items-center gap-2 text-[11px]">
                 <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[c.status] }} />
-                <span className="text-[var(--color-text-2)] font-semibold">{c.label}</span>
-                {c.detail && <span className="text-[var(--color-muted)]">— {c.detail}</span>}
+                <span className="text-[var(--ink-2)] font-semibold">{c.label}</span>
+                {c.detail && <span className="text-[var(--ink-3)]">— {c.detail}</span>}
               </div>
             ))}
           </div>
@@ -260,12 +261,12 @@ export function BundleEditor({ initial, isNew }: Props) {
       )}
 
       {/* Sticky save bar */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--color-border)] px-5 py-3" style={{ background: 'var(--color-surface)' }}>
+      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--edge)] px-5 py-3" style={{ background: 'var(--surface-1)' }}>
         <div className="max-w-3xl mx-auto flex items-center justify-end gap-2">
-          <button onClick={() => save(false)} disabled={!canSave || saving} className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40" style={{ background: 'var(--color-surface-2)', color: 'var(--color-text)', border: '1px solid var(--color-border)', fontFamily: 'var(--font-display)' }}>
+          <button onClick={() => save(false)} disabled={!canSave || saving} className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>
             {saving ? 'Saving…' : 'Save draft'}
           </button>
-          <button onClick={() => save(true)} disabled={!canPublish || saving} className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40" style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }} title={canPublish ? '' : 'Complete the readiness checks first'}>
+          <button onClick={() => save(true)} disabled={!canPublish || saving} className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40" style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }} title={canPublish ? '' : 'Complete the readiness checks first'}>
             {saving ? 'Saving…' : 'Publish'}
           </button>
         </div>
@@ -290,13 +291,14 @@ export function BundleEditor({ initial, isNew }: Props) {
 
       {/* Full-page preview overlay */}
       {preview && (
-        <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: 'var(--color-bg)' }}>
-          <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b border-[var(--color-border)]" style={{ background: 'var(--color-surface)' }}>
-            <span className="text-xs font-bold text-[var(--color-muted)]">Preview — not saved</span>
-            <button onClick={() => setPreview(false)} className="text-xs font-bold px-3 py-1.5 rounded-xl" style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>Close preview</button>
-          </div>
-          <BundleLandingPage bundle={assembled} />
-        </div>
+        <Modal onClose={() => setPreview(false)} size="lg" label="Bundle preview">
+          <ModalHeader title="Preview" subtitle="Not saved — this is what the page would look like." />
+          {/* `padding="none"`: the landing page brings its own layout, and a
+              modal's inset around a full page reads as a frame around a frame. */}
+          <ModalBody className="p-0">
+            <BundleLandingPage bundle={assembled} />
+          </ModalBody>
+        </Modal>
       )}
     </div>
   )
@@ -307,27 +309,35 @@ function ProductPicker({ products, disabledIds, onPick, onClose }: { products: C
   const [q, setQ] = useState('')
   const filtered = products.filter((p) => p.title.toLowerCase().includes(q.toLowerCase()) || p.category.toLowerCase().includes(q.toLowerCase()))
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
-      <div className="w-full max-w-lg max-h-[80vh] rounded-t-2xl sm:rounded-2xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }} onClick={(e) => e.stopPropagation()}>
-        <div className="p-4 border-b border-[var(--color-border)]">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products…" className={inputCls} style={inputStyle} />
-        </div>
-        <div className="overflow-y-auto p-2">
+    <Modal onClose={onClose} size="md" label="Add a product to this bundle">
+      <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--edge)' }}>
+        <Input
+          label="Search products"
+          autoFocus
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search products…"
+        />
+      </div>
+      <ModalBody>
           {filtered.map((p) => {
             const disabled = disabledIds.has(p.id)
             return (
               <button key={p.id} onClick={() => !disabled && onPick(p)} disabled={disabled} className="w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between gap-3 disabled:opacity-40" style={{ background: 'transparent' }}>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
-                  <p className="text-[11px] text-[var(--color-muted)]">{p.category} · {p.stackSlots[0]}</p>
+                  <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
+                  <p className="text-[11px] text-[var(--ink-3)]">{p.category} · {p.stackSlots[0]}</p>
                 </div>
-                <span className="text-[11px] font-bold text-[var(--color-accent)] flex-shrink-0">{disabled ? 'Added' : 'Add +'}</span>
+                <span className="text-[11px] font-bold text-[var(--accent)] flex-shrink-0">{disabled ? 'Added' : 'Add +'}</span>
               </button>
             )
           })}
-          {filtered.length === 0 && <p className="text-sm text-[var(--color-muted)] text-center py-8">No products match.</p>}
-        </div>
-      </div>
-    </div>
+        {filtered.length === 0 && (
+          <p className="text-center" style={{ fontSize: 'var(--text-body)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
+            No products match.
+          </p>
+        )}
+      </ModalBody>
+    </Modal>
   )
 }

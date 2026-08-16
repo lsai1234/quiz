@@ -6,7 +6,7 @@ import { AiSuggestPanel } from '@/components/portal/AiSuggestPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
 
-const DOT: Record<CheckStatus, string> = { ok: '#34d399', warn: '#fbbf24', fail: '#f87171' }
+const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
 
 interface Row { product: CatalogueProduct; readiness: ProductReadiness }
 
@@ -36,11 +36,11 @@ export default function ProductsPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Catalogue</h2>
+        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Catalogue</h2>
         <button
           onClick={() => setShowAi(true)}
           disabled={notReady === 0}
-          className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-40"
+          className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--accent)] text-[var(--ink-on-accent)] active:scale-95 transition-all disabled:opacity-40"
           style={{ fontFamily: 'var(--font-display)' }}
           title={notReady === 0 ? 'Everything is already tagged' : `Get AI tag suggestions for ${notReady} product(s)`}
         >
@@ -48,38 +48,38 @@ export default function ProductsPage() {
         </button>
       </div>
 
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products…" className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-2" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products…" className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }} />
       <div className="flex flex-wrap gap-2 mb-4">
         {(['all', 'attention', 'sub'] as const).map((f) => (
           <button key={f} onClick={() => setFilter(f)} className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
-            style={{ background: filter === f ? 'var(--color-accent)' : 'var(--color-surface-2)', color: filter === f ? 'var(--color-bg)' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+            style={{ background: filter === f ? 'var(--accent)' : 'var(--surface-2)', color: filter === f ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
             {f === 'all' ? `All (${rows?.length ?? 0})` : f === 'attention' ? `Needs attention (${notReady})` : 'Subscription'}
           </button>
         ))}
       </div>
 
       {rows === null ? (
-        <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
       ) : (
         <div className="space-y-2">
           {filtered.map(({ product, readiness }) => (
-            <button key={product.id} onClick={() => setEditing(product)} className="w-full text-left rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 active:scale-[0.99] transition-all">
+            <button key={product.id} onClick={() => setEditing(product)} className="w-full text-left rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 active:scale-[0.99] transition-all">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[readiness.overall] }} />
-                    <p className="text-sm font-bold text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product.title}</p>
+                    <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product.title}</p>
                   </div>
-                  <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                  <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                     {product.category} · {product.subscriptionEligible ? 'subscribable' : 'one-off'} · {product.servings}d
                     {product.cost == null && ' · no cost set'}
                   </p>
                 </div>
-                <span className="text-xs font-bold text-[var(--color-muted)]">Edit →</span>
+                <span className="text-xs font-bold text-[var(--ink-3)]">Edit →</span>
               </div>
             </button>
           ))}
-          {filtered.length === 0 && <p className="text-sm text-[var(--color-muted)] text-center py-8">No products match.</p>}
+          {filtered.length === 0 && <p className="text-sm text-[var(--ink-3)] text-center py-8">No products match.</p>}
         </div>
       )}
 

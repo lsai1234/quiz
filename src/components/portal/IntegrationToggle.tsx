@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 
-const ACCENT = '#00D4FF'
 
 export interface IntegrationOption {
   mode: string
@@ -54,7 +53,7 @@ export function IntegrationToggle({ endpoint, options, liveLabel, credentialsHin
     setSaving(false)
   }
 
-  if (!data) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!data) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const live = data.effective !== 'mock'
   const wantsLiveButMock = data.mode !== 'mock' && !live
@@ -71,28 +70,28 @@ export function IntegrationToggle({ endpoint, options, liveLabel, credentialsHin
               disabled={saving}
               className="w-full text-left rounded-2xl border p-4 transition-all active:scale-[0.99]"
               style={{
-                background: active ? `color-mix(in srgb, ${ACCENT} 8%, transparent)` : 'var(--color-surface)',
-                borderColor: active ? `color-mix(in srgb, ${ACCENT} 40%, transparent)` : 'var(--color-border)',
+                background: active ? `var(--accent-fill)` : 'var(--surface-1)',
+                borderColor: active ? `var(--accent-line)` : 'var(--edge)',
               }}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>{o.label}</span>
-                {active && <span className="text-[10px] font-bold uppercase" style={{ color: ACCENT }}>Selected</span>}
+                <span className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>{o.label}</span>
+                {active && <span className="text-[10px] font-bold uppercase" style={{ color: 'var(--accent)' }}>Selected</span>}
               </div>
-              <p className="text-xs text-[var(--color-muted)] mt-0.5">{o.desc}</p>
+              <p className="text-xs text-[var(--ink-3)] mt-0.5">{o.desc}</p>
             </button>
           )
         })}
       </div>
 
-      <div className="text-xs rounded-xl p-3.5 space-y-1.5" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}>
-        <p className="text-[var(--color-text-2)]">
-          Now using: <strong style={{ color: live ? ACCENT : 'var(--color-text)' }}>{live ? liveLabel : 'Mock'}</strong>
+      <div className="text-xs rounded-xl p-3.5 space-y-1.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
+        <p className="text-[var(--ink-2)]">
+          Now using: <strong style={{ color: live ? 'var(--accent)' : 'var(--ink-1)' }}>{live ? liveLabel : 'Mock'}</strong>
         </p>
         {wantsLiveButMock ? (
-          <p className="text-[var(--color-red)] leading-relaxed pt-1">{credentialsHint}</p>
+          <p className="text-[var(--tone-critical)] leading-relaxed pt-1">{credentialsHint}</p>
         ) : (
-          <p className="text-[var(--color-muted)] pt-1">Applies on the next request — no redeploy needed.</p>
+          <p className="text-[var(--ink-3)] pt-1">Applies on the next request — no redeploy needed.</p>
         )}
       </div>
     </div>

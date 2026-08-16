@@ -5,11 +5,7 @@ import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { refundForReturnedValue } from '@/lib/recharge/exit'
 import type { ExitQueue, ExitRow, ExitState } from '@/lib/portal/exits'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
-const AMBER = '#fbbf24'
-const RED = '#f87171'
-const MUTED = 'var(--color-muted)'
+const MUTED = 'var(--ink-3)'
 
 const STATE_LABEL: Record<ExitState, string> = {
   owed: 'Owed',
@@ -21,12 +17,12 @@ const STATE_LABEL: Record<ExitState, string> = {
 }
 
 const STATE_COLOUR: Record<ExitState, string> = {
-  owed: AMBER,
-  collected: GREEN,
+  owed: 'var(--tone-attention)',
+  collected: 'var(--tone-positive)',
   waived: MUTED,
   'written-off': MUTED,
-  'refund-due': ACCENT,
-  'return-due': ACCENT,
+  'refund-due': 'var(--accent)',
+  'return-due': 'var(--accent)',
 }
 
 /** The automatic waivers, in language a founder can repeat to a member. */
@@ -73,21 +69,21 @@ export function ExitsPage() {
     setBusy(null)
   }
 
-  if (!queue) return <p className="text-sm text-[var(--color-muted)]">Loading…</p>
+  if (!queue) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
 
   const rows = filter === 'all' ? queue.rows : queue.rows.filter((r) => r.state === filter)
 
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-        <Stat label="Owed" value={queue.owed} tone={queue.owed > 0 ? AMBER : MUTED} hint="Invoiced, not paid" />
-        <Stat label="Collected" value={queue.collected} tone={GREEN} hint="Settlements taken" />
+        <Stat label="Owed" value={queue.owed} tone={queue.owed > 0 ? 'var(--tone-attention)' : MUTED} hint="Invoiced, not paid" />
+        <Stat label="Collected" value={queue.collected} tone={'var(--tone-positive)'} hint="Settlements taken" />
         <Stat label="Waived" value={queue.waived} tone={MUTED} hint="Never charged" />
-        <Stat label="Refunds due" value={queue.refundsDue} tone={queue.refundsDue > 0 ? ACCENT : MUTED} hint="We owe them" />
+        <Stat label="Refunds due" value={queue.refundsDue} tone={queue.refundsDue > 0 ? 'var(--accent)' : MUTED} hint="We owe them" />
         <Stat
           label="Returns coming"
           value={queue.returnsAwaiting}
-          tone={queue.returnsAwaiting > 0 ? ACCENT : MUTED}
+          tone={queue.returnsAwaiting > 0 ? 'var(--accent)' : MUTED}
           hint={`${queue.returnsAwaitingCount} parcel${queue.returnsAwaitingCount === 1 ? '' : 's'}, at most`}
         />
       </div>
@@ -99,9 +95,9 @@ export function ExitsPage() {
             onClick={() => setFilter(f)}
             className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
             style={{
-              background: filter === f ? 'var(--color-accent)' : 'var(--color-surface-2)',
-              color: filter === f ? 'var(--color-bg)' : 'var(--color-muted)',
-              border: '1px solid var(--color-border)',
+              background: filter === f ? 'var(--accent)' : 'var(--surface-2)',
+              color: filter === f ? 'var(--ground-base)' : 'var(--ink-3)',
+              border: '1px solid var(--edge)',
             }}
           >
             {f === 'all' ? 'Everything' : STATE_LABEL[f]}
@@ -110,7 +106,7 @@ export function ExitsPage() {
       </div>
 
       {rows.length === 0 && (
-        <p className="text-sm text-[var(--color-muted)] rounded-2xl border border-[var(--color-border)] p-6 text-center">
+        <p className="text-sm text-[var(--ink-3)] rounded-2xl border border-[var(--edge)] p-6 text-center">
           {filter === 'owed'
             ? 'Nothing outstanding. Every settlement has been collected or waived.'
             : filter === 'return-due'
@@ -121,24 +117,24 @@ export function ExitsPage() {
 
       <div className="space-y-2">
         {rows.map((row) => (
-          <div key={row.userId + row.at} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+          <div key={row.userId + row.at} className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-bold text-[var(--color-text)] truncate">{row.email ?? row.userId}</p>
-                <p className="text-[11px] text-[var(--color-muted)] mt-0.5">
+                <p className="text-sm font-bold text-[var(--ink-1)] truncate">{row.email ?? row.userId}</p>
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
                   Left {new Date(row.at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   {row.reason ? ` · “${row.reason}”` : ''}
                   {/* Where the figure came from. A forecast-sourced exit is one
                       whose history we could not read, and is worth a second look
                       before chasing anyone for it. */}
-                  {row.source === 'forecast' && <span style={{ color: AMBER }}> · from forecast, not ledger</span>}
+                  {row.source === 'forecast' && <span style={{ color: 'var(--tone-attention)' }}> · from forecast, not ledger</span>}
                 </p>
                 {row.waiver && (
                   <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>
                     {WAIVER_LABEL[row.waiver] ?? row.waiver}
                   </p>
                 )}
-                {row.note && <p className="text-[11px] text-[var(--color-text-2)] mt-1">“{row.note}”</p>}
+                {row.note && <p className="text-[11px] text-[var(--ink-2)] mt-1">“{row.note}”</p>}
               </div>
               <div className="text-right shrink-0">
                 <p className="text-sm font-black" style={{ color: STATE_COLOUR[row.state], fontFamily: 'var(--font-display)' }}>
@@ -161,20 +157,20 @@ export function ExitsPage() {
               <div className="flex gap-1.5 mt-3 flex-wrap">
                 {row.state === 'owed' && (
                   <>
-                    <Action label="Mark paid" tone={GREEN} busy={busy === row.userId}
+                    <Action label="Mark paid" tone={'var(--tone-positive)'} busy={busy === row.userId}
                       onClick={() => act(row, 'mark-paid', 'How was it paid? (bank transfer, invoice link…)')} />
                     <Action label="Waive" tone={MUTED} busy={busy === row.userId}
                       onClick={() => act(row, 'waive', 'Why are you waiving this?')} />
-                    <Action label="Write off" tone={RED} busy={busy === row.userId}
+                    <Action label="Write off" tone={'var(--tone-critical)'} busy={busy === row.userId}
                       onClick={() => act(row, 'write-off', 'Why are you writing this off?')} />
                   </>
                 )}
                 {row.state === 'refund-due' && (
-                  <Action label="Mark refunded" tone={ACCENT} busy={busy === row.userId}
+                  <Action label="Mark refunded" tone={'var(--accent)'} busy={busy === row.userId}
                     onClick={() => act(row, 'mark-refunded', 'How was it refunded?')} />
                 )}
                 {row.invoiceId && (
-                  <span className="text-[10px] text-[var(--color-muted)] self-center ml-1">{row.invoiceId}</span>
+                  <span className="text-[10px] text-[var(--ink-3)] self-center ml-1">{row.invoiceId}</span>
                 )}
               </div>
             )}
@@ -187,10 +183,10 @@ export function ExitsPage() {
 
 function Stat({ label, value, tone, hint }: { label: string; value: number; tone: string; hint: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--color-muted)]">{label}</p>
+    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-3">
+      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{label}</p>
       <p className="text-xl font-black mt-0.5" style={{ color: tone, fontFamily: 'var(--font-display)' }}>{formatGBP(value)}</p>
-      <p className="text-[10px] text-[var(--color-muted)] mt-0.5">{hint}</p>
+      <p className="text-[10px] text-[var(--ink-3)] mt-0.5">{hint}</p>
     </div>
   )
 }
@@ -275,9 +271,9 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
+    <div className="mt-3 rounded-xl border border-[var(--edge)] bg-[var(--surface-2)] p-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-bold text-[var(--color-text)]">What came back unopened?</p>
+        <p className="text-xs font-bold text-[var(--ink-1)]">What came back unopened?</p>
         <button
           type="button"
           onClick={() => setTicked(allTicked ? new Set() : new Set(row.returnItems.map((i) => i.key)))}
@@ -293,7 +289,7 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
       </p>
 
       {row.returnItems.length === 0 ? (
-        <p className="text-[11px] mt-2" style={{ color: AMBER }}>
+        <p className="text-[11px] mt-2" style={{ color: 'var(--tone-attention)' }}>
           No itemised statement was stored for this exit, so there is nothing to tick. Refund it in Stripe by
           hand and mark it refunded.
         </p>
@@ -303,15 +299,15 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
             <label
               key={item.key}
               className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 cursor-pointer"
-              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+              style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)' }}
             >
               <input
                 type="checkbox"
                 checked={ticked.has(item.key)}
                 onChange={() => toggle(item.key)}
-                style={{ accentColor: ACCENT }}
+                style={{ accentColor: 'var(--accent)' }}
               />
-              <span className="text-xs text-[var(--color-text)] flex-1 min-w-0 truncate">
+              <span className="text-xs text-[var(--ink-1)] flex-1 min-w-0 truncate">
                 {item.title}
                 {item.quantity > 1 && <span style={{ color: MUTED }}> ×{item.quantity}</span>}
               </span>
@@ -328,7 +324,7 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
           <p className="text-[10px] font-bold uppercase tracking-wide" style={{ color: MUTED }}>
             Refund
           </p>
-          <p className="text-lg font-black" style={{ color: preview > 0 ? ACCENT : MUTED, fontFamily: 'var(--font-display)' }}>
+          <p className="text-lg font-black" style={{ color: preview > 0 ? 'var(--accent)' : MUTED, fontFamily: 'var(--font-display)' }}>
             {formatGBP(preview)}
           </p>
           {/* Why it is not simply the value of what came back: they paid a
@@ -344,9 +340,9 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
           disabled={busy || row.returnItems.length === 0}
           className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-50"
           style={{
-            background: `color-mix(in srgb, ${ACCENT} 14%, transparent)`,
-            color: ACCENT,
-            border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`,
+            background: `var(--accent-fill)`,
+            color: 'var(--accent)',
+            border: `1px solid var(--accent-line)`,
           }}
         >
           {busy ? 'Refunding…' : preview > 0 ? `Refund ${formatGBP(preview)}` : 'Refund nothing & close'}
@@ -357,7 +353,7 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
         <p
           className="text-[11px] mt-2 leading-relaxed"
           role="status"
-          style={{ color: result.payoutError ? AMBER : GREEN }}
+          style={{ color: result.payoutError ? 'var(--tone-attention)' : 'var(--tone-positive)' }}
         >
           {result.payoutError
             ? `${formatGBP(result.refunded)} refunded, ${formatGBP(result.shortfall)} still owed. ${result.payoutError}`

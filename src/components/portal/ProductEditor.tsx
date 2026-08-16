@@ -1,11 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
 import { STACK_SLOTS, SLOT_LABELS, type StackSlot } from '@/lib/catalogue/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
-const ACCENT = '#00D4FF'
 const GOALS = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
 interface Props {
@@ -52,41 +51,33 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
   }
 
   const numInput = (value: number | undefined, onChange: (n: number) => void) => (
-    <input type="number" value={value ?? 0} onChange={(e) => onChange(parseFloat(e.target.value))} className="w-20 px-2 py-1 rounded-lg text-sm text-right outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+    <input type="number" value={value ?? 0} onChange={(e) => onChange(parseFloat(e.target.value))} className="w-20 px-2 py-1 rounded-lg text-sm text-right outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }} />
   )
   const toggle = (value: boolean, onChange: (b: boolean) => void) => (
-    <button onClick={() => onChange(!value)} className="w-11 h-6 rounded-full transition-colors relative flex-shrink-0" style={{ background: value ? ACCENT : 'var(--color-border-2)' }}>
+    <button onClick={() => onChange(!value)} className="w-11 h-6 rounded-full transition-colors relative flex-shrink-0" style={{ background: value ? 'var(--accent)' : 'var(--edge-strong)' }}>
       <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all" style={{ left: value ? '22px' : '2px' }} />
     </button>
   )
-  return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={(e) => { if (e.target === e.currentTarget) onClose() }} style={{ background: 'rgba(0,0,0,0.72)' }}>
-      <div className="w-full max-w-lg rounded-t-3xl overflow-hidden flex flex-col" style={{ background: 'var(--color-surface)', maxHeight: '92dvh' }}>
-        <div className="px-5 pt-4 pb-3 flex items-start justify-between border-b border-[var(--color-border)]">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold tracking-widest uppercase truncate" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>{d.category}</p>
-            <h3 className="text-lg font-black text-[var(--color-text)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{d.title}</h3>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-[var(--color-muted)] bg-[var(--color-surface-2)] flex-shrink-0">✕</button>
-        </div>
-
-        <div className="overflow-y-auto flex-1 px-5 py-3">
+  return (
+    <Modal onClose={onClose} size="lg">
+      <ModalHeader title={d.title} subtitle={d.category} />
+      <ModalBody>
           {/* Tags */}
           <Group title="Tags" desc="These decide when the quiz recommends this product.">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-muted)] mb-1.5">What it’s for</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--ink-3)] mb-1.5">What it’s for</p>
             <div className="flex flex-wrap gap-1.5 mb-3">
               {STACK_SLOTS.map((s) => (
                 <Chip key={s} on={d.stackSlots.includes(s)} onClick={() => set({ stackSlots: toggleIn(d.stackSlots, s) as StackSlot[] })}>{SLOT_LABELS[s]}</Chip>
               ))}
             </div>
-            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--color-muted)] mb-1.5">Goals it supports</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-[var(--ink-3)] mb-1.5">Goals it supports</p>
             <div className="flex flex-wrap gap-1.5 mb-3">
               {GOALS.map((g) => (
                 <Chip key={g} on={(d.goals as string[]).includes(g)} onClick={() => set({ goals: toggleIn(d.goals as string[], g) as CatalogueProduct['goals'] })}>{g}</Chip>
               ))}
             </div>
             <Row label="Alternatives group" help="Products in the same group can be swapped for each other.">
-              <input value={d.swapGroup} onChange={(e) => set({ swapGroup: e.target.value as CatalogueProduct['swapGroup'] })} className="w-40 px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }} />
+              <input value={d.swapGroup} onChange={(e) => set({ swapGroup: e.target.value as CatalogueProduct['swapGroup'] })} className="w-40 px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }} />
             </Row>
           </Group>
 
@@ -95,7 +86,7 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
             <Row label="Offer on subscription">{toggle(d.subscriptionEligible, (b) => set({ subscriptionEligible: b }))}</Row>
             <Row label="Servings per unit" help="How many servings one unit/container holds at the normal dose.">{numInput(d.servings, (n) => set({ servings: n }))}</Row>
             <Row label="How it’s taken">
-              <select value={d.consumption?.cadence ?? 'auto'} onChange={(e) => set({ consumption: e.target.value === 'auto' ? undefined : { cadence: e.target.value as 'daily' | 'per-workout', servingsPerUnit: d.consumption?.servingsPerUnit ?? d.servings } })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+              <select value={d.consumption?.cadence ?? 'auto'} onChange={(e) => set({ consumption: e.target.value === 'auto' ? undefined : { cadence: e.target.value as 'daily' | 'per-workout', servingsPerUnit: d.consumption?.servingsPerUnit ?? d.servings } })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>
                 <option value="auto">Auto</option>
                 <option value="daily">Every day</option>
                 <option value="per-workout">On training days</option>
@@ -109,14 +100,14 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
           </Group>
 
           {/* Advanced */}
-          <button onClick={() => setAdvanced((a) => !a)} className="w-full text-left text-xs font-bold py-2" style={{ color: ACCENT }}>
+          <button onClick={() => setAdvanced((a) => !a)} className="w-full text-left text-xs font-bold py-2" style={{ color: 'var(--accent)' }}>
             {advanced ? '▾ Hide advanced settings' : '▸ Advanced settings'}
           </button>
           {advanced && (
             <Group title="">
               <Row label="Servings per unit override">{numInput(d.consumption?.servingsPerUnit, (n) => set({ consumption: { cadence: d.consumption?.cadence ?? 'daily', servingsPerUnit: n } }))}</Row>
               <Row label="Monthly refill product" help="If this lasts longer than a month, the smaller product it ships on subscription.">
-                <select value={d.subscriptionProductId ?? ''} onChange={(e) => set({ subscriptionProductId: e.target.value || null })} className="w-44 px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                <select value={d.subscriptionProductId ?? ''} onChange={(e) => set({ subscriptionProductId: e.target.value || null })} className="w-44 px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>
                   <option value="">— Ships as itself —</option>
                   {allProducts.filter((p) => p.id !== d.id).map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
                 </select>
@@ -124,14 +115,14 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
               <Row label="Hidden refill product" help="A small product that only exists as a subscription refill — kept out of the quiz.">{toggle(!!d.isSubscriptionOnly, (b) => set({ isSubscriptionOnly: b }))}</Row>
               <Row label="Minimum term override (months)">{numInput(d.minSubscriptionMonths, (n) => set({ minSubscriptionMonths: n || undefined }))}</Row>
               <Row label="Keep-vs-change advice">
-                <select value={d.recommendationBasis ?? 'auto'} onChange={(e) => set({ recommendationBasis: e.target.value === 'auto' ? undefined : (e.target.value as 'objective' | 'subjective') })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                <select value={d.recommendationBasis ?? 'auto'} onChange={(e) => set({ recommendationBasis: e.target.value === 'auto' ? undefined : (e.target.value as 'objective' | 'subjective') })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>
                   <option value="auto">Auto</option>
                   <option value="objective">A need (don’t change on a mood)</option>
                   <option value="subjective">Felt (change if not working)</option>
                 </select>
               </Row>
               <Row label="When it’s felt (onset)" help="Drives the hub check-in: slow-build items aren’t judged before their time; immediate ones are reviewed straight away.">
-                <select value={d.effectOnset ?? 'auto'} onChange={(e) => set({ effectOnset: e.target.value === 'auto' ? undefined : (e.target.value as NonNullable<CatalogueProduct['effectOnset']>) })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}>
+                <select value={d.effectOnset ?? 'auto'} onChange={(e) => set({ effectOnset: e.target.value === 'auto' ? undefined : (e.target.value as NonNullable<CatalogueProduct['effectOnset']>) })} className="px-2 py-1 rounded-lg text-sm outline-none" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>
                   <option value="auto">Auto</option>
                   <option value="immediate">Immediate (same session)</option>
                   <option value="short">Short (~1–3 weeks)</option>
@@ -145,27 +136,36 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
               <Row label="Can be a booster">{toggle(d.isBoosterEligible, (b) => set({ isBoosterEligible: b }))}</Row>
             </Group>
           )}
-        </div>
-
-        <div className="px-5 py-3 border-t border-[var(--color-border)] flex items-center gap-2">
-          {result && <span className="text-[11px] text-[var(--color-text-2)] flex-1 leading-snug">{result}</span>}
-          <button onClick={aiSuggest} disabled={suggesting} className="ml-auto py-2.5 px-3 rounded-2xl text-xs font-bold border border-[var(--color-border-2)] text-[var(--color-text-2)]" style={{ fontFamily: 'var(--font-display)' }}>{suggesting ? '…' : '✨ AI suggest'}</button>
-          <button onClick={save} disabled={saving} className="py-2.5 px-5 rounded-2xl text-sm font-bold bg-[var(--color-accent)] text-[var(--color-bg)]" style={{ fontFamily: 'var(--font-display)' }}>{saving ? 'Saving…' : 'Save'}</button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+      </ModalBody>
+      <ModalFooter>
+        {result && (
+          <span
+            className="flex-1"
+            // `role="status"` so a save result is announced rather than only
+            // appearing — this line reports both success and failure.
+            role="status"
+            style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' }}
+          >
+            {result}
+          </span>
+        )}
+        <Button variant="secondary" size="sm" icon="sparkle" onClick={aiSuggest} loading={suggesting}>
+          AI suggest
+        </Button>
+        <Button variant="primary" onClick={save} loading={saving}>Save</Button>
+      </ModalFooter>
+    </Modal>
   )
 }
 
 function Row({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
-    <div className="py-2.5 border-b border-[var(--color-border)] last:border-0">
+    <div className="py-2.5 border-b border-[var(--edge)] last:border-0">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-[var(--color-text)]">{label}</span>
+        <span className="text-sm font-semibold text-[var(--ink-1)]">{label}</span>
         <span className="flex items-center gap-2 flex-shrink-0">{children}</span>
       </div>
-      {help && <p className="text-[11px] text-[var(--color-muted)] mt-0.5 leading-snug">{help}</p>}
+      {help && <p className="text-[11px] text-[var(--ink-3)] mt-0.5 leading-snug">{help}</p>}
     </div>
   )
 }
@@ -173,7 +173,7 @@ function Row({ label, help, children }: { label: string; help?: string; children
 function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
-      style={{ background: on ? ACCENT : 'var(--color-surface-2)', color: on ? 'var(--color-bg)' : 'var(--color-muted)', border: '1px solid var(--color-border)' }}>
+      style={{ background: on ? 'var(--accent)' : 'var(--surface-2)', color: on ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
       {children}
     </button>
   )
@@ -182,9 +182,9 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
 function Group({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
     <div className="mb-3">
-      {title && <p className="text-sm font-bold mt-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{title}</p>}
-      {desc && <p className="text-[11px] text-[var(--color-muted)] mb-1">{desc}</p>}
-      <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 mt-1">{children}</div>
+      {title && <p className="text-sm font-bold mt-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{title}</p>}
+      {desc && <p className="text-[11px] text-[var(--ink-3)] mb-1">{desc}</p>}
+      <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-3 mt-1">{children}</div>
     </div>
   )
 }

@@ -1,0 +1,458 @@
+/**
+ * The material layer.
+ *
+ * Everything a component can express as an inline style lives in the component.
+ * What lands here is what inline styles cannot say: pseudo-element highlights,
+ * `:hover`, `:active`, `:focus-visible`, keyframes, and the media queries that
+ * guard them. Each rule reads its colours from custom properties the component
+ * sets, so a variant is still defined in one place — `Button.tsx` decides what
+ * `--hover-bg` is, this file decides when it applies.
+ *
+ * Hover is guarded behind `@media (hover: hover)` throughout. An unguarded
+ * `:hover` on a touch device sticks after the tap and leaves the last thing you
+ * pressed looking permanently active.
+ */
+
+/* ── Glass ────────────────────────────────────────────────────────────────────
+   The thing that makes a translucent surface read as a physical sheet rather
+   than as a lighter rectangle: a bright hairline where the light catches the top
+   edge, and a short gradient falling away beneath it.
+
+   A band, never a wash. Run this gradient over the whole card and the plane the
+   text sits on lightens enough to put even the second ink tier under AA —
+   measured at 3.14:1. Confined to the top, the ground and the highlight can both
+   be far stronger than a "safe" flat design would allow, and the body copy never
+   enters it: `--specular-depth` is shorter than the smallest card padding. */
+.system-glass {
+  position: relative;
+  isolation: isolate;
+}
+
+.system-glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, var(--specular-strength)) 0%,
+      rgba(255, 255, 255, 0) var(--specular-depth)
+    );
+}
+
+/* The lit top edge itself. Drawn as an inset shadow rather than a border so it
+   sits inside the radius and follows the corner instead of cutting across it. */
+.system-glass::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  box-shadow: var(--inset-hairline);
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────────
+   Three layers: a dark cut-in that separates the ring from whatever is under it,
+   the ring, and a bloom so it still reads over a bright accent fill. Components
+   pass their resting shadow through `--rest-shadow` so focusing something does
+   not flatten it. */
+.system-focus:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--rest-shadow, 0 0 #0000);
+}
+
+.system-focus-critical:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-critical), var(--rest-shadow, 0 0 #0000);
+}
+
+/* For a control whose visible box is a wrapper — a field with a unit in it. The
+   ring belongs to the thing the eye reads as the input, not to the bare `<input>`
+   sitting inside it. */
+.system-focus-within:focus-within {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--rest-shadow, 0 0 #0000);
+}
+
+.system-focus-within :focus-visible {
+  outline: none;
+}
+
+/* ── The Founders Hub safety net ──────────────────────────────────────────────
+   Not one file in the Founders Hub had any focus styling: 131 buttons and 88
+   form controls, and a keyboard user got the user-agent outline over a dark
+   surface or nothing at all. That is a defect rather than an inconsistency, and
+   it should not have to wait for 50 files to be converted one at a time.
+
+   So the ring is applied to the region rather than to each control. Anything
+   already on `.system-focus` resolves to the same declaration, so migrating a
+   control changes nothing here — and, more usefully, this cannot be regressed:
+   a raw `<button>` added to the hub tomorrow is covered the day it lands.
+
+   Scoped to the hub deliberately. It is a floor under an internal tool being
+   migrated, not a global default that would let the rest of the app skip the
+   primitives. `founder-hub.test.ts` holds it in place. */
+.founder-hub :is(button, [role='button'], a[href], input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--rest-shadow, var(--shadow-none));
+}
+
+/* Fields in the hub are still raw `<input>`s with their own class strings, most
+   of which set `outline-none`. Giving them the recessed surface here means the
+   ring above lands on something that already reads as a field. */
+.founder-hub :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
+  border-radius: var(--radius-row);
+}
+
+/* ── Controls: buttons, tabs, anything pressable ──────────────────────────── */
+
+.system-control {
+  cursor: pointer;
+  /* The resting shadow is applied here rather than inline on the element.
+     Inline styles outrank any stylesheet rule, so a button that painted its own
+     glow could not have that glow cancelled by `:disabled` below — which is
+     exactly what a disabled primary did: fully dimmed, still blooming. */
+  box-shadow: var(--rest-shadow, var(--shadow-none));
+  transition:
+    background var(--duration-fast) var(--ease-settle),
+    border-color var(--duration-fast) var(--ease-settle),
+    color var(--duration-fast) var(--ease-settle),
+    box-shadow var(--duration-base) var(--ease-settle),
+    opacity var(--duration-fast) var(--ease-settle),
+    transform var(--duration-base) var(--ease-spring);
+}
+
+.system-control:disabled,
+.system-control[aria-disabled='true'] {
+  opacity: var(--disabled-opacity);
+  pointer-events: none;
+  cursor: default;
+  box-shadow: none;
+  transform: none;
+}
+
+@media (hover: hover) {
+  .system-control:hover:not(:disabled) {
+    background: var(--hover-bg, inherit);
+    border-color: var(--hover-edge, currentColor);
+    box-shadow: var(--hover-shadow, var(--rest-shadow, 0 0 #0000));
+    /* The lift is what makes a press feel like it has somewhere to go. */
+    transform: translateY(-1px);
+  }
+}
+
+/* Down past where it started, so the whole gesture is one continuous travel. */
+.system-control:active:not(:disabled) {
+  transform: translateY(1px) scale(0.985);
+  box-shadow: var(--rest-shadow, 0 0 #0000);
+  transition-duration: var(--duration-fast);
+}
+
+/* ── Sheen ────────────────────────────────────────────────────────────────────
+   A band of light crossing the face on hover. On a solid accent fill this is the
+   single detail that reads as expensive — it is the highlight travelling over a
+   curved surface as it turns. Once, quickly, and never on a loop: a control that
+   shimmers continuously is a control that is asking for attention it has not
+   earned. */
+.system-sheen {
+  position: relative;
+  overflow: hidden;
+}
+
+.system-sheen > * {
+  position: relative;
+  z-index: 1;
+}
+
+.system-sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  pointer-events: none;
+  opacity: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 100%
+  );
+  transform: translateX(-160%) skewX(-12deg);
+}
+
+@media (hover: hover) {
+  .system-sheen:hover:not(:disabled)::after {
+    animation: system-sheen 760ms var(--ease-settle);
+  }
+}
+
+@keyframes system-sheen {
+  0% { transform: translateX(-160%) skewX(-12deg); opacity: 0; }
+  18% { opacity: 1; }
+  100% { transform: translateX(340%) skewX(-12deg); opacity: 0; }
+}
+
+/* ── Fields ───────────────────────────────────────────────────────────────── */
+
+.system-field {
+  transition:
+    border-color var(--duration-fast) var(--ease-settle),
+    box-shadow var(--duration-base) var(--ease-settle),
+    background var(--duration-fast) var(--ease-settle);
+}
+
+.system-field:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: default;
+}
+
+/* The placeholder is the one piece of text in a field that is not the value, and
+   it has to stay distinguishable from one without dropping under AA. */
+.system-field::placeholder {
+  color: var(--ink-3);
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .system-field:hover:not(:disabled):not(:focus):not(:focus-within) {
+    border-color: var(--edge-strong);
+  }
+}
+
+/* ── Cards that do something when you press them ──────────────────────────── */
+
+.system-card-interactive {
+  cursor: pointer;
+  transition:
+    background var(--duration-base) var(--ease-settle),
+    border-color var(--duration-base) var(--ease-settle),
+    box-shadow var(--duration-base) var(--ease-settle),
+    transform var(--duration-base) var(--ease-spring);
+}
+
+@media (hover: hover) {
+  .system-card-interactive:hover {
+    background: var(--surface-hover);
+    border-color: var(--edge-strong);
+    box-shadow: var(--shadow-raised);
+    transform: translateY(-2px);
+  }
+}
+
+.system-card-interactive:active {
+  transform: translateY(0) scale(0.995);
+  transition-duration: var(--duration-fast);
+}
+
+/* ── Ground ───────────────────────────────────────────────────────────────────
+   Three blooms drifting independently on long, mutually prime durations, so the
+   pattern never visibly repeats. Slow enough to be weather rather than
+   animation — you should never catch one moving, only notice the room is not
+   the same as it was.
+
+   `will-change` on three large composited layers is the whole cost of the
+   effect, which is why there are three of them and not seven. */
+@keyframes system-bloom-a {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6%, 4%, 0) scale(1.18); }
+}
+
+@keyframes system-bloom-b {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1.1); }
+  50% { transform: translate3d(-7%, 5%, 0) scale(0.92); }
+}
+
+@keyframes system-bloom-c {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(4%, -6%, 0) scale(1.22); }
+}
+
+.system-bloom {
+  position: absolute;
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Position, colour and cycle for each bloom. Here rather than in `Ground.tsx`
+   because they are three long strings of design values, and a component that
+   composes gradients and animation shorthands is a component that has stopped
+   consuming the system and started being one.
+
+   The durations are mutually prime-ish, so the three never resynchronise into a
+   pattern you can watch repeating. */
+.system-bloom-1 {
+  top: -28%;
+  left: -18%;
+  width: 78vw;
+  height: 78vw;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--bloom-accent) calc(var(--bloom-1-alpha) * 100%), transparent),
+    transparent 100%
+  );
+  animation: system-bloom-a var(--duration-drift) ease-in-out infinite;
+}
+
+.system-bloom-2 {
+  top: -22%;
+  right: -20%;
+  width: 68vw;
+  height: 68vw;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--bloom-violet) calc(var(--bloom-2-alpha) * 100%), transparent),
+    transparent 100%
+  );
+  animation: system-bloom-b calc(var(--duration-drift) * 1.45) ease-in-out infinite;
+}
+
+.system-bloom-3 {
+  bottom: -34%;
+  left: 22%;
+  width: 72vw;
+  height: 72vw;
+  background: radial-gradient(
+    closest-side,
+    color-mix(in srgb, var(--bloom-teal) calc(var(--bloom-3-alpha) * 100%), transparent),
+    transparent 100%
+  );
+  animation: system-bloom-c calc(var(--duration-drift) * 1.9) ease-in-out infinite;
+}
+
+/* Corners down. Without it the blooms run into the page edge and read as a
+   coloured border rather than as light in a room. */
+.system-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    120% 90% at 50% 40%,
+    transparent 30%,
+    color-mix(in srgb, var(--ground-base) 88%, transparent) 100%
+  );
+}
+
+/* ── Bloom shapes ─────────────────────────────────────────────────────────────
+   The system owns the *shape* of a glow; the component passes its *colour* in
+   `--tone-glow`. That split is what stops five tones becoming five hand-written
+   shadow strings each time a new component wants one. */
+.system-chip-solid {
+  box-shadow: var(--inset-highlight), 0 4px 14px -4px var(--tone-glow, transparent);
+}
+
+.system-chip-soft {
+  box-shadow: var(--inset-hairline);
+}
+
+.system-card-glow {
+  box-shadow: var(--card-shadow), 0 12px 44px -14px var(--tone-glow, transparent);
+}
+
+.system-tab-glow {
+  box-shadow: 0 0 12px 0 var(--accent-glow);
+}
+
+.system-charge-fill {
+  box-shadow: 0 0 12px 0 var(--tone-glow, transparent);
+}
+
+/* The travelling charge inside a fill. */
+.system-charge-flow {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+}
+
+/* Film grain. The cheapest thing that separates a premium surface from a flat
+   one: large soft gradients band badly on an 8-bit display, and grain is what
+   breaks the bands up and gives the black something to be made of. Fixed, so it
+   sits still while the page scrolls under it — grain that scrolls reads as a
+   texture printed on the content rather than as the film. */
+.system-grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ── Modal ────────────────────────────────────────────────────────────────────
+   The panel arrives on a spring and leaves on a straight line. Overshoot on the
+   way in reads as an object settling into place; overshoot on the way out reads
+   as the interface not being sure it meant to close. */
+@keyframes system-panel-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes system-panel-out {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(10px) scale(0.985); }
+}
+
+@keyframes system-scrim-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes system-scrim-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+/* ── Charge ───────────────────────────────────────────────────────────────────
+   The house signature, borrowed from the quiz: a level that reads as liquid
+   rather than as a filled rectangle. A meniscus drifting across the surface, and
+   a slow travelling highlight inside the fill. */
+@keyframes system-meniscus {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@keyframes system-charge-flow {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(220%); }
+}
+
+.system-meniscus {
+  animation: system-meniscus 4.2s linear infinite;
+}
+
+.system-charge-flow {
+  animation: system-charge-flow 2.6s var(--ease-settle) infinite;
+}
+
+/* ── Reduced motion ───────────────────────────────────────────────────────────
+   State changes still happen, they just stop being animated, and everything that
+   moves on its own stops entirely — the blooms, the grain's companion drift, the
+   charge flow. The press travel goes too: a control that resizes under the
+   finger is exactly what this setting is asking us to stop. */
+@media (prefers-reduced-motion: reduce) {
+  .system-control,
+  .system-field,
+  .system-card-interactive {
+    transition: none;
+  }
+
+  .system-control:hover:not(:disabled),
+  .system-control:active:not(:disabled),
+  .system-card-interactive:hover,
+  .system-card-interactive:active {
+    transform: none;
+  }
+
+  .system-sheen:hover::after {
+    animation: none;
+  }
+
+  .system-bloom,
+  .system-meniscus,
+  .system-charge-flow {
+    animation: none !important;
+  }
+}
