@@ -12,6 +12,7 @@ import {
 } from '../schedule'
 import { createMockSubscription, monthsRemainingOnTerm, skippedDeliveryCount } from '../mock'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 
 const NOW = new Date('2026-06-27T12:00:00Z')
 const sub = () => createMockSubscription(MOCK_CATALOGUE, 'test@example.com')
@@ -95,14 +96,34 @@ describe('skipDelivery', () => {
 })
 
 describe('nextChargeBreakdown', () => {
-  it('charges the flat monthly with no adjustments by default', () => {
+  it('charges the flat monthly plus the postage that rides with it', () => {
+    // The postage is a real second line on the member's Stripe invoice. This
+    // used to return the plan alone, so the hub told someone on a £53.25 plan
+    // that their next charge was £53.25 while Stripe took £56.20 — on the one
+    // screen whose whole job is answering "what am I actually charged?".
     const s = sub()
     const c = nextChargeBreakdown(s, schedule(s))
     expect(c.plan).toBe(s.flatMonthly)
+    expect(c.delivery).toBeGreaterThan(0)
     expect(c.extras).toBe(0)
     expect(c.credits).toBe(0)
-    expect(c.net).toBeCloseTo(s.flatMonthly, 2)
+    expect(c.net).toBeCloseTo(s.flatMonthly + c.delivery, 2)
     expect(c.date).toBe(nextDelivery(schedule(s))!.date)
+  })
+
+  it('charges no postage on a plan that clears the free-delivery line', () => {
+    const s = { ...sub(), flatMonthly: 150 }
+    const c = nextChargeBreakdown(s, schedule(s))
+    expect(c.delivery).toBe(0)
+    expect(c.net).toBeCloseTo(150, 2)
+  })
+
+  it('quotes the same postage the Stripe line was created at', () => {
+    // Both read `recurringDeliveryOption` off the plan's own monthly. Computing
+    // them from different inputs is how the two would drift.
+    const s = sub()
+    const c = nextChargeBreakdown(s, schedule(s))
+    expect(c.delivery).toBe(recurringDeliveryOption(s.flatMonthly)?.price ?? 0)
   })
 
   it('adds one-off extras on top of the flat monthly', () => {
@@ -112,7 +133,7 @@ describe('nextChargeBreakdown', () => {
     const ds = buildDeliverySchedule(s2, MOCK_CATALOGUE, 6, NOW)
     const c = nextChargeBreakdown(s2, ds)
     expect(c.extras).toBeGreaterThan(0)
-    expect(c.net).toBeCloseTo(c.plan + c.extras - c.credits, 2)
+    expect(c.net).toBeCloseTo(c.plan + c.delivery + c.extras - c.credits, 2)
   })
 })
 

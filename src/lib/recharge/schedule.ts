@@ -11,7 +11,8 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine, DeliveryOverride } from './types'
 import { effectiveNextDispatch } from './mock'
-import { getPricingConfig, discountWithFloor, unitCostOf } from '@/lib/stack-blueprint/pricing'
+import { getPricingConfig, discountWithFloor, unitCostOf, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 import { shipsAtCycle } from './clock'
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -233,27 +234,48 @@ export interface ChargeBreakdown {
   date: string | null
   /** The flat monthly membership amount (what's billed every cycle). */
   plan: number
+  /**
+   * Postage billed alongside the plan, every cycle (£). Zero when the plan
+   * clears the free-delivery threshold.
+   *
+   * This is a real line on the member's invoice — `createSubscriptionSession`
+   * adds it as a second recurring item, because Stripe refuses shipping options
+   * in subscription mode. It was missing here, so the hub told a member on a
+   * £47.50 plan that their next charge was £47.50 while Stripe took £50.45, on
+   * the one screen in the app whose entire job is answering "what am I actually
+   * charged?".
+   */
+  delivery: number
   /** One-off extras riding on the next box (charged on top). */
   extras: number
   /** Banked credits applied to the next charge (e.g. from skips). */
   credits: number
-  /** Net charged next = max(0, plan + extras − credits). */
+  /** Net charged next = max(0, plan + delivery + extras − credits). */
   net: number
   /** Upcoming boxes that are skipped (no charge those cycles). */
   skippedUpcoming: number
 }
 
-export function nextChargeBreakdown(sub: MemberSubscription, deliveries: Delivery[]): ChargeBreakdown {
+export function nextChargeBreakdown(
+  sub: MemberSubscription,
+  deliveries: Delivery[],
+  config: PricingConfig = getPricingConfig(),
+): ChargeBreakdown {
   const next = nextDelivery(deliveries)
   const plan = sub.flatMonthly
+  // Derived from the plan's own monthly, which is exactly how the rate on the
+  // Stripe line was chosen at signup — so the two cannot drift apart by being
+  // computed from different inputs.
+  const delivery = recurringDeliveryOption(plan, config)?.price ?? 0
   const extras = next?.oneOffTotal ?? 0
   const credits = round(sub.lines.reduce((s, l) => s + (l.pendingCredit ?? 0), 0))
   return {
     date: next?.date ?? null,
     plan,
+    delivery,
     extras,
     credits,
-    net: round(Math.max(0, plan + extras - credits)),
+    net: round(Math.max(0, plan + delivery + extras - credits)),
     skippedUpcoming: deliveries.filter((d) => d.status === 'skipped').length,
   }
 }

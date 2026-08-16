@@ -10,12 +10,14 @@ import type { MemberSubscription } from '@/lib/recharge/types'
 import { syncSubscriptionToStripe, syncMonthlyAmount } from '@/lib/payments/subscription-sync'
 
 const updateSubscriptionAmount = jest.fn()
+const updateSubscriptionDelivery = jest.fn()
 const cancelStripeSubscription = jest.fn()
 const pauseStripeSubscription = jest.fn()
 const resumeStripeSubscription = jest.fn()
 
 jest.mock('@/lib/payments/stripe', () => ({
   updateSubscriptionAmount: (...a: unknown[]) => updateSubscriptionAmount(...a),
+  updateSubscriptionDelivery: (...a: unknown[]) => updateSubscriptionDelivery(...a),
   cancelStripeSubscription: (...a: unknown[]) => cancelStripeSubscription(...a),
   pauseStripeSubscription: (...a: unknown[]) => pauseStripeSubscription(...a),
   resumeStripeSubscription: (...a: unknown[]) => resumeStripeSubscription(...a),
@@ -145,5 +147,66 @@ describe('pause and resume', () => {
   it('does not re-pause an already-paused plan', async () => {
     await syncSubscriptionToStripe(sub({ status: 'paused' }), sub({ status: 'paused', flatMonthly: 70 }))
     expect(pauseStripeSubscription).not.toHaveBeenCalled()
+  })
+})
+
+
+/**
+ * Postage crossing a delivery band.
+ *
+ * `updateSubscriptionAmount` writes the plan line and deliberately leaves
+ * postage alone, so until `syncDeliveryLine` existed a plan that grew or shrank
+ * kept billing whatever rate it signed up at for the rest of its life. The three
+ * directions are not symmetrical, and the third could not be fixed by updating
+ * anything: a plan that qualified for free delivery at signup has no postage
+ * item at all.
+ *
+ * The rate ladder these lean on: up to £40 → £4.95, up to £100 → £2.95, above
+ * £100 → free.
+ */
+describe('postage on a plan that changes size', () => {
+  it('drops the rate when the plan grows into a cheaper band', async () => {
+    // £38 → £45. Was billed £4.95 forever; owes £2.95.
+    await syncSubscriptionToStripe(sub({ flatMonthly: 38 }), sub({ flatMonthly: 45 }))
+    expect(updateSubscriptionDelivery).toHaveBeenCalledWith(
+      'sub_stripe_1',
+      expect.objectContaining({ price: 2.95 }),
+    )
+  })
+
+  it('removes postage when the plan grows past the free-delivery line', async () => {
+    // £90 → £110. Was billed £2.95 forever; owes nothing.
+    await syncSubscriptionToStripe(sub({ flatMonthly: 90 }), sub({ flatMonthly: 110 }))
+    expect(updateSubscriptionDelivery).toHaveBeenCalledWith('sub_stripe_1', null)
+  })
+
+  it('starts charging postage when the plan shrinks below the free line', async () => {
+    // £110 → £90. The leak: no postage item was ever created for this plan, and
+    // nothing outside checkout could add one, so it shipped free indefinitely.
+    await syncSubscriptionToStripe(sub({ flatMonthly: 110 }), sub({ flatMonthly: 90 }))
+    expect(updateSubscriptionDelivery).toHaveBeenCalledWith(
+      'sub_stripe_1',
+      expect.objectContaining({ price: 2.95 }),
+    )
+  })
+
+  it('leaves Stripe alone when the plan moves within one band', async () => {
+    // Ordinary hub saves must not churn Stripe with a second call.
+    await syncSubscriptionToStripe(sub({ flatMonthly: 45 }), sub({ flatMonthly: 55 }))
+    expect(updateSubscriptionDelivery).not.toHaveBeenCalled()
+  })
+
+  it('does not re-rate postage on a plan being cancelled', async () => {
+    await syncSubscriptionToStripe(sub({ flatMonthly: 90 }), sub({ flatMonthly: 110, status: 'cancelled' }))
+    expect(updateSubscriptionDelivery).not.toHaveBeenCalled()
+  })
+
+  it('does not touch postage when the price change itself was refused', async () => {
+    // A plan Stripe would not re-price must not end up with new postage against
+    // the old price — the same rule the amount sync follows.
+    updateSubscriptionAmount.mockRejectedValueOnce(new Error('card_declined'))
+    const result = await syncSubscriptionToStripe(sub({ flatMonthly: 90 }), sub({ flatMonthly: 110 }))
+    expect(result.ok).toBe(false)
+    expect(updateSubscriptionDelivery).not.toHaveBeenCalled()
   })
 })

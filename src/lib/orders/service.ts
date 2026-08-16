@@ -15,6 +15,7 @@ import crypto from 'crypto'
 import { getSupplier } from '@/lib/supplier'
 import { getOrderingSource } from '@/lib/supplier/ordering'
 import { deliverability } from '@/lib/pricing/zones'
+import { recurringDeliveryOption } from '@/lib/pricing/delivery'
 import { shipsAtCycle } from '@/lib/recharge/clock'
 import { cycleIsSkipped, removedLinesAtCycle } from '@/lib/recharge/schedule'
 import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@/lib/supplier/types'
@@ -250,12 +251,27 @@ export async function createSubscriptionOrder(input: {
     const existing = await getOrder(input.id)
     if (existing) return existing
   }
+  // The postage the member is actually paying on this plan, recorded on the
+  // order the way a one-off records what checkout collected.
+  //
+  // It used to be left at zero, which was wrong in three directions at once. The
+  // order's `total` understated what was taken; every financial reading of
+  // delivery revenue counted subscriptions as contributing nothing; and the
+  // fulfilment queue's `deliveryShortfall` compared a Zone 2 order's full due
+  // against a recorded £0 and reported the whole charge as unpaid, when in fact
+  // the member had paid the mainland rate and only the surcharge was short.
+  //
+  // Read from the plan's own monthly rather than stored, so it always matches
+  // the rate `recurringDeliveryOption` put on the Stripe line at signup.
+  const postage = recurringDeliveryOption(input.sub.flatMonthly)?.price ?? 0
+
   return createOrderFromCheckout({
     id: input.id,
     channel: 'subscription',
     userId: input.userId ?? null,
     email: input.email ?? input.sub.customerEmail ?? null,
     lines: subscriptionOrderLines(input.sub, input.catalogue, input.cycle),
+    shipping: postage,
     shippingAddress: input.shippingAddress ?? input.sub.shippingAddress ?? null,
     stripePaymentIntentId: input.stripePaymentIntentId ?? null,
     status: 'paid',
