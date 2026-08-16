@@ -34,7 +34,7 @@ export function PortalLogin({ mode = 'demo' }: { mode?: FounderAuthMode }) {
   }
 
   return (
-    <Ground>
+    <Ground className="founder-hub">
       <div
         className="min-h-screen flex flex-col items-center justify-center mx-auto"
         style={{ padding: 'var(--gutter)', maxWidth: '26rem' }}

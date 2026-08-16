@@ -52,7 +52,11 @@ export function PortalShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <Ground>
+    // `founder-hub` is the hook for the focus-ring floor in `system.css`. Every
+    // control inside the hub gets a visible focus state whether or not it has
+    // been converted to `Button` yet — and a raw one added tomorrow is covered
+    // the day it lands. See `founder-hub.test.ts`.
+    <Ground className="founder-hub">
       {/* One of the three surfaces allowed to blur: persistent chrome over a
           static page, which is what `backdrop-filter` is worth paying for. */}
       <header

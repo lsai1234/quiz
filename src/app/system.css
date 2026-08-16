@@ -82,6 +82,32 @@
   outline: none;
 }
 
+/* ── The Founders Hub safety net ──────────────────────────────────────────────
+   Not one file in the Founders Hub had any focus styling: 131 buttons and 88
+   form controls, and a keyboard user got the user-agent outline over a dark
+   surface or nothing at all. That is a defect rather than an inconsistency, and
+   it should not have to wait for 50 files to be converted one at a time.
+
+   So the ring is applied to the region rather than to each control. Anything
+   already on `.system-focus` resolves to the same declaration, so migrating a
+   control changes nothing here — and, more usefully, this cannot be regressed:
+   a raw `<button>` added to the hub tomorrow is covered the day it lands.
+
+   Scoped to the hub deliberately. It is a floor under an internal tool being
+   migrated, not a global default that would let the rest of the app skip the
+   primitives. `founder-hub.test.ts` holds it in place. */
+.founder-hub :is(button, [role='button'], a[href], input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring), var(--rest-shadow, var(--shadow-none));
+}
+
+/* Fields in the hub are still raw `<input>`s with their own class strings, most
+   of which set `outline-none`. Giving them the recessed surface here means the
+   ring above lands on something that already reads as a field. */
+.founder-hub :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
+  border-radius: var(--radius-row);
+}
+
 /* ── Controls: buttons, tabs, anything pressable ──────────────────────────── */
 
 .system-control {
