@@ -35,6 +35,7 @@ import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { ShareSheet } from '@/components/share-card/ShareSheet'
+import { ShareStackButton } from '@/components/share-card/ShareStackButton'
 import { buildSharePayload } from '@/lib/share-card/payload'
 import { ConsentGate } from '@/components/legal/ConsentGate'
 import { funnel } from '@/lib/analytics/quiz'
@@ -450,21 +451,7 @@ export function StackReviewPage() {
           drinksMode={!!answers.drinksMode}
         />
 
-        <div className="px-5 max-w-lg mx-auto -mt-2 mb-5">
-          <button
-            type="button"
-            onClick={() => setShareOpen(true)}
-            className="w-full py-3 rounded-2xl text-sm font-bold tracking-tight flex items-center justify-center gap-2"
-            style={{
-              fontFamily: 'var(--font-display)',
-              background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
-              border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
-              color: 'var(--color-accent)',
-            }}
-          >
-            Share your stack
-          </button>
-        </div>
+        <ShareStackButton onOpen={() => setShareOpen(true)} />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
 
