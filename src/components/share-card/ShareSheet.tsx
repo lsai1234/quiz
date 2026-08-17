@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ShareCardPayload } from '@/lib/share-card/types'
 import { FORMATS, type ShareFormat } from '@/lib/share-card/format'
-import { cardImageUrl, cardShareUrl, cardFileName, cardShareText } from '@/lib/share-card/share-link'
+import { cardImageUrl, cardShareUrl, cardFileName, cardShareText, mintShareUrl } from '@/lib/share-card/share-link'
 import { shareCard, copyLink, isIosSafari } from '@/lib/share-card/share-action'
 import { share as shareEvents } from '@/lib/analytics/share'
 
@@ -58,7 +58,26 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
   const openedAt = useRef(Date.now())
 
   const imageUrl = useMemo(() => cardImageUrl(payload, format), [payload, format])
-  const link = useMemo(() => cardShareUrl(payload), [payload])
+
+  /**
+   * The link, minted once and reused.
+   *
+   * Starts as the long stateless URL so the sheet is usable the instant it
+   * opens, then upgrades to `/s/<token>` when the mint comes back. Sharing
+   * before it lands gets the long link, which works — the short one is a nicety,
+   * and blocking the primary button on a network call to get it would be
+   * trading the feature for the polish.
+   */
+  const [link, setLink] = useState(() => cardShareUrl(payload))
+  const minted = useRef(false)
+
+  useEffect(() => {
+    if (minted.current) return
+    minted.current = true
+    let live = true
+    mintShareUrl(payload).then(({ url }) => { if (live) setLink(url) })
+    return () => { live = false }
+  }, [payload])
 
   useEffect(() => { setMounted(true) }, [])
 

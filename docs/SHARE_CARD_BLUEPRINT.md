@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phases 0–2 landed (Phase 1 rebuilt after review). Phases 3–6 planned.
+**Status:** Phases 0–3 landed (Phase 1 rebuilt after review). Phases 4–6 planned.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -397,14 +397,34 @@ Three things the build changed:
 **Exit:** works on iOS Safari, Android Chrome and desktop; failure of any rung falls to
 the next rung visibly rather than silently.
 
-### Phase 3 — Persistence and the landing page · 1.5d
+### Phase 3 — Persistence and the landing page · 1.5d — **done**
 
-The migration, the repo module, `/s/[token]` — a real page with OG/Twitter meta, the
-card rendered large, and one CTA: *Build your own stack*. View counting, revocation,
-retention sweep.
+The `share_cards` migration, the repo, `/api/share` to mint a token, a token-backed
+image route, and `/s/[token]` — a real page with OG and Twitter meta, the card rendered
+large, and one CTA. View counting, revocation, and the retention sweep on the existing
+daily cron.
 
-**Exit:** a pasted link previews correctly in WhatsApp, iMessage, Slack, Discord and X;
-`/s/` → quiz-start is tracked end to end.
+**Exit met:** 14 storage tests plus the existing share suite; full suite 2470 green;
+`tsc --noEmit` clean; production build clean with all four routes present.
+
+Four decisions worth keeping:
+
+- **Views are counted on the page, never in the image route.** Every unfurl bot that
+  touches a pasted link fetches the image, and counting those would make a card nobody
+  opened look like a card that travelled.
+- **`revoked_at`, not a delete.** A link that has been taken down stops rendering without
+  its view history going with it.
+- **The sweep never touches a card with an account behind it.** A card attached to a
+  customer is theirs, and deleting it because a year passed is deleting something of
+  theirs on a schedule they never agreed to. Anonymous cards only.
+- **The short link never blocks the share.** The sheet opens with the long stateless URL
+  and upgrades to `/s/<token>` when the mint returns. A database that is down, slow or
+  absent costs a tidy URL, not the ability to post.
+
+The payload is still user input on the way in: anyone can post a crafted one and get a
+token. That is fine for a vanity graphic and it is written down in the route, because
+Phase 5 must not treat a stored card as evidence of anything — an entry is verified
+against what somebody actually posted.
 
 ### Phase 4 — Influencer mode · 1d
 

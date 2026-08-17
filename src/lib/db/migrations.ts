@@ -354,6 +354,32 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX password_resets_user ON password_resets(user_id);
   `,
+  // v11 — share cards. A card is a frozen snapshot of somebody's stack, taken
+  // at the moment they pressed Share, addressed by a short readable token.
+  //
+  // `payload` is the whole document rather than a set of columns, on purpose:
+  // nothing queries inside a card, the shape is versioned by the payload's own
+  // `v` field, and a card that has been posted must never be rewritten by a
+  // later migration. The indexed columns are the ones the business asks about —
+  // whose card it is, and which partner it attributes to.
+  //
+  // `revoked_at` rather than a delete, so a link that has been taken down stops
+  // rendering without the view history going with it.
+  `
+  CREATE TABLE share_cards (
+    token        TEXT PRIMARY KEY,
+    user_id      TEXT REFERENCES users(id) ON DELETE SET NULL,
+    partner_code TEXT,
+    payload      TEXT NOT NULL,
+    view_count   INTEGER NOT NULL DEFAULT 0,
+    created_at   TEXT NOT NULL,
+    last_seen_at TEXT,
+    revoked_at   TEXT
+  );
+  CREATE INDEX share_cards_user ON share_cards(user_id);
+  CREATE INDEX share_cards_partner ON share_cards(partner_code);
+  CREATE INDEX share_cards_created ON share_cards(created_at);
+  `,
 ]
 
 /**
