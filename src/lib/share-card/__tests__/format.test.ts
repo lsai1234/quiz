@@ -126,10 +126,10 @@ describe('the entry card', () => {
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
     expect(view.stackName).toBe('Iron Foundations')
     expect(view.archetype).toBe('The Strength Builder')
-    // Two products, where the story card shows five. The three entry steps have
-    // to be legible or the promotion does not work, and they cost about a
-    // product row each. On this card the stack is the hook, not the subject.
-    expect(view.lineup).toHaveLength(2)
+    // The same five as the story card. A two-product version of somebody's
+    // stack undersells both the stack and the quiz that built it; the room for
+    // the prize block and the entry steps comes out of the type scale instead.
+    expect(view.lineup).toHaveLength(5)
   })
 
   it('caps the steps at three', () => {

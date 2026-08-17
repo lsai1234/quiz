@@ -66,6 +66,8 @@ interface Geometry {
   cropMarks: boolean
   specName: number
   rowPad: number
+  /** The prize headline's ceiling. Only the entry card draws one. */
+  prizeMax: number
   /** Room the headline has, before the optical hang buys eight pixels back. */
   headlineRoom: number
 }
@@ -78,7 +80,8 @@ function geometry(format: string): Geometry {
         w: 1080, h: 1080, margin: 76, safeTop: 76, safeBottom: 1004, artH: 640,
         headlineMax: 124, headlineMin: 68,
         score: { size: 268, left: -24, top: 176 },
-        cropMarks: true, specName: 40, rowPad: 13, headlineRoom: 1080 - 76 * 2,
+        cropMarks: true, specName: 40, rowPad: 13, prizeMax: 64,
+        headlineRoom: 1080 - 76 * 2,
       }
 
     /**
@@ -91,16 +94,35 @@ function geometry(format: string): Geometry {
         w: 1200, h: 630, margin: 56, safeTop: 56, safeBottom: 574, artH: 630,
         headlineMax: 86, headlineMin: 48,
         score: null,
-        cropMarks: false, specName: 30, rowPad: 8, headlineRoom: 760,
+        cropMarks: false, specName: 30, rowPad: 8, prizeMax: 52, headlineRoom: 760,
       }
 
-    /** The story frame, and the competition card on it. The brief's numbers. */
+    /**
+     * The competition card. The story frame, carrying two extra blocks.
+     *
+     * It shows the same five products as the story card *and* a prize headline
+     * and three entry steps — about 380px of type the story card does not have
+     * to find room for. Everything else therefore comes down a step and the
+     * score moves up and in: the hierarchy is identical, the scale is not.
+     * These numbers were arrived at by rendering, not by arithmetic.
+     */
+    case 'entry':
+      return {
+        w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
+        headlineMax: 146, headlineMin: 78,
+        score: { size: 344, left: -30, top: 284 },
+        cropMarks: true, specName: 40, rowPad: 11, prizeMax: 74,
+        headlineRoom: 1080 - 84 * 2,
+      }
+
+    /** The story frame. The brief's numbers. */
     default:
       return {
         w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
         headlineMax: 172, headlineMin: 92,
         score: { size: 430, left: -38, top: 352 },
-        cropMarks: true, specName: 52, rowPad: 19, headlineRoom: 1080 - 84 * 2,
+        cropMarks: true, specName: 52, rowPad: 19, prizeMax: 88,
+        headlineRoom: 1080 - 84 * 2,
       }
   }
 }
@@ -215,12 +237,11 @@ function moneySplit(text: string): Array<{ text: string; money: boolean }> {
 }
 
 /** The prize headline, sized to the room the handle box leaves it. */
-const PRIZE_MAX = 88
 const PRIZE_MIN = 44
 
 function fitPrize(text: string, g: Geometry): number {
   const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 + 5
-  return Math.max(PRIZE_MIN, Math.min(PRIZE_MAX, Math.floor(room / widthEm(text))))
+  return Math.max(PRIZE_MIN, Math.min(g.prizeMax, Math.floor(room / widthEm(text))))
 }
 
 /** The gutter the step numbers sit in. */
@@ -447,13 +468,11 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
   const art = override === undefined ? cardArt(view.artKey, view.heroImage) : override
   const entry = view.entry
   const { line1, line2, size: headline } = fitHeadline(view.stackName, g)
-  // Six rows and a prize block will not both fit above the safe line at full
-  // row padding, so the table tightens rather than the body growing under the
-  // profile header. The designed rhythm is the geometry's; two thirds is the
-  // floor.
-  const crowded = view.specRows.length + (entry ? 1 : 0) >= 6
-  const rowPad = crowded ? Math.round(g.rowPad * 0.63) : g.rowPad
-  const prizeSize = entry ? fitPrize(entry.prize, g) : PRIZE_MAX
+  // The table's rhythm is the format's, not a runtime squeeze. The entry card
+  // used to tighten its rows on the fly to fit the prize block; it now carries
+  // its own scale, which is the same decision made once instead of per render.
+  const rowPad = g.rowPad
+  const prizeSize = entry ? fitPrize(entry.prize, g) : g.prizeMax
   const railSize = Math.max(13, Math.round(g.w * 0.0176))
   const stepSize = entry ? fitSteps(entry.steps, railSize, g) : railSize
 

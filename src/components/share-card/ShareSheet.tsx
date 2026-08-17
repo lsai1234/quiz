@@ -37,9 +37,14 @@ const ACCENT = '#00D4FF'
 /**
  * The formats offered, in the order they are offered.
  *
- * `entry` is appended only while a competition is running: it is a different
- * card, not a badge on this one, so picking it loads a different picture. OG is
- * never offered — it is a link preview, not something anybody downloads.
+ * `entry` is prepended, not appended, and it is offered only while a competition
+ * is running: it is a different card, not a badge on this one, so picking it
+ * loads a different picture. First and preselected because while a draw is on it
+ * is the card we want shared — a promotion that depends on somebody noticing a
+ * third tab is a promotion most people never enter. The moment the draw closes
+ * the tab disappears and "My stack" is the default again, with no code change.
+ *
+ * OG is never offered — it is a link preview, not something anybody downloads.
  */
 const BASE_FORMATS: ShareFormat[] = ['story', 'square']
 
@@ -69,13 +74,26 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
    * would keep offering an entry into a draw that has closed.
    */
   const [comp, setComp] = useState<{ state: string; prize: string; test: boolean } | null>(null)
-  const offered: ShareFormat[] = comp ? [...BASE_FORMATS, 'entry'] : BASE_FORMATS
+  const offered: ShareFormat[] = comp ? ['entry', ...BASE_FORMATS] : BASE_FORMATS
+
+  /**
+   * Whether the person has picked a tab themselves.
+   *
+   * The competition answer arrives a moment after the sheet opens, and switching
+   * the card under somebody who has already chosen one is the sheet overruling
+   * them. So the preselect happens once, and only if they have not touched it.
+   */
+  const chosen = useRef(false)
 
   useEffect(() => {
     let live = true
     fetch('/api/competition/enter')
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (live && d?.state === 'open') setComp(d) })
+      .then((d) => {
+        if (!live || d?.state !== 'open') return
+        setComp(d)
+        if (!chosen.current) setFormat('entry')
+      })
       .catch(() => {})
     return () => { live = false }
   }, [])
@@ -132,6 +150,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
   }, [close])
 
   const pickFormat = (next: ShareFormat) => {
+    chosen.current = true
     if (next === format) return
     shareEvents.format({ from: format, to: next })
     setReady(false)
@@ -283,7 +302,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
           </p>
         ) : (
           <>
-            <div className="flex gap-2 mt-4" role="tablist" aria-label="Card size">
+            <div className="flex gap-2 mt-4" role="tablist" aria-label="Which card">
               {offered.map((f) => {
                 const active = f === format
                 return (

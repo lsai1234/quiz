@@ -165,3 +165,69 @@ describe('closing', () => {
     expect(propsFor('share_dismiss')).toMatchObject({ shared: false })
   })
 })
+
+/**
+ * Which card the sheet opens on.
+ *
+ * While a draw is running the competition card is the one we want shared, and a
+ * promotion that depends on somebody noticing a third tab is a promotion most
+ * people never enter. So it comes first and it is preselected — but only until
+ * the person picks for themselves, because a sheet that swaps the card under
+ * somebody mid-choice is the sheet overruling them.
+ */
+function withCompetition(open: boolean) {
+  global.fetch = jest.fn().mockImplementation((url: string) => {
+    if (String(url).includes('/api/competition/enter')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () => (open
+          ? { state: 'open', prize: 'Win £200 of supplements', test: false }
+          : { state: 'off' }),
+      })
+    }
+    return Promise.resolve({ ok: true, blob: async () => new Blob(['png'], { type: 'image/png' }) })
+  }) as unknown as typeof fetch
+}
+
+describe('which card it opens on', () => {
+  it('offers the competition first and starts there', async () => {
+    setNavigator({ userAgent: 'desktop' })
+    withCompetition(true)
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    await waitFor(() =>
+      expect(screen.getByRole('tab', { name: /competition/i })).toHaveAttribute('aria-selected', 'true'))
+    expect(screen.getAllByRole('tab').map((t) => t.textContent))
+      .toEqual(['Competition', 'My stack', 'Post'])
+  })
+
+  it('leaves the tab alone once somebody has picked one', async () => {
+    // The competition answer lands a moment after the sheet opens. Somebody who
+    // has already chosen "My stack" must not have it swapped underneath them.
+    setNavigator({ userAgent: 'desktop' })
+    let resolve: (v: unknown) => void = () => {}
+    const pending = new Promise((r) => { resolve = r })
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/competition/enter')) return pending
+      return Promise.resolve({ ok: true, blob: async () => new Blob(['png'], { type: 'image/png' }) })
+    }) as unknown as typeof fetch
+
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    await userEvent.click(screen.getByRole('tab', { name: /post/i }))
+
+    resolve({ ok: true, json: async () => ({ state: 'open', prize: 'Win £200', test: false }) })
+
+    await waitFor(() => expect(screen.getByRole('tab', { name: /competition/i })).toBeInTheDocument())
+    expect(screen.getByRole('tab', { name: /post/i })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('is My stack, first and only, when no draw is running', async () => {
+    setNavigator({ userAgent: 'desktop' })
+    withCompetition(false)
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    expect(screen.getByRole('tab', { name: /my stack/i })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab', { name: /competition/i })).not.toBeInTheDocument()
+  })
+})

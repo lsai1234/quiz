@@ -108,10 +108,11 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     // does, and the stack is the hook rather than the subject here. Measured by
     // rendering it — at a third, the route block ran off the bottom.
     imageRatio: 0.26,
-    // Two products, where the story card shows five. The three entry steps have
-    // to be legible on this card or the promotion does not work, and they cost
-    // about a product row each. The stack is the hook here, not the subject.
-    lineupRows: 2,
+    // The same five as the story card. The stack is the hook that stops the
+    // scroll, and a two-product version of somebody's stack undersells both the
+    // stack and the quiz that built it. The room for the prize block and the
+    // three entry steps comes out of the type scale instead — see `geometry`.
+    lineupRows: 5,
     showStats: false,
     showFitMeter: true,
     showTier: false,
