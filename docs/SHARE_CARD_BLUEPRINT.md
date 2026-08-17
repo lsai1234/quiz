@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phases 0–4 landed (Phase 1 rebuilt after review). Phase 5 waits on legal; Phase 6 ongoing.
+**Status:** Phases 0–5 landed (Phase 1 rebuilt after review). Phase 5 is off by default and waits on the wording. Phase 6 ongoing.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -451,19 +451,40 @@ Two decisions:
 Conversion is deliberately not repeated here: orders and revenue per code already live on
 the money tab, and this is the part of the funnel a partner can act on.
 
-### Phase 5 — The competition · 2.5d
+### Phase 5 — The competition · 2.5d — **built, off by default**
 
-The `story-comp` variant and its routing (§3.7), `competition_entries` (share token,
-claimed handle, channel, state), the entry flow off the share sheet, a T&Cs page under
-`src/app/legal/`, live campaign config with a closing date, an entries list and winner
-draw in the Founders Hub, and the free-entry route required by §6.2.
+The mechanics, with the wording left as a settings screen to fill in when it is written.
 
-**Entry is not the same object as a share.** One person may share five times and enter
-once; someone may enter without ever sharing (the free route). Modelling entry as "a
-share that happened" makes the draw unauditable.
+- **Founders Hub → Settings → Competition.** Every field the CAP Code requires, plus
+  `off` / `test` / `live`. It will not let the promotion go `live` while any of them is
+  empty, and it lists which — a checklist is the useful version of "no".
+- **`test` runs the whole flow** as a visible rehearsal: the entry band on the card says
+  so, the entry screen says so, and entries are recorded as test rows kept out of every
+  draw. That is what trying it before the wording exists looks like.
+- **`competition_entries`**, its own table, because an entry is not a share (§3.7).
+- **The entry band** on the card, as the second kind of callout — prize, mechanic,
+  closing date and terms pointer, because a significant condition has to be on the
+  promotion itself.
+- **`/legal/competition`** — the terms, rendered from config, and the free entry route.
+- **Entries list and the draw** in the Founders Hub.
 
-**Exit:** legal sign-off (§6.2) obtained before this phase ships. Not before it is
-built — before it is *shipped*.
+**Exit met:** 17 competition tests; full suite 2496 green; `tsc --noEmit` clean;
+production build clean with all routes present.
+
+Three things worth keeping:
+
+- **Nothing is ever auto-verified.** Anyone can mint a card token by calling
+  `/api/share`, so an entry carrying one is a *claim* that somebody posted. Every entry
+  lands `pending` and a person confirms it. The draw only ever sees `verified`.
+- **The free route is the same form, in the same number of taps.** "Equal standing" is
+  measurable, and an email address to find would not be equal.
+- **A test entry can never win.** `is_test` exists for exactly one failure — a rehearsal
+  row taking £200 of real product — and the draw excludes it in SQL rather than in a
+  filter somebody can forget.
+
+**Still outstanding, and not mine to write:** the prize structure ("up to £200" cannot go
+into terms as it stands), the promoter's registered address, and the winner-selection
+wording. The screen is waiting for them.
 
 ### Phase 6 — Measure and iterate · ongoing
 

@@ -7,6 +7,7 @@ import { FORMATS, type ShareFormat } from '@/lib/share-card/format'
 import { cardImageUrl, cardShareUrl, cardFileName, cardShareText, mintShareUrl } from '@/lib/share-card/share-link'
 import { shareCard, copyLink, isIosSafari } from '@/lib/share-card/share-action'
 import { share as shareEvents } from '@/lib/analytics/share'
+import { CompetitionEntry } from './CompetitionEntry'
 
 /**
  * The share sheet.
@@ -53,6 +54,23 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
   const [mounted, setMounted] = useState(false)
   const [format, setFormat] = useState<ShareFormat>('story')
   const [stage, setStage] = useState<Stage>({ kind: 'idle' })
+  /**
+   * The competition, if one is running.
+   *
+   * Fetched rather than passed in, and fetched *live*, because §3.7 is explicit
+   * that a promotion's state is never frozen: a sheet that decided at build time
+   * would keep offering an entry into a draw that has closed.
+   */
+  const [comp, setComp] = useState<{ state: string; prize: string; test: boolean } | null>(null)
+
+  useEffect(() => {
+    let live = true
+    fetch('/api/competition/enter')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (live && d?.state === 'open') setComp(d) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
   const [ready, setReady] = useState(false)
   const shared = useRef(false)
   const openedAt = useRef(Date.now())
@@ -307,6 +325,10 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
               Copy link
             </button>
           </>
+        )}
+
+        {comp && stage.kind !== 'long-press' && (
+          <CompetitionEntry prize={comp.prize} test={comp.test} link={link} />
         )}
 
         {stage.kind === 'done' && (

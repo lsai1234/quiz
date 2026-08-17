@@ -380,6 +380,33 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX share_cards_partner ON share_cards(partner_code);
   CREATE INDEX share_cards_created ON share_cards(created_at);
   `,
+  // v12 — competition entries.
+  //
+  // An entry is NOT a share, and this being its own table is the reason why. One
+  // person may share five times and enter once; somebody may enter without ever
+  // sharing, because the free entry route the CAP Code requires has to be of
+  // equal standing. Modelling an entry as "a share that happened" makes the draw
+  // unauditable, which is the one thing a prize draw cannot be.
+  //
+  // `share_token` is nullable for exactly that reason — a free entry has no card
+  // behind it. `is_test` keeps rehearsal entries in the same table and out of
+  // every real draw.
+  `
+  CREATE TABLE competition_entries (
+    id           TEXT PRIMARY KEY,
+    campaign     TEXT NOT NULL,
+    share_token  TEXT,
+    handle       TEXT NOT NULL,
+    channel      TEXT NOT NULL,
+    route        TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    is_test      INTEGER NOT NULL DEFAULT 0,
+    note         TEXT,
+    created_at   TEXT NOT NULL
+  );
+  CREATE INDEX competition_entries_campaign ON competition_entries(campaign, state);
+  CREATE UNIQUE INDEX competition_entries_once ON competition_entries(campaign, channel, handle);
+  `,
 ]
 
 /**

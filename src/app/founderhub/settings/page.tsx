@@ -1,6 +1,7 @@
 import { DataSourceToggle } from '@/components/portal/DataSourceToggle'
 import { IntegrationToggle } from '@/components/portal/IntegrationToggle'
 import { OrderSendingToggle } from '@/components/portal/OrderSendingToggle'
+import { CompetitionSettings } from '@/components/portal/CompetitionSettings'
 
 const SUPPLIER_OPTIONS = [
   { mode: 'mock', label: 'Mock supplier', desc: 'Use the built-in PowerBody sample feed. Best while building.' },
@@ -23,6 +24,16 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-black mb-1" style={heading}>Settings</h1>
         <p className="text-sm text-[var(--ink-3)]">Choose where the app reads products, stock and payments from. Each defaults to mock while we build.</p>
       </div>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Competition</h2>
+        <p className="text-xs text-[var(--ink-3)] mb-2">
+          The share-card giveaway. Off by default; <strong>Test</strong> runs the whole flow as a
+          rehearsal. Going live needs the wording a prize draw legally has to carry, and this
+          screen will not let it until every field is filled in.
+        </p>
+        <CompetitionSettings />
+      </section>
 
       <section>
         <h2 className="text-sm font-bold mb-2" style={heading}>Data source</h2>

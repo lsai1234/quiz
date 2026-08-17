@@ -119,7 +119,21 @@ const TIER_LABEL: Record<string, string> = {
  * competition's entry band lands in Phase 5 as a second kind rather than as a
  * second card, per §3.7.
  */
-export type ShareCallout = { kind: 'code'; code: string; caption: string }
+export type ShareCallout =
+  | { kind: 'code'; code: string; caption: string }
+  | {
+      kind: 'competition'
+      /** The prize, as advertised. */
+      prize: string
+      /** What somebody has to do. */
+      mechanic: string
+      /** "Closes 30 Nov" — a significant condition, so it is on the image. */
+      closes: string
+      /** Where the full terms are. Also a significant condition. */
+      terms: string
+      /** Set while this is a rehearsal. Printed on the card. */
+      test: boolean
+    }
 
 /** One number-over-caption pair. */
 export interface ShareStat {
@@ -173,7 +187,28 @@ export interface ShareCardView {
   footer: string
 }
 
-export function buildShareCardView(payload: ShareCardPayload, format: ShareFormat): ShareCardView {
+/**
+ * The competition band, when there is one to draw.
+ *
+ * Passed in rather than read here, because it comes from live campaign config
+ * and this function is pure — and because the whole point of §3.7 is that the
+ * promotion's state is read at render time, never frozen into the payload. A
+ * card still advertising a closed draw is a compliance problem; a card with a
+ * stale product name is just old.
+ */
+export interface CompetitionBand {
+  prize: string
+  mechanic: string
+  closes: string
+  terms: string
+  test: boolean
+}
+
+export function buildShareCardView(
+  payload: ShareCardPayload,
+  format: ShareFormat,
+  competition?: CompetitionBand | null,
+): ShareCardView {
   const spec = FORMATS[format]
 
   const greeting = payload.firstName ? `${payload.firstName.toUpperCase()}’S ` : ''
@@ -184,7 +219,7 @@ export function buildShareCardView(payload: ShareCardPayload, format: ShareForma
   // The band costs a product row. That trade is the point rather than a
   // compromise: an influencer's card is carrying their code, and one fewer
   // product is a cheaper price than a footer pushed off the bottom edge.
-  const hasCallout = spec.showCallout && !!payload.code
+  const hasCallout = spec.showCallout && (!!competition || !!payload.code)
   const rows = Math.max(1, spec.lineupRows - (hasCallout ? 1 : 0))
   const imageRatio = spec.imageRatio - (hasCallout ? 0.05 : 0)
   const shown = payload.lineup.slice(0, rows)
@@ -232,10 +267,15 @@ export function buildShareCardView(payload: ShareCardPayload, format: ShareForma
     // The code was a chip in the footer, which is where a caption goes, not an
     // offer. An influencer's whole reason to post the card is that code, so it
     // gets the band.
-    callout:
-      spec.showCallout && payload.code
-        ? { kind: 'code', code: payload.code, caption: 'Use this code at checkout' }
-        : null,
+    // The competition band wins over the code band. Both would be two offers on
+    // one card, and the entry card exists because its job is the whole card.
+    callout: !spec.showCallout
+      ? null
+      : competition
+        ? { kind: 'competition' as const, ...competition }
+        : payload.code
+          ? { kind: 'code' as const, code: payload.code, caption: 'Use this code at checkout' }
+          : null,
     footer: 'getchrgd.co.uk',
   }
 }

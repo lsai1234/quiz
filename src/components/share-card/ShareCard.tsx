@@ -302,23 +302,63 @@ function List({ title, items, max, width, marker }: {
  * a caption goes, and a code in a caption is a code nobody types.
  */
 function Callout({ callout }: { callout: NonNullable<ShareCardView['callout']> }) {
+  if (callout.kind === 'code') {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          background: P.inkPrint,
+          borderRadius: px(P.radiusRow),
+          padding: `${px(P.space3)}px ${px(P.space4)}px`,
+        }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={eyebrow(withAlpha(P.surfacePrint, 0.62), P.textMicro)}>{callout.caption}</div>
+          <div style={display(px(P.textDisplay), P.surfacePrint)}>{callout.code}</div>
+        </div>
+        <Bolt size={px(P.textDisplay)} color={P.accent} />
+      </div>
+    )
+  }
+
+  /**
+   * The entry band.
+   *
+   * Everything on it is there because the CAP Code requires a significant
+   * condition to appear on the promotion itself, not only behind a link: the
+   * prize, what somebody has to do, the closing date, and where the full terms
+   * are. It is the densest thing on the card for that reason — it is not
+   * decoration, it is the part that makes the promotion legal to run.
+   *
+   * `test` prints across it during a rehearsal, so a card that escapes into a
+   * story before the wording is signed off says what it is.
+   */
   return (
     <div
       style={{
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        flexDirection: 'column',
         flexShrink: 0,
         background: P.inkPrint,
         borderRadius: px(P.radiusRow),
         padding: `${px(P.space3)}px ${px(P.space4)}px`,
+        gap: px(P.space1),
       }}
     >
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={eyebrow(withAlpha(P.surfacePrint, 0.62), P.textMicro)}>{callout.caption}</div>
-        <div style={display(px(P.textDisplay), P.surfacePrint)}>{callout.code}</div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={eyebrow(P.accent, P.textMicro)}>
+          {callout.test ? 'Test — not a live promotion' : 'Win'}
+        </div>
+        <Bolt size={px(P.textLead)} color={P.accent} />
       </div>
-      <Bolt size={px(P.textDisplay)} color={P.accent} />
+      <div style={display(px(P.textTitle), P.surfacePrint)}>{callout.prize}</div>
+      <div style={body(P.textBodySm, withAlpha(P.surfacePrint, 0.78))}>{callout.mechanic}</div>
+      <div style={body(P.textMicro, withAlpha(P.surfacePrint, 0.55))}>
+        {`${callout.closes} · ${callout.terms}`}
+      </div>
     </div>
   )
 }
