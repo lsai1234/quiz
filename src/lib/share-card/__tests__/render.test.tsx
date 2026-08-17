@@ -53,7 +53,7 @@ const BAND: CompetitionBand = {
   test: false,
   handle: '@getchrgd_',
   route: 'Quiz link in our bio',
-  steps: ['Follow @getchrgd_', 'Share this to your story', 'Tag @getchrgd_ in your story'],
+  steps: ['Follow @getchrgd_', 'Take the quiz', 'Share it to your story tagging us'],
 }
 
 describe('the card rasterises', () => {

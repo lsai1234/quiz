@@ -22,7 +22,7 @@ const BAND = {
   test: false,
   handle: '@getchrgd_',
   route: 'Take the quiz — link in our bio',
-  steps: ['Follow @getchrgd_', 'Take the quiz', 'Tag @getchrgd_ in your story'],
+  steps: ['Follow @getchrgd_', 'Take the quiz', 'Share it to your story tagging us'],
 }
 
 describe('formats', () => {
