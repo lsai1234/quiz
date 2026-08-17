@@ -7,7 +7,8 @@ import { ShareCard } from '@/components/share-card/ShareCard'
 import { buildShareCardView, FORMATS, type CompetitionBand, type ShareFormat } from '../format'
 import { loadShareCardFonts } from '../fonts'
 import { sharePersonas } from '../personas'
-import { decodePng, brightPixels, patchDeviation, patchMean } from './png'
+import { decodePng, brightPixels, patchDeviation, patchMean, solidPngDataUri } from './png'
+import { ART_KEYS } from '../art'
 
 /**
  * Every persona, in every format, actually rasterised.
@@ -101,5 +102,48 @@ describe('the card rasterises', () => {
       expect(brightPixels(image, 0, 250, 180)).toBe(0)
       expect(brightPixels(image, 1620, 1920, 180)).toBe(0)
     }
+  })
+})
+
+/**
+ * The other half of the picture: what happens once photography is uploaded.
+ *
+ * `resolveCardArt` hands the renderer a data URI and the card draws it instead
+ * of the gradient field. Worth its own test because the two paths are different
+ * elements — an `<img>` against a stack of gradient divs — and only one of them
+ * was exercised by everything above.
+ */
+describe('with uploaded art', () => {
+  const [persona] = PERSONAS
+
+  it.each(ART_KEYS)('draws the upload rather than the field — %s', async (key) => {
+    const view = buildShareCardView({ ...persona.payload, artKey: key }, 'story')
+    const res = new ImageResponse(
+      // Mid grey: bright enough to be unmistakable against a card whose art is
+      // near-black either way, and dark enough that the scrim still reads.
+      <ShareCard view={view} art={solidPngDataUri(108, 144, [128, 128, 128])} />,
+      { width: 1080, height: 1920, fonts: await loadShareCardFonts() },
+    )
+    expect(res.status).toBe(200)
+
+    const image = decodePng(Buffer.from(await res.arrayBuffer()))
+    // The middle of the art window, where nothing else is drawn. The gradient
+    // fields all sit under 60 here; the upload puts it near 128 before the
+    // scrim's transparent midsection.
+    expect(patchMean(image, 120, 560, 200, 200)).toBeGreaterThan(90)
+
+    // And the picture still stops where the card says it does. Sampled below
+    // the safe line, where nothing but ground and grain is ever drawn — a patch
+    // over the spec table measures the type, not the photograph.
+    expect(patchMean(image, 400, 1700, 200, 120)).toBeLessThan(20)
+  })
+
+  it('falls back to the field when nothing is uploaded', async () => {
+    const view = buildShareCardView(persona.payload, 'story')
+    const res = new ImageResponse(<ShareCard view={view} art={null} />, {
+      width: 1080, height: 1920, fonts: await loadShareCardFonts(),
+    })
+    const image = decodePng(Buffer.from(await res.arrayBuffer()))
+    expect(patchMean(image, 120, 560, 200, 200)).toBeLessThan(90)
   })
 })

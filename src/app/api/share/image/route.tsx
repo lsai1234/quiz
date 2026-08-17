@@ -5,6 +5,7 @@ import { buildShareCardView, isShareFormat, FORMATS, type ShareFormat } from '@/
 import { decodeSharePayload } from '@/lib/share-card/codec'
 import { loadShareCardFonts } from '@/lib/share-card/fonts'
 import { competitionBand } from '@/lib/competition/band'
+import { resolveCardArt } from '@/lib/share-card/art-resolve'
 
 /**
  * The card, as a PNG.
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
   const view = buildShareCardView(payload, format, format === 'entry' ? await competitionBand() : null)
   const spec = FORMATS[format]
 
-  return new ImageResponse(<ShareCard view={view} />, {
+  return new ImageResponse(<ShareCard view={view} art={await resolveCardArt(view.artKey, view.heroImage)} />, {
     width: spec.width,
     height: spec.height,
     fonts: await loadShareCardFonts(),

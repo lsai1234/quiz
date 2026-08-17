@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phases 0–5 landed (Phase 1 rebuilt after review). Phase 5 is off by default and waits on the wording. Phase 6 ongoing.
+**Status:** Phases 0–7 landed (Phase 1 rebuilt twice — see Phase 7). Phase 5 is off by default and waits on the wording. Phase 6 ongoing.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -488,7 +488,64 @@ wording. The screen is waiting for them.
 
 ### Phase 6 — Measure and iterate · ongoing
 
-Per-archetype card art. A/B the CTA copy. Card→quiz→checkout conversion by channel.
+A/B the CTA copy. Card→quiz→checkout conversion by channel.
+
+### Phase 7 — The poster rebuild, and the photography · 2d — **done**
+
+Phase 1 shipped a card that read as a UI component screenshotted: rounded panels, a
+filled accent pill, evenly spaced blocks, and a soft glow doing the work photography
+should have been doing. This is the rebuild against the founder's written brief.
+
+**The card.**
+
+- **Fixed pixel geometry per format**, in one table. The brief specifies the story frame
+  down to the pixel and the first attempt took that literally as constants — which
+  rendered the square and the link preview as the top-left corner of a story card with
+  the headline below the bottom edge. Same composition, re-proportioned.
+- **Big Shoulders Display + IBM Plex Mono**, replacing Space Grotesk + Inter. Six
+  subsetted TTFs, ~140KB, no network fetch in the render path. The 172↔17 scale contrast
+  is what stops the card reading as an app screen.
+- **The charge index outlined and bleeding off the left edge**, drawn from pre-extracted
+  glyph outlines. Satori renders `-webkit-text-stroke` as a fill with no stroke and
+  rejects SVG `<text>` outright; both were tested. Paths were the alternative to putting
+  a headless browser in the render path for one piece of type.
+- **Hairlines instead of containers.** No radius, no fill, no glow, no vignette, nothing
+  centred.
+
+**The photography.**
+
+- **Six category keys** — `strength` · `performance` · `energy` · `recovery` ·
+  `wellbeing` · `hydration` — resolved uploaded → bundled → gradient field.
+- **Founders Hub → Settings → Share card photography.** Six slots, each previewing *the
+  crop the card actually draws* (1080 × 1210 from a 3:4 source, so the bottom fifth is
+  gone) with the card's own scrim over it and a toggle for the left-third guide.
+- **The gradient stand-in replaced the product renders.** A bottle with the logo across
+  its belly fought the headline, put the brightest part of the frame exactly where the
+  outlined score is ghosted, and said "one product" on a card about a stack.
+
+**Two decisions that diverge from the brief, both for the same reason** — the standing
+instruction on this build is no new running costs:
+
+- **Satori, not Playwright.** The brief asks for a headless Chromium screenshot because
+  it assumes `html2canvas` is in use. It is not, and never was: §3.1 chose server-side
+  rasterisation from the start. Everything the brief needs from a browser was tested
+  against Satori and only one thing failed — the outlined numeral — which the glyph-path
+  route solved without a 300MB binary in the render path.
+- **Client-side canvas, not `sharp`.** The derivative and the luminance sample are
+  produced in the browser and the route stores the result, re-checking every limit rather
+  than trusting it. `sharp` is a native binary that roughly doubles the function bundle.
+
+**Storage:** the bytes live in `share_card_art` (migration v13), not in a blob store. Six
+images with a hard 1080 × 1440 ceiling, and the renderer needs them inlined as a data URI
+anyway — a network fetch mid-render is exactly what a card must not do. `version` is the
+content hash, so replacing a photo invalidates every card that carried it and re-uploading
+the same file invalidates nothing.
+
+**Exit met:** full suite 2543 green; `tsc --noEmit` clean; production build clean. The
+brief's acceptance list is asserted against decoded pixels rather than by eye — byte-exact
+dimensions, no type outside y ∈ [250, 1620], grain and the scrim present in the export,
+all six categories rendering with the stand-in and with an upload, and a 1000 × 1000
+rejected with a message naming both what it is and what it needs to be.
 
 ---
 

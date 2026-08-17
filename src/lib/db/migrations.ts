@@ -407,6 +407,34 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX competition_entries_campaign ON competition_entries(campaign, state);
   CREATE UNIQUE INDEX competition_entries_once ON competition_entries(campaign, channel, handle);
   `,
+  // v13 — the share card's category photography, as uploaded.
+  //
+  // Six rows at most, one per art key, so this is a settings record shaped like
+  // a table rather than a growing store.
+  //
+  // The bytes live in the column. That is the unusual decision here and it was
+  // taken deliberately over object storage: the whole set is six images with a
+  // hard 1080×1440 ceiling, the renderer needs them as a data URI anyway — a
+  // network fetch mid-render is exactly what the card must not do — and adding a
+  // paid blob store for under 3MB of near-static data would be a running cost
+  // for no capability. If the set ever grows past a handful, `data` becomes a
+  // URL and this table keeps its shape.
+  //
+  // `version` is what makes the derivative cacheable: it goes in the image URL
+  // and in the card's cache key, so replacing a photo invalidates every card
+  // that carried it without touching a single stored row.
+  `
+  CREATE TABLE share_card_art (
+    art_key    TEXT PRIMARY KEY,
+    mime       TEXT NOT NULL,
+    data       TEXT NOT NULL,
+    width      INTEGER NOT NULL,
+    height     INTEGER NOT NULL,
+    version    TEXT NOT NULL,
+    bytes      INTEGER NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ]
 
 /**

@@ -2,6 +2,7 @@ import { DataSourceToggle } from '@/components/portal/DataSourceToggle'
 import { IntegrationToggle } from '@/components/portal/IntegrationToggle'
 import { OrderSendingToggle } from '@/components/portal/OrderSendingToggle'
 import { CompetitionSettings } from '@/components/portal/CompetitionSettings'
+import { ShareArtSettings } from '@/components/portal/ShareArtSettings'
 
 const SUPPLIER_OPTIONS = [
   { mode: 'mock', label: 'Mock supplier', desc: 'Use the built-in PowerBody sample feed. Best while building.' },
@@ -33,6 +34,16 @@ export default function SettingsPage() {
           screen will not let it until every field is filled in.
         </p>
         <CompetitionSettings />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Share card photography</h2>
+        <p className="text-xs text-[var(--ink-3)] mb-2">
+          One photograph per category, printed full-bleed behind the stack on every share card.
+          The preview shows the crop the card actually uses, not the whole picture — the bottom
+          fifth is cut off — and the guide marks where the charge index is ghosted over the frame.
+        </p>
+        <ShareArtSettings />
       </section>
 
       <section>

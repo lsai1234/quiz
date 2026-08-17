@@ -411,9 +411,17 @@ function ArtField({ artKey, g }: { artKey: string | undefined; g: Geometry }) {
   )
 }
 
-export function ShareCard({ view }: { view: ShareCardView }) {
+/**
+ * `art` overrides the picture the card would resolve on its own.
+ *
+ * The routes pass the uploaded image through it — see `art-resolve.ts` — and
+ * `/styleguide/share` and the render tests leave it off, which keeps them
+ * working with no database. `null` is a real value here and means "draw the
+ * gradient field"; only `undefined` falls through to the bundled art.
+ */
+export function ShareCard({ view, art: override }: { view: ShareCardView; art?: string | null }) {
   const g = geometry(view.format)
-  const art = cardArt(view.artKey, view.heroImage)
+  const art = override === undefined ? cardArt(view.artKey, view.heroImage) : override
   const entry = view.entry
   const { line1, line2, size: headline } = fitHeadline(view.stackName, g)
   // Six rows and a prize block will not both fit above the safe line at full
