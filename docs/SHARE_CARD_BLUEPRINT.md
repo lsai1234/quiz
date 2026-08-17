@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** proposed, not built. This is the plan to review before any code lands.
+**Status:** Phase 0 landed. Phases 1–6 planned; review before each lands.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -87,11 +87,19 @@ Price. Email. Age. Gender. Anything from the safety step. The card is a public U
 may sit in someone's story highlights for a year; the safety screen is a health
 disclosure and does not go near it. First name is **opt-in**, default off.
 
+**The name leaks through a field that does not look like one.** `factory.ts`
+addresses every personalised reason to the customer — `For Sam: Magnesium
+glycinate to help you wind down…`. On the results screen that is a nice touch; on
+a public card it publishes a name nobody opted into, arriving through what reads
+as product copy. The payload builder is therefore given the customer's name in
+order to *strip* it, with showing it a separate decision that defaults off. Found
+by the Phase 0 privacy test, not by reading the code.
+
 ---
 
 ## 3. Technical decisions
 
-Five decisions carry the build. Each is stated with its cost, because each has a cheaper
+Seven decisions carry the build. Each is stated with its cost, because each has a cheaper
 option that is wrong.
 
 ### 3.1 Render server-side with `next/og`, not client-side capture
@@ -155,11 +163,11 @@ weights each).
 interface ShareCardPayload {
   v: 1
   stackName: string
-  archetype: string
-  focusAreas: string[]
-  fitScore: number
+  archetype: string                                   // '' when no identity
+  focusAreas: { label: string; glyph: string }[]
+  fitScore: number | null                             // null when no identity
   lineup: { slot: string; product: string; reason: string }[]
-  coverage: { label: string; score: number }[]
+  coverage: { label: string; score: number; targeted: boolean }[]
   level: StackLevel
   drinksMode: boolean
   firstName?: string        // opt-in only
@@ -167,6 +175,19 @@ interface ShareCardPayload {
   createdAt: string
 }
 ```
+
+`coverage.targeted` is not `score > 0`, and the difference is why it exists.
+`stackStatScore` gives every product a small baseline on every axis, so a goal
+nothing in the stack addresses still scores around 31 — a bar a third full,
+captioned with a goal the customer asked for and did not get. On a public card
+that reads as a claim. The renderer draws untargeted axes as faint context rather
+than as fill, which is the idiom the product deck already uses
+(`StatBar.targeted`).
+
+`identity` is nullable throughout: it comes from an AI call that can fail or be
+unconfigured, and a share button that only works when OpenAI is reachable is
+broken for some fraction of every day. Without it the card loses its archetype,
+focus chips and fit meter and keeps its name, lineup and coverage.
 
 Built once, at share time, by `buildSharePayload(blueprint, identity, products)` and
 stored. **Never re-derived from a live blueprint at render time.** Products get swapped,
@@ -270,13 +291,19 @@ from the snapshot.
 Each phase is independently shippable and independently useful. Estimates are build days
 for one developer, excluding review.
 
-### Phase 0 — Foundations · 0.5d
+### Phase 0 — Foundations · 0.5d — **done**
 
-No UI. `ShareCardPayload` type, `buildSharePayload()`, `palette.ts` + sync test, fonts
-vendored, token generator.
+No UI. Landed in `src/lib/share-card/`: the payload type and builder, the frozen
+palette and its sync test, three subsetted faces (127KB) with a loader, and the
+share-token generator.
 
-**Exit:** payload builder unit-tested against the six personas in §5; palette sync test
-green.
+**Exit met:** 120 tests green across the payload, palette, token and font suites;
+full suite 2366 green; `tsc --noEmit` clean.
+
+Three things the phase changed about the plan, each recorded where it belongs:
+`coverage.targeted` added to the payload (§3.4), name redaction added to the
+builder (§2), and one persona that turns out not to be reachable from the mock
+catalogue (§5).
 
 ### Phase 1 — The renderer · 2d
 
@@ -347,6 +374,11 @@ The six the renderer has to survive, all of which the engine can already produce
 4. **Wellbeing track** — no training language anywhere on the card.
 5. **Unmet goals** — `blueprint.unmetGoals` non-empty. The card shows coverage
    honestly rather than drawing a full bar for a goal nothing covers.
+   *Phase 0 note:* not reachable from the mock catalogue — every safety-gated
+   persona tried still finds a substitute, so `unmetGoals` comes back empty. It
+   becomes reachable the moment the real catalogue is thinner than the mock one,
+   which is exactly when a card claiming full coverage would be a lie. Covered by
+   a hand-built blueprint until a real thin-catalogue fixture exists.
 6. **Long everything** — longest product name and longest AI stack name in the
    catalogue, plus a long first name. This is the one that breaks layouts.
 
