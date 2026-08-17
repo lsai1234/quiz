@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phases 0–3 landed (Phase 1 rebuilt after review). Phases 4–6 planned.
+**Status:** Phases 0–4 landed (Phase 1 rebuilt after review). Phase 5 waits on legal; Phase 6 ongoing.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -426,15 +426,30 @@ token. That is fine for a vanity graphic and it is written down in the route, be
 Phase 5 must not treat a stored card as evidence of anything — an entry is verified
 against what somebody actually posted.
 
-### Phase 4 — Influencer mode · 1d
+### Phase 4 — Influencer mode · 1d — **done**
 
-Partner code baked into the card and into the link (reusing `middleware.ts` and the
-existing `REFERRAL_COOKIE` — attribution is already solved, this just feeds it). A
-**Your share assets** panel in the Partners Hub: all three sizes, the link, and
-share/click/conversion counts on the existing dashboard.
+The code was already on the card and in the link from Phase 1. This adds the missing
+half: a **Your assets** tab in the Partners Hub carrying a sample card per code in all
+three sizes, the partner's link, and the two numbers at the top of their funnel — cards
+their followers made, and how often those were opened.
 
-**Exit:** a partner can pull their assets without contacting us, and a purchase from a
-card click lands as a commission row.
+**Exit met:** a partner pulls their assets without contacting us; 7 asset tests; full
+suite 2477 green; `tsc --noEmit` clean; production build clean.
+
+Two decisions:
+
+- **The sample is an engine-built stack, not a fixture.** A partner has no stack of their
+  own, so the asset has to be somebody's — and a hand-written one would teach them the
+  wrong thing about the product. It reuses the `complete` persona with their code swapped
+  in and the first name stripped, so the card they post is a stack the engine would
+  really produce.
+- **It says it is a sample, three times.** On the card's description, under the preview,
+  and in a line asking them not to caption it as somebody's results. An asset that could
+  be mistaken for a real customer's card eventually will be, by someone writing a caption
+  at speed — and that is a claim about a named person we did not make.
+
+Conversion is deliberately not repeated here: orders and revenue per code already live on
+the money tab, and this is the part of the funnel a partner can act on.
 
 ### Phase 5 — The competition · 2.5d
 

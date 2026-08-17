@@ -13,6 +13,7 @@ import { balanceFor, invoiceFor } from './ledger'
 import { performanceForCodes, type PartnerPerformance } from './performance'
 import { describePayout, describeTerms, sortedHistory, termsInForce } from './terms'
 import * as repo from './repo'
+import { shareAssetsFor, type PartnerShareAsset } from './share-assets'
 import type { SelfBilledInvoice } from './invoice'
 import type { PartnerBalance, PartnerCode, PartnerCommission, PartnerPayout, PartnerTerms } from './types'
 
@@ -50,6 +51,12 @@ export interface PartnerDashboard {
   termsHistory: PartnerTerms[]
   /** The deal in whole sentences, so the screen never has to assemble it. */
   wording: { earn: string; paid: string }
+  /**
+   * A sample card per code, plus how many their followers have made and how
+   * often those were opened — the top of the funnel the money tab measures the
+   * bottom of, and the only part a partner can act on.
+   */
+  shareAssets: PartnerShareAsset[]
 }
 
 export async function dashboardFor(partnerId: string): Promise<PartnerDashboard | null> {
@@ -64,7 +71,10 @@ export async function dashboardFor(partnerId: string): Promise<PartnerDashboard 
     balanceFor(partnerId),
   ])
 
-  const performance = await performanceForCodes(codes.map((c) => c.code))
+  const [performance, shareAssets] = await Promise.all([
+    performanceForCodes(codes.map((c) => c.code)),
+    shareAssetsFor(codes),
+  ])
   const totals = performance.reduce(
     (t, p) => ({
       orders: t.orders + p.orders,
@@ -106,6 +116,7 @@ export async function dashboardFor(partnerId: string): Promise<PartnerDashboard 
     terms,
     termsHistory: sortedHistory(history),
     wording: { earn: describeTerms(terms), paid: describePayout(terms.payout) },
+    shareAssets,
   }
 }
 

@@ -7,10 +7,11 @@ import type { ShareCardPayload } from './types'
 /**
  * The stacks the card has to survive.
  *
- * One list, used by both the render test and `/styleguide/share`, so the cards a
- * founder signs off are the same cards CI renders. A preview page with its own
- * happy-path fixture is a preview page that stays green while the card breaks
- * for a real customer.
+ * One list, used by the render test, `/styleguide/share`, and the sample card a
+ * partner downloads — so the cards a founder signs off are the same cards CI
+ * renders, and the asset a partner posts is a stack the engine would really
+ * produce. A preview page with its own happy-path fixture is a preview page that
+ * stays green while the card breaks for a real customer.
  *
  * These are built from the real engine and the mock catalogue rather than
  * hand-written payloads: the interesting failures are in the shapes the engine

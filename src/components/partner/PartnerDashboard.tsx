@@ -24,7 +24,7 @@ const day = (iso: string) =>
 export function PartnerDashboard() {
   const [data, setData] = useState<Data | null>(null)
   const [failed, setFailed] = useState(false)
-  const [tab, setTab] = useState<'money' | 'terms'>('money')
+  const [tab, setTab] = useState<'money' | 'assets' | 'terms'>('money')
 
   useEffect(() => {
     fetch('/api/partner/me', { cache: 'no-store' })
@@ -58,7 +58,7 @@ export function PartnerDashboard() {
   return (
     <Shell onLogout={logout} name={data.partner.name}>
       <div className="flex gap-1 mb-4">
-        {(['money', 'terms'] as const).map((t) => (
+        {(['money', 'assets', 'terms'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -69,12 +69,14 @@ export function PartnerDashboard() {
               border: '1px solid var(--color-border)',
             }}
           >
-            {t === 'money' ? 'How you’re doing' : 'Your deal'}
+            {t === 'money' ? 'How you’re doing' : t === 'assets' ? 'Your assets' : 'Your deal'}
           </button>
         ))}
       </div>
 
-      {tab === 'money' ? <MoneyTab data={data} /> : <TermsTab data={data} />}
+      {tab === 'money' && <MoneyTab data={data} />}
+      {tab === 'assets' && <AssetsTab data={data} />}
+      {tab === 'terms' && <TermsTab data={data} />}
     </Shell>
   )
 }
@@ -282,6 +284,91 @@ function MoneyTab({ data }: { data: Data }) {
           </div>
         )}
       </Card>
+    </>
+  )
+}
+
+/**
+ * `Your assets` — the tab that stops partners emailing us for a graphic.
+ *
+ * Three sizes of a sample card with their code on it, their link, and the two
+ * numbers at the top of their funnel: cards their followers made, and how often
+ * those were opened. Orders and revenue are the money tab's job; this is the
+ * part a partner can actually do something about.
+ *
+ * The card is labelled a sample in three places on purpose. It is a real stack
+ * built by the real engine, but it is nobody's — and an asset that could be
+ * mistaken for a customer's own card is an asset that will be, eventually, by
+ * somebody writing a caption.
+ */
+function AssetsTab({ data }: { data: Data }) {
+  if (data.shareAssets.length === 0) {
+    return (
+      <Card title="Your assets" desc="Cards to post, with your code on them.">
+        <p className="text-[11px] text-[var(--color-muted)] leading-snug">
+          You don’t have a code yet. Once one is set up, your cards appear here.
+        </p>
+      </Card>
+    )
+  }
+
+  return (
+    <>
+      {data.shareAssets.map((asset) => (
+        <Card
+          key={asset.code}
+          title={`${asset.code} — cards to post`}
+          desc="A sample of what your followers get when they finish the quiz, with your code on it. Download, post, and anyone who uses the code is attributed to you."
+        >
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <Figure
+              label="Cards made"
+              value={String(asset.cardsCreated)}
+              note="By people who finished the quiz on your link"
+            />
+            <Figure
+              label="Card opens"
+              value={String(asset.cardViews)}
+              note="Times someone followed one of those cards"
+            />
+          </div>
+
+          <div className="flex gap-2 mb-3">
+            {(['story', 'square', 'og'] as const).map((format) => (
+              <a
+                key={format}
+                href={`/api/share/image?format=${format}&d=${asset.encoded}`}
+                download={`chrgd-${asset.code.toLowerCase()}-${format}.png`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-1 text-center text-[11px] font-bold px-3 py-2.5 rounded-xl"
+                style={{ background: 'var(--color-surface-2)', color: ACCENT, border: '1px solid var(--color-border)' }}
+              >
+                {format === 'story' ? 'Story' : format === 'square' ? 'Post' : 'Link preview'}
+              </a>
+            ))}
+          </div>
+
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`/api/share/image?format=square&d=${asset.encoded}`}
+            alt={`Sample CHRGD card carrying the code ${asset.code}`}
+            width={1080}
+            height={1080}
+            loading="lazy"
+            className="w-full h-auto rounded-xl mb-3"
+            style={{ border: '1px solid var(--color-border)' }}
+          />
+
+          <ShareLink code={asset.code} />
+
+          <p className="text-[10px] text-[var(--color-muted)] leading-snug mt-3">
+            This is a sample card, not a real customer’s. Please don’t caption it as
+            somebody’s results — the numbers on it are an example of what the quiz
+            produces.
+          </p>
+        </Card>
+      ))}
     </>
   )
 }
