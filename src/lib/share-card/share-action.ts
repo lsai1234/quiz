@@ -59,6 +59,38 @@ export function canShareFiles(file: File): boolean {
   )
 }
 
+/**
+ * Which rung this device will actually land on, worked out before anything is
+ * pressed.
+ *
+ * The ladder is honest but it used to be silent: the button said "Share", and
+ * what happened next was a share sheet, a download, or apparently nothing,
+ * depending on the browser. Somebody on a desktop pressed Share and got a file
+ * in their Downloads folder with no explanation.
+ *
+ * Knowing the rung up front lets the button say what it is about to do and lets
+ * the caller teach the step people actually miss — that the card reaches a story
+ * by picking Instagram in the OS sheet. The probe file is a real one because
+ * `canShare({ files })` inspects the type; a zero-byte PNG answers the same
+ * question as a 400KB one.
+ */
+export type ShareCapability = 'files' | 'link' | 'download' | 'manual'
+
+export function shareCapability(): ShareCapability {
+  if (typeof navigator === 'undefined') return 'manual'
+
+  const probe = new File([new Uint8Array(1)], 'card.png', { type: 'image/png' })
+  if (canShareFiles(probe)) return 'files'
+  if (canShareLink()) return 'link'
+
+  // Same test `defaultDownload` makes, so the label cannot promise a save the
+  // ladder is about to refuse.
+  if (typeof document !== 'undefined' && 'download' in document.createElement('a') && !isIosSafari()) {
+    return 'download'
+  }
+  return 'manual'
+}
+
 /** Whether this browser can share at all. */
 function canShareLink(): boolean {
   return typeof navigator !== 'undefined' && typeof navigator.share === 'function'

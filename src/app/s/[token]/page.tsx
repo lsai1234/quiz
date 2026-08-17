@@ -78,7 +78,7 @@ export default async function SharedCardPage({ params }: Props) {
 
   return (
     <main
-      className="min-h-screen flex flex-col items-center px-5 py-10"
+      className="min-h-screen flex flex-col items-center px-5 py-8"
       style={{ background: 'var(--color-bg)' }}
     >
       <div className="w-full max-w-sm flex flex-col items-center">
@@ -89,19 +89,33 @@ export default async function SharedCardPage({ params }: Props) {
           {view.eyebrow}
         </p>
 
-        {/* The card, large. It is the whole reason anybody followed the link. */}
+        {/*
+          The card, large — it is the whole reason anybody followed the link —
+          but capped at 62% of the viewport.
+
+          At its natural 9:16 a 1080×1920 card is taller than a phone screen, so
+          the page opened on a picture with the call to action somewhere below
+          the fold: the one thing this page exists to do was the one thing a
+          visitor had to scroll to find. Capping the height keeps the card the
+          hero and puts the button in the same view.
+        */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`/api/share/${card.token}/image?format=story`}
           alt={`${card.payload.stackName} — a CHRGD stack`}
           width={1080}
           height={1920}
-          className="w-full h-auto rounded-3xl"
-          style={{ border: '1px solid var(--color-border)' }}
+          className="w-auto rounded-3xl"
+          style={{
+            border: '1px solid var(--color-border)',
+            maxHeight: '62dvh',
+            maxWidth: '100%',
+            boxShadow: '0 30px 70px -40px rgba(0,0,0,0.95)',
+          }}
         />
 
         <h1
-          className="text-2xl font-black tracking-tight mt-8 text-center"
+          className="text-2xl font-black tracking-tight mt-7 text-center"
           style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
         >
           Build your own in 90 seconds
@@ -113,7 +127,7 @@ export default async function SharedCardPage({ params }: Props) {
 
         <Link
           href={cta}
-          className="w-full mt-6 py-4 rounded-2xl text-base font-black tracking-tight text-center"
+          className="w-full mt-5 py-4 rounded-2xl text-base font-black tracking-tight text-center"
           style={{ fontFamily: 'var(--font-display)', background: 'var(--color-accent)', color: '#07070A' }}
         >
           Start the quiz

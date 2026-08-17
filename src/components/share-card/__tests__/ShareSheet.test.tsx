@@ -10,11 +10,12 @@ jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
  * The share sheet.
  *
  * What matters here is not that the buttons render — it is that every rung of
- * the ladder is *visible* when it is reached. There is no way to post to
- * Instagram Stories from mobile web, so the card reaches a story through the OS
- * share sheet, and on a device that cannot do that it falls to a download and
- * then to press-and-hold. A rung that fails silently leaves someone pressing a
- * button that appears dead, and it reads in the funnel as disinterest.
+ * the ladder is *visible* when it is reached, and that the label says which rung
+ * it is before anything is pressed. There is no way to post to Instagram Stories
+ * from mobile web, so the card reaches a story through the OS share sheet, and
+ * on a device that cannot do that it falls to a download and then to
+ * press-and-hold. A rung that fails silently leaves someone pressing a button
+ * that appears dead, and it reads in the funnel as disinterest.
  */
 
 const payload = sharePersonas()[0].payload
@@ -27,6 +28,9 @@ const originalNavigator = globalThis.navigator
 function setNavigator(value: Partial<Navigator>) {
   Object.defineProperty(globalThis, 'navigator', { value, configurable: true, writable: true })
 }
+
+/** The primary action, whatever this device's rung called it. */
+const primary = () => screen.getByRole('button', { name: /share your card|share the link|save your card/i })
 
 beforeEach(() => {
   ;(track as jest.Mock).mockClear()
@@ -51,7 +55,7 @@ describe('opening', () => {
 
     expect(events()).toContain('share_open')
     expect(propsFor('share_open')).toMatchObject({ format: 'story', hasCode: true })
-    expect(screen.getByRole('img', { name: /my stack size/i })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /my stack card/i })).toBeInTheDocument()
   })
 
   it('says what the card does not contain', () => {
@@ -61,6 +65,42 @@ describe('opening', () => {
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
     expect(screen.getByText(/never shows your price/i)).toBeInTheDocument()
   })
+
+  it('traps focus, which the hand-rolled sheet never did', async () => {
+    // The previous sheet was a portal with no focus management at all: a
+    // keyboard user could Tab straight out of it into the page behind.
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const dialog = screen.getByRole('dialog')
+    await waitFor(() => expect(dialog).toHaveFocus())
+    expect(dialog).toHaveAttribute('aria-modal', 'true')
+  })
+})
+
+/**
+ * The label is a promise about what the next tap does.
+ *
+ * It used to say "Share" on every device and then download a file on half of
+ * them. `shareCapability()` is read before anything is pressed so the button can
+ * name the rung it is actually on.
+ */
+describe('saying what will happen', () => {
+  it('offers to share where the OS sheet exists, and teaches the step people miss', () => {
+    setNavigator({ share: jest.fn(), canShare: () => true, userAgent: 'Android Chrome' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    expect(screen.getByRole('button', { name: /share your card/i })).toBeInTheDocument()
+    expect(screen.getByText(/pick instagram, then story/i)).toBeInTheDocument()
+  })
+
+  it('offers to save where it does not, and says what to do with the file', () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    expect(screen.getByRole('button', { name: /save your card/i })).toBeInTheDocument()
+    expect(screen.getByText(/from your camera roll/i)).toBeInTheDocument()
+  })
 })
 
 describe('the ladder', () => {
@@ -69,11 +109,11 @@ describe('the ladder', () => {
     setNavigator({ share, canShare: () => true, userAgent: 'Android Chrome' })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Share' }))
+    await userEvent.click(primary())
 
     await waitFor(() => expect(propsFor('share_method')).toMatchObject({ method: 'native-file' }))
     expect(share).toHaveBeenCalled()
-    expect(await screen.findByText(/opening your share sheet/i)).toBeInTheDocument()
+    expect(await screen.findByText(/sent to your share sheet/i)).toBeInTheDocument()
   })
 
   it('shows the press-and-hold instruction when nothing else works', async () => {
@@ -82,7 +122,7 @@ describe('the ladder', () => {
     setNavigator({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1' })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Share' }))
+    await userEvent.click(primary())
 
     expect(await screen.findByText(/press and hold the card/i)).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: /press and hold to save/i })).toBeInTheDocument()
@@ -94,24 +134,26 @@ describe('the ladder', () => {
     setNavigator({ clipboard: { writeText } as unknown as Clipboard, userAgent: 'desktop' })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Share' }))
+    await userEvent.click(primary())
 
     await waitFor(() => expect(events()).toContain('share_error'))
     expect(propsFor('share_error')).toMatchObject({ at: 'render' })
     expect(await screen.findByText(/link copied/i)).toBeInTheDocument()
   })
 
-  it('returns to idle when the customer dismisses the OS sheet', async () => {
+  it('stays put when the customer dismisses the OS sheet', async () => {
     // An AbortError is someone saying no. The sheet must not then hand them a
-    // download, and must not report a share.
+    // download, must not report a share, and must not advance to a step that
+    // claims something happened.
     const abort = Object.assign(new Error('aborted'), { name: 'AbortError' })
     setNavigator({ share: jest.fn().mockRejectedValue(abort), canShare: () => true, userAgent: 'iPhone' })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Share' }))
+    await userEvent.click(primary())
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Share' })).toBeEnabled())
+    await waitFor(() => expect(primary()).toBeEnabled())
     expect(events()).not.toContain('share_method')
+    expect(screen.queryByText(/sent to your share sheet/i)).not.toBeInTheDocument()
   })
 })
 
@@ -121,35 +163,64 @@ describe('copy link', () => {
     setNavigator({ clipboard: { writeText } as unknown as Clipboard, userAgent: 'desktop' })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /copy link/i }))
+    await userEvent.click(screen.getByRole('button', { name: /copy the link/i }))
 
     await waitFor(() => expect(propsFor('share_method')).toMatchObject({ method: 'copy-link' }))
     expect(writeText.mock.calls[0][0]).toContain('ref=SARAH20')
   })
 
-  it('says so when the clipboard refuses rather than looking successful', async () => {
+  it('says so in place when the clipboard refuses', async () => {
+    // Not by advancing to the press-and-hold rung: that answers a clipboard
+    // refusal with an instruction about saving an image, which is a different
+    // problem the person did not have.
     setNavigator({
       clipboard: { writeText: jest.fn().mockRejectedValue(new Error('denied')) } as unknown as Clipboard,
       userAgent: 'desktop',
     })
 
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /copy link/i }))
+    await userEvent.click(screen.getByRole('button', { name: /copy the link/i }))
 
-    expect(await screen.findByText(/could not copy/i)).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not copy/i)
     expect(propsFor('share_error')).toMatchObject({ at: 'clipboard' })
+    expect(primary()).toBeInTheDocument()
   })
 })
 
-describe('format', () => {
-  it('switches size and reports the change', async () => {
+describe('choosing a card', () => {
+  it('switches the card and reports the change', async () => {
     setNavigator({ userAgent: 'desktop' })
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
 
     await userEvent.click(screen.getByRole('tab', { name: 'Post' }))
 
     expect(propsFor('share_format')).toMatchObject({ from: 'story', to: 'square' })
-    expect(screen.getByRole('img', { name: /post size/i })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /post card/i })).toBeInTheDocument()
+  })
+
+  it('costs one tab stop, not one per card', async () => {
+    // The ARIA tabs pattern is a roving tabindex. The previous row announced
+    // itself as a tablist and behaved like a toolbar — three stops, and arrow
+    // keys did nothing.
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.filter((t) => t.getAttribute('tabindex') === '0')).toHaveLength(1)
+    expect(tabs.filter((t) => t.getAttribute('tabindex') === '-1')).toHaveLength(tabs.length - 1)
+  })
+
+  it('moves with the arrow keys, and wraps', async () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const story = screen.getByRole('tab', { name: 'My stack' })
+    story.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: 'Post' })).toHaveAttribute('aria-selected', 'true')
+
+    await userEvent.keyboard('{ArrowRight}')
+    expect(screen.getByRole('tab', { name: 'My stack' })).toHaveAttribute('aria-selected', 'true')
   })
 })
 
@@ -161,7 +232,9 @@ describe('closing', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Close' }))
 
-    expect(onClose).toHaveBeenCalled()
+    // The shared `Sheet` runs its exit animation before handing back, so this
+    // is not synchronous the way the hand-rolled one was.
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
     expect(propsFor('share_dismiss')).toMatchObject({ shared: false })
   })
 })
@@ -233,14 +306,75 @@ describe('which card it opens on', () => {
 })
 
 /**
+ * What happens after it goes.
+ *
+ * The old sheet ended with a line of text and left entering the giveaway as an
+ * accordion the person had to notice, open and fill in — the conversion-critical
+ * step of the whole promotion, competing with the button beside it. Entering is
+ * now the step that follows a share.
+ */
+describe('after a successful share', () => {
+  function shareable(open: boolean) {
+    global.fetch = jest.fn().mockImplementation((url: string) => {
+      if (String(url).includes('/api/competition/enter')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => (open ? { state: 'open', prize: 'Win £200', test: false } : { state: 'off' }),
+        })
+      }
+      return Promise.resolve({ ok: true, blob: async () => new Blob(['png'], { type: 'image/png' }) })
+    }) as unknown as typeof fetch
+  }
+
+  it('asks for the handle, because posting alone does not enter you', async () => {
+    shareable(true)
+    setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
+
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    await waitFor(() => expect(screen.getByRole('tab', { name: /competition/i })).toBeInTheDocument())
+    await userEvent.click(primary())
+
+    expect(await screen.findByText(/posting alone doesn’t enter you/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/instagram handle/i)).toBeInTheDocument()
+  })
+
+  it('does not ask for a handle when no draw is running', async () => {
+    shareable(false)
+    setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
+
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    await userEvent.click(primary())
+
+    expect(await screen.findByText(/that’s away/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/handle/i)).not.toBeInTheDocument()
+  })
+
+  it('lets somebody go back and share another card', async () => {
+    shareable(false)
+    setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
+
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    await userEvent.click(primary())
+    await screen.findByText(/that’s away/i)
+
+    await userEvent.click(screen.getByRole('button', { name: /share another/i }))
+    expect(await screen.findByRole('tab', { name: 'My stack' })).toBeInTheDocument()
+  })
+})
+
+/**
  * The wait.
  *
- * The card is rasterised on the server — Satori laying out a 1080x1920 poster
+ * The card is rasterised on the server — Satori laying out a 1080×1920 poster
  * and encoding a PNG — so there is a real second or two between opening the
  * sheet and seeing anything. A line of static text across that gap reads as a
  * stall, and somebody who thinks the sheet is broken does not share.
  */
 describe('while the card is being built', () => {
+  // The sheet is portalled to `document.body`, so the render container is empty
+  // and everything has to be found on the document.
+  const sheen = () => document.querySelector('.card-build-sheen')
+
   it('says so, to a screen reader as well as on screen', () => {
     setNavigator({ userAgent: 'desktop' })
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
@@ -250,14 +384,7 @@ describe('while the card is being built', () => {
     expect(status).toHaveAttribute('aria-live', 'polite')
   })
 
-  // The sheet is portalled to `document.body`, so the render container is empty
-  // and everything has to be found on the document.
-  const sheen = () => document.querySelector('.card-build-sheen')
-
   it('holds the card’s shape so the preview does not jump when it lands', () => {
-    // The skeleton sits inside the preview box, which already carries the
-    // format's aspect ratio. If it did not, the sheet would resize under the
-    // person's thumb at the moment the image arrived.
     setNavigator({ userAgent: 'desktop' })
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
 

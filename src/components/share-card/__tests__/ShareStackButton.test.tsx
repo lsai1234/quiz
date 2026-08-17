@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ShareStackButton } from '../ShareStackButton'
+import { sharePersonas } from '@/lib/share-card/personas'
 
 /**
  * The Share button, and the competition attached to it.
@@ -35,7 +36,7 @@ describe('with no competition running', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
 
     expect(screen.queryByText(/win/i)).not.toBeInTheDocument()
-    expect(screen.queryByText(/enter/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/giveaway/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
@@ -53,6 +54,40 @@ describe('with no competition running', () => {
     render(<ShareStackButton onOpen={() => {}} />)
     expect(await screen.findByRole('button', { name: /share your stack/i })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole('link')).not.toBeInTheDocument())
+  })
+})
+
+describe('the tile itself', () => {
+  it('shows the card, which is the whole argument for pressing it', async () => {
+    // This was a flat outline rectangle asking for work with no visible reward.
+    // Nothing on the screen said there was a designed poster behind it.
+    respond({ state: 'off' })
+    const payload = sharePersonas()[0].payload
+    render(<ShareStackButton payload={payload} onOpen={() => {}} />)
+
+    const thumb = document.querySelector('img') as HTMLImageElement
+    expect(thumb).toBeInTheDocument()
+    expect(thumb.src).toContain('/api/share/image')
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+  })
+
+  it('asks for the giveaway card once a draw is on, so the sheet opens on it', async () => {
+    // The thumbnail has to be the card the sheet will show, or the tile is
+    // advertising something else.
+    respond(OPEN)
+    const payload = sharePersonas()[0].payload
+    render(<ShareStackButton payload={payload} onOpen={() => {}} />)
+
+    await waitFor(() =>
+      expect((document.querySelector('img') as HTMLImageElement).src).toContain('format=entry'))
+  })
+
+  it('still works with no stack to draw', () => {
+    // Direct navigation, before a quiz has been taken.
+    respond({ state: 'off' })
+    render(<ShareStackButton onOpen={() => {}} />)
+    expect(screen.getByRole('button', { name: /share your stack/i })).toBeInTheDocument()
+    expect(document.querySelector('img')).toBeNull()
   })
 })
 
@@ -83,7 +118,8 @@ describe('with a competition running', () => {
     respond(OPEN)
     render(<ShareStackButton onOpen={() => {}} />)
 
-    await waitFor(() => expect(screen.getByText(/share it to your story to enter/i)).toBeInTheDocument())
+    // The three steps in the order they happen, matching the card itself.
+    await waitFor(() => expect(screen.getByText(/follow, post the card, tag us/i)).toBeInTheDocument())
     expect(screen.getByText(/closes 30 nov/i)).toBeInTheDocument()
 
     // Significant conditions have to be reachable from the claim — but not at

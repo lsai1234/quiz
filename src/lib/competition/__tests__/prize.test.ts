@@ -1,4 +1,4 @@
-import { prizeAmount, prizeChip, closesLabel } from '../prize'
+import { prizeAmount, prizeChip, prizeInline, closesLabel } from '../prize'
 
 /**
  * The prize, cut down to chip size.
@@ -45,5 +45,23 @@ describe('closesLabel', () => {
   it('says nothing rather than something wrong', () => {
     expect(closesLabel(null)).toBe('')
     expect(closesLabel('not a date')).toBe('')
+  })
+})
+
+describe('prizeInline', () => {
+  it('takes the verb off so the prize reads inside a sentence', () => {
+    // "count you in for Win £200 of supplements" — the prize is written to stand
+    // alone on the card, which is exactly what makes it wrong mid-sentence.
+    expect(prizeInline('Win £200 of supplements')).toBe('£200 of supplements')
+    expect(prizeInline('Claim a year’s supply')).toBe('a year’s supply')
+  })
+
+  it('leaves a prize that is already a noun alone', () => {
+    expect(prizeInline('£200 of free product')).toBe('£200 of free product')
+    expect(prizeInline('Winter bundle')).toBe('Winter bundle')
+  })
+
+  it('survives nothing', () => {
+    expect(prizeInline('')).toBe('')
   })
 })

@@ -1,38 +1,52 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import type { ShareCardPayload } from '@/lib/share-card/types'
 import { FORMATS, type ShareFormat } from '@/lib/share-card/format'
 import { cardImageUrl, cardShareUrl, cardFileName, cardShareText, mintShareUrl } from '@/lib/share-card/share-link'
-import { shareCard, copyLink, isIosSafari } from '@/lib/share-card/share-action'
+import { shareCard, copyLink, isIosSafari, shareCapability, type ShareCapability } from '@/lib/share-card/share-action'
 import { share as shareEvents } from '@/lib/analytics/share'
-import { CompetitionEntry } from './CompetitionEntry'
+import { Sheet, SheetHeader, SheetBody, SheetFooter } from '@/components/ui/Sheet'
+import { Button } from '@/components/ui/Button'
+import { Icon } from '@/components/ui/Icon'
+import { CardBuilding } from './CardBuilding'
+import { FormatTabs } from './FormatTabs'
+import { ShareEntryPanel } from './CompetitionEntry'
 
 /**
  * The share sheet.
  *
- * ── Why it is built like the rest of this screen ────────────────────────────
- * On the old palette (`--color-*`) and portalled, matching `ProductSwapModal`
- * next to it, rather than on `@/components/system`. `DESIGN.md` is explicit that
- * the two systems must not be mixed inside one screen, and the results page has
- * not been migrated. When it is, this moves with it.
+ * ── What was wrong with the last one ────────────────────────────────────────
+ * It was a wall. Seven blocks stacked down one scroll: a title, a thumbnail,
+ * three tabs, a Share button, a Copy button, a paragraph about the entry card,
+ * an accordion for the giveaway, and a privacy note. Everything was available
+ * and nothing was obvious, and the two things that matter most were the worst
+ * served — the card was the smallest element on a sheet that exists to show it,
+ * and *entering the giveaway* was an accordion below the fold labelled with a
+ * question.
  *
- * ── What it is actually doing ───────────────────────────────────────────────
- * Fetching a PNG and handing it to the OS share sheet. Everything visible is in
- * service of the two places that go wrong:
+ * This is the same capability as three steps, one decision each:
  *
- *   • **The wait.** Rasterising a 1080×1920 card is not instant, and a share
- *     button that does nothing for a second gets pressed twice. The preview and
- *     its skeleton are the feedback.
- *   • **The fall.** There is no way to post to Instagram Stories from mobile
- *     web, so the card reaches a story through the OS sheet — and on a device
- *     that cannot do that, `shareCard` falls to a download and then to
- *     press-and-hold. Each rung has to be *visible* when it is reached, or the
- *     customer is left pressing a button that appears dead.
+ *   1. **Compose.** Which card, and share it. Nothing else on screen.
+ *   2. **Entered.** Sharing succeeded — now the handle, which is the step that
+ *      actually enters somebody into the draw. It follows the share instead of
+ *      competing with it.
+ *   3. **Manual.** The bottom rung, when the browser will not save for us.
+ *
+ * ── The button says what it is about to do ──────────────────────────────────
+ * `shareCapability()` is read before anything is pressed, so the label is
+ * "Share your card" where the OS sheet exists and "Save your card" where it does
+ * not, and the line under it names the step people actually miss: the card
+ * reaches a story by picking Instagram in the sheet that opens.
+ *
+ * ── Why it is built on `@/components/ui` ────────────────────────────────────
+ * On the old palette, matching the results screen it opens over — `DESIGN.md` is
+ * explicit that the two systems must not be mixed inside one screen. It now uses
+ * the shared `Sheet` rather than a hand-rolled copy of it, which is where the
+ * focus trap, the focus restore, the exit animation and the scroll lock come
+ * from. The previous version had none of them: a keyboard user could tab
+ * straight out of an open sheet into the page behind it.
  */
-
-const ACCENT = '#00D4FF'
 
 /**
  * The formats offered, in the order they are offered.
@@ -48,105 +62,65 @@ const ACCENT = '#00D4FF'
  */
 const BASE_FORMATS: ShareFormat[] = ['story', 'square']
 
-const FORMAT_LABEL: Record<ShareFormat, string> = {
+export const FORMAT_LABEL: Record<ShareFormat, string> = {
   story: 'My stack',
   square: 'Post',
   og: 'Link',
   entry: 'Competition',
 }
 
-/**
- * What the preview shows while the server draws the card.
- *
- * The wait is a real render — Satori laying out a 1080x1920 poster and encoding
- * a PNG — and it is long enough that a line of static text reads as a stall. So
- * this is a skeleton of the card's own layout: the header rail, the score, the
- * headline, five product rows. It says a poster is being made, and because it
- * has the card's proportions the preview does not jump when the image lands.
- *
- * `aria-hidden` with a live region beside it: a screen reader wants "Building
- * your card", not a description of eleven grey rectangles.
- */
-function CardBuilding() {
-  const bar = (top: string, left: string, width: string, height: string, bright = false) => (
-    <div
-      className="card-build-bar absolute rounded-[2px]"
-      style={{
-        top, left, width, height,
-        background: bright ? 'rgba(0,212,255,0.45)' : 'rgba(255,255,255,0.4)',
-      }}
-    />
-  )
-
-  return (
-    <div className="absolute inset-0">
-      <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
-        {/* Header rail */}
-        {bar('13%', '8%', '26%', '1.1%', true)}
-        {bar('13%', '58%', '34%', '1.1%')}
-        {/* The score, bleeding off the left edge the way the card's does */}
-        <div
-          className="card-build-bar absolute rounded-[3px]"
-          style={{ top: '15%', left: '-3%', width: '30%', height: '17%', background: 'rgba(255,255,255,0.16)' }}
-        />
-        {/* Kicker, headline, standfirst */}
-        {bar('35.5%', '8%', '30%', '1%', true)}
-        {bar('38.5%', '8%', '46%', '5.5%')}
-        {bar('45%', '8%', '62%', '5.5%')}
-        {bar('52%', '8%', '52%', '1%')}
-        {/* The spec table */}
-        {[0, 1, 2, 3, 4].map((i) => (
-          <div key={i}>
-            {bar(`${57 + i * 5.4}%`, '8%', `${44 - i * 4}%`, '2.4%')}
-            {bar(`${57.6 + i * 5.4}%`, '80%', '12%', '1.1%')}
-          </div>
-        ))}
-
-        {/* The sheen. One pass across the whole card rather than per element:
-            a poster coming off a press, not eleven things loading. */}
-        <div
-          className="card-build-sheen absolute inset-y-0"
-          style={{
-            width: '55%',
-            backgroundImage:
-              'linear-gradient(100deg, transparent 0%, rgba(0,212,255,0.10) 40%, rgba(255,255,255,0.14) 50%, rgba(0,212,255,0.10) 60%, transparent 100%)',
-          }}
-        />
-      </div>
-
-      <div
-        role="status"
-        aria-live="polite"
-        className="absolute inset-x-0 bottom-4 text-center text-[11px]"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        Building your card…
-      </div>
-    </div>
-  )
+/** What each card is for, said once, under the tabs. */
+const FORMAT_NOTE: Record<ShareFormat, string> = {
+  entry: 'Your stack, how to enter, and where to find us. Post this one to enter.',
+  story: 'Full height, for an Instagram or TikTok story.',
+  square: 'Square, for a feed post or a carousel.',
+  og: 'The preview a pasted link unfurls as.',
 }
 
-type Stage =
-  | { kind: 'idle' }
-  | { kind: 'working' }
+/** What the primary button says, and what it warns about, per rung. */
+const ACTION: Record<ShareCapability, { label: string; icon: 'share' | 'download'; note: string }> = {
+  files: {
+    label: 'Share your card',
+    icon: 'share',
+    note: 'Pick Instagram, then Story, in the sheet that opens.',
+  },
+  link: {
+    label: 'Share the link',
+    icon: 'share',
+    note: 'This browser can’t hand over the image, so it shares a link that unfurls as your card.',
+  },
+  download: {
+    label: 'Save your card',
+    icon: 'download',
+    note: 'Saves the image — then add it to your story from your camera roll.',
+  },
+  manual: {
+    label: 'Save your card',
+    icon: 'download',
+    note: 'Saves the image — then add it to your story from your camera roll.',
+  },
+}
+
+type Step =
+  | { kind: 'compose' }
   /** Every rung failed. The image is shown full-bleed to be saved by hand. */
-  | { kind: 'long-press' }
-  | { kind: 'done'; message: string }
+  | { kind: 'manual' }
+  /** It went. What happens next depends on whether a draw is running. */
+  | { kind: 'shared'; message: string }
+
+interface Live { state: string; prize: string; test: boolean }
 
 export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; onClose: () => void }) {
-  const [mounted, setMounted] = useState(false)
   const [format, setFormat] = useState<ShareFormat>('story')
-  const [stage, setStage] = useState<Stage>({ kind: 'idle' })
-  /**
-   * The competition, if one is running.
-   *
-   * Fetched rather than passed in, and fetched *live*, because §3.7 is explicit
-   * that a promotion's state is never frozen: a sheet that decided at build time
-   * would keep offering an entry into a draw that has closed.
-   */
-  const [comp, setComp] = useState<{ state: string; prize: string; test: boolean } | null>(null)
-  const offered: ShareFormat[] = comp ? ['entry', ...BASE_FORMATS] : BASE_FORMATS
+  const [step, setStep] = useState<Step>({ kind: 'compose' })
+  const [busy, setBusy] = useState(false)
+  /** Something went wrong but the step did not change — shown in place. */
+  const [notice, setNotice] = useState<string | null>(null)
+  const [ready, setReady] = useState(false)
+  const [comp, setComp] = useState<Live | null>(null)
 
+  const shared = useRef(false)
+  const startedAt = useRef(Date.now())
   /**
    * Whether the person has picked a tab themselves.
    *
@@ -156,6 +130,24 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
    */
   const chosen = useRef(false)
 
+  const offered: ShareFormat[] = comp ? ['entry', ...BASE_FORMATS] : BASE_FORMATS
+
+  /**
+   * Read once, on mount. The answer cannot change while the sheet is open, and
+   * probing on every render would build a `File` per keystroke.
+   */
+  const capability = useMemo<ShareCapability>(() => shareCapability(), [])
+  const action = ACTION[capability]
+
+  const imageUrl = useMemo(() => cardImageUrl(payload, format), [payload, format])
+
+  /**
+   * The competition, if one is running.
+   *
+   * Fetched rather than passed in, and fetched *live*, because §3.7 is explicit
+   * that a promotion's state is never frozen: a sheet that decided at build time
+   * would keep offering an entry into a draw that has closed.
+   */
   useEffect(() => {
     let live = true
     fetch('/api/competition/enter')
@@ -168,11 +160,6 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
       .catch(() => {})
     return () => { live = false }
   }, [])
-  const [ready, setReady] = useState(false)
-  const shared = useRef(false)
-  const openedAt = useRef(Date.now())
-
-  const imageUrl = useMemo(() => cardImageUrl(payload, format), [payload, format])
 
   /**
    * The link, minted once and reused.
@@ -194,19 +181,10 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     return () => { live = false }
   }, [payload])
 
-  useEffect(() => { setMounted(true) }, [])
-
   useEffect(() => {
     shareEvents.open({ format, hasCode: !!payload.code })
     // Once, on open — the format switch reports itself separately.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Scroll lock, matching ProductSwapModal.
-  useEffect(() => {
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
   }, [])
 
   const close = useCallback(() => {
@@ -214,39 +192,40 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     onClose()
   }, [format, onClose])
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [close])
-
-  const pickFormat = (next: ShareFormat) => {
+  const pickFormat = useCallback((next: ShareFormat) => {
     chosen.current = true
-    if (next === format) return
-    shareEvents.format({ from: format, to: next })
-    setReady(false)
-    setStage({ kind: 'idle' })
-    setFormat(next)
-  }
+    setFormat((current) => {
+      if (next === current) return current
+      shareEvents.format({ from: current, to: next })
+      setReady(false)
+      return next
+    })
+  }, [])
 
   const onShare = async () => {
-    if (stage.kind === 'working') return
-    setStage({ kind: 'working' })
-    openedAt.current = Date.now()
+    if (busy) return
+    setNotice(null)
+    setBusy(true)
+    startedAt.current = Date.now()
 
     let blob: Blob
     try {
       const res = await fetch(imageUrl)
       if (!res.ok) throw new Error(`image route ${res.status}`)
       blob = await res.blob()
-      shareEvents.render({ format, ms: Date.now() - openedAt.current, bytes: blob.size })
+      shareEvents.render({ format, ms: Date.now() - startedAt.current, bytes: blob.size })
     } catch (err) {
       shareEvents.error({ at: 'render', format, message: (err as Error)?.message })
       // The card could not be made. Offer the link, which still unfurls as one.
       const copied = await copyLink(link)
       shareEvents.method({ method: 'copy-link', format })
       shared.current = copied
-      setStage({ kind: 'done', message: copied ? 'Link copied' : 'Could not build the image — try again' })
+      setBusy(false)
+      if (copied) {
+        setStep({ kind: 'shared', message: 'Link copied' })
+      } else {
+        setNotice('Could not build the image — try again in a moment.')
+      }
       return
     }
 
@@ -259,189 +238,260 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     })
 
     for (const f of outcome.failures) shareEvents.error({ at: f.at, format, message: f.message })
+    setBusy(false)
 
-    if (outcome.cancelled) {
-      setStage({ kind: 'idle' })
-      return
-    }
+    // Dismissing the OS sheet is a change of mind, not a failure. Staying put is
+    // the only correct response: advancing would claim something that did not
+    // happen, and an error would blame somebody for pressing cancel.
+    if (outcome.cancelled) return
 
     if (outcome.ok && outcome.method) {
       shareEvents.method({ method: outcome.method, format })
       shared.current = true
-      setStage({
-        kind: 'done',
-        message: outcome.method === 'download' ? 'Saved' : 'Opening your share sheet…',
+      setStep({
+        kind: 'shared',
+        message: outcome.method === 'download' ? 'Saved to your device' : 'Sent to your share sheet',
       })
       return
     }
 
-    // Nothing worked. Show the card and tell them how to save it by hand.
-    setStage({ kind: 'long-press' })
+    setStep({ kind: 'manual' })
   }
 
   const onCopy = async () => {
+    setNotice(null)
     const ok = await copyLink(link)
     if (ok) {
       shareEvents.method({ method: 'copy-link', format })
       shared.current = true
-      setStage({ kind: 'done', message: 'Link copied' })
-    } else {
-      shareEvents.error({ at: 'clipboard', format })
-      setStage({ kind: 'done', message: 'Could not copy — long-press the link to select it' })
+      setStep({ kind: 'shared', message: 'Link copied' })
+      return
     }
+    // Stay put and say so. Advancing to the press-and-hold rung would answer a
+    // clipboard refusal with an instruction about saving an image, which is a
+    // different problem the person did not have.
+    shareEvents.error({ at: 'clipboard', format })
+    setNotice('Could not copy — long-press the link to select it.')
   }
 
-  if (!mounted) return null
-
   const spec = FORMATS[format]
-  const busy = stage.kind === 'working'
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Share your stack"
-    >
-      {/* The scrim. Named distinctly from the Close button rather than
-          duplicating it: two controls with the same accessible name is a screen
-          reader announcing the same thing twice with no way to tell them apart. */}
-      <button
-        type="button"
-        aria-label="Dismiss"
-        onClick={close}
-        className="absolute inset-0 w-full h-full cursor-default"
-        style={{ background: 'rgba(4,6,12,0.72)', backdropFilter: 'blur(8px)' }}
-      />
-
-      <div
-        className="relative w-full max-w-md rounded-t-3xl sm:rounded-3xl px-5 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] max-h-[92vh] overflow-y-auto"
-        style={{ background: 'var(--color-surface, #121216)', border: '1px solid rgba(255,255,255,0.09)' }}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2
-            className="text-lg font-black tracking-tight"
-            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
-          >
-            {stage.kind === 'long-press' ? 'Press and hold to save' : 'Share your stack'}
-          </h2>
-          <button
-            type="button"
-            onClick={close}
-            className="text-sm px-3 py-1.5 rounded-full"
-            style={{ color: 'var(--color-muted)' }}
-          >
-            Close
-          </button>
-        </div>
-
-        {/* The preview. Also the thing being saved on the long-press rung, which
-            is why it is the same element rather than a second image. */}
-        <div
-          className="relative mx-auto rounded-2xl overflow-hidden"
-          style={{
-            width: '100%',
-            maxWidth: stage.kind === 'long-press' ? '100%' : '15rem',
-            aspectRatio: `${spec.width} / ${spec.height}`,
-            background: 'rgba(255,255,255,0.05)',
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            key={imageUrl}
-            src={imageUrl}
-            alt={`Your CHRGD stack, ${FORMAT_LABEL[format]} size`}
-            onLoad={() => setReady(true)}
-            className="w-full h-full object-cover"
-            style={{ opacity: ready ? 1 : 0, transition: 'opacity 240ms' }}
+  // ── The bottom rung ───────────────────────────────────────────────────────
+  if (step.kind === 'manual') {
+    return (
+      <Sheet onClose={close} label="Save your card">
+        <SheetHeader eyebrow="Last step" title="Press and hold to save" />
+        <SheetBody className="flex flex-col items-center">
+          <CardFrame
+            spec={spec}
+            imageUrl={imageUrl}
+            format={format}
+            ready={ready}
+            onReady={() => setReady(true)}
+            full
           />
-          {!ready && <CardBuilding />}
-        </div>
-
-        {stage.kind === 'long-press' ? (
-          <p className="text-sm mt-4 leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
+          <p className="text-sm mt-4 leading-relaxed text-center" style={{ color: 'var(--color-text-2)' }}>
             Your browser won’t save the image for us. Press and hold the card above,
             then choose <strong style={{ color: 'var(--color-text)' }}>Save to Photos</strong>.
             {isIosSafari() ? ' Then open Instagram and add it to your story.' : ''}
           </p>
-        ) : (
-          <>
-            <div className="flex gap-2 mt-4" role="tablist" aria-label="Which card">
-              {offered.map((f) => {
-                const active = f === format
-                return (
-                  <button
-                    key={f}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => pickFormat(f)}
-                    className="flex-1 py-2 rounded-xl text-sm font-semibold"
-                    style={{
-                      background: active ? 'rgba(0,212,255,0.12)' : 'rgba(255,255,255,0.05)',
-                      border: `1px solid ${active ? 'rgba(0,212,255,0.35)' : 'rgba(255,255,255,0.09)'}`,
-                      color: active ? ACCENT : 'var(--color-text-2)',
-                    }}
-                  >
-                    {FORMAT_LABEL[f]}
-                  </button>
-                )
-              })}
-            </div>
+        </SheetBody>
+        <SheetFooter>
+          <Button variant="secondary" onClick={onCopy} icon="link">Copy link instead</Button>
+        </SheetFooter>
+      </Sheet>
+    )
+  }
 
-            <button
-              type="button"
-              onClick={onShare}
-              disabled={busy}
-              className="w-full mt-3 py-3.5 rounded-2xl text-base font-black tracking-tight"
-              style={{
-                fontFamily: 'var(--font-display)',
-                background: busy ? 'rgba(0,212,255,0.4)' : ACCENT,
-                color: '#07070A',
-              }}
-            >
-              {busy ? 'Preparing…' : 'Share'}
-            </button>
+  // ── It went ───────────────────────────────────────────────────────────────
+  if (step.kind === 'shared') {
+    return (
+      <Sheet onClose={close} label="Shared">
+        <SheetHeader
+          eyebrow={comp ? 'One step left' : 'Done'}
+          title={comp ? 'Nearly entered' : 'That’s away'}
+        />
+        <SheetBody>
+          <Confirmation message={step.message} />
 
-            <button
-              type="button"
-              onClick={onCopy}
-              className="w-full mt-2 py-3 rounded-2xl text-sm font-semibold"
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.09)',
-                color: 'var(--color-text-2)',
-              }}
-            >
-              Copy link
-            </button>
-          </>
+          {comp ? (
+            <ShareEntryPanel
+              prize={comp.prize}
+              test={comp.test}
+              link={link}
+              format={format}
+              onDone={close}
+            />
+          ) : (
+            <p className="text-sm leading-relaxed text-center" style={{ color: 'var(--color-text-2)' }}>
+              Thanks for sharing it. Anyone who opens your link lands on your stack
+              with one thing to do next — take the quiz.
+            </p>
+          )}
+        </SheetBody>
+        <SheetFooter>
+          <Button
+            variant="ghost"
+            onClick={() => { setStep({ kind: 'compose' }); setReady(false) }}
+          >
+            Share another
+          </Button>
+          <Button variant="secondary" onClick={close}>Done</Button>
+        </SheetFooter>
+      </Sheet>
+    )
+  }
+
+  // ── Compose ───────────────────────────────────────────────────────────────
+  return (
+    <Sheet onClose={close} label="Share your stack">
+      <SheetHeader
+        eyebrow={comp && format === 'entry' ? 'Giveaway card' : 'Your card'}
+        title="Share your stack"
+      />
+
+      <SheetBody className="flex flex-col items-center">
+        <CardFrame
+          spec={spec}
+          imageUrl={imageUrl}
+          format={format}
+          ready={ready}
+          onReady={() => setReady(true)}
+        />
+
+        {offered.length > 1 && (
+          <FormatTabs
+            offered={offered}
+            format={format}
+            onPick={pickFormat}
+            label={FORMAT_LABEL}
+            className="mt-4"
+          />
         )}
 
-        {format === 'entry' && (
-          <p className="text-[11px] mt-3 leading-relaxed text-center" style={{ color: 'var(--color-muted)' }}>
-            This one is the giveaway card. It carries your stack plus how to enter and
-            where to find us — post it to your story so the people who see it can get
-            to the quiz.
-          </p>
-        )}
-
-        {comp && stage.kind !== 'long-press' && (
-          <CompetitionEntry prize={comp.prize} test={comp.test} link={link} />
-        )}
-
-        {stage.kind === 'done' && (
-          <p className="text-sm mt-3 text-center" style={{ color: ACCENT }} role="status">
-            {stage.message}
-          </p>
-        )}
-
-        <p className="text-[11px] mt-4 text-center leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          Your card shows your stack and what it’s for. It never shows your price
-          or anything from the health questions.
+        <p
+          className="text-xs mt-3 leading-snug text-center max-w-[17rem]"
+          style={{ color: 'var(--color-text-2)' }}
+        >
+          {FORMAT_NOTE[format]}
         </p>
+
+        {/* The one line on this sheet that is not about sharing. A card is a
+            public URL with no expiry, and this is where somebody finds out what
+            is on it before they post it — so it is short enough to actually be
+            read rather than thorough enough to be skipped. */}
+        <p
+          className="text-[11px] mt-1.5 leading-relaxed text-center"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Never shows your price or your health answers.
+        </p>
+
+        {notice && (
+          <p className="text-xs mt-3 text-center" style={{ color: '#f87171' }} role="alert">
+            {notice}
+          </p>
+        )}
+      </SheetBody>
+
+      <SheetFooter className="flex-col">
+        <Button
+          variant="primary"
+          size="lg"
+          icon={action.icon}
+          onClick={onShare}
+          loading={busy}
+          fullWidth
+        >
+          {busy ? 'Getting it ready…' : action.label}
+        </Button>
+
+        <p
+          className="text-[11px] leading-relaxed text-center w-full"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          {action.note}
+        </p>
+
+        <button
+          type="button"
+          onClick={onCopy}
+          className="text-xs underline underline-offset-2 py-1"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Copy the link instead
+        </button>
+      </SheetFooter>
+    </Sheet>
+  )
+}
+
+/**
+ * The card, framed.
+ *
+ * Sized against the viewport rather than a fixed width so it takes whatever the
+ * sheet's header and footer leave it — on a tall phone that is a noticeably
+ * bigger card, and on a short one it shrinks instead of pushing the button off
+ * the bottom. `full` is the manual rung, where the image is the thing being
+ * saved rather than a preview of it.
+ */
+function CardFrame({ spec, imageUrl, format, ready, onReady, full = false }: {
+  spec: { width: number; height: number }
+  imageUrl: string
+  format: ShareFormat
+  ready: boolean
+  onReady: () => void
+  full?: boolean
+}) {
+  const portrait = spec.height > spec.width
+  return (
+    <div
+      className="relative rounded-2xl overflow-hidden shrink-0"
+      style={{
+        aspectRatio: `${spec.width} / ${spec.height}`,
+        maxHeight: full ? undefined : portrait ? '40dvh' : '28dvh',
+        width: full ? '100%' : 'auto',
+        maxWidth: '100%',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.09)',
+        // Lifts the card off the sheet so it reads as an object on a surface
+        // rather than a panel in a form.
+        boxShadow: '0 18px 48px -22px rgba(0,0,0,0.9)',
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        key={imageUrl}
+        src={imageUrl}
+        alt={`Your CHRGD stack, ${FORMAT_LABEL[format]} card`}
+        onLoad={onReady}
+        className="w-full h-full object-cover"
+        style={{ opacity: ready ? 1 : 0, transition: 'opacity 240ms' }}
+      />
+      {!ready && <CardBuilding />}
+    </div>
+  )
+}
+
+/** The tick and the line that says what just happened. */
+function Confirmation({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center text-center mb-5">
+      <div
+        className="flex items-center justify-center rounded-full mb-3"
+        style={{
+          width: 52,
+          height: 52,
+          background: 'rgba(0,212,255,0.12)',
+          border: '1px solid rgba(0,212,255,0.35)',
+          color: '#00D4FF',
+        }}
+      >
+        <Icon name="check" size={24} />
       </div>
-    </div>,
-    document.body,
+      <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }} role="status">
+        {message}
+      </p>
+    </div>
   )
 }

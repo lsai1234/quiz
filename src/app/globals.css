@@ -328,12 +328,20 @@
 .card-build-sheen { animation: card-build-sheen 1.5s var(--ease-settle, ease-in-out) infinite; }
 .card-build-bar   { animation: card-build-pulse 1.4s ease-in-out infinite; }
 
+/* The selection pill on the share sheet's card picker. It travels between
+   segments rather than blinking from one to the next, which is what makes a
+   segmented control read as one control instead of three buttons. */
+.segmented-pill { transition: left 260ms var(--ease-settle, cubic-bezier(0.32, 0.72, 0, 1)); }
+
 @media (prefers-reduced-motion: reduce) {
   /* The sweep goes; the pulse only slows. Same exception as the Button spinner:
      it is the only signal the render is alive, and freezing it entirely leaves a
      reduced-motion user unable to tell a slow card from a dead one. */
   .card-build-sheen { animation: none !important; opacity: 0 !important; }
   .card-build-bar { animation-duration: 2.8s; }
+  /* The pill still moves — it just arrives immediately. Removing the travel is
+     the point of the setting; removing the selection would be a bug. */
+  .segmented-pill { transition: none; }
 }
 
 /* ── UI primitives (src/components/ui) ─────────────────────────────────────── */

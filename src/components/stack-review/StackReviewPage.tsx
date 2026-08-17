@@ -451,7 +451,7 @@ export function StackReviewPage() {
           drinksMode={!!answers.drinksMode}
         />
 
-        <ShareStackButton onOpen={() => setShareOpen(true)} />
+        <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
 

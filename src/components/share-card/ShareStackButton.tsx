@@ -1,36 +1,44 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import type { ShareCardPayload } from '@/lib/share-card/types'
+import { cardImageUrl } from '@/lib/share-card/share-link'
 import { prizeChip, closesLabel } from '@/lib/competition/prize'
+import { Icon } from '@/components/ui/Icon'
 
 /**
- * The Share button on the reveal page, and the competition attached to it.
+ * The way into the share flow, on the reveal page.
  *
- * ── What this is balancing ──────────────────────────────────────────────────
- * The reveal page's job is checkout. Sharing is the second job and the
- * competition is the third, and a giveaway shouted loudly enough on this screen
- * is a giveaway that reads as the reason to be here — somebody who came to buy a
- * stack leaves having entered a draw instead. That is the failure mode this is
- * designed around, so the competition is attached to the action it belongs to
- * rather than given a block of its own:
+ * ── Why it shows the card ───────────────────────────────────────────────────
+ * This was a flat outline rectangle reading "Share your stack" — an ask, with no
+ * visible reward, for work the person had no reason to think was worth doing.
+ * Nothing on the screen said there was a designed poster behind it, so the only
+ * people who found out were the ones who pressed a plain button on spec.
  *
- *   • The button keeps its secondary styling. The filled CTA on this page is the
- *     checkout bar and it stays the only filled thing.
- *   • The prize is a chip *inside* the existing button, so it costs no vertical
- *     space above the fold and cannot be read before "Share your stack".
- *   • One quiet line underneath carries the conditions, at the same size as the
- *     page's other small print rather than below it — they are the promotion's
- *     significant terms, not a footnote. No banner, no modal,
- *     no interstitial — nothing that has to be dismissed on the way to paying.
- *   • With the competition off, which is the default, this renders exactly the
- *     button that was here before. There is no state in which an inactive draw
- *     costs a sale.
+ * It now shows the actual card. That is the whole argument for pressing it, and
+ * it costs nothing extra: the thumbnail is the same image the sheet is about to
+ * request, so loading it here warms the browser cache and the sheet opens with
+ * the card already there instead of on a skeleton.
+ *
+ * ── And why the competition is a chip, not a banner ─────────────────────────
+ * The reveal page's job is checkout. A giveaway shouted loudly enough here turns
+ * somebody who came to buy a stack into somebody who entered a draw, so the
+ * promotion is attached to the action it belongs to and never given a block of
+ * its own:
+ *
+ *   • This stays a secondary surface. The filled CTA on the page is the checkout
+ *     bar and it remains the only filled thing.
+ *   • The prize is a chip inside the tile, so it cannot be read before the tile
+ *     says what it is.
+ *   • One quiet line carries the conditions — the promotion's significant terms,
+ *     at the same size as the page's other small print rather than below it.
+ *   • With the competition off, which is the default and what almost every
+ *     visitor sees, none of it renders. There is no state in which an inactive
+ *     draw costs a sale.
  *
  * ── The state is read live ──────────────────────────────────────────────────
  * Same rule as the card itself (`docs/SHARE_CARD_BLUEPRINT.md` §3.7): a screen
- * that decided at build time keeps advertising a draw that has closed. So it is
- * fetched, and the button simply has no chip until the answer arrives — which is
- * the correct thing to show while we do not know.
+ * that decided at build time keeps advertising a draw that has closed.
  */
 
 interface Live {
@@ -40,8 +48,14 @@ interface Live {
   closesAt: string | null
 }
 
-export function ShareStackButton({ onOpen }: { onOpen: () => void }) {
+export function ShareStackButton({ payload, onOpen }: {
+  /** Absent only where the caller has no stack yet — the tile then has no card
+   *  to show and falls back to the plain button it used to be. */
+  payload?: ShareCardPayload
+  onOpen: () => void
+}) {
   const [comp, setComp] = useState<Live | null>(null)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -52,6 +66,12 @@ export function ShareStackButton({ onOpen }: { onOpen: () => void }) {
     return () => { live = false }
   }, [])
 
+  // The card the sheet will open on, so the thumbnail is the one they get.
+  const thumb = useMemo(
+    () => (payload ? cardImageUrl(payload, comp ? 'entry' : 'story') : null),
+    [payload, comp],
+  )
+
   const closes = comp ? closesLabel(comp.closesAt) : ''
 
   return (
@@ -59,36 +79,94 @@ export function ShareStackButton({ onOpen }: { onOpen: () => void }) {
       <button
         type="button"
         onClick={onOpen}
-        className="w-full py-3 rounded-2xl text-sm font-bold tracking-tight flex items-center justify-center gap-2"
+        className="w-full flex items-center gap-3.5 p-3 rounded-2xl text-left transition-colors active:scale-[0.99]"
         style={{
-          fontFamily: 'var(--font-display)',
-          background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
-          color: 'var(--color-accent)',
+          background: 'color-mix(in srgb, var(--color-accent) 9%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--color-accent) 28%, transparent)',
         }}
       >
-        Share your stack
-        {comp ? (
-          <span
-            className="text-[10px] font-bold tracking-[.12em] uppercase px-2 py-0.5 rounded-full"
-            style={{
-              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-              background: 'color-mix(in srgb, var(--color-accent) 22%, transparent)',
-              color: 'var(--color-accent)',
-            }}
+        {/* The card itself, at postage-stamp size. Fixed dimensions rather than
+            an aspect ratio: the tile must not resize when the image lands. */}
+        <div
+          className="relative shrink-0 rounded-lg overflow-hidden"
+          style={{
+            width: 46,
+            height: 82,
+            background: 'rgba(255,255,255,0.06)',
+            border: '1px solid rgba(255,255,255,0.10)',
+            boxShadow: '0 6px 18px -8px rgba(0,0,0,0.9)',
+          }}
+        >
+          {thumb && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={thumb}
+              alt=""
+              onLoad={() => setReady(true)}
+              className="w-full h-full object-cover"
+              style={{ opacity: ready ? 1 : 0, transition: 'opacity 300ms' }}
+            />
+          )}
+          {!ready && (
+            <div
+              className="card-build-sheen absolute inset-y-0"
+              aria-hidden
+              style={{
+                width: '60%',
+                backgroundImage:
+                  'linear-gradient(100deg, transparent 0%, rgba(0,212,255,0.14) 50%, transparent 100%)',
+              }}
+            />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="text-[10px] font-bold tracking-[0.18em] uppercase"
+              style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}
+            >
+              Your card is ready
+            </span>
+            {comp && (
+              <span
+                className="text-[9px] font-bold tracking-[.12em] uppercase px-1.5 py-0.5 rounded-full"
+                style={{
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  background: 'color-mix(in srgb, var(--color-accent) 20%, transparent)',
+                  color: 'var(--color-accent)',
+                }}
+              >
+                {comp.test ? 'Test draw' : prizeChip(comp.prize)}
+              </span>
+            )}
+          </div>
+
+          <p
+            className="text-sm font-bold tracking-tight mt-0.5"
+            style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}
           >
-            {comp.test ? 'Test draw' : prizeChip(comp.prize)}
-          </span>
-        ) : null}
+            Share your stack
+          </p>
+          <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>
+            {comp ? 'Post it to your story to enter the giveaway' : 'A poster of your stack, built to post'}
+          </p>
+        </div>
+
+        {/* Colour comes from the parent — the icon set paints with
+            `currentColor` so a glyph can sit in muted text without a prop. */}
+        <span className="shrink-0" style={{ color: 'var(--color-muted)' }}>
+          <Icon name="chevron-right" size={18} />
+        </span>
       </button>
 
-      {comp ? (
+      {comp && (
         <p className="text-xs leading-relaxed mt-2 text-center" style={{ color: 'var(--color-muted)' }}>
           {comp.test ? (
             'Test run — sharing won’t enter you into a real draw.'
           ) : (
             <>
-              Share it to your story to enter{closes ? ` · ${closes}` : ''} ·{' '}
+              Follow, post the card, tag us{closes ? ` · ${closes}` : ''} ·{' '}
               {/* Opens in a new tab on purpose. The significant conditions have to
                   be reachable from the claim, and navigating away from a page
                   with a stack on it is how a basket gets abandoned. */}
@@ -104,7 +182,7 @@ export function ShareStackButton({ onOpen }: { onOpen: () => void }) {
             </>
           )}
         </p>
-      ) : null}
+      )}
     </div>
   )
 }

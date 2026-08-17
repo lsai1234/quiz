@@ -37,6 +37,16 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   fullWidth?: boolean
   /** The accent colour for `variant="tone"`. Ignored by every other variant. */
   tone?: string
+  /**
+   * Work in progress. Swaps the leading glyph for a spinner, blocks presses and
+   * marks the control busy — so the caller never has to disable it separately
+   * and remember to re-enable it on the error path.
+   *
+   * Matches the contract the system Button already has. Without it every caller
+   * on this palette hand-rolls "disabled plus a changed label", which says a
+   * press was refused rather than that it was received.
+   */
+  loading?: boolean
   className?: string
   ref?: Ref<HTMLButtonElement>
 }
@@ -74,9 +84,11 @@ export function Button({
   iconRight,
   fullWidth,
   tone = AMBER,
+  loading = false,
   className,
   children,
   type = 'button',
+  disabled,
   ref,
   ...rest
 }: ButtonProps) {
@@ -91,6 +103,8 @@ export function Button({
       {...rest}
       ref={ref}
       type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={[
         'inline-flex items-center justify-center font-bold transition-all duration-200',
         'active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none',
@@ -107,9 +121,35 @@ export function Button({
         ...paint(variant, tone),
       }}
     >
-      {icon && <Icon name={icon} size={s.glyph} className="shrink-0" />}
+      {loading
+        ? <Spinner size={s.glyph} />
+        : icon && <Icon name={icon} size={s.glyph} className="shrink-0" />}
       {children}
-      {iconRight && <Icon name={iconRight} size={s.glyph} className="shrink-0" />}
+      {iconRight && !loading && <Icon name={iconRight} size={s.glyph} className="shrink-0" />}
     </button>
+  )
+}
+
+/**
+ * Deliberately not gated on `prefers-reduced-motion`: a spinner is the only
+ * signal that a press was received, it occupies a 16px square, and freezing it
+ * would leave a reduced-motion user staring at a static mark with no way to tell
+ * a slow request from a dead one. The setting exists to stop large-area motion
+ * and parallax, not to remove progress feedback. Same reasoning, and the same
+ * mark, as the system Button.
+ */
+function Spinner({ size }: { size: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      className="animate-spin shrink-0"
+      aria-hidden
+    >
+      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth={2.5} opacity={0.25} />
+      <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" />
+    </svg>
   )
 }

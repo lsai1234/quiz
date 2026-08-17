@@ -79,6 +79,12 @@ const GLYPHS = {
   plus: <path d="M12 5v14M5 12h14" />,
   dash: <path d="M5 12h14" />,
   check: <path d="M4.5 12.5 9.5 17.5 19.5 6.5" />,
+  // The share glyph is the OS one — a box with an arrow leaving the top —
+  // because that is what the button actually opens on a phone, and inventing a
+  // different mark for it would be inventing a different promise.
+  share: <><path d="M12 3v12" /><path d="M8 7l4-4 4 4" /><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" /></>,
+  download: <><path d="M12 3v12" /><path d="M8 11l4 4 4-4" /><path d="M5 19h14" /></>,
+  link: <><path d="M10 13.5a3.5 3.5 0 0 0 5 0l3-3a3.5 3.5 0 0 0-5-5l-1.2 1.2" /><path d="M14 10.5a3.5 3.5 0 0 0-5 0l-3 3a3.5 3.5 0 0 0 5 5l1.2-1.2" /></>,
   'alert-triangle': <><path d="M12 4 2.7 20h18.6z" /><path d="M12 10v4" /><path d="M12 17.2h.01" /></>,
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.8h.01" /></>,
   star: <path d="M12 3.5l2.6 5.6 6.1.8-4.5 4.2 1.2 6-5.4-3-5.4 3 1.2-6L3.3 9.9l6.1-.8z" />,
