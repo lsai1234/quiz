@@ -23,7 +23,10 @@ export async function competitionBand(): Promise<CompetitionBand | null> {
     closes: campaign.closesAt
       ? `Closes ${new Date(campaign.closesAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
       : 'Closing date to be confirmed',
-    terms: campaign.termsUrl.replace(/^https?:\/\//, ''),
+    // A pointer, not the path. The full URL wrapped to two lines on the card
+    // and took the mark off the bottom with it — and nobody types a path off a
+    // story anyway. The complete terms live behind the link in the bio.
+    terms: 'Full T&Cs at getchrgd.co.uk',
     test: isTestRun(campaign),
     handle: campaign.instagramHandle || '@getchrgd',
     route: campaign.quizRoute || 'Quiz link in our bio',

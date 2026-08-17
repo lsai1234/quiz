@@ -18,7 +18,7 @@ const BAND = {
   prize: '£200 of free supplements',
   mechanic: 'Follow, repost and share to your story',
   closes: 'Closes 30 Nov',
-  terms: 'getchrgd.co.uk/legal/competition',
+  terms: 'Full T&Cs at getchrgd.co.uk',
   test: false,
   handle: '@getchrgd',
   route: 'Take the quiz — link in our bio',
@@ -40,8 +40,10 @@ describe('formats', () => {
 
   it('give the picture a share of every card', () => {
     // The single biggest thing separating the card from a screenshot of the app.
+    // A quarter on the entry card, where the advert needs the room more; a
+    // third or better everywhere the stack is the subject.
     for (const format of FORMAT_IDS) {
-      expect(FORMATS[format].imageRatio).toBeGreaterThanOrEqual(0.3)
+      expect(FORMATS[format].imageRatio).toBeGreaterThanOrEqual(format === 'entry' ? 0.25 : 0.3)
     }
   })
 })
@@ -115,7 +117,7 @@ describe('the entry card', () => {
     expect(view.entry).toMatchObject({
       prize: '£200 of free supplements',
       closes: 'Closes 30 Nov',
-      terms: 'getchrgd.co.uk/legal/competition',
+      terms: 'Full T&Cs at getchrgd.co.uk',
     })
     expect(view.entry?.steps).toHaveLength(3)
   })

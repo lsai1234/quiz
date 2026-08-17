@@ -104,9 +104,10 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
   entry: {
     width: 1080,
     height: 1920,
-    // A third, not near half: the advert needs the room more than the picture
-    // does, and the stack is the hook rather than the subject here.
-    imageRatio: 0.3,
+    // A quarter, not near half: the advert needs the room more than the picture
+    // does, and the stack is the hook rather than the subject here. Measured by
+    // rendering it — at a third, the route block ran off the bottom.
+    imageRatio: 0.26,
     lineupRows: 3,
     showStats: false,
     showFitMeter: true,

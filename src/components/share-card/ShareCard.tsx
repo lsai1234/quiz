@@ -1,5 +1,5 @@
 import type { ShareCardView } from '@/lib/share-card/format'
-import { SHARE_PALETTE as P, px, headlineSize } from '@/lib/share-card/palette'
+import { SHARE_PALETTE as P, px, headlineSize, FILL_ACCENT } from '@/lib/share-card/palette'
 import { GRAIN_DATA_URI, GRAIN_TILE_PX } from '@/lib/share-card/grain'
 import { FONT_DISPLAY, FONT_BODY } from '@/lib/share-card/fonts'
 import { cardArt } from '@/lib/share-card/art-file'
@@ -373,7 +373,17 @@ function Stat({ label, value, size }: { label: string; value: string; size: numb
   )
 }
 
+/**
+ * The bottom rail.
+ *
+ * On the entry card the right-hand side carries the closing date and the terms
+ * rather than the domain — the accent slab above already says where to go, and
+ * stacking a terms line above a footer line spent 60px on two rails doing one
+ * rail's job. It also pushed the mark off the bottom of the card, which is the
+ * one thing on it that is not negotiable.
+ */
 function Footer({ view, markSize }: { view: ShareCardView; markSize: number }) {
+  const right = view.entry ? `${view.entry.closes} · ${view.entry.terms}` : view.footer
   return (
     <div
       style={{
@@ -389,7 +399,34 @@ function Footer({ view, markSize }: { view: ShareCardView; markSize: number }) {
           getCHRGD
         </div>
       </div>
-      <div style={eyebrow(P.inkPrint, P.textMeta)}>{view.footer}</div>
+      <div
+        style={{
+          ...eyebrow(view.entry ? withAlpha(P.inkPrint, 0.5) : P.inkPrint, P.textMicro),
+          letterSpacing: '0.06em',
+          whiteSpace: 'nowrap',
+          textAlign: 'right',
+        }}
+      >
+        {right}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * A hairline with a label sitting on it.
+ *
+ * The entry card is two things — somebody's stack and a giveaway — and without
+ * a rule between them the eye reads one long column and neither lands. This is
+ * the seam, and it is drawn rather than implied because a gap alone is not
+ * legible at story size.
+ */
+function SeamRule({ label }: { label: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: px(P.space3), flexShrink: 0 }}>
+      <div style={{ display: 'flex', height: hairline, flex: 1, background: withAlpha(P.inkPrint, 0.16) }} />
+      <div style={eyebrow(P.inkPrint2, P.textMicro)}>{label}</div>
+      <div style={{ display: 'flex', height: hairline, flex: 1, background: withAlpha(P.inkPrint, 0.16) }} />
     </div>
   )
 }
@@ -404,29 +441,48 @@ function Footer({ view, markSize }: { view: ShareCardView; markSize: number }) {
  * and short enough to remember for the two seconds it takes to open the app:
  * a handle, and where the quiz is once you get there.
  *
- * Everything else here is the CAP Code's: the prize, the steps, the closing
- * date and where the full terms are, all on the promotion itself rather than
- * behind a link — because a reshared image cannot carry a link either.
+ * ── Why the prize is the biggest thing on the card ──────────────────────────
+ * The first version set the stack name at display size and the prize beneath it
+ * at half that, which is the right hierarchy for a share card and the wrong one
+ * for an advert. On this card the stack is the byline — it is why somebody
+ * stops — and the prize is the headline. Set as a poster would set it: a small
+ * tracked eyebrow, the amount as large as the frame allows, and the rest as
+ * tracked caps beneath.
+ *
+ * Everything else is the CAP Code's: the steps, the closing date and where the
+ * full terms are, all on the promotion itself rather than behind a link —
+ * because a reshared image cannot carry a link either.
  */
-function EntryAdvert({ entry }: { entry: NonNullable<ShareCardView['entry']> }) {
+function EntryAdvert({ entry, width }: {
+  entry: NonNullable<ShareCardView['entry']>
+  width: number
+}) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, gap: px(P.space3) }}>
-      {entry.test ? (
-        <div style={eyebrow(P.toneAttention, P.textMicro)}>Test — not a live promotion</div>
-      ) : null}
+      <SeamRule label={entry.test ? 'Test — not a live promotion' : 'The giveaway'} />
 
-      {/* The prize, as the loudest thing on the card after the stack name. */}
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={eyebrow(P.inkPrint2, P.textMicro)}>Win</div>
-        <div style={display(px(P.textDisplay), P.inkPrint)}>{entry.prize}</div>
+      {/* The headline. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space1) }}>
+        <div style={eyebrow(P.accentDeep, P.textMicro)}>Win</div>
+        {/* 0.78 of the headline size the frame would allow. At full size the
+            prize took two lines of 118px and pushed the route block — the one
+            element that cannot be dropped — off the bottom of the card. */}
+        <div
+          style={{
+            ...display(Math.round(headlineSize(entry.prize, width, 2) * 0.74), P.inkPrint),
+            display: 'flex',
+          }}
+        >
+          {entry.prize}
+        </div>
       </div>
 
-      {/* Three steps, numbered. An advert that needs reading twice does not get
-          entered, so this is a list rather than the prose the terms page uses. */}
+      {/* Three steps. An advert that needs reading twice does not get entered,
+          so this is a numbered list rather than the prose the terms page uses. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space2) }}>
         <div style={eyebrow(P.inkPrint2, P.textMicro)}>How to enter</div>
         {entry.steps.map((step, i) => (
-          <div key={`${i}-${step}`} style={{ display: 'flex', gap: px(P.space2), alignItems: 'center' }}>
+          <div key={`${i}-${step}`} style={{ display: 'flex', gap: px(P.space3), alignItems: 'center' }}>
             <div
               style={{
                 display: 'flex',
@@ -436,15 +492,15 @@ function EntryAdvert({ entry }: { entry: NonNullable<ShareCardView['entry']> }) 
                 height: px(P.space6),
                 flexShrink: 0,
                 borderRadius: px(P.radiusPill),
-                background: P.inkPrint,
-                ...body(P.textBodySm, P.surfacePrint, P.weightStrong),
+                border: `${Math.max(2, hairline * 2)}px solid ${P.accentDeep}`,
+                ...display(px(P.textBodySm), P.accentDeep),
               }}
             >
               {String(i + 1)}
             </div>
             <div
               style={{
-                ...body(P.textBody, P.inkPrint, P.weightStrong),
+                ...body(P.textLead, P.inkPrint, P.weightStrong),
                 minWidth: 0,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
@@ -458,21 +514,27 @@ function EntryAdvert({ entry }: { entry: NonNullable<ShareCardView['entry']> }) 
       </div>
 
       {/* The route. The one element on this card that cannot be dropped: it is
-          the only path from a reshared story back to the quiz. */}
+          the only path from a reshared story back to the quiz — so it is the
+          accent slab, not another grey box. */}
       <div
         style={{
           display: 'flex',
-          flexDirection: 'column',
-          background: P.inkPrint,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          backgroundImage: FILL_ACCENT,
           borderRadius: px(P.radiusRow),
-          padding: `${px(P.space3)}px ${px(P.space4)}px`,
+          padding: `${px(P.space4)}px ${px(P.space5)}px`,
         }}
       >
-        <div style={display(px(P.textTitle), P.surfacePrint)}>{entry.handle}</div>
-        <div style={body(P.textBodySm, withAlpha(P.surfacePrint, 0.75))}>{entry.route}</div>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div style={{ ...display(px(P.textDisplay), P.inkOnAccent), letterSpacing: `${P.trackingTitle}em` }}>
+            {entry.handle}
+          </div>
+          <div style={body(P.textBody, withAlpha(P.inkOnAccent, 0.72), P.weightStrong)}>{entry.route}</div>
+        </div>
+        <Bolt size={px(P.textDisplay)} color={P.inkOnAccent} />
       </div>
 
-      <div style={body(P.textMicro, P.inkPrint2)}>{`${entry.closes} · ${entry.terms}`}</div>
     </div>
   )
 }
@@ -499,14 +561,53 @@ export function ShareCard({ view }: { view: ShareCardView }) {
         background: P.surfacePrint,
         padding: pad,
         gap: px(P.space4),
+        position: 'relative',
       }}
     >
+      {/* Grain on the light panel too. The dark half has had it since the first
+          render and the light half had nothing, which is most of what made this
+          side read as a UI panel rather than as printed stock. */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundImage: `url(${GRAIN_DATA_URI})`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: `${GRAIN_TILE_PX}px ${GRAIN_TILE_PX}px`,
+          opacity: P.grainOpacity * 1.4,
+        }}
+      />
+      {/* The seam where the panels meet, lit from above — the design system's
+          specular, inverted onto a light surface. */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          top: 0, left: 0, right: 0,
+          height: px(P.specularDepth),
+          backgroundImage: `linear-gradient(180deg, ${withAlpha(P.inkPrint, 0.10)} 0%, ${withAlpha(P.inkPrint, 0)} 100%)`,
+        }}
+      />
       <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space1), flexShrink: 0 }}>
-        <div style={display(headlineSize(view.stackName, cardW - pad * 2), P.inkPrint)}>
+        {view.entry ? <div style={eyebrow(P.inkPrint2, P.textMicro)}>My stack</div> : null}
+        <div
+          style={display(
+            // Demoted on the entry card. There the prize is the headline and the
+            // stack is the byline — two display lines at the same size fight,
+            // and the first version had them doing exactly that.
+            view.entry
+              ? Math.round(headlineSize(view.stackName, cardW - pad * 2) * 0.6)
+              : headlineSize(view.stackName, cardW - pad * 2),
+            P.inkPrint,
+          )}
+        >
           {view.stackName}
         </div>
         {view.archetype ? (
-          <div style={body(P.textLead, P.inkPrint2, P.weightBody)}>{view.archetype}</div>
+          <div style={body(view.entry ? P.textBody : P.textLead, P.inkPrint2, P.weightBody)}>
+            {view.archetype}
+          </div>
         ) : null}
       </div>
 
@@ -558,7 +659,7 @@ export function ShareCard({ view }: { view: ShareCardView }) {
       {view.entry ? null : <div style={{ display: 'flex', flex: 1, minHeight: 0 }} />}
 
       {view.callout ? <Callout callout={view.callout} /> : null}
-      {view.entry ? <EntryAdvert entry={view.entry} /> : null}
+      {view.entry ? <EntryAdvert entry={view.entry} width={cardW - pad * 2} /> : null}
       {view.entry ? <div style={{ display: 'flex', flex: 1, minHeight: 0 }} /> : null}
 
       <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0 }}>
