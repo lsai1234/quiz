@@ -9,9 +9,9 @@
     "dev": "node --max-old-space-size=4096 node_modules/next/dist/bin/next dev",
     "build": "node --max-old-space-size=4096 node_modules/next/dist/bin/next build --webpack",
     "start": "next start",
-    "test": "node --max-old-space-size=4096 node_modules/jest/bin/jest.js",
-    "test:watch": "node --max-old-space-size=4096 node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --max-old-space-size=4096 node_modules/jest/bin/jest.js --coverage"
+    "test": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js",
+    "test:watch": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js --watch",
+    "test:coverage": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js --coverage"
   },
   "dependencies": {
     "@types/canvas-confetti": "^1.9.0",

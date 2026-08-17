@@ -35,8 +35,19 @@ const DANGLING = new Set([
 ])
 
 /** Below this, a clause is too short to be worth cutting to — "Boosts energy"
- *  tells you less than the seven-word truncation would. */
+ *  tells you less than the truncation would. */
 const MIN_CLAUSE_WORDS = 4
+
+/**
+ * The row's word budget.
+ *
+ * Nine rather than the seven the plan assumed, decided by rendering it: the
+ * engine's clauses land at eight and nine words far more often than at seven,
+ * and cutting one word early takes the noun off the end — "recovery is your
+ * biggest" instead of "recovery is your biggest performance lever". Nine still
+ * sets on one line at the card's row width.
+ */
+const MAX_REASON_WORDS = 9
 
 /**
  * Words, for the purpose of a word budget.
@@ -50,14 +61,21 @@ const words = (s: string) =>
   s.trim().split(/\s+/).filter((w) => w && !/^[—–\-;:,.]+$/.test(w))
 
 /**
- * The engine addresses personalised reasons to the customer by name —
- * `For ${name}: ${reason}` (`stack-blueprint/factory.ts`). On the results screen
- * that is a nice touch. On a public card it is a name nobody asked to publish,
- * arriving through a field that looks like product copy.
+ * The engine addresses personalised reasons to the customer, in two shapes:
  *
- * Stripped structurally so it holds even when the caller does not pass a name to
- * redact, and reinforced by `redact()` for the AI personalisation pass, which is
- * unreviewed model output and free to address someone however it likes.
+ *   "For Sam: Magnesium glycinate to help you wind down…"        (wellbeing)
+ *   "Chosen for Sam — creatine is the most-studied supplement"   (performance)
+ *
+ * On the results screen both are a nice touch. On a public card the name is
+ * something nobody opted into publishing, arriving through a field that reads as
+ * product copy — and the address is not even the interesting half of the
+ * sentence. What is worth showing is always what comes after it.
+ *
+ * So the address gets removed rather than truncated around: the `For X:` form
+ * structurally, and the `Chosen for X —` form by dropping leading clauses that
+ * are too short to be saying anything once the name has gone. `redact()` covers
+ * the AI personalisation pass, which is unreviewed model output and free to
+ * address someone however it likes.
  */
 const ADDRESS_PREFIX = /^for\s+[^:]{1,40}:\s*/i
 
@@ -72,43 +90,59 @@ function redact(text: string, name: string | null): string {
     .trim()
 }
 
+/** Sentence case, for a clause that used to sit mid-sentence. */
+function capitalise(text: string): string {
+  return text ? text[0].toUpperCase() + text.slice(1) : text
+}
+
 /**
  * A slot reason, cut to something that fits a card row.
  *
- * The engine writes reasons as a claim plus a personalised clause — "Keeps you
- * hydrated and prevents cramps — especially useful in long or sweaty sessions."
- * The first clause is almost always the part worth showing, so an em-dash or
- * semicolon boundary is preferred over counting words. Falls back to a word cap
- * when there is no boundary, or when the boundary would leave a stub.
+ * The engine writes a reason as an address plus a clause, or a claim plus a
+ * personalising clause:
+ *
+ *   "Chosen for Sam — creatine is the most-studied strength supplement available"
+ *   "Keeps you hydrated and prevents cramps — especially useful in long sessions"
+ *
+ * The two want opposite halves, and what separates them is not position but
+ * substance: an address stops saying anything once the name is removed, and a
+ * claim does not. So the string is split at its clause boundaries and the first
+ * fragment with enough words left in it wins, whichever side it falls on.
  *
  * This is a *layout* cut, not a compliance filter. Claim safety on the card is a
  * separate, blocking gate — see `docs/SHARE_CARD_BLUEPRINT.md` §6.1 — and it
  * belongs upstream of this function, because truncation can no more make a
  * banned claim safe than it can make a safe one banned.
  */
-export function shortReason(reason: string, maxWords = 7, name: string | null = null): string {
+export function shortReason(reason: string, maxWords = MAX_REASON_WORDS, name: string | null = null): string {
   const cleaned = redact(reason.replace(ADDRESS_PREFIX, ''), name)
     .trim()
     .replace(/\s+/g, ' ')
     .replace(/\.+$/, '')
   if (!cleaned) return ''
 
-  // Prefer the first clause, when there is one and it says enough.
-  const boundary = cleaned.search(/\s*[—–;:]\s*/)
-  if (boundary > 0) {
-    const clause = cleaned.slice(0, boundary).trim()
-    const n = words(clause).length
-    if (n >= MIN_CLAUSE_WORDS && n <= maxWords) return clause
-  }
+  const segments = cleaned
+    .split(/\s*[—–;:]\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean)
 
-  const all = words(cleaned)
-  if (all.length <= maxWords) return cleaned
+  // The last segment rather than the first, when every fragment is short: a
+  // trailing stub is at least the end of the thought, where a leading one is
+  // usually the salutation that is being dropped in the first place.
+  const chosen = segments.find((s) => words(s).length >= MIN_CLAUSE_WORDS)
+
+  // Nothing substantive survived — the whole string was an address. Better to
+  // say nothing and let the caller fall back than to print "Chosen for".
+  if (!chosen) return ''
+
+  const all = words(chosen)
+  if (all.length <= maxWords) return capitalise(chosen)
 
   const cut = all.slice(0, maxWords)
   while (cut.length > MIN_CLAUSE_WORDS && DANGLING.has(cut[cut.length - 1].toLowerCase())) {
     cut.pop()
   }
-  return cut.join(' ').replace(/[,;:—–]$/, '')
+  return capitalise(cut.join(' ').replace(/[,;:—–]$/, ''))
 }
 
 export interface BuildSharePayloadOptions {
@@ -179,7 +213,14 @@ export function buildSharePayload(
     .map(({ slot, product }) => ({
       slot: slot.title,
       product: product.title,
-      reason: shortReason(slot.reason, 7, customerName),
+      // The engine's reason, unless removing the address leaves nothing behind
+      // — "Chosen for Sam" with no clause after it reduces to "Chosen for",
+      // which renders as a row with a broken sentence under it. The catalogue's
+      // own copy is the fallback: deterministic, already claim-reviewed, and
+      // always about this product.
+      reason:
+        shortReason(slot.reason, MAX_REASON_WORDS, customerName) ||
+        shortReason(product.shortReason || product.description, MAX_REASON_WORDS, customerName),
     }))
 
   const inStack = selected.map((e) => e.product).filter((p): p is CatalogueProduct => !!p)
@@ -197,7 +238,12 @@ export function buildSharePayload(
 
   return {
     v: SHARE_PAYLOAD_VERSION,
-    stackName: blueprint.stackName,
+    // The AI identity's name ("Iron Foundations") over the engine's
+    // ("Everyday Wellbeing Stack"). The engine's name is a category and the
+    // identity's is a title, and the headline is the whole job of this card —
+    // it is the line that gets screenshotted. Falls back to the engine's when
+    // no identity was generated, which is the only name there is then.
+    stackName: identity?.name?.trim() || blueprint.stackName,
     archetype: identity?.archetype ?? '',
     focusAreas: (identity?.focusAreas ?? []).map((label) => ({ label, glyph: focusAreaGlyph(label) })),
     fitScore: identity ? clampScore(identity.routineFitScore) : null,

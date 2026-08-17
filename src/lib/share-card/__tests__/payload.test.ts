@@ -95,9 +95,9 @@ describe('buildSharePayload', () => {
         expect(row.slot.length).toBeGreaterThan(0)
         expect(row.product.length).toBeGreaterThan(0)
         expect(row.reason.length).toBeGreaterThan(0)
-        // Seven words is the row's budget; the cut happens in the builder so the
+        // Nine words is the row's budget; the cut happens in the builder so the
         // renderer never has to decide what to drop mid-layout.
-        expect(row.reason.split(/\s+/).length).toBeLessThanOrEqual(7)
+        expect(row.reason.split(/\s+/).length).toBeLessThanOrEqual(9)
       }
     })
 
@@ -164,6 +164,22 @@ describe('buildSharePayload', () => {
     expect(payload.coverage.some((c) => c.targeted)).toBe(true)
   })
 
+  it('leads with the identity name, not the engine one', () => {
+    // "Iron Foundations" is a title; "Everyday Wellbeing Stack" is a category.
+    // The headline is the line that gets screenshotted.
+    const blueprint = buildStackBlueprint(PERSONAS.wellbeing, MOCK_CATALOGUE)
+    expect(blueprint.stackName).not.toBe(IDENTITY.name)
+    expect(build(PERSONAS.wellbeing).stackName).toBe('Iron Foundations')
+  })
+
+  it('falls back to the engine name when there is no identity', () => {
+    const blueprint = buildStackBlueprint(PERSONAS.wellbeing, MOCK_CATALOGUE)
+    expect(build(PERSONAS.wellbeing, null).stackName).toBe(blueprint.stackName)
+    // …and when the identity came back with an empty one.
+    expect(build(PERSONAS.wellbeing, { ...IDENTITY, name: '  ' }).stackName)
+      .toBe(blueprint.stackName)
+  })
+
   it('drops the identity fields rather than inventing them when there is no identity', () => {
     const payload = build(PERSONAS.essentials, null)
     expect(payload.archetype).toBe('')
@@ -226,7 +242,7 @@ describe('buildSharePayload', () => {
     // The AI personalisation pass is unreviewed model output and can address
     // someone however it likes, so the redaction is not tied to one prefix.
     expect(shortReason("Sam's evening magnesium for restful sleep", 7, 'Sam Whitlock'))
-      .toBe('evening magnesium for restful sleep')
+      .toBe('Evening magnesium for restful sleep')
     expect(shortReason('Chosen for Sam because you train late', 7, 'Sam'))
       .toBe('Chosen for because you train late')
   })
@@ -263,23 +279,36 @@ describe('shortReason', () => {
       .toBe('Proven to build strength and power')
   })
 
-  it('falls back to a word cap when there is no clause boundary', () => {
+  it('leaves a nine-word clause whole', () => {
     expect(shortReason('Fast-absorbing protein to build and repair muscle after training.'))
-      .toBe('Fast-absorbing protein to build and repair muscle')
+      .toBe('Fast-absorbing protein to build and repair muscle after training')
+  })
+
+  it('falls back to a word cap when a clause runs past the budget', () => {
+    expect(shortReason('Fast-absorbing protein to build and repair muscle after every single session.'))
+      .toBe('Fast-absorbing protein to build and repair muscle after every')
   })
 
   it('never ends on a dangling word', () => {
-    // "Boosts energy, focus and blood flow before training" cuts to "…flow
-    // before" at seven words, which reads as a truncation bug on a card.
-    expect(shortReason('Boosts energy, focus and blood flow before training.'))
+    // At a seven-word budget this cuts to "…blood flow before", which reads as a
+    // truncation bug on a card. The budget is passed explicitly because the
+    // default is nine, where this particular string no longer truncates at all.
+    expect(shortReason('Boosts energy, focus and blood flow before training.', 7))
       .toBe('Boosts energy, focus and blood flow')
   })
 
-  it('ignores a clause boundary that would leave a stub', () => {
-    // "Magnesium" alone says less than the word cap does, so the boundary is
-    // skipped — and the dash does not spend one of the seven words.
+  it('skips a leading fragment that says nothing on its own', () => {
+    // "Magnesium" is one word — an address or a label, not a reason — so the
+    // clause after it wins. The row already shows the product's name anyway.
     expect(shortReason('Magnesium — supports muscle function and restful sleep every night'))
-      .toBe('Magnesium supports muscle function and restful sleep')
+      .toBe('Supports muscle function and restful sleep every night')
+  })
+
+  it('gives nothing back when the whole string was an address', () => {
+    // "Chosen for Sam" with no clause after it. Returning "Chosen for" would put
+    // a broken sentence on a public card; the builder falls back to the
+    // catalogue's own copy instead.
+    expect(shortReason('Chosen for Sam', 9, 'Sam Whitlock')).toBe('')
   })
 
   it('leaves a reason that already fits alone', () => {

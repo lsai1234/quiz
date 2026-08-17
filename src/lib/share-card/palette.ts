@@ -29,17 +29,51 @@
 /**
  * How much bigger the card is than the app.
  *
- * The card renders at 1080px wide and is viewed full-screen on a phone whose CSS
- * viewport is ~360px — exactly 3×. So a token scaled by 3 lands at the same
- * apparent size on the card as it does in the app, which is what makes the card
- * look like the product rather than like a poster about it.
+ * The obvious value is 3: the card is 1080px wide and is viewed full-screen on a
+ * phone whose CSS viewport is ~360px, so ×3 renders every token at the same
+ * apparent size it has in the app. Rendering it proved that wrong, and the
+ * reason is worth keeping written down — **an app screen scrolls and a card does
+ * not**. The results page spends about two and a half screens on the content the
+ * card has to fit in one frame, so matching the app's apparent size puts the
+ * lineup off the bottom edge.
  *
- * This is a coordinate conversion, not a new type scale. When something needs to
- * be bigger on the card than in the app, step UP the token (`--text-title` where
- * the app uses `--text-body`) rather than multiplying by a second factor — that
- * is how a parallel scale gets invented one call site at a time.
+ * 2.25 is what fits, and it is still comfortably legible in a story: it puts
+ * `--text-body` at 32px on a 1080px frame, which is the size story captions
+ * actually run at. A card is read at arm's length rather than at phone distance,
+ * so slightly smaller relative type is right on its own terms too.
+ *
+ * This is a coordinate conversion, not a licence for a second type scale. When
+ * something needs to be bigger on the card than in the app, step UP the token
+ * (`--text-lead` where the app uses `--text-body`) rather than multiplying by
+ * another factor — that is how a parallel scale gets invented one call site at a
+ * time. The one exception is the headline, below, because a name that wraps to
+ * three lines is a broken card however correct its token is.
  */
-export const CARD_SCALE = 3
+export const CARD_SCALE = 2.25
+
+/**
+ * The headline size, in card pixels, for a name in a given column width.
+ *
+ * `stackName` is model-generated and only asked to be two or three words, so its
+ * rendered width varies by more than any token step can absorb: "Peak Protocol"
+ * and "Iron Foundations" want very different sizes to fill a line, and this line
+ * landing is the card's whole job.
+ *
+ * Sized against the *column* rather than the frame, which is the bug the first
+ * OG render showed: 1200px of frame is only ~450px of text column once the
+ * two-column split and the padding come out, so a size chosen from the frame
+ * wrapped the name and pushed the footer off the bottom edge.
+ *
+ * 0.56em is Space Grotesk Bold's average advance — near enough for a bound, and
+ * the cap is what decides the common case anyway.
+ */
+export function headlineSize(name: string, availableWidth: number, maxLines = 2): number {
+  const parts = name.trim().split(/\s+/)
+  const longest = Math.max(...parts.map((w) => w.length), 1)
+  const perLine = Math.ceil(name.trim().length / maxLines)
+  const budget = Math.max(longest, perLine)
+  return Math.round(Math.min(availableWidth / (budget * 0.56), availableWidth * 0.115))
+}
 
 /** A token length (px) in card pixels. */
 export function px(token: number): number {

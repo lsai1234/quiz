@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phase 0 landed. Phases 1–6 planned; review before each lands.
+**Status:** Phases 0–1 landed. Phases 2–6 planned; review before each lands.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -305,15 +305,33 @@ Three things the phase changed about the plan, each recorded where it belongs:
 builder (§2), and one persona that turns out not to be reachable from the mock
 catalogue (§5).
 
-### Phase 1 — The renderer · 2d
+### Phase 1 — The renderer · 2d — **done**
 
-`ShareCard` Satori component, three formats, the image route, and `/styleguide/share` —
-a preview page rendering all three sizes at true pixel dimensions across the six
-personas, on the real ground, per the `/styleguide` convention.
+`ShareCard` (Satori), three formats, `/api/share/image`, and `/styleguide/share`
+rendering all three at true pixel size across six personas — from the same route a
+customer downloads from, so the preview cannot diverge from the product.
 
-**Exit:** every persona renders without overflow or clipping; small text clears AA
-measured on the composited card, not on flat black; founder sign-off at
-`/styleguide/share`.
+**Exit met:** 18 rasterisation cases green (six personas × three formats), row counts
+pinned in `format.test.ts`, full suite 2423 green, `tsc --noEmit` clean. Awaiting founder
+sign-off at `/styleguide/share`.
+
+Four things rendering it changed, none of which were visible on paper:
+
+- **`CARD_SCALE` is 2.25, not 3.** An app screen scrolls and a card does not: the results
+  page spends ~2.5 screens on what the card must fit in one frame, so matching the app's
+  apparent size put the lineup off the bottom edge.
+- **Row counts are a budget, not a constant.** A long name wraps to two lines; a card with
+  no AI identity has ~300px less header. A constant was wrong in both directions —
+  overflowing the longest persona and leaving a third of the no-identity card empty.
+  `format.ts` now costs the header in card pixels and divides what is left by a row.
+- **Satori lays a React fragment out as a row container.** `<>…</>` is not flattened the
+  way React flattens it, so the stacked card silently became two columns running off the
+  edge. Every branch now returns one real element.
+- **Format contents shifted.** Square drops the fit ring (121px of header — the difference
+  between two products with their reasons and one). OG drops the reasons (a grey texture
+  at link-preview size) and the code chip (the URL beside it already carries the code).
+
+Story shows four rows, square two, OG two.
 
 ### Phase 2 — The share sheet · 1.5d
 

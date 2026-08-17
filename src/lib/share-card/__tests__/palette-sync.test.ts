@@ -93,9 +93,12 @@ describe('share card palette', () => {
   })
 
   it('scales app pixels to card pixels', () => {
-    // 1080px of card over a 360px phone viewport. If this stops being 3 the card
-    // stops looking like the app at the size people actually see it.
-    expect(CARD_SCALE).toBe(3)
-    expect(px(SHARE_PALETTE.space4)).toBe(48)
+    // Not 3 — see the note on CARD_SCALE. A card does not scroll, so matching
+    // the app's apparent size puts the lineup off the bottom edge. 2.25 puts
+    // `--text-body` at 32px on a 1080px frame, which is where story captions
+    // actually sit.
+    expect(CARD_SCALE).toBe(2.25)
+    expect(px(SHARE_PALETTE.space4)).toBe(36)
+    expect(px(SHARE_PALETTE.textBody)).toBeCloseTo(31.5)
   })
 })
