@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { CardBuilding } from './CardBuilding'
 import { FormatTabs } from './FormatTabs'
-import { ShareEntryPanel } from './CompetitionEntry'
+import { EnteredPanel } from './CompetitionEntry'
 
 /**
  * The share sheet.
@@ -28,10 +28,20 @@ import { ShareEntryPanel } from './CompetitionEntry'
  * This is the same capability as three steps, one decision each:
  *
  *   1. **Compose.** Which card, and share it. Nothing else on screen.
- *   2. **Entered.** Sharing succeeded — now the handle, which is the step that
- *      actually enters somebody into the draw. It follows the share instead of
- *      competing with it.
+ *   2. **Entered.** Sharing succeeded. While a draw is on, this confirms what
+ *      the entry actually was and nothing more — see below.
  *   3. **Manual.** The bottom rung, when the browser will not save for us.
+ *
+ * ── Nobody types anything ───────────────────────────────────────────────────
+ * There was a handle field here, and before that an accordion. Both existed to
+ * build an entrant list this site owned. It does not need one: the winner is
+ * drawn from the accounts that tagged us, which the founder reads off their own
+ * mentions and pastes into Founders Hub. The tag *is* the entry.
+ *
+ * That deletes the worst step in the flow — the one where somebody who has just
+ * posted to their story has to come back to a website and type their own handle
+ * into a box. What replaces it is a confirmation of the three things that count,
+ * which is information rather than work.
  *
  * ── The button says what it is about to do ──────────────────────────────────
  * `shareCapability()` is read before anything is pressed, so the label is
@@ -108,7 +118,7 @@ type Step =
   /** It went. What happens next depends on whether a draw is running. */
   | { kind: 'shared'; message: string }
 
-interface Live { state: string; prize: string; test: boolean }
+interface Live { state: string; prize: string; test: boolean; entrySteps?: string[] }
 
 export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; onClose: () => void }) {
   const [format, setFormat] = useState<ShareFormat>('story')
@@ -308,20 +318,14 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     return (
       <Sheet onClose={close} label="Shared">
         <SheetHeader
-          eyebrow={comp ? 'One step left' : 'Done'}
-          title={comp ? 'Nearly entered' : 'That’s away'}
+          eyebrow={comp ? 'Entered' : 'Done'}
+          title={comp ? 'You’re in' : 'That’s away'}
         />
         <SheetBody>
           <Confirmation message={step.message} />
 
           {comp ? (
-            <ShareEntryPanel
-              prize={comp.prize}
-              test={comp.test}
-              link={link}
-              format={format}
-              onDone={close}
-            />
+            <EnteredPanel prize={comp.prize} test={comp.test} steps={comp.entrySteps ?? []} />
           ) : (
             <p className="text-sm leading-relaxed text-center" style={{ color: 'var(--color-text-2)' }}>
               Thanks for sharing it. Anyone who opens your link lands on your stack

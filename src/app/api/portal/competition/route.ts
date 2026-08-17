@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import {
-  getCampaign, saveCampaign, missingForLive, competitionState,
+  getCampaign, saveCampaign, missingForLive, competitionState, isTestRun,
   type Campaign, type CampaignStatus,
 } from '@/lib/competition/campaign'
-import { entryCounts, listEntries, setEntryState, drawWinner, type EntryState } from '@/lib/competition/entries'
+import {
+  entryCounts, listEntries, setEntryState, drawWinner, importTaggedHandles,
+  type EntryState,
+} from '@/lib/competition/entries'
 
 /**
  * The competition, from the Founders Hub.
@@ -78,6 +81,24 @@ export async function POST(req: Request) {
     }
     await setEntryState(id, state, typeof body.note === 'string' ? body.note : null)
     return NextResponse.json(await payload())
+  }
+
+  if (action === 'import-tags') {
+    // The whole entrant pipeline, in one paste. The winner is drawn from the
+    // accounts that tagged us, which the founder reads off their own Instagram
+    // mentions — so this is where entrants come from, and there is no form on
+    // the customer's side at all.
+    const raw = typeof body.handles === 'string' ? body.handles : ''
+    if (!raw.trim()) {
+      return NextResponse.json({ error: 'paste some handles first' }, { status: 400 })
+    }
+    const campaign = await getCampaign()
+    const imported = await importTaggedHandles({
+      campaign: campaign.name || 'untitled',
+      raw,
+      isTest: isTestRun(campaign),
+    })
+    return NextResponse.json({ imported, ...(await payload()) })
   }
 
   if (action === 'draw') {

@@ -21,7 +21,7 @@ import { getEngine, now } from '@/lib/db/engine'
  */
 
 export type EntryChannel = 'instagram' | 'tiktok' | 'other'
-export type EntryRoute = 'share' | 'free'
+export type EntryRoute = 'share' | 'free' | 'tag'
 export type EntryState = 'pending' | 'verified' | 'rejected' | 'won'
 
 export interface CompetitionEntry {
@@ -125,6 +125,78 @@ export async function enterCompetition(input: {
   )
 
   return { ok: true, entry }
+}
+
+/**
+ * Import the handles that tagged us, from the Founders Hub.
+ *
+ * ── Why these land `verified` and a shared card does not ────────────────────
+ * The rest of this file is careful that a stored card is a *claim*: anyone can
+ * post a payload to `/api/share` and get a token back, so an entry carrying one
+ * enters `pending` until a person has looked.
+ *
+ * These are the opposite case. They arrive because the founder read their own
+ * Instagram mentions and pasted what was there — the looking has already
+ * happened, and it happened on the platform rather than in this database. Making
+ * them `pending` would ask somebody to verify a list they just wrote by hand.
+ *
+ * That is what makes the whole entry form unnecessary: the tag is the entry, so
+ * nobody has to come back to a website and type their own handle into a box.
+ *
+ * ── Idempotent on purpose ──────────────────────────────────────────────────
+ * The founder will paste overlapping lists across a campaign — mentions are
+ * checked on Monday and again on Thursday, and Monday's names are still there.
+ * A handle already entered is counted as a duplicate rather than an error, so
+ * pasting the whole list again is safe and says nothing alarming.
+ */
+export interface ImportResult {
+  /** Handles stored for the first time. */
+  added: string[]
+  /** Already entered. Not a problem — re-pasting a list is expected. */
+  duplicates: string[]
+  /** Lines that are not a handle any platform would allow. */
+  rejected: string[]
+}
+
+export async function importTaggedHandles(input: {
+  campaign: string
+  /** Free text: one per line, or comma or space separated, `@` optional. */
+  raw: string
+  channel?: EntryChannel
+  isTest?: boolean
+}): Promise<ImportResult> {
+  const result: ImportResult = { added: [], duplicates: [], rejected: [] }
+  const seen = new Set<string>()
+
+  for (const piece of input.raw.split(/[\s,;]+/)) {
+    const token = piece.trim()
+    if (!token) continue
+
+    const handle = normaliseHandle(token)
+    if (!handle) { result.rejected.push(token); continue }
+    // Deduplicated within the paste as well as against the table, so one list
+    // containing a name twice does not report it as a duplicate of itself.
+    if (seen.has(handle)) continue
+    seen.add(handle)
+
+    const outcome = await enterCompetition({
+      campaign: input.campaign,
+      handle,
+      channel: input.channel ?? 'instagram',
+      route: 'tag',
+      isTest: input.isTest,
+      note: 'Tagged us — imported from mentions',
+    })
+
+    if (!outcome.ok) {
+      result.duplicates.push(handle)
+      continue
+    }
+    await setEntryState(outcome.entry.id, 'verified', outcome.entry.note)
+    result.added.push(handle)
+  }
+
+  return result
 }
 
 export async function listEntries(campaign: string): Promise<CompetitionEntry[]> {

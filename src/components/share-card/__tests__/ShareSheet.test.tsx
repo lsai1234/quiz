@@ -309,24 +309,30 @@ describe('which card it opens on', () => {
  * What happens after it goes.
  *
  * The old sheet ended with a line of text and left entering the giveaway as an
- * accordion the person had to notice, open and fill in — the conversion-critical
- * step of the whole promotion, competing with the button beside it. Entering is
- * now the step that follows a share.
+ * accordion the person had to notice, open and fill in. Then it was a handle
+ * field on the step after a share, which still asked somebody who had just
+ * posted to their story to come back and type their own name into a box.
+ *
+ * It asks for nothing now. The winner is drawn from the accounts that tagged us,
+ * so the tag is the entry and the only useful thing this step can do is confirm
+ * what that entry was.
  */
 describe('after a successful share', () => {
-  function shareable(open: boolean) {
+  function shareable(open: boolean, entrySteps: string[] = []) {
     global.fetch = jest.fn().mockImplementation((url: string) => {
       if (String(url).includes('/api/competition/enter')) {
         return Promise.resolve({
           ok: true,
-          json: async () => (open ? { state: 'open', prize: 'Win £200', test: false } : { state: 'off' }),
+          json: async () => (open
+            ? { state: 'open', prize: 'Win £200', test: false, entrySteps }
+            : { state: 'off' }),
         })
       }
       return Promise.resolve({ ok: true, blob: async () => new Blob(['png'], { type: 'image/png' }) })
     }) as unknown as typeof fetch
   }
 
-  it('asks for the handle, because posting alone does not enter you', async () => {
+  it('confirms the entry without asking for anything', async () => {
     shareable(true)
     setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
 
@@ -334,8 +340,25 @@ describe('after a successful share', () => {
     await waitFor(() => expect(screen.getByRole('tab', { name: /competition/i })).toBeInTheDocument())
     await userEvent.click(primary())
 
-    expect(await screen.findByText(/posting alone doesn’t enter you/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/instagram handle/i)).toBeInTheDocument()
+    expect(await screen.findByText(/nothing else to do/i)).toBeInTheDocument()
+    // The step this whole change exists to delete.
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/handle/i)).not.toBeInTheDocument()
+  })
+
+  it('lists the conditions in the campaign’s own words', async () => {
+    // Read from config rather than written into the component, so this screen
+    // and the card can never disagree about what enters somebody.
+    shareable(true, ['Follow @getchrgd_', 'Take the quiz', 'Share it to your story tagging us'])
+    setNavigator({ share: jest.fn().mockResolvedValue(undefined), canShare: () => true, userAgent: 'Android' })
+
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    await waitFor(() => expect(screen.getByRole('tab', { name: /competition/i })).toBeInTheDocument())
+    await userEvent.click(primary())
+
+    expect(await screen.findByText('Share it to your story tagging us')).toBeInTheDocument()
+    expect(screen.getByText('Take the quiz')).toBeInTheDocument()
+    expect(screen.getByText(/the tag is what enters you/i)).toBeInTheDocument()
   })
 
   it('does not ask for a handle when no draw is running', async () => {

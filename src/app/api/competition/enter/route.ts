@@ -81,6 +81,9 @@ export async function GET() {
     name: campaign.name,
     prize: campaign.prize,
     mechanic: campaign.mechanic,
+    // The three conditions, so the share flow can confirm them in the founder's
+    // own words rather than in a second copy that drifts from the card's.
+    entrySteps: campaign.entrySteps.filter(Boolean),
     closesAt: campaign.closesAt,
     termsUrl: campaign.termsUrl,
     freeEntryRoute: campaign.freeEntryRoute,

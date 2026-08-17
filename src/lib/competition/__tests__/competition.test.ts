@@ -3,6 +3,7 @@ import {
 } from '../campaign'
 import {
   enterCompetition, listEntries, setEntryState, drawWinner, entryCounts, normaliseHandle,
+  importTaggedHandles,
 } from '../entries'
 
 /**
@@ -181,5 +182,69 @@ describe('counts', () => {
     expect(counts.pending).toBe(1)
     expect(counts.test).toBe(1)
     expect(await listEntries('counts')).toHaveLength(2)
+  })
+})
+
+/**
+ * Importing the handles that tagged us.
+ *
+ * This is where entrants come from now. The winner is drawn from the accounts
+ * that tagged us on Instagram, read off our own mentions — so there is no entry
+ * form on the customer's side at all, and the whole pipeline is one paste.
+ */
+describe('importTaggedHandles', () => {
+  it('takes a pasted list in whatever shape it was copied in', async () => {
+    const result = await importTaggedHandles({
+      campaign: 'tags',
+      raw: '@jamie\nalex.lifts, sam_trains\n  https://instagram.com/dana/  ',
+    })
+    expect(result.added.sort()).toEqual(['alex.lifts', 'dana', 'jamie', 'sam_trains'])
+    expect(result.rejected).toEqual([])
+  })
+
+  it('enters them verified, because the looking already happened', async () => {
+    // The rest of this module is careful that a stored card is a claim. These
+    // are the opposite: they are here because a person read their own mentions.
+    await importTaggedHandles({ campaign: 'verified-tags', raw: '@jamie' })
+    const [entry] = await listEntries('verified-tags')
+    expect(entry.state).toBe('verified')
+    expect(entry.route).toBe('tag')
+  })
+
+  it('is safe to paste twice', async () => {
+    // Mentions get checked on Monday and again on Thursday, and Monday's names
+    // are still there. Re-pasting must not be an error or a duplicate row.
+    await importTaggedHandles({ campaign: 'twice', raw: '@jamie @alex' })
+    const second = await importTaggedHandles({ campaign: 'twice', raw: '@jamie @alex @sam' })
+
+    expect(second.added).toEqual(['sam'])
+    expect(second.duplicates.sort()).toEqual(['alex', 'jamie'])
+    expect(await listEntries('twice')).toHaveLength(3)
+  })
+
+  it('counts a name repeated inside one paste once, not as a duplicate of itself', async () => {
+    const result = await importTaggedHandles({ campaign: 'repeat', raw: '@jamie @Jamie jamie' })
+    expect(result.added).toEqual(['jamie'])
+    expect(result.duplicates).toEqual([])
+  })
+
+  it('says which lines it could not read rather than dropping them', async () => {
+    const result = await importTaggedHandles({ campaign: 'bad', raw: '@jamie not-a-handle x' })
+    expect(result.added).toEqual(['jamie'])
+    expect(result.rejected.sort()).toEqual(['not-a-handle', 'x'])
+  })
+
+  it('feeds the draw', async () => {
+    // Membership, not position: the draw orders by id, which is a UUID, so the
+    // pool's order is not the order it was pasted in.
+    await importTaggedHandles({ campaign: 'drawable', raw: '@jamie @alex @sam' })
+    const winner = await drawWinner('drawable', () => 1)
+    expect(['jamie', 'alex', 'sam']).toContain(winner?.handle)
+    expect(winner?.state).toBe('won')
+  })
+
+  it('keeps a rehearsal out of the draw', async () => {
+    await importTaggedHandles({ campaign: 'rehearsal', raw: '@jamie @alex', isTest: true })
+    expect(await drawWinner('rehearsal')).toBeNull()
   })
 })

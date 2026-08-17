@@ -482,6 +482,12 @@ Three things worth keeping:
   row taking £200 of real product — and the draw excludes it in SQL rather than in a
   filter somebody can forget.
 
+**Superseded in Phase 8:** the customer-side entry form is gone. The winner is drawn
+from the accounts that tagged us, so the tag is the entry and nobody types a handle on
+this site. `enterCompetition` and the free entry route are unchanged — the form still
+exists on `/legal/competition`, which is where the CAP Code's equal-standing route
+belongs.
+
 **Still outstanding, and not mine to write:** the prize structure ("up to £200" cannot go
 into terms as it stands), the promoter's registered address, and the winner-selection
 wording. The screen is waiting for them.
@@ -546,6 +552,49 @@ brief's acceptance list is asserted against decoded pixels rather than by eye �
 dimensions, no type outside y ∈ [250, 1620], grain and the scrim present in the export,
 all six categories rendering with the stand-in and with an upload, and a 1000 × 1000
 rejected with a message naming both what it is and what it needs to be.
+
+### Phase 8 — The share journey · 1.5d — **done**
+
+The card was finished; the flow around it was not.
+
+**The sheet was a wall** — seven blocks down one scroll, in which the card was the
+smallest element and entering the giveaway was an accordion below the fold labelled with
+a question. It is three steps now, one decision each: compose, entered, and the manual
+rung. It is built on the shared `Sheet` primitive rather than a hand-rolled portal, which
+is where the focus trap, the focus restore and the exit animation come from — it had none
+of them, and a keyboard user could tab straight out of an open sheet into the page behind.
+
+**The button says what it will do.** `shareCapability()` is read before anything is
+pressed, so it reads "Share your card" where an OS sheet exists and "Save your card"
+where it does not. It used to say "Share" everywhere and then download a file on half of
+them.
+
+**The way in shows the card.** The reveal page had a flat outline rectangle asking for
+work with no visible reward. It is a tile with the real card on it, which is both the
+argument for pressing it and a prefetch.
+
+**Nobody types a handle.** This is the change that matters most and it is a decision
+about how the promotion runs, not a UI tweak. The winner is drawn from the accounts that
+tagged us — read off our own Instagram mentions and pasted into Founders Hub, where
+`importTaggedHandles` normalises, dedupes and enters them as verified. So the tag *is*
+the entry, and the worst step in the flow is gone: somebody who has just posted to their
+story no longer has to come back to a website and type their own name into a box.
+
+Those pasted handles land `verified` while a shared card still lands `pending`, and the
+asymmetry is the point: a card token is a claim anybody can mint, whereas a pasted handle
+is there because a person read their own mentions. The verification already happened, on
+the platform.
+
+**One thing that cannot be fixed, and was asked for:** there is no way to post to
+Instagram Stories from mobile web. The Stories hand-off (`instagram-stories://share` on
+iOS, `com.instagram.share.ADD_TO_STORY` on Android) passes the image through the iOS
+pasteboard or an Android content-URI grant, neither of which a browser can hand over.
+Share → Instagram → Story is the floor at three taps and the ladder is already at it.
+
+**Exit met:** full suite 2595 green; `tsc --noEmit` clean; production build clean. Every
+screen reviewed at 390×844 in a real browser via `/styleguide/share-flow`, which exists
+because none of this was reviewable without finishing a quiz — which is how it got that
+way.
 
 ---
 

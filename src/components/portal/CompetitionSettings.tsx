@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Campaign, CampaignStatus, CompetitionState } from '@/lib/competition/campaign'
-import type { CompetitionEntry, EntryState } from '@/lib/competition/entries'
+import type { CompetitionEntry, EntryState, ImportResult } from '@/lib/competition/entries'
 
 /**
  * The competition, in the Founders Hub.
@@ -61,6 +61,8 @@ export function CompetitionSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [winner, setWinner] = useState<CompetitionEntry | null>(null)
+  const [paste, setPaste] = useState('')
+  const [imported, setImported] = useState<ImportResult | null>(null)
 
   useEffect(() => {
     fetch('/api/portal/competition')
@@ -86,6 +88,7 @@ export function CompetitionSettings() {
       setData(json)
       setDraft(json.campaign)
       if ('winner' in json) setWinner(json.winner)
+      if ('imported' in json) { setImported(json.imported); setPaste('') }
     } catch {
       setError('Couldn’t reach the server.')
     } finally {
@@ -208,6 +211,45 @@ export function CompetitionSettings() {
         </button>
       </div>
 
+      {/* Where entrants come from */}
+      <div className="rounded-2xl p-4" style={surface}>
+        <p className="text-xs font-bold text-[var(--ink-1)] mb-1">Who tagged us</p>
+        <p className="text-[11px] text-[var(--ink-3)] mb-2 leading-snug">
+          The tag is the entry — nobody types anything on the site. Check your Instagram
+          mentions, paste the handles here, and they go straight in as verified. Pasting
+          the same list twice is safe: anything already entered is counted as a duplicate
+          rather than added again.
+        </p>
+        <textarea
+          value={paste}
+          onChange={(e) => setPaste(e.target.value)}
+          rows={4}
+          placeholder={'@jamie\n@alex.lifts\nsam_trains'}
+          className={`${input} font-mono`}
+          style={{ resize: 'vertical' }}
+        />
+        <button
+          type="button"
+          disabled={saving || paste.trim().length === 0}
+          onClick={() => post({ action: 'import-tags', handles: paste })}
+          className="w-full mt-2 py-2.5 rounded-xl text-xs font-bold disabled:opacity-40"
+          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
+        >
+          {saving ? 'Adding…' : 'Add these entrants'}
+        </button>
+        {imported && (
+          <p className="text-[11px] mt-2 leading-snug text-[var(--ink-2)]">
+            Added <strong className="text-[var(--ink-1)]">{imported.added.length}</strong>
+            {imported.duplicates.length > 0 && <> · {imported.duplicates.length} already in</>}
+            {imported.rejected.length > 0 && (
+              <> · <span style={{ color: 'var(--tone-attention)' }}>
+                couldn’t read: {imported.rejected.join(', ')}
+              </span></>
+            )}
+          </p>
+        )}
+      </div>
+
       {/* Entries */}
       <div className="rounded-2xl p-4" style={surface}>
         <p className="text-xs font-bold text-[var(--ink-1)] mb-2">Entries</p>
@@ -232,7 +274,7 @@ export function CompetitionSettings() {
                     {e.isTest && <span className="ml-2 text-[9px] font-bold text-[var(--tone-attention)]">TEST</span>}
                   </p>
                   <p className="text-[10px] text-[var(--ink-3)]">
-                    {e.channel} · {e.route === 'free' ? 'free entry' : 'shared'} · {e.state}
+                    {e.channel} · {e.route === 'free' ? 'free entry' : e.route === 'tag' ? 'tagged us' : 'shared'} · {e.state}
                   </p>
                 </div>
                 {e.state === 'pending' && (
@@ -270,7 +312,9 @@ export function CompetitionSettings() {
           Draw a winner
         </button>
         <p className="text-[10px] text-[var(--ink-3)] mt-1.5 leading-snug">
-          Drawn at random from verified entries only. Test entries can never win.
+          Drawn at random from verified entries only, using a cryptographic random
+          number — “we used a properly random draw” is a claim that has to survive
+          somebody asking how. Test entries can never win.
         </p>
         {winner && (
           <p className="text-xs font-bold mt-2" style={{ color: 'var(--tone-positive)' }}>

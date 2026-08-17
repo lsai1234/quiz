@@ -1,103 +1,43 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
-import type { ShareFormat } from '@/lib/share-card/format'
-import { Button } from '@/components/ui/Button'
 import { Icon } from '@/components/ui/Icon'
 import { prizeInline } from '@/lib/competition/prize'
 
 /**
- * Entering the giveaway, once the card has been shared.
+ * What entering the giveaway looks like once the card has been shared.
  *
- * ── Why it is a step and no longer an accordion ─────────────────────────────
- * This used to sit under the share buttons, folded away behind the line
- * "Entering the giveaway? Win £200" — the conversion-critical step of the whole
- * promotion, below the fold, phrased as a question, competing with the button
- * next to it. Somebody could share their card and never discover that sharing
- * alone did not enter them.
+ * ── There is nothing to fill in, and that is the point ──────────────────────
+ * This has been three things. First an accordion under the share buttons,
+ * folded away behind "Entering the giveaway? Win £200" — the conversion-critical
+ * step of the whole promotion, below the fold, phrased as a question. Then a
+ * handle field on the step after a share, which was better but still asked
+ * somebody who had *just posted to their story* to come back to a website and
+ * type their own name into a box.
  *
- * So it moved to where it belongs: after a successful share, as the thing that
- * finishes what they just started. There is no fold and nothing to notice.
+ * Now it asks for nothing. The winner is drawn from the accounts that tagged us,
+ * read off our own Instagram mentions — so the tag is the entry, and the only
+ * useful thing this screen can do is confirm what the entry actually was.
  *
- * ── What it does not do ─────────────────────────────────────────────────────
- * It does not verify anything. Anyone can mint a card token by calling the API,
- * so a handle typed here is a *claim* that somebody posted — every entry lands
- * `pending` and a person confirms it in the Founders Hub before the draw can see
- * it. That is what makes the draw auditable, and it is why the copy says
- * "we'll check" rather than "you're in".
+ * ── Which makes it information, not a form ──────────────────────────────────
+ * The three conditions are listed because they are the promotion's significant
+ * conditions and because somebody who missed one should be able to go back and
+ * fix it while the post is still up. A ticked list is the shortest honest way to
+ * say "here is what counts".
  */
 
 const ACCENT = '#00D4FF'
 
-type State = 'idle' | 'sending' | 'done' | 'already' | 'error'
-
-/** The platforms, spelled the way the platforms spell themselves — a
- *  `capitalize` class turns "tiktok" into "Tiktok", which is nobody's name. */
-const CHANNELS = [
-  { id: 'instagram', label: 'Instagram' },
-  { id: 'tiktok', label: 'TikTok' },
-] as const
-
-type Channel = (typeof CHANNELS)[number]['id']
-
-export function ShareEntryPanel({ prize, test, link, format, onDone }: {
+export function EnteredPanel({ prize, test, steps }: {
   prize: string
   test: boolean
-  link: string
-  /** Which card was shared. A story card entered on is worth knowing about. */
-  format: ShareFormat
-  onDone: () => void
+  /**
+   * The campaign's own entry conditions. Read from config rather than written
+   * here, so this screen and the card can never disagree about what enters
+   * somebody — and so changing the wording is one edit in Founders Hub.
+   */
+  steps: string[]
 }) {
-  const [state, setState] = useState<State>('idle')
-  const [handle, setHandle] = useState('')
-  const [channel, setChannel] = useState<Channel>('instagram')
-
-  async function submit() {
-    setState('sending')
-    try {
-      const path = new URL(link).pathname
-      const token = path.startsWith('/s/') ? path.slice(3) : null
-      const res = await fetch('/api/competition/enter', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ handle, channel, route: 'share', shareToken: token, note: format }),
-      })
-      if (res.ok) return setState('done')
-      const json = await res.json().catch(() => ({}))
-      setState(json.error === 'already-entered' ? 'already' : 'error')
-    } catch {
-      setState('error')
-    }
-  }
-
-  if (state === 'done' || state === 'already') {
-    return (
-      <div className="text-center" role="status">
-        <div
-          className="inline-flex items-center justify-center rounded-full mb-3"
-          style={{
-            width: 44, height: 44,
-            background: 'rgba(0,212,255,0.12)',
-            border: `1px solid ${ACCENT}59`,
-            color: ACCENT,
-          }}
-        >
-          <Icon name="check" size={20} />
-        </div>
-        <p className="text-sm font-semibold" style={{ color: 'var(--color-text)' }}>
-          {state === 'already' ? 'You’re already in' : 'Entry received'}
-        </p>
-        <p className="text-xs mt-1.5 leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-          {state === 'already'
-            ? 'That handle is already entered for this draw.'
-            : 'We’ll look for your story and confirm it. Keep the post up until the draw closes.'}
-        </p>
-        <Button variant="ghost" size="sm" className="mt-3" onClick={onDone}>Close</Button>
-      </div>
-    )
-  }
-
   return (
     <div>
       {test && (
@@ -107,66 +47,42 @@ export function ShareEntryPanel({ prize, test, link, format, onDone }: {
       )}
 
       <p className="text-sm leading-relaxed text-center mb-4" style={{ color: 'var(--color-text-2)' }}>
-        {test
-          ? 'Posting alone doesn’t enter you. Tell us the handle you posted from.'
-          : <>Posting alone doesn’t enter you — tell us the handle you posted from so we can find your story and count you in for <strong style={{ color: 'var(--color-text)' }}>{prizeInline(prize)}</strong>.</>}
+        {test ? (
+          'Nothing else to do — this is a rehearsal, so no real draw is running.'
+        ) : (
+          <>
+            Nothing else to do. We draw a winner from everyone who tagged us, so
+            {steps.length > 0 ? ' make sure these are all true and' : ''} you’re in
+            for <strong style={{ color: 'var(--color-text)' }}>{prizeInline(prize)}</strong>.
+          </>
+        )}
       </p>
 
-      <div className="flex gap-2 mb-3" role="radiogroup" aria-label="Where you posted">
-        {CHANNELS.map(({ id, label }) => (
-          <button
-            key={id}
-            type="button"
-            role="radio"
-            aria-checked={channel === id}
-            onClick={() => setChannel(id)}
-            className="flex-1 py-2.5 rounded-xl text-xs font-bold"
-            style={{
-              background: channel === id ? 'rgba(0,212,255,0.12)' : 'rgba(255,255,255,0.05)',
-              border: `1px solid ${channel === id ? 'rgba(0,212,255,0.38)' : 'rgba(255,255,255,0.09)'}`,
-              color: channel === id ? ACCENT : 'var(--color-text-2)',
-            }}
-          >
-            {label}
-          </button>
+      <ul className="flex flex-col gap-2.5">
+        {steps.map((step) => (
+          <li key={step} className="flex items-start gap-2.5">
+            <span
+              className="flex items-center justify-center rounded-full shrink-0 mt-0.5"
+              style={{
+                width: 22,
+                height: 22,
+                background: 'rgba(0,212,255,0.12)',
+                border: `1px solid ${ACCENT}52`,
+                color: ACCENT,
+              }}
+            >
+              <Icon name="check" size={13} />
+            </span>
+            <span className="text-sm font-semibold min-w-0" style={{ color: 'var(--color-text)' }}>
+              {step}
+            </span>
+          </li>
         ))}
-      </div>
+      </ul>
 
-      <label htmlFor="entry-handle" className="text-[11px] font-bold block mb-1.5" style={{ color: 'var(--color-text-2)' }}>
-        Your {CHANNELS.find((c) => c.id === channel)?.label} handle
-      </label>
-      <input
-        id="entry-handle"
-        value={handle}
-        onChange={(e) => setHandle(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && handle.trim().length >= 2) submit() }}
-        placeholder="@yourname"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
-        enterKeyHint="done"
-        className="w-full px-3.5 py-3 rounded-xl text-sm outline-none"
-        style={{
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.09)',
-          color: 'var(--color-text)',
-        }}
-      />
-
-      <Button
-        variant="primary"
-        className="mt-3"
-        fullWidth
-        loading={state === 'sending'}
-        disabled={handle.trim().length < 2}
-        onClick={submit}
-      >
-        {state === 'sending' ? 'Entering…' : 'Enter the giveaway'}
-      </Button>
-
-      {state === 'error' && (
-        <p className="text-[11px] mt-2 text-center" style={{ color: '#f87171' }} role="alert">
-          That didn’t work — check the handle and try again.
+      {steps.length > 0 && (
+        <p className="text-[11px] mt-3.5 leading-snug text-center" style={{ color: 'var(--color-muted)' }}>
+          The tag is what enters you — without it we can’t find your post.
         </p>
       )}
 

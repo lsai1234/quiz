@@ -39,6 +39,13 @@ export function ShareFlowBench({ payload }: { payload: ShareCardPayload }) {
                   prize: 'Win £200 of supplements',
                   test,
                   closesAt: '2026-11-30T23:59:00.000Z',
+                  // The campaign defaults, so the confirmation step shows the
+                  // conditions it will actually show in production.
+                  entrySteps: [
+                    'Follow @getchrgd_',
+                    'Take the quiz',
+                    'Share it to your story tagging us',
+                  ],
                 }
               : { state: 'off' },
           ),
