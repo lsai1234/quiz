@@ -75,6 +75,12 @@ Two columns: name + archetype + fit meter left, top three products right. This o
 never downloaded — it exists so a pasted `/s/…` link previews correctly in WhatsApp,
 Discord, Slack, iMessage and X.
 
+### Competition variant — 1080 × 1920
+
+The same card with the lineup shortened to four rows and the reclaimed space given to an
+entry band. See §3.7 for why this is a variant rather than a badge on the standard card,
+and how someone ends up with the right one.
+
 ### What never goes on the card
 
 Price. Email. Age. Gender. Anything from the safety step. The card is a public URL that
@@ -212,6 +218,51 @@ So the ladder is:
    cross-origin blobs and the button would otherwise appear to do nothing.
 4. Copy link, always available, next to the primary button.
 
+### 3.7 One card, two variants — and the variant is routed, not toggled
+
+The competition needs the card to double as its advert. That is a different job from
+the vanity card, and the two do not combine well on one surface:
+
+- A prize banner has to be loud or nobody enters, and loud eats `stackName`, which is
+  the hook.
+- It changes what the post says about the poster. "Here's my stack" reads as personal;
+  the same card with WIN £200 on it reads as an ad they were paid to run. That is what
+  kills reshares.
+- Per §6.2, an advert for the promotion carries significant conditions **on the image**.
+  Three lines of legal small print ruin a vanity card and are fine on a card built for it.
+
+A separate generic giveaway graphic is not the answer either — an impersonal "WIN £200"
+tile gets scrolled past. The reason this works at all is that the advert *is* someone's
+own result.
+
+**So: same payload, same renderer, a second composition.** `format=story-comp` keeps the
+name, archetype and fit meter, shrinks the lineup from six rows to four, and spends the
+reclaimed bottom third on an entry band: prize, the follow/repost/share mechanic, closing
+date, terms pointer, and the code set large enough to read off a screenshot. One extra
+layout in a renderer already producing three.
+
+**The entry rule:** the competition card is the one that must be posted to enter; the
+clean card is an optional extra alongside it. One sentence in the T&Cs, a verifiable
+entry, and the conditions living on the entry post itself.
+
+**Routing, not a toggle.** Finish the quiz normally → the clean card, with a quiet line
+under the share button: *Entering the £200 giveaway? Get the entry version.* Arrive from
+a competition link or tap the giveaway CTA → the entry card is the default, clean one
+available as "just my stack". Nobody has to know there are two.
+
+Two constraints on this:
+
+**The clean card stays the default while the competition runs.** Defaulting everyone to
+the entry card will be tempting and will lower the overall share rate — most people do
+not want to look like they are running an ad.
+
+**The competition card expires.** This is the one exception to §3.4: the payload freezes
+what was shared, but *promotion state must stay live*. A card still rendering
+"closes 30 Nov" in January is a promotion that appears open when it is closed — a CAP
+problem. Past the closing date the renderer draws a closed state or falls back to the
+clean card. The closing date is read from live campaign config at render time, never
+from the snapshot.
+
 ---
 
 ## 4. Phases
@@ -266,11 +317,12 @@ share/click/conversion counts on the existing dashboard.
 **Exit:** a partner can pull their assets without contacting us, and a purchase from a
 card click lands as a commission row.
 
-### Phase 5 — The competition · 2d
+### Phase 5 — The competition · 2.5d
 
-`competition_entries` (share token, claimed handle, channel, state), the entry flow off
-the share sheet, a T&Cs page under `src/app/legal/`, an entries list and winner draw in
-the Founders Hub, and the free-entry route required by §6.2.
+The `story-comp` variant and its routing (§3.7), `competition_entries` (share token,
+claimed handle, channel, state), the entry flow off the share sheet, a T&Cs page under
+`src/app/legal/`, live campaign config with a closing date, an entries list and winner
+draw in the Founders Hub, and the free-entry route required by §6.2.
 
 **Entry is not the same object as a share.** One person may share five times and enter
 once; someone may enter without ever sharing (the free route). Modelling entry as "a
@@ -363,6 +415,9 @@ will look like disinterest rather than a bug.
    for reach, and it is a routine-fit figure rather than a health score. Planned: show it.
 4. **Card lifetime** — anonymous cards swept after 12 months, account-linked cards kept?
 5. **Prize** — "up to £200" needs a defined structure before T&Cs can be written.
+6. **Entry post** — is posting the competition card the *only* way to enter via social,
+   or does a story mentioning the brand count? The former is verifiable and is what
+   §3.7 assumes; the latter is looser and much harder to audit.
 
 ---
 
