@@ -48,6 +48,26 @@ export interface Campaign {
   freeEntryRoute: string
   /** Where the full terms live. Relative or absolute. */
   termsUrl: string
+  /**
+   * The Instagram handle, on the card.
+   *
+   * This is the field the whole entry card turns on. A story someone reshares is
+   * a flat image — there is no link on it, and the person seeing it has no way to
+   * reach the quiz unless the picture tells them where to go. So the handle and
+   * the route below are printed on the card, large, and they are the only path
+   * from a repost back to us.
+   */
+  instagramHandle: string
+  /** How to reach the quiz from the handle — "Quiz link in bio". */
+  quizRoute: string
+  /**
+   * The three steps, as they appear on the card.
+   *
+   * Discrete rather than a sentence, because the card is an advert and an advert
+   * that needs reading twice does not get entered. `mechanic` stays as the prose
+   * version for the terms page.
+   */
+  entrySteps: string[]
   /** Instagram requires the promotion to disclaim their involvement. */
   platformDisclaimer: string
 }
@@ -63,6 +83,13 @@ export const EMPTY_CAMPAIGN: Campaign = {
   winnerSelection: '',
   freeEntryRoute: '',
   termsUrl: '/legal/competition',
+  instagramHandle: '@getchrgd',
+  quizRoute: 'Quiz link in our bio',
+  entrySteps: [
+    'Follow @getchrgd',
+    'Take the quiz and share your stack',
+    'Post this to your story and tag us',
+  ],
   platformDisclaimer:
     'This promotion is in no way sponsored, endorsed or administered by, or associated with, Instagram or TikTok.',
 }
@@ -95,6 +122,8 @@ export const REQUIRED_FOR_LIVE: Array<{ field: keyof Campaign; label: string }> 
   { field: 'winnerSelection', label: 'How and when winners are picked and notified' },
   { field: 'freeEntryRoute', label: 'A free entry route (no purchase necessary)' },
   { field: 'termsUrl', label: 'A link to the full terms' },
+  { field: 'instagramHandle', label: 'The Instagram handle to print on the card' },
+  { field: 'quizRoute', label: 'How someone reaches the quiz from that handle' },
 ]
 
 /** What is still missing before this may be set to `live`. Empty = ready. */

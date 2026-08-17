@@ -26,7 +26,7 @@ const FORMAT_IDS = Object.keys(FORMATS) as ShareFormat[]
 
 /** Widths to show each format at on the page. The story is shown small enough to
  *  see whole; the OG at roughly the size a chat client unfurls it. */
-const PREVIEW_WIDTH: Record<ShareFormat, number> = { story: 260, square: 320, og: 400 }
+const PREVIEW_WIDTH: Record<ShareFormat, number> = { story: 260, square: 320, og: 400, entry: 260 }
 
 export default function ShareCardStyleguide() {
   const personas = sharePersonas()

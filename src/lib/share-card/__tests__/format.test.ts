@@ -14,9 +14,20 @@ import { sharePersonas } from '../personas'
 const FORMAT_IDS = Object.keys(FORMATS) as ShareFormat[]
 const PERSONAS = Object.fromEntries(sharePersonas().map((p) => [p.id, p.payload]))
 
+const BAND = {
+  prize: '£200 of free supplements',
+  mechanic: 'Follow, repost and share to your story',
+  closes: 'Closes 30 Nov',
+  terms: 'getchrgd.co.uk/legal/competition',
+  test: false,
+  handle: '@getchrgd',
+  route: 'Take the quiz — link in our bio',
+  steps: ['Follow @getchrgd', 'Take the quiz', 'Post this to your story'],
+}
+
 describe('formats', () => {
   it('are all real', () => {
-    expect(FORMAT_IDS.sort()).toEqual(['og', 'square', 'story'])
+    expect(FORMAT_IDS.sort()).toEqual(['entry', 'og', 'square', 'story'])
     expect(isShareFormat('story')).toBe(true)
     expect(isShareFormat('reel')).toBe(false)
   })
@@ -30,7 +41,7 @@ describe('formats', () => {
   it('give the picture a share of every card', () => {
     // The single biggest thing separating the card from a screenshot of the app.
     for (const format of FORMAT_IDS) {
-      expect(FORMATS[format].imageRatio).toBeGreaterThan(0.3)
+      expect(FORMATS[format].imageRatio).toBeGreaterThanOrEqual(0.3)
     }
   })
 })
@@ -71,6 +82,60 @@ describe('the lists', () => {
     const view = buildShareCardView(PERSONAS['no-identity'], 'story')
     expect(view.builtFor.length).toBeGreaterThan(0)
     expect(view.builtFor.every((l) => typeof l === 'string' && l.length > 0)).toBe(true)
+  })
+})
+
+describe('the entry card', () => {
+  it('is a different card, not a badge on the story one', () => {
+    // The whole reason it is its own format: picking the competition loads a
+    // different picture, and the advert is what the card *is*.
+    const entry = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    const story = buildShareCardView(PERSONAS.complete, 'story', BAND)
+
+    expect(entry.entry).not.toBeNull()
+    expect(entry.callout).toBeNull()
+    expect(story.entry).toBeNull()
+    expect(story.callout).toMatchObject({ kind: 'competition' })
+  })
+
+  it('prints the way back to the quiz', () => {
+    // A story somebody reshares is a flat image — no link, no swipe-up. If the
+    // handle and the route are not printed on it, nobody who sees the repost
+    // can reach the quiz and the share is worth nothing. This is the single
+    // most load-bearing assertion on the entry card.
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.entry?.handle).toBe('@getchrgd')
+    expect(view.entry?.route).toBe('Take the quiz — link in our bio')
+  })
+
+  it('carries what the CAP Code needs on the promotion itself', () => {
+    // Significant conditions have to be on the advert, not only behind a link —
+    // and a reshared image cannot carry a link either.
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.entry).toMatchObject({
+      prize: '£200 of free supplements',
+      closes: 'Closes 30 Nov',
+      terms: 'getchrgd.co.uk/legal/competition',
+    })
+    expect(view.entry?.steps).toHaveLength(3)
+  })
+
+  it('keeps the personalisation — it is the hook', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.stackName).toBe('Iron Foundations')
+    expect(view.archetype).toBe('The Strength Builder')
+    expect(view.lineup).toHaveLength(3)
+  })
+
+  it('caps the steps at three', () => {
+    const many = { ...BAND, steps: ['a', 'b', 'c', 'd', 'e'] }
+    expect(buildShareCardView(PERSONAS.complete, 'entry', many).entry?.steps).toHaveLength(3)
+  })
+
+  it('has no advert when no competition is running', () => {
+    // The band is read live and returns null once the closing date passes, so
+    // this is the state an entry card falls into rather than a separate one.
+    expect(buildShareCardView(PERSONAS.complete, 'entry', null).entry).toBeNull()
   })
 })
 

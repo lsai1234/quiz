@@ -50,6 +50,8 @@ const FIELDS: Array<{ key: keyof Campaign; label: string; hint: string; long?: b
   { key: 'winnerSelection', label: 'How winners are picked', hint: 'When, how, how they are told, and what happens if they cannot be reached.', long: true },
   { key: 'freeEntryRoute', label: 'Free entry route', hint: 'No purchase necessary, and of equal standing to entering by sharing.', long: true },
   { key: 'termsUrl', label: 'Full terms URL', hint: 'Where the complete terms live.' },
+  { key: 'instagramHandle', label: 'Instagram handle', hint: 'Printed on the entry card. A reshared story has no link on it — this is the only way someone who sees it can find us.' },
+  { key: 'quizRoute', label: 'How to reach the quiz', hint: 'What it says under the handle — “Quiz link in our bio”.' },
   { key: 'platformDisclaimer', label: 'Platform disclaimer', hint: 'Instagram requires the promotion to disclaim their involvement.', long: true },
 ]
 
@@ -174,6 +176,26 @@ export function CompetitionSettings() {
             <p className="text-[10px] text-[var(--ink-3)] mt-1 leading-snug">{hint}</p>
           </div>
         ))}
+
+        <div>
+          <label className="text-[11px] font-bold text-[var(--ink-2)] block mb-1">The three steps, as they appear on the card</label>
+          {[0, 1, 2].map((i) => (
+            <input
+              key={i}
+              className={`${input} mb-1.5`}
+              placeholder={`Step ${i + 1}`}
+              value={draft.entrySteps[i] ?? ''}
+              onChange={(e) => {
+                const steps = [...draft.entrySteps]
+                steps[i] = e.target.value
+                setDraft({ ...draft, entrySteps: steps })
+              }}
+            />
+          ))}
+          <p className="text-[10px] text-[var(--ink-3)] leading-snug">
+            Short lines, not sentences. An advert that needs reading twice doesn’t get entered.
+          </p>
+        </div>
 
         <button
           type="button"

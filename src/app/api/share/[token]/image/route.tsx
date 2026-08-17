@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { ShareCard } from '@/components/share-card/ShareCard'
 import { buildShareCardView, isShareFormat, FORMATS, type ShareFormat } from '@/lib/share-card/format'
 import { loadShareCardFonts } from '@/lib/share-card/fonts'
+import { competitionBand } from '@/lib/competition/band'
 import { getShareCard } from '@/lib/db/share-cards'
 
 /**
@@ -35,7 +36,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ token: stri
   if (!card) return json(404, { error: 'not found' })
 
   const spec = FORMATS[format]
-  return new ImageResponse(<ShareCard view={buildShareCardView(card.payload, format)} />, {
+  const band = format === 'entry' ? await competitionBand() : null
+  return new ImageResponse(<ShareCard view={buildShareCardView(card.payload, format, band)} />, {
     width: spec.width,
     height: spec.height,
     fonts: await loadShareCardFonts(),

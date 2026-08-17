@@ -394,6 +394,89 @@ function Footer({ view, markSize }: { view: ShareCardView; markSize: number }) {
   )
 }
 
+/**
+ * The advert, on the entry card.
+ *
+ * ── The thing this exists to solve ──────────────────────────────────────────
+ * A story somebody reshares is a flat image. There is no link on it, no
+ * swipe-up, no tappable sticker — the person who sees it has nothing to press.
+ * So the route back to us has to be *printed*, large enough to read at a glance
+ * and short enough to remember for the two seconds it takes to open the app:
+ * a handle, and where the quiz is once you get there.
+ *
+ * Everything else here is the CAP Code's: the prize, the steps, the closing
+ * date and where the full terms are, all on the promotion itself rather than
+ * behind a link — because a reshared image cannot carry a link either.
+ */
+function EntryAdvert({ entry }: { entry: NonNullable<ShareCardView['entry']> }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, gap: px(P.space3) }}>
+      {entry.test ? (
+        <div style={eyebrow(P.toneAttention, P.textMicro)}>Test — not a live promotion</div>
+      ) : null}
+
+      {/* The prize, as the loudest thing on the card after the stack name. */}
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={eyebrow(P.inkPrint2, P.textMicro)}>Win</div>
+        <div style={display(px(P.textDisplay), P.inkPrint)}>{entry.prize}</div>
+      </div>
+
+      {/* Three steps, numbered. An advert that needs reading twice does not get
+          entered, so this is a list rather than the prose the terms page uses. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space2) }}>
+        <div style={eyebrow(P.inkPrint2, P.textMicro)}>How to enter</div>
+        {entry.steps.map((step, i) => (
+          <div key={`${i}-${step}`} style={{ display: 'flex', gap: px(P.space2), alignItems: 'center' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: px(P.space6),
+                height: px(P.space6),
+                flexShrink: 0,
+                borderRadius: px(P.radiusPill),
+                background: P.inkPrint,
+                ...body(P.textBodySm, P.surfacePrint, P.weightStrong),
+              }}
+            >
+              {String(i + 1)}
+            </div>
+            <div
+              style={{
+                ...body(P.textBody, P.inkPrint, P.weightStrong),
+                minWidth: 0,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {step}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* The route. The one element on this card that cannot be dropped: it is
+          the only path from a reshared story back to the quiz. */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          background: P.inkPrint,
+          borderRadius: px(P.radiusRow),
+          padding: `${px(P.space3)}px ${px(P.space4)}px`,
+        }}
+      >
+        <div style={display(px(P.textTitle), P.surfacePrint)}>{entry.handle}</div>
+        <div style={body(P.textBodySm, withAlpha(P.surfacePrint, 0.75))}>{entry.route}</div>
+      </div>
+
+      <div style={body(P.textMicro, P.inkPrint2)}>{`${entry.closes} · ${entry.terms}`}</div>
+    </div>
+  )
+}
+
 export function ShareCard({ view }: { view: ShareCardView }) {
   const { spec } = view
   const isOg = view.format === 'og'
@@ -427,26 +510,40 @@ export function ShareCard({ view }: { view: ShareCardView }) {
         ) : null}
       </div>
 
-      <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0, overflow: 'hidden' }}>
-        {/* Not 50/50: product names run half as long again as focus labels, and
-            an even split is what put the longest of them on the edge of wrapping. */}
-        <List
-          title="Your stack"
-          items={view.lineup.map((r) => r.product)}
-          max={spec.lineupRows}
-          width="52%"
-          marker="number"
-        />
-        {view.builtFor.length > 0 ? (
+      {/* On the entry card the stack is the hook, not the subject — one column,
+          so the advert below it gets the room. */}
+      {view.entry ? (
+        <div style={{ display: 'flex', flexShrink: 0 }}>
           <List
-            title="Built for"
-            items={view.builtFor}
+            title="Your stack"
+            items={view.lineup.map((r) => r.product)}
             max={spec.lineupRows}
-            width="44%"
-            marker="bolt"
+            width="100%"
+            marker="number"
           />
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0, overflow: 'hidden' }}>
+          {/* Not 50/50: product names run half as long again as focus labels, and
+              an even split is what put the longest of them on the edge of wrapping. */}
+          <List
+            title="Your stack"
+            items={view.lineup.map((r) => r.product)}
+            max={spec.lineupRows}
+            width="52%"
+            marker="number"
+          />
+          {view.builtFor.length > 0 ? (
+            <List
+              title="Built for"
+              items={view.builtFor}
+              max={spec.lineupRows}
+              width="44%"
+              marker="bolt"
+            />
+          ) : null}
+        </div>
+      )}
 
       {view.overflow > 0 ? (
         <div style={{ ...body(P.textBodySm, P.inkPrint2), flexShrink: 0 }}>
@@ -455,10 +552,14 @@ export function ShareCard({ view }: { view: ShareCardView }) {
       ) : null}
 
       {/* The card's slack, in one place. Without it the lists stretched and the
-          gap opened up between a list and its own overflow line. */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }} />
+          gap opened up between a list and its own overflow line.
+          On the entry card it moves below the advert: the advert has to follow
+          the stack closely, or the card reads as two unrelated posters. */}
+      {view.entry ? null : <div style={{ display: 'flex', flex: 1, minHeight: 0 }} />}
 
       {view.callout ? <Callout callout={view.callout} /> : null}
+      {view.entry ? <EntryAdvert entry={view.entry} /> : null}
+      {view.entry ? <div style={{ display: 'flex', flex: 1, minHeight: 0 }} /> : null}
 
       <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0 }}>
         {view.stats.map((s) => (

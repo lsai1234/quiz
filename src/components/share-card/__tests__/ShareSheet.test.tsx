@@ -51,7 +51,7 @@ describe('opening', () => {
 
     expect(events()).toContain('share_open')
     expect(propsFor('share_open')).toMatchObject({ format: 'story', hasCode: true })
-    expect(screen.getByRole('img', { name: /story size/i })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /my stack size/i })).toBeInTheDocument()
   })
 
   it('says what the card does not contain', () => {

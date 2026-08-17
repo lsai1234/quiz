@@ -34,13 +34,20 @@ import { CompetitionEntry } from './CompetitionEntry'
 
 const ACCENT = '#00D4FF'
 
-/** The formats offered. OG is a link preview and is never downloaded. */
-const OFFERED: ShareFormat[] = ['story', 'square']
+/**
+ * The formats offered, in the order they are offered.
+ *
+ * `entry` is appended only while a competition is running: it is a different
+ * card, not a badge on this one, so picking it loads a different picture. OG is
+ * never offered — it is a link preview, not something anybody downloads.
+ */
+const BASE_FORMATS: ShareFormat[] = ['story', 'square']
 
 const FORMAT_LABEL: Record<ShareFormat, string> = {
-  story: 'Story',
+  story: 'My stack',
   square: 'Post',
   og: 'Link',
+  entry: 'Competition',
 }
 
 type Stage =
@@ -62,6 +69,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
    * would keep offering an entry into a draw that has closed.
    */
   const [comp, setComp] = useState<{ state: string; prize: string; test: boolean } | null>(null)
+  const offered: ShareFormat[] = comp ? [...BASE_FORMATS, 'entry'] : BASE_FORMATS
 
   useEffect(() => {
     let live = true
@@ -276,7 +284,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
         ) : (
           <>
             <div className="flex gap-2 mt-4" role="tablist" aria-label="Card size">
-              {OFFERED.map((f) => {
+              {offered.map((f) => {
                 const active = f === format
                 return (
                   <button
@@ -325,6 +333,14 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
               Copy link
             </button>
           </>
+        )}
+
+        {format === 'entry' && (
+          <p className="text-[11px] mt-3 leading-relaxed text-center" style={{ color: 'var(--color-muted)' }}>
+            This one is the giveaway card. It carries your stack plus how to enter and
+            where to find us — post it to your story so the people who see it can get
+            to the quiz.
+          </p>
         )}
 
         {comp && stage.kind !== 'long-press' && (

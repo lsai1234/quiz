@@ -15,7 +15,7 @@ import { ART_SET, isPlaceholder, type ArtKey } from './art'
  * So: this file decides *what appears*, the component decides *how it looks*.
  */
 
-export type ShareFormat = 'story' | 'square' | 'og'
+export type ShareFormat = 'story' | 'square' | 'og' | 'entry'
 
 export interface FormatSpec {
   width: number
@@ -87,6 +87,34 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
    * survives at that size to the right of it, and no code chip because the URL
    * beside it already carries the code.
    */
+  /**
+   * The competition card — an advert with somebody's stack on it.
+   *
+   * A separate format rather than a badge on the story card, because the two
+   * are doing different jobs and only one of them is about the stack. Here the
+   * personalisation is the *hook* — it is why anybody stops — and the bottom
+   * two thirds are the advert: what you win, the three steps, and the route
+   * back to us.
+   *
+   * That last part is the whole reason this format exists. A story somebody
+   * reshares is a flat image. There is no link on it, no swipe-up, nothing —
+   * so unless the picture itself says "@getchrgd, quiz link in bio", a person
+   * who sees it has no way to reach the quiz and the repost is worth nothing.
+   */
+  entry: {
+    width: 1080,
+    height: 1920,
+    // A third, not near half: the advert needs the room more than the picture
+    // does, and the stack is the hook rather than the subject here.
+    imageRatio: 0.3,
+    lineupRows: 3,
+    showStats: false,
+    showFitMeter: true,
+    showTier: false,
+    showCallout: true,
+    showOverflow: false,
+  },
+
   og: {
     width: 1200,
     height: 630,
@@ -184,6 +212,21 @@ export interface ShareCardView {
   /** A real catalogue picture, when there is one. Overrides the art set. */
   heroImage: string | null
   callout: ShareCallout | null
+  /**
+   * The advert, on the entry card only.
+   *
+   * Null on every other format. Kept separate from `callout` because a band is
+   * something a card carries and this is what the card *is*.
+   */
+  entry: {
+    prize: string
+    steps: string[]
+    handle: string
+    route: string
+    closes: string
+    terms: string
+    test: boolean
+  } | null
   footer: string
 }
 
@@ -202,6 +245,10 @@ export interface CompetitionBand {
   closes: string
   terms: string
   test: boolean
+  /** The handle and the route are what make a reshared story reachable. */
+  handle: string
+  route: string
+  steps: string[]
 }
 
 export function buildShareCardView(
@@ -219,7 +266,9 @@ export function buildShareCardView(
   // The band costs a product row. That trade is the point rather than a
   // compromise: an influencer's card is carrying their code, and one fewer
   // product is a cheaper price than a footer pushed off the bottom edge.
-  const hasCallout = spec.showCallout && (!!competition || !!payload.code)
+  // The entry card renders the advert, not a band — charging it for a band it
+  // never draws cost it a product row.
+  const hasCallout = format !== 'entry' && spec.showCallout && (!!competition || !!payload.code)
   const rows = Math.max(1, spec.lineupRows - (hasCallout ? 1 : 0))
   const imageRatio = spec.imageRatio - (hasCallout ? 0.05 : 0)
   const shown = payload.lineup.slice(0, rows)
@@ -269,13 +318,27 @@ export function buildShareCardView(
     // gets the band.
     // The competition band wins over the code band. Both would be two offers on
     // one card, and the entry card exists because its job is the whole card.
-    callout: !spec.showCallout
+    // The entry card carries the advert instead of a band — a band on top of an
+    // advert would be the same offer twice.
+    callout: !spec.showCallout || format === 'entry'
       ? null
       : competition
         ? { kind: 'competition' as const, ...competition }
         : payload.code
           ? { kind: 'code' as const, code: payload.code, caption: 'Use this code at checkout' }
           : null,
+    entry:
+      format === 'entry' && competition
+        ? {
+            prize: competition.prize,
+            steps: competition.steps.slice(0, 3),
+            handle: competition.handle,
+            route: competition.route,
+            closes: competition.closes,
+            terms: competition.terms,
+            test: competition.test,
+          }
+        : null,
     footer: 'getchrgd.co.uk',
   }
 }

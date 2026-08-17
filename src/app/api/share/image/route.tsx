@@ -4,6 +4,7 @@ import { ShareCard } from '@/components/share-card/ShareCard'
 import { buildShareCardView, isShareFormat, FORMATS, type ShareFormat } from '@/lib/share-card/format'
 import { decodeSharePayload } from '@/lib/share-card/codec'
 import { loadShareCardFonts } from '@/lib/share-card/fonts'
+import { competitionBand } from '@/lib/competition/band'
 
 /**
  * The card, as a PNG.
@@ -43,7 +44,9 @@ export async function GET(req: NextRequest) {
     return json(400, { error: 'missing or invalid payload' })
   }
 
-  const view = buildShareCardView(payload, format)
+  // Live, never from the payload: a card that keeps advertising a closed draw
+  // is a compliance problem, where a card with a stale product name is just old.
+  const view = buildShareCardView(payload, format, format === 'entry' ? await competitionBand() : null)
   const spec = FORMATS[format]
 
   return new ImageResponse(<ShareCard view={view} />, {
