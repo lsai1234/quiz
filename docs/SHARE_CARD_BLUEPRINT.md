@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phases 0–1 landed. Phases 2–6 planned; review before each lands.
+**Status:** Phases 0–1 landed (Phase 1 rebuilt after review). Phases 2–6 planned.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -39,41 +39,60 @@ authored, which is why this can be built quickly.
 
 ### Story card — 1080 × 1920, the primary asset
 
+**Rebuilt after the first version was reviewed and rejected.** What shipped first
+was the results page rendered at 1080px — translucent glass rows on a dark ground
+— and it read exactly like what it was: a piece of an app, photographed. The
+reference for the rebuild is Spotify Wrapped, and what that format actually does
+is four things an app screen does not:
+
+1. **A picture**, roughly the top 45%. Nothing else buys attention at thumbnail
+   size, and it was the single largest gap.
+2. **A hard split** — a solid light data panel under a dark image panel. Two
+   planes of translucent grey is an interface; black type on a light panel is
+   print. This is why `--surface-print` was added to the token set.
+3. **Density** — numbered lists in two columns, not a stack of identical cards.
+   Ten data points where the old layout fitted four.
+4. **A signature** — the mark, the domain, and one enormous number.
+
 Top to bottom:
 
-1. **The ground.** The three-bloom mesh (cyan / violet / teal), vignette, grain.
-   Baked static — see §3.2. This is what makes it read as CHRGD at thumbnail size,
-   before a single word is legible.
-2. **Eyebrow.** CHRGD wordmark, then `MY STACK` (or `MY LQD PACKAGE` in drinks mode).
-3. **The name.** `blueprint.stackName` — the AI-generated 2–3 word name
-   ("Iron Foundations", "Peak Protocol"). Display face, as large as it will go. This is
-   the hook; it is the bit people screenshot.
-4. **Archetype chip.** `identity.archetype` — "The Strength Builder".
-5. **Fit meter.** `identity.routineFitScore` drawn as a `ChargeMeter` — meniscus, charge,
-   bloom. The house signature has to be on the most public surface we own.
-6. **BUILT FOR** — 3–4 focus areas as icon chips. `identity.focusAreas` mapped through
-   the existing `focusAreaGlyph()` in `src/lib/identity-visuals.ts`.
-7. **THE LINEUP** — the core of the card. One row per slot:
-   slot title (`Protein`) · product name · a reason of seven words or fewer, from
-   `slot.reason` truncated at a clause boundary. Capped at **6 rows**, then
-   `+2 more in your stack` so a Complete-tier stack does not overflow.
-8. **COVERAGE** — four bars. Axes from `selectStatAxes(blueprint, products)`, values from
-   `stackStatScore(products, goal)`. This is "why you've got them" made visual: the
-   user's own goals, and how well the stack covers each one. Same axes the deck already
-   uses, so the card cannot disagree with the screen it came from.
-9. **Footer.** `getchrgd.co.uk` · the partner/entry code as a legible chip ·
-   "Build yours in 90 seconds".
+1. **Image panel.** The CHRGD product render on a *charge field* — the logo's own
+   charge bars run as hard stripes, tightening as they rise. Not the reference's
+   op-art checkerboard: borrowing that would make the card look like Spotify's
+   rather than ours. The routine-fit score is ghosted enormous over the field,
+   the card's answer to the reference's "2025".
+2. **Masthead**, on the picture: `CHRGD STACK · Complete`, with an opted-in first
+   name in front of it.
+3. **The headline.** The AI identity's name at display size, in black on the light
+   panel, with the archetype beneath it.
+4. **Two numbered lists.** *Your stack* — the products, brand prefix stripped,
+   each pinned to one line — and *Built for*, the focus areas, or the customer's
+   own goals when no identity was generated. **This is where the card says why.**
+   The first version spent a whole row and a sentence per product; this says the
+   same thing in a third of the space and is far more scannable.
+5. **Overflow line** — `+1 more in your stack`.
+6. **Two stat pairs** — `Routine fit / 88` and `Built mainly for / Muscle`. A
+   number and a word: two words is a caption, two numbers is a table.
+7. **Footer bar** — the CHRGD mark and wordmark, the code chip, `getchrgd.co.uk`.
+
+**On the pictures.** Every product in the catalogue carries `imageUrl: null` —
+there is no product photography in the system. The card uses the CHRGD renders
+from `public/hero/`, downscaled into `share-card/art/` (~200KB for four), keyed
+off the first slot. `payload.heroImage` carries a real image straight through
+when the catalogue has one, so photography is a data change rather than a code
+change on the day it lands.
 
 ### Square — 1080 × 1080, feed and carousel
 
-Same card, coverage bars dropped, lineup capped at 4. Fits a carousel slide next to an
-influencer's own photo.
+The same card at 56% of the height: smaller picture, lists three deep, no
+overflow line. Fits a carousel slide next to an influencer's own photo.
 
 ### Open Graph — 1200 × 630, link preview
 
-Two columns: name + archetype + fit meter left, top three products right. This one is
-never downloaded — it exists so a pasted `/s/…` link previews correctly in WhatsApp,
-Discord, Slack, iMessage and X.
+Picture down the left, everything that survives at 400px wide to the right of it,
+no code chip — the URL beside it already carries the code. Never downloaded; it
+exists so a pasted `/s/…` link unfurls properly in WhatsApp, Discord, Slack,
+iMessage and X.
 
 ### Competition variant — 1080 × 1920
 
@@ -332,6 +351,22 @@ Four things rendering it changed, none of which were visible on paper:
   at link-preview size) and the code chip (the URL beside it already carries the code).
 
 Story shows four rows, square two, OG two.
+
+**Then it was reviewed and rejected, and rebuilt.** The verdict was that it looked
+like an app screenshot rather than something anyone would post — correct, and the
+right moment to change, because the card's *look* is the only part Phases 2–6 do
+not depend on. The payload, token, codec, fonts and image route all survived; the
+component, the format spec and the view model were rewritten. See §2 for what the
+card is now and why.
+
+Two more things the rebuild found, both Satori:
+
+- **A numeric JSX child** (`{i + 1}`) makes Satori count the *parent* as having
+  more than one child and throw "Expected `<div>` to have explicit display: flex"
+  — pointing at an element that already has it. Every text child is a string now.
+- **`-webkit-text-stroke` is not supported as a shorthand**, and the long-hand
+  form draws nothing when the fill is transparent. The outlined numeral rendered
+  as empty space; it is filled at low alpha instead.
 
 ### Phase 2 — The share sheet · 1.5d
 

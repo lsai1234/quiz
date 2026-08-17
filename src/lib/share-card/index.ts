@@ -24,6 +24,6 @@ export type { BuildSharePayloadOptions } from './payload'
 export { generateShareToken, normaliseToken, isShareToken, TOKEN_LENGTH } from './token'
 
 export { FORMATS, buildShareCardView, isShareFormat } from './format'
-export type { ShareFormat, FormatSpec, ShareCardView } from './format'
+export type { ShareFormat, FormatSpec, ShareCardView, ShareStat } from './format'
 
 export { encodeSharePayload, decodeSharePayload } from './codec'

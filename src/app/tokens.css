@@ -135,6 +135,26 @@
   /* Labels on an accent or tone fill. 11.36:1 on cyan, 13.08:1 on amber. */
   --ink-on-accent: #07070a;
 
+  /* ══ Print ═════════════════════════════════════════════════════════════════
+     One light surface, for the one thing this app makes that is not a screen:
+     the share card's data panel. A card is an object that leaves the product —
+     it sits in someone's story next to whatever else they posted — and a dense
+     numbered list is far more legible as black on light than as light on black.
+
+     It is deliberately a *surface*, not a theme. Nothing else in the app may use
+     it, and the ink tiers below exist only to sit on it.
+
+       --ink-print    on --surface-print   18.1:1
+       --ink-print-2  on --surface-print    5.9:1
+
+     The accent does NOT clear AA on this surface — `--accent` measures 2.1:1 and
+     `--accent-deep` 2.6:1 — so on a print surface the accent is a graphic fill
+     or display-size type only, never a small label. That is the one rule this
+     group adds, and `tokens.test.ts` holds it. */
+  --surface-print: #f4f6fb;
+  --ink-print: #07070a;
+  --ink-print-2: #555d6b;
+
   /* ══ Accent and tone ═══════════════════════════════════════════════════════
      The brand cyan, and the four things a status can mean. Brightened from the
      values in the old palette: over a lit ground, a dim tone reads as muddy

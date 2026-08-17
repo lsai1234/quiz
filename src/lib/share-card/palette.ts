@@ -120,6 +120,14 @@ export const SHARE_PALETTE = {
   ink3: '#a2a8b4',
   inkOnAccent: '#07070a',
 
+  // ── Print ─────────────────────────────────────────────────────────────────
+  // The one light surface in a dark-only system, added for this card. See the
+  // note in tokens.css: the accent does not clear AA on it, so on a print
+  // surface the accent is a graphic fill or display-size type only.
+  surfacePrint: '#f4f6fb',
+  inkPrint: '#07070a',
+  inkPrint2: '#555d6b',
+
   // ── Accent and tone ───────────────────────────────────────────────────────
   accent: '#00d4ff',
   accentBright: '#5ce4ff',
@@ -205,6 +213,10 @@ export const TOKEN_SOURCE: Record<keyof SharePalette, string> = {
   ink2: 'ink-2',
   ink3: 'ink-3',
   inkOnAccent: 'ink-on-accent',
+
+  surfacePrint: 'surface-print',
+  inkPrint: 'ink-print',
+  inkPrint2: 'ink-print-2',
 
   accent: 'accent',
   accentBright: 'accent-bright',

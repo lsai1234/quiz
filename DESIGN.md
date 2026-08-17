@@ -235,6 +235,7 @@ Read them the way the app already does:
 | Edges | `--edge`, `--edge-strong`, `--edge-top` |
 | Blur | `--blur-nav/panel/scrim`, `--blur-saturate` |
 | Ink | `--ink-1/2/3`, `--ink-on-accent` |
+| Print | `--surface-print`, `--ink-print`, `--ink-print-2` — the share card only |
 | Tone | `--accent`, `--accent-bright/deep`, `--tone-positive/attention/critical/info` |
 | Tinted steps | `--{accent,positive,attention,critical,info}-{fill,line,glow}` |
 | Fills | `--fill-accent/positive/attention/critical/info/neutral/glass` |
@@ -257,6 +258,23 @@ Resting shadows are applied by `.system-control`, not inline. Inline styles
 outrank stylesheet rules, so a button painting its own glow could not have that
 glow cancelled by `:disabled` — which is exactly what a disabled primary did:
 fully dimmed, still blooming.
+
+### One light surface, and where it is allowed
+
+`--surface-print` is the only light surface in the system, and it exists for the
+one thing this app makes that is not a screen: the share card's data panel. A
+card leaves the product — it sits in someone's story next to whatever else they
+posted — and a dense numbered list is far more legible as black on light than as
+light on black.
+
+It is a surface, not a theme. Nothing in the app may use it, and `--ink-print` /
+`--ink-print-2` exist only to sit on it.
+
+The rule it adds: **the accent does not clear AA on a print surface.**
+`--accent` measures 2.1:1 there and `--accent-deep` 2.6:1, so on that panel the
+accent is a graphic fill or display-size type only, never a small label. The card
+uses it for the ghosted score and the charge field, and near-black everywhere
+words have to be read.
 
 ### Three alphas, not sixteen
 

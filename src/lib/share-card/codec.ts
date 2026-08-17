@@ -65,6 +65,7 @@ function isShareCardPayload(value: unknown): value is ShareCardPayload {
   if (!Array.isArray(p.focusAreas) || !p.focusAreas.every(isFocusArea)) return false
 
   if (p.firstName !== undefined && !isString(p.firstName)) return false
+  if (p.heroImage !== undefined && !isString(p.heroImage)) return false
   if (p.code !== undefined && !isString(p.code)) return false
 
   return true

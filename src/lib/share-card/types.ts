@@ -94,6 +94,15 @@ export interface ShareCardPayload {
   coverage: ShareCoverageEntry[]
   level: StackLevel
   drinksMode: boolean
+  /**
+   * The hero product's image, when the catalogue has one.
+   *
+   * Every mock product currently carries `imageUrl: null` — there is no product
+   * photography in the system yet — so the card falls back to the house renders
+   * in `share-card/art/`. This field is what makes real photography a data
+   * change rather than a code change on the day it lands.
+   */
+  heroImage?: string
   /** Opt-in only. Absent unless the sharer explicitly asked for it. */
   firstName?: string
   /** Partner or entry code, shown as a chip and carried in the link. */

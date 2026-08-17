@@ -212,7 +212,10 @@ export function buildSharePayload(
     .filter((e): e is { slot: (typeof e)['slot']; product: CatalogueProduct } => !!e.product)
     .map(({ slot, product }) => ({
       slot: slot.title,
-      product: product.title,
+      // "CHRGD Whey Protein" on a CHRGD card spends five characters saying what
+      // the footer already says, and it is what pushed half the list onto a
+      // second line. The brand is the card; the product is the name.
+      product: product.title.replace(/^CHRGD\s+/i, ''),
       // The engine's reason, unless removing the address leaves nothing behind
       // — "Chosen for Sam" with no clause after it reduces to "Chosen for",
       // which renders as a row with a broken sentence under it. The catalogue's
@@ -251,6 +254,7 @@ export function buildSharePayload(
     coverage,
     level: stackLevelOf(blueprint),
     drinksMode,
+    ...(inStack[0]?.imageUrl ? { heroImage: inStack[0].imageUrl } : {}),
     ...(name ? { firstName: name } : {}),
     ...(code ? { code: code.trim().toUpperCase() } : {}),
     createdAt: now().toISOString(),
