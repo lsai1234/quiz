@@ -108,7 +108,10 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     // does, and the stack is the hook rather than the subject here. Measured by
     // rendering it — at a third, the route block ran off the bottom.
     imageRatio: 0.26,
-    lineupRows: 3,
+    // Two products, where the story card shows five. The three entry steps have
+    // to be legible on this card or the promotion does not work, and they cost
+    // about a product row each. The stack is the hook here, not the subject.
+    lineupRows: 2,
     showStats: false,
     showFitMeter: true,
     showTier: false,
@@ -206,6 +209,16 @@ export interface ShareCardView {
   stamp: string
   /** The cyan mono line above the headline. */
   kicker: string
+  /**
+   * What this card is, for somebody who has never heard of us.
+   *
+   * The card explained itself only to people who already knew: the biggest words
+   * on it are a stack name — "Iron Foundations" — which means nothing to a
+   * stranger scrolling past it on someone else's story, and everything below it
+   * is a list of supplements with no stated origin. One line under the headline
+   * is what turns it from an artefact into an advert.
+   */
+  standfirst: string
   /** The right-hand mono item in the footer rail. */
   footNote: string
   /**
@@ -322,9 +335,15 @@ export function buildShareCardView(
     specRows: shown.map((row) => ({ name: row.product, qty: row.dose ?? '' })),
     stamp: `STACK REPORT — ${String(artIndex).padStart(2, '0')}`,
     kicker: (payload.archetype.trim() || (payload.drinksMode ? 'The LQD Package' : 'Your Stack')).toUpperCase(),
+    standfirst: payload.drinksMode
+      ? 'MY CHRGD LQD PACKAGE, BUILT BY THE QUIZ'
+      : 'MY SUPPLEMENT STACK, BUILT BY THE CHRGD QUIZ',
+    // The footer is the only place that says how to get one, and "build yours"
+    // assumed the reader already knew what "yours" would be. Naming the quiz is
+    // the instruction; the URL beside it is where.
     footNote: competition
       ? `${competition.closes.toUpperCase()} · T&CS APPLY`
-      : 'BUILD YOURS IN 90 SECONDS',
+      : 'TAKE THE QUIZ · 90 SECONDS',
     imageRatio,
     eyebrow,
     stackName: payload.stackName,

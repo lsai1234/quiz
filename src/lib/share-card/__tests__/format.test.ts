@@ -126,7 +126,10 @@ describe('the entry card', () => {
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
     expect(view.stackName).toBe('Iron Foundations')
     expect(view.archetype).toBe('The Strength Builder')
-    expect(view.lineup).toHaveLength(3)
+    // Two products, where the story card shows five. The three entry steps have
+    // to be legible or the promotion does not work, and they cost about a
+    // product row each. On this card the stack is the hook, not the subject.
+    expect(view.lineup).toHaveLength(2)
   })
 
   it('caps the steps at three', () => {
@@ -138,6 +141,47 @@ describe('the entry card', () => {
     // The band is read live and returns null once the closing date passes, so
     // this is the state an entry card falls into rather than a separate one.
     expect(buildShareCardView(PERSONAS.complete, 'entry', null).entry).toBeNull()
+  })
+})
+
+/**
+ * What the card says it is.
+ *
+ * The card explained itself only to somebody who already knew us: the biggest
+ * words on it are a stack name that means nothing to a stranger, and everything
+ * under them is a list of supplements with no stated origin. These two lines are
+ * the whole of the fix, so they are pinned rather than left as copy.
+ */
+describe('saying what this is', () => {
+  it('names the quiz under the headline', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'story')
+    expect(view.standfirst).toContain('CHRGD QUIZ')
+    expect(view.standfirst).toContain('SUPPLEMENT STACK')
+  })
+
+  it('says LQD when the stack is drinks', () => {
+    const view = buildShareCardView(PERSONAS.drinks, 'story')
+    expect(view.standfirst).toContain('LQD')
+  })
+
+  it('is on every format — a stranger sees whichever one got shared', () => {
+    for (const format of ['story', 'square', 'og', 'entry'] as const) {
+      expect(buildShareCardView(PERSONAS.complete, format).standfirst).toBeTruthy()
+    }
+  })
+
+  it('tells a reader what to do, not what we would like them to feel', () => {
+    // "Build yours in 90 seconds" assumed the reader already knew what "yours"
+    // would be. Naming the quiz is the instruction; the URL beside it is where.
+    expect(buildShareCardView(PERSONAS.complete, 'story').footNote).toContain('TAKE THE QUIZ')
+  })
+
+  it('gives the closing date the footer instead while a draw is running', () => {
+    // A significant condition has to be on the promotion itself, and it outranks
+    // the call to action — the entry steps are carrying that job on this card.
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.footNote).toContain('CLOSES 30 NOV')
+    expect(view.footNote).toContain('T&CS APPLY')
   })
 })
 

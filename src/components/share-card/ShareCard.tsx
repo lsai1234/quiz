@@ -574,12 +574,25 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
           ) : null}
         </div>
 
+        {/* What this is, for somebody who has never heard of us. The stack
+            name is the biggest thing on the card and means nothing to a
+            stranger; this is the line that makes the rest of it legible. */}
+        <div
+          style={{
+            display: 'flex',
+            ...mono(railSize, 400, withAlpha(P.ink1, 0.58), 0.13),
+            marginTop: Math.round(g.specName * 0.42),
+          }}
+        >
+          {view.standfirst}
+        </div>
+
         {/* ── Spec table, not cards ───────────────────────────────────────── */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            marginTop: Math.round(g.specName * 0.85),
+            marginTop: Math.round(g.specName * 0.5),
             borderTop: `1.5px solid ${RULE}`,
           }}
         >
@@ -598,10 +611,10 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
 
         {/* ── Prize: a rule and a line of type. No pill, no fill. ─────────── */}
         {entry ? (
-          <div style={{ display: 'flex', alignItems: 'flex-end', marginTop: 46 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', marginTop: 38 }}>
             <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', ...mono(railSize, 600, P.accent, 0.28), marginBottom: 9 }}>
-                {entry.test ? 'TEST — NOT A LIVE PROMOTION' : 'SHARE THIS + FOLLOW TO ENTER'}
+                {entry.test ? 'TEST — NOT A LIVE PROMOTION' : 'HOW TO ENTER'}
               </div>
               <div
                 style={{
@@ -623,6 +636,46 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
                   </div>
                 ))}
               </div>
+
+              {/* The steps, drawn.
+                  They have been in campaign config since the competition was
+                  built and the card never showed them, so the only instruction a
+                  reader got was a four-word summary. A promotion whose entry
+                  conditions are not on the promotion is both unenterable and, as
+                  a significant condition, a compliance problem.
+
+                  Stacked rather than run together on one line: three steps of
+                  founder-typed length do not fit across the column, and an
+                  advert that needs reading twice does not get entered. */}
+              {entry.steps.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', marginTop: 18 }}>
+                  {entry.steps.map((step, i) => (
+                    <div
+                      key={`${i}-${step}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        height: 32,
+                        ...mono(railSize, 400, P.ink1, 0.06),
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          width: 38,
+                          flexShrink: 0,
+                          ...mono(railSize - 2, 600, P.accent, 0.12),
+                        }}
+                      >
+                        {String(i + 1).padStart(2, '0')}
+                      </div>
+                      <div style={{ display: 'flex', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                        {step.toUpperCase()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
             </div>
             {/* The route back, in the hairline box. Not a QR: on a story the
                 viewer is holding the phone the code is displayed on, so a handle
@@ -639,7 +692,8 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
                 border: `1.5px solid ${RULE}`,
               }}
             >
-              <div style={{ ...mono(20, 600, P.ink1, 0.04), lineHeight: '26px' }}>{entry.handle}</div>
+              <div style={{ ...mono(13, 600, P.accent, 0.22), lineHeight: '20px' }}>FIND US</div>
+              <div style={{ ...mono(20, 600, P.ink1, 0.04), lineHeight: '28px' }}>{entry.handle}</div>
               <div style={{ ...mono(13, 400, MUTED, 0.06), lineHeight: '20px' }}>{entry.route}</div>
             </div>
           </div>
