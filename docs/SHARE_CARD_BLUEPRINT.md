@@ -1,6 +1,6 @@
 # The share card — build blueprint
 
-**Status:** Phases 0–1 landed (Phase 1 rebuilt after review). Phases 2–6 planned.
+**Status:** Phases 0–2 landed (Phase 1 rebuilt after review). Phases 3–6 planned.
 **Owner:** —
 **Branch:** `claude/quiz-results-share-card-8xu3dp`
 
@@ -368,12 +368,31 @@ Two more things the rebuild found, both Satori:
   form draws nothing when the fill is transparent. The outlined numeral rendered
   as empty space; it is filled at low alpha instead.
 
-### Phase 2 — The share sheet · 1.5d
+### Phase 2 — The share sheet · 1.5d — **done**
 
-Share button on `StackReviewPage`. `ShareSheet` built from `@/components/system` `Modal`
-— preview thumbnail, primary share button, format switch, copy link. The share ladder
-from §3.6. Analytics: `share_open`, `share_render`, `share_method`, `share_error`, as
-typed wrappers alongside `funnel` in `src/lib/analytics/`.
+A **Share your stack** button under the results hero, and a portalled sheet carrying a
+live preview, a Story/Post size switch, the share ladder from §3.6 and a copy-link
+fallback. Typed analytics (`share_open`, `share_render`, `share_method`, `share_error`,
+`share_format`, `share_dismiss`) alongside `funnel`.
+
+**Exit met:** 32 tests across the ladder, the links and the sheet; full suite 2456
+green; `tsc --noEmit` clean; production build clean.
+
+Not built from `@/components/system` as the plan assumed — the results page is still on
+the old palette, and `DESIGN.md` forbids mixing the two systems inside one screen. It
+matches `ProductSwapModal` beside it, and moves when that screen is migrated.
+
+Three things the build changed:
+
+- **`AbortError` is not a failure.** `navigator.share()` rejects with it when someone
+  dismisses the OS sheet, and treating that as a failed rung hands a download to a person
+  who just said no. It returns to idle and reports nothing.
+- **A resolved `share()` is not a post.** It resolves on dismissal too and never says
+  where anything went, so `share_method: native-*` means "reached the OS sheet" — and the
+  analytics wrapper says exactly that rather than implying a story went up.
+- **The loaders had to be split.** `format.ts` is imported by the sheet in the browser and
+  pulled `art.ts`, which pulled `fs`. The bytes now live in `art-file.ts`, server-only;
+  `codec.ts` became isomorphic for the same reason.
 
 **Exit:** works on iOS Safari, Android Chrome and desktop; failure of any rung falls to
 the next rung visibly rather than silently.

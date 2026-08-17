@@ -1,5 +1,3 @@
-import { readFileSync } from 'fs'
-import { join } from 'path'
 import type { Goal } from '@/lib/types'
 
 /**
@@ -28,9 +26,12 @@ import type { Goal } from '@/lib/types'
  * ── Frozen, like everything else on the card ────────────────────────────────
  * The chosen family is written into the payload at share time (`artKey`). A card
  * shared today has to keep its picture when the set is re-shot.
+ *
+ * ── No `fs` in this file ────────────────────────────────────────────────────
+ * Reading the bytes lives in `art-file.ts`, which is server-only. This half is
+ * imported by `format.ts`, which the share sheet needs in the browser, and a
+ * top-level `import 'fs'` anywhere in that chain breaks the client bundle.
  */
-
-const ART_DIR = join(process.cwd(), 'src/lib/share-card/art')
 
 export type ArtKey = 'strength' | 'performance' | 'energy' | 'recovery' | 'wellbeing' | 'hydration'
 
@@ -121,28 +122,6 @@ export function pickArtKey(goals: Goal[], drinksMode = false): ArtKey {
     if (family) return family
   }
   return 'wellbeing'
-}
-
-const cache = new Map<string, string>()
-
-function dataUri(file: string): string {
-  const hit = cache.get(file)
-  if (hit) return hit
-  const uri = `data:image/png;base64,${readFileSync(join(ART_DIR, file)).toString('base64')}`
-  cache.set(file, uri)
-  return uri
-}
-
-/**
- * The image for the card.
- *
- * A real catalogue image wins when the payload carries one — that path exists so
- * the day there is proper photography it is a data change — and otherwise the
- * family's art is used.
- */
-export function cardArt(key: ArtKey | undefined, imageUrl?: string | null): string {
-  if (imageUrl) return imageUrl
-  return dataUri(ART_SET[key ?? 'wellbeing'].file)
 }
 
 /** Whether this family is still standing in for art that has not been made. */

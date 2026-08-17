@@ -28,7 +28,7 @@ changes a card somebody has already posted.
 
 | | |
 |---|---|
-| **Dimensions** | 1200 × 1600 minimum (4:3 portrait). Rendered at ~520 × 700 on the story card and cropped, so keep the subject central with room around it. |
+| **Dimensions** | 1200 × 1600 minimum — **3:4 portrait**. Rendered at ~520 × 700 on the story card, so keep the subject central with room around it. |
 | **Format** | PNG. Transparent background is fine and preferred — the card paints its own ground behind. |
 | **File size** | Under 250KB each after compression. They are read per render on the image route. |
 | **Ground** | Near-black (`#07070a`) or transparent. Never a light or busy background — the card's image panel is dark and the picture sits on a cyan bloom. |
@@ -67,6 +67,49 @@ who never said the word "training".
 Liquid. A pour, a splash, condensation on a cold surface. Cyan through the water,
 hard specular highlights. This one carries the whole LQD line, so it should read
 as "drink" instantly.
+
+---
+
+## Prompts
+
+A shared suffix, then one line each. The suffix is what makes the six a set
+rather than six stock photos — paste it on the end of every one.
+
+**Suffix (use on all six):**
+
+> shot on a near-black seamless background, single hard key light with deep
+> shadow, one electric cyan rim light along an edge, cyan and violet only, no
+> other colours, matte finish, fine film grain, photographic, high contrast,
+> nothing in the left third of the frame, no text, no logos, no watermarks, no
+> faces, 3:4 portrait
+
+**1 · `strength`**
+> A loaded olympic barbell resting on a concrete floor, chalk dust in the air,
+> heavy steel plates, extreme close crop on the sleeve and collar
+
+**2 · `performance`**
+> A sprinter's legs mid-stride frozen at high shutter speed, muscle definition
+> sharp, motion blur only in the background, shot from low and behind
+
+**3 · `energy`**
+> A high-voltage electrical arc between two dark metal contacts, filaments of
+> light branching outward, macro, abstract, no object recognisable
+
+**4 · `recovery`**
+> Steam rising off cold water in a dark stone plunge pool, ripples catching the
+> light, still and quiet, nobody in frame
+
+**5 · `wellbeing`**
+> A single shaft of morning light falling across a dark linen surface with fresh
+> greenery just catching it, calm and domestic, softer than the rest of the set
+
+**6 · `hydration`**
+> A stream of clear liquid pouring into a dark glass, splash crown frozen at high
+> speed, condensation on the glass, backlit so the liquid glows
+
+**Save each as** `src/lib/share-card/art/<key>.png` — `strength.png`,
+`performance.png`, `energy.png`, `recovery.png`, `wellbeing.png`,
+`hydration.png` — then point `ART_SET` at them and set `placeholder: false`.
 
 ---
 

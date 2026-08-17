@@ -2,7 +2,7 @@ import type { ShareCardView } from '@/lib/share-card/format'
 import { SHARE_PALETTE as P, px, headlineSize } from '@/lib/share-card/palette'
 import { GRAIN_DATA_URI, GRAIN_TILE_PX } from '@/lib/share-card/grain'
 import { FONT_DISPLAY, FONT_BODY } from '@/lib/share-card/fonts'
-import { cardArt } from '@/lib/share-card/art'
+import { cardArt } from '@/lib/share-card/art-file'
 
 /**
  * The share card.

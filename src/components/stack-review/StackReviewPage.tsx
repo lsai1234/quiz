@@ -34,6 +34,8 @@ import { UpgradesCard } from './UpgradesCard'
 import { LqdPourGuide } from './LqdPourGuide'
 import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
+import { ShareSheet } from '@/components/share-card/ShareSheet'
+import { buildSharePayload } from '@/lib/share-card/payload'
 import { ConsentGate } from '@/components/legal/ConsentGate'
 import { funnel } from '@/lib/analytics/quiz'
 import type { StackLevel, Goal } from '@/lib/types'
@@ -125,9 +127,10 @@ export function StackReviewPage() {
   const {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
     stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
-    revealedIntroDiscount, setRevealedIntroDiscount,
+    revealedIntroDiscount, setRevealedIntroDiscount, identity,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   // What to do if a product becomes unavailable — chosen in the subscription
   // journey, carried to checkout so it's stored with the plan rather than asked
   // for afterwards. Defaults to keeping the plan whole.
@@ -303,13 +306,36 @@ export function StackReviewPage() {
     [blueprint, sortedSlots, products, answers, subOpts],
   )
 
+  /**
+   * The share card's snapshot.
+   *
+   * Built here rather than inside the sheet so it is taken from the stack as it
+   * stands on screen — after tier changes and product swaps — which is the stack
+   * the customer is actually looking at when they press Share.
+   *
+   * `answers.name` is passed to be *stripped*: the engine writes reasons
+   * addressed to the customer ("Chosen for Sam — …"), so the name reaches the
+   * card through what looks like product copy unless the builder is told to
+   * remove it. Showing it is the separate `showFirstName` flag, and it stays off
+   * until there is a control for it.
+   */
+  const sharePayload = useMemo(
+    () =>
+      buildSharePayload(activeBlueprint, identity, products, {
+        customerName: answers.name,
+        code: partnerCode?.code ?? null,
+        drinksMode: !!answers.drinksMode,
+      }),
+    [activeBlueprint, identity, products, answers.name, answers.drinksMode, partnerCode],
+  )
+
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
   // so the sale is always reachable without scrolling to the bottom.
   const stickyIsSub = planType === 'subscription'
     && pricing.subscriptionItemCount > 0
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
-  const showStickyBar = !swapSlot && !journeyOpen
+  const showStickyBar = !swapSlot && !journeyOpen && !shareOpen
     && checkoutState.status !== 'needs-account'
     && checkoutState.status !== 'needs-consent'
   const leavingForStripe = checkoutState.status === 'redirecting'
@@ -423,6 +449,22 @@ export function StackReviewPage() {
           canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
           drinksMode={!!answers.drinksMode}
         />
+
+        <div className="px-5 max-w-lg mx-auto -mt-2 mb-5">
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="w-full py-3 rounded-2xl text-sm font-bold tracking-tight flex items-center justify-center gap-2"
+            style={{
+              fontFamily: 'var(--font-display)',
+              background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
+              color: 'var(--color-accent)',
+            }}
+          >
+            Share your stack
+          </button>
+        </div>
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
 
@@ -630,6 +672,10 @@ export function StackReviewPage() {
           </div>
         </div>,
         document.body,
+      )}
+
+      {shareOpen && (
+        <ShareSheet payload={sharePayload} onClose={() => setShareOpen(false)} />
       )}
 
       {swapSlot && (

@@ -63,8 +63,27 @@ export const QUIZ_EVENTS = [
 
 export type QuizEvent = (typeof QUIZ_EVENTS)[number]
 
+/**
+ * The share card funnel.
+ *
+ * `share_method` is the one that matters. The share ladder falls from the native
+ * file sheet to a download to press-and-hold, and a high `share_open` with a low
+ * `share_method` means a rung is failing silently on a real device — which looks
+ * exactly like disinterest unless the rung is recorded.
+ */
+export const SHARE_EVENTS = [
+  'share_open',
+  'share_render',
+  'share_method',
+  'share_error',
+  'share_format',
+  'share_dismiss',
+] as const
+
+export type ShareEvent = (typeof SHARE_EVENTS)[number]
+
 /** Every event the client may emit. */
-export type AnalyticsEvent = ShopEvent | QuizEvent
+export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent
 
 export type EventProps = Record<string, string | number | boolean | undefined>
 

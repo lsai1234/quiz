@@ -24,8 +24,36 @@ import { SHARE_PAYLOAD_VERSION, type ShareCardPayload } from './types'
  *  image route as free object storage. A real payload is well under 4KB. */
 const MAX_ENCODED_BYTES = 8_192
 
+/**
+ * base64url, in both runtimes.
+ *
+ * The image route encodes on the server and the share sheet encodes in the
+ * browser, so this cannot reach for `Buffer`. `btoa` only takes latin-1, hence
+ * the UTF-8 pass — a stack name with an em dash or a curly apostrophe in it is
+ * not hypothetical, the engine writes both.
+ */
+function toBase64Url(json: string): string {
+  const bytes = new TextEncoder().encode(json)
+  let binary = ''
+  for (const b of bytes) binary += String.fromCharCode(b)
+  const b64 = typeof btoa === 'function'
+    ? btoa(binary)
+    : Buffer.from(bytes).toString('base64')
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function fromBase64Url(encoded: string): string {
+  const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+  if (typeof atob === 'function') {
+    const binary = atob(b64)
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  }
+  return Buffer.from(b64, 'base64').toString('utf8')
+}
+
 export function encodeSharePayload(payload: ShareCardPayload): string {
-  return Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+  return toBase64Url(JSON.stringify(payload))
 }
 
 /**
@@ -39,7 +67,7 @@ export function decodeSharePayload(encoded: string): ShareCardPayload | null {
 
   let parsed: unknown
   try {
-    parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'))
+    parsed = JSON.parse(fromBase64Url(encoded))
   } catch {
     return null
   }
