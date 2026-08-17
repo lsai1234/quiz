@@ -61,13 +61,37 @@ interface Geometry {
   artH: number
   headlineMax: number
   headlineMin: number
-  /** The outlined numeral. Absent where the card is too small to carry it. */
-  score: { size: number; left: number; top: number } | null
+  /**
+   * The outlined numeral, and how its label is set.
+   *
+   * `spine` stacks "CHARGE INDEX" upright beside the numeral, which is the
+   * signature on the cards that have a whole empty band to give it. `inline`
+   * lays the same words along the numeral's foot, for the entry card — where
+   * the numeral is small and the spine, at that height, ran straight through
+   * the header rail.
+   *
+   * Null where the canvas is too small to carry a numeral at all.
+   */
+  score: { size: number; left: number; top: number; label: 'spine' | 'inline' } | null
   cropMarks: boolean
   specName: number
   rowPad: number
   /** The prize headline's ceiling. Only the entry card draws one. */
   prizeMax: number
+  /**
+   * The utility tier: the rails, the standfirst, the doses, the entry steps.
+   *
+   * Stated per format rather than derived from the width, because the link
+   * preview is the widest canvas and the one painted smallest.
+   *
+   * The brief put this tier at 17–20px, which is where it stayed until the card
+   * was looked at on a phone: 19px on a 1080 canvas is about 6pt in the hand,
+   * and everything at that tier — what the card is, the doses, how to enter —
+   * was being scrolled past unread. Lifting it costs the 172:17 scale contrast
+   * the brief asked for and buys a card people can actually read. 172:27 is
+   * still a tenfold range.
+   */
+  mono: number
   /** Room the headline has, before the optical hang buys eight pixels back. */
   headlineRoom: number
 }
@@ -79,8 +103,8 @@ function geometry(format: string): Geometry {
       return {
         w: 1080, h: 1080, margin: 76, safeTop: 76, safeBottom: 1004, artH: 640,
         headlineMax: 124, headlineMin: 68,
-        score: { size: 268, left: -24, top: 176 },
-        cropMarks: true, specName: 40, rowPad: 13, prizeMax: 64,
+        score: { size: 240, left: -22, top: 150, label: 'spine' },
+        cropMarks: true, specName: 40, rowPad: 12, prizeMax: 64, mono: 24,
         headlineRoom: 1080 - 76 * 2,
       }
 
@@ -94,7 +118,8 @@ function geometry(format: string): Geometry {
         w: 1200, h: 630, margin: 56, safeTop: 56, safeBottom: 574, artH: 630,
         headlineMax: 86, headlineMin: 48,
         score: null,
-        cropMarks: false, specName: 30, rowPad: 8, prizeMax: 52, headlineRoom: 760,
+        cropMarks: false, specName: 30, rowPad: 8, prizeMax: 52, mono: 20,
+        headlineRoom: 760,
       }
 
     /**
@@ -109,9 +134,13 @@ function geometry(format: string): Geometry {
     case 'entry':
       return {
         w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
-        headlineMax: 146, headlineMin: 78,
-        score: { size: 344, left: -30, top: 284 },
-        cropMarks: true, specName: 40, rowPad: 11, prizeMax: 74,
+        headlineMax: 156, headlineMin: 84,
+        // The score gives up most of its size here, and that is the right thing
+        // to trade: on an advert the charge index is the least important mark on
+        // the card, and the 500px it was taking is what the prize and the entry
+        // steps needed to be read at arm's length.
+        score: { size: 196, left: -18, top: 300, label: 'inline' },
+        cropMarks: true, specName: 46, rowPad: 14, prizeMax: 96, mono: 26,
         headlineRoom: 1080 - 84 * 2,
       }
 
@@ -120,8 +149,8 @@ function geometry(format: string): Geometry {
       return {
         w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
         headlineMax: 172, headlineMin: 92,
-        score: { size: 430, left: -38, top: 352 },
-        cropMarks: true, specName: 52, rowPad: 19, prizeMax: 88,
+        score: { size: 430, left: -38, top: 300, label: 'spine' },
+        cropMarks: true, specName: 50, rowPad: 15, prizeMax: 88, mono: 27,
         headlineRoom: 1080 - 84 * 2,
       }
   }
@@ -208,7 +237,7 @@ function Bolt({ size, color }: { size: number; color: string }) {
 const SPINE = 'CHARGE INDEX'
 
 /** The hairline box holding the handle and the route back. */
-const HANDLE_BOX_W = 232
+const HANDLE_BOX_W = 268
 
 /**
  * The prize line, split so the money can be cyan.
@@ -244,8 +273,10 @@ function fitPrize(text: string, g: Geometry): number {
   return Math.max(PRIZE_MIN, Math.min(g.prizeMax, Math.floor(room / widthEm(text))))
 }
 
-/** The gutter the step numbers sit in. */
-const STEP_INDEX_W = 38
+/** The gutter the step numbers sit in, at a given step size. */
+function stepIndexW(size: number): number {
+  return Math.round(size * 2.1)
+}
 
 /**
  * The entry steps, sized so the longest one fits.
@@ -263,8 +294,8 @@ const STEP_INDEX_W = 38
 function fitSteps(steps: string[], railSize: number, g: Geometry): number {
   const longest = steps.reduce((n, step) => Math.max(n, step.length), 0)
   if (longest === 0) return railSize
-  const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 - STEP_INDEX_W
-  return Math.max(14, Math.min(railSize, Math.floor(room / (longest * 0.66))))
+  const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 - stepIndexW(railSize)
+  return Math.max(19, Math.min(railSize, Math.floor(room / (longest * 0.66))))
 }
 
 /**
@@ -282,7 +313,7 @@ function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['sco
   // units, so they are flipped and dropped onto a baseline here.
   const boxW = Math.round(width * scale)
   const boxH = Math.round(at.size * 1.02)
-  const spineSize = Math.max(13, Math.round(at.size * 0.044))
+  const spineSize = at.label === 'spine' ? Math.max(13, Math.round(at.size * 0.044)) : 22
   const spineStep = Math.round(spineSize * 1.05)
 
   return (
@@ -309,31 +340,48 @@ function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['sco
           ))}
         </g>
       </svg>
-      <div
-        style={{
-          display: 'flex',
-          ...mono(spineSize, 600, P.accent, 0.34),
-          // Set upright and read top-to-bottom, the way a spine label is.
-          // Satori has no `writing-mode`, so the characters are stacked instead —
-          // which reads the same at this size and needs no transform.
-          flexDirection: 'column',
-          marginTop: 22,
-          marginLeft: 18,
-          // Both the column and each cell carry an explicit height: left to
-          // compute its own, Satori sized the column to about half the string
-          // and cut "CHARGE INDEX" off after the E.
-          height: SPINE.length * spineStep,
-        }}
-      >
-        {SPINE.split('').map((c, i) => (
-          <div
-            key={i}
-            style={{ display: 'flex', height: spineStep, lineHeight: `${spineStep}px` }}
-          >
-            {c === ' ' ? ' ' : c}
-          </div>
-        ))}
-      </div>
+      {at.label === 'spine' ? (
+        <div
+          style={{
+            display: 'flex',
+            ...mono(spineSize, 600, P.accent, 0.34),
+            // Set upright and read top-to-bottom, the way a spine label is.
+            // Satori has no `writing-mode`, so the characters are stacked
+            // instead — which reads the same at this size and needs no
+            // transform.
+            flexDirection: 'column',
+            marginTop: 22,
+            marginLeft: 18,
+            // Both the column and each cell carry an explicit height: left to
+            // compute its own, Satori sized the column to about half the string
+            // and cut "CHARGE INDEX" off after the E.
+            height: SPINE.length * spineStep,
+          }}
+        >
+          {SPINE.split('').map((c, i) => (
+            <div
+              key={i}
+              style={{ display: 'flex', height: spineStep, lineHeight: `${spineStep}px` }}
+            >
+              {c === '\u00a0' ? '\u00a0' : c}
+            </div>
+          ))}
+        </div>
+      ) : (
+        // Laid along the numeral's foot. At the entry card's score size a spine
+        // is only nine characters tall, which put it level with the header rail
+        // and ran "CHARGE INDEX" straight through "GETCHRGD".
+        <div
+          style={{
+            display: 'flex',
+            ...mono(spineSize, 600, P.accent, 0.3),
+            marginLeft: 16,
+            marginTop: Math.round(boxH * 0.62),
+          }}
+        >
+          {SPINE}
+        </div>
+      )}
     </div>
   )
 }
@@ -351,7 +399,7 @@ function SpecRow({ index, name, qty, last, pad, size }: {
   index: string; name: string; qty: string; last: boolean; pad: number; size: number
 }) {
   const NAME_SIZE = size
-  const monoSize = Math.max(12, Math.round(size * 0.36))
+  const monoSize = Math.max(14, Math.round(size * 0.45))
   return (
     <div
       style={{
@@ -365,7 +413,7 @@ function SpecRow({ index, name, qty, last, pad, size }: {
       <div
         style={{
           display: 'flex',
-          width: Math.round(size * 0.73),
+          width: Math.round(size * 0.82),
           flexShrink: 0,
           ...mono(monoSize - 1, 600, P.accent, 0.12),
           lineHeight: `${NAME_SIZE}px`,
@@ -473,7 +521,7 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
   // its own scale, which is the same decision made once instead of per render.
   const rowPad = g.rowPad
   const prizeSize = entry ? fitPrize(entry.prize, g) : g.prizeMax
-  const railSize = Math.max(13, Math.round(g.w * 0.0176))
+  const railSize = g.mono
   const stepSize = entry ? fitSteps(entry.steps, railSize, g) : railSize
 
   return (
@@ -623,7 +671,7 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
         <div
           style={{
             display: 'flex',
-            ...mono(railSize, 400, withAlpha(P.ink1, 0.58), 0.13),
+            ...mono(railSize, 400, withAlpha(P.ink1, 0.72), 0.11),
             marginTop: Math.round(g.specName * 0.42),
           }}
         >
@@ -705,7 +753,7 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
                       <div
                         style={{
                           display: 'flex',
-                          width: STEP_INDEX_W,
+                          width: stepIndexW(stepSize),
                           flexShrink: 0,
                           ...mono(stepSize - 2, 600, P.accent, 0.12),
                         }}
@@ -735,9 +783,9 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
                 border: `1.5px solid ${RULE}`,
               }}
             >
-              <div style={{ ...mono(13, 600, P.accent, 0.22), lineHeight: '20px' }}>FIND US</div>
-              <div style={{ ...mono(20, 600, P.ink1, 0.04), lineHeight: '28px' }}>{entry.handle}</div>
-              <div style={{ ...mono(13, 400, MUTED, 0.06), lineHeight: '20px' }}>{entry.route}</div>
+              <div style={{ ...mono(railSize - 10, 600, P.accent, 0.22), lineHeight: '22px' }}>FIND US</div>
+              <div style={{ ...mono(railSize, 600, P.ink1, 0.04), lineHeight: '34px' }}>{entry.handle}</div>
+              <div style={{ ...mono(railSize - 9, 400, MUTED, 0.06), lineHeight: '22px' }}>{entry.route}</div>
             </div>
           </div>
         ) : null}
@@ -752,8 +800,8 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
             borderTop: `1px solid ${withAlpha(P.ink1, 0.13)}`,
           }}
         >
-          <div style={mono(railSize - 2, 400, withAlpha(P.ink1, 0.34), 0.16)}>{view.footer}</div>
-          <div style={mono(railSize - 2, 400, withAlpha(P.ink1, 0.34), 0.16)}>{view.footNote}</div>
+          <div style={mono(railSize - 3, 400, withAlpha(P.ink1, 0.42), 0.14)}>{view.footer}</div>
+          <div style={mono(railSize - 3, 400, withAlpha(P.ink1, 0.42), 0.14)}>{view.footNote}</div>
         </div>
       </div>
 

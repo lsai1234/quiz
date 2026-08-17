@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ShareSheet } from '../ShareSheet'
 import { sharePersonas } from '@/lib/share-card/personas'
@@ -229,5 +229,57 @@ describe('which card it opens on', () => {
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     expect(screen.getByRole('tab', { name: /my stack/i })).toHaveAttribute('aria-selected', 'true')
     expect(screen.queryByRole('tab', { name: /competition/i })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * The wait.
+ *
+ * The card is rasterised on the server — Satori laying out a 1080x1920 poster
+ * and encoding a PNG — so there is a real second or two between opening the
+ * sheet and seeing anything. A line of static text across that gap reads as a
+ * stall, and somebody who thinks the sheet is broken does not share.
+ */
+describe('while the card is being built', () => {
+  it('says so, to a screen reader as well as on screen', () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent(/building your card/i)
+    expect(status).toHaveAttribute('aria-live', 'polite')
+  })
+
+  // The sheet is portalled to `document.body`, so the render container is empty
+  // and everything has to be found on the document.
+  const sheen = () => document.querySelector('.card-build-sheen')
+
+  it('holds the card’s shape so the preview does not jump when it lands', () => {
+    // The skeleton sits inside the preview box, which already carries the
+    // format's aspect ratio. If it did not, the sheet would resize under the
+    // person's thumb at the moment the image arrived.
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    expect(sheen()).toBeInTheDocument()
+    expect(document.querySelectorAll('.card-build-bar').length).toBeGreaterThan(6)
+  })
+
+  it('hides the skeleton once the card has loaded', async () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const img = document.querySelector('img') as HTMLImageElement
+    fireEvent.load(img)
+
+    await waitFor(() => expect(sheen()).not.toBeInTheDocument())
+    expect(screen.queryByText(/building your card/i)).not.toBeInTheDocument()
+    expect(img).toHaveStyle({ opacity: '1' })
+  })
+
+  it('keeps the skeleton decorative — a reader wants the status, not the bars', () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    expect(sheen()?.closest('[aria-hidden="true"]')).toBeInTheDocument()
   })
 })

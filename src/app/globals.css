@@ -311,6 +311,31 @@
   .receipt-led-on { animation: none !important; }
 }
 
+/* The share card, while the server is rasterising it.
+   The wait is a real render — Satori laying out a 1080x1920 poster and PNG
+   encoding it — and a static "Building your card..." line for a second and a
+   half reads as a stall rather than as progress. So the placeholder is a
+   skeleton of the card's own layout with a sheen sweeping across it, which says
+   the poster is being made rather than that something is broken. */
+@keyframes card-build-sheen {
+  0%   { transform: translateX(-130%); }
+  100% { transform: translateX(230%); }
+}
+@keyframes card-build-pulse {
+  0%, 100% { opacity: 0.22; }
+  50%      { opacity: 0.5; }
+}
+.card-build-sheen { animation: card-build-sheen 1.5s var(--ease-settle, ease-in-out) infinite; }
+.card-build-bar   { animation: card-build-pulse 1.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* The sweep goes; the pulse only slows. Same exception as the Button spinner:
+     it is the only signal the render is alive, and freezing it entirely leaves a
+     reduced-motion user unable to tell a slow card from a dead one. */
+  .card-build-sheen { animation: none !important; opacity: 0 !important; }
+  .card-build-bar { animation-duration: 2.8s; }
+}
+
 /* ── UI primitives (src/components/ui) ─────────────────────────────────────── */
 
 /* Bottom sheets. The hub's six hand-rolled sheets appear instantly, which reads
