@@ -95,6 +95,14 @@ export interface ShareCardPayload {
   level: StackLevel
   drinksMode: boolean
   /**
+   * Which of the six card images this stack gets, frozen at share time.
+   *
+   * Derived rather than stored would be fine today and wrong the moment the art
+   * set is re-shot or re-keyed: a card that has been posted keeps its picture.
+   * See `art.ts`.
+   */
+  artKey?: string
+  /**
    * The hero product's image, when the catalogue has one.
    *
    * Every mock product currently carries `imageUrl: null` — there is no product

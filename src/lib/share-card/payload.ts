@@ -4,6 +4,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackIdentity } from '@/lib/types'
 import { selectStatAxes, stackStatScore, MAX_STAT } from '@/lib/stack-stats'
 import { focusAreaGlyph } from '@/lib/identity-visuals'
+import { pickArtKey } from './art'
 import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } from './types'
 
 /**
@@ -254,6 +255,7 @@ export function buildSharePayload(
     coverage,
     level: stackLevelOf(blueprint),
     drinksMode,
+    artKey: pickArtKey([blueprint.primaryGoal, ...blueprint.secondaryGoals], drinksMode),
     ...(inStack[0]?.imageUrl ? { heroImage: inStack[0].imageUrl } : {}),
     ...(name ? { firstName: name } : {}),
     ...(code ? { code: code.trim().toUpperCase() } : {}),

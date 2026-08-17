@@ -2,7 +2,7 @@ import type { ShareCardView } from '@/lib/share-card/format'
 import { SHARE_PALETTE as P, px, headlineSize } from '@/lib/share-card/palette'
 import { GRAIN_DATA_URI, GRAIN_TILE_PX } from '@/lib/share-card/grain'
 import { FONT_DISPLAY, FONT_BODY } from '@/lib/share-card/fonts'
-import { productArt } from '@/lib/share-card/art'
+import { cardArt } from '@/lib/share-card/art'
 
 /**
  * The share card.
@@ -160,7 +160,7 @@ function FitGhost({ score, width, height }: { score: number; width: number; heig
 
 /** The picture, on the charge field, under the masthead. */
 function ImagePanel({ view, width, height }: { view: ShareCardView; width: number; height: number }) {
-  const art = productArt(view.lineup[0]?.slot ?? '', view.heroImage)
+  const art = cardArt(view.artKey, view.heroImage)
   // The masthead owns the top strip and everything else starts beneath it. In
   // the first pass the picture's keyline ran straight through the eyebrow.
   const mastheadH = px(P.space8)
@@ -220,31 +220,58 @@ function ImagePanel({ view, width, height }: { view: ShareCardView; width: numbe
   )
 }
 
+/** The brand's bolt, at list size. */
+function Bolt({ size, color }: { size: number; color: string }) {
+  return (
+    <svg width={Math.round(size * 0.62)} height={size} viewBox="30 20 48 79" fill="none">
+      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill={color} />
+    </svg>
+  )
+}
+
 /**
- * A numbered list — the densest way to say "here is what you got".
+ * A list — the densest way to say "here is what you got".
+ *
+ * Two shapes, and the difference is not decoration. *Your stack* is numbered
+ * because it has an order the engine chose. *Built for* is not a ranking, and
+ * numbering it was the most literal thing borrowed from the reference: it made
+ * three goals look like a chart position. It gets the brand's bolt instead,
+ * which is ours and is honest about the list being a set rather than a countdown.
  *
  * Every item is pinned to one line. Left to wrap, a product name that just
  * reaches the column width takes a second line and pushes the rest of the list
- * out of step with the column beside it, which reads as a broken layout rather
- * than as a long name. A name that will not fit is truncated instead: the row is
- * an index, and the full name is one tap away on the card's own link.
+ * out of step with the column beside it — which reads as a broken layout rather
+ * than as a long name.
  */
-function NumberedList({ title, items, max, width }: {
-  title: string; items: string[]; max: number; width: string
+function List({ title, items, max, width, marker }: {
+  title: string; items: string[]; max: number; width: string; marker: 'number' | 'bolt'
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width, minWidth: 0, gap: px(P.space2) }}>
-      <div style={body(P.textBodySm, P.inkPrint2, P.weightBody)}>{title}</div>
+      <div style={eyebrow(P.inkPrint2, P.textMicro)}>{title}</div>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {items.slice(0, max).map((item, i) => (
           <div key={`${i}-${item}`} style={{ display: 'flex', gap: px(P.space2), width: '100%' }}>
-            {/* `String(...)`, not `{i + 1}`. A numeric JSX child makes Satori
-                count the *parent* as having more than one child and throw
-                "Expected <div> to have explicit display: flex" — pointing at an
-                element that already has it. Every text child here is a string. */}
-            <div style={{ ...body(P.textLead, P.inkPrint2, P.weightBody), flexShrink: 0 }}>
-              {String(i + 1)}
-            </div>
+            {marker === 'number' ? (
+              // `String(...)`, not `{i + 1}`. A numeric JSX child makes Satori
+              // count the *parent* as having more than one child and throw
+              // "Expected <div> to have explicit display: flex" — pointing at an
+              // element that already has it. Every text child here is a string.
+              <div style={{ ...body(P.textLead, P.inkPrint2, P.weightBody), flexShrink: 0 }}>
+                {String(i + 1)}
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  height: px(P.textLead) * P.leadingSnug,
+                  flexShrink: 0,
+                }}
+              >
+                <Bolt size={px(P.textBody)} color={P.accentDeep} />
+              </div>
+            )}
             <div
               style={{
                 ...body(P.textLead, P.inkPrint, P.weightStrong),
@@ -259,6 +286,39 @@ function NumberedList({ title, items, max, width }: {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/**
+ * The callout band.
+ *
+ * The strip the card's other two jobs live in. An ordinary share has none; an
+ * influencer's carries their code at a size somebody can read off a story
+ * without pausing it, which is the entire reason they are posting. The
+ * competition's entry band is the second kind, in Phase 5.
+ *
+ * It sits above the stats rather than in the footer because the footer is where
+ * a caption goes, and a code in a caption is a code nobody types.
+ */
+function Callout({ callout }: { callout: NonNullable<ShareCardView['callout']> }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0,
+        background: P.inkPrint,
+        borderRadius: px(P.radiusRow),
+        padding: `${px(P.space3)}px ${px(P.space4)}px`,
+      }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={eyebrow(withAlpha(P.surfacePrint, 0.62), P.textMicro)}>{callout.caption}</div>
+        <div style={display(px(P.textDisplay), P.surfacePrint)}>{callout.code}</div>
+      </div>
+      <Bolt size={px(P.textDisplay)} color={P.accent} />
     </div>
   )
 }
@@ -289,23 +349,7 @@ function Footer({ view, markSize }: { view: ShareCardView; markSize: number }) {
           getCHRGD
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: px(P.space3) }}>
-        {view.code ? (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              background: P.inkPrint,
-              borderRadius: px(P.radiusPill),
-              padding: `${px(P.space2)}px ${px(P.space3)}px`,
-              ...eyebrow(P.surfacePrint, P.textMicro),
-            }}
-          >
-            {view.code}
-          </div>
-        ) : null}
-        <div style={eyebrow(P.inkPrint, P.textMeta)}>{view.footer}</div>
-      </div>
+      <div style={eyebrow(P.inkPrint, P.textMeta)}>{view.footer}</div>
     </div>
   )
 }
@@ -319,7 +363,7 @@ export function ShareCard({ view }: { view: ShareCardView }) {
   const margin = isOg ? 0 : px(P.space4)
   const cardW = spec.width - margin * 2
   const cardH = spec.height - margin * 2
-  const imageH = Math.round(cardH * spec.imageRatio)
+  const imageH = Math.round(cardH * view.imageRatio)
   const pad = px(P.space6)
 
   const dataPanel = (
@@ -346,14 +390,21 @@ export function ShareCard({ view }: { view: ShareCardView }) {
       <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0, overflow: 'hidden' }}>
         {/* Not 50/50: product names run half as long again as focus labels, and
             an even split is what put the longest of them on the edge of wrapping. */}
-        <NumberedList
+        <List
           title="Your stack"
           items={view.lineup.map((r) => r.product)}
           max={spec.lineupRows}
-          width="56%"
+          width="52%"
+          marker="number"
         />
         {view.builtFor.length > 0 ? (
-          <NumberedList title="Built for" items={view.builtFor} max={spec.lineupRows} width="40%" />
+          <List
+            title="Built for"
+            items={view.builtFor}
+            max={spec.lineupRows}
+            width="44%"
+            marker="bolt"
+          />
         ) : null}
       </div>
 
@@ -366,6 +417,8 @@ export function ShareCard({ view }: { view: ShareCardView }) {
       {/* The card's slack, in one place. Without it the lists stretched and the
           gap opened up between a list and its own overflow line. */}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }} />
+
+      {view.callout ? <Callout callout={view.callout} /> : null}
 
       <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0 }}>
         {view.stats.map((s) => (

@@ -66,6 +66,7 @@ function isShareCardPayload(value: unknown): value is ShareCardPayload {
 
   if (p.firstName !== undefined && !isString(p.firstName)) return false
   if (p.heroImage !== undefined && !isString(p.heroImage)) return false
+  if (p.artKey !== undefined && !isString(p.artKey)) return false
   if (p.code !== undefined && !isString(p.code)) return false
 
   return true

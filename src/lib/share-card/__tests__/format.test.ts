@@ -127,9 +127,32 @@ describe('the rest of the view', () => {
     expect(view.lineup.length).toBeGreaterThan(0)
   })
 
-  it('keeps the code off the link preview, where the URL already carries it', () => {
-    expect(buildShareCardView(PERSONAS.complete, 'story').code).toBe('SARAH20')
-    expect(buildShareCardView(PERSONAS.complete, 'og').code).toBeNull()
+  it('gives an influencer’s code the band, not a footer chip', () => {
+    // Their whole reason to post is the code. In the footer it was a caption.
+    const view = buildShareCardView(PERSONAS.complete, 'story')
+    expect(view.callout).toEqual({
+      kind: 'code',
+      code: 'SARAH20',
+      caption: 'Use this code at checkout',
+    })
+  })
+
+  it('has no band on an ordinary share, or on a link preview', () => {
+    expect(buildShareCardView(PERSONAS.essentials, 'story').callout).toBeNull()
+    expect(buildShareCardView(PERSONAS.complete, 'og').callout).toBeNull()
+  })
+
+  it('picks the picture from what the stack is for', () => {
+    // Not shuffled: two people with the same goals get the same card, and a
+    // strength stack never gets the wellbeing image.
+    expect(buildShareCardView(PERSONAS.complete, 'story').artKey).toBe('strength')
+    expect(buildShareCardView(PERSONAS.wellbeing, 'story').artKey).toBe('recovery')
+    expect(buildShareCardView(PERSONAS.drinks, 'story').artKey).toBe('hydration')
+  })
+
+  it('says out loud that the art is still a placeholder', () => {
+    // So nobody signs the card off believing the house renders are the art.
+    expect(buildShareCardView(PERSONAS.complete, 'story').artIsPlaceholder).toBe(true)
   })
 
   it('passes a real product picture through when the catalogue has one', () => {

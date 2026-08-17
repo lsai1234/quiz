@@ -58,9 +58,14 @@ export default function ShareCardStyleguide() {
         </h1>
         <p style={{ color: 'var(--ink-3)', fontSize: 'var(--text-body)', maxWidth: '46rem' }}>
           Six stacks the renderer has to survive, in all three formats, rendered by the
-          same route a customer downloads from. Row counts adapt to how much space the
-          header takes, so a long name or a wrapping set of focus chips shows fewer
-          products and a larger overflow line rather than running off the frame.
+          same route a customer downloads from. The layout adapts to what each card is
+          carrying: a card with a partner code trades a product row and some of the
+          picture for the code band.
+        </p>
+        <p style={{ color: 'var(--tone-attention)', fontSize: 'var(--text-body)', maxWidth: '46rem', marginTop: 'var(--space-3)' }}>
+          The art set does not exist yet. Every card below is falling back to a CHRGD
+          product render — see <code>docs/SHARE_CARD_ART_BRIEF.md</code> for what the six
+          images have to be. Judge the layout here, not the pictures.
         </p>
       </header>
 
@@ -118,6 +123,7 @@ export default function ShareCardStyleguide() {
                         }}
                       >
                         {format} · {spec.width}×{spec.height} · {view.lineup.length} of {persona.payload.lineup.length}
+                        {view.artIsPlaceholder ? ' · placeholder art' : ''}
                       </figcaption>
                     </figure>
                   )

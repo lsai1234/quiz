@@ -1,4 +1,5 @@
 import type { ShareCardPayload, ShareLineupEntry } from './types'
+import { ART_SET, isPlaceholder, type ArtKey } from './art'
 
 /**
  * The card's formats, and what each one has room to say.
@@ -29,8 +30,16 @@ export interface FormatSpec {
   showFitMeter: boolean
   /** The tier, appended to the eyebrow. */
   showTier: boolean
-  /** The code chip. Redundant where the link itself carries it. */
-  showCode: boolean
+  /**
+   * The callout band — the strip between the lists and the stats.
+   *
+   * Empty on an ordinary share, the partner's code on an influencer's, and the
+   * competition's entry band in Phase 5. It exists now, unused most of the time,
+   * because the three jobs in §1 of the blueprint are the reason this card is
+   * being built and a layout with nowhere to put two of them is a layout that
+   * gets rebuilt twice.
+   */
+  showCallout: boolean
   /** The "+n more in your stack" line. */
   showOverflow: boolean
 }
@@ -49,7 +58,7 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     showStats: true,
     showFitMeter: true,
     showTier: true,
-    showCode: true,
+    showCallout: true,
     showOverflow: true,
   },
 
@@ -67,7 +76,7 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     showStats: true,
     showFitMeter: true,
     showTier: true,
-    showCode: true,
+    showCallout: true,
     showOverflow: false,
   },
 
@@ -86,7 +95,8 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
     showStats: false,
     showFitMeter: true,
     showTier: false,
-    showCode: false,
+    // A link preview needs no code: the URL sitting beside it carries one.
+    showCallout: false,
     showOverflow: true,
   },
 }
@@ -101,6 +111,15 @@ const TIER_LABEL: Record<string, string> = {
   performance: 'Balanced',
   complete: 'Complete',
 }
+
+/**
+ * The callout band's contents.
+ *
+ * `code` is the influencer case and is the only kind Phase 1 builds. The
+ * competition's entry band lands in Phase 5 as a second kind rather than as a
+ * second card, per §3.7.
+ */
+export type ShareCallout = { kind: 'code'; code: string; caption: string }
 
 /** One number-over-caption pair. */
 export interface ShareStat {
@@ -118,6 +137,14 @@ export interface ShareStat {
 export interface ShareCardView {
   format: ShareFormat
   spec: FormatSpec
+  /**
+   * The picture's share of the card, after the layout has adapted.
+   *
+   * Not just `spec.imageRatio`: a card carrying the callout band has to find
+   * ~180px, and taking all of it from the lists strips the card of the thing it
+   * is about. It comes out of the picture and the lists together.
+   */
+  imageRatio: number
   eyebrow: string
   stackName: string
   archetype: string | null
@@ -136,9 +163,13 @@ export interface ShareCardView {
   /** Products the format had no room for. 0 when the whole lineup fits. */
   overflow: number
   stats: ShareStat[]
-  /** The hero picture, when the catalogue has one. Falls back to house art. */
+  /** Which of the six images this card carries. */
+  artKey: ArtKey
+  /** True while that image is standing in for art that has not been made. */
+  artIsPlaceholder: boolean
+  /** A real catalogue picture, when there is one. Overrides the art set. */
   heroImage: string | null
-  code: string | null
+  callout: ShareCallout | null
   footer: string
 }
 
@@ -150,13 +181,21 @@ export function buildShareCardView(payload: ShareCardPayload, format: ShareForma
   const base = payload.drinksMode ? 'CHRGD LQD' : 'CHRGD STACK'
   const eyebrow = spec.showTier && tier ? `${greeting}${base} · ${tier}` : `${greeting}${base}`
 
-  const shown = payload.lineup.slice(0, spec.lineupRows)
+  // The band costs a product row. That trade is the point rather than a
+  // compromise: an influencer's card is carrying their code, and one fewer
+  // product is a cheaper price than a footer pushed off the bottom edge.
+  const hasCallout = spec.showCallout && !!payload.code
+  const rows = Math.max(1, spec.lineupRows - (hasCallout ? 1 : 0))
+  const imageRatio = spec.imageRatio - (hasCallout ? 0.05 : 0)
+  const shown = payload.lineup.slice(0, rows)
+
+  const artKey = (payload.artKey && payload.artKey in ART_SET ? payload.artKey : 'wellbeing') as ArtKey
 
   const builtFor = (
     payload.focusAreas.length > 0
       ? payload.focusAreas.map((f) => f.label)
       : payload.coverage.filter((c) => c.targeted).map((c) => c.label)
-  ).slice(0, spec.lineupRows)
+  ).slice(0, rows)
 
   // A number and a word, which is the pairing that makes the reference's stat
   // row read — two words side by side is a caption, two numbers is a table.
@@ -178,6 +217,7 @@ export function buildShareCardView(payload: ShareCardPayload, format: ShareForma
   return {
     format,
     spec,
+    imageRatio,
     eyebrow,
     stackName: payload.stackName,
     archetype: payload.archetype.trim() || null,
@@ -186,8 +226,16 @@ export function buildShareCardView(payload: ShareCardPayload, format: ShareForma
     builtFor,
     overflow: spec.showOverflow ? Math.max(0, payload.lineup.length - shown.length) : 0,
     stats,
+    artKey,
+    artIsPlaceholder: isPlaceholder(artKey),
     heroImage: payload.heroImage ?? null,
-    code: spec.showCode ? (payload.code ?? null) : null,
+    // The code was a chip in the footer, which is where a caption goes, not an
+    // offer. An influencer's whole reason to post the card is that code, so it
+    // gets the band.
+    callout:
+      spec.showCallout && payload.code
+        ? { kind: 'code', code: payload.code, caption: 'Use this code at checkout' }
+        : null,
     footer: 'getchrgd.co.uk',
   }
 }
