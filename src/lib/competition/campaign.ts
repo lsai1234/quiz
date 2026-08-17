@@ -83,12 +83,12 @@ export const EMPTY_CAMPAIGN: Campaign = {
   winnerSelection: '',
   freeEntryRoute: '',
   termsUrl: '/legal/competition',
-  instagramHandle: '@getchrgd',
+  instagramHandle: '@getchrgd_',
   quizRoute: 'Quiz link in our bio',
   entrySteps: [
-    'Follow @getchrgd',
+    'Follow @getchrgd_',
     'Take the quiz and share your stack',
-    'Post this to your story and tag us',
+    'Tag @getchrgd_ in your story',
   ],
   platformDisclaimer:
     'This promotion is in no way sponsored, endorsed or administered by, or associated with, Instagram or TikTok.',

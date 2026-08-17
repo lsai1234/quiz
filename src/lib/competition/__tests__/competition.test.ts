@@ -90,6 +90,14 @@ describe('handles', () => {
     }
   })
 
+  it('keeps a trailing underscore, which our own handle ends in', () => {
+    // `@getchrgd_` is a real Instagram handle and `@getchrgd` is somebody
+    // else's. Stripping the underscore would silently retarget the promotion.
+    for (const input of ['@getchrgd_', 'getchrgd_', 'https://instagram.com/getchrgd_/']) {
+      expect(normaliseHandle(input)).toBe('getchrgd_')
+    }
+  })
+
   it('rejects what is not a handle', () => {
     expect(normaliseHandle('a')).toBeNull()
     expect(normaliseHandle('has spaces')).toBeNull()

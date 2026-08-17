@@ -20,9 +20,9 @@ const BAND = {
   closes: 'Closes 30 Nov',
   terms: 'Full T&Cs at getchrgd.co.uk',
   test: false,
-  handle: '@getchrgd',
+  handle: '@getchrgd_',
   route: 'Take the quiz — link in our bio',
-  steps: ['Follow @getchrgd', 'Take the quiz', 'Post this to your story'],
+  steps: ['Follow @getchrgd_', 'Take the quiz', 'Tag @getchrgd_ in your story'],
 }
 
 describe('formats', () => {
@@ -106,7 +106,7 @@ describe('the entry card', () => {
     // can reach the quiz and the share is worth nothing. This is the single
     // most load-bearing assertion on the entry card.
     const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
-    expect(view.entry?.handle).toBe('@getchrgd')
+    expect(view.entry?.handle).toBe('@getchrgd_')
     expect(view.entry?.route).toBe('Take the quiz — link in our bio')
   })
 
@@ -272,5 +272,28 @@ describe('the rest of the view', () => {
     expect(buildShareCardView(PERSONAS.complete, 'story').heroImage).toBeNull()
     const withArt = { ...PERSONAS.complete, heroImage: 'https://cdn.example/whey.png' }
     expect(buildShareCardView(withArt, 'story').heroImage).toBe('https://cdn.example/whey.png')
+  })
+})
+
+/**
+ * The handle, and the fact that it has an underscore on the end.
+ *
+ * `@getchrgd_` is not `@getchrgd`, and on a reshared story the handle is the
+ * only route back to us — a wrong one sends every entrant to somebody else's
+ * account, or to nothing. It is founder-editable, so what is pinned here is the
+ * fallback and the fact that the entry rules survive a handle with an underscore
+ * in it.
+ */
+describe('the way back', () => {
+  it('carries the handle exactly as configured, underscore and all', () => {
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.entry?.handle).toBe('@getchrgd_')
+  })
+
+  it('tells people to tag us, as its own step', () => {
+    // Bundled into "post this to your story and tag us" it read as one action
+    // and got done as one. Tagging is how an entry is found at all.
+    const view = buildShareCardView(PERSONAS.complete, 'entry', BAND)
+    expect(view.entry?.steps.some((s) => /tag/i.test(s))).toBe(true)
   })
 })

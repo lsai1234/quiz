@@ -51,9 +51,9 @@ const BAND: CompetitionBand = {
   closes: 'Closes 30 Nov',
   terms: 'Full T&Cs at getchrgd.co.uk',
   test: false,
-  handle: '@getchrgd',
+  handle: '@getchrgd_',
   route: 'Quiz link in our bio',
-  steps: ['Follow @getchrgd', 'Share this to your story', 'Tag us to be counted'],
+  steps: ['Follow @getchrgd_', 'Share this to your story', 'Tag @getchrgd_ in your story'],
 }
 
 describe('the card rasterises', () => {

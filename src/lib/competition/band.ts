@@ -28,7 +28,7 @@ export async function competitionBand(): Promise<CompetitionBand | null> {
     // story anyway. The complete terms live behind the link in the bio.
     terms: 'Full T&Cs at getchrgd.co.uk',
     test: isTestRun(campaign),
-    handle: campaign.instagramHandle || '@getchrgd',
+    handle: campaign.instagramHandle || '@getchrgd_',
     route: campaign.quizRoute || 'Quiz link in our bio',
     steps: campaign.entrySteps.filter(Boolean),
   }

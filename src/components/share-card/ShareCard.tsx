@@ -223,6 +223,29 @@ function fitPrize(text: string, g: Geometry): number {
   return Math.max(PRIZE_MIN, Math.min(PRIZE_MAX, Math.floor(room / widthEm(text))))
 }
 
+/** The gutter the step numbers sit in. */
+const STEP_INDEX_W = 38
+
+/**
+ * The entry steps, sized so the longest one fits.
+ *
+ * These are typed by the founder in Founders Hub and they are the promotion's
+ * significant conditions, so they cannot be allowed to run off the edge or be
+ * cut with an ellipsis — a truncated entry condition is a promotion nobody can
+ * enter and a compliance problem besides. Shrinking is the failure mode that
+ * still says everything.
+ *
+ * IBM Plex Mono advances at 0.6em; the tracking is added on top, so a character
+ * costs `size × 0.66`. Mono is the one face here where a width estimate is exact
+ * rather than approximate.
+ */
+function fitSteps(steps: string[], railSize: number, g: Geometry): number {
+  const longest = steps.reduce((n, step) => Math.max(n, step.length), 0)
+  if (longest === 0) return railSize
+  const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 - STEP_INDEX_W
+  return Math.max(14, Math.min(railSize, Math.floor(room / (longest * 0.66))))
+}
+
 /**
  * The score, outlined, bleeding off the left edge.
  *
@@ -432,6 +455,7 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
   const rowPad = crowded ? Math.round(g.rowPad * 0.63) : g.rowPad
   const prizeSize = entry ? fitPrize(entry.prize, g) : PRIZE_MAX
   const railSize = Math.max(13, Math.round(g.w * 0.0176))
+  const stepSize = entry ? fitSteps(entry.steps, railSize, g) : railSize
 
   return (
     <div
@@ -655,21 +679,21 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        height: 32,
-                        ...mono(railSize, 400, P.ink1, 0.06),
+                        height: Math.round(stepSize * 1.7),
+                        ...mono(stepSize, 400, P.ink1, 0.06),
                       }}
                     >
                       <div
                         style={{
                           display: 'flex',
-                          width: 38,
+                          width: STEP_INDEX_W,
                           flexShrink: 0,
-                          ...mono(railSize - 2, 600, P.accent, 0.12),
+                          ...mono(stepSize - 2, 600, P.accent, 0.12),
                         }}
                       >
                         {String(i + 1).padStart(2, '0')}
                       </div>
-                      <div style={{ display: 'flex', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', whiteSpace: 'nowrap' }}>
                         {step.toUpperCase()}
                       </div>
                     </div>

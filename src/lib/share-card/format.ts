@@ -98,7 +98,7 @@ export const FORMATS: Record<ShareFormat, FormatSpec> = {
    *
    * That last part is the whole reason this format exists. A story somebody
    * reshares is a flat image. There is no link on it, no swipe-up, nothing —
-   * so unless the picture itself says "@getchrgd, quiz link in bio", a person
+   * so unless the picture itself says "@getchrgd_, quiz link in bio", a person
    * who sees it has no way to reach the quiz and the repost is worth nothing.
    */
   entry: {
