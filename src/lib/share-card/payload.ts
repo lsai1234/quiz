@@ -20,6 +20,28 @@ import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } f
  * so the card cannot disagree with the screen it was shared from.
  */
 
+/**
+ * The serving line for a product — "30 G / DAY", "1 SCOOP".
+ *
+ * Built only from data the catalogue actually holds: the key active's milligrams
+ * where there is one, and the pack's own serving description otherwise. Returns
+ * undefined when neither exists, and the card leaves the column blank.
+ *
+ * Deliberately never inferred. A dose invented to fill a layout is a statement
+ * about how much of a supplement somebody should take, printed on a public card
+ * — which is the one kind of claim this feature must never make by accident.
+ */
+function servingLine(product: CatalogueProduct): string | undefined {
+  const active = product.actives?.find((a) => typeof a.mg === 'number' && a.mg > 0)
+  if (active?.mg) {
+    return active.mg >= 1000
+      ? `${Math.round(active.mg / 100) / 10} G / DAY`
+      : `${active.mg} MG / DAY`
+  }
+  const size = product.variants?.[0]?.size
+  return size ? String(size).toUpperCase() : undefined
+}
+
 /** How many coverage bars the card has room for. */
 const COVERAGE_AXES = 4
 
@@ -225,6 +247,7 @@ export function buildSharePayload(
       reason:
         shortReason(slot.reason, MAX_REASON_WORDS, customerName) ||
         shortReason(product.shortReason || product.description, MAX_REASON_WORDS, customerName),
+      ...(servingLine(product) ? { dose: servingLine(product) } : {}),
     }))
 
   const inStack = selected.map((e) => e.product).filter((p): p is CatalogueProduct => !!p)

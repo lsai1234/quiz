@@ -1,6 +1,6 @@
 import { statSync } from 'fs'
 import { join } from 'path'
-import { loadShareCardFonts, FONT_DISPLAY, FONT_BODY } from '../fonts'
+import { loadShareCardFonts, FONT_DISPLAY, FONT_MONO, SHARE_CARD_FACES } from '../fonts'
 
 /**
  * The vendored faces.
@@ -15,18 +15,20 @@ import { loadShareCardFonts, FONT_DISPLAY, FONT_BODY } from '../fonts'
 
 const DIR = 'src/lib/share-card/fonts'
 
-/** 50KB is a subsetted weight; the full Inter TTF is 325KB. Anything between is
- *  a subset that has drifted and worth looking at. */
+/** 50KB is a subsetted weight; a full display TTF is 300KB+. Anything between
+ *  is a subset that has drifted and worth looking at. */
 const MAX_BYTES = 80 * 1024
 
 describe('share card fonts', () => {
-  it('loads three faces', async () => {
+  it('loads the display and utility families, at the weights the card sets', async () => {
     const fonts = await loadShareCardFonts()
-    expect(fonts).toHaveLength(3)
     expect(fonts.map((f) => `${f.name} ${f.weight}`).sort()).toEqual([
-      `${FONT_BODY} 400`,
-      `${FONT_BODY} 600`,
-      `${FONT_DISPLAY} 700`,
+      `${FONT_DISPLAY} 400`,
+      `${FONT_DISPLAY} 600`,
+      `${FONT_DISPLAY} 800`,
+      `${FONT_MONO} 400`,
+      `${FONT_MONO} 500`,
+      `${FONT_MONO} 600`,
     ])
   })
 
@@ -43,21 +45,22 @@ describe('share card fonts', () => {
   it('hands over exactly the file, not the pool it was read into', async () => {
     // A Node Buffer is a view into a shared, larger ArrayBuffer. Passing the
     // whole pool to Satori hands it whatever else Node allocated alongside.
-    const files = ['SpaceGrotesk-Bold.ttf', 'Inter-Regular.ttf', 'Inter-SemiBold.ttf']
-    const sizes = files.map((f) => statSync(join(DIR, f)).size).sort((a, b) => a - b)
+    const sizes = SHARE_CARD_FACES
+      .map((f) => statSync(join(DIR, f.file)).size)
+      .sort((a, b) => a - b)
     const loaded = (await loadShareCardFonts()).map((f) => f.data.byteLength).sort((a, b) => a - b)
     expect(loaded).toEqual(sizes)
   })
 
   it('keeps every face subsetted', () => {
-    for (const file of ['SpaceGrotesk-Bold.ttf', 'Inter-Regular.ttf', 'Inter-SemiBold.ttf']) {
-      expect(statSync(join(DIR, file)).size).toBeLessThan(MAX_BYTES)
+    for (const face of SHARE_CARD_FACES) {
+      expect(statSync(join(DIR, face.file)).size).toBeLessThan(MAX_BYTES)
     }
   })
 
   it('reads each face once', async () => {
     // The cache holds the promise, not the result, so concurrent first requests
-    // share one set of reads instead of racing to do the same three.
+    // share one set of reads instead of racing to do the same six.
     const [a, b] = await Promise.all([loadShareCardFonts(), loadShareCardFonts()])
     expect(a[0].data).toBe(b[0].data)
   })

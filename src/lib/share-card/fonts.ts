@@ -4,69 +4,55 @@ import { join } from 'path'
 /**
  * The card's typefaces, as bytes.
  *
- * ── Why they are vendored rather than imported ──────────────────────────────
- * The app loads Space Grotesk and Inter through `next/font/google`, which is the
- * right thing for the browser: it self-hosts them, subsets them and hands the
- * page a class name. What it does not hand anyone is the font *binary*, and
- * Satori needs exactly that — an ArrayBuffer per face, passed to `ImageResponse`.
+ * ── The pairing ─────────────────────────────────────────────────────────────
+ * Big Shoulders Display for the display roles and IBM Plex Mono for everything
+ * utilitarian — the labels, the quantities, the footer. A condensed grotesque
+ * against a mono is what gives the card its 172↔17 scale contrast; the previous
+ * pairing (Space Grotesk + Inter) reads as a product UI, which is what the card
+ * was being mistaken for.
  *
- * The alternative is fetching from `fonts.gstatic.com` at render time, which
- * puts an uncacheable third-party round trip in front of every card and makes
- * image generation fail whenever Google is slow. So the faces are committed
- * here, subsetted, at 127KB for all three.
+ * ── Why they are vendored, and why not woff2 ────────────────────────────────
+ * `next/font/google` does not expose font binaries to `ImageResponse`, and
+ * fetching from `fonts.gstatic.com` at render time puts an uncacheable
+ * third-party round trip in front of every card. So the faces are committed
+ * here, subsetted to Latin, at ~140KB for all six.
  *
- * ── The subset ──────────────────────────────────────────────────────────────
- * Latin-1 plus general punctuation, currency (the card carries no price, but £
- * appears in competition copy), the arrows and the replacement character. The
- * full Inter TTF is 325KB per weight because it carries Cyrillic, Greek and
- * Vietnamese; subsetting takes each weight to 50KB. Regenerate with:
+ * The design brief asks for self-hosted **woff2**. Satori does not read woff2 —
+ * ttf, otf and woff only — so these are subsetted TTF. Same bytes on the wire
+ * as far as the renderer is concerned; nothing fetches them over a network.
+ *
+ * Regenerate with:
  *
  *   python3 -m fontTools.subset <src>.ttf \
  *     --unicodes="U+0000-00FF,U+2010-2027,U+20A0-20BF,U+2122,U+2190-2193,U+2212,U+FEFF,U+FFFD" \
  *     --layout-features="kern,liga,calt,tnum" --no-hinting --output-file=<dest>.ttf
  *
- * A glyph outside the subset renders as a blank box rather than failing, so a
- * card is the wrong place to discover the subset was too tight — anything the
- * copy can contain belongs in that range.
+ * The 900 weight is deliberately absent: the only thing that used it is the
+ * score numeral, and that is drawn as outlines now (see digits.ts).
  *
- * ── Weights ─────────────────────────────────────────────────────────────────
- * Three faces, not six. Satori does not synthesise weights, so every weight the
- * card uses has to be a real file, and each one is 26–50KB of function bundle.
- * Display 700 / body 400 / strong 600 covers the card's hierarchy; anything
- * beyond that should be earned by a design that needs it.
- *
- * `--weight-display` is 900 in the token set. Space Grotesk has no weight above
- * 700, and in the browser that difference is invisible because the token is
- * clamped to the face's range. The card states 700 explicitly instead of asking
- * for a weight that does not exist. See `TOKEN_EXCEPTIONS` in palette.ts.
- *
- * Node runtime only — this reads from disk. `next/og` on the edge runtime would
- * need these inlined, and 127KB of base64 is 170KB of source, which is the wrong
- * trade for a route that is not latency-critical.
+ * Node runtime only — this reads from disk.
  */
 
 const FONT_DIR = join(process.cwd(), 'src/lib/share-card/fonts')
 
-/** The shape `ImageResponse` wants for each face. */
 export interface LoadedFont {
   name: string
   data: ArrayBuffer
-  weight: 400 | 600 | 700
+  weight: 400 | 500 | 600 | 800
   style: 'normal'
 }
 
 const FACES: Array<{ file: string; name: string; weight: LoadedFont['weight'] }> = [
-  { file: 'SpaceGrotesk-Bold.ttf', name: 'Space Grotesk', weight: 700 },
-  { file: 'Inter-Regular.ttf', name: 'Inter', weight: 400 },
-  { file: 'Inter-SemiBold.ttf', name: 'Inter', weight: 600 },
+  { file: 'BigShouldersDisplay-400.ttf', name: 'Big Shoulders Display', weight: 400 },
+  { file: 'BigShouldersDisplay-600.ttf', name: 'Big Shoulders Display', weight: 600 },
+  { file: 'BigShouldersDisplay-800.ttf', name: 'Big Shoulders Display', weight: 800 },
+  { file: 'IBMPlexMono-400.ttf', name: 'IBM Plex Mono', weight: 400 },
+  { file: 'IBMPlexMono-500.ttf', name: 'IBM Plex Mono', weight: 500 },
+  { file: 'IBMPlexMono-600.ttf', name: 'IBM Plex Mono', weight: 600 },
 ]
 
-/**
- * Read every face once per process.
- *
- * Cached as the promise rather than the result so concurrent first requests
- * share one set of reads instead of racing to do the same three.
- */
+/** Read every face once per process, sharing one set of reads across
+ *  concurrent first requests rather than racing to do the same six. */
 let cache: Promise<LoadedFont[]> | null = null
 
 export function loadShareCardFonts(): Promise<LoadedFont[]> {
@@ -87,6 +73,8 @@ export function loadShareCardFonts(): Promise<LoadedFont[]> {
   return cache
 }
 
-/** The font-family names, for the card's CSS. */
-export const FONT_DISPLAY = 'Space Grotesk'
-export const FONT_BODY = 'Inter'
+export const FONT_DISPLAY = 'Big Shoulders Display'
+export const FONT_MONO = 'IBM Plex Mono'
+
+/** Every face, so a test can assert the set without duplicating the list. */
+export const SHARE_CARD_FACES = FACES.map(({ file, name, weight }) => ({ file, name, weight }))

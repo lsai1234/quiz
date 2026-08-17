@@ -43,6 +43,14 @@ export interface ShareLineupEntry {
   product: string
   /** Why it is in the stack, cut to a card-sized clause. See `shortReason`. */
   reason: string
+  /**
+   * The serving line — "30 G / DAY", "1 SCOOP".
+   *
+   * Taken from the catalogue's own active-ingredient data, and absent when the
+   * catalogue has none. Never inferred: a dose invented for a layout is a claim
+   * about how much of something a person should take, printed on a public card.
+   */
+  dose?: string
 }
 
 /** One coverage bar: a goal of the user's, and how well the stack serves it. */

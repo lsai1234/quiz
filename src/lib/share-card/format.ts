@@ -1,5 +1,5 @@
 import type { ShareCardPayload, ShareLineupEntry } from './types'
-import { ART_SET, isPlaceholder, type ArtKey } from './art'
+import { ART_SET, ART_KEYS, isPlaceholder, type ArtKey } from './art'
 
 /**
  * The card's formats, and what each one has room to say.
@@ -194,6 +194,21 @@ export interface ShareCardView {
   fit: { score: number } | null
   lineup: ShareLineupEntry[]
   /**
+   * The spec table — the poster's version of the lineup.
+   *
+   * Name plus a dosage, because a bare list of products is an inventory and a
+   * dosed one reads as a protocol. The dose is the product's own serving line
+   * where the catalogue has it, and blank where it does not: an invented number
+   * on a public card is a claim.
+   */
+  specRows: Array<{ name: string; qty: string }>
+  /** The mono line at the top right — "STACK REPORT — 03". */
+  stamp: string
+  /** The cyan mono line above the headline. */
+  kicker: string
+  /** The right-hand mono item in the footer rail. */
+  footNote: string
+  /**
    * The second column: what the stack is for.
    *
    * The focus areas when an identity was generated, and the coverage axes — the
@@ -299,9 +314,17 @@ export function buildShareCardView(
       ]
     : []
 
+  const artIndex = ART_KEYS.indexOf(artKey) + 1
+
   return {
     format,
     spec,
+    specRows: shown.map((row) => ({ name: row.product, qty: row.dose ?? '' })),
+    stamp: `STACK REPORT — ${String(artIndex).padStart(2, '0')}`,
+    kicker: (payload.archetype.trim() || (payload.drinksMode ? 'The LQD Package' : 'Your Stack')).toUpperCase(),
+    footNote: competition
+      ? `${competition.closes.toUpperCase()} · T&CS APPLY`
+      : 'BUILD YOURS IN 90 SECONDS',
     imageRatio,
     eyebrow,
     stackName: payload.stackName,

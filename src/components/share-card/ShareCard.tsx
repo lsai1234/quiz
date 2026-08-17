@@ -1,67 +1,123 @@
 import type { ShareCardView } from '@/lib/share-card/format'
-import { SHARE_PALETTE as P, px, headlineSize, FILL_ACCENT } from '@/lib/share-card/palette'
+import { SHARE_PALETTE as P } from '@/lib/share-card/palette'
 import { GRAIN_DATA_URI, GRAIN_TILE_PX } from '@/lib/share-card/grain'
-import { FONT_DISPLAY, FONT_BODY } from '@/lib/share-card/fonts'
+import { FONT_DISPLAY, FONT_MONO } from '@/lib/share-card/fonts'
 import { cardArt } from '@/lib/share-card/art-file'
+import { artField } from '@/lib/share-card/art'
+import { numeralPath, DIGIT_UPEM } from '@/lib/share-card/digits'
 
 /**
  * The share card.
  *
- * ── What it is trying to be ─────────────────────────────────────────────────
- * An object, not a screenshot. The first version of this card was the results
- * page rendered at 1080px — translucent glass rows on a dark ground — and it
- * read exactly like what it was: a piece of an app, photographed. A card that
- * gets posted has to survive on its own, next to whatever else is in someone's
- * story, and that needs four things an app screen does not:
+ * ── What it is ─────────────────────────────────────────────────────────────
+ * A poster, not a UI component. The previous version was a rounded card with
+ * glass panels and a filled accent pill — it read as an app screen photographed,
+ * which is exactly what it was. This is built to `docs/SHARE_CARD_BRIEF`: full
+ * bleed photography, a hard type hierarchy, hairlines rather than containers,
+ * and the score bleeding off the left edge as the signature.
  *
- *   1. **A picture.** Roughly the top 40%. Nothing else buys attention at
- *      thumbnail size.
- *   2. **A hard split.** A solid light data panel under a dark image panel. Two
- *      planes of translucent grey on a dark ground is an interface; black type
- *      on a light panel is print.
- *   3. **Density.** Numbered lists in two columns, not a stack of identical
- *      cards. Ten data points where the old layout fitted four.
- *   4. **A signature.** The mark, the domain, and one enormous number.
+ * ── Instagram's chrome is a hard constraint ────────────────────────────────
+ * Text lives strictly between y=250 and y=1620. Above that is the profile
+ * header, below it the reply bar and the link sticker. The previous card put its
+ * masthead at y≈72 and its footer at y≈1800 — both were being covered on the
+ * version that shipped, and nothing about the render revealed it. Imagery may
+ * bleed under both bands; type may not.
  *
  * ── Satori ──────────────────────────────────────────────────────────────────
- * This never mounts in a browser. `next/og` walks the tree with Satori, so there
- * is no `tokens.css`, no `color-mix()`, no `backdrop-filter`, no grid and no
- * class names. Flexbox and absolute positioning only, every value a literal from
- * `palette.ts`. Three behaviours that fail silently rather than throwing, all
- * learned by rendering it:
+ * Rasterised by `next/og`, so: flexbox and absolute positioning only, no CSS
+ * variables, no grid, no class names, every value a fixed pixel literal. Four
+ * behaviours learned by rendering rather than reading:
  *
  *   • Any element with more than one child needs an explicit `display: 'flex'`.
- *   • A React fragment is laid out as a row container, not flattened — so every
- *     branch below returns one real element.
- *   • Two `flex: 1` siblings in a fixed-height column overlap rather than
- *     competing. Anything sized by its content sets `flexShrink: 0`.
+ *   • A numeric JSX child makes it miscount that parent's children — every text
+ *     child here is a string.
+ *   • Fragments are laid out as a row container rather than flattened.
+ *   • `border-style: dotted` is rejected outright, so the spec leaders are a
+ *     repeating gradient. Same line, and it renders.
  */
 
-const hairline = Math.max(1, Math.round(px(1)))
+/**
+ * ── One poster, four canvases ───────────────────────────────────────────────
+ * The brief specifies the story frame down to the pixel, and the first build
+ * took it literally: every value a constant, `W = 1080`, `H = 1920`. The square
+ * and the link preview then rendered as the top-left corner of a story card,
+ * with the headline below the bottom edge — a real regression, and one only a
+ * render of all four formats showed.
+ *
+ * So the numbers are a table rather than constants. The story figures are the
+ * brief's, unchanged; the others are the same composition re-proportioned. What
+ * moves between them is only geometry — the type scale, the hierarchy and the
+ * order are one design.
+ */
+interface Geometry {
+  w: number
+  h: number
+  margin: number
+  /** Where type may start. Instagram's profile chrome on the story frames. */
+  safeTop: number
+  /** Where type must end. The reply bar and the link sticker. */
+  safeBottom: number
+  /** How far the picture bleeds down the card. */
+  artH: number
+  headlineMax: number
+  headlineMin: number
+  /** The outlined numeral. Absent where the card is too small to carry it. */
+  score: { size: number; left: number; top: number } | null
+  cropMarks: boolean
+  specName: number
+  rowPad: number
+  /** Room the headline has, before the optical hang buys eight pixels back. */
+  headlineRoom: number
+}
 
-const display = (size: number, color: string = P.ink1, weight: number = P.weightDisplay) => ({
+function geometry(format: string): Geometry {
+  switch (format) {
+    /** The feed post. No platform chrome, so the margins are the safe zone. */
+    case 'square':
+      return {
+        w: 1080, h: 1080, margin: 76, safeTop: 76, safeBottom: 1004, artH: 640,
+        headlineMax: 124, headlineMin: 68,
+        score: { size: 268, left: -24, top: 176 },
+        cropMarks: true, specName: 40, rowPad: 13, headlineRoom: 1080 - 76 * 2,
+      }
+
+    /**
+     * The link unfurl. Usually painted under 400px wide in a chat client, so
+     * the score comes off — at that size an outlined numeral is grey noise —
+     * and the picture becomes a ground rather than a band.
+     */
+    case 'og':
+      return {
+        w: 1200, h: 630, margin: 56, safeTop: 56, safeBottom: 574, artH: 630,
+        headlineMax: 86, headlineMin: 48,
+        score: null,
+        cropMarks: false, specName: 30, rowPad: 8, headlineRoom: 760,
+      }
+
+    /** The story frame, and the competition card on it. The brief's numbers. */
+    default:
+      return {
+        w: 1080, h: 1920, margin: 84, safeTop: 250, safeBottom: 1620, artH: 1210,
+        headlineMax: 172, headlineMin: 92,
+        score: { size: 430, left: -38, top: 352 },
+        cropMarks: true, specName: 52, rowPad: 19, headlineRoom: 1080 - 84 * 2,
+      }
+  }
+}
+
+const display = (size: number, weight: 400 | 600 | 800, color: string, tracking = -0.022) => ({
   fontFamily: FONT_DISPLAY,
   fontSize: size,
   fontWeight: weight,
-  letterSpacing: `${P.trackingDisplay}em`,
-  lineHeight: P.leadingTight,
+  letterSpacing: `${tracking}em`,
   color,
 })
 
-const body = (size: number, color: string = P.inkPrint, weight: number = P.weightBody) => ({
-  fontFamily: FONT_BODY,
-  fontSize: px(size),
+const mono = (size: number, weight: 400 | 500 | 600, color: string, tracking: number) => ({
+  fontFamily: FONT_MONO,
+  fontSize: size,
   fontWeight: weight,
-  lineHeight: P.leadingSnug,
-  color,
-})
-
-const eyebrow = (color: string, size: number = P.textMeta) => ({
-  fontFamily: FONT_DISPLAY,
-  fontSize: px(size),
-  fontWeight: P.weightStrong,
-  letterSpacing: `${P.trackingEyebrow}em`,
-  textTransform: 'uppercase' as const,
+  letterSpacing: `${tracking}em`,
   color,
 })
 
@@ -71,218 +127,166 @@ function withAlpha(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
 }
 
+const RULE = withAlpha(P.ink1, 0.2)
+const MUTED = withAlpha(P.ink1, 0.44)
+
 /**
- * The CHRGD mark, as Satori can draw it.
+ * The headline, broken and sized to fit.
  *
- * The same geometry as `@/components/brand/CHRGDLogo` — battery cell, two charge
- * bars, the bolt keylined off them — restated here because that component is a
- * browser component built on `currentColor` and CSS variables, and this renderer
- * resolves neither. The paths are the contract: if the master mark moves, both
- * move.
+ * Two problems, one function. Splitting on the first space put "UNCOMPROMISING
+ * FOUNDATIONS" on a 14-character first line, and 172px of Big Shoulders 800 ran
+ * a clean 160px off the right edge — silently, because Satori does not wrap a
+ * `nowrap` line and does not complain about one it has overflowed.
+ *
+ * So the break is chosen to balance the two lines rather than to fall after the
+ * first word, and the size is then computed from the wider of them. Widths come
+ * from a per-character estimate rather than real metrics: Satori has no measuring
+ * pass to borrow, and a table accurate to a few percent is enough when the result
+ * is clamped anyway. `I`, `1` and the like are half the width of everything else
+ * in a condensed face, which is most of the error a flat average would make.
  */
-function Mark({ size, tone, accent, keyline }: {
-  size: number; tone: string; accent: string; keyline: string
-}) {
+const NARROW = new Set(['I', 'J', 'L', '1', 'İ', '.', ',', ':', ';', "'", '!', '|', ' ', '-'])
+const WIDE = new Set(['M', 'W', 'Q', '@', '&'])
+
+function widthEm(text: string): number {
+  let em = 0
+  for (const ch of text.toUpperCase()) {
+    em += NARROW.has(ch) ? 0.24 : WIDE.has(ch) ? 0.58 : 0.46
+  }
+  return em
+}
+
+function fitHeadline(name: string, g: Geometry): { line1: string; line2: string; size: number } {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  let best = { line1: name.trim(), line2: '', widest: widthEm(name) }
+
+  for (let cut = 1; cut < words.length; cut += 1) {
+    const line1 = words.slice(0, cut).join(' ')
+    const line2 = words.slice(cut).join(' ')
+    const widest = Math.max(widthEm(line1), widthEm(line2))
+    // Strictly better only: ties keep the earlier break, which puts the short
+    // punchy line on top — "IRON" over "FOUNDATIONS", not the other way round.
+    if (widest < best.widest) best = { line1, line2, widest }
+  }
+
+  const room = g.headlineRoom + 8 // the -8 optical hang buys eight pixels back
+  const size = Math.max(g.headlineMin, Math.min(g.headlineMax, Math.floor(room / best.widest)))
+  return { line1: best.line1, line2: best.line2, size }
+}
+
+/** The bolt, at rail size. */
+function Bolt({ size, color }: { size: number; color: string }) {
   return (
-    <svg width={size} height={Math.round(size * 1.15)} viewBox="0 0 100 115" fill="none">
-      <rect x="37" y="0" width="26" height="12" rx="6" fill={tone} />
-      <rect x="7" y="11" width="86" height="101" rx="30" fill="none" stroke={tone} strokeWidth="8" />
-      <rect x="19" y="29" width="62" height="12" rx="4" fill={tone} />
-      <rect x="19" y="49" width="62" height="12" rx="4" fill={tone} />
-      <path
-        d="M58 22L32 62H51L40 97L76 52H57L58 22Z"
-        fill={accent} stroke={keyline} strokeWidth="4" strokeLinejoin="round"
-      />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M14 2 L6.5 13.4 H11 L9.5 22 L17.5 10.6 H13 Z" fill={color} />
     </svg>
   )
 }
 
+const SPINE = 'CHARGE INDEX'
+
+/** The hairline box holding the handle and the route back. */
+const HANDLE_BOX_W = 232
+
 /**
- * The charge field — the card's graphic device.
+ * The prize line, split so the money can be cyan.
  *
- * The layout reference for this card is Spotify Wrapped, whose device is an
- * op-art checkerboard. Borrowing that would make the card look like Spotify's
- * rather than ours, so this is the logo's own charge bars run as a field: hard
- * stripes in the accent, tightening as they rise.
+ * "Win £200 of supplements" is typed by the founder in Founders Hub, so the
+ * amount is not a field the renderer can colour on its own — it has to be found
+ * in the sentence. Anything currency-shaped counts: £200, $50, £1,000, 200 free
+ * products would not.
  */
-function ChargeField({ width, height }: { width: number; height: number }) {
-  const bars = 18
-  return (
-    <div style={{ display: 'flex', position: 'absolute', top: 0, left: 0, width, height }}>
-      {Array.from({ length: bars }, (_, i) => {
-        const t = i / (bars - 1)
-        return (
-          <div
-            key={i}
-            style={{
-              display: 'flex',
-              position: 'absolute',
-              left: 0,
-              top: Math.round(height * (1 - Math.pow(1 - t, 1.6))) - 8,
-              width,
-              height: Math.max(3, Math.round(4 + t * 14)),
-              background: withAlpha(P.accent, 0.14 + t * 0.30),
-            }}
-          />
-        )
-      })}
-    </div>
-  )
+function moneySplit(text: string): Array<{ text: string; money: boolean }> {
+  const parts: Array<{ text: string; money: boolean }> = []
+  const pattern = /[£$€]\s?[\d][\d,.]*[kK]?/g
+  let at = 0
+  for (const match of text.matchAll(pattern)) {
+    const start = match.index ?? 0
+    if (start > at) parts.push({ text: text.slice(at, start), money: false })
+    parts.push({ text: match[0], money: true })
+    at = start + match[0].length
+  }
+  if (at < text.length) parts.push({ text: text.slice(at), money: false })
+  if (parts.length === 0) return [{ text, money: false }]
+  // Each part is its own flex child, and flex trims the whitespace at a child's
+  // edges — which closed the sentence up to "WIN£200OF SUPPLEMENTS". The spaces
+  // either side of the amount are load-bearing, so they are made non-breaking.
+  return parts.map((part) => ({ ...part, text: part.text.replace(/^ | $/g, ' ') }))
+}
+
+/** The prize headline, sized to the room the handle box leaves it. */
+const PRIZE_MAX = 88
+const PRIZE_MIN = 44
+
+function fitPrize(text: string, g: Geometry): number {
+  const room = g.w - g.margin * 2 - HANDLE_BOX_W - 26 + 5
+  return Math.max(PRIZE_MIN, Math.min(PRIZE_MAX, Math.floor(room / widthEm(text))))
 }
 
 /**
- * The routine-fit score, ghosted over the charge field.
+ * The score, outlined, bleeding off the left edge.
  *
- * The reference runs an enormous outlined "2025" up the side of its picture; this
- * is the equivalent, and the one figure on the card that is purely the
- * customer's. It was outlined in the first pass — `color: transparent` plus a
- * `-webkit-text-stroke` — and rendered as nothing at all, because Satori draws
- * the fill and skips the stroke. Filled at low alpha instead: legible, cheap,
- * and reading as texture rather than as a label. The copy of the number meant to
- * be *read* lives in the stat row.
+ * Drawn from glyph outlines rather than set as type: Satori renders
+ * `-webkit-text-stroke` as a fill with no stroke, and rejects SVG `<text>`
+ * outright. Both were tested. Paths were the alternative to putting a headless
+ * browser in the render path for one piece of type — see `digits.ts`.
  */
-function FitGhost({ score, width, height }: { score: number; width: number; height: number }) {
+function ScoreMark({ score, at }: { score: number; at: NonNullable<Geometry['score']> }) {
+  const { glyphs, width } = numeralPath(String(score))
+  const scale = at.size / DIGIT_UPEM
+  // Big Shoulders' cap height sits around 0.72em; the glyphs are y-up in font
+  // units, so they are flipped and dropped onto a baseline here.
+  const boxW = Math.round(width * scale)
+  const boxH = Math.round(at.size * 1.02)
+  const spineSize = Math.max(13, Math.round(at.size * 0.044))
+  const spineStep = Math.round(spineSize * 1.05)
+
   return (
     <div
       style={{
         display: 'flex',
         position: 'absolute',
-        left: px(P.space3),
-        top: Math.round(height * 0.26),
-        width: Math.round(width * 0.5),
-        ...display(Math.round(height * 0.5), withAlpha(P.accentBright, 0.32)),
+        left: at.left,
+        top: at.top,
+        alignItems: 'flex-start',
       }}
     >
-      {String(score)}
-    </div>
-  )
-}
-
-/** The picture, on the charge field, under the masthead. */
-function ImagePanel({ view, width, height }: { view: ShareCardView; width: number; height: number }) {
-  const art = cardArt(view.artKey, view.heroImage)
-  // The masthead owns the top strip and everything else starts beneath it. In
-  // the first pass the picture's keyline ran straight through the eyebrow.
-  const mastheadH = px(P.space8)
-  const artW = Math.round(width * 0.52)
-  const artH = height - mastheadH
-
-  return (
-    <div
-      style={{
-        display: 'flex',
-        position: 'relative',
-        width,
-        height,
-        background: P.groundBase,
-        overflow: 'hidden',
-      }}
-    >
-      {/* The field stops where the picture starts. Run full width at the weight
-          that made it visible, it stopped reading as a device and started
-          reading as scanlines over the photograph. */}
-      <ChargeField width={Math.round(width * 0.48)} height={height} />
-      {view.fit ? <FitGhost score={view.fit.score} width={width} height={height} /> : null}
-
-      {/* A bloom under the product, so it sits in light rather than on black. */}
+      <svg width={boxW} height={boxH} viewBox={`0 0 ${width} ${DIGIT_UPEM * 1.02}`}>
+        <g transform={`translate(0, ${DIGIT_UPEM * 0.98}) scale(1, -1)`}>
+          {glyphs.map((g, i) => (
+            <g key={i} transform={`translate(${g.x}, 0)`}>
+              <path
+                d={g.d}
+                fill="none"
+                stroke={withAlpha(P.ink1, 0.34)}
+                strokeWidth={2 / scale}
+              />
+            </g>
+          ))}
+        </g>
+      </svg>
       <div
         style={{
           display: 'flex',
-          position: 'absolute',
-          right: 0,
-          top: mastheadH,
-          width: artW,
-          height: artH,
-          backgroundImage: `radial-gradient(circle at 50% 50%, ${withAlpha(P.accent, 0.30)} 0%, ${withAlpha(P.accent, 0)} 62%)`,
-        }}
-      />
-
-      {/* No frame. The house renders are 2:3 and the panel is close to square,
-          so a box around them letterboxed the product inside its own picture. */}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          right: px(P.space2),
-          top: mastheadH,
-          width: artW,
-          height: artH,
+          ...mono(spineSize, 600, P.accent, 0.34),
+          // Set upright and read top-to-bottom, the way a spine label is.
+          // Satori has no `writing-mode`, so the characters are stacked instead —
+          // which reads the same at this size and needs no transform.
+          flexDirection: 'column',
+          marginTop: 22,
+          marginLeft: 18,
+          // Both the column and each cell carry an explicit height: left to
+          // compute its own, Satori sized the column to about half the string
+          // and cut "CHARGE INDEX" off after the E.
+          height: SPINE.length * spineStep,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={art} alt="" width={artW} height={artH} style={{ objectFit: 'contain' }} />
-      </div>
-
-      <div style={{ display: 'flex', position: 'absolute', left: px(P.space5), top: px(P.space4) }}>
-        <div style={eyebrow(P.accentBright, P.textMeta)}>{view.eyebrow}</div>
-      </div>
-    </div>
-  )
-}
-
-/** The brand's bolt, at list size. */
-function Bolt({ size, color }: { size: number; color: string }) {
-  return (
-    <svg width={Math.round(size * 0.62)} height={size} viewBox="30 20 48 79" fill="none">
-      <path d="M58 22L32 62H51L40 97L76 52H57L58 22Z" fill={color} />
-    </svg>
-  )
-}
-
-/**
- * A list — the densest way to say "here is what you got".
- *
- * Two shapes, and the difference is not decoration. *Your stack* is numbered
- * because it has an order the engine chose. *Built for* is not a ranking, and
- * numbering it was the most literal thing borrowed from the reference: it made
- * three goals look like a chart position. It gets the brand's bolt instead,
- * which is ours and is honest about the list being a set rather than a countdown.
- *
- * Every item is pinned to one line. Left to wrap, a product name that just
- * reaches the column width takes a second line and pushes the rest of the list
- * out of step with the column beside it — which reads as a broken layout rather
- * than as a long name.
- */
-function List({ title, items, max, width, marker }: {
-  title: string; items: string[]; max: number; width: string; marker: 'number' | 'bolt'
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width, minWidth: 0, gap: px(P.space2) }}>
-      <div style={eyebrow(P.inkPrint2, P.textMicro)}>{title}</div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {items.slice(0, max).map((item, i) => (
-          <div key={`${i}-${item}`} style={{ display: 'flex', gap: px(P.space2), width: '100%' }}>
-            {marker === 'number' ? (
-              // `String(...)`, not `{i + 1}`. A numeric JSX child makes Satori
-              // count the *parent* as having more than one child and throw
-              // "Expected <div> to have explicit display: flex" — pointing at an
-              // element that already has it. Every text child here is a string.
-              <div style={{ ...body(P.textLead, P.inkPrint2, P.weightBody), flexShrink: 0 }}>
-                {String(i + 1)}
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  height: px(P.textLead) * P.leadingSnug,
-                  flexShrink: 0,
-                }}
-              >
-                <Bolt size={px(P.textBody)} color={P.accentDeep} />
-              </div>
-            )}
-            <div
-              style={{
-                ...body(P.textLead, P.inkPrint, P.weightStrong),
-                minWidth: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {item}
-            </div>
+        {SPINE.split('').map((c, i) => (
+          <div
+            key={i}
+            style={{ display: 'flex', height: spineStep, lineHeight: `${spineStep}px` }}
+          >
+            {c === ' ' ? ' ' : c}
           </div>
         ))}
       </div>
@@ -291,450 +295,376 @@ function List({ title, items, max, width, marker }: {
 }
 
 /**
- * The callout band.
+ * One row of the spec table: index, name, leader, quantity.
  *
- * The strip the card's other two jobs live in. An ordinary share has none; an
- * influencer's carries their code at a size somebody can read off a story
- * without pausing it, which is the entire reason they are posting. The
- * competition's entry band is the second kind, in Phase 5.
- *
- * It sits above the stats rather than in the footer because the footer is where
- * a caption goes, and a code in a caption is a code nobody types.
+ * Aligned on centres, not baselines. `align-items: baseline` is the right answer
+ * typographically and the wrong one here — Satori resolved it against the
+ * display face's full line box, which dropped the mono quantity most of a line
+ * below the product name it belongs to. Explicit line heights on both sides make
+ * centring land on the same optical line that baseline alignment was meant to.
  */
-function Callout({ callout }: { callout: NonNullable<ShareCardView['callout']> }) {
-  if (callout.kind === 'code') {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-          background: P.inkPrint,
-          borderRadius: px(P.radiusRow),
-          padding: `${px(P.space3)}px ${px(P.space4)}px`,
-        }}
-      >
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={eyebrow(withAlpha(P.surfacePrint, 0.62), P.textMicro)}>{callout.caption}</div>
-          <div style={display(px(P.textDisplay), P.surfacePrint)}>{callout.code}</div>
-        </div>
-        <Bolt size={px(P.textDisplay)} color={P.accent} />
-      </div>
-    )
-  }
-
-  /**
-   * The entry band.
-   *
-   * Everything on it is there because the CAP Code requires a significant
-   * condition to appear on the promotion itself, not only behind a link: the
-   * prize, what somebody has to do, the closing date, and where the full terms
-   * are. It is the densest thing on the card for that reason — it is not
-   * decoration, it is the part that makes the promotion legal to run.
-   *
-   * `test` prints across it during a rehearsal, so a card that escapes into a
-   * story before the wording is signed off says what it is.
-   */
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-        background: P.inkPrint,
-        borderRadius: px(P.radiusRow),
-        padding: `${px(P.space3)}px ${px(P.space4)}px`,
-        gap: px(P.space1),
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={eyebrow(P.accent, P.textMicro)}>
-          {callout.test ? 'Test — not a live promotion' : 'Win'}
-        </div>
-        <Bolt size={px(P.textLead)} color={P.accent} />
-      </div>
-      <div style={display(px(P.textTitle), P.surfacePrint)}>{callout.prize}</div>
-      <div style={body(P.textBodySm, withAlpha(P.surfacePrint, 0.78))}>{callout.mechanic}</div>
-      <div style={body(P.textMicro, withAlpha(P.surfacePrint, 0.55))}>
-        {`${callout.closes} · ${callout.terms}`}
-      </div>
-    </div>
-  )
-}
-
-/** A caption over an enormous figure — the reference's "42,279 / Minutes Listened". */
-function Stat({ label, value, size }: { label: string; value: string; size: number }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, gap: px(P.space1) }}>
-      <div style={body(P.textBodySm, P.inkPrint2, P.weightBody)}>{label}</div>
-      <div style={display(size, P.inkPrint)}>{value}</div>
-    </div>
-  )
-}
-
-/**
- * The bottom rail.
- *
- * On the entry card the right-hand side carries the closing date and the terms
- * rather than the domain — the accent slab above already says where to go, and
- * stacking a terms line above a footer line spent 60px on two rails doing one
- * rail's job. It also pushed the mark off the bottom of the card, which is the
- * one thing on it that is not negotiable.
- */
-function Footer({ view, markSize }: { view: ShareCardView; markSize: number }) {
-  const right = view.entry ? `${view.entry.closes} · ${view.entry.terms}` : view.footer
+function SpecRow({ index, name, qty, last, pad, size }: {
+  index: string; name: string; qty: string; last: boolean; pad: number; size: number
+}) {
+  const NAME_SIZE = size
+  const monoSize = Math.max(12, Math.round(size * 0.36))
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        flexShrink: 0,
+        paddingTop: pad,
+        paddingBottom: pad,
+        borderBottom: `${last ? 1.5 : 1}px solid ${last ? RULE : withAlpha(P.ink1, 0.1)}`,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: px(P.space2) }}>
-        <Mark size={markSize} tone={P.inkPrint} accent={P.accentDeep} keyline={P.surfacePrint} />
-        <div style={{ ...display(px(P.textTitle), P.inkPrint), letterSpacing: `${P.trackingTitle}em` }}>
-          getCHRGD
-        </div>
-      </div>
-      <div
-        style={{
-          ...eyebrow(view.entry ? withAlpha(P.inkPrint, 0.5) : P.inkPrint, P.textMicro),
-          letterSpacing: '0.06em',
-          whiteSpace: 'nowrap',
-          textAlign: 'right',
-        }}
-      >
-        {right}
-      </div>
-    </div>
-  )
-}
-
-/**
- * A hairline with a label sitting on it.
- *
- * The entry card is two things — somebody's stack and a giveaway — and without
- * a rule between them the eye reads one long column and neither lands. This is
- * the seam, and it is drawn rather than implied because a gap alone is not
- * legible at story size.
- */
-function SeamRule({ label }: { label: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: px(P.space3), flexShrink: 0 }}>
-      <div style={{ display: 'flex', height: hairline, flex: 1, background: withAlpha(P.inkPrint, 0.16) }} />
-      <div style={eyebrow(P.inkPrint2, P.textMicro)}>{label}</div>
-      <div style={{ display: 'flex', height: hairline, flex: 1, background: withAlpha(P.inkPrint, 0.16) }} />
-    </div>
-  )
-}
-
-/**
- * The advert, on the entry card.
- *
- * ── The thing this exists to solve ──────────────────────────────────────────
- * A story somebody reshares is a flat image. There is no link on it, no
- * swipe-up, no tappable sticker — the person who sees it has nothing to press.
- * So the route back to us has to be *printed*, large enough to read at a glance
- * and short enough to remember for the two seconds it takes to open the app:
- * a handle, and where the quiz is once you get there.
- *
- * ── Why the prize is the biggest thing on the card ──────────────────────────
- * The first version set the stack name at display size and the prize beneath it
- * at half that, which is the right hierarchy for a share card and the wrong one
- * for an advert. On this card the stack is the byline — it is why somebody
- * stops — and the prize is the headline. Set as a poster would set it: a small
- * tracked eyebrow, the amount as large as the frame allows, and the rest as
- * tracked caps beneath.
- *
- * Everything else is the CAP Code's: the steps, the closing date and where the
- * full terms are, all on the promotion itself rather than behind a link —
- * because a reshared image cannot carry a link either.
- */
-function EntryAdvert({ entry, width }: {
-  entry: NonNullable<ShareCardView['entry']>
-  width: number
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, gap: px(P.space3) }}>
-      <SeamRule label={entry.test ? 'Test — not a live promotion' : 'The giveaway'} />
-
-      {/* The headline. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space1) }}>
-        <div style={eyebrow(P.accentDeep, P.textMicro)}>Win</div>
-        {/* 0.78 of the headline size the frame would allow. At full size the
-            prize took two lines of 118px and pushed the route block — the one
-            element that cannot be dropped — off the bottom of the card. */}
-        <div
-          style={{
-            ...display(Math.round(headlineSize(entry.prize, width, 2) * 0.74), P.inkPrint),
-            display: 'flex',
-          }}
-        >
-          {entry.prize}
-        </div>
-      </div>
-
-      {/* Three steps. An advert that needs reading twice does not get entered,
-          so this is a numbered list rather than the prose the terms page uses. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space2) }}>
-        <div style={eyebrow(P.inkPrint2, P.textMicro)}>How to enter</div>
-        {entry.steps.map((step, i) => (
-          <div key={`${i}-${step}`} style={{ display: 'flex', gap: px(P.space3), alignItems: 'center' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: px(P.space6),
-                height: px(P.space6),
-                flexShrink: 0,
-                borderRadius: px(P.radiusPill),
-                border: `${Math.max(2, hairline * 2)}px solid ${P.accentDeep}`,
-                ...display(px(P.textBodySm), P.accentDeep),
-              }}
-            >
-              {String(i + 1)}
-            </div>
-            <div
-              style={{
-                ...body(P.textLead, P.inkPrint, P.weightStrong),
-                minWidth: 0,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              {step}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* The route. The one element on this card that cannot be dropped: it is
-          the only path from a reshared story back to the quiz — so it is the
-          accent slab, not another grey box. */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          backgroundImage: FILL_ACCENT,
-          borderRadius: px(P.radiusRow),
-          padding: `${px(P.space4)}px ${px(P.space5)}px`,
+          width: Math.round(size * 0.73),
+          flexShrink: 0,
+          ...mono(monoSize - 1, 600, P.accent, 0.12),
+          lineHeight: `${NAME_SIZE}px`,
         }}
       >
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ ...display(px(P.textDisplay), P.inkOnAccent), letterSpacing: `${P.trackingTitle}em` }}>
-            {entry.handle}
-          </div>
-          <div style={body(P.textBody, withAlpha(P.inkOnAccent, 0.72), P.weightStrong)}>{entry.route}</div>
-        </div>
-        <Bolt size={px(P.textDisplay)} color={P.inkOnAccent} />
+        {index}
       </div>
+      <div
+        style={{
+          display: 'flex',
+          ...display(NAME_SIZE, 600, P.ink1, -0.01),
+          lineHeight: `${NAME_SIZE}px`,
+          textTransform: 'uppercase',
+          minWidth: 0,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+        }}
+      >
+        {name}
+      </div>
+      {/* A dotted leader. `border-style: dotted` is rejected by Satori, so this
+          is a repeating gradient — same line, and it renders. */}
+      <div
+        style={{
+          display: 'flex',
+          flex: 1,
+          height: 1,
+          minWidth: 24,
+          marginLeft: 20,
+          marginRight: 20,
+          backgroundImage: `repeating-linear-gradient(90deg, ${withAlpha(P.ink1, 0.22)} 0 2px, transparent 2px 7px)`,
+        }}
+      />
+      <div
+        style={{
+          display: 'flex',
+          flexShrink: 0,
+          ...mono(monoSize, 500, MUTED, 0.1),
+          lineHeight: `${NAME_SIZE}px`,
+        }}
+      >
+        {qty}
+      </div>
+    </div>
+  )
+}
 
+/**
+ * The picture, when there is no picture.
+ *
+ * Layered gradients standing in for the photography that has not been shot. Each
+ * layer is its own div because Satori takes one `background-image` per element
+ * reliably and a comma-separated list less so. See `art.ts` for why this beats a
+ * product render.
+ */
+function ArtField({ artKey, g }: { artKey: string | undefined; g: Geometry }) {
+  const field = artField(artKey as never)
+  return (
+    <div
+      style={{
+        display: 'flex',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: g.w,
+        height: g.artH,
+        backgroundImage: field.base,
+      }}
+    >
+      {field.layers.map((layer, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: g.w,
+            height: g.artH,
+            backgroundImage: layer.image,
+            opacity: layer.opacity ?? 1,
+          }}
+        />
+      ))}
     </div>
   )
 }
 
 export function ShareCard({ view }: { view: ShareCardView }) {
-  const { spec } = view
-  const isOg = view.format === 'og'
-
-  // A margin, so the card reads as an object sitting on the brand's ground
-  // rather than as a full-bleed screen. The reference does the same.
-  const margin = isOg ? 0 : px(P.space4)
-  const cardW = spec.width - margin * 2
-  const cardH = spec.height - margin * 2
-  const imageH = Math.round(cardH * view.imageRatio)
-  const pad = px(P.space6)
-
-  const dataPanel = (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        flex: 1,
-        minHeight: 0,
-        background: P.surfacePrint,
-        padding: pad,
-        gap: px(P.space4),
-        position: 'relative',
-      }}
-    >
-      {/* Grain on the light panel too. The dark half has had it since the first
-          render and the light half had nothing, which is most of what made this
-          side read as a UI panel rather than as printed stock. */}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 0, left: 0, right: 0, bottom: 0,
-          backgroundImage: `url(${GRAIN_DATA_URI})`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: `${GRAIN_TILE_PX}px ${GRAIN_TILE_PX}px`,
-          opacity: P.grainOpacity * 1.4,
-        }}
-      />
-      {/* The seam where the panels meet, lit from above — the design system's
-          specular, inverted onto a light surface. */}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 0, left: 0, right: 0,
-          height: px(P.specularDepth),
-          backgroundImage: `linear-gradient(180deg, ${withAlpha(P.inkPrint, 0.10)} 0%, ${withAlpha(P.inkPrint, 0)} 100%)`,
-        }}
-      />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: px(P.space1), flexShrink: 0 }}>
-        {view.entry ? <div style={eyebrow(P.inkPrint2, P.textMicro)}>My stack</div> : null}
-        <div
-          style={display(
-            // Demoted on the entry card. There the prize is the headline and the
-            // stack is the byline — two display lines at the same size fight,
-            // and the first version had them doing exactly that.
-            view.entry
-              ? Math.round(headlineSize(view.stackName, cardW - pad * 2) * 0.6)
-              : headlineSize(view.stackName, cardW - pad * 2),
-            P.inkPrint,
-          )}
-        >
-          {view.stackName}
-        </div>
-        {view.archetype ? (
-          <div style={body(view.entry ? P.textBody : P.textLead, P.inkPrint2, P.weightBody)}>
-            {view.archetype}
-          </div>
-        ) : null}
-      </div>
-
-      {/* On the entry card the stack is the hook, not the subject — one column,
-          so the advert below it gets the room. */}
-      {view.entry ? (
-        <div style={{ display: 'flex', flexShrink: 0 }}>
-          <List
-            title="Your stack"
-            items={view.lineup.map((r) => r.product)}
-            max={spec.lineupRows}
-            width="100%"
-            marker="number"
-          />
-        </div>
-      ) : (
-        <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0, overflow: 'hidden' }}>
-          {/* Not 50/50: product names run half as long again as focus labels, and
-              an even split is what put the longest of them on the edge of wrapping. */}
-          <List
-            title="Your stack"
-            items={view.lineup.map((r) => r.product)}
-            max={spec.lineupRows}
-            width="52%"
-            marker="number"
-          />
-          {view.builtFor.length > 0 ? (
-            <List
-              title="Built for"
-              items={view.builtFor}
-              max={spec.lineupRows}
-              width="44%"
-              marker="bolt"
-            />
-          ) : null}
-        </div>
-      )}
-
-      {view.overflow > 0 ? (
-        <div style={{ ...body(P.textBodySm, P.inkPrint2), flexShrink: 0 }}>
-          {`+${view.overflow} more in your stack`}
-        </div>
-      ) : null}
-
-      {/* The card's slack, in one place. Without it the lists stretched and the
-          gap opened up between a list and its own overflow line.
-          On the entry card it moves below the advert: the advert has to follow
-          the stack closely, or the card reads as two unrelated posters. */}
-      {view.entry ? null : <div style={{ display: 'flex', flex: 1, minHeight: 0 }} />}
-
-      {view.callout ? <Callout callout={view.callout} /> : null}
-      {view.entry ? <EntryAdvert entry={view.entry} width={cardW - pad * 2} /> : null}
-      {view.entry ? <div style={{ display: 'flex', flex: 1, minHeight: 0 }} /> : null}
-
-      <div style={{ display: 'flex', gap: px(P.space4), flexShrink: 0 }}>
-        {view.stats.map((s) => (
-          <Stat key={s.label} label={s.label} value={s.value} size={px(P.textDisplay)} />
-        ))}
-      </div>
-
-      <Footer view={view} markSize={px(P.textTitle)} />
-    </div>
-  )
-
-  const ground = (
-    <div style={{ display: 'flex', position: 'absolute', top: 0, left: 0, width: spec.width, height: spec.height }}>
-      <div
-        style={{
-          display: 'flex', position: 'absolute', top: 0, left: 0, width: spec.width, height: spec.height,
-          backgroundImage: `radial-gradient(circle at 12% 4%, ${withAlpha(P.bloomAccent, 0.55)} 0%, ${withAlpha(P.bloomAccent, 0)} 58%)`,
-        }}
-      />
-      <div
-        style={{
-          display: 'flex', position: 'absolute', top: 0, left: 0, width: spec.width, height: spec.height,
-          backgroundImage: `radial-gradient(circle at 92% 88%, ${withAlpha(P.bloomViolet, 0.45)} 0%, ${withAlpha(P.bloomViolet, 0)} 58%)`,
-        }}
-      />
-      <div
-        style={{
-          display: 'flex', position: 'absolute', top: 0, left: 0, width: spec.width, height: spec.height,
-          backgroundImage: `url(${GRAIN_DATA_URI})`,
-          backgroundRepeat: 'repeat',
-          backgroundSize: `${GRAIN_TILE_PX}px ${GRAIN_TILE_PX}px`,
-          opacity: P.grainOpacity,
-        }}
-      />
-    </div>
-  )
+  const g = geometry(view.format)
+  const art = cardArt(view.artKey, view.heroImage)
+  const entry = view.entry
+  const { line1, line2, size: headline } = fitHeadline(view.stackName, g)
+  // Six rows and a prize block will not both fit above the safe line at full
+  // row padding, so the table tightens rather than the body growing under the
+  // profile header. The designed rhythm is the geometry's; two thirds is the
+  // floor.
+  const crowded = view.specRows.length + (entry ? 1 : 0) >= 6
+  const rowPad = crowded ? Math.round(g.rowPad * 0.63) : g.rowPad
+  const prizeSize = entry ? fitPrize(entry.prize, g) : PRIZE_MAX
+  const railSize = Math.max(13, Math.round(g.w * 0.0176))
 
   return (
     <div
       style={{
         display: 'flex',
         position: 'relative',
-        width: spec.width,
-        height: spec.height,
+        width: g.w,
+        height: g.h,
         background: P.groundBase,
-        padding: margin,
+        overflow: 'hidden',
+        fontFamily: FONT_DISPLAY,
       }}
     >
-      {ground}
-      {isOg ? (
-        <div style={{ display: 'flex', flexDirection: 'row', width: cardW, height: cardH, position: 'relative' }}>
-          <div style={{ display: 'flex', width: Math.round(cardW * 0.36), height: cardH, flexShrink: 0 }}>
-            <ImagePanel view={view} width={Math.round(cardW * 0.36)} height={cardH} />
-          </div>
-          <div style={{ display: 'flex', flex: 1, minWidth: 0, height: cardH }}>{dataPanel}</div>
+      {/* ── Art: full bleed, hard crop, no radius ─────────────────────────── */}
+      {art ? (
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: g.w,
+            height: g.artH,
+            overflow: 'hidden',
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={art}
+            alt=""
+            width={g.w}
+            height={g.artH}
+            style={{ objectFit: 'cover', objectPosition: 'center top' }}
+          />
         </div>
       ) : (
+        <ArtField artKey={view.artKey} g={g} />
+      )}
+      {/* The scrim. Holds the header rail at the top and hands the photo to the
+          ink at the bottom, so the body block can break the seam. */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          top: 0, left: 0, width: g.w, height: g.artH,
+          backgroundImage: `linear-gradient(to bottom, ${withAlpha(P.groundBase, 0.55)} 0%, transparent 22%, transparent 62%, ${withAlpha(P.groundBase, 0.88)} 100%)`,
+        }}
+      />
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          top: g.artH - 2, left: 0, width: g.w, height: g.h - g.artH + 2,
+          background: P.groundBase,
+        }}
+      />
+
+      {/* ── Crop marks: honest to the report conceit ──────────────────────── */}
+      {(g.cropMarks ? [
+        { top: 44, left: 44, borderTopWidth: 1.5, borderLeftWidth: 1.5 },
+        { top: 44, right: 44, borderTopWidth: 1.5, borderRightWidth: 1.5 },
+        { bottom: 44, left: 44, borderBottomWidth: 1.5, borderLeftWidth: 1.5 },
+        { bottom: 44, right: 44, borderBottomWidth: 1.5, borderRightWidth: 1.5 },
+      ] : []).map((pos, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            width: 34,
+            height: 34,
+            borderStyle: 'solid',
+            borderColor: withAlpha(P.ink1, 0.34),
+            borderTopWidth: 0, borderRightWidth: 0, borderBottomWidth: 0, borderLeftWidth: 0,
+            ...pos,
+          }}
+        />
+      ))}
+
+      {/* ── Header rail ───────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          top: g.safeTop + 2,
+          left: g.margin,
+          width: g.w - g.margin * 2,
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+          <Bolt size={railSize + 2} color={P.accent} />
+          <div style={mono(railSize, 600, P.ink1, 0.3)}>GETCHRGD</div>
+        </div>
+        <div style={mono(railSize, 600, MUTED, 0.3)}>{view.stamp}</div>
+      </div>
+
+      {view.fit && g.score ? <ScoreMark score={view.fit.score} at={g.score} /> : null}
+
+      {/* ── Body: anchored to the bottom so the headline breaks the seam ──── */}
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'absolute',
+          left: g.margin,
+          width: g.headlineRoom,
+          bottom: g.h - g.safeBottom,
+        }}
+      >
+        <div style={{ display: 'flex', ...mono(railSize + 1, 600, P.accent, 0.3), marginBottom: 14 }}>
+          {view.kicker}
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', marginLeft: -8 }}>
+          <div
+            style={{
+              display: 'flex',
+              ...display(headline, 800, P.ink1),
+              lineHeight: 0.79,
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {line1}
+          </div>
+          {line2 ? (
+            <div
+              style={{
+                display: 'flex',
+                ...display(headline, 400, withAlpha(P.ink1, 0.62)),
+                lineHeight: 0.79,
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {line2}
+            </div>
+          ) : null}
+        </div>
+
+        {/* ── Spec table, not cards ───────────────────────────────────────── */}
         <div
           style={{
             display: 'flex',
             flexDirection: 'column',
-            width: cardW,
-            height: cardH,
-            position: 'relative',
-            borderRadius: px(P.radiusSheet),
-            overflow: 'hidden',
+            marginTop: Math.round(g.specName * 0.85),
+            borderTop: `1.5px solid ${RULE}`,
           }}
         >
-          <div style={{ display: 'flex', width: cardW, height: imageH, flexShrink: 0 }}>
-            <ImagePanel view={view} width={cardW} height={imageH} />
-          </div>
-          {dataPanel}
+          {view.specRows.map((row, i) => (
+            <SpecRow
+              key={`${i}-${row.name}`}
+              index={String(i + 1).padStart(2, '0')}
+              name={row.name}
+              qty={row.qty}
+              last={i === view.specRows.length - 1}
+              pad={rowPad}
+              size={g.specName}
+            />
+          ))}
         </div>
-      )}
+
+        {/* ── Prize: a rule and a line of type. No pill, no fill. ─────────── */}
+        {entry ? (
+          <div style={{ display: 'flex', alignItems: 'flex-end', marginTop: 46 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', ...mono(railSize, 600, P.accent, 0.28), marginBottom: 9 }}>
+                {entry.test ? 'TEST — NOT A LIVE PROMOTION' : 'SHARE THIS + FOLLOW TO ENTER'}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  ...display(prizeSize, 800, P.ink1),
+                  lineHeight: 0.83,
+                  textTransform: 'uppercase',
+                  marginLeft: -5,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {/* The money in cyan, per the brief. Split rather than
+                    interpolated: Satori miscounts a parent's children when one of
+                    them is a number, and "£200" arrives from campaign config as
+                    part of a sentence the founder types. */}
+                {moneySplit(entry.prize).map((part, i) => (
+                  <div key={i} style={{ display: 'flex', color: part.money ? P.accent : P.ink1 }}>
+                    {part.text}
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* The route back, in the hairline box. Not a QR: on a story the
+                viewer is holding the phone the code is displayed on, so a handle
+                they can remember for two seconds beats a code they cannot scan. */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                flexShrink: 0,
+                width: HANDLE_BOX_W,
+                marginLeft: 26,
+                padding: '13px 18px',
+                border: `1.5px solid ${RULE}`,
+              }}
+            >
+              <div style={{ ...mono(20, 600, P.ink1, 0.04), lineHeight: '26px' }}>{entry.handle}</div>
+              <div style={{ ...mono(13, 400, MUTED, 0.06), lineHeight: '20px' }}>{entry.route}</div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            marginTop: 26,
+            paddingTop: 17,
+            borderTop: `1px solid ${withAlpha(P.ink1, 0.13)}`,
+          }}
+        >
+          <div style={mono(railSize - 2, 400, withAlpha(P.ink1, 0.34), 0.16)}>{view.footer}</div>
+          <div style={mono(railSize - 2, 400, withAlpha(P.ink1, 0.34), 0.16)}>{view.footNote}</div>
+        </div>
+      </div>
+
+      {/* ── Grain, over everything ────────────────────────────────────────── */}
+      <div
+        style={{
+          display: 'flex',
+          position: 'absolute',
+          top: 0, left: 0, width: g.w, height: g.h,
+          backgroundImage: `url(${GRAIN_DATA_URI})`,
+          backgroundRepeat: 'repeat',
+          backgroundSize: `${GRAIN_TILE_PX}px ${GRAIN_TILE_PX}px`,
+          opacity: 0.07,
+          mixBlendMode: 'overlay',
+        }}
+      />
     </div>
   )
 }

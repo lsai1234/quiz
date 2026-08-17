@@ -24,13 +24,15 @@ function dataUri(file: string): string {
 }
 
 /**
- * The image for the card.
+ * The image for the card, or null when there is none to draw.
  *
- * A real catalogue image wins when the payload carries one — that path exists so
- * the day there is proper photography it is a data change — and otherwise the
- * family's art is used.
+ * Resolution order is the one in the brief: uploaded (arrives as `imageUrl`) →
+ * bundled → nothing, and nothing means the card draws the family's gradient
+ * field instead. Null rather than a stand-in file, because a card that renders a
+ * broken image slot is worse than one that renders a designed absence.
  */
-export function cardArt(key: ArtKey | undefined, imageUrl?: string | null): string {
+export function cardArt(key: ArtKey | undefined, imageUrl?: string | null): string | null {
   if (imageUrl) return imageUrl
-  return dataUri(ART_SET[key ?? 'wellbeing'].file)
+  const file = ART_SET[key ?? 'wellbeing'].file
+  return file ? dataUri(file) : null
 }
