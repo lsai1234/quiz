@@ -133,6 +133,20 @@ Setting `NOTIFY_DOMAIN` puts each kind on its own address —
 replies going to the real contact inbox. The setup guide for both routes is
 `docs/EMAILS.md`.
 
+## Testing
+
+```bash
+npm test     # 2,841 unit tests
+npm run e2e  # the browser suite — every product, every journey, no keys needed
+```
+
+`npm run e2e` starts its own server against the app's mock modes and drives a
+real browser through the quiz, the shop, bundles, checkout, My Hub, the Founders
+Hub and the Partners Hub, including a rendered-output pass that catches text and
+icon faults the unit suite cannot see. It is written up in
+`docs/E2E_AUTOMATED_PLAN.md`; the manual walkthrough for the parts that need real
+money and a real supplier is `docs/E2E_TEST_PLAN.md`.
+
 ## Stack
 
 Next.js 16 · App Router · TypeScript · Tailwind CSS v4 · SQLite / Postgres · PowerBody dropship API · Stripe · OpenAI API · Google Sheets API

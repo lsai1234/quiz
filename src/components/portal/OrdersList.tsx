@@ -31,6 +31,26 @@ export const STATUS_COLOR: Record<string, string> = {
   failed: 'var(--tone-critical)',
 }
 
+/**
+ * A timestamp, in the format the rest of the product uses.
+ *
+ * These three call sites (here and twice in `OrderDetail`) were the only dates
+ * in the app rendered with a bare `toLocaleString()`, which takes the format
+ * from whatever machine is looking. On a browser defaulting to US English an
+ * order placed on the 8th of November reads `11/8/2026` — the same string a UK
+ * reader takes as the 11th of August. Every other date in the codebase names
+ * `en-GB` explicitly; so does this one.
+ */
+export function formatStamp(iso: string | number | Date): string {
+  return new Date(iso).toLocaleString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function statusLabel(s: string): string {
   return s.replace(/_/g, ' ')
 }
@@ -127,7 +147,7 @@ export function OrdersList({ defaultChannel = 'all' }: { defaultChannel?: string
                     {needsReview(o) && <Badge tone="attention">needs review</Badge>}
                   </div>
                   <p className="truncate" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-                    {o.email ?? 'guest'} · {new Date(o.createdAt).toLocaleString()}
+                    {o.email ?? 'guest'} · {formatStamp(o.createdAt)}
                   </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">

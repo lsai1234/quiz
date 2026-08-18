@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+# e2e run output — traces, failure screenshots and the HTML report.
+# The snapshot baselines in e2e/snapshots/ ARE committed.
+/e2e/.artifacts/
+/e2e/.report/
 
 # next.js
 /.next/

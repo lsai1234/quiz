@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { StatusBadge, statusLabel } from './OrdersList'
+import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
 import { Button, Card } from '@/components/system'
 
 
@@ -103,7 +103,7 @@ export function OrderDetail({ id }: { id: string }) {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{order.id}</h1>
-          <p className="text-[11px] text-[var(--ink-3)]">{order.channel} · {order.email ?? 'guest'} · {new Date(order.createdAt).toLocaleString()}</p>
+          <p className="text-[11px] text-[var(--ink-3)]">{order.channel} · {order.email ?? 'guest'} · {formatStamp(order.createdAt)}</p>
         </div>
         <StatusBadge status={order.status} />
       </div>
@@ -218,7 +218,7 @@ export function OrderDetail({ id }: { id: string }) {
           {order.events.slice().reverse().map((e, i) => (
             <div key={i} className="text-[11px] text-[var(--ink-3)] flex gap-2">
               <span className="text-[var(--ink-2)] font-semibold whitespace-nowrap">{statusLabel(e.type)}</span>
-              <span>{new Date(e.at).toLocaleString()}</span>
+              <span>{formatStamp(e.at)}</span>
               {e.detail && <span className="truncate">· {e.detail}</span>}
             </div>
           ))}

@@ -186,9 +186,16 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
   useEffect(() => {
     if (minted.current) return
     minted.current = true
-    let live = true
-    mintShareUrl(payload).then(({ url }) => { if (live) setLink(url) })
-    return () => { live = false }
+    /* No `live` flag here, deliberately.
+       Pairing a one-shot ref guard with a cleanup that cancels the result is a
+       contradiction: Strict Mode runs the effect, cleans it up, and runs it
+       again, so the first call's cleanup cancelled the only mint the guard
+       would ever allow. The short link came back and was thrown away, and every
+       share in development handed over the ~2,600-character fallback URL with
+       the whole stack in its query string. React 18+ does not warn about a
+       setState on an unmounted component, so landing it unconditionally is
+       both simpler and correct. */
+    mintShareUrl(payload).then(({ url }) => setLink(url))
   }, [payload])
 
   useEffect(() => {

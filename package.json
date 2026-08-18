@@ -11,7 +11,12 @@
     "start": "next start",
     "test": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js --coverage"
+    "test:coverage": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js --coverage",
+    "e2e": "playwright test --config e2e/playwright.config.ts",
+    "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
+    "e2e:report": "playwright show-report e2e/.report",
+    "e2e:update-snapshots": "playwright test --config e2e/playwright.config.ts --update-snapshots",
+    "e2e:reset": "rm -rf .data/e2e.db e2e/.artifacts e2e/.report"
   },
   "dependencies": {
     "@types/canvas-confetti": "^1.9.0",
@@ -29,6 +34,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

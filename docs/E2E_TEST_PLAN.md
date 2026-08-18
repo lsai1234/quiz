@@ -1,5 +1,11 @@
 # End-to-end test plan
 
+> **Doing this by hand? Run [`E2E_AUTOMATED_PLAN.md`](./E2E_AUTOMATED_PLAN.md) first.**
+> `npm run e2e` walks every journey in this document that does not need money or a
+> supplier — the whole of phase A, and the parts of C that are not about Stripe
+> itself — in about ten minutes, with no keys. What is left for you here is the
+> half that genuinely needs a card, an address and a warehouse.
+
 Everything to walk before the first real parcel ships, in the order that makes each step
 cheap to debug. Written for a founder with a PowerBody **sandbox** account: sandbox
 products, sandbox stock, real code, no money and no parcels until the very last phase.

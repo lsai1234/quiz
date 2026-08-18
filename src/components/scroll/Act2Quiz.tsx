@@ -186,6 +186,16 @@ const SAFETY_DATA: Array<{ id: SafetyFlag; label: string }> = [
   { id: 'medication', label: 'On prescription medication' },
 ]
 
+// Age brackets. The id is a range and the label is prose ("Under 25"), so this
+// has to be looked up like any other answer rather than printed raw — see the
+// "You" row in `reviewRows`.
+const AGE_DATA: Array<{ id: AgeBracket; label: string }> = [
+  { id: '16-24', label: 'Under 25' },
+  { id: '25-34', label: '25–34' },
+  { id: '35-44', label: '35–44' },
+  { id: '45+',   label: '45+' },
+]
+
 // Bodyweight bands (optional) — scale weight-sensitive dosing (protein). Bands,
 // never an exact figure.
 const WEIGHT_DATA: Array<{ id: WeightBand; label: string }> = [
@@ -939,7 +949,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       const labels = WORKOUT_ADDON_DATA.filter((w) => (answers.workoutAddOns ?? []).includes(w.id)).map((w) => w.label)
       rows.push({ label: 'Workout drinks', value: labels.join(', '), edit: 'workoutAddOns' })
     }
-    if (localAge) rows.push({ label: 'You', value: [localName.trim(), localAge, labelOf(WEIGHT_DATA, localWeight || null)].filter(Boolean).join(' · '), edit: 'personal' })
+    if (localAge) rows.push({ label: 'You', value: [localName.trim(), labelOf(AGE_DATA, localAge), labelOf(WEIGHT_DATA, localWeight || null)].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
       const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
       if (t) rows.push({ label: 'Training', value: t, edit: 'frequency' })
@@ -1353,12 +1363,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               <div>
                 <label className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block" style={{ fontFamily: 'var(--font-display)' }}>Age</label>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {([
-                    { id: '16-24' as AgeBracket, label: 'Under 25' },
-                    { id: '25-34' as AgeBracket, label: '25–34' },
-                    { id: '35-44' as AgeBracket, label: '35–44' },
-                    { id: '45+'  as AgeBracket, label: '45+' },
-                  ]).map(({ id: aid, label }) => (
+                  {AGE_DATA.map(({ id: aid, label }) => (
                     <AnswerOption key={`age-${aid}`} label={label} multi selected={localAge === aid} onClick={() => setLocalAge(aid)} />
                   ))}
                 </div>
