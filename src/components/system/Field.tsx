@@ -56,6 +56,13 @@ export interface FieldProps {
   compact?: boolean
   /** `right` for numbers, so a column of figures lines up on its units. */
   align?: 'left' | 'right'
+  /**
+   * Keep the label as the control's name but do not draw it — for a control
+   * sitting under a heading that already says the same words. Unlike `compact`
+   * this changes nothing about the control's size, and unlike dropping the label
+   * it leaves the name intact.
+   */
+  hideLabel?: boolean
   className?: string
 }
 
@@ -97,6 +104,7 @@ export function Field({
   required,
   disabled,
   compact,
+  hideLabel,
   className,
   children,
 }: FieldProps & { id: string; children: ReactNode }) {
@@ -129,6 +137,7 @@ export function Field({
     >
       <label
         htmlFor={id}
+        className={hideLabel ? 'sr-only' : undefined}
         style={{
           fontSize: 'var(--text-micro)',
           fontWeight: 'var(--weight-strong)',

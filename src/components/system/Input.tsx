@@ -42,6 +42,7 @@ export function Input({
   disabled,
   compact,
   align,
+  hideLabel,
   className,
   prefix,
   suffix,
@@ -49,7 +50,7 @@ export function Input({
   ...rest
 }: InputProps) {
   const id = useId()
-  const field = { label, hint, error, required, disabled, compact, align, className }
+  const field = { label, hint, error, required, disabled, compact, align, hideLabel, className }
   const surface = controlSurface(Boolean(error), { compact, align })
   // A unit means the box is a wrapper with the input inside it, which changes
   // which element is the outermost thing this renders — and so which one the

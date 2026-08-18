@@ -5,8 +5,10 @@ import { ProductEditor } from '@/components/portal/ProductEditor'
 import { AiSuggestPanel } from '@/components/portal/AiSuggestPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
+import { Badge, Button, Card, Input } from '@/components/system'
 
-const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
+/** Readiness status → the system's semantic tone. `Badge` owns the colours. */
+const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: 'positive', warn: 'attention', fail: 'critical' }
 
 interface Row { product: CatalogueProduct; readiness: ProductReadiness }
 
@@ -36,51 +38,99 @@ export default function ProductsPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Catalogue</h2>
-        <button
+        <h2 style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+          Catalogue
+        </h2>
+        <Button
+          variant="primary"
+          size="sm"
+          icon="sparkle"
           onClick={() => setShowAi(true)}
           disabled={notReady === 0}
-          className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--accent)] text-[var(--ink-on-accent)] active:scale-95 transition-all disabled:opacity-40"
-          style={{ fontFamily: 'var(--font-display)' }}
           title={notReady === 0 ? 'Everything is already tagged' : `Get AI tag suggestions for ${notReady} product(s)`}
         >
-          {`✨ Suggest tags${notReady ? ` (${notReady})` : ''}`}
-        </button>
+          {`Suggest tags${notReady ? ` (${notReady})` : ''}`}
+        </Button>
       </div>
 
-      <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search products…" className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-2" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }} />
+      <div className="mb-2">
+        <Input
+          label="Search products"
+          compact
+          className="w-full"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search products…"
+        />
+      </div>
+      {/* Filters, not tabs: they narrow one list rather than switching between
+          panels, so `aria-pressed` is the state that fits. */}
       <div className="flex flex-wrap gap-2 mb-4">
         {(['all', 'attention', 'sub'] as const).map((f) => (
-          <button key={f} onClick={() => setFilter(f)} className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
-            style={{ background: filter === f ? 'var(--accent)' : 'var(--surface-2)', color: filter === f ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
+          <Button
+            key={f}
+            size="sm"
+            variant={filter === f ? 'primary' : 'secondary'}
+            aria-pressed={filter === f}
+            onClick={() => setFilter(f)}
+          >
             {f === 'all' ? `All (${rows?.length ?? 0})` : f === 'attention' ? `Needs attention (${notReady})` : 'Subscription'}
-          </button>
+          </Button>
         ))}
       </div>
 
       {rows === null ? (
-        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
+        <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
       ) : (
-        <div className="space-y-2">
+        <ul className="space-y-2">
           {filtered.map(({ product, readiness }) => (
-            <button key={product.id} onClick={() => setEditing(product)} className="w-full text-left rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 active:scale-[0.99] transition-all">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[readiness.overall] }} />
-                    <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product.title}</p>
-                  </div>
-                  <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+            // `solid`: a catalogue is long and this is a scrolling list, which
+            // is the case translucency is not paid for.
+            <Card as="li" key={product.id} solid interactive padding="none">
+              {/* The whole row is the control — `padding="none"` on the card and
+                  a full-width button inside it, so the tap target is the card
+                  rather than the words in the middle of it. */}
+              <Button
+                variant="ghost"
+                fullWidth
+                onClick={() => setEditing(product)}
+                className="justify-between text-left"
+                iconRight="chevron-right"
+              >
+                <span className="min-w-0">
+                  <span className="flex items-center gap-2">
+                    <span
+                      className="truncate"
+                      style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}
+                    >
+                      {product.title}
+                    </span>
+                    {/* Only when it is not fine. A green dot on every row in a
+                        catalogue tells you nothing about which one to open. */}
+                    {readiness.overall !== 'ok' && (
+                      <Badge tone={TONE[readiness.overall]} dot>
+                        {readiness.overall === 'fail' ? 'Not ready' : 'Needs a look'}
+                      </Badge>
+                    )}
+                  </span>
+                  <span
+                    className="block"
+                    style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}
+                  >
                     {product.category} · {product.subscriptionEligible ? 'subscribable' : 'one-off'} · {product.servings}d
                     {product.cost == null && ' · no cost set'}
-                  </p>
-                </div>
-                <span className="text-xs font-bold text-[var(--ink-3)]">Edit →</span>
-              </div>
-            </button>
+                  </span>
+                </span>
+              </Button>
+            </Card>
           ))}
-          {filtered.length === 0 && <p className="text-sm text-[var(--ink-3)] text-center py-8">No products match.</p>}
-        </div>
+          {filtered.length === 0 && (
+            <p className="text-center" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
+              No products match.
+            </p>
+          )}
+        </ul>
       )}
 
       {editing && (

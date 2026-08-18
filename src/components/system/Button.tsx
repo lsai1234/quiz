@@ -144,6 +144,45 @@ const PAINT: Record<Variant, CSSProperties> = {
   },
 }
 
+/**
+ * The button's paint and shape, for the one thing a `<button>` cannot be: a link.
+ *
+ * A few places in the hub navigate rather than act — "Edit this bundle", "Open
+ * the live page" — and those have to stay anchors. A `<button>` with a router
+ * push in it loses the middle-click, the open-in-new-tab and the status bar, and
+ * announces itself as a button to someone who is looking for a link.
+ *
+ * So the element stays the caller's (a Next `<Link>`, an `<a>`) and only the
+ * surface comes from here. Spread both halves onto it. Everything else a Button
+ * does — the sheen, the focus ring, the resting shadow — rides on the class
+ * names, so a link styled this way behaves like the buttons beside it.
+ */
+export function buttonSurface(
+  variant: Variant = 'secondary',
+  size: Size = 'md',
+): { className: string; style: CSSProperties } {
+  const s = SIZES[size]
+  return {
+    className: [
+      'system-control system-sheen inline-flex items-center justify-center',
+      variant === 'destructive' ? 'system-focus-critical' : 'system-focus',
+    ].join(' '),
+    style: {
+      padding: s.padding,
+      fontSize: s.font,
+      lineHeight: 'var(--leading-tight)',
+      borderRadius: s.radius,
+      minHeight: s.minHeight,
+      gap: s.gap,
+      fontFamily: 'var(--font-display)',
+      fontWeight: 'var(--weight-strong)',
+      letterSpacing: 'var(--tracking-title)',
+      textDecoration: 'none',
+      ...PAINT[variant],
+    },
+  }
+}
+
 export function Button({
   variant = 'secondary',
   size = 'md',

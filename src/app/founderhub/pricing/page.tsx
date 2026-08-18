@@ -14,6 +14,7 @@ import { deriveFreeDeliveryThreshold } from '@/lib/pricing/delivery'
 import { VatPanel } from '@/components/portal/pricing/VatPanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Budget, StackLevel } from '@/lib/types'
+import { Badge, Button, Card, Input, Select, Tabs } from '@/components/system'
 
 
 const LEVELS: StackLevel[] = ['essentials', 'performance', 'complete']
@@ -26,9 +27,6 @@ const BUDGETS: Budget[] = ['under-30', '30-50', '50-80', '80-plus']
 
 const pct = (n: number) => Math.round(n * 1000) / 10
 const money = (n: number) => `£${n.toFixed(2)}`
-
-const INPUT_STYLE = { background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
-const SMALL_INPUT = 'w-16 px-2 py-1.5 rounded-lg text-xs text-right outline-none'
 
 type Tab = 'overview' | 'products' | 'rules'
 
@@ -93,7 +91,7 @@ export default function PricingPage() {
     return checkScenarios({ listPrice: avgPrice * n, supplierCost: avgCost * n }, draft)
   }, [draft, catalogue])
 
-  if (!draft || !cutOffs || !ladder || !typicalBox) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
+  if (!draft || !cutOffs || !ladder || !typicalBox) return <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
 
   const set = (patch: Partial<PricingConfig>) => { setDraft({ ...draft, ...patch }); setSavedFlag(false) }
   const setNested = <K extends 'delivery' | 'goodPricing' | 'introOffer' | 'vat' | 'paymentFees' | 'returns' | 'supplierAccount' | 'partners' | 'orderMix' | 'listPricing'>(
@@ -123,75 +121,68 @@ export default function PricingPage() {
     draft,
   )
 
-  return (
-    <div className="pb-10">
-      <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Pricing</h1>
-          <p className="text-sm text-[var(--ink-3)] mt-0.5">
-            Every price is <strong style={{ color: 'var(--ink-1)' }}>what we pay, doubled</strong>. This page shows what that leaves us.
-          </p>
-        </div>
-        <div className="flex gap-2 shrink-0">
-          <button onClick={reset} disabled={saving} className="text-xs font-semibold px-3 py-2 rounded-xl border border-[var(--edge)] text-[var(--ink-3)]">Reset</button>
-          <button onClick={save} disabled={saving || !dirty} className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40" style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }}>
-            {saving ? 'Saving…' : savedFlag && !dirty ? 'Saved ✓' : 'Save'}
-          </button>
-        </div>
-      </div>
-
-      {dirty && (
-        <p className="text-[11px] rounded-lg px-2.5 py-1.5 mb-3 inline-block" style={{ background: `var(--attention-fill)`, color: 'var(--tone-attention)' }}>
-          Unsaved changes — the figures below already reflect them; the live site does not.
-        </p>
-      )}
-
-      <nav className="flex gap-1.5 mb-1 mt-3">
-        {TABS.map((t) => (
-          <button key={t.id} onClick={() => setTab(t.id)}
-            className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
-            style={{ background: tab === t.id ? 'var(--accent)' : 'var(--surface-2)', color: tab === t.id ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
-            {t.label}
-          </button>
-        ))}
-      </nav>
-      <p className="text-[11px] text-[var(--ink-3)] mb-4">{TABS.find((t) => t.id === tab)!.blurb}</p>
-
-      {/* ══ OVERVIEW ═══════════════════════════════════════════════════════ */}
-      {tab === 'overview' && (
+  /**
+   * The three views, built above the return so the tablist can own them.
+   *
+   * `Tabs` renders exactly one panel and gives it the id the selected tab
+   * points at. That is the part three plain buttons could not do: the strip
+   * used to switch a conditional further down the page with nothing tying the
+   * two together, so arrow keys did nothing and a screen reader was never told
+   * which view it had landed in.
+   */
+  const PANELS: Record<Tab, React.ReactNode> = {
+    overview: (
         <div className="space-y-4">
           <CutOffs thresholds={cutOffs} introDiscount={effectiveIntroDiscount(draft)} />
           <ScenarioTable check={typicalBox} title="A typical quiz box, every way of buying it" />
           <LadderPanel check={ladder} />
         </div>
-      )}
-
-      {/* ══ PRODUCTS ═══════════════════════════════════════════════════════ */}
-      {tab === 'products' && (
+    ),
+    products: (
         <div className="space-y-4">
           {products && <ProductTable review={products} />}
 
           <Card>
-            <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)] mb-2">Price anything</p>
+            <p style={{ fontSize: 'var(--text-micro)', textTransform: 'uppercase', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', color: 'var(--ink-3)', marginBottom: 'var(--space-2)' }}>
+              Price anything
+            </p>
             <div className="grid grid-cols-2 gap-3 mb-3">
-              <Input label="PowerBody charge us" prefix="£" value={assetPrice} step="0.01" onChange={setAssetPrice} help="ex VAT" />
-              <Input label="In a box of" suffix="items" value={parcelItems} onChange={(n) => setParcelItems(Math.max(1, Math.round(n)))}
-                help={parcelItems > 1 ? 'postage shared' : 'ships on its own'} />
+              <Input
+                label="PowerBody charge us"
+                prefix="£"
+                align="right"
+                type="number"
+                step="0.01"
+                hint="ex VAT"
+                value={assetPrice}
+                onChange={(e) => setAssetPrice(parseFloat(e.target.value) || 0)}
+              />
+              <Input
+                label="In a box of"
+                suffix="items"
+                align="right"
+                type="number"
+                hint={parcelItems > 1 ? 'postage shared' : 'ships on its own'}
+                value={parcelItems}
+                onChange={(e) => setParcelItems(Math.max(1, Math.round(parseFloat(e.target.value) || 0)))}
+              />
             </div>
             <div className="grid grid-cols-3 gap-3">
               <Headline label="We charge" value={money(example.listPrice)} colour="var(--ink-1)" note={`${money(assetPrice)} × ${draft.listPricing.markupOnCost}`} small />
               <Headline label="A subscriber pays" value={money(example.subscriberPrice)} colour={'var(--accent)'} note="middle bundle" small />
               <Headline label="We keep" value={money(example.keeps)} colour={example.viable ? 'var(--tone-positive)' : 'var(--tone-critical)'} note={`${pct(example.marginPct)}% a month`} small />
             </div>
-            {example.warning && <p className="text-[11px] mt-2" style={{ color: 'var(--tone-attention)' }}>{example.warning}</p>}
+            {example.warning && (
+              <p style={{ fontSize: 'var(--text-meta)', marginTop: 'var(--space-2)', color: 'var(--tone-attention)' }}>
+                {example.warning}
+              </p>
+            )}
           </Card>
 
           <ScenarioTable check={exampleScenarios} title="…and every way that product can be bought" />
         </div>
-      )}
-
-      {/* ══ RULES ══════════════════════════════════════════════════════════ */}
-      {tab === 'rules' && (
+    ),
+    rules: (
         <div>
           <Section title="What we charge" desc="One rule for the whole catalogue: double what PowerBody charge us. Nothing here reads the brand's RRP — that is a suggestion, it varies, and some products don't have one.">
             <Num label="Multiply what we pay by" value={draft.listPricing.markupOnCost} suffix="×" onChange={(n) => setNested('listPricing', { markupOnCost: n })}
@@ -284,15 +275,47 @@ export default function PricingPage() {
                   })
                   return (
                     <div key={i} className="flex items-center gap-2">
-                      <input type="number" value={pct(o.discount)} onChange={(e) => update({ discount: (parseFloat(e.target.value) || 0) / 100 })} className={SMALL_INPUT} style={INPUT_STYLE} />
-                      <span className="text-[11px] text-[var(--ink-3)]">% off, weight</span>
-                      <input type="number" value={o.weight} onChange={(e) => update({ weight: Math.max(0, parseFloat(e.target.value) || 0) })} className={SMALL_INPUT} style={INPUT_STYLE} />
-                      <span className="text-[11px] text-[var(--ink-3)] flex-1">≈ 1 in {Math.round(total / Math.max(0.0001, o.weight))}</span>
-                      <button onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: draft.introOffer.scratchReveal.outcomes.filter((_, idx) => idx !== i) } })} className="text-[var(--ink-3)] text-sm px-1">✕</button>
+                      <Input
+                        label={`Card ${i + 1} discount`}
+                        compact
+                        align="right"
+                        suffix="%"
+                        className="w-20"
+                        type="number"
+                        value={pct(o.discount)}
+                        onChange={(e) => update({ discount: (parseFloat(e.target.value) || 0) / 100 })}
+                      />
+                      <span style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>off, weight</span>
+                      <Input
+                        label={`Card ${i + 1} weight`}
+                        compact
+                        align="right"
+                        className="w-16"
+                        type="number"
+                        value={o.weight}
+                        onChange={(e) => update({ weight: Math.max(0, parseFloat(e.target.value) || 0) })}
+                      />
+                      <span className="flex-1" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+                        ≈ 1 in {Math.round(total / Math.max(0.0001, o.weight))}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="trash"
+                        aria-label={`Remove card ${i + 1}`}
+                        onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: draft.introOffer.scratchReveal.outcomes.filter((_, idx) => idx !== i) } })}
+                      />
                     </div>
                   )
                 })}
-                <button onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: [...draft.introOffer.scratchReveal.outcomes, { discount: 0.1, weight: 10 }] } })} className="text-xs font-bold" style={{ color: 'var(--accent)' }}>+ Add a card</button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="plus"
+                  onClick={() => setNested('introOffer', { scratchReveal: { ...draft.introOffer.scratchReveal, outcomes: [...draft.introOffer.scratchReveal.outcomes, { discount: 0.1, weight: 10 }] } })}
+                >
+                  Add a card
+                </Button>
               </div>
             )}
           </Section>
@@ -334,7 +357,62 @@ export default function PricingPage() {
             <Num label="Months a subscriber stays" value={draft.orderMix.averageRetentionMonths} suffix="mo" onChange={(n) => setNested('orderMix', { averageRetentionMonths: n })} />
           </Section>
         </div>
+    ),
+  }
+
+  return (
+    <div className="pb-10">
+      <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
+        <div>
+          <h1 style={{ fontSize: 'var(--text-display)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', lineHeight: 'var(--leading-tight)', color: 'var(--ink-1)' }}>
+            Pricing
+          </h1>
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+            Every price is <strong style={{ color: 'var(--ink-1)' }}>what we pay, doubled</strong>. This page shows what that leaves us.
+          </p>
+        </div>
+        <div className="flex gap-2 shrink-0">
+          <Button variant="ghost" size="sm" loading={saving} onClick={reset}>
+            Reset
+          </Button>
+          <Button variant="primary" size="sm" loading={saving} disabled={!dirty} onClick={save}>
+            {savedFlag && !dirty ? 'Saved' : 'Save'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Announced, not just coloured: the whole point of this line is that the
+          numbers on screen are not the numbers customers are being charged. */}
+      {dirty && (
+        <p role="status" style={{ marginBottom: 'var(--space-3)' }}>
+          <Badge tone="attention" icon="alert-triangle">
+            Unsaved changes — the figures below already reflect them; the live site does not.
+          </Badge>
+        </p>
       )}
+
+      {/* A real tablist. These were three buttons with nothing tying them to the
+          panel they switch, so arrow keys did nothing and a screen reader was
+          never told which view it had landed in. */}
+      <Tabs
+        label="Pricing views"
+        value={tab}
+        onChange={(id) => setTab(id as Tab)}
+        className="mt-3"
+        tabs={TABS.map((t) => ({
+          id: t.id,
+          label: t.label,
+          content: (
+            <>
+              <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginBottom: 'var(--space-4)' }}>
+                {t.blurb}
+              </p>
+              {PANELS[t.id]}
+            </>
+          ),
+        }))}
+      />
+
     </div>
   )
 }
@@ -355,8 +433,10 @@ function ScenarioTable({ check, title }: { check: ScenarioCheck; title: string }
   const tone = check.ok ? 'var(--tone-positive)' : 'var(--tone-critical)'
   return (
     <Card>
-      <p className="text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)] mb-1">{title}</p>
-      <p className="text-base font-black mb-2" style={{ color: tone, fontFamily: 'var(--font-display)' }}>
+      <p style={{ fontSize: 'var(--text-micro)', textTransform: 'uppercase', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', color: 'var(--ink-3)', marginBottom: 'var(--space-1)' }}>
+        {title}
+      </p>
+      <p style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: tone, marginBottom: 'var(--space-2)' }}>
         {check.ok ? 'Every way of buying pays' : `${check.problems.length} way${check.problems.length === 1 ? '' : 's'} of buying loses money`}
       </p>
       <div className="space-y-1">
@@ -364,14 +444,18 @@ function ScenarioTable({ check, title }: { check: ScenarioCheck; title: string }
           const bad = s.keeps < 0
           const colour = bad ? (s.promotional ? 'var(--tone-attention)' : 'var(--tone-critical)') : 'var(--tone-positive)'
           return (
-            <div key={s.id} className="flex items-baseline justify-between gap-2 py-1.5 border-b border-[var(--edge)] last:border-0">
-              <span className="text-[11px] text-[var(--ink-2)] min-w-0">
+            <div
+              key={s.id}
+              className="flex items-baseline justify-between gap-2"
+              style={{ padding: 'var(--space-2) 0', borderBottom: '1px solid var(--edge)', fontSize: 'var(--text-meta)' }}
+            >
+              <span className="min-w-0" style={{ color: 'var(--ink-2)' }}>
                 {s.label}
-                {s.discount > 0 && <span className="text-[var(--ink-3)]"> · {pct(s.discount)}% off</span>}
+                {s.discount > 0 && <span style={{ color: 'var(--ink-3)' }}> · {pct(s.discount)}% off</span>}
                 {s.promotional && bad && <span style={{ color: 'var(--tone-attention)' }}> · meant to lose, ~1 in 21</span>}
               </span>
-              <span className="text-[11px] whitespace-nowrap">
-                <span className="text-[var(--ink-3)]">pays {money(s.paid)} → </span>
+              <span className="whitespace-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ color: 'var(--ink-3)' }}>pays {money(s.paid)} → </span>
                 <strong style={{ color: colour }}>{money(s.keeps)}</strong>
               </span>
             </div>
@@ -393,8 +477,8 @@ function ProductTable({ review }: { review: CatalogueReview }) {
   return (
     <div className="space-y-3">
       <Card>
-        <p className="text-[11px] text-[var(--ink-2)] leading-relaxed">
-          <strong className="text-[var(--ink-1)]">Every price is what we pay × {review.markupOnCost}</strong>, rounded
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)' }}>
+          <strong style={{ color: 'var(--ink-1)' }}>Every price is what we pay × {review.markupOnCost}</strong>, rounded
           down to .99. Margins assume the product sits in a box with others, because that is how the quiz sells — each
           one carries a share of a single delivery rather than a whole one.
         </p>
@@ -407,7 +491,18 @@ function ProductTable({ review }: { review: CatalogueReview }) {
       </div>
 
       <Card>
-        <div className="flex text-[10px] uppercase font-bold tracking-widest text-[var(--ink-3)] pb-2 border-b border-[var(--edge)]">
+        <div
+          className="flex"
+          style={{
+            fontSize: 'var(--text-micro)',
+            textTransform: 'uppercase',
+            fontWeight: 'var(--weight-strong)',
+            letterSpacing: 'var(--tracking-eyebrow)',
+            color: 'var(--ink-3)',
+            paddingBottom: 'var(--space-2)',
+            borderBottom: '1px solid var(--edge)',
+          }}
+        >
           <span className="flex-1">Product</span>
           <span className="w-20 text-right">We pay</span>
           <span className="w-20 text-right">We charge</span>
@@ -416,15 +511,29 @@ function ProductTable({ review }: { review: CatalogueReview }) {
         </div>
         <div className="max-h-[28rem] overflow-y-auto">
           {review.rows.map((r) => (
-            <div key={r.title} className="py-2 border-b border-[var(--edge)] last:border-0">
-              <div className="flex items-baseline text-[11px]">
-                <span className="flex-1 truncate text-[var(--ink-2)] pr-2">{r.title}</span>
-                <span className="w-20 text-right text-[var(--ink-3)]">{money(r.cost)}</span>
-                <span className="w-20 text-right text-[var(--ink-1)]">{money(r.listPrice)}</span>
-                <span className="w-24 text-right text-[var(--ink-1)]">{money(r.subscriberPrice)}</span>
-                <span className="w-20 text-right font-bold" style={{ color: r.viable ? 'var(--tone-positive)' : 'var(--tone-critical)' }}>{money(r.keeps)}</span>
+            <div key={r.title} style={{ padding: 'var(--space-2) 0', borderBottom: '1px solid var(--edge)' }}>
+              <div
+                className="flex items-baseline"
+                style={{ fontSize: 'var(--text-meta)', fontVariantNumeric: 'tabular-nums' }}
+              >
+                <span className="flex-1 truncate" style={{ color: 'var(--ink-2)', paddingRight: 'var(--space-2)' }}>
+                  {r.title}
+                </span>
+                <span className="w-20 text-right" style={{ color: 'var(--ink-3)' }}>{money(r.cost)}</span>
+                <span className="w-20 text-right" style={{ color: 'var(--ink-1)' }}>{money(r.listPrice)}</span>
+                <span className="w-24 text-right" style={{ color: 'var(--ink-1)' }}>{money(r.subscriberPrice)}</span>
+                <span
+                  className="w-20 text-right"
+                  style={{ fontWeight: 'var(--weight-strong)', color: r.viable ? 'var(--tone-positive)' : 'var(--tone-critical)' }}
+                >
+                  {money(r.keeps)}
+                </span>
               </div>
-              {r.warning && <p className="text-[10px] mt-0.5" style={{ color: r.viable ? 'var(--tone-attention)' : 'var(--tone-critical)' }}>{r.warning}</p>}
+              {r.warning && (
+                <p style={{ fontSize: 'var(--text-micro)', marginTop: 'var(--space-1)', color: r.viable ? 'var(--tone-attention)' : 'var(--tone-critical)' }}>
+                  {r.warning}
+                </p>
+              )}
             </div>
           ))}
         </div>
@@ -433,34 +542,30 @@ function ProductTable({ review }: { review: CatalogueReview }) {
   )
 }
 
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4">{children}</div>
-}
-
 function Headline({ label, value, note, colour, small }: { label: string; value: string; note?: string; colour: string; small?: boolean }) {
   return (
-    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-3.5 text-center">
-      <p className="text-[10px] uppercase font-bold text-[var(--ink-3)]">{label}</p>
-      <p className={`${small ? 'text-xl' : 'text-2xl'} font-black my-0.5`} style={{ color: colour, fontFamily: 'var(--font-display)' }}>{value}</p>
-      {note && <p className="text-[10px] text-[var(--ink-3)] leading-snug">{note}</p>}
-    </div>
-  )
-}
-
-function Input({ label, value, onChange, prefix, suffix, help, step }: {
-  label: string; value: number; onChange: (n: number) => void; prefix?: string; suffix?: string; help?: string; step?: string
-}) {
-  return (
-    <label className="block">
-      <span className="text-[10px] uppercase font-bold text-[var(--ink-3)] block mb-1">{label}</span>
-      <span className="flex items-center gap-1">
-        {prefix && <span className="text-xs text-[var(--ink-3)]">{prefix}</span>}
-        <input type="number" step={step} value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-          className="w-full min-w-0 px-2 py-1.5 rounded-lg text-sm outline-none" style={INPUT_STYLE} />
-        {suffix && <span className="text-xs text-[var(--ink-3)]">{suffix}</span>}
-      </span>
-      {help && <span className="text-[10px] text-[var(--ink-3)] block mt-0.5">{help}</span>}
-    </label>
+    <Card elevation={2} padding="tight" className="text-center">
+      <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', textTransform: 'uppercase', letterSpacing: 'var(--tracking-eyebrow)', color: 'var(--ink-3)' }}>
+        {label}
+      </p>
+      <p
+        style={{
+          fontSize: small ? 'var(--text-title)' : 'var(--text-display)',
+          fontWeight: 'var(--weight-display)',
+          fontFamily: 'var(--font-display)',
+          // A column of figures that changes width as the numbers change is a
+          // column you re-read every time.
+          fontVariantNumeric: 'tabular-nums',
+          color: colour,
+          margin: 'var(--space-1) 0',
+        }}
+      >
+        {value}
+      </p>
+      {note && (
+        <p style={{ fontSize: 'var(--text-micro)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' }}>{note}</p>
+      )}
+    </Card>
   )
 }
 
@@ -472,70 +577,140 @@ function TierEditor({ tiers, onChange, onAdd, onRemove }: {
 }) {
   return (
     <div className="space-y-2">
-      {tiers.length === 0 && <p className="text-[11px] text-[var(--ink-3)]">None set.</p>}
+      {tiers.length === 0 && <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>None set.</p>}
       {tiers.map((t, i) => (
         <div key={t.id} className="flex items-center gap-2">
-          <input value={t.label} onChange={(e) => onChange(i, { label: e.target.value })} className="flex-1 min-w-0 px-2 py-1.5 rounded-lg text-xs outline-none" style={INPUT_STYLE} />
-          <span className="text-[11px] text-[var(--ink-3)]">spend £</span>
-          <input type="number" value={t.minSubtotal ?? 0} onChange={(e) => onChange(i, { minSubtotal: parseFloat(e.target.value) })} className="w-14 px-2 py-1.5 rounded-lg text-xs text-right outline-none" style={INPUT_STYLE} />
-          <input type="number" value={pct(t.discountPct)} onChange={(e) => onChange(i, { discountPct: parseFloat(e.target.value) / 100 })} className="w-12 px-2 py-1.5 rounded-lg text-xs text-right outline-none" style={INPUT_STYLE} />
-          <span className="text-[11px] text-[var(--ink-3)]">% off</span>
-          <button onClick={() => onRemove(i)} className="text-[var(--ink-3)] text-sm px-1">✕</button>
+          <Input
+            label={`Tier ${i + 1} name`}
+            compact
+            className="flex-1 min-w-0"
+            value={t.label}
+            onChange={(e) => onChange(i, { label: e.target.value })}
+          />
+          <span style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>spend</span>
+          <Input
+            label={`Tier ${i + 1} minimum spend`}
+            compact
+            align="right"
+            prefix="£"
+            className="w-20"
+            type="number"
+            value={t.minSubtotal ?? 0}
+            onChange={(e) => onChange(i, { minSubtotal: parseFloat(e.target.value) })}
+          />
+          <Input
+            label={`Tier ${i + 1} discount`}
+            compact
+            align="right"
+            suffix="%"
+            className="w-20"
+            type="number"
+            value={pct(t.discountPct)}
+            onChange={(e) => onChange(i, { discountPct: parseFloat(e.target.value) / 100 })}
+          />
+          <span style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>off</span>
+          <Button variant="ghost" size="sm" icon="trash" aria-label={`Remove tier ${i + 1}`} onClick={() => onRemove(i)} />
         </div>
       ))}
-      <button onClick={onAdd} className="text-xs font-bold mt-1" style={{ color: 'var(--accent)' }}>+ Add a tier</button>
+      <Button variant="ghost" size="sm" icon="plus" onClick={onAdd}>
+        Add a tier
+      </Button>
     </div>
   )
 }
 
-function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
+/**
+ * One setting: what it is on the left, the control on the right, and what it
+ * does underneath.
+ *
+ * Layout only — it draws no label of its own. The control inside is a compact
+ * field, which takes its accessible name from the same string this row shows,
+ * so the row reads as one thing and a screen reader still hears the name.
+ */
+function SettingRow({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
   return (
-    <div className="py-2.5 border-b border-[var(--edge)] last:border-0">
+    <div style={{ padding: 'var(--space-3) 0', borderBottom: '1px solid var(--edge)' }}>
       <div className="flex items-center justify-between gap-3">
-        <span className="text-sm font-semibold text-[var(--ink-1)]">{label}</span>
-        <span className="flex items-center gap-1 flex-shrink-0">{children}</span>
+        <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+          {label}
+        </span>
+        <span className="flex items-center gap-2 shrink-0">{children}</span>
       </div>
-      {help && <p className="text-[11px] text-[var(--ink-3)] mt-1 leading-snug pr-24">{help}</p>}
+      {help && (
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+          {help}
+        </p>
+      )}
     </div>
   )
 }
 
 function Num({ label, value, onChange, suffix, help }: { label: string; value: number; onChange: (n: number) => void; suffix?: string; help?: string }) {
   return (
-    <Field label={label} help={help}>
-      <input type="number" value={value} onChange={(e) => onChange(parseFloat(e.target.value) || 0)} className="w-20 px-2 py-1.5 rounded-lg text-sm text-right outline-none" style={INPUT_STYLE} />
-      {suffix && <span className="text-[11px] text-[var(--ink-3)] w-16">{suffix}</span>}
-    </Field>
+    <SettingRow label={label} help={help}>
+      <Input
+        label={label}
+        compact
+        align="right"
+        className="w-24"
+        type="number"
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+      />
+      {suffix && (
+        <span className="w-16" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }} aria-hidden>
+          {suffix}
+        </span>
+      )}
+    </SettingRow>
   )
 }
 
+/**
+ * An on/off setting.
+ *
+ * A button with `aria-pressed` rather than a `Checkbox`, because the row already
+ * shows the name to the left of it: a checkbox would draw that name a second
+ * time, or lose the layout that makes 30 settings readable in a column.
+ */
 function Toggle({ label, value, onChange, help }: { label: string; value: boolean; onChange: (v: boolean) => void; help?: string }) {
   return (
-    <Field label={label} help={help}>
-      <button onClick={() => onChange(!value)} className="text-xs font-bold px-3 py-1.5 rounded-lg"
-        style={{ background: value ? 'var(--accent)' : 'var(--surface-2)', color: value ? 'var(--ground-base)' : 'var(--ink-3)', border: '1px solid var(--edge)' }}>
+    <SettingRow label={label} help={help}>
+      <Button
+        size="sm"
+        variant={value ? 'primary' : 'secondary'}
+        aria-label={label}
+        aria-pressed={value}
+        onClick={() => onChange(!value)}
+      >
         {value ? 'On' : 'Off'}
-      </button>
-    </Field>
+      </Button>
+    </SettingRow>
   )
 }
 
 function Choice({ label, value, options, onChange, help }: { label: string; value: string; options: { v: string; l: string }[]; onChange: (v: string) => void; help?: string }) {
   return (
-    <Field label={label} help={help}>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="px-2 py-1.5 rounded-lg text-xs outline-none" style={INPUT_STYLE}>
+    <SettingRow label={label} help={help}>
+      <Select label={label} compact value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-      </select>
-    </Field>
+      </Select>
+    </SettingRow>
   )
 }
 
 function Section({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 mb-4">
-      <p className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{title}</p>
-      {desc && <p className="text-[11px] text-[var(--ink-3)] mb-2 mt-0.5 leading-snug">{desc}</p>}
-      <div className="mt-1">{children}</div>
-    </div>
+    <Card as="section" className="mb-4">
+      <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+        {title}
+      </p>
+      {desc && (
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)', marginBottom: 'var(--space-2)' }}>
+          {desc}
+        </p>
+      )}
+      <div>{children}</div>
+    </Card>
   )
 }

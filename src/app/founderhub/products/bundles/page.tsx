@@ -7,8 +7,10 @@ import { bundleSlug } from '@/lib/bundles/resolve'
 import type { BundlePriceSummary } from '@/lib/bundles/pricing'
 import type { BundleReadiness, CheckStatus } from '@/lib/bundles/readiness'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { Badge, Button, Card, buttonSurface } from '@/components/system'
 
-const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
+/** Readiness status → the system's semantic tone. `Badge` owns the colours. */
+const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: 'positive', warn: 'attention', fail: 'critical' }
 
 interface Row {
   bundle: ResolvedBundle
@@ -81,119 +83,176 @@ export default function PortalBundlesPage() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-1">
-        <h2 className="text-lg font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Bundles</h2>
-        <Link
-          href="/founderhub/products/bundles/new"
-          className="text-xs font-bold px-3 py-2 rounded-xl bg-[var(--accent)] text-[var(--ink-on-accent)] active:scale-95 transition-all"
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          + New bundle
+        <h2 style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+          Bundles
+        </h2>
+        {/* A link, not a button: it goes somewhere, and someone expecting to
+            middle-click it should be able to. */}
+        <Link href="/founderhub/products/bundles/new" {...buttonSurface('primary', 'sm')}>
+          New bundle
         </Link>
       </div>
-      <p className="text-[11px] text-[var(--ink-3)] mb-4">
+      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginBottom: 'var(--space-4)' }}>
         Prebuilt bundles shown in the shop, top to bottom. Reorder, publish, edit or remove them.
       </p>
 
       {error && (
-        <div className="mb-3 rounded-xl border border-[var(--tone-critical)]/30 bg-[var(--tone-critical)]/8 px-4 py-2.5 text-xs text-[var(--tone-critical)]">
-          {error}
+        <div className="mb-3">
+          <Card tone="critical" padding="tight">
+            <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
+              {error}
+            </p>
+          </Card>
         </div>
       )}
 
       {rows === null ? (
-        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
+        <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
       ) : (
         <div className="space-y-2">
           {visible.map((row, i) => {
             const { bundle, price, readiness } = row
             const isOpen = expanded === bundle.slug
             return (
-              <div key={bundle.slug} className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] overflow-hidden">
-                <div className="p-4">
+              <Card key={bundle.slug} solid>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[readiness.overall] }} />
-                        <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{bundle.name}</p>
-                        {!bundle.published && (
-                          <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ color: 'var(--ink-3)', border: '1px solid var(--edge-strong)' }}>Draft</span>
+                        <p className="truncate" style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                          {bundle.name}
+                        </p>
+                        {readiness.overall !== 'ok' && (
+                          <Badge tone={TONE[readiness.overall]} dot>
+                            {readiness.overall === 'fail' ? 'Not ready' : 'Needs a look'}
+                          </Badge>
                         )}
-                        {bundle.custom && (
-                          <span className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-full" style={{ color: 'var(--accent)', background: 'var(--accent-fill)' }}>Custom</span>
-                        )}
+                        {!bundle.published && <Badge>Draft</Badge>}
+                        {bundle.custom && <Badge tone="accent">Custom</Badge>}
                       </div>
-                      <p className="text-[11px] text-[var(--ink-3)] mt-1">
+                      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                         {bundle.seriesName} · {formatGBP(price.price)}
                         {price.saving > 0 && ` · save ${formatGBP(price.saving)}`} · {bundle.blueprint.slots.length} products
-                        {!readiness.sellable && ' · ⚠ product unavailable'}
+                        {!readiness.sellable && ' · product unavailable'}
                       </p>
                     </div>
 
-                    {/* Reorder */}
-                    <div className="flex flex-col gap-1 flex-shrink-0">
-                      <button onClick={() => move(bundle.slug, -1)} disabled={i === 0 || !!busy} aria-label="Move up" className="w-7 h-6 rounded-lg text-xs disabled:opacity-30" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>↑</button>
-                      <button onClick={() => move(bundle.slug, 1)} disabled={i === visible.length - 1 || !!busy} aria-label="Move down" className="w-7 h-6 rounded-lg text-xs disabled:opacity-30" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}>↓</button>
+                    {/* Reorder. Named per bundle: a page of twenty rows all
+                        offering "Move up" is a list nobody can navigate. */}
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="chevron-up"
+                        aria-label={`Move ${bundle.name} up`}
+                        onClick={() => move(bundle.slug, -1)}
+                        disabled={i === 0 || !!busy}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="chevron-down"
+                        aria-label={`Move ${bundle.name} down`}
+                        onClick={() => move(bundle.slug, 1)}
+                        disabled={i === visible.length - 1 || !!busy}
+                      />
                     </div>
                   </div>
 
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-2 mt-3">
-                    <button
-                      onClick={() => post({ action: 'publish', slug: bundle.slug, published: !bundle.published })}
+                    <Button
+                      size="sm"
+                      variant={bundle.published ? 'secondary' : 'primary'}
                       disabled={!!busy}
-                      className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg"
-                      style={{
-                        background: bundle.published ? 'var(--surface-2)' : 'var(--accent)',
-                        color: bundle.published ? 'var(--ink-3)' : 'var(--ground-base)',
-                        border: '1px solid var(--edge)',
-                        fontFamily: 'var(--font-display)',
-                      }}
+                      aria-label={bundle.published ? `Unpublish ${bundle.name}` : `Publish ${bundle.name}`}
+                      onClick={() => post({ action: 'publish', slug: bundle.slug, published: !bundle.published })}
                     >
                       {bundle.published ? 'Unpublish' : 'Publish'}
-                    </button>
-                    <Link href={`/founderhub/products/bundles/${bundle.slug}`} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>Edit</Link>
-                    <Link href={`/bundles/${bundle.slug}`} target="_blank" className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>Preview ↗</Link>
-                    <button onClick={() => duplicate(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>Duplicate</button>
-                    <button onClick={() => setExpanded(isOpen ? null : bundle.slug)} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-display)' }}>{isOpen ? 'Hide checks' : 'Checks'}</button>
+                    </Button>
+                    <Link
+                      href={`/founderhub/products/bundles/${bundle.slug}`}
+                      aria-label={`Edit ${bundle.name}`}
+                      {...buttonSurface('secondary', 'sm')}
+                    >
+                      Edit
+                    </Link>
+                    <Link
+                      href={`/bundles/${bundle.slug}`}
+                      target="_blank"
+                      aria-label={`Preview ${bundle.name} in a new tab`}
+                      {...buttonSurface('secondary', 'sm')}
+                    >
+                      Preview
+                    </Link>
+                    <Button size="sm" disabled={!!busy} aria-label={`Duplicate ${bundle.name}`} onClick={() => duplicate(bundle.slug, bundle.name)}>
+                      Duplicate
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-expanded={isOpen}
+                      aria-label={`${isOpen ? 'Hide' : 'Show'} readiness checks for ${bundle.name}`}
+                      onClick={() => setExpanded(isOpen ? null : bundle.slug)}
+                    >
+                      {isOpen ? 'Hide checks' : 'Checks'}
+                    </Button>
                     <div className="flex-1" />
-                    <button onClick={() => remove(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>Remove</button>
+                    <Button variant="ghost" size="sm" disabled={!!busy} aria-label={`Remove ${bundle.name} from the shop`} onClick={() => remove(bundle.slug, bundle.name)}>
+                      Remove
+                    </Button>
                     {bundle.custom && (
-                      <button onClick={() => del(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>Delete</button>
+                      // Destructive, because it is: remove hides, delete cannot
+                      // be undone, and the two used to look identical.
+                      <Button variant="destructive" size="sm" disabled={!!busy} aria-label={`Permanently delete ${bundle.name}`} onClick={() => del(bundle.slug, bundle.name)}>
+                        Delete
+                      </Button>
                     )}
                   </div>
 
                   {isOpen && (
-                    <div className="mt-3 pt-3 space-y-1.5" style={{ borderTop: '1px solid var(--edge)' }}>
+                    <ul className="mt-3 pt-3 space-y-1.5" style={{ borderTop: '1px solid var(--edge)' }}>
                       {readiness.checks.map((c) => (
-                        <div key={c.id} className="flex items-center gap-2 text-[11px]">
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[c.status] }} />
-                          <span className="text-[var(--ink-2)] font-semibold">{c.label}</span>
-                          {c.detail && <span className="text-[var(--ink-3)]">— {c.detail}</span>}
-                        </div>
+                        <li key={c.id} className="flex items-center gap-2" style={{ fontSize: 'var(--text-meta)' }}>
+                          <Badge tone={TONE[c.status]} dot>
+                            {c.label}
+                          </Badge>
+                          {c.detail && <span style={{ color: 'var(--ink-3)' }}>{c.detail}</span>}
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
-                </div>
-              </div>
+              </Card>
             )
           })}
-          {visible.length === 0 && <p className="text-sm text-[var(--ink-3)] text-center py-8">No bundles yet.</p>}
+          {visible.length === 0 && (
+            <p className="text-center" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
+              No bundles yet.
+            </p>
+          )}
 
           {/* Removed bundles — restorable */}
           {removed.length > 0 && (
             <div className="mt-6">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--ink-3)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Removed</p>
+              <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 'var(--space-2)' }}>
+                Removed
+              </p>
               <div className="space-y-2">
                 {removed.map(({ bundle }) => (
-                  <div key={bundle.slug} className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-[var(--ink-3)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{bundle.name}</p>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button onClick={() => post({ action: 'restore', slug: bundle.slug })} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }}>Restore</button>
+                  <Card key={bundle.slug} solid className="flex items-center justify-between gap-3">
+                    <p className="truncate" style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-3)' }}>
+                      {bundle.name}
+                    </p>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button variant="primary" size="sm" disabled={!!busy} aria-label={`Restore ${bundle.name}`} onClick={() => post({ action: 'restore', slug: bundle.slug })}>
+                        Restore
+                      </Button>
                       {bundle.custom && (
-                        <button onClick={() => del(bundle.slug, bundle.name)} disabled={!!busy} className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg" style={{ color: 'var(--tone-critical)', fontFamily: 'var(--font-display)' }}>Delete</button>
+                        <Button variant="destructive" size="sm" disabled={!!busy} aria-label={`Permanently delete ${bundle.name}`} onClick={() => del(bundle.slug, bundle.name)}>
+                          Delete
+                        </Button>
                       )}
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </div>

@@ -169,6 +169,7 @@ hierarchy collapses into two.
 | `Select` | Native `<select>`, styled. Same label/hint/error shell, same `compact`. |
 | `Textarea` | The same box, opened up. `rows`; no `compact` — a paragraph does not fit a table row. |
 | `Checkbox` | The one control whose name sits beside it. Drawn box, real `<input type="checkbox">` underneath. |
+| `buttonSurface()` | Not a component — the button's paint, for the few places that must stay a link. |
 | `Modal` | + `ModalHeader`/`Body`/`Footer`. Focus-trapped, Escape, scroll lock. |
 | `Badge` | `neutral`/`accent`/`positive`/`attention`/`critical`/`info`; `soft`/`solid`. |
 | `Tabs` | Real tablist: roving tabindex, arrow keys, Home/End. |
@@ -350,6 +351,12 @@ Two things it does not do:
 `className` goes on the box: on the control normally, and on the wrapper when
 `prefix` or `suffix` means the wrapper is the box. Width is the only thing that
 belongs there.
+
+`hideLabel` is the smaller cousin of `compact` and lives on every field: it keeps
+the name and drops only the drawing of it, for a control sitting under a heading
+that already says the same words. `Checkbox` takes it too. Reach for `compact`
+when the field must also get smaller, and `hideLabel` when only the label is in
+the way.
 
 Both variants are on `/styleguide`, side by side, under **Compact fields**.
 

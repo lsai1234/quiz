@@ -32,13 +32,14 @@ export function Select({
   disabled,
   compact,
   align,
+  hideLabel,
   className,
   children,
   ref,
   ...rest
 }: SelectProps) {
   const id = useId()
-  const field = { label, hint, error, required, disabled, compact, align, className }
+  const field = { label, hint, error, required, disabled, compact, align, hideLabel, className }
 
   return (
     <Field id={id} {...field}>

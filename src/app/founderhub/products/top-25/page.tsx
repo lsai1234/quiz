@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ProductEditor } from '@/components/portal/ProductEditor'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
+import { Badge, Button, Card, Input } from '@/components/system'
 
-const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
+/** Readiness status → the system's semantic tone. `Badge` owns the colours. */
+const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: 'positive', warn: 'attention', fail: 'critical' }
 
 /** What the roster API reports about a product's economics. */
 type PriceAudit = {
@@ -125,26 +127,33 @@ export default function TopProductsPage() {
             const p = slot.product
             const verdict = slot.price
             return (
-              <div key={slot.productId} className="rounded-2xl border p-3.5"
-                style={{ background: 'var(--surface-1)', borderColor: !p ? `var(--critical-line)` : 'var(--edge)' }}>
+              <Card key={slot.productId} solid padding="tight" tone={!p ? 'critical' : undefined}>
                 <div className="flex items-start gap-3">
-                  <span className="text-sm font-black w-6 text-right shrink-0" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>{slot.rank}</span>
+  <span className="w-6 text-right shrink-0" style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', color: 'var(--accent)' }}>
+                    {slot.rank}
+                  </span>
 
                   <div className="min-w-0 flex-1">
                     {p ? (
                       <>
                         <div className="flex items-center gap-2">
-                          {slot.readiness && <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: DOT[slot.readiness.overall] }} />}
-                          <button onClick={() => setEditing(p)} className="text-sm font-bold text-[var(--ink-1)] truncate underline decoration-dotted" style={{ fontFamily: 'var(--font-display)' }}>
-                            {p.title}
-                          </button>
+                          <Button variant="ghost" size="sm" className="min-w-0" aria-label={`Edit ${p.title}`} onClick={() => setEditing(p)}>
+                            <span className="truncate">{p.title}</span>
+                          </Button>
+                          {/* Only when it is not fine: a green dot on every row
+                              says nothing about which one needs opening. */}
+                          {slot.readiness && slot.readiness.overall !== 'ok' && (
+                            <Badge tone={TONE[slot.readiness.overall]} dot>
+                              {slot.readiness.overall === 'fail' ? 'Not ready' : 'Needs a look'}
+                            </Badge>
+                          )}
                         </div>
-                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                           {p.category} · {p.subscriptionEligible ? 'subscribable' : 'one-off'} · {p.servings} servings ·{' '}
                           {money(p.basePrice)}{p.cost != null ? ` · costs ${money(p.cost)}` : ' · no cost set'}
                         </p>
                         {verdict && (
-                          <p className="text-[11px] mt-1" style={{ color: !verdict.viable ? 'var(--tone-critical)' : !verdict.scenariosOk ? 'var(--tone-attention)' : 'var(--tone-positive)' }}>
+                          <p style={{ fontSize: 'var(--text-meta)', marginTop: 'var(--space-1)', color: !verdict.viable ? 'var(--tone-critical)' : !verdict.scenariosOk ? 'var(--tone-attention)' : 'var(--tone-positive)' }}>
                             {verdict.viable
                               ? `We keep ${money(verdict.keeps)} a month (${pct(verdict.marginPct)})`
                               : 'Loses money as a stack line'}
@@ -153,25 +162,48 @@ export default function TopProductsPage() {
                           </p>
                         )}
                         {slot.readiness && slot.readiness.overall !== 'ok' && (
-                          <p className="text-[11px] mt-1" style={{ color: DOT[slot.readiness.overall] }}>
+                          <p style={{ fontSize: 'var(--text-meta)', marginTop: 'var(--space-1)', color: slot.readiness.overall === 'fail' ? 'var(--tone-critical)' : 'var(--tone-attention)' }}>
                             {slot.readiness.checks.filter((c) => c.status !== 'ok').map((c) => c.label).join(' · ')}
                           </p>
                         )}
                       </>
                     ) : (
-                      <p className="text-sm font-semibold" style={{ color: 'var(--tone-critical)' }}>
+                      <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--tone-critical)' }}>
                         {slot.productId} — no longer in the catalogue. Take it off.
                       </p>
                     )}
                   </div>
 
+                  {/* Named by what they move. Twenty-five rows of "Move up" is
+                      a list a screen-reader user cannot work in. */}
                   <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => act({ action: 'move', productId: slot.productId, direction: -1 })} disabled={busy || i === 0} className={ICON} aria-label="Move up">↑</button>
-                    <button onClick={() => act({ action: 'move', productId: slot.productId, direction: 1 })} disabled={busy || i === data.roster.length - 1} className={ICON} aria-label="Move down">↓</button>
-                    <button onClick={() => act({ action: 'remove', productId: slot.productId })} disabled={busy} className={ICON} style={{ color: 'var(--tone-critical)' }} aria-label="Remove">✕</button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="chevron-up"
+                      aria-label={`Move ${p?.title ?? slot.productId} up`}
+                      disabled={busy || i === 0}
+                      onClick={() => act({ action: 'move', productId: slot.productId, direction: -1 })}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="chevron-down"
+                      aria-label={`Move ${p?.title ?? slot.productId} down`}
+                      disabled={busy || i === data.roster.length - 1}
+                      onClick={() => act({ action: 'move', productId: slot.productId, direction: 1 })}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      icon="x"
+                      aria-label={`Take ${p?.title ?? slot.productId} off the roster`}
+                      disabled={busy}
+                      onClick={() => act({ action: 'remove', productId: slot.productId })}
+                    />
                   </div>
                 </div>
-              </div>
+              </Card>
             )
           })}
         </div>
@@ -179,39 +211,62 @@ export default function TopProductsPage() {
 
       {/* Candidates */}
       <section>
-        <h3 className="text-sm font-bold mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+        <h3 style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)', marginBottom: 'var(--space-1)' }}>
           Everything else ({data.candidates.length})
         </h3>
-        <p className="text-[11px] text-[var(--ink-3)] mb-2">
+        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginBottom: 'var(--space-2)' }}>
           {full
             ? `The Top ${data.limit} is full — take something off before adding.`
             : `${data.limit - data.roster.length} place${data.limit - data.roster.length === 1 ? '' : 's'} left.`}
         </p>
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search the catalogue…"
-          className="w-full px-3 py-2 rounded-xl text-sm outline-none mb-2"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }} />
+        <div className="mb-2">
+          <Input
+            label="Search the catalogue"
+            compact
+            className="w-full"
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search the catalogue…"
+          />
+        </div>
 
         <div className="space-y-1.5 max-h-96 overflow-y-auto">
           {candidates.map((c) => (
-            <div key={c.id} className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
-              style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+            // `solid`: this list scrolls inside its own box, and translucency
+            // over a scrolling parent is the case that is not paid for.
+            <Card key={c.id} solid padding="tight" className="flex items-center justify-between gap-3">
               <div className="min-w-0 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: DOT[c.readiness] }} />
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-[var(--ink-1)] truncate">{c.title}</p>
-                  <p className="text-[10px] text-[var(--ink-3)]">
+                  <p className="truncate" style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+                    {c.title}
+                  </p>
+                  <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
                     {c.category} · {money(c.basePrice)}{c.cost == null && ' · no cost set'}
                   </p>
                 </div>
+                {c.readiness !== 'ok' && (
+                  <Badge tone={TONE[c.readiness]} dot>
+                    {c.readiness === 'fail' ? 'Not ready' : 'Needs a look'}
+                  </Badge>
+                )}
               </div>
-              <button onClick={() => act({ action: 'add', productId: c.id })} disabled={busy || full}
-                className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-30 shrink-0"
-                style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}>
+              <Button
+                size="sm"
+                icon="plus"
+                aria-label={`Add ${c.title} to the roster`}
+                disabled={busy || full}
+                onClick={() => act({ action: 'add', productId: c.id })}
+              >
                 Add
-              </button>
-            </div>
+              </Button>
+            </Card>
           ))}
-          {candidates.length === 0 && <p className="text-xs text-[var(--ink-3)] py-4 text-center">Nothing matches.</p>}
+          {candidates.length === 0 && (
+            <p className="text-center" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)', padding: 'var(--space-4) 0' }}>
+              Nothing matches.
+            </p>
+          )}
         </div>
       </section>
 
@@ -222,13 +277,13 @@ export default function TopProductsPage() {
   )
 }
 
-const ICON = 'text-xs font-bold w-7 h-7 rounded-lg border border-[var(--edge)] text-[var(--ink-3)] disabled:opacity-25'
-
 function Stat({ n, label, colour }: { n: number | string; label: string; colour: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 text-center">
-      <p className="text-2xl font-black" style={{ color: colour, fontFamily: 'var(--font-display)' }}>{n}</p>
-      <p className="text-[11px] text-[var(--ink-3)] mt-0.5">{label}</p>
-    </div>
+    <Card elevation={2} className="text-center">
+      <p style={{ fontSize: 'var(--text-display)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', color: colour }}>
+        {n}
+      </p>
+      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>{label}</p>
+    </Card>
   )
 }

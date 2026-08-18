@@ -33,13 +33,14 @@ export function Textarea({
   error,
   required,
   disabled,
+  hideLabel,
   className,
   rows = 3,
   ref,
   ...rest
 }: TextareaProps) {
   const id = useId()
-  const field = { label, hint, error, required, disabled, className }
+  const field = { label, hint, error, required, disabled, hideLabel, className }
 
   return (
     <Field id={id} {...field}>

@@ -30,13 +30,20 @@ export interface CheckboxProps
   label: ReactNode
   /** Quieter text under the label, for the consequence of turning it off. */
   hint?: ReactNode
+  /**
+   * Keep the name for screen readers but do not draw it — for a tick in a list
+   * row that already shows what it selects. `label` is still required, and is
+   * still the control's accessible name; it simply is not given space, the same
+   * bargain `compact` makes on `Input`.
+   */
+  hideLabel?: boolean
   disabled?: boolean
   /** Layout only. */
   className?: string
   ref?: Ref<HTMLInputElement>
 }
 
-export function Checkbox({ label, hint, disabled, className, ref, ...rest }: CheckboxProps) {
+export function Checkbox({ label, hint, hideLabel, disabled, className, ref, ...rest }: CheckboxProps) {
   const id = useId()
 
   return (
@@ -60,7 +67,10 @@ export function Checkbox({ label, hint, disabled, className, ref, ...rest }: Che
           aria-describedby={hint ? `${id}-hint` : undefined}
           className="system-checkbox system-focus shrink-0"
         />
-        <span style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' }}>
+        <span
+          className={hideLabel ? 'sr-only' : undefined}
+          style={hideLabel ? undefined : { fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' }}
+        >
           {label}
         </span>
       </label>

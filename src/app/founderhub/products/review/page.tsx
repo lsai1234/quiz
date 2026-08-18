@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { REVIEW_FIELDS, type ReviewField } from '@/lib/catalogue/review'
 import type { CatalogueProduct, FieldSource } from '@/lib/catalogue/types'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
+import { Badge, Button, Card, Checkbox, Input, Textarea } from '@/components/system'
 
 
 interface Row {
@@ -13,12 +14,19 @@ interface Row {
 }
 
 /** How each provenance reads on screen, and how much attention it deserves. */
-const SOURCE_LABEL: Record<FieldSource, { text: string; colour: string; note: string }> = {
-  supplier: { text: 'PowerBody', colour: 'var(--tone-positive)', note: 'Exactly what the supplier sent.' },
-  rule: { text: 'Our rule', colour: 'var(--accent)', note: 'Computed by our own pricing/mapping rules.' },
-  ai: { text: 'AI', colour: 'var(--tone-attention)', note: 'Written by the model. Check it.' },
-  heuristic: { text: 'Keyword match', colour: 'var(--tone-attention)', note: 'Our deterministic classifier — blunt, never invented.' },
-  founder: { text: 'You', colour: 'var(--tone-positive)', note: 'You set this.' },
+/**
+ * Where each value came from, and how much to trust it.
+ *
+ * The tone carries the meaning: positive is somebody's word for it — the
+ * supplier's or yours — attention is something this system worked out and has to
+ * be checked before it goes on sale.
+ */
+const SOURCE_LABEL: Record<FieldSource, { text: string; tone: 'positive' | 'accent' | 'attention'; note: string }> = {
+  supplier: { text: 'PowerBody', tone: 'positive', note: 'Exactly what the supplier sent.' },
+  rule: { text: 'Our rule', tone: 'accent', note: 'Computed by our own pricing/mapping rules.' },
+  ai: { text: 'AI', tone: 'attention', note: 'Written by the model. Check it.' },
+  heuristic: { text: 'Keyword match', tone: 'attention', note: 'Our deterministic classifier — blunt, never invented.' },
+  founder: { text: 'You', tone: 'positive', note: 'You set this.' },
 }
 
 const money = (n: unknown) => (typeof n === 'number' ? `£${n.toFixed(2)}` : '—')
@@ -188,38 +196,27 @@ export default function ReviewPage() {
       ) : (
         <div className="space-y-2">
           {picked.size > 0 && (
-            <div className="rounded-2xl border p-3 flex flex-wrap items-center gap-2" style={{ background: 'var(--surface-2)', borderColor: `var(--accent-line)` }}>
-              <p className="text-xs text-[var(--ink-3)] flex-1 min-w-[180px]">
+            <Card tone="accent" padding="tight" className="flex flex-wrap items-center gap-2">
+              <p className="flex-1" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)', minWidth: '11rem' }}>
                 {picked.size} ticked. Combine them when they are flavours of the same product — each keeps its own
                 supplier SKU and becomes a variant.
               </p>
-              <button
-                onClick={combine}
-                disabled={busy || picked.size < 2}
-                className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
-                style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-              >
+              <Button variant="primary" size="sm" loading={busy} disabled={picked.size < 2} onClick={combine}>
                 Combine into one product
-              </button>
-              <button
-                onClick={() => setPicked(new Set())}
-                className="text-xs font-bold px-3 py-2 rounded-xl border"
-                style={{ borderColor: 'var(--edge)', color: 'var(--ink-3)' }}
-              >
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
                 Clear
-              </button>
-            </div>
+              </Button>
+            </Card>
           )}
 
           {rows.map(({ product, remaining, complete }) => (
-            <div
-              key={product.id}
-              className="w-full text-left rounded-2xl border p-3.5 flex items-center gap-3"
-              style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}
-            >
-              <input
-                type="checkbox"
-                aria-label={`Select ${product.title}`}
+            // `solid`: the review queue is a long scrolling list.
+            <Card key={product.id} solid padding="tight" className="flex items-center gap-3">
+              <Checkbox
+                label={`Select ${product.title}`}
+                hideLabel
+                className="shrink-0"
                 checked={picked.has(product.id)}
                 onChange={() =>
                   setPicked((prev) => {
@@ -229,35 +226,35 @@ export default function ReviewPage() {
                     return next
                   })
                 }
-                className="shrink-0"
               />
               {/* eslint-disable-next-line @next/next/no-img-element */}
               {product.imageUrl ? (
                 <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
               ) : (
-                <div className="w-12 h-12 rounded-xl shrink-0 grid place-items-center text-[9px] text-[var(--ink-3)]" style={{ background: 'var(--surface-2)' }}>
+                <div className="w-12 h-12 rounded-xl shrink-0 grid place-items-center" style={{ background: 'var(--surface-2)', fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
                   No image
                 </div>
               )}
-              <button onClick={() => setOpenId(product.id)} className="min-w-0 flex-1 text-left">
-                <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>
-                  {product.title}
-                </p>
-                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
-                  {product.category || 'Uncategorised'} · {money(product.cost)} → {money(product.basePrice)}
-                  {product.variants.length > 1 && ` · ${product.variants.length} variants`}
-                </p>
-              </button>
-              <span
-                className="text-[10px] font-bold uppercase shrink-0 px-2 py-1 rounded-lg"
-                style={{
-                  color: complete ? 'var(--tone-positive)' : 'var(--tone-attention)',
-                  background: `color-mix(in srgb, ${complete ? 'var(--tone-positive)' : 'var(--tone-attention)'} 12%, transparent)`,
-                }}
+              <Button
+                variant="ghost"
+                className="min-w-0 flex-1 justify-start text-left"
+                aria-label={`Review ${product.title}`}
+                onClick={() => setOpenId(product.id)}
               >
+                <span className="min-w-0">
+                  <span className="block truncate" style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                    {product.title}
+                  </span>
+                  <span className="block" style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+                    {product.category || 'Uncategorised'} · {money(product.cost)} → {money(product.basePrice)}
+                    {product.variants.length > 1 && ` · ${product.variants.length} variants`}
+                  </span>
+                </span>
+              </Button>
+              <Badge tone={complete ? 'positive' : 'attention'} className="shrink-0">
                 {complete ? 'Ready to approve' : `${remaining.length} to check`}
-              </span>
-            </div>
+              </Badge>
+            </Card>
           ))}
         </div>
       )}
@@ -302,48 +299,48 @@ function ProductReview({
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
-        <button onClick={onBack} className="text-xs font-bold px-3 py-2 rounded-xl border border-[var(--edge)] text-[var(--ink-3)]">
-          ← Queue
-        </button>
-        <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
+        <Button variant="ghost" size="sm" icon="arrow-left" onClick={onBack}>
+          Queue
+        </Button>
+        <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
           {product.title}
         </p>
       </div>
 
-      <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', color: 'var(--ink-3)', border: '1px solid var(--edge)' }}>
-        Fields marked <strong style={{ color: 'var(--tone-positive)' }}>PowerBody</strong> are a faithful copy of the feed and are shown
-        for context only. The ones marked <strong style={{ color: 'var(--tone-attention)' }}>AI</strong> or{' '}
-        <strong style={{ color: 'var(--tone-attention)' }}>Keyword match</strong> were worked out here — confirm or correct each before
-        approving.
-      </p>
+      <Card elevation={2} padding="tight">
+        <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)' }}>
+          Fields marked <strong style={{ color: 'var(--tone-positive)' }}>PowerBody</strong> are a faithful copy of the feed and are shown
+          for context only. The ones marked <strong style={{ color: 'var(--tone-attention)' }}>AI</strong> or{' '}
+          <strong style={{ color: 'var(--tone-attention)' }}>Keyword match</strong> were worked out here — confirm or correct each before
+          approving.
+        </p>
+      </Card>
 
       {/* What the customer will actually be able to pick, and which supplier SKU
           each choice orders. The only place a combine can be checked. */}
-      <div className="rounded-2xl border p-3.5" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+      <Card padding="tight">
         <div className="flex items-center gap-2 flex-wrap mb-1.5">
-          <span className="text-xs font-bold text-[var(--ink-1)]">
+          <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
             {product.variants.length === 1 ? 'One variant' : `${product.variants.length} variants`}
           </span>
-          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: 'var(--tone-positive)', background: `var(--positive-fill)` }}>
-            PowerBody
-          </span>
+          <Badge tone="positive">PowerBody</Badge>
         </div>
         <div className="space-y-1">
           {product.variants.map((v) => (
-            <div key={v.id} className="flex items-center gap-2 flex-wrap text-[11px]">
-              <span className="text-[var(--ink-2)] font-semibold">{v.flavour || v.size || v.title}</span>
-              <span className="text-[var(--ink-3)]">{v.sku ?? 'no SKU'}</span>
-              <span className="text-[var(--ink-3)]">{money(v.price)}</span>
+            <div key={v.id} className="flex items-center gap-2 flex-wrap" style={{ fontSize: 'var(--text-meta)' }}>
+              <span style={{ fontWeight: 'var(--weight-strong)', color: 'var(--ink-2)' }}>{v.flavour || v.size || v.title}</span>
+              <span style={{ color: 'var(--ink-3)' }}>{v.sku ?? 'no SKU'}</span>
+              <span style={{ color: 'var(--ink-3)' }}>{money(v.price)}</span>
               <span style={{ color: v.available ? 'var(--ink-3)' : 'var(--tone-critical)' }}>
                 {v.available ? `${v.inventory ?? '—'} in stock` : 'Out of stock'}
               </span>
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-[var(--ink-3)] mt-1.5">
+        <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
           Each variant orders its own SKU, and stock is tracked per variant.
         </p>
-      </div>
+      </Card>
 
       <div className="space-y-2">
         {REVIEW_FIELDS.map((field) => {
@@ -355,25 +352,22 @@ function ProductReview({
           const shown = draft ?? asText(value)
 
           return (
-            <div
-              key={field.key as string}
-              className="rounded-2xl border p-3.5"
-              style={{
-                background: 'var(--surface-1)',
-                borderColor: needsCheck ? `var(--attention-line)` : 'var(--edge)',
-              }}
-            >
+            // Tinted only while it still needs a look. A field already checked
+            // off is not the thing on this page asking for attention.
+            <Card key={field.key as string} padding="tight" tone={needsCheck ? 'attention' : undefined}>
               <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                <span className="text-xs font-bold text-[var(--ink-1)]">{field.label}</span>
-                <span
-                  className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded"
-                  style={{ color: meta.colour, background: `color-mix(in srgb, ${meta.colour} 12%, transparent)` }}
-                  title={meta.note}
-                >
-                  {meta.text}
+                <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+                  {field.label}
+                </span>
+                {/* `title` on the wrapper, not the Badge: the hover note is the
+                    element's, and Badge takes no arbitrary DOM props. */}
+                <span title={meta.note}>
+                  <Badge tone={meta.tone}>{meta.text}</Badge>
                 </span>
                 {confirmed.has(field.key as string) && (
-                  <span className="text-[9px] font-bold uppercase" style={{ color: 'var(--tone-positive)' }}>✓ checked</span>
+                  <Badge tone="positive" icon="check">
+                    checked
+                  </Badge>
                 )}
               </div>
 
@@ -382,72 +376,73 @@ function ProductReview({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={String(value)} alt="" className="w-24 h-24 rounded-xl object-cover" />
                 ) : (
-                  <p className="text-xs text-[var(--ink-3)]">PowerBody sent no image for this product.</p>
+                  <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>
+                    PowerBody sent no image for this product.
+                  </p>
                 )
               ) : field.kind === 'longtext' ? (
-                <textarea
+                // `compact`: the card heading above is already the field's name,
+                // and a stacked label would draw it a second time.
+                <Textarea
+                  label={field.label}
                   value={shown}
                   rows={3}
                   onChange={(e) => setDrafts((d) => ({ ...d, [field.key as string]: e.target.value }))}
-                  className="w-full text-sm rounded-xl px-3 py-2 border resize-y"
-                  style={{ background: 'var(--surface-2)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
+                  hideLabel
                 />
               ) : (
-                <input
+                <Input
+                  label={field.label}
+                  compact
+                  className="w-full"
                   value={shown}
                   onChange={(e) => setDrafts((d) => ({ ...d, [field.key as string]: e.target.value }))}
-                  className="w-full text-sm rounded-xl px-3 py-2 border"
-                  style={{ background: 'var(--surface-2)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
                 />
               )}
 
-              {field.note && <p className="text-[10px] text-[var(--ink-3)] mt-1.5">{field.note}</p>}
+              {field.note && (
+                <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
+                  {field.note}
+                </p>
+              )}
 
               {needsCheck && (
                 <div className="flex items-center gap-2 mt-2">
-                  <button
-                    disabled={busy}
+                  <Button
+                    size="sm"
+                    loading={busy}
+                    aria-label={`${drafts[field.key as string] !== undefined ? 'Save and check off' : 'Confirm'} ${field.label}`}
                     onClick={() => {
                       const raw = drafts[field.key as string]
                       const patch =
                         raw === undefined ? {} : ({ [field.key]: parse(field, raw) } as Partial<CatalogueProduct>)
                       onSave(patch, [field.key as string])
                     }}
-                    className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-40"
-                    style={{ borderColor: `var(--positive-line)`, color: 'var(--tone-positive)' }}
                   >
                     {drafts[field.key as string] !== undefined ? 'Save & check off' : 'Looks right'}
-                  </button>
+                  </Button>
                 </div>
               )}
-            </div>
+            </Card>
           )
         })}
       </div>
 
       {/* Sits at the end of the fields rather than floating over them — stuck to
           the viewport it covered whichever field happened to be under it. */}
-      <div
-        className="flex items-center gap-2 flex-wrap rounded-2xl border p-3.5"
-        style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}
-      >
-        <button
+      <Card padding="tight" className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant={complete ? 'primary' : 'secondary'}
+          loading={busy}
+          disabled={!complete}
           onClick={onApprove}
-          disabled={busy || !complete}
-          className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40"
-          style={{ background: complete ? 'var(--tone-positive)' : 'var(--surface-2)', color: complete ? 'var(--ink-on-accent)' : 'var(--ink-3)' }}
         >
           {complete ? 'Approve — put it on sale' : `${remaining.length} field${remaining.length === 1 ? '' : 's'} left to check`}
-        </button>
-        <button
-          onClick={onDiscard}
-          disabled={busy}
-          className="text-xs font-bold px-3 py-2.5 rounded-xl border disabled:opacity-40"
-          style={{ borderColor: 'var(--critical-line)', color: 'var(--tone-critical)' }}
-        >
+        </Button>
+        <Button variant="destructive" loading={busy} onClick={onDiscard}>
           Discard
-        </button>
-      </div>
+        </Button>
+      </Card>
     </div>
   )
 }
