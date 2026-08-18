@@ -52,7 +52,7 @@ export function CheckInJourney({ recommendations, onChange, onDismiss }: Props) 
         gravity: 0.9,
         ticks: 140,
         origin: { y: 0.3 },
-        colors: ['var(--accent)', 'var(--tone-positive)', '#7dd3fc'],
+        colors: ['var(--accent)', 'var(--tone-positive)', 'var(--tone-info)'],
       })
     }
   }, [review.length, good.length, reduced])

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Badge, Button, Card, Ground, Input } from '@/components/system'
 import type { PartnerDashboard as Data } from '@/lib/partners/dashboard'
 
 const money = (n: number) => `£${n.toFixed(2)}`
@@ -54,18 +55,15 @@ export function PartnerDashboard() {
     <Shell onLogout={logout} name={data.partner.name}>
       <div className="flex gap-1 mb-4">
         {(['money', 'assets', 'terms'] as const).map((t) => (
-          <button
+          <Button
             key={t}
+            size="sm"
+            variant={tab === t ? 'primary' : 'secondary'}
+            aria-pressed={tab === t}
             onClick={() => setTab(t)}
-            className="px-3.5 py-1.5 rounded-full text-xs font-bold"
-            style={{
-              background: tab === t ? 'var(--accent)' : 'var(--surface-2)',
-              color: tab === t ? 'var(--ground-base)' : 'var(--ink-3)',
-              border: '1px solid var(--edge)',
-            }}
           >
             {t === 'money' ? 'How you’re doing' : t === 'assets' ? 'Your assets' : 'Your deal'}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -78,40 +76,74 @@ export function PartnerDashboard() {
 
 function Shell({ children, name, onLogout }: { children: React.ReactNode; name: string; onLogout: () => void }) {
   return (
-    <div className="min-h-screen" style={{ background: 'var(--ground-base)' }}>
-      <header className="sticky top-0 z-10 border-b border-[var(--edge)]" style={{ background: 'var(--surface-solid)' }}>
-        <div className="max-w-2xl mx-auto px-5 py-3 flex items-center justify-between gap-3">
-          <span className="text-sm font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+    // `my-hub` is the region class the focus floor hangs off. The Partners Hub
+    // is a different audience, not a different system.
+    <Ground className="my-hub">
+      <header
+        className="sticky top-0 z-10"
+        style={{
+          background: 'var(--surface-2)',
+          backdropFilter: 'blur(var(--blur-nav)) saturate(var(--blur-saturate))',
+          WebkitBackdropFilter: 'blur(var(--blur-nav)) saturate(var(--blur-saturate))',
+          borderBottom: '1px solid var(--edge)',
+        }}
+      >
+        <div
+          className="max-w-2xl mx-auto flex items-center justify-between"
+          style={{ padding: 'var(--space-3) var(--gutter)', gap: 'var(--space-3)' }}
+        >
+          <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
             CHRGD <span style={{ color: 'var(--accent)' }}>Partners</span>
           </span>
-          <div className="flex items-center gap-3">
-            {name && <span className="text-[11px] font-semibold text-[var(--ink-3)] hidden sm:inline">{name}</span>}
-            <button onClick={onLogout} className="text-xs font-semibold text-[var(--ink-3)] underline">Sign out</button>
+          <div className="flex items-center" style={{ gap: 'var(--space-3)' }}>
+            {name && (
+              <span className="hidden sm:inline" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+                {name}
+              </span>
+            )}
+            <Button variant="ghost" size="sm" icon="log-out" aria-label="Sign out" onClick={onLogout} />
           </div>
         </div>
       </header>
-      <main className="max-w-2xl mx-auto px-5 py-6">{children}</main>
-    </div>
+      <main className="max-w-2xl mx-auto" style={{ padding: 'var(--space-6) var(--gutter)' }}>
+        {children}
+      </main>
+    </Ground>
   )
 }
 
-function Card({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
+/** A titled block. Layout — everything inside it is a primitive. */
+function Panel({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-[var(--edge)] p-4 mb-3" style={{ background: 'var(--surface-solid)' }}>
-      <h2 className="text-xs font-black text-[var(--ink-1)] mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>{title}</h2>
-      {desc && <p className="text-[11px] text-[var(--ink-3)] mb-3 leading-snug">{desc}</p>}
+    <Card as="section" solid className="mb-3">
+      <h2 style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+        {title}
+      </h2>
+      {desc && (
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)', marginBottom: 'var(--space-3)' }}>
+          {desc}
+        </p>
+      )}
       {children}
-    </section>
+    </Card>
   )
 }
 
 function Figure({ label, value, tone, note }: { label: string; value: string; tone?: string; note?: string }) {
   return (
-    <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{label}</p>
-      <p className="text-lg font-black" style={{ color: tone ?? 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{value}</p>
-      {note && <p className="text-[10px] text-[var(--ink-3)] leading-snug mt-0.5">{note}</p>}
-    </div>
+    <Card elevation={2} padding="tight">
+      <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+        {label}
+      </p>
+      <p style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', color: tone ?? 'var(--ink-1)' }}>
+        {value}
+      </p>
+      {note && (
+        <p style={{ fontSize: 'var(--text-micro)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+          {note}
+        </p>
+      )}
+    </Card>
   )
 }
 
@@ -120,7 +152,7 @@ function MoneyTab({ data }: { data: Data }) {
 
   return (
     <>
-      <Card
+      <Panel
         title="What you’re owed"
         desc="Commission is held until the 14-day return window on the order has passed. Only then can it be paid."
       >
@@ -157,9 +189,9 @@ function MoneyTab({ data }: { data: Data }) {
           )}
         </div>
         <p className="text-[11px] text-[var(--ink-3)] leading-snug mt-3">{data.wording.paid}</p>
-      </Card>
+      </Panel>
 
-      <Card title="What you’ve brought in">
+      <Panel title="What you’ve brought in">
         <div className="grid grid-cols-2 gap-2">
           <Figure label="Orders, all time" value={String(totals.orders)} note={totals.subscriptions > 0 ? `${totals.subscriptions} on subscription` : undefined} />
           <Figure label="Their spend" value={money(totals.revenue)} />
@@ -171,9 +203,9 @@ function MoneyTab({ data }: { data: Data }) {
             {totals.reversed} order{totals.reversed === 1 ? ' was' : 's were'} refunded and {totals.reversed === 1 ? 'is' : 'are'} not counted above.
           </p>
         )}
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title={`Your earnings (${earnings.length})`}
         desc="Each order you brought in, and the date its commission clears."
       >
@@ -215,9 +247,9 @@ function MoneyTab({ data }: { data: Data }) {
             ))}
           </div>
         )}
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title={`Payouts (${payouts.length})`}
         desc="We raise the invoice for you — here is exactly what it says."
       >
@@ -278,7 +310,7 @@ function MoneyTab({ data }: { data: Data }) {
             })}
           </div>
         )}
-      </Card>
+      </Panel>
     </>
   )
 }
@@ -299,18 +331,18 @@ function MoneyTab({ data }: { data: Data }) {
 function AssetsTab({ data }: { data: Data }) {
   if (data.shareAssets.length === 0) {
     return (
-      <Card title="Your assets" desc="Cards to post, with your code on them.">
+      <Panel title="Your assets" desc="Cards to post, with your code on them.">
         <p className="text-[11px] text-[var(--ink-3)] leading-snug">
           You don’t have a code yet. Once one is set up, your cards appear here.
         </p>
-      </Card>
+      </Panel>
     )
   }
 
   return (
     <>
       {data.shareAssets.map((asset) => (
-        <Card
+        <Panel
           key={asset.code}
           title={`${asset.code} — cards to post`}
           desc="A sample of what your followers get when they finish the quiz, with your code on it. Download, post, and anyone who uses the code is attributed to you."
@@ -362,7 +394,7 @@ function AssetsTab({ data }: { data: Data }) {
             somebody’s results — the numbers on it are an example of what the quiz
             produces.
           </p>
-        </Card>
+        </Panel>
       ))}
     </>
   )
@@ -374,7 +406,7 @@ function TermsTab({ data }: { data: Data }) {
   return (
     <>
       {codes.map((code) => (
-        <Card key={code.code} title="Your code" desc={`Used ${code.terms.uses} time${code.terms.uses === 1 ? '' : 's'}.`}>
+        <Panel key={code.code} title="Your code" desc={`Used ${code.terms.uses} time${code.terms.uses === 1 ? '' : 's'}.`}>
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             <span
               className="text-sm font-black tracking-wide px-3 py-1.5 rounded-xl"
@@ -410,14 +442,14 @@ function TermsTab({ data }: { data: Data }) {
             {code.terms.endsAt && <li>· Ends {day(code.terms.endsAt)}.</li>}
             {code.terms.maxUses == null && !code.terms.endsAt && <li>· No usage cap and no end date.</li>}
           </ul>
-        </Card>
+        </Panel>
       ))}
 
-      <Card title="What you earn" desc={`In force since ${day(terms.effectiveFrom)}.`}>
+      <Panel title="What you earn" desc={`In force since ${day(terms.effectiveFrom)}.`}>
         <p className="text-sm text-[var(--ink-1)] leading-snug">{wording.earn}</p>
-      </Card>
+      </Panel>
 
-      <Card title="When it becomes payable">
+      <Panel title="When it becomes payable">
         <ol className="text-[11px] text-[var(--ink-2)] leading-relaxed space-y-1">
           <li><strong>1.</strong> Someone orders on your code. Commission is earned the moment they pay.</li>
           <li><strong>2.</strong> It’s held for 14 days, the window a customer has to send an order back.</li>
@@ -427,13 +459,13 @@ function TermsTab({ data }: { data: Data }) {
         <p className="text-[11px] text-[var(--ink-3)] leading-snug mt-3">
           Every earning on the previous tab shows its own clearing date, so you never have to work this out.
         </p>
-      </Card>
+      </Panel>
 
-      <Card title="How you get paid">
+      <Panel title="How you get paid">
         <p className="text-sm text-[var(--ink-1)] leading-snug">{wording.paid}</p>
-      </Card>
+      </Panel>
 
-      <Card
+      <Panel
         title={`Your deal, over time (${termsHistory.length})`}
         desc="Every version, dated, with the reason it changed. Nothing here is ever edited or removed."
       >
@@ -455,7 +487,7 @@ function TermsTab({ data }: { data: Data }) {
             </div>
           ))}
         </div>
-      </Card>
+      </Panel>
     </>
   )
 }
@@ -468,15 +500,16 @@ function ShareLink({ code }: { code: string }) {
     <div>
       <p className="text-[11px] font-bold text-[var(--ink-3)] mb-1">Your link</p>
       <div className="flex gap-2">
-        <input
+        <Input
+          label="Your link"
+          hideLabel
+          className="flex-1"
           readOnly
           value={url}
           onFocus={(e) => e.currentTarget.select()}
-          className="flex-1 px-3 py-2 rounded-xl text-[11px] outline-none"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
-        <button
-          type="button"
+        <Button
+          icon={copied ? 'check' : 'link'}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(url)
@@ -486,11 +519,9 @@ function ShareLink({ code }: { code: string }) {
               /* clipboard blocked — the field is selectable, which is the fallback */
             }
           }}
-          className="text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all"
-          style={{ background: 'var(--surface-2)', color: 'var(--accent)', border: '1px solid var(--edge)' }}
         >
           {copied ? 'Copied' : 'Copy'}
-        </button>
+        </Button>
       </div>
       {/* The 30 days is the LINK's memory, not the code's life. Saying "lasts
           30 days" next to a code read as the code expiring, which would be a

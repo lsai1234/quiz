@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Button, Input, Note } from '@/components/system'
 import { useSearchParams } from 'next/navigation'
 
 /**
@@ -67,9 +68,11 @@ export function SetPassword() {
     }
   }
 
-  const wrap = 'min-h-screen flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
-  const input = 'w-full px-4 py-3.5 rounded-2xl text-sm outline-none'
-  const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
+  // `my-hub` on the wrapper: signed out, this screen IS the region, and the
+  // password fields guarding a partner account are exactly the controls the
+  // focus floor must not miss. Same reason `PortalLogin` carries `founder-hub`.
+  const wrap =
+    'my-hub min-h-screen flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
 
   if (dead) {
     return (
@@ -98,37 +101,42 @@ export function SetPassword() {
       </p>
 
       <form onSubmit={submit} className="w-full space-y-3">
-        <input
+        {/* The rules land on the field itself: `hint` while it is fine, `error`
+            when it is not, both wired through `aria-describedby`. They used to
+            be loose paragraphs underneath that nothing pointed at. */}
+        <Input
+          label="New password"
+          hideLabel
           type="password"
           autoComplete="new-password"
           placeholder="New password"
+          hint="At least 10 characters."
+          error={tooShort ? 'At least 10 characters.' : undefined}
           value={password}
           onChange={(e) => { setPassword(e.target.value); setError(null) }}
-          className={input}
-          style={inputStyle}
         />
-        <input
+        <Input
+          label="Confirm new password"
+          hideLabel
           type="password"
           autoComplete="new-password"
           placeholder="Type it again"
+          error={mismatch ? 'Those don’t match.' : undefined}
           value={confirm}
           onChange={(e) => { setConfirm(e.target.value); setError(null) }}
-          className={input}
-          style={inputStyle}
         />
 
-        {tooShort && <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>At least 10 characters.</p>}
-        {mismatch && <p className="text-[11px]" style={{ color: '#f87171' }}>Those don’t match.</p>}
-        {error && <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{error}</p>}
+        {/* Was `#f87171` — the fourth hardcoded red in this codebase, and the
+            third distinct value claiming to be the same colour. */}
+        {error && (
+          <Note icon="alert-triangle" tone="critical" live="assertive">
+            {error}
+          </Note>
+        )}
 
-        <button
-          type="submit"
-          disabled={!valid || saving || !name}
-          className="w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: 'var(--ground-base)', fontFamily: 'var(--font-display)' }}
-        >
-          {saving ? 'Setting it…' : name ? 'Set password & sign in' : 'Checking your link…'}
-        </button>
+        <Button type="submit" variant="primary" size="lg" fullWidth loading={saving} disabled={!valid || !name}>
+          {name ? 'Set password & sign in' : 'Checking your link…'}
+        </Button>
       </form>
     </div>
   )

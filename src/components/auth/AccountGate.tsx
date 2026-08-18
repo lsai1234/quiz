@@ -235,7 +235,11 @@ export function AccountGate({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {error && <p className="text-xs font-semibold px-1" style={{ color: '#ff6b6b' }} role="alert">{error}</p>}
+          {error && (
+            <Note icon="alert-triangle" tone="critical" live="assertive">
+              {error}
+            </Note>
+          )}
         </form>
 
         {providers.length > 0 && (

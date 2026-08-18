@@ -1,6 +1,8 @@
 'use client'
 
 import { useState } from 'react'
+import { Button, Input, Note } from '@/components/system'
+import { Eyebrow } from '@/components/hub/Eyebrow'
 
 /**
  * Partner sign-in.
@@ -77,76 +79,62 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
     }
   }
 
-  const inputClass = 'w-full px-4 py-3.5 rounded-2xl text-sm outline-none'
-  const inputStyle = {
-    background: 'var(--surface-2)',
-    border: '1px solid var(--edge)',
-    color: 'var(--ink-1)',
-  } as const
-  const wrap = 'min-h-screen flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
+  // `my-hub` on the wrapper: signed out, this screen IS the region, and the
+  // password fields guarding a partner account are exactly the controls the
+  // focus floor must not miss. Same reason `PortalLogin` carries `founder-hub`.
+  const wrap =
+    'my-hub min-h-screen flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
 
   if (forgot) {
     return (
       <div className={wrap} style={{ background: 'var(--ground-base)' }}>
-        <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
-          CHRGD Partners
-        </p>
-        <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+        <Eyebrow color="var(--accent)" className="mb-2">CHRGD Partners</Eyebrow>
+        <h1 style={{ fontSize: 'var(--text-hero)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-display)', lineHeight: 'var(--leading-tight)', color: 'var(--ink-1)', marginBottom: 'var(--space-2)' }}>
           Forgotten password
         </h1>
 
         {resetSent ? (
           <>
-            <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
+            <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginBottom: 'var(--space-6)' }}>
               If we have a partner account for <strong>{email.trim()}</strong>, a link to set a new
               password is on its way. It works once, for the next 60 minutes.
             </p>
-            <button
-              type="button"
-              onClick={() => { setForgot(false); setResetSent(false) }}
-              className="text-xs font-bold underline"
-              style={{ color: 'var(--accent)' }}
-            >
+            <Button variant="ghost" size="sm" onClick={() => { setForgot(false); setResetSent(false) }}>
               Back to sign-in
-            </button>
+            </Button>
           </>
         ) : (
           <>
-            <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
+            <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginBottom: 'var(--space-6)' }}>
               Type the email on your partner account and we’ll send a link to set a new one.
             </p>
             <form onSubmit={requestReset} className="w-full space-y-3">
-              <input
+              <Input
+                label="Email address"
+                hideLabel
                 type="email"
                 inputMode="email"
                 autoComplete="email"
-                aria-label="Email address"
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null) }}
-                className={inputClass}
-                style={inputStyle}
               />
 
-              {error && <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{error}</p>}
+              {/* Was a hardcoded `#f87171` — a third red, differing from both the
+                  token and the other hardcoded one in this directory. */}
+              {error && (
+                <Note icon="alert-triangle" tone="critical" live="assertive">
+                  {error}
+                </Note>
+              )}
 
-              <button
-                type="submit"
-                disabled={!emailValid || loading}
-                className="w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-                style={{ background: 'var(--accent)', color: 'var(--ground-base)', fontFamily: 'var(--font-display)' }}
-              >
-                {loading ? 'Sending…' : 'Email me a link'}
-              </button>
+              <Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={!emailValid}>
+                Email me a link
+              </Button>
             </form>
-            <button
-              type="button"
-              onClick={() => { setForgot(false); setError(null) }}
-              className="text-xs font-bold underline mt-5"
-              style={{ color: 'var(--accent)' }}
-            >
+            <Button variant="ghost" size="sm" className="mt-5" onClick={() => { setForgot(false); setError(null) }}>
               Back to sign-in
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -155,61 +143,55 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
 
   return (
     <div className={wrap} style={{ background: 'var(--ground-base)' }}>
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
-        CHRGD Partners
-      </p>
-      <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+      <Eyebrow color="var(--accent)" className="mb-2">CHRGD Partners</Eyebrow>
+      <h1 style={{ fontSize: 'var(--text-hero)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-display)', lineHeight: 'var(--leading-tight)', color: 'var(--ink-1)', marginBottom: 'var(--space-2)' }}>
         Partner sign-in
       </h1>
-      <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
+      <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginBottom: 'var(--space-6)' }}>
         Your code, your numbers and your terms.
       </p>
 
       <form onSubmit={submit} className="w-full space-y-3">
-        <input
+        {/* Named, not just placeheld. Neither of these had a label of any kind,
+            so a partner on a screen reader met two unnamed edit boxes. */}
+        <Input
+          label="Email address"
+          hideLabel
           type="email"
           inputMode="email"
           autoComplete="email"
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
-        <input
+        <Input
+          label="Password"
+          hideLabel
           type="password"
           autoComplete="current-password"
           placeholder="Password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
 
-        {error && <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{error}</p>}
+        {error && (
+          <Note icon="alert-triangle" tone="critical" live="assertive">
+            {error}
+          </Note>
+        )}
 
-        <button
-          type="submit"
-          disabled={!valid || loading}
-          className="w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: 'var(--ground-base)', fontFamily: 'var(--font-display)' }}
-        >
-          {loading ? 'Signing in…' : 'Sign in'}
-        </button>
+        <Button type="submit" variant="primary" size="lg" fullWidth loading={loading} disabled={!valid}>
+          Sign in
+        </Button>
       </form>
 
       {canResetPassword && (
-        <button
-          type="button"
-          onClick={() => { setForgot(true); setError(null) }}
-          className="text-xs font-bold underline mt-5"
-          style={{ color: 'var(--accent)' }}
-        >
+        <Button variant="ghost" size="sm" className="mt-5" onClick={() => { setForgot(true); setError(null) }}>
           Forgotten your password?
-        </button>
+        </Button>
       )}
 
-      <p className="text-[11px] text-[var(--ink-3)] mt-6 leading-snug">
+      <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-6)' }}>
         {canResetPassword
           ? 'Haven’t set a password yet? Use the link we sent you, or ask for a new one above.'
           : 'Haven’t set a password yet? Use the link we sent you. Lost it, or need a new one — email us and we’ll send another.'}
