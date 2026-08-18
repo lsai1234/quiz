@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Badge, Button, Card } from '@/components/system'
 
 
 export interface IntegrationOption {
@@ -64,22 +65,33 @@ export function IntegrationToggle({ endpoint, options, liveLabel, credentialsHin
         {options.map((o) => {
           const active = data.mode === o.mode
           return (
-            <button
-              key={o.mode}
+            // The card carries the tint, the button inside it is the target:
+            // the whole row is pressable rather than the words in it.
+            <Card key={o.mode} padding="none" tone={active ? 'accent' : undefined}>
+            <Button
+              variant="ghost"
+              fullWidth
+              className="text-left justify-between items-start"
+              // These are a choice with one selected. It was a coloured border
+              // and the word "Selected" — neither is state a screen reader gets.
+              aria-pressed={active}
+              loading={saving}
               onClick={() => choose(o.mode)}
-              disabled={saving}
-              className="w-full text-left rounded-2xl border p-4 transition-all active:scale-[0.99]"
-              style={{
-                background: active ? `var(--accent-fill)` : 'var(--surface-1)',
-                borderColor: active ? `var(--accent-line)` : 'var(--edge)',
-              }}
             >
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>{o.label}</span>
-                {active && <span className="text-[10px] font-bold uppercase" style={{ color: 'var(--accent)' }}>Selected</span>}
-              </div>
-              <p className="text-xs text-[var(--ink-3)] mt-0.5">{o.desc}</p>
-            </button>
+              <span className="min-w-0">
+                <span className="block" style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                  {o.label}
+                </span>
+                <span
+                  className="block"
+                  style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-body)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}
+                >
+                  {o.desc}
+                </span>
+              </span>
+              {active && <Badge tone="accent">Selected</Badge>}
+            </Button>
+            </Card>
           )
         })}
       </div>

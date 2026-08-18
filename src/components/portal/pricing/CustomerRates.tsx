@@ -2,6 +2,7 @@
 
 import { customerDeliveryCharge, deriveFreeDeliveryThreshold } from '@/lib/pricing/delivery'
 import type { PricingConfig, CustomerDeliveryRate } from '@/lib/stack-blueprint/pricing'
+import { Button, Input } from '@/components/system'
 
 
 /**
@@ -66,53 +67,63 @@ export function CustomerRates({
               }}
             >
               <span className="text-[10px] text-[var(--ink-3)] flex-1">basket under £</span>
-              <input
+              <Input
+                label={`Band ${index + 1} basket ceiling — blank for no limit`}
+                compact
+                align="right"
+                prefix="£"
+                className="w-24"
                 type="number"
                 value={rate.maxOrderValue ?? ''}
                 placeholder="∞"
                 onChange={(e) =>
                   update(index, { maxOrderValue: e.target.value === '' ? null : parseFloat(e.target.value) || 0 })
                 }
-                className="w-16 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
-                aria-label="Basket value ceiling (blank for no limit)"
               />
-              <span className="text-[10px] text-[var(--ink-3)]">retail · pays £</span>
-              <input
+              <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>retail · pays</span>
+              <Input
+                label={`Band ${index + 1} — what the member pays, inc VAT`}
+                compact
+                align="right"
+                prefix="£"
+                className="w-24"
                 type="number"
                 step="0.01"
                 value={rate.price}
                 onChange={(e) => update(index, { price: parseFloat(e.target.value) || 0 })}
-                className="w-14 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
-                aria-label="What the member pays, inc VAT"
               />
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                icon="trash"
+                aria-label={`Remove band ${index + 1}`}
                 onClick={() => remove(index)}
-                className="text-[var(--ink-3)] text-xs px-0.5"
-                aria-label="Remove this band"
-              >
-                ✕
-              </button>
+              />
             </div>
           )
         })}
       </div>
 
       <div className="flex items-center gap-1.5 rounded-lg px-2 py-1.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
-        <span className="text-[10px] text-[var(--ink-3)] flex-1">Highlands &amp; Islands surcharge · £</span>
-        <input
+        <span className="flex-1" style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+          Highlands &amp; Islands surcharge
+        </span>
+        <Input
+          label="Highlands and Islands surcharge, inc VAT"
+          compact
+          align="right"
+          prefix="£"
+          className="w-24"
           type="number"
           step="0.01"
           value={config.delivery.zone2Surcharge}
           onChange={(e) => onSurchargeChange(parseFloat(e.target.value) || 0)}
-          className="w-14 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-          style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
-          aria-label="Zone 2 surcharge, inc VAT"
         />
       </div>
 
-      <button onClick={add} className="text-xs font-bold" style={{ color: 'var(--accent)' }}>+ Add a band</button>
+      <Button variant="ghost" size="sm" icon="plus" onClick={add}>
+        Add a band
+      </Button>
 
       {hasFreeBand ? (
         <p className="text-[10px] text-[var(--ink-3)] leading-snug">

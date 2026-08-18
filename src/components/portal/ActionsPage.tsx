@@ -5,6 +5,7 @@ import { ActionQueue } from './ActionQueue'
 import { PriceChanges } from './PriceChanges'
 import type { ChangeEvent } from '@/lib/changes/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { Button, Input } from '@/components/system'
 
 
 interface RunSummary {
@@ -117,35 +118,25 @@ export function ActionsPage() {
 
       <div className="flex flex-wrap items-end gap-2 justify-between">
         <div className="flex items-end gap-2">
-          <div>
-            <label className="text-[10px] uppercase font-bold text-[var(--ink-3)] block mb-1">
-              Force a SKU out of stock (demo)
-            </label>
-            <input
-              value={forceSku}
-              onChange={(e) => setForceSku(e.target.value)}
-              placeholder="e.g. ON-GOLD-WHEY-2270"
-              className="text-sm rounded-xl px-3 py-2 border"
-              style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
-            />
-          </div>
-          <button
-            onClick={() => run(false)}
-            disabled={running}
-            className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40"
-            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-          >
-            {running ? 'Checking…' : 'Run check'}
-          </button>
-          <button
-            onClick={() => run(true)}
-            disabled={running}
-            className="text-xs font-bold px-4 py-2 rounded-xl border disabled:opacity-40"
-            style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
+          {/* The `<label>` here had no `htmlFor`, so tapping it did nothing and
+              the field announced itself unnamed. The primitive wires both. */}
+          <Input
+            label="Force a SKU out of stock (demo)"
+            value={forceSku}
+            onChange={(e) => setForceSku(e.target.value)}
+            placeholder="e.g. ON-GOLD-WHEY-2270"
+          />
+          <Button variant="primary" size="sm" loading={running} onClick={() => run(false)}>
+            Run check
+          </Button>
+          <Button
+            size="sm"
+            loading={running}
             title="Compute and preview without writing anything"
+            onClick={() => run(true)}
           >
             Dry run
-          </button>
+          </Button>
         </div>
       </div>
 

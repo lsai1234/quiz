@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
+import { Button, Checkbox, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 
@@ -73,20 +73,34 @@ export function AiSuggestPanel({ onClose, onApplied }: Props) {
   const Chip = ({ id, fkey, label }: { id: string; fkey: string; label: string }) => {
     const isOff = off(id, fkey)
     return (
-      <button onClick={() => toggle(id, fkey)} className="px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all"
-        style={{ background: isOff ? 'transparent' : `var(--accent-fill)`, color: isOff ? 'var(--ink-3)' : 'var(--accent)', border: `1px solid ${isOff ? 'var(--edge)' : `var(--accent-line)`}`, textDecoration: isOff ? 'line-through' : 'none' }}>
+      // `aria-pressed`, so "this suggestion is switched off" is state rather
+      // than a strikethrough nobody can hear.
+      <Button
+        size="sm"
+        variant={isOff ? 'ghost' : 'primary'}
+        aria-pressed={!isOff}
+        onClick={() => toggle(id, fkey)}
+      >
         {label}
-      </button>
+      </Button>
     )
   }
 
   function FieldRow({ r, fkey, title, children }: { r: Result; fkey: string; title: string; children: React.ReactNode }) {
     return (
       <div className="flex items-start gap-2 py-1.5">
-        <input type="checkbox" checked={!off(r.id, fkey)} onChange={() => toggle(r.id, fkey)} className="mt-1 accent-[var(--accent)]" />
+        <Checkbox
+          label={`Apply the suggested ${title.toLowerCase()}`}
+          hideLabel
+          className="mt-1"
+          checked={!off(r.id, fkey)}
+          onChange={() => toggle(r.id, fkey)}
+        />
         <div className="min-w-0">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{title}</p>
-          <div className="text-sm text-[var(--ink-1)]">{children}</div>
+          <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+            {title}
+          </p>
+          <div style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>{children}</div>
         </div>
       </div>
     )

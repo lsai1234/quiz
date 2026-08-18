@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PartnerBalance, PartnerPayout } from '@/lib/partners/types'
 import type { SelfBilledInvoice } from '@/lib/partners/invoice'
+import { Button, Input } from '@/components/system'
 
 
 const money = (n: number) => `£${n.toFixed(2)}`
@@ -129,12 +130,14 @@ export function PayoutsPage() {
   return (
     <div>
       <div className="flex items-center justify-end gap-3 mb-1 flex-wrap">
-        <input
+        {/* Unlabelled before this: a bare month picker with nothing saying what
+            period it sets. */}
+        <Input
+          label="Payout period"
+          compact
           type="month"
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
-          className="px-3 py-1.5 rounded-xl text-xs outline-none"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
       </div>
       <p className="text-[11px] text-[var(--ink-3)] leading-snug mb-4">
@@ -159,23 +162,18 @@ export function PayoutsPage() {
       </div>
 
       <div className="flex flex-wrap gap-2 mb-5">
-        <button
-          disabled={busy || data.totals.readyToPay <= 0}
-          onClick={() => run(false)}
-          className="text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }}
-        >
-          {busy ? 'Running…' : `Run ${data.period}`}
-        </button>
-        <button
-          disabled={busy || data.totals.heldUnderMinimum <= 0}
-          onClick={() => run(true)}
-          className="text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all disabled:opacity-40"
-          style={{ background: 'var(--surface-2)', color: 'var(--ink-3)', border: '1px solid var(--edge)' }}
+        <Button variant="primary" size="sm" loading={busy} disabled={data.totals.readyToPay <= 0} onClick={() => run(false)}>
+          {`Run ${data.period}`}
+        </Button>
+        <Button
+          size="sm"
+          loading={busy}
+          disabled={data.totals.heldUnderMinimum <= 0}
           title="Pay everyone, including balances under their agreed minimum"
+          onClick={() => run(true)}
         >
           Run, ignoring minimums
-        </button>
+        </Button>
       </div>
 
       <Section title={`Waiting for a run (${waiting.length})`} desc="Cleared the return window; not yet on a payout.">
@@ -238,14 +236,15 @@ export function PayoutsPage() {
                   </div>
                 </div>
                 {p.state === 'due' && (
-                  <button
-                    disabled={busy}
+                  <Button
+                    size="sm"
+                    className="mt-1"
+                    loading={busy}
+                    aria-label={`Mark ${p.partnerName}'s payout paid`}
                     onClick={() => markPaid(p.id, p.partnerName)}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl active:scale-95 transition-all disabled:opacity-40 mt-1"
-                    style={{ background: 'var(--surface-2)', color: 'var(--accent)', border: '1px solid var(--edge)' }}
                   >
                     Mark paid
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}

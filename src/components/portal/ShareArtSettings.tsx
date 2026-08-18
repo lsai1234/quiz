@@ -7,6 +7,7 @@ import {
   ART_MIMES, ART_MAX_BYTES, DERIVATIVE, CARD_WINDOW, LEFT_THIRD,
   validateSource, leftThirdWarning,
 } from '@/lib/share-card/art-upload'
+import { Button, Checkbox } from '@/components/system'
 
 /**
  * The card's six category photographs, in the Founders Hub.
@@ -184,10 +185,12 @@ export function ShareArtSettings() {
           Stored at {DERIVATIVE.width} × {DERIVATIVE.height}. Any slot left empty draws the
           gradient stand-in, so the card never shows a broken image.
         </p>
-        <label className="flex items-center gap-2 text-xs text-[var(--ink-2)] shrink-0">
-          <input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} />
-          Left-third guide
-        </label>
+        <Checkbox
+          className="shrink-0"
+          label="Left-third guide"
+          checked={guide}
+          onChange={(e) => setGuide(e.target.checked)}
+        />
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -310,28 +313,37 @@ function ArtSlot({ slot, guide, busy, error, warning, onFile, onReset }: {
       />
 
       <div className="flex gap-2">
-        <button
-          type="button"
+        <Button
+          size="sm"
+          className="flex-1"
+          loading={busy}
+          aria-label={`${upload ? "Replace" : "Upload"} the image for ${slot.key}`}
           onClick={() => picker.current?.click()}
-          disabled={busy}
-          className="flex-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-[var(--ink-1)] disabled:opacity-50"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}
         >
           {upload ? 'Replace' : 'Upload'}
-        </button>
-        <button
-          type="button"
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          loading={busy}
+          disabled={!upload}
+          aria-label={`Reset ${slot.key} to the stand-in`}
           onClick={onReset}
-          disabled={busy || !upload}
-          className="rounded-lg px-2 py-1.5 text-[11px] text-[var(--ink-2)] disabled:opacity-40"
-          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}
         >
           Reset
-        </button>
+        </Button>
       </div>
 
-      {error ? <p className="text-[11px] text-[var(--tone-critical)]">{error}</p> : null}
-      {warning ? <p className="text-[11px] text-[var(--tone-attention)]">{warning}</p> : null}
+      {error ? (
+        <p role="status" style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-critical)' }}>
+          {error}
+        </p>
+      ) : null}
+      {warning ? (
+        <p role="status" style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-attention)' }}>
+          {warning}
+        </p>
+      ) : null}
     </div>
   )
 }

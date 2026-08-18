@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { Campaign, CampaignStatus, CompetitionState } from '@/lib/competition/campaign'
 import type { CompetitionEntry, EntryState, ImportResult } from '@/lib/competition/entries'
+import { Button, Input, Textarea } from '@/components/system'
 
 /**
  * The competition, in the Founders Hub.
@@ -32,8 +33,6 @@ interface Data {
 }
 
 const surface = { background: 'var(--surface-1)', border: '1px solid var(--edge)' } as const
-const input =
-  'w-full px-3 py-2 rounded-xl text-xs outline-none bg-[var(--surface-2)] border border-[var(--edge)] text-[var(--ink-1)]'
 
 const STATUS_COPY: Record<CampaignStatus, { label: string; desc: string }> = {
   off: { label: 'Off', desc: 'Nothing about a competition appears anywhere. The default.' },
@@ -105,20 +104,17 @@ export function CompetitionSettings() {
         <p className="text-xs font-bold mb-2 text-[var(--ink-1)]">Status</p>
         <div className="flex gap-2 mb-2">
           {(Object.keys(STATUS_COPY) as CampaignStatus[]).map((s) => (
-            <button
+            <Button
               key={s}
-              type="button"
-              disabled={saving}
+              size="sm"
+              className="flex-1"
+              variant={data.campaign.status === s ? 'primary' : 'secondary'}
+              aria-pressed={data.campaign.status === s}
+              loading={saving}
               onClick={() => post({ action: 'save', campaign: { ...draft, status: s } })}
-              className="flex-1 py-2 rounded-xl text-xs font-bold"
-              style={{
-                background: data.campaign.status === s ? 'var(--accent)' : 'var(--surface-2)',
-                color: data.campaign.status === s ? 'var(--ink-on-accent)' : 'var(--ink-2)',
-                border: '1px solid var(--edge)',
-              }}
             >
               {STATUS_COPY[s].label}
-            </button>
+            </Button>
           ))}
         </div>
         <p className="text-[11px] text-[var(--ink-3)] leading-snug">{STATUS_COPY[data.campaign.status].desc}</p>
@@ -147,10 +143,9 @@ export function CompetitionSettings() {
         </div>
 
         <div>
-          <label className="text-[11px] font-bold text-[var(--ink-2)] block mb-1">Closing date</label>
-          <input
+          <Input
+            label="Closing date"
             type="date"
-            className={input}
             value={draft.closesAt ? draft.closesAt.slice(0, 10) : ''}
             onChange={(e) => setDraft({ ...draft, closesAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
           />
@@ -160,18 +155,20 @@ export function CompetitionSettings() {
         </div>
 
         {FIELDS.map(({ key, label, hint, long }) => (
+          // The `<label>` that used to sit above each of these had no `htmlFor`,
+          // so tapping it did nothing and the field announced itself unnamed.
+          // The primitive draws the label and wires it.
           <div key={key}>
-            <label className="text-[11px] font-bold text-[var(--ink-2)] block mb-1">{label}</label>
             {long ? (
-              <textarea
+              <Textarea
+                label={label}
                 rows={2}
-                className={input}
                 value={String(draft[key] ?? '')}
                 onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
               />
             ) : (
-              <input
-                className={input}
+              <Input
+                label={label}
                 value={String(draft[key] ?? '')}
                 onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
               />
@@ -181,11 +178,15 @@ export function CompetitionSettings() {
         ))}
 
         <div>
-          <label className="text-[11px] font-bold text-[var(--ink-2)] block mb-1">The three steps, as they appear on the card</label>
+          <p style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-2)', marginBottom: 'var(--space-1)' }}>
+            The three steps, as they appear on the card
+          </p>
           {[0, 1, 2].map((i) => (
-            <input
+            <Input
               key={i}
-              className={`${input} mb-1.5`}
+              label={`Step ${i + 1}`}
+              hideLabel
+              className="w-full mb-1.5"
               placeholder={`Step ${i + 1}`}
               value={draft.entrySteps[i] ?? ''}
               onChange={(e) => {
@@ -200,15 +201,9 @@ export function CompetitionSettings() {
           </p>
         </div>
 
-        <button
-          type="button"
-          disabled={saving}
-          onClick={() => post({ action: 'save', campaign: draft })}
-          className="w-full py-2.5 rounded-xl text-xs font-bold"
-          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-        >
-          {saving ? 'Saving…' : 'Save'}
-        </button>
+        <Button variant="primary" fullWidth loading={saving} onClick={() => post({ action: 'save', campaign: draft })}>
+          Save
+        </Button>
       </div>
 
       {/* Where entrants come from */}
@@ -220,23 +215,26 @@ export function CompetitionSettings() {
           the same list twice is safe: anything already entered is counted as a duplicate
           rather than added again.
         </p>
-        <textarea
+        <Textarea
+          label="Handles to add, one per line"
+          hideLabel
+          className="w-full font-mono"
           value={paste}
           onChange={(e) => setPaste(e.target.value)}
           rows={4}
           placeholder={'@jamie\n@alex.lifts\nsam_trains'}
-          className={`${input} font-mono`}
-          style={{ resize: 'vertical' }}
         />
-        <button
-          type="button"
-          disabled={saving || paste.trim().length === 0}
-          onClick={() => post({ action: 'import-tags', handles: paste })}
-          className="w-full mt-2 py-2.5 rounded-xl text-xs font-bold disabled:opacity-40"
-          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-        >
-          {saving ? 'Adding…' : 'Add these entrants'}
-        </button>
+        <div className="mt-2">
+          <Button
+            variant="primary"
+            fullWidth
+            loading={saving}
+            disabled={paste.trim().length === 0}
+            onClick={() => post({ action: 'import-tags', handles: paste })}
+          >
+            Add these entrants
+          </Button>
+        </div>
         {imported && (
           <p className="text-[11px] mt-2 leading-snug text-[var(--ink-2)]">
             Added <strong className="text-[var(--ink-1)]">{imported.added.length}</strong>
@@ -279,22 +277,22 @@ export function CompetitionSettings() {
                 </div>
                 {e.state === 'pending' && (
                   <>
-                    <button
-                      type="button"
+                    <Button
+                      size="sm"
+                      variant="primary"
+                      aria-label={`Verify ${e.handle}`}
                       onClick={() => post({ action: 'set-state', id: e.id, state: 'verified' })}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg"
-                      style={{ background: 'var(--positive-fill)', color: 'var(--tone-positive)' }}
                     >
                       Verify
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      aria-label={`Reject ${e.handle}`}
                       onClick={() => post({ action: 'set-state', id: e.id, state: 'rejected' })}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg"
-                      style={{ background: 'var(--critical-fill)', color: 'var(--tone-critical)' }}
                     >
                       Reject
-                    </button>
+                    </Button>
                   </>
                 )}
               </div>
@@ -302,15 +300,16 @@ export function CompetitionSettings() {
           </div>
         )}
 
-        <button
-          type="button"
-          disabled={saving || (data.counts.verified ?? 0) === 0}
-          onClick={() => post({ action: 'draw' })}
-          className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold disabled:opacity-40"
-          style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)' }}
-        >
-          Draw a winner
-        </button>
+        <div className="mt-3">
+          <Button
+            fullWidth
+            loading={saving}
+            disabled={(data.counts.verified ?? 0) === 0}
+            onClick={() => post({ action: 'draw' })}
+          >
+            Draw a winner
+          </Button>
+        </div>
         <p className="text-[10px] text-[var(--ink-3)] mt-1.5 leading-snug">
           Drawn at random from verified entries only, using a cryptographic random
           number — “we used a properly random draw” is a claim that has to survive

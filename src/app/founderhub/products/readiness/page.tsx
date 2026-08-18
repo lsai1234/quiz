@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { ProductEditor } from '@/components/portal/ProductEditor'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
+import { Badge, Button, Card } from '@/components/system'
 
-const DOT: Record<CheckStatus, string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
+/** Readiness status → the system's semantic tone. `Badge` owns the colours. */
+const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: 'positive', warn: 'attention', fail: 'critical' }
 const RANK: Record<CheckStatus, number> = { fail: 0, warn: 1, ok: 2 }
 
 interface Row { product: CatalogueProduct; readiness: ProductReadiness }
@@ -42,25 +44,40 @@ export default function ReadinessPage() {
       </div>
 
       {rows === null ? (
-        <p className="text-sm text-[var(--ink-3)]">Loading…</p>
+        <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
       ) : (
         <div className="space-y-2">
           {sorted.map(({ product, readiness }) => (
-            <button key={product.id} onClick={() => setEditing(product)} className="w-full text-left rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 active:scale-[0.99] transition-all">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: DOT[readiness.overall] }} />
-                <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product.title}</p>
-              </div>
-              <div className="space-y-1">
-                {readiness.checks.map((c) => (
-                  <div key={c.id} className="flex items-center gap-2 text-[11px]">
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: DOT[c.status] }} />
-                    <span className="text-[var(--ink-2)]">{c.label}</span>
-                    {c.detail && <span className="text-[var(--ink-3)]">— {c.detail}</span>}
-                  </div>
-                ))}
-              </div>
-            </button>
+            <Card key={product.id} solid interactive padding="none">
+            <Button
+              variant="ghost"
+              fullWidth
+              className="text-left justify-start items-start"
+              aria-label={`Edit ${product.title}`}
+              onClick={() => setEditing(product)}
+            >
+              <span className="min-w-0">
+                <span className="flex items-center gap-2">
+                  <Badge tone={TONE[readiness.overall]} dot>
+                    {readiness.overall === 'ok' ? 'Ready' : readiness.overall === 'warn' ? 'Needs a look' : 'Not ready'}
+                  </Badge>
+                  <span className="truncate" style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                    {product.title}
+                  </span>
+                </span>
+                <span className="block space-y-1" style={{ marginTop: 'var(--space-2)' }}>
+                  {readiness.checks.map((c) => (
+                    <span key={c.id} className="flex items-center gap-2" style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)' }}>
+                      <Badge tone={TONE[c.status]} dot>
+                        {c.label}
+                      </Badge>
+                      {c.detail && <span style={{ color: 'var(--ink-3)' }}>{c.detail}</span>}
+                    </span>
+                  ))}
+                </span>
+              </span>
+            </Button>
+            </Card>
           ))}
         </div>
       )}

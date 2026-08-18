@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { FulfilmentQueue } from '@/components/portal/FulfilmentQueue'
 import type { QueueKind } from '@/lib/orders/queue'
+import { Button } from '@/components/system'
 
 const TABS: { value: QueueKind | 'all'; label: string; blurb: string }[] = [
   { value: 'all', label: 'Everything', blurb: 'Every paid order waiting on you, one-off and subscription.' },
@@ -35,18 +36,15 @@ export default function QueuePage() {
 
       <div className="flex gap-1.5">
         {TABS.map((t) => (
-          <button
+          <Button
             key={t.value}
+            size="sm"
+            variant={tab === t.value ? 'primary' : 'secondary'}
+            aria-pressed={tab === t.value}
             onClick={() => setTab(t.value)}
-            className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
-            style={{
-              background: tab === t.value ? 'var(--accent)' : 'var(--surface-2)',
-              color: tab === t.value ? 'var(--ground-base)' : 'var(--ink-3)',
-              border: '1px solid var(--edge)',
-            }}
           >
             {t.label}
-          </button>
+          </Button>
         ))}
       </div>
 

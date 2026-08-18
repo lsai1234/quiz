@@ -36,10 +36,10 @@ describe('the Founders Hub', () => {
   })
 
   it('puts a focus ring under every control in the region', () => {
-    // The floor, not a per-control opt-in. 131 raw buttons and 88 raw form
-    // controls are still waiting to become primitives; this is what makes their
-    // focus state correct in the meantime, and what covers the next raw one
-    // somebody adds.
+    // The floor, not a per-control opt-in. It was written when 131 raw buttons
+    // and 88 raw form controls were still waiting to become primitives. They are
+    // primitives now, so it protects one thing: the next raw control somebody
+    // adds, which is covered the day it lands rather than the day it is noticed.
     expect(SYSTEM_CSS).toMatch(
       /\.founder-hub :is\(button, \[role='button'\], a\[href\], input, select, textarea\):focus-visible/,
     )
@@ -70,5 +70,47 @@ describe('the Founders Hub', () => {
     // `--color-*` is the old palette. It still exists for the hubs that have not
     // been migrated, but nothing in Founders Hub may reach for it again.
     expect(source).not.toMatch(/var\(--color-[a-z0-9-]+\)/)
+  })
+
+  /**
+   * ── The structural rule ────────────────────────────────────────────────────
+   *
+   * The palette rule above stopped the hub inventing colours. This one stops it
+   * inventing controls. Both exist for the same reason: 151 hand-rolled buttons
+   * and 79 hand-rolled fields did not arrive in one commit — they arrived one
+   * reasonable-looking call site at a time, and nothing said no.
+   *
+   * A raw `<button>` is not a small thing to leave in. Every one of them in this
+   * hub was missing at least one of: a focus ring, a disabled state, a busy
+   * state, or — for the icon-only ones — a name. The primitives carry all four,
+   * so reaching for the element directly is reaching past them.
+   */
+  const ALLOWED = {
+    // The only slider in the product, in `PriceChanges`. A Slider primitive for
+    // one call site would be a pattern with a single user; see the note there
+    // and in `docs/DESIGN_ROLLOUT.md`. Native `<input type="range">` announces
+    // its own role, name and value, and the region focus floor covers the ring.
+    'src/components/portal/PriceChanges.tsx': ['input'],
+    // The file input behind `ShareArtSettings`'s Upload button. It is
+    // `className="hidden"` and never focusable — the Button is the control, and
+    // this is the only way to open a native file picker.
+    'src/components/portal/ShareArtSettings.tsx': ['input'],
+  } as const
+
+  it.each(FILES)('%s builds its controls from the primitives', (file) => {
+    const source = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '')
+
+    const allowed: readonly string[] = ALLOWED[file as keyof typeof ALLOWED] ?? []
+
+    for (const tag of ['button', 'input', 'select', 'textarea']) {
+      if (allowed.includes(tag)) continue
+      expect({ file, tag, found: new RegExp(`<${tag}[\\s>]`).test(source) }).toEqual({
+        file,
+        tag,
+        found: false,
+      })
+    }
   })
 })

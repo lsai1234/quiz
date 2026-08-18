@@ -360,6 +360,18 @@ the way.
 
 Both variants are on `/styleguide`, side by side, under **Compact fields**.
 
+## The Founders Hub is fully migrated
+
+Every control in `src/components/portal` and `src/app/founderhub` is a primitive.
+`founder-hub.test.ts` checks each file for raw `<button>`, `<input>`, `<select>`
+and `<textarea>` as well as for hex literals and `--color-*`, so a new raw
+control fails a test rather than quietly joining the 151 that were there before.
+
+Two exceptions are named in that test with their reasons: the single
+`<input type="range">` in `PriceChanges` (no Slider primitive exists, and one
+call site does not justify one) and the hidden `<input type="file">` behind
+`ShareArtSettings`'s Upload button.
+
 ## The Founders Hub focus floor
 
 `.founder-hub` on the hub's roots, plus a rule in `system.css`, gives every

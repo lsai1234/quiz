@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/system'
 import type { FulfilmentQueue as Queue, QueueKind, QueueOrder } from '@/lib/orders/queue'
 import { OrderingModeBanner } from './OrderSendingToggle'
+import { Checkbox } from '@/components/system'
 
 /** The queue endpoint adds the current ordering mode to the queue payload. */
 type QueueWithOrdering = Queue & { ordering?: 'simulate' | 'live' }
@@ -189,7 +190,13 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                 return (
                   <div key={o.id} className="rounded-2xl border p-3.5" style={{ background: 'var(--surface-1)', borderColor: blocked && o.review === 'pending' ? `var(--critical-line)` : 'var(--edge)' }}>
                     <div className="flex items-start gap-3">
-                      <input type="checkbox" checked={selected.has(o.id)} onChange={() => toggle(o.id)} className="mt-1 shrink-0" aria-label={`Select ${o.reference ?? o.id}`} />
+                      <Checkbox
+                        label={`Select ${o.reference ?? o.id}`}
+                        hideLabel
+                        className="mt-1 shrink-0"
+                        checked={selected.has(o.id)}
+                        onChange={() => toggle(o.id)}
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <Link href={`/founderhub/commerce/orders/${o.id}`} className="text-sm font-bold text-[var(--ink-1)] underline" style={{ fontFamily: 'var(--font-display)' }}>

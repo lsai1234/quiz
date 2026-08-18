@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
+import { Button } from '@/components/system'
 
 
 interface Change {
@@ -107,17 +108,16 @@ export function SupplierSyncPanel() {
               : 'Has not run yet. It runs nightly, or check now.'}
           </p>
         </div>
-        <button
-          onClick={runNow}
-          disabled={busy}
-          className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-          style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
-        >
-          {busy ? 'Checking…' : 'Check now'}
-        </button>
+        <Button size="sm" loading={busy} onClick={runNow}>
+          Check now
+        </Button>
       </div>
 
-      {error && <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
+      {error && (
+        <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
+          {error}
+        </p>
+      )}
 
       {report && report.updated === 0 && report.missing.length === 0 && (
         <p className="text-xs" style={{ color: 'var(--tone-positive)' }}>

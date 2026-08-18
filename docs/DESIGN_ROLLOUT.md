@@ -10,38 +10,37 @@ Two commits are already on master:
   Founders Hub shell, dashboard, modals, palette and focus floor
 - `025207f` — three subscription delivery fixes
 
-Phases 0 and 1 are done on `claude/liquid-glass-design-system-hxqlsp` and not yet
-merged. Everything below them is what is *not* done.
+Phases 0, 1 and 2 are done on `claude/liquid-glass-design-system-hxqlsp` and not
+yet merged. Everything below them is what is *not* done.
 
 ---
 
 ## Where it actually stands
 
-Measured on master, across the 61 Founders Hub files:
+Across the 61 Founders Hub files, at the head of this branch:
 
 | | Count |
 |---|---|
 | Hex literals | **0** |
 | Old `--color-*` references | **0** |
-| Files importing `@/components/system` | 8 |
-| Raw `<button>` | 131 |
-| Raw `<input>` / `<select>` / `<textarea>` | 95 |
-| Files carrying at least one raw control | 31 |
+| Raw `<button>` | **0** |
+| Raw `<input>` / `<select>` / `<textarea>` | **2**, both listed below |
+| Files importing `@/components/system` | 40 |
 
-The palette is done and locked by `founder-hub.test.ts` — including for two
-components written after the migration, by other work, which the test held to
-the rule without anyone having to remember it. What is left is **structural**:
-controls that are the right colour but not the right component.
+Founders Hub is finished. All four numbers are held by `founder-hub.test.ts`,
+which runs per file, so the next raw control fails a test the day it lands
+rather than the day somebody notices it.
 
-The work is concentrated rather than spread. Five files carry 48% of it:
+The two survivors are deliberate, named in the test's `ALLOWED` map with the
+reason beside them:
 
-| File | Raw controls |
-|---|---|
-| `BundleEditor.tsx` | 39 |
-| `PartnerDetail.tsx` | 29 |
-| `founderhub/pricing/page.tsx` | 16 |
-| `Outbox.tsx` | 14 |
-| `CompetitionSettings.tsx` | 11 |
+- **`PriceChanges.tsx` — an `<input type="range">.`** The only slider in the
+  product. A Slider primitive with one call site is a pattern with a single
+  user; the native range announces its own role, name and value, and the region
+  focus floor gives it a ring. Revisit if a second slider ever appears.
+- **`ShareArtSettings.tsx` — a hidden `<input type="file">.`** It is
+  `className="hidden"` and never focusable; the Button beside it is the control.
+  There is no other way to open a native file picker.
 
 ---
 
@@ -108,7 +107,7 @@ Two calls worth knowing before Phase 2 leans on this:
 
 ---
 
-## Phase 2 — Founders Hub controls
+## Phase 2 — Founders Hub controls — **done**
 
 The bulk: 31 files, 226 raw controls. Split by where the work actually is, not
 alphabetically, so each commit is a coherent review.
@@ -132,6 +131,37 @@ field-heavy, so these do not depend on Phase 1 and could run in parallel with it
 **Done when:** raw `<button>` and raw field counts in Founders Hub reach zero,
 and `founder-hub.test.ts` gains an assertion holding them there — the same shape
 as the palette rule, so the next raw control cannot land unnoticed.
+
+**Outcome:** all four sub-phases shipped, 31 files, ~220 controls. Nine private
+control layers deleted along the way — `INPUT_STYLE`/`SMALL_INPUT`, two `const
+BTN`s, two `const btn`s, three separate local `Field`s and a local `Card` and
+`Input` that shadowed the real ones.
+
+Four additions to the primitive layer, each because the alternative was a
+one-off at a call site:
+
+- `Textarea` — 11 across five files, no primitive.
+- `Checkbox` — 8 across six files. Not built on `Field`: its name sits beside it
+  and is usually a sentence.
+- `buttonSurface()` — the button's paint without the `<button>`, for the few
+  places that navigate and must stay anchors.
+- `hideLabel` on the field family and `Checkbox` — keeps the name, drops only
+  the drawing of it.
+
+Plus `chevron-up` and `chevron-left`, which the shared glyph set was missing.
+
+The accessibility repairs are the part worth reading, because they were not
+cosmetic. Icon-only controls had no names at all; twenty rows of "Move up" are
+now "Move Creatine Monohydrate up". Every status dot with a `title` is a Badge
+with words. Four filter strips and every on/off control carry `aria-pressed`.
+Two tab strips that were buttons plus an underline are real tablists. A
+`<label>` containing `<button>`s — invalid markup that hands clicks to the wrong
+control — is a `<fieldset>`. Several `<label>`s had no `htmlFor`, so tapping
+them did nothing and the field announced itself unnamed.
+
+And a class of thing the migration surfaced rather than fixed: Refund, Cancel,
+Reject, Delete and Write off were all secondary buttons with red text, which
+scans exactly like "Sync status" beside them. They are `destructive` now.
 
 ---
 

@@ -2,6 +2,7 @@
 
 import { ZONE_LABELS, selectService } from '@/lib/pricing/delivery'
 import type { PricingConfig, DeliveryService, DeliveryZone } from '@/lib/stack-blueprint/pricing'
+import { Button, Input } from '@/components/system'
 
 
 const ZONES: DeliveryZone[] = ['uk-1', 'uk-2', 'eu']
@@ -67,33 +68,38 @@ export function RateCard({
                       border: `1px solid ${isApplicable ? `var(--accent-line)` : 'var(--edge)'}`,
                     }}
                   >
-                    <input
+                    <Input
+                      label={`Name of delivery service ${s.name || 'unnamed'}`}
+                      compact
+                      className="flex-1 min-w-0"
                       value={s.name}
                       onChange={(e) => update(s.id, { name: e.target.value })}
-                      className="flex-1 min-w-0 bg-transparent text-[11px] outline-none text-[var(--ink-1)]"
-                      aria-label="Service name"
                     />
-                    <span className="text-[10px] text-[var(--ink-3)]">up to £</span>
-                    <input
+                    <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>up to</span>
+                    <Input
+                      label={`Maximum order value for ${s.name || 'this service'} — blank for no limit`}
+                      compact
+                      align="right"
+                      prefix="£"
+                      className="w-24"
                       type="number"
                       value={s.maxOrderValue ?? ''}
                       placeholder="∞"
                       onChange={(e) => update(s.id, { maxOrderValue: e.target.value === '' ? null : parseFloat(e.target.value) || 0 })}
-                      className="w-16 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                      style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
-                      aria-label="Maximum order value (blank for no limit)"
                     />
-                    <span className="text-[10px] text-[var(--ink-3)]">wholesale · costs £</span>
-                    <input
+                    <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>wholesale · costs</span>
+                    <Input
+                      label={`What ${s.name || 'this service'} costs us, ex VAT`}
+                      compact
+                      align="right"
+                      prefix="£"
+                      className="w-24"
                       type="number"
                       step="0.01"
                       value={s.price}
                       onChange={(e) => update(s.id, { price: parseFloat(e.target.value) || 0 })}
-                      className="w-14 px-1 py-0.5 rounded text-[11px] text-right outline-none"
-                      style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
-                      aria-label="Price ex VAT"
                     />
-                    <button onClick={() => remove(s.id)} className="text-[var(--ink-3)] text-xs px-0.5" aria-label={`Remove ${s.name}`}>✕</button>
+                    <Button variant="ghost" size="sm" icon="trash" aria-label={`Remove ${s.name}`} onClick={() => remove(s.id)} />
                   </div>
                 )
               })}
@@ -102,7 +108,9 @@ export function RateCard({
         )
       })}
 
-      <button onClick={add} className="text-xs font-bold" style={{ color: 'var(--accent)' }}>+ Add a service</button>
+      <Button variant="ghost" size="sm" icon="plus" onClick={add}>
+        Add a service
+      </Button>
       <p className="text-[10px] text-[var(--ink-3)] leading-snug">
         Banded on what <strong>we</strong> pay PowerBody for the order, ex VAT — not on weight, and not on what the
         member pays us. Leave the limit blank for the open-ended top band. The cheapest band an order qualifies for is

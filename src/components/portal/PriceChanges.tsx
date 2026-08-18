@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { PriceGroupImpact } from '@/lib/changes/price'
+import { Button } from '@/components/system'
 
 
 type Group = PriceGroupImpact & { suggestedPassOnPct: number | null; noticeDays: number }
@@ -152,25 +153,34 @@ export function PriceChanges() {
             )}
 
             <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => act(g.productId, 'absorb')}
+              <Button
+                variant="primary"
+                size="sm"
+                loading={busy === g.productId}
                 disabled={busy !== null}
-                className="text-xs font-bold px-4 py-2 rounded-xl disabled:opacity-40"
-                style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
+                onClick={() => act(g.productId, 'absorb')}
               >
-                {busy === g.productId ? 'Working…' : 'Absorb it'}
-              </button>
+                Absorb it
+              </Button>
 
               <div className="flex items-center gap-2">
+                {/* The one raw control left in the hub. There is no Slider
+                    primitive and this is the only slider in the product, so it
+                    is flagged in `docs/DESIGN_ROLLOUT.md` rather than made into
+                    a primitive for one call site. It is covered by the region
+                    focus floor in `system.css`, and its name and value are
+                    announced by the native range role. */}
                 <input
                   type="range" min={0} max={100} step={5}
                   value={Math.round(share * 100)}
                   onChange={(e) => setShares({ ...shares, [g.productId]: Number(e.target.value) / 100 })}
                   className="w-28"
                   style={{ accentColor: 'var(--accent)' }}
-                  aria-label="Share to pass on"
+                  aria-label={`Share of the ${g.productTitle} rise to pass on`}
                 />
-                <button
+                <Button
+                  size="sm"
+                  disabled={busy !== null}
                   onClick={() => {
                     if (
                       window.confirm(
@@ -180,12 +190,9 @@ export function PriceChanges() {
                       act(g.productId, 'pass-on', share)
                     }
                   }}
-                  disabled={busy !== null}
-                  className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-                  style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
                 >
                   Pass on {pct(share)}
-                </button>
+                </Button>
               </div>
             </div>
           </div>

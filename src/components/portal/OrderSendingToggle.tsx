@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Badge, Button, Card } from '@/components/system'
 
 
 interface State {
@@ -57,7 +58,7 @@ export function OrderSendingToggle() {
     }
   }
 
-  if (!data) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
+  if (!data) return <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
 
   const isLive = data.effective === 'live'
   const wantsLiveButSimulating = data.mode === 'live' && !isLive
@@ -67,70 +68,56 @@ export function OrderSendingToggle() {
       <div className="space-y-2">
         {OPTIONS.map((o) => {
           const active = data.mode === o.mode
-          const danger = o.mode === 'live'
-          const tint = danger ? 'var(--tone-attention)' : 'var(--tone-positive)'
+          const tone = o.mode === 'live' ? 'attention' : 'positive'
           return (
-            <button
-              key={o.mode}
-              onClick={() => (o.mode === 'live' && !active ? setConfirming(true) : choose(o.mode))}
-              disabled={saving}
-              className="w-full text-left rounded-2xl border p-4 transition-all active:scale-[0.99] disabled:opacity-50"
-              style={{
-                background: active ? `color-mix(in srgb, ${tint} 10%, transparent)` : 'var(--surface-1)',
-                borderColor: active ? `color-mix(in srgb, ${tint} 45%, transparent)` : 'var(--edge)',
-              }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className="text-sm font-bold text-[var(--ink-1)]"
-                  style={{ fontFamily: 'var(--font-display)' }}
-                >
-                  {o.label}
-                </span>
-                {active && (
-                  <span className="text-[10px] font-bold uppercase whitespace-nowrap" style={{ color: tint }}>
-                    Selected
+            // The card carries the tint; the button inside it is the target, so
+            // the whole row is pressable rather than just the words.
+            <Card key={o.mode} padding="none" tone={active ? tone : undefined}>
+              <Button
+                variant="ghost"
+                fullWidth
+                className="text-left justify-between items-start"
+                // `aria-pressed`, because these are a choice with one selected —
+                // it was a coloured border and the word "Selected", neither of
+                // which a screen reader reports as state.
+                aria-pressed={active}
+                loading={saving}
+                onClick={() => (o.mode === 'live' && !active ? setConfirming(true) : choose(o.mode))}
+              >
+                <span className="min-w-0">
+                  <span className="block" style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                    {o.label}
                   </span>
-                )}
-              </div>
-              <p className="text-xs text-[var(--ink-3)] mt-0.5 leading-relaxed">{o.desc}</p>
-            </button>
+                  <span
+                    className="block"
+                    style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-body)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}
+                  >
+                    {o.desc}
+                  </span>
+                </span>
+                {active && <Badge tone={tone}>Selected</Badge>}
+              </Button>
+            </Card>
           )
         })}
       </div>
 
       {confirming && (
-        <div
-          className="text-xs rounded-xl p-3.5 space-y-2.5"
-          style={{
-            background: `var(--attention-fill)`,
-            border: `1px solid color-mix(in srgb, var(--tone-attention) 45%, transparent)`,
-          }}
-        >
-          <p style={{ color: 'var(--tone-attention)' }} className="leading-relaxed">
+        <Card tone="attention" padding="tight" className="space-y-2.5">
+          <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--tone-attention)' }}>
             <strong>This arms real ordering.</strong> From now on, Send in the fulfilment queue places a genuine
             dropship order with PowerBody — stock is committed, you are invoiced, and a parcel goes to the customer.
             Orders already sent as simulations are unaffected.
           </p>
           <div className="flex gap-2">
-            <button
-              onClick={() => choose('live')}
-              disabled={saving}
-              className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-              style={{ background: 'var(--tone-attention)', borderColor: 'var(--tone-attention)', color: 'var(--ink-on-accent)' }}
-            >
-              {saving ? 'Switching…' : 'Yes, send real orders'}
-            </button>
-            <button
-              onClick={() => setConfirming(false)}
-              disabled={saving}
-              className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-              style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
-            >
+            <Button variant="destructive" size="sm" loading={saving} onClick={() => choose('live')}>
+              Yes, send real orders
+            </Button>
+            <Button size="sm" disabled={saving} onClick={() => setConfirming(false)}>
               Cancel
-            </button>
+            </Button>
           </div>
-        </div>
+        </Card>
       )}
 
       <div

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { Badge, Card, Input, Select } from '@/components/system'
 
 
 interface OrderRow {
@@ -87,44 +88,59 @@ export function OrdersList({ defaultChannel = 'all' }: { defaultChannel?: string
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search order id or email"
-          className="flex-1 min-w-[180px] text-sm rounded-xl px-3 py-2 border" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }} />
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-sm rounded-xl px-3 py-2 border" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}>
+        <Input
+          label="Search orders"
+          compact
+          className="flex-1 min-w-[11rem]"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search order id or email"
+        />
+        <Select label="Status" compact value={status} onChange={(e) => setStatus(e.target.value)}>
           {STATUSES.map((s) => <option key={s} value={s}>{s === 'all' ? 'All statuses' : statusLabel(s)}</option>)}
-        </select>
-        <select value={channel} onChange={(e) => setChannel(e.target.value)} className="text-sm rounded-xl px-3 py-2 border" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}>
+        </Select>
+        <Select label="Channel" compact value={channel} onChange={(e) => setChannel(e.target.value)}>
           {CHANNELS.map((c) => <option key={c} value={c}>{c === 'all' ? 'All channels' : c === 'one-off' ? 'One-off (shop + quiz)' : c}</option>)}
-        </select>
+        </Select>
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-[var(--ink-3)] py-8 text-center">No orders yet. Place a checkout in the shop or quiz to see one here.</p>
+        <p className="text-center" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
+          No orders yet. Place a checkout in the shop or quiz to see one here.
+        </p>
       ) : (
-        <div className="space-y-2">
+        <ul className="space-y-2">
           {filtered.map((o) => (
-            <Link key={o.id} href={`/founderhub/commerce/orders/${o.id}`} className="block rounded-2xl border p-3.5" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+            // `solid`: the orders list is long and scrolls.
+            <Card key={o.id} as="li" solid interactive padding="none">
+            <Link href={`/founderhub/commerce/orders/${o.id}`} className="block" style={{ padding: 'var(--space-3)' }}>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>{o.reference ?? o.id}</span>
-                    <span className="text-[10px] font-semibold uppercase text-[var(--ink-3)]">{o.channel}</span>
-                    {needsReview(o) && (
-                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
-                        style={{ color: 'var(--tone-attention)', background: 'color-mix(in srgb, var(--tone-attention) 14%, transparent)' }}>
-                        needs review
-                      </span>
-                    )}
+                    <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+                      {o.reference ?? o.id}
+                    </span>
+                    <span style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                      {o.channel}
+                    </span>
+                    {needsReview(o) && <Badge tone="attention">needs review</Badge>}
                   </div>
-                  <p className="text-[11px] text-[var(--ink-3)] truncate">{o.email ?? 'guest'} · {new Date(o.createdAt).toLocaleString()}</p>
+                  <p className="truncate" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+                    {o.email ?? 'guest'} · {new Date(o.createdAt).toLocaleString()}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-sm font-bold text-[var(--ink-1)]">{money(o.total, o.currency)}</span>
+                  <span style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontVariantNumeric: 'tabular-nums', color: 'var(--ink-1)' }}>
+                    {money(o.total, o.currency)}
+                  </span>
                   <StatusBadge status={o.status} />
                 </div>
               </div>
             </Link>
+            </Card>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   )
