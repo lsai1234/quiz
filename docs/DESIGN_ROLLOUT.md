@@ -10,7 +10,8 @@ Two commits are already on master:
   Founders Hub shell, dashboard, modals, palette and focus floor
 - `025207f` — three subscription delivery fixes
 
-Everything below is what is *not* done.
+Phases 0 and 1 are done on `claude/liquid-glass-design-system-hxqlsp` and not yet
+merged. Everything below them is what is *not* done.
 
 ---
 
@@ -44,7 +45,7 @@ The work is concentrated rather than spread. Five files carry 48% of it:
 
 ---
 
-## Phase 0 — Re-baseline
+## Phase 0 — Re-baseline — **done**
 
 Small, and everything else depends on it.
 
@@ -56,9 +57,16 @@ suite on current master, confirm green.
 it stands today. Any failure here belongs to whoever is closest to it, not to
 this rollout — but it has to be known before anything is built on top.
 
+**Outcome:** branch re-baselined on current master, `npx tsc --noEmit` clean,
+2595 tests across 175 suites green. Nothing in `src/components/system` or
+`src/app/system.css` was touched by the intervening commits. One thing changed
+for anyone running tests by hand: `package.json` now passes
+`--experimental-vm-modules`, so `node node_modules/jest/bin/jest.js` no longer
+works on its own — use `npm test`.
+
 ---
 
-## Phase 1 — Close the primitive gap
+## Phase 1 — Close the primitive gap — **done**
 
 Small, and it is the blocker on the largest part of Phase 2.
 
@@ -79,6 +87,24 @@ the pricing screens and the new settings screens.
 
 **Done when:** the variant exists, is on the styleguide, and
 `tokens-only.test.ts` still passes.
+
+**Outcome:** `compact` and `align` on `Input` and `Select`. No label, hint or
+error line is drawn; the name moves to `aria-label` and the messages to
+`sr-only`, still referenced by `aria-describedby`, so a screen reader gets what
+the stacked field gives. `align="right"` also switches on tabular figures.
+Written up in `DESIGN.md` and shown on `/styleguide` under **Compact fields**,
+both in a dense line-item table and beside the stacked version of the same field.
+
+Two calls worth knowing before Phase 2 leans on this:
+
+- Compact sits at `--control-sm` (36px), not the ~30px the raw fields use, so the
+  pricing screens will get slightly taller. A number box nobody can hit is not an
+  improvement on a tall one — but it is a visible change, and it is the one to
+  look at on `/styleguide` first.
+- Building the styleguide row surfaced a real bug in the existing `Input`: with a
+  `prefix` or `suffix` the box is a wrapper, and the caller's `className` was
+  landing on the bare input inside it. A `w-24` on a unit field sized the text and
+  left the box full-bleed. Fixed, and covered by a test.
 
 ---
 

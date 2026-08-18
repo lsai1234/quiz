@@ -30,27 +30,29 @@ export function Select({
   error,
   required,
   disabled,
+  compact,
+  align,
   className,
   children,
   ref,
   ...rest
 }: SelectProps) {
   const id = useId()
-  const field = { label, hint, error, required, disabled, className }
+  const field = { label, hint, error, required, disabled, compact, align, className }
 
   return (
     <Field id={id} {...field}>
-      <div className="relative">
+      <div className={`relative ${compact ? (className ?? '') : ''}`}>
         <select
           {...rest}
           {...fieldControlProps(id, field)}
           ref={ref}
           className="system-field system-focus w-full appearance-none"
           style={{
-            ...controlSurface(Boolean(error)),
+            ...controlSurface(Boolean(error), { compact, align }),
             fontFamily: 'var(--font-body)',
             // Room for the glyph, so a long option label never runs under it.
-            paddingRight: 'var(--space-8)',
+            paddingRight: compact ? 'var(--space-6)' : 'var(--space-8)',
             // Renders the native option list dark. Without it the picker opens
             // as a white sheet in the middle of a dark app.
             colorScheme: 'dark',
@@ -61,7 +63,7 @@ export function Select({
         <span
           className="absolute top-1/2 pointer-events-none flex"
           style={{
-            right: 'var(--space-3)',
+            right: compact ? 'var(--space-2)' : 'var(--space-3)',
             transform: 'translateY(-50%)',
             color: 'var(--ink-3)',
           }}

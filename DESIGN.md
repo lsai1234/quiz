@@ -165,8 +165,8 @@ hierarchy collapses into two.
 | `Ground` | The mesh. Wrap each hub shell in it. |
 | `Button` | `primary` / `secondary` / `ghost` / `destructive`; `sm`/`md`/`lg`; `loading`; `icon`/`iconRight`. |
 | `Card` | `elevation` 1–3, `solid`, `tone`, `padding`, `interactive`. |
-| `Input` | `label` required; `hint`, `error`, `prefix`, `suffix`. |
-| `Select` | Native `<select>`, styled. Same label/hint/error shell. |
+| `Input` | `label` required; `hint`, `error`, `prefix`, `suffix`, `compact`, `align`. |
+| `Select` | Native `<select>`, styled. Same label/hint/error shell, same `compact`. |
 | `Modal` | + `ModalHeader`/`Body`/`Footer`. Focus-trapped, Escape, scroll lock. |
 | `Badge` | `neutral`/`accent`/`positive`/`attention`/`critical`/`info`; `soft`/`solid`. |
 | `Tabs` | Real tablist: roving tabindex, arrow keys, Home/End. |
@@ -322,21 +322,34 @@ primitive layer is allowed to take from outside itself.
 
 ---
 
-## Known gap: there is no compact field
+## `compact` — the field for a table row
 
 `Input` and `Select` render a label above the control, which is right for a form
 and wrong for a dense table row. The Founders Hub pricing screens are full of
-16-to-20px-wide right-aligned number inputs sitting inside label/value rows that
-already name them — `w-16 px-2 py-1.5 text-xs text-right` — and dropping `Input`
-into those would put a second label above every one and break the layout that
-makes the page readable.
+narrow right-aligned number inputs sitting inside rows that already name them, and
+the stacked field puts a second label above every one.
 
-So they are still raw `<input>`s, deliberately, and they are covered by the
-focus-ring floor (see below) rather than by the primitive. Closing this properly
-means adding a compact variant that takes its accessible name from an existing
-label rather than drawing its own — not forcing the current one in.
+`compact` draws no label, hint or error line. Nothing is dropped, only moved: the
+name goes to `aria-label`, and the hint and error are still rendered, still
+referenced by `aria-describedby`, and still announced — as `sr-only`. A screen
+reader gets exactly what the stacked field gives. Pair it with `align="right"` on
+anything numeric, which also switches on tabular figures so a column does not
+shift width as it is typed.
 
-Flagged here rather than worked around, per the rule below.
+Two things it does not do:
+
+- **It does not shrink below the thumb.** Compact sits at `--control-sm` (36px).
+  The raw fields it replaces are around 30px, so the dense pages get slightly
+  taller — deliberately. A number box nobody can hit is not an improvement on a
+  tall one.
+- **It does not invent a label.** `label` is still required. A field with no name
+  is a field nobody can use, and in compact mode it is the *only* name there is.
+
+`className` goes on the box: on the control normally, and on the wrapper when
+`prefix` or `suffix` means the wrapper is the box. Width is the only thing that
+belongs there.
+
+Both variants are on `/styleguide`, side by side, under **Compact fields**.
 
 ## The Founders Hub focus floor
 

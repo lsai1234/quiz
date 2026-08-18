@@ -353,3 +353,79 @@ describe('Modal', () => {
     expect(document.body.style.overflow).toBe('')
   })
 })
+
+
+/**
+ * The compact field.
+ *
+ * The variant exists because Founders Hub is full of dense rows that already
+ * name their value, and the stacked label doubles the height of those pages.
+ * The whole risk of a variant like this is that "no label" quietly becomes "no
+ * accessible name" — so what is pinned here is that nothing a screen reader
+ * relies on was dropped, only the space it took.
+ */
+describe('Input, compact', () => {
+  it('still has an accessible name, with no visible label', () => {
+    render(<Input compact label="Discount" />)
+    expect(screen.getByRole('textbox', { name: 'Discount' })).toBeInTheDocument()
+    // Nothing drawn: the row around it already says what this is.
+    expect(screen.queryByText('Discount')).not.toBeInTheDocument()
+  })
+
+  it('still announces its error, without giving it a line', () => {
+    render(<Input compact label="Weight" error="Must be a positive number." />)
+    const field = screen.getByRole('textbox', { name: 'Weight' })
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+    expect(field).toHaveAccessibleDescription('Must be a positive number.')
+  })
+
+  it('still announces its hint', () => {
+    render(<Input compact label="Rate" hint="Percent, not a fraction." />)
+    expect(screen.getByRole('textbox', { name: 'Rate' })).toHaveAccessibleDescription(
+      'Percent, not a fraction.',
+    )
+  })
+
+  it('takes the caller width on the control itself', () => {
+    // There is no wrapper in compact mode, so a className that lands anywhere
+    // else is a width that silently does nothing.
+    render(<Input compact label="Cost" className="w-16" />)
+    expect(screen.getByRole('textbox', { name: 'Cost' }).className).toContain('w-16')
+  })
+
+  it('keeps its focus ring', () => {
+    render(<Input compact label="Cost" />)
+    expect(screen.getByRole('textbox', { name: 'Cost' }).className).toContain('system-focus')
+  })
+
+  it('puts the caller width on the box, not the text, when there is a unit', () => {
+    // With a unit the box is the wrapper and the input is bare inside it, so a
+    // width on the input sizes the text and leaves the box full-bleed — which is
+    // the opposite of what a caller asking for `w-24` in a table row wants.
+    render(<Input compact label="Unit price" prefix="£" className="w-24" />)
+    const field = screen.getByRole('textbox', { name: 'Unit price' })
+    expect(field.className).not.toContain('w-24')
+    expect(field.parentElement?.className).toContain('w-24')
+    // The ring still belongs to the box the member can see.
+    expect(field.parentElement?.className).toContain('system-focus-within')
+  })
+
+  it('does not set aria-label when the label is visible', () => {
+    // A visible <label htmlFor> plus an aria-label is the one way to make a
+    // correctly-labelled field announce something other than what is on screen.
+    render(<Input label="Supplier SKU" />)
+    expect(screen.getByLabelText('Supplier SKU')).not.toHaveAttribute('aria-label')
+  })
+})
+
+describe('Select, compact', () => {
+  it('still has an accessible name, with no visible label', () => {
+    render(
+      <Select compact label="Cadence">
+        <option value="1">Monthly</option>
+      </Select>,
+    )
+    expect(screen.getByRole('combobox', { name: 'Cadence' })).toBeInTheDocument()
+    expect(screen.queryByText('Cadence')).not.toBeInTheDocument()
+  })
+})

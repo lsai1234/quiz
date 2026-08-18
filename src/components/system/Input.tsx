@@ -40,6 +40,8 @@ export function Input({
   error,
   required,
   disabled,
+  compact,
+  align,
   className,
   prefix,
   suffix,
@@ -47,8 +49,12 @@ export function Input({
   ...rest
 }: InputProps) {
   const id = useId()
-  const field = { label, hint, error, required, disabled, className }
-  const surface = controlSurface(Boolean(error))
+  const field = { label, hint, error, required, disabled, compact, align, className }
+  const surface = controlSurface(Boolean(error), { compact, align })
+  // A unit means the box is a wrapper with the input inside it, which changes
+  // which element is the outermost thing this renders — and so which one the
+  // caller's width belongs on.
+  const wrapped = Boolean(prefix || suffix)
 
   const input = (
     <input
@@ -57,9 +63,19 @@ export function Input({
       ref={ref}
       // With a unit, the box belongs to the wrapper and so does the ring —
       // otherwise focusing draws two, one inside the other.
-      className={`system-field w-full min-w-0 ${prefix || suffix ? '' : 'system-focus'}`}
+      //
+      // Compact puts the caller's width on whichever of the two is the box —
+      // there is no `Field` wrapper to carry it, because a compact field is
+      // nothing but the box.
+      className={[
+        'system-field min-w-0',
+        wrapped ? '' : 'system-focus',
+        compact ? (wrapped ? '' : (className ?? '')) : 'w-full',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={
-        prefix || suffix
+        wrapped
           ? // The box is drawn by the wrapper in this case, so the input itself
             // contributes nothing but the text.
             {
@@ -77,11 +93,16 @@ export function Input({
 
   return (
     <Field id={id} {...field}>
-      {prefix || suffix ? (
+      {wrapped ? (
         <div
           // `focus-within` rather than `focus`: the ring belongs to the box the
           // member sees, and the thing taking focus is the bare input inside it.
-          className="system-field system-focus-within flex items-center"
+          className={[
+            'system-field system-focus-within flex items-center',
+            compact ? (className ?? '') : '',
+          ]
+            .filter(Boolean)
+            .join(' ')}
           style={surface}
         >
           {prefix && (

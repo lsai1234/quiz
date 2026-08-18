@@ -246,6 +246,90 @@ export function StyleguidePage() {
         </Section>
 
         <Section
+          title="Compact fields"
+          note="The stacked label is right for a form and wrong for a table row that already names the value. Compact drops the label, hint and error lines — the name moves to aria-label, the messages to sr-only — so a screen reader gets exactly what the stacked field gives while the row keeps its height. The control still sits at 36px: the fields it replaces across the hubs are around 30px, and a number box nobody can hit is not an improvement on a tall one."
+        >
+          <SubLabel>In a row that already names the value</SubLabel>
+          <Card padding="normal">
+            <div
+              className="grid items-center"
+              style={{
+                gridTemplateColumns: 'minmax(0, 1fr) 4.5rem 6rem 8rem',
+                columnGap: 'var(--space-3)',
+                rowGap: 'var(--space-3)',
+              }}
+            >
+              <Label>Line</Label>
+              <div className="text-right"><Label>Qty</Label></div>
+              <div className="text-right"><Label>Unit</Label></div>
+              <Label>Cadence</Label>
+
+              <span style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}>
+                Magnesium Glycinate
+              </span>
+              <Input compact align="right" label="Magnesium Glycinate quantity" defaultValue="2" inputMode="numeric" />
+              <Input compact align="right" label="Magnesium Glycinate unit price" prefix="£" defaultValue="24.00" inputMode="decimal" />
+              <Select compact label="Magnesium Glycinate cadence" defaultValue="1">
+                <option value="1">Monthly</option>
+                <option value="2">Every 2 months</option>
+              </Select>
+
+              <span style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}>
+                Creatine Monohydrate
+              </span>
+              <Input
+                compact
+                align="right"
+                label="Creatine Monohydrate quantity"
+                defaultValue="0"
+                inputMode="numeric"
+                error="A line needs at least one unit."
+              />
+              <Input compact align="right" label="Creatine Monohydrate unit price" prefix="£" defaultValue="18.50" inputMode="decimal" />
+              <Select compact label="Creatine Monohydrate cadence" defaultValue="3">
+                <option value="1">Monthly</option>
+                <option value="3">Every 3 months</option>
+              </Select>
+
+              <span style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}>
+                Vitamin D3 + K2
+              </span>
+              <Input compact align="right" label="Vitamin D3 quantity" defaultValue="1" inputMode="numeric" disabled />
+              <Input compact align="right" label="Vitamin D3 unit price" prefix="£" defaultValue="9.00" inputMode="decimal" disabled />
+              <Select compact label="Vitamin D3 cadence" defaultValue="1" disabled>
+                <option value="1">Monthly</option>
+              </Select>
+            </div>
+          </Card>
+
+          <SubLabel>The same field, both ways</SubLabel>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card padding="normal">
+              <Input
+                label="Commission"
+                suffix="%"
+                defaultValue="12"
+                hint="Applied to every line in the bundle."
+              />
+            </Card>
+            <Card padding="normal">
+              <div className="flex items-center justify-between" style={{ gap: 'var(--space-3)' }}>
+                <span style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}>Commission</span>
+                <Input
+                  compact
+                  align="right"
+                  label="Commission"
+                  suffix="%"
+                  defaultValue="12"
+                  hint="Applied to every line in the bundle."
+                  className="w-24"
+                />
+              </div>
+            </Card>
+          </div>
+        </Section>
+
+        <Section
           title="Tabs"
           note="Arrow keys move between them, Home and End jump to the ends, and Tab steps past the whole strip rather than through every tab in it."
         >
