@@ -20,26 +20,15 @@
   --color-text: #fafafa;
   --color-text-2: #a1a1aa;
   --color-accent: #00D4FF;
-  --color-accent-dim: #00AACC;
-  --color-blue: #38bdf8;
   --color-red: #f87171;
   --color-amber: #f59e0b;
 
-  /* Alpha-on-black surfaces — the technique that separates the designed screens
-     from the assembled ones. Opaque greys put every card at the same visual
-     weight; a translucent white over the page background recedes, and stacks.
-     Kept in step with `GLASS` in src/lib/ui/tokens.ts, which exists because
-     runtime `color-mix()` needs a value rather than a var(). */
-  --color-glass: rgba(255, 255, 255, 0.015);
-  --color-glass-raised: rgba(255, 255, 255, 0.04);
-  --color-hairline: rgba(255, 255, 255, 0.08);
-  --color-hairline-strong: rgba(255, 255, 255, 0.2);
-
-  /* How a stack line is landing. Mirrors TONE in src/lib/ui/tokens.ts. */
-  --color-tone-good: #34d399;
-  --color-tone-building: #00D4FF;
-  --color-tone-essential: #7dd3fc;
-  --color-tone-review: #fbbf24;
+  /* The glass surfaces and the four stack-line tones used to live here as eight
+     more custom properties. Nothing referenced them — every consumer went
+     through `GLASS` and `TONE` in src/lib/ui/tokens.ts instead, because runtime
+     `color-mix()` needs a value rather than a var(). The migrated hubs use
+     `--surface-*`, `--edge*` and `--tone-*` from tokens.css. Removed rather
+     than left as a second, unread definition of the same colours. */
 
   /* The radius roles moved to tokens.css, which owns the whole set including
      the pill and chip sizes these three never covered. Same values; they had no

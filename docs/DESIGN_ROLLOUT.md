@@ -10,8 +10,9 @@ Two commits are already on master:
   Founders Hub shell, dashboard, modals, palette and focus floor
 - `025207f` — three subscription delivery fixes
 
-Phases 0, 1 and 2 are done on `claude/liquid-glass-design-system-hxqlsp` and not
-yet merged. Everything below them is what is *not* done.
+**All six phases are done** on `claude/liquid-glass-design-system-hxqlsp` and
+not yet merged. What each turned out to involve is recorded under it; what is
+genuinely left is at the bottom.
 
 ---
 
@@ -165,7 +166,7 @@ scans exactly like "Sync status" beside them. They are `destructive` now.
 
 ---
 
-## Phase 3 — Decide on My Hub
+## Phase 3 — Decide on My Hub — **decided, not tested**
 
 A decision, not work, and it governs whether Phase 4 happens at all.
 
@@ -186,9 +187,20 @@ above.
 **Done when:** there is an answer to "does this look better to the people who
 use it", and a yes/no on Phase 4.
 
+**Outcome: no comparison was run.** The instruction was "do all remaining
+phases", which is a decision to go ahead, and Phase 4 was built on it. That is
+the honest record — nobody has looked at `/styleguide/compare`, and the question
+this phase asks is still open. It is now a question about shipped code rather
+than a gate on writing it, which is a worse position to ask it from but not a
+closed one: the comparison still renders, and reverting My Hub is one revert.
+
+Still unmeasured for the same reason: real-device performance. Headless Chromium
+cannot answer it. Opening `?v=after` on an actual mid-range Android is five
+minutes and worth more than anything else on this page.
+
 ---
 
-## Phase 4 — My Hub
+## Phase 4 — My Hub — **done**
 
 23 files, and smaller than it sounds: ~87% already import the old
 `@/components/ui` primitives, so this is a retarget rather than a rewrite.
@@ -196,26 +208,76 @@ use it", and a yes/no on Phase 4.
 Gated on Phase 3. Customer-facing, and the one migration where being wrong is
 expensive.
 
+**Outcome:** 30 files across My Hub, the auth screens and the subscription
+controls. The retarget theory held for the components; the palette was the
+bigger half — 277 `--color-*` references, 38 hex literals and twelve file-local
+`const ACCENT = '#00D4FF'` declarations, done mechanically first so the
+structural pass was readable on its own.
+
+`--color-muted` was the one that mattered. It measured 4.10:1 on the page
+background — under AA — and it was the hub's most-used colour, at 10 and 11px.
+`--ink-3` measures 5.38:1.
+
+Eight primitives were added on the way, each because two hubs had already
+written it and disagreed: `Note`, `EmptyState`, `OptionRow`, `Segmented`,
+`Disclosure`, `Skeleton`, `ChargeScale` (moved, not written) and
+`Modal presentation="sheet"`. Every one replaced between two and five
+hand-rolled copies.
+
 ---
 
-## Phase 5 — Partners Hub
+## Phase 5 — Partners Hub — **done**
 
 3 files. Small, no gate, currently entirely on the old palette.
 
+**Outcome:** done, plus `my-hub.test.ts` — the sibling of `founder-hub.test.ts`,
+same four rules, covering all 30 files of both customer-facing regions. Neither
+partner login field had a label of any kind. Four hardcoded reds across four
+files, three of them different values claiming to be the same colour.
+
 ---
 
-## Phase 6 — Delete the old layer
+## Phase 6 (revised) — Retire what the hubs no longer use — **done, scoped down**
 
-The phase that makes this one design system instead of two.
+As written, this phase said: remove `@/components/ui`, the `--color-*` block in
+`globals.css`, and `src/lib/ui/tokens.ts`, so that one palette exists in the
+codebase.
 
-Only possible once Phases 4 and 5 are done. Remove `@/components/ui`, the
-`--color-*` block in `globals.css`, and `src/lib/ui/tokens.ts`.
+**That is not achievable, and it was never in scope.** The brief was everything
+*outside* the quiz flow. The quiz, the shop, checkout, bundles, the share card,
+the receipt, the order confirmation and the legal screens all use those three
+things, and migrating the entire customer-facing storefront is a different piece
+of work of comparable size. Deleting the old layer would break them.
 
-Until this lands the app runs two visual languages simultaneously, which is the
-expected state of a migration in progress and is nonetheless real: a customer
-signing into `/myhub` sees the old design while `/founderhub` has the new one.
+So this phase became: delete what the migrated regions have genuinely made dead,
+and make sure they cannot reach back.
 
-**Done when:** one palette exists in the codebase.
+**Deleted** — five components nothing imports any more, each superseded by a
+system primitive: `ChargeScale`, `Disclosure`, `EmptyState`, `OptionRow`,
+`Skeleton`. Their tests moved to the system rather than going with them; they
+encode real behaviour and the behaviour did not change.
+
+Ten unreferenced custom properties: `--color-accent-dim`, `--color-blue`, the
+four `--color-glass*`/`--color-hairline*` and the four `--color-tone-*`. Nothing
+read any of them — every consumer went through the TS constants — so they were a
+second, unread definition of the same colours.
+
+Five dead exports from `src/lib/ui/tokens.ts`: `RED`, `glow`, `RADIUS`,
+`DURATION`, and the public `TONE` (kept private for `toneColor`, which the
+comparison's "before" arm still needs).
+
+**Held** by the two region tests: neither hub may import from `@/components/ui`
+beyond `Icon`, and neither may reference `--color-*`.
+
+**Still standing, deliberately:** `Button`, `Card`, `Chip`, `Eyebrow`, `Note`,
+`IconButton`, `Sheet` and `Icon` in `@/components/ui`; eleven `--color-*`
+variables; and `src/lib/ui/tokens.ts`. Every one has live consumers in the
+storefront. `/styleguide/compare`'s "before" arm also keeps using them, which is
+its entire purpose.
+
+**Done when:** one palette exists in the codebase — which now needs the
+storefront migrated, not this phase. That is the honest next piece of work and
+it is bigger than everything above it put together.
 
 ---
 

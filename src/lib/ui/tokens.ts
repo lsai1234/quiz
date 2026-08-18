@@ -22,18 +22,18 @@ export const GREEN = '#34d399'
 /** Needs attention — never "error". Settlements, skips, out-of-stock, exits. */
 export const AMBER = '#fbbf24'
 
-/** Genuine failure. Auth errors, failed payments. */
-export const RED = '#ff6b6b'
-
-/** How a stack line is landing. Mirrors `StatusTone` in `@/lib/feedback`. */
-export const TONE = {
-  /** Felt and working. */
+/**
+ * How a stack line is landing, in the old palette. Mirrors `StatusTone` in
+ * `@/lib/feedback`.
+ *
+ * Kept only for `/styleguide/compare`'s "before" arm, which exists to show what
+ * the old design looked like and so has to keep using it. Everything live reads
+ * the semantic tones from `@/components/system` instead.
+ */
+const TONE = {
   good: GREEN,
-  /** Still building towards its effect window. */
   building: ACCENT,
-  /** Works quietly in the background; not something you feel. */
   essential: '#7dd3fc',
-  /** Not landing — worth a change. */
   review: AMBER,
 } as const
 
@@ -73,31 +73,8 @@ export function tint(color: string, pct: number): string {
   return `color-mix(in srgb, ${color} ${pct}%, transparent)`
 }
 
-/** A soft coloured bloom under an elevated element, in the `DidYouKnowChip` idiom. */
-export function glow(color: string, pct = 45): string {
-  return `0 8px 30px -12px ${tint(color, pct)}`
-}
-
-/**
- * One radius per role, so adjacent elements stop disagreeing. The hub currently
- * mixes `rounded-lg`, `-xl`, `-2xl` and `-3xl` on elements sitting side by side.
- */
-export const RADIUS = {
-  /** Pills, chips, small controls. */
-  pill: 9999,
-  /** A row inside a card; a compact button. */
-  row: 12,
-  /** A card; a full-width button. */
-  card: 16,
-  /** The top corners of a bottom sheet; the hero. */
-  sheet: 24,
-} as const
-
 /** The house easing — a soft overshoot-free settle. Used across the quiz. */
 export const EASE = 'cubic-bezier(0.22, 1, 0.36, 1)'
-
-/** Standard transition duration, in ms. Matches `duration-200` in the quiz. */
-export const DURATION = 200
 
 /**
  * "st" / "nd" / "rd" / "th" for a day of the month.

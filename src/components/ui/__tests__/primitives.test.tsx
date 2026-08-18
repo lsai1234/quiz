@@ -6,8 +6,6 @@ import { Card } from '../Card'
 import { Chip } from '../Chip'
 import { Note } from '../Note'
 import { Eyebrow } from '../Eyebrow'
-import { Skeleton, SkeletonText } from '../Skeleton'
-import { Disclosure } from '../Disclosure'
 import { GREEN } from '@/lib/ui/tokens'
 
 describe('Button', () => {
@@ -129,66 +127,5 @@ describe('Eyebrow', () => {
   it('renders a caps label', () => {
     render(<Eyebrow>Your stack</Eyebrow>)
     expect(screen.getByText('Your stack').className).toContain('uppercase')
-  })
-})
-
-describe('Skeleton', () => {
-  it('is hidden from screen readers — it says nothing worth hearing', () => {
-    const { container } = render(<Skeleton width={120} height={12} />)
-    expect(container.firstChild).toHaveAttribute('aria-hidden', 'true')
-  })
-
-  it('ends a paragraph short, the way a real one does', () => {
-    const { container } = render(<SkeletonText lines={3} />)
-    const blocks = container.querySelectorAll('.skeleton-shimmer')
-    expect(blocks).toHaveLength(3)
-    expect((blocks[2] as HTMLElement).style.width).toBe('62%')
-  })
-})
-
-describe('Disclosure', () => {
-  it('starts closed and says so', () => {
-    render(
-      <Disclosure summary="Plan & billing settings">
-        <p>Regular ship day</p>
-      </Disclosure>,
-    )
-    const trigger = screen.getByRole('button', { name: /plan & billing settings/i })
-    expect(trigger).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('Regular ship day')).not.toBeInTheDocument()
-  })
-
-  it('opens, and points at the panel it controls', async () => {
-    const user = userEvent.setup()
-    render(
-      <Disclosure summary="Plan & billing settings">
-        <p>Regular ship day</p>
-      </Disclosure>,
-    )
-
-    const trigger = screen.getByRole('button', { name: /plan & billing settings/i })
-    await user.click(trigger)
-
-    expect(trigger).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('Regular ship day')).toBeInTheDocument()
-    // The ▲/▼ characters this replaces told assistive tech nothing at all.
-    const panelId = trigger.getAttribute('aria-controls')!
-    expect(document.getElementById(panelId)).toContainElement(screen.getByText('Regular ship day'))
-  })
-
-  it('lets a parent drive it, for a deep link that must land open', async () => {
-    const onOpenChange = jest.fn()
-    const user = userEvent.setup()
-    render(
-      <Disclosure summary="Settings" open onOpenChange={onOpenChange}>
-        <p>Ship day</p>
-      </Disclosure>,
-    )
-
-    expect(screen.getByText('Ship day')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Settings' }))
-    expect(onOpenChange).toHaveBeenCalledWith(false)
-    // Still open: the parent owns the state and has not changed it yet.
-    expect(screen.getByText('Ship day')).toBeInTheDocument()
   })
 })

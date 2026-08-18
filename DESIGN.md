@@ -169,8 +169,15 @@ hierarchy collapses into two.
 | `Select` | Native `<select>`, styled. Same label/hint/error shell, same `compact`. |
 | `Textarea` | The same box, opened up. `rows`; no `compact` — a paragraph does not fit a table row. |
 | `Checkbox` | The one control whose name sits beside it. Drawn box, real `<input type="checkbox">` underneath. |
+| `OptionRow` | "Pick one of these", as a list. `role="radio"` when it is one; a chevron when it navigates. |
+| `Segmented` | "Pick one of these", as a row. For options a word long. Real radiogroup. |
+| `Disclosure` | A collapsible section, with `aria-expanded` and a panel it actually points at. |
+| `Note` | An aside. `tone`, and `live="polite" \| "assertive"` when it appeared because of an action. |
+| `EmptyState` | "There is nothing here", said deliberately. Glyph, line, and a way out. |
+| `ChargeScale` | The rating input — `ChargeMeter`'s sibling. Shows a level by asking for one. |
+| `Skeleton` / `SkeletonText` | Loading placeholders. `aria-hidden`; the shimmer stops under reduced motion. |
 | `buttonSurface()` | Not a component — the button's paint, for the few places that must stay a link. |
-| `Modal` | + `ModalHeader`/`Body`/`Footer`. Focus-trapped, Escape, scroll lock. |
+| `Modal` | + `ModalHeader`/`Body`/`Footer`. Focus-trapped, Escape, scroll lock. `presentation="sheet"` for a phone bottom sheet. |
 | `Badge` | `neutral`/`accent`/`positive`/`attention`/`critical`/`info`; `soft`/`solid`. |
 | `Tabs` | Real tablist: roving tabindex, arrow keys, Home/End. |
 | `ChargeMeter` | The house signature. Any proportion, drawn as liquid. |
@@ -359,6 +366,26 @@ when the field must also get smaller, and `hideLabel` when only the label is in
 the way.
 
 Both variants are on `/styleguide`, side by side, under **Compact fields**.
+
+## Every hub is migrated; the storefront is not
+
+Founders Hub, My Hub and the Partners Hub — plus the auth screens and the
+subscription controls — are entirely on this system. `founder-hub.test.ts` and
+`my-hub.test.ts` hold both regions to the same four rules, per file: no hex, no
+`--color-*`, no raw controls, and no imports from `@/components/ui` beyond
+`Icon`.
+
+**The quiz, the shop, checkout, bundles, the share card, the receipt and the
+legal screens are not migrated and were never in scope for this work** — the
+brief was everything *outside* the quiz flow, and the storefront grew from the
+same root. They still use `@/components/ui`, `src/lib/ui/tokens.ts` and the
+`--color-*` palette, and those therefore still exist. Five components nothing
+imported any more (`ChargeScale`, `Disclosure`, `EmptyState`, `OptionRow`,
+`Skeleton`) and ten unreferenced `--color-*` variables have been deleted; the
+rest stays until the storefront moves.
+
+`/styleguide/compare`'s "before" arm deliberately keeps using the old layer.
+Its whole job is to show what the old design looked like.
 
 ## The Founders Hub is fully migrated
 

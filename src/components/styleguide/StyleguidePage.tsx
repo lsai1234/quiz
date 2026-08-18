@@ -6,14 +6,22 @@ import {
   Button,
   Card,
   ChargeMeter,
+  ChargeScale,
   Checkbox,
+  Disclosure,
+  EmptyState,
+  Note,
+  OptionRow,
   Ground,
   Input,
   Modal,
   ModalBody,
   ModalFooter,
   ModalHeader,
+  Segmented,
   Select,
+  Skeleton,
+  SkeletonText,
   Tabs,
   Textarea,
 } from '@/components/system'
@@ -30,6 +38,10 @@ import {
 export function StyleguidePage() {
   const [modal, setModal] = useState<null | 'sm' | 'md' | 'lg'>(null)
   const [tab, setTab] = useState('surfaces')
+  const [policy, setPolicy] = useState('swap')
+  const [usage, setUsage] = useState('normal')
+  const [day, setDay] = useState(15)
+  const [rating, setRating] = useState<number | null>(4)
 
   return (
     <Ground>
@@ -245,6 +257,113 @@ export function StyleguidePage() {
               <option value="uk">United Kingdom</option>
             </Select>
           </div>
+        </Section>
+
+        <Section
+          title="Choosing one of a set"
+          note="Two shapes for the same question. A list when each answer needs a sentence, a row when each needs a word. Both are real radiogroups — arrow keys move within them and each option announces its position, which is what five hand-rolled copies across the two hubs were all missing."
+        >
+          <SubLabel>OptionRow — a list</SubLabel>
+          <div className="grid" style={{ gap: 'var(--space-2)' }} role="radiogroup" aria-label="If this becomes unavailable">
+            <OptionRow
+              role="radio"
+              icon="swap"
+              label="Keep my plan whole"
+              sub="We swap in the closest match and tell you what changed."
+              selected={policy === 'swap'}
+              onClick={() => setPolicy('swap')}
+            />
+            <OptionRow
+              role="radio"
+              icon="minus"
+              label="Take it off my plan"
+              sub="Your monthly drops by what it cost. Nothing arrives in its place."
+              selected={policy === 'remove'}
+              onClick={() => setPolicy('remove')}
+            />
+          </div>
+
+          <SubLabel>OptionRow — navigating, so no selected state</SubLabel>
+          <div className="grid" style={{ gap: 'var(--space-2)' }}>
+            <OptionRow icon="credit-card" label="Payment method" navigates onClick={() => {}} />
+            <OptionRow icon="truck" label="Delivery address" navigates onClick={() => {}} />
+          </div>
+
+          <SubLabel>Segmented — a row</SubLabel>
+          <Segmented
+            label="How much do you get through?"
+            columns={3}
+            value={usage}
+            onChange={setUsage}
+            options={[
+              { value: 'light', label: 'Light' },
+              { value: 'normal', label: 'Normal' },
+              { value: 'heavy', label: 'Heavy' },
+            ]}
+          />
+
+          <SubLabel>Segmented — wrapping, with spoken names for bare numbers</SubLabel>
+          <Segmented
+            label="Regular ship day"
+            value={day}
+            onChange={setDay}
+            options={[1, 5, 10, 15, 20, 25].map((d) => ({
+              value: d,
+              label: d,
+              ariaLabel: `${d} of the month`,
+            }))}
+          />
+        </Section>
+
+        <Section
+          title="Note and EmptyState"
+          note="An aside, and the moment somebody looked for something and did not find it. Both existed a dozen times each across the two hubs as a tinted paragraph and a muted sentence in whitespace."
+        >
+          <div className="space-y-3">
+            <Note>Cancelling is unconditional — there is no minimum term on any plan.</Note>
+            <Note tone="positive" icon="check">
+              Your next box is paid for. Nothing else is owed.
+            </Note>
+            <Note tone="attention" icon="alert-triangle">
+              You are below the free-delivery line, so postage is billed from next month.
+            </Note>
+            <Note tone="critical" icon="alert-triangle" live="assertive">
+              That sign-in didn’t complete. Try again, or use your email and password.
+            </Note>
+          </div>
+
+          <SubLabel>EmptyState</SubLabel>
+          <Card padding="none">
+            <EmptyState icon="box" title="Nothing ships in this box" action={<Button size="sm">Add something</Button>}>
+              Every item is either skipped or on a longer cycle. Add one and it goes out on the same date.
+            </EmptyState>
+          </Card>
+        </Section>
+
+        <Section
+          title="Disclosure, ChargeScale and Skeleton"
+          note="A collapsible section that says what it controls; the rating input that replaced five emoji faces; and the placeholder that stops the login screen flashing on every load."
+        >
+          <Card>
+            <Disclosure summary="Plan & billing settings">
+              <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)', paddingTop: 'var(--space-2)' }}>
+                The panel a screen reader is now told about, because the trigger points at it.
+              </p>
+            </Disclosure>
+          </Card>
+
+          <SubLabel>ChargeScale — five points, and three</SubLabel>
+          <Card className="space-y-5">
+            <ChargeScale label="How is your sleep?" value={rating} onChange={setRating} />
+            <ChargeScale steps={3} label="How is this landing?" lowLabel="Not landing" highLabel="Loving it" onChange={() => {}} />
+          </Card>
+
+          <SubLabel>Skeleton</SubLabel>
+          <Card className="space-y-3">
+            <Skeleton width={140} height={10} radius="var(--radius-chip)" />
+            <Skeleton width="72%" height={26} radius="var(--radius-chip)" />
+            <SkeletonText lines={3} />
+          </Card>
         </Section>
 
         <Section
