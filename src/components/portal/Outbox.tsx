@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Notification } from '@/lib/notify/types'
+import { Badge, Button, Card, Input, Select, Tabs } from '@/components/system'
 
 
 const TEMPLATE_LABEL: Record<string, string> = {
@@ -69,31 +70,20 @@ function CopyButton({
 }) {
   const done = copied === copyKey
   return (
-    <button
+    <Button
+      size="sm"
+      variant={primary ? 'primary' : 'secondary'}
+      icon={done ? 'check' : 'link'}
       onClick={() => onCopy(copyKey, text)}
-      className="text-xs font-bold px-3 py-1.5 rounded-xl border transition-colors"
-      style={
-        primary
-          ? { background: done ? 'var(--tone-positive)' : 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'transparent' }
-          : { borderColor: done ? 'var(--tone-positive)' : 'var(--edge)', color: done ? 'var(--tone-positive)' : 'var(--ink-2)' }
-      }
     >
-      {done ? '✓ Copied' : label}
-    </button>
+      {done ? 'Copied' : label}
+    </Button>
   )
 }
 
 function StatusPill({ status }: { status: Notification['status'] }) {
-  const colour = status === 'sent' ? 'var(--tone-positive)' : status === 'failed' ? 'var(--tone-critical)' : 'var(--tone-attention)'
-  const label = status === 'sent' ? 'Sent' : status === 'failed' ? 'Failed' : 'To send'
-  return (
-    <span
-      className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
-      style={{ color: colour, background: `color-mix(in srgb, ${colour} 14%, transparent)` }}
-    >
-      {label}
-    </span>
-  )
+  const tone = status === 'sent' ? 'positive' : status === 'failed' ? 'critical' : 'attention'
+  return <Badge tone={tone}>{status === 'sent' ? 'Sent' : status === 'failed' ? 'Failed' : 'To send'}</Badge>
 }
 
 /**
@@ -111,18 +101,15 @@ function EmailPreview({ notification }: { notification: Notification }) {
     <div>
       <div className="flex gap-2 mb-2">
         {(['html', 'text'] as const).map((option) => (
-          <button
+          <Button
             key={option}
+            size="sm"
+            variant={mode === option ? 'primary' : 'secondary'}
+            aria-pressed={mode === option}
             onClick={() => setMode(option)}
-            className="text-[11px] font-bold px-2.5 py-1 rounded-lg border"
-            style={
-              mode === option
-                ? { background: 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'transparent' }
-                : { borderColor: 'var(--edge)', color: 'var(--ink-2)' }
-            }
           >
             {option === 'html' ? 'As designed' : 'Plain text'}
-          </button>
+          </Button>
         ))}
       </div>
       {mode === 'html' ? (
@@ -135,8 +122,15 @@ function EmailPreview({ notification }: { notification: Notification }) {
         />
       ) : (
         <pre
-          className="text-[11px] whitespace-pre-wrap rounded-xl p-3 overflow-x-auto"
-          style={{ background: 'var(--surface-2)', color: 'var(--ink-2)', fontFamily: 'inherit' }}
+          className="whitespace-pre-wrap overflow-x-auto"
+          style={{
+            fontSize: 'var(--text-meta)',
+            background: 'var(--surface-2)',
+            color: 'var(--ink-2)',
+            fontFamily: 'inherit',
+            borderRadius: 'var(--radius-row)',
+            padding: 'var(--space-3)',
+          }}
         >
           {notification.rendered.text}
         </pre>
@@ -153,28 +147,32 @@ function TestSend({ id, onSend }: { id: string; onSend: (id: string, to: string)
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <input
+      <Input
+        label="Send a test copy to"
+        compact
+        className="w-64"
         type="email"
         value={to}
         onChange={(e) => setTo(e.target.value)}
         placeholder="you@getchrgd.co.uk"
-        className="text-xs px-3 py-1.5 rounded-xl border bg-transparent"
-        style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
       />
-      <button
+      <Button
+        size="sm"
+        loading={busy}
+        disabled={!to.includes('@')}
         onClick={async () => {
           setBusy(true)
           setState(await onSend(id, to))
           setBusy(false)
         }}
-        disabled={busy || !to.includes('@')}
-        className="text-xs font-bold px-3 py-1.5 rounded-xl border disabled:opacity-40"
-        style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
       >
-        {busy ? 'Sending…' : 'Send me a copy'}
-      </button>
+        Send me a copy
+      </Button>
       {state && (
-        <span className="text-[11px]" style={{ color: state.startsWith('Sent') ? 'var(--tone-positive)' : 'var(--tone-critical)' }}>
+        <span
+          role="status"
+          style={{ fontSize: 'var(--text-meta)', color: state.startsWith('Sent') ? 'var(--tone-positive)' : 'var(--tone-critical)' }}
+        >
           {state}
         </span>
       )}
@@ -473,29 +471,21 @@ export function Outbox() {
       )}
 
       {/* ── Tabs ── */}
-      <div className="flex gap-2 border-b border-[var(--edge)]">
-        {([
-          ['queue', `To send${toSend.length > 0 && tab === 'queue' ? ` · ${toSend.length}` : ''}`],
-          ['log', 'Log'],
-        ] as const).map(([id, label]) => (
-          <button
-            key={id}
-            onClick={() => {
-              setTab(id)
-              setExpanded(null)
-              setNotifications(null)
-            }}
-            className="text-sm font-bold px-3 py-2 -mb-px border-b-2"
-            style={{
-              borderColor: tab === id ? 'var(--accent)' : 'transparent',
-              color: tab === id ? 'var(--ink-1)' : 'var(--ink-3)',
-              fontFamily: 'var(--font-display)',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* A real tablist. Two buttons and an underline said nothing to anyone
+          not looking at the colour. */}
+      <Tabs
+        label="Outbox views"
+        value={tab}
+        onChange={(id) => {
+          setTab(id as typeof tab)
+          setExpanded(null)
+          setNotifications(null)
+        }}
+        tabs={[
+          { id: 'queue', label: `To send${toSend.length > 0 && tab === 'queue' ? ` · ${toSend.length}` : ''}` },
+          { id: 'log', label: 'Log' },
+        ]}
+      />
 
       {tab === 'queue' ? (
         <>
@@ -516,54 +506,39 @@ export function Outbox() {
                   />
                 )}
                 {canSend && toSend.length > 1 && (
-                  <button
-                    onClick={sendAll}
-                    disabled={busy !== null}
-                    className="text-xs font-bold px-3 py-1.5 rounded-xl disabled:opacity-40"
-                    style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-                  >
-                    {busy === 'all' ? 'Sending…' : `Send all ${toSend.length}`}
-                  </button>
+                  <Button variant="primary" size="sm" loading={busy === 'all'} disabled={busy !== null} onClick={sendAll}>
+                    {`Send all ${toSend.length}`}
+                  </Button>
                 )}
               </div>
             </div>
 
             {toSend.length === 0 ? (
-              <div className="rounded-2xl border border-[var(--edge)] p-8 text-center" style={{ background: 'var(--surface-1)' }}>
-                <p className="text-sm font-bold mb-1" style={{ color: 'var(--tone-positive)', fontFamily: 'var(--font-display)' }}>
+              <Card padding="roomy" className="text-center">
+                <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--tone-positive)', marginBottom: 'var(--space-1)' }}>
                   Nothing waiting
                 </p>
-                <p className="text-xs text-[var(--ink-3)]">
+                <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>
                   Every member with something to be told has been told.
                 </p>
-              </div>
+              </Card>
             ) : (
               <div className="space-y-3">
                 {toSend.map((n) => (
-                  <div
-                    key={n.id}
-                    className="rounded-2xl border p-4"
-                    style={{
-                      background: 'var(--surface-1)',
-                      borderColor:
-                        n.status === 'failed'
-                          ? `var(--critical-line)`
-                          : `var(--attention-line)`,
-                    }}
-                  >
+                  <Card key={n.id} tone={n.status === 'failed' ? 'critical' : 'attention'}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
                           {n.rendered.subject}
                         </p>
-                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                           {n.email} · {templateLabel(n.template)} · {when(n.createdAt)}
                         </p>
                         {n.from && (
-                          <p className="text-[11px] text-[var(--ink-3)] mt-0.5">From {n.from}</p>
+                          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>From {n.from}</p>
                         )}
                         {n.error && (
-                          <p className="text-[11px] mt-1" style={{ color: 'var(--tone-critical)' }}>
+                          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-critical)', marginTop: 'var(--space-1)' }}>
                             Failed to send: {n.error}
                           </p>
                         )}
@@ -573,19 +548,30 @@ export function Outbox() {
 
                     {/* The body, always visible — you're about to send it, so read it. */}
                     <pre
-                      className="mt-3 text-[11px] whitespace-pre-wrap rounded-xl p-3 overflow-x-auto"
-                      style={{ background: 'var(--surface-2)', color: 'var(--ink-2)', fontFamily: 'inherit' }}
+                      className="whitespace-pre-wrap overflow-x-auto"
+                      style={{
+                        fontSize: 'var(--text-meta)',
+                        background: 'var(--surface-2)',
+                        color: 'var(--ink-2)',
+                        fontFamily: 'inherit',
+                        borderRadius: 'var(--radius-row)',
+                        padding: 'var(--space-3)',
+                        marginTop: 'var(--space-3)',
+                      }}
                     >
                       {n.rendered.text}
                     </pre>
 
-                    <button
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="mt-2"
+                      aria-expanded={expanded === n.id}
+                      icon={expanded === n.id ? 'chevron-down' : 'chevron-right'}
                       onClick={() => setExpanded(expanded === n.id ? null : n.id)}
-                      className="mt-2 text-[11px] font-bold underline"
-                      style={{ color: 'var(--ink-2)' }}
                     >
                       {expanded === n.id ? 'Hide the designed version' : 'See the designed version'}
-                    </button>
+                    </Button>
                     {expanded === n.id && (
                       <div className="mt-3">
                         <EmailPreview notification={n} />
@@ -609,37 +595,37 @@ export function Outbox() {
                             Copying stays available — sometimes you want to send it
                             yourself with a note attached. */}
                         {canSend && (
-                          <button
-                            onClick={() => act(n.id, 'send')}
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            icon={n.status === 'failed' ? 'refresh' : 'arrow-right'}
+                            loading={busy === n.id}
                             disabled={busy !== null}
-                            className="text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-40"
-                            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
+                            onClick={() => act(n.id, 'send')}
                           >
-                            {busy === n.id ? 'Sending…' : n.status === 'failed' ? '↻ Try again' : '→ Send email'}
-                          </button>
+                            {n.status === 'failed' ? 'Try again' : 'Send email'}
+                          </Button>
                         )}
-                        <button
-                          onClick={() => act(n.id, 'markSent')}
+                        <Button
+                          size="sm"
+                          variant={canSend ? 'secondary' : 'primary'}
+                          icon="check"
+                          loading={busy === n.id && !canSend}
                           disabled={busy !== null}
-                          className="text-xs font-bold px-4 py-1.5 rounded-xl disabled:opacity-40"
-                          style={
-                            canSend
-                              ? { border: '1px solid var(--edge)', color: 'var(--ink-2)' }
-                              : { background: 'var(--tone-positive)', color: 'var(--ink-on-accent)' }
-                          }
                           title={canSend ? 'I sent this one myself' : undefined}
+                          onClick={() => act(n.id, 'markSent')}
                         >
-                          {busy === n.id && !canSend ? 'Saving…' : '✓ Mark as sent'}
-                        </button>
+                          Mark as sent
+                        </Button>
                       </div>
                     </div>
 
                     {canSend && (
-                      <div className="mt-3 pt-3 border-t border-[var(--edge)]">
+                      <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--edge)' }}>
                         <TestSend id={n.id} onSend={testSend} />
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -648,23 +634,26 @@ export function Outbox() {
           {/* ── Already sent ── */}
           {done.length > 0 && (
             <section>
-              <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+              <h2 style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)', marginBottom: 'var(--space-2)' }}>
                 Sent recently · {done.length}
               </h2>
               <div className="space-y-2">
                 {done.map((n) => (
-                  <div key={n.id} className="rounded-2xl border border-[var(--edge)] p-4" style={{ background: 'var(--surface-1)' }}>
+                  // `solid`: this list grows, and it is the scrolling case.
+                  <Card key={n.id} solid>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[var(--ink-2)] truncate">{n.rendered.subject}</p>
-                        <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                        <p className="truncate" style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-2)' }}>
+                          {n.rendered.subject}
+                        </p>
+                        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                           {n.email} · {when(n.sentAt ?? n.createdAt)}
                           {n.sentManually ? ' · sent by hand' : n.providerId ? ' · delivered' : ''}
                         </p>
                       </div>
                       <StatusPill status={n.status} />
                     </div>
-                  </div>
+                  </Card>
                 ))}
               </div>
             </section>
@@ -674,41 +663,32 @@ export function Outbox() {
         /* ── The log ── */
         <section>
           <div className="flex flex-wrap items-center gap-2 mb-3">
-            <input
+            <Input
+              label="Search recipient"
+              compact
+              className="flex-1 min-w-[11rem]"
               type="search"
               value={logEmail}
               onChange={(e) => setLogEmail(e.target.value)}
               placeholder="Search recipient…"
-              className="text-xs px-3 py-1.5 rounded-xl border bg-transparent flex-1 min-w-[180px]"
-              style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
             />
-            <select
-              value={logTemplate}
-              onChange={(e) => setLogTemplate(e.target.value)}
-              className="text-xs px-3 py-1.5 rounded-xl border bg-transparent"
-              style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
-            >
+            <Select label="Kind of email" compact value={logTemplate} onChange={(e) => setLogTemplate(e.target.value)}>
               <option value="">All kinds</option>
               {Object.entries(TEMPLATE_LABEL).map(([id, label]) => (
                 <option key={id} value={id}>
                   {label}
                 </option>
               ))}
-            </select>
-            <select
-              value={logStatus}
-              onChange={(e) => setLogStatus(e.target.value)}
-              className="text-xs px-3 py-1.5 rounded-xl border bg-transparent"
-              style={{ borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
-            >
+            </Select>
+            <Select label="Status" compact value={logStatus} onChange={(e) => setLogStatus(e.target.value)}>
               <option value="">Any status</option>
               <option value="sent">Sent</option>
               <option value="queued">To send</option>
               <option value="failed">Failed</option>
-            </select>
+            </Select>
           </div>
 
-          <p className="text-[11px] text-[var(--ink-3)] mb-2">
+          <p role="status" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginBottom: 'var(--space-2)' }}>
             {total === 0
               ? 'Nothing matches.'
               : `Showing ${notifications.length} of ${total}${total > notifications.length ? ' — narrow the search to see the rest' : ''}.`}
@@ -716,19 +696,23 @@ export function Outbox() {
 
           <div className="space-y-2">
             {notifications.map((n) => (
-              <div key={n.id} className="rounded-2xl border border-[var(--edge)]" style={{ background: 'var(--surface-1)' }}>
-                <button
+              <Card key={n.id} solid padding="none">
+                <Button
+                  variant="ghost"
+                  fullWidth
+                  className="text-left justify-between items-start"
+                  aria-expanded={expanded === n.id}
+                  aria-label={`${expanded === n.id ? 'Hide' : 'Show'} the email “${n.rendered.subject}” to ${n.email}`}
                   onClick={() => setExpanded(expanded === n.id ? null : n.id)}
-                  className="w-full text-left p-4 flex items-start justify-between gap-3"
                 >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: 'var(--ink-1)' }}>
+                  <span className="min-w-0">
+                    <span className="block truncate" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
                       {n.rendered.subject}
-                    </p>
-                    <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                    </span>
+                    <span className="block" style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                       {n.email} · {templateLabel(n.template)} · {when(n.sentAt ?? n.createdAt)}
-                    </p>
-                    <p className="text-[11px] text-[var(--ink-3)] mt-0.5 break-all">
+                    </span>
+                    <span className="block break-all" style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                       {n.from ? `From ${n.from}` : 'From the default address'}
                       {/* The distinction is the whole point of keeping a log:
                           "a provider confirmed this" and "somebody said they
@@ -740,15 +724,15 @@ export function Outbox() {
                             ? ` · delivered (${n.providerId})`
                             : ' · delivery unconfirmed')}
                       {n.attempts > 1 ? ` · ${n.attempts} attempts` : ''}
-                    </p>
+                    </span>
                     {n.error && (
-                      <p className="text-[11px] mt-1" style={{ color: 'var(--tone-critical)' }}>
+                      <span className="block" style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', color: 'var(--tone-critical)', marginTop: 'var(--space-1)' }}>
                         {n.error}
-                      </p>
+                      </span>
                     )}
-                  </div>
+                  </span>
                   <StatusPill status={n.status} />
-                </button>
+                </Button>
 
                 {expanded === n.id && (
                   <div className="px-4 pb-4 space-y-3">
@@ -756,20 +740,21 @@ export function Outbox() {
                     <div className="flex flex-wrap gap-2">
                       <CopyButton label="Copy message" text={n.rendered.text} copyKey={`log-${n.id}`} copied={copied} onCopy={copy} />
                       {n.status === 'failed' && (
-                        <button
-                          onClick={() => act(n.id, 'retry')}
+                        <Button
+                          size="sm"
+                          icon="refresh"
+                          loading={busy === n.id}
                           disabled={busy !== null}
-                          className="text-xs font-bold px-3 py-1.5 rounded-xl border disabled:opacity-40"
-                          style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
+                          onClick={() => act(n.id, 'retry')}
                         >
-                          ↻ Put back in the queue
-                        </button>
+                          Put back in the queue
+                        </Button>
                       )}
                     </div>
                     {canSend && <TestSend id={n.id} onSend={testSend} />}
                   </div>
                 )}
-              </div>
+              </Card>
             ))}
           </div>
         </section>

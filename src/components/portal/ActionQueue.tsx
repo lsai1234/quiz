@@ -6,6 +6,7 @@ import type { ChangeEvent, ChangeKind } from '@/lib/changes/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { NO_CONSTRAINTS, describeConstraints, failedConstraints } from '@/lib/changes/safety'
+import { Button, Card, Input } from '@/components/system'
 
 
 const KIND_LABEL: Record<ChangeKind, string> = {
@@ -193,18 +194,9 @@ function ProductGroup({
 
 function BulkButton({ label, onClick, disabled, primary }: { label: string; onClick: () => void; disabled: boolean; primary?: boolean }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-      style={
-        primary
-          ? { background: 'var(--accent)', color: 'var(--ink-on-accent)', borderColor: 'var(--accent)' }
-          : { borderColor: 'var(--edge)', color: 'var(--ink-2)' }
-      }
-    >
+    <Button size="sm" variant={primary ? 'primary' : 'secondary'} disabled={disabled} onClick={onClick}>
       {label}
-    </button>
+    </Button>
   )
 }
 
@@ -219,7 +211,6 @@ function EventRow({
   onTogglePicker: () => void
   onResolve: Props['onResolve']
 }) {
-  const btn = 'text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40'
 
   return (
     <div className="p-4">
@@ -238,29 +229,30 @@ function EventRow({
 
       <div className="mt-3 flex flex-wrap gap-2">
         {event.suggestedReplacementId && (
-          <button
-            onClick={() => onResolve(event.id, 'substitute', event.suggestedReplacementId!)}
+          <Button
+            variant="primary"
+            size="sm"
+            loading={busy}
             disabled={disabled}
-            className={btn}
-            style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
+            onClick={() => onResolve(event.id, 'substitute', event.suggestedReplacementId!)}
           >
-            {busy ? 'Working…' : `Swap to ${event.suggestedReplacementTitle}`}
-          </button>
+            {`Swap to ${event.suggestedReplacementTitle}`}
+          </Button>
         )}
-        <button onClick={onTogglePicker} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
+        <Button size="sm" disabled={disabled} aria-expanded={pickerOpen} onClick={onTogglePicker}>
           Choose another
-        </button>
-        <button onClick={() => onResolve(event.id, 'remove')} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
+        </Button>
+        <Button size="sm" disabled={disabled} onClick={() => onResolve(event.id, 'remove')}>
           Remove from plan
-        </button>
+        </Button>
         {event.kind === 'out-of-stock' && (
-          <button onClick={() => onResolve(event.id, 'hold')} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
+          <Button size="sm" disabled={disabled} onClick={() => onResolve(event.id, 'hold')}>
             Hold next box
-          </button>
+          </Button>
         )}
-        <button onClick={() => onResolve(event.id, 'dismiss')} disabled={disabled} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-3)' }}>
+        <Button variant="ghost" size="sm" disabled={disabled} onClick={() => onResolve(event.id, 'dismiss')}>
           Dismiss
-        </button>
+        </Button>
       </div>
 
       {pickerOpen && (
@@ -299,28 +291,38 @@ function ReplacementPicker({
   }, [catalogue, event, query])
 
   return (
-    <div className="mt-3 rounded-xl border border-[var(--edge)] p-3" style={{ background: 'var(--surface-2)' }}>
+    <Card solid padding="tight" className="mt-3">
       {constraintsLabel && (
-        <p className="text-[11px] mb-2" style={{ color: 'var(--accent)' }}>
+        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--accent)', marginBottom: 'var(--space-2)' }}>
           This member needs {constraintsLabel} products.
         </p>
       )}
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder={`Search ${event.slotTitle.toLowerCase()}…`}
-        className="w-full text-xs rounded-lg px-3 py-2 mb-2 border"
-        style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
-      />
+      <div className="mb-2">
+        <Input
+          label={`Search ${event.slotTitle.toLowerCase()}`}
+          compact
+          className="w-full"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${event.slotTitle.toLowerCase()}…`}
+        />
+      </div>
       {candidates.length === 0 ? (
-        <p className="text-[11px] text-[var(--ink-3)] py-2">Nothing else in this category.</p>
+        <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', padding: 'var(--space-2) 0' }}>
+          Nothing else in this category.
+        </p>
       ) : (
         <div className="space-y-1">
           {candidates.map((p) => {
             const failures = failedConstraints(p, constraints)
             return (
-              <button
+              <Button
                 key={p.id}
+                variant="ghost"
+                size="sm"
+                fullWidth
+                className="justify-start text-left"
                 onClick={() => {
                   // A founder may know something we don't, but never by accident.
                   if (
@@ -333,21 +335,21 @@ function ReplacementPicker({
                   }
                   onPick(p.id)
                 }}
-                className="w-full text-left px-2.5 py-2 rounded-lg text-xs hover:bg-[var(--surface-1)]"
-                style={{ color: 'var(--ink-2)' }}
               >
-                <span className="font-semibold">{p.title}</span>
-                <span className="text-[var(--ink-3)]"> · {formatGBP(p.basePrice)}</span>
-                {failures.length > 0 && (
-                  <span className="block text-[10px] font-semibold mt-0.5" style={{ color: 'var(--tone-attention)' }}>
-                    ⚠ {failures.join(' · ')}
-                  </span>
-                )}
-              </button>
+                <span>
+                  <span>{p.title}</span>
+                  <span style={{ fontWeight: 'var(--weight-body)', color: 'var(--ink-3)' }}> · {formatGBP(p.basePrice)}</span>
+                  {failures.length > 0 && (
+                    <span className="block" style={{ fontSize: 'var(--text-micro)', color: 'var(--tone-attention)', marginTop: 'var(--space-1)' }}>
+                      {failures.join(' · ')}
+                    </span>
+                  )}
+                </span>
+              </Button>
             )
           })}
         </div>
       )}
-    </div>
+    </Card>
   )
 }

@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import type { SupplierRow } from '@/lib/supplier/row'
+import { Badge, Button, Card, Textarea } from '@/components/system'
 
 
 /**
@@ -129,19 +130,22 @@ export function SupplierImport() {
         </p>
       )}
 
-      <div className="rounded-2xl border p-3.5 space-y-2.5" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+      <Card padding="tight" className="space-y-2.5">
         <div>
-          <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
+          <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
             Add by SKU
           </p>
-          <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
             Paste one or more SKUs — commas, spaces or new lines. Each one comes back with its picture, name, brand,
             live stock and real cost, so you can check it before adding.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <textarea
+        <div className="flex flex-wrap gap-2 items-end">
+          <Textarea
+            label="SKUs to look up"
+            hideLabel
+            className="flex-1 min-w-[14rem]"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -153,30 +157,20 @@ export function SupplierImport() {
             }}
             rows={2}
             placeholder="e.g. ON-GOLD-WHEY-2270, APP-CREA-250"
-            className="flex-1 min-w-[220px] text-sm rounded-xl px-3 py-2 border resize-y"
-            style={{ background: 'var(--surface-2)', borderColor: 'var(--edge)', color: 'var(--ink-1)' }}
           />
-          <button
-            onClick={lookup}
-            disabled={looking || !input.trim()}
-            className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40 self-start"
-            style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
-          >
-            {looking ? 'Looking…' : 'Look up'}
-          </button>
+          <Button variant="primary" loading={looking} disabled={!input.trim()} onClick={lookup}>
+            Look up
+          </Button>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            onClick={loadSamples}
-            disabled={sampling}
-            className="text-[11px] font-bold px-2.5 py-1.5 rounded-lg border disabled:opacity-40"
-            style={{ borderColor: 'var(--edge)', color: 'var(--ink-3)' }}
-          >
-            {sampling ? 'Reading the feed…' : 'Show me some SKUs'}
-          </button>
+          <Button variant="ghost" size="sm" loading={sampling} onClick={loadSamples}>
+            Show me some SKUs
+          </Button>
           {source && results && (
-            <span className="text-[10px] text-[var(--ink-3)]">Answered by the {source} supplier.</span>
+            <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+              Answered by the {source} supplier.
+            </span>
           )}
         </div>
 
@@ -192,37 +186,35 @@ export function SupplierImport() {
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {samples.map((sku) => (
-                    <button
+                    <Button
                       key={sku}
+                      size="sm"
+                      // No aria-label: the SKU is the visible text and so is the
+                      // name. An "Add SKU … to the box" label that does not start
+                      // with what is written on the button breaks voice control.
                       onClick={() => setInput((v) => (v.trim() ? `${v.trim()}, ${sku}` : sku))}
-                      className="text-[10px] font-semibold px-2 py-1 rounded-md border"
-                      style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}
                     >
                       {sku}
-                    </button>
+                    </Button>
                   ))}
                 </div>
-                <button
-                  onClick={() => setInput(samples.join(', '))}
-                  className="text-[10px] font-bold underline"
-                  style={{ color: 'var(--accent)' }}
-                >
+                <Button variant="ghost" size="sm" onClick={() => setInput(samples.join(', '))}>
                   Put all {samples.length} in the box
-                </button>
+                </Button>
               </>
             )}
           </div>
         )}
-      </div>
+      </Card>
 
       {notFound.length > 0 && (
-        <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>
+        <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
           Not in the feed: {notFound.join(', ')}
         </p>
       )}
 
       {results && results.length === 0 && notFound.length === 0 && (
-        <p className="text-sm text-[var(--ink-3)]">Nothing found for those SKUs.</p>
+        <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Nothing found for those SKUs.</p>
       )}
 
       {results && results.length > 0 && (
@@ -233,24 +225,14 @@ export function SupplierImport() {
 
           {addable.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => add(addable.map((r) => r.sku))}
-                disabled={adding}
-                className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
-                style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-              >
-                {adding ? 'Adding…' : `Add all ${addable.length} separately`}
-              </button>
+              <Button variant="primary" size="sm" loading={adding} onClick={() => add(addable.map((r) => r.sku))}>
+                {`Add all ${addable.length} separately`}
+              </Button>
               {/* PowerBody sell each flavour as its own SKU, so this is how four
                   codes become one product with a flavour picker. */}
-              <button
-                onClick={() => add(addable.map((r) => r.sku), true)}
-                disabled={adding}
-                className="text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40"
-                style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
-              >
+              <Button size="sm" loading={adding} onClick={() => add(addable.map((r) => r.sku), true)}>
                 Add as ONE product ({addable.length} variants)
-              </button>
+              </Button>
             </div>
           )}
           {addable.length > 1 && (
@@ -309,16 +291,13 @@ function ProductCard({ row: r, adding, onAdd }: { row: SupplierRow; adding: bool
       </div>
 
       {r.alreadyAdded ? (
-        <span className="text-[10px] font-bold uppercase shrink-0" style={{ color: 'var(--accent)' }}>Added</span>
+        <Badge tone="accent" icon="check" className="shrink-0">
+          Added
+        </Badge>
       ) : (
-        <button
-          onClick={onAdd}
-          disabled={adding}
-          className="text-xs font-bold px-3 py-1.5 rounded-xl border shrink-0 disabled:opacity-40"
-          style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}
-        >
+        <Button size="sm" className="shrink-0" loading={adding} aria-label={`Add ${r.name}`} onClick={onAdd}>
           Add
-        </button>
+        </Button>
       )}
     </div>
   )

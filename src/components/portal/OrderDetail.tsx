@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { StatusBadge, statusLabel } from './OrdersList'
+import { Button, Card } from '@/components/system'
 
 
 interface OrderLine {
@@ -49,11 +50,12 @@ const REVIEW_LABEL: Record<string, string> = {
   held: 'On hold',
   rejected: 'Rejected — will not be fulfilled',
 }
-const REVIEW_COLOUR: Record<string, string> = {
-  pending: 'var(--tone-attention)',
-  approved: 'var(--tone-positive)',
-  held: 'var(--tone-attention)',
-  rejected: 'var(--tone-critical)',
+/** Review state → the system's semantic tone. `Card` and `Badge` own the colours. */
+const REVIEW_TONE: Record<string, 'attention' | 'positive' | 'critical'> = {
+  pending: 'attention',
+  approved: 'positive',
+  held: 'attention',
+  rejected: 'critical',
 }
 
 export function OrderDetail({ id }: { id: string }) {
@@ -91,7 +93,6 @@ export function OrderDetail({ id }: { id: string }) {
   const canSubmit = order.status === 'paid' || order.status === 'failed'
   const canSync = !!order.supplierOrderId
   const terminal = ['refunded', 'cancelled'].includes(order.status)
-  const btn = 'text-xs font-bold px-3 py-2 rounded-xl border disabled:opacity-40'
   const review = order.review?.state ?? 'pending'
   const awaitingReview = !order.supplierOrderId && canSubmit
 
@@ -109,39 +110,62 @@ export function OrderDetail({ id }: { id: string }) {
 
       {/* Fulfilment review — nothing reaches PowerBody until this says approved. */}
       {awaitingReview && (
-        <div className="rounded-2xl border p-3.5" style={{ background: 'var(--surface-1)', borderColor: `color-mix(in srgb, ${REVIEW_COLOUR[review] ?? 'var(--accent)'} 35%, transparent)` }}>
+        <Card padding="tight" tone={REVIEW_TONE[review] ?? 'accent'}>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <p className="text-sm font-bold" style={{ color: REVIEW_COLOUR[review] ?? 'var(--accent)', fontFamily: 'var(--font-display)' }}>
+              <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: `var(--tone-${REVIEW_TONE[review] ?? 'info'})` }}>
                 {REVIEW_LABEL[review] ?? review}
               </p>
-              <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+              <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                 We ask PowerBody for nothing until you confirm it.
                 {order.review?.by && ` Last set by ${order.review.by}.`}
                 {order.review?.note && ` “${order.review.note}”`}
               </p>
             </div>
             <div className="flex gap-2">
-              {review !== 'held' && <button onClick={() => act('hold')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-attention)' }}>Hold</button>}
-              {review !== 'pending' && <button onClick={() => act('return')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>Back to queue</button>}
-              {review !== 'rejected' && <button onClick={() => act('reject')} disabled={busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>Reject</button>}
+              {review !== 'held' && (
+                <Button size="sm" loading={busy === 'hold'} disabled={busy !== null} onClick={() => act('hold')}>
+                  Hold
+                </Button>
+              )}
+              {review !== 'pending' && (
+                <Button size="sm" loading={busy === 'return'} disabled={busy !== null} onClick={() => act('return')}>
+                  Back to queue
+                </Button>
+              )}
+              {review !== 'rejected' && (
+                <Button variant="destructive" size="sm" loading={busy === 'reject'} disabled={busy !== null} onClick={() => act('reject')}>
+                  Reject
+                </Button>
+              )}
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Actions */}
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => act('submit')} disabled={!canSubmit || busy !== null} className={btn} style={{ borderColor: `var(--accent-line)`, color: 'var(--accent)' }}>
-          {busy === 'submit' ? 'Sending…' : order.status === 'failed' ? 'Retry send to PowerBody' : 'Confirm & send to PowerBody'}
-        </button>
-        <button onClick={() => act('sync')} disabled={!canSync || busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--ink-2)' }}>
-          {busy === 'sync' ? 'Syncing…' : 'Sync status'}
-        </button>
-        <button onClick={() => act('refund')} disabled={terminal || busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>Refund</button>
-        <button onClick={() => act('cancel')} disabled={terminal || busy !== null} className={btn} style={{ borderColor: 'var(--edge)', color: 'var(--tone-critical)' }}>Cancel</button>
+        <Button variant="primary" size="sm" loading={busy === 'submit'} disabled={!canSubmit || busy !== null} onClick={() => act('submit')}>
+          {order.status === 'failed' ? 'Retry send to PowerBody' : 'Confirm & send to PowerBody'}
+        </Button>
+        <Button size="sm" loading={busy === 'sync'} disabled={!canSync || busy !== null} onClick={() => act('sync')}>
+          Sync status
+        </Button>
+        {/* Both take money or an order back. `destructive` is what says so — they
+            used to be secondary buttons with red text, which is the same weight
+            as "Sync status" to anyone scanning the row. */}
+        <Button variant="destructive" size="sm" loading={busy === 'refund'} disabled={terminal || busy !== null} onClick={() => act('refund')}>
+          Refund
+        </Button>
+        <Button variant="destructive" size="sm" loading={busy === 'cancel'} disabled={terminal || busy !== null} onClick={() => act('cancel')}>
+          Cancel
+        </Button>
       </div>
-      {error && <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
+      {error && (
+        <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
+          {error}
+        </p>
+      )}
 
       {/* Lines */}
       <section>

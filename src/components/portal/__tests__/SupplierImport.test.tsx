@@ -79,7 +79,9 @@ describe('SupplierImport', () => {
     const user = userEvent.setup()
     await user.type(screen.getByPlaceholderText(/ON-GOLD-WHEY-2270/), 'PB-WHEY-1KG')
     await user.click(screen.getByRole('button', { name: /look up/i }))
-    await user.click(await screen.findByRole('button', { name: /^add$/i }))
+    // Named per row — a results list of identical "Add" buttons is one a
+    // screen-reader user cannot tell apart.
+    await user.click(await screen.findByRole('button', { name: `Add ${ROW.name}` }))
 
     // Adding is not publishing, and the wording has to carry that.
     expect(await screen.findByText(/waiting in Products → Review/)).toBeInTheDocument()

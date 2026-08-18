@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { refundForReturnedValue } from '@/lib/recharge/exit'
 import type { ExitQueue, ExitRow, ExitState } from '@/lib/portal/exits'
+import { Button, Card, Checkbox } from '@/components/system'
 
 const MUTED = 'var(--ink-3)'
 
@@ -90,23 +91,29 @@ export function ExitsPage() {
 
       <div className="flex gap-1.5 flex-wrap">
         {(['return-due', 'owed', 'refund-due', 'collected', 'waived', 'written-off', 'all'] as const).map((f) => (
-          <button
+          <Button
             key={f}
+            size="sm"
+            variant={filter === f ? 'primary' : 'secondary'}
+            aria-pressed={filter === f}
             onClick={() => setFilter(f)}
-            className="px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap"
-            style={{
-              background: filter === f ? 'var(--accent)' : 'var(--surface-2)',
-              color: filter === f ? 'var(--ground-base)' : 'var(--ink-3)',
-              border: '1px solid var(--edge)',
-            }}
           >
             {f === 'all' ? 'Everything' : STATE_LABEL[f]}
-          </button>
+          </Button>
         ))}
       </div>
 
       {rows.length === 0 && (
-        <p className="text-sm text-[var(--ink-3)] rounded-2xl border border-[var(--edge)] p-6 text-center">
+        <p
+          className="text-center"
+          style={{
+            fontSize: 'var(--text-body-sm)',
+            color: 'var(--ink-3)',
+            border: '1px solid var(--edge)',
+            borderRadius: 'var(--radius-card)',
+            padding: 'var(--space-6)',
+          }}
+        >
           {filter === 'owed'
             ? 'Nothing outstanding. Every settlement has been collected or waived.'
             : filter === 'return-due'
@@ -157,16 +164,17 @@ export function ExitsPage() {
               <div className="flex gap-1.5 mt-3 flex-wrap">
                 {row.state === 'owed' && (
                   <>
-                    <Action label="Mark paid" tone={'var(--tone-positive)'} busy={busy === row.userId}
+                    <Action label="Mark paid" variant="primary" busy={busy === row.userId}
                       onClick={() => act(row, 'mark-paid', 'How was it paid? (bank transfer, invoice link…)')} />
-                    <Action label="Waive" tone={MUTED} busy={busy === row.userId}
+                    <Action label="Waive" busy={busy === row.userId}
                       onClick={() => act(row, 'waive', 'Why are you waiving this?')} />
-                    <Action label="Write off" tone={'var(--tone-critical)'} busy={busy === row.userId}
+                    {/* Writing off gives up money and cannot be undone. */}
+                    <Action label="Write off" variant="destructive" busy={busy === row.userId}
                       onClick={() => act(row, 'write-off', 'Why are you writing this off?')} />
                   </>
                 )}
                 {row.state === 'refund-due' && (
-                  <Action label="Mark refunded" tone={'var(--accent)'} busy={busy === row.userId}
+                  <Action label="Mark refunded" variant="primary" busy={busy === row.userId}
                     onClick={() => act(row, 'mark-refunded', 'How was it refunded?')} />
                 )}
                 {row.invoiceId && (
@@ -183,24 +191,29 @@ export function ExitsPage() {
 
 function Stat({ label, value, tone, hint }: { label: string; value: number; tone: string; hint: string }) {
   return (
-    <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-3">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{label}</p>
-      <p className="text-xl font-black mt-0.5" style={{ color: tone, fontFamily: 'var(--font-display)' }}>{formatGBP(value)}</p>
-      <p className="text-[10px] text-[var(--ink-3)] mt-0.5">{hint}</p>
-    </div>
+    <Card padding="tight">
+      <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+        {label}
+      </p>
+      <p style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums', color: tone, marginTop: 'var(--space-1)' }}>
+        {formatGBP(value)}
+      </p>
+      <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>{hint}</p>
+    </Card>
   )
 }
 
-function Action({ label, tone, busy, onClick }: { label: string; tone: string; busy: boolean; onClick: () => void }) {
+/**
+ * One settlement action on a row.
+ *
+ * Takes a variant rather than a colour. "Write off" is destructive and "Mark
+ * paid" is not, and painting both as tinted outlines made them the same weight.
+ */
+function Action({ label, variant, busy, onClick }: { label: string; variant?: 'primary' | 'secondary' | 'destructive'; busy: boolean; onClick: () => void }) {
   return (
-    <button
-      onClick={onClick}
-      disabled={busy}
-      className="px-3 py-1.5 rounded-lg text-xs font-bold disabled:opacity-50"
-      style={{ background: `color-mix(in srgb, ${tone} 14%, transparent)`, color: tone, border: `1px solid color-mix(in srgb, ${tone} 30%, transparent)` }}
-    >
+    <Button size="sm" variant={variant ?? 'secondary'} loading={busy} onClick={onClick}>
       {label}
-    </button>
+    </Button>
   )
 }
 
@@ -271,17 +284,18 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
   }
 
   return (
-    <div className="mt-3 rounded-xl border border-[var(--edge)] bg-[var(--surface-2)] p-3">
+    <Card elevation={2} padding="tight" className="mt-3">
       <div className="flex items-baseline justify-between gap-2">
-        <p className="text-xs font-bold text-[var(--ink-1)]">What came back unopened?</p>
-        <button
-          type="button"
+        <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+          What came back unopened?
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setTicked(allTicked ? new Set() : new Set(row.returnItems.map((i) => i.key)))}
-          className="text-[10px] font-semibold underline"
-          style={{ color: MUTED }}
         >
           {allTicked ? 'Clear all' : 'Whole box'}
-        </button>
+        </Button>
       </div>
       <p className="text-[10px] mt-0.5 leading-relaxed" style={{ color: MUTED }}>
         Leave opened items unticked — they aren&apos;t refundable unless they arrived faulty. If something was
@@ -296,25 +310,30 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
       ) : (
         <div className="mt-2 space-y-1">
           {row.returnItems.map((item) => (
-            <label
+            <Card
               key={item.key}
-              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 cursor-pointer"
-              style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)' }}
+              solid
+              padding="tight"
+              className="flex items-center justify-between gap-2.5"
             >
-              <input
-                type="checkbox"
+              <Checkbox
+                className="min-w-0 flex-1"
+                label={
+                  <span className="truncate" style={{ color: 'var(--ink-1)' }}>
+                    {item.title}
+                    {item.quantity > 1 && <span style={{ color: MUTED }}> ×{item.quantity}</span>}
+                  </span>
+                }
                 checked={ticked.has(item.key)}
                 onChange={() => toggle(item.key)}
-                style={{ accentColor: 'var(--accent)' }}
               />
-              <span className="text-xs text-[var(--ink-1)] flex-1 min-w-0 truncate">
-                {item.title}
-                {item.quantity > 1 && <span style={{ color: MUTED }}> ×{item.quantity}</span>}
-              </span>
-              <span className="text-[11px] font-bold shrink-0" style={{ color: MUTED }}>
+              <span
+                className="shrink-0"
+                style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-strong)', fontVariantNumeric: 'tabular-nums', color: MUTED }}
+              >
                 {formatGBP(item.value)}
               </span>
-            </label>
+            </Card>
           ))}
         </div>
       )}
@@ -334,19 +353,15 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
             {formatGBP(returnedValue)} of {formatGBP(row.shippedTotal)} returned · they paid {formatGBP(row.paidTotal)}
           </p>
         </div>
-        <button
-          type="button"
+        <Button
+          variant="primary"
+          size="sm"
+          loading={busy}
+          disabled={row.returnItems.length === 0}
           onClick={settle}
-          disabled={busy || row.returnItems.length === 0}
-          className="px-3 py-2 rounded-lg text-xs font-bold disabled:opacity-50"
-          style={{
-            background: `var(--accent-fill)`,
-            color: 'var(--accent)',
-            border: `1px solid var(--accent-line)`,
-          }}
         >
-          {busy ? 'Refunding…' : preview > 0 ? `Refund ${formatGBP(preview)}` : 'Refund nothing & close'}
-        </button>
+          {preview > 0 ? `Refund ${formatGBP(preview)}` : 'Refund nothing & close'}
+        </Button>
       </div>
 
       {result && (
@@ -360,6 +375,6 @@ function ReturnPanel({ row, onDone }: { row: ExitRow; onDone: () => Promise<void
             : `${formatGBP(result.refunded)} refunded to their card. This return is closed.`}
         </p>
       )}
-    </div>
+    </Card>
   )
 }
