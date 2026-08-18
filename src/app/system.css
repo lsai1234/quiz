@@ -212,6 +212,58 @@
   cursor: default;
 }
 
+/* ── Checkbox ─────────────────────────────────────────────────────────────────
+   The box `Checkbox` draws. Same recess and hairline as a field, at the size of
+   a glyph, with the tick drawn as two borders on a rotated element — no image,
+   no font, and it inherits the accent the moment the token moves.
+
+   Sized in `em` off the label so it lines up with the first line of a sentence
+   whatever that sentence is set at. */
+.system-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 1.15em;
+  height: 1.15em;
+  margin: 0;
+  /* Optically centred on the cap height of the first line rather than its box. */
+  margin-top: 0.1em;
+  border: 1px solid var(--edge-strong);
+  border-radius: var(--radius-chip);
+  background: var(--surface-input);
+  box-shadow: var(--inset-well);
+  --rest-shadow: var(--inset-well);
+  cursor: inherit;
+  transition:
+    background var(--duration-fast) var(--ease-settle),
+    border-color var(--duration-fast) var(--ease-settle);
+}
+
+.system-checkbox:checked {
+  background: var(--fill-accent);
+  border-color: transparent;
+  box-shadow: var(--inset-highlight), var(--glow-accent);
+  --rest-shadow: var(--inset-highlight), var(--glow-accent);
+}
+
+/* The tick: the bottom and right edges of a box, turned 45°. */
+.system-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 0.34em;
+  top: 0.13em;
+  width: 0.3em;
+  height: 0.58em;
+  border: 2px solid var(--ink-on-accent);
+  border-top: 0;
+  border-left: 0;
+  transform: rotate(45deg);
+}
+
+.system-checkbox:disabled {
+  cursor: default;
+}
+
 /* The placeholder is the one piece of text in a field that is not the value, and
    it has to stay distinguishable from one without dropping under AA. */
 .system-field::placeholder {

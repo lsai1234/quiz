@@ -167,6 +167,8 @@ hierarchy collapses into two.
 | `Card` | `elevation` 1–3, `solid`, `tone`, `padding`, `interactive`. |
 | `Input` | `label` required; `hint`, `error`, `prefix`, `suffix`, `compact`, `align`. |
 | `Select` | Native `<select>`, styled. Same label/hint/error shell, same `compact`. |
+| `Textarea` | The same box, opened up. `rows`; no `compact` — a paragraph does not fit a table row. |
+| `Checkbox` | The one control whose name sits beside it. Drawn box, real `<input type="checkbox">` underneath. |
 | `Modal` | + `ModalHeader`/`Body`/`Footer`. Focus-trapped, Escape, scroll lock. |
 | `Badge` | `neutral`/`accent`/`positive`/`attention`/`critical`/`info`; `soft`/`solid`. |
 | `Tabs` | Real tablist: roving tabindex, arrow keys, Home/End. |

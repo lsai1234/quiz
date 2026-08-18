@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Card, Modal, ModalBody, ModalHeader, Tabs } from '@/components/system'
+import { Badge, Button, Card, Checkbox, Input, Modal, ModalBody, ModalHeader, Select, Tabs, Textarea } from '@/components/system'
 import { describePayout, describeTerms } from '@/lib/partners/terms'
 import type {
   CodeTerms,
@@ -165,34 +165,57 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
   )
 }
 
+/**
+ * A titled block inside a tab. Layout only — the local `Field`, `INPUT` and
+ * `BTN` that used to live beside it are `Input`, `Select`, `Textarea` and
+ * `Button` now, and the `Note` below is the one piece of prose styling left.
+ */
 function Group({ title, desc, children }: { title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-[var(--edge)] p-4 mb-3" style={{ background: 'var(--surface-2)' }}>
-      <p className="text-xs font-black text-[var(--ink-1)] mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
-      {desc && <p className="text-[11px] text-[var(--ink-3)] mb-3 leading-snug">{desc}</p>}
+    <Card elevation={2} className="mb-3">
+      <p
+        style={{
+          fontSize: 'var(--text-body-sm)',
+          fontWeight: 'var(--weight-display)',
+          fontFamily: 'var(--font-display)',
+          color: 'var(--ink-1)',
+        }}
+      >
+        {title}
+      </p>
+      {desc && (
+        <p
+          style={{
+            fontSize: 'var(--text-meta)',
+            lineHeight: 'var(--leading-snug)',
+            color: 'var(--ink-3)',
+            marginTop: 'var(--space-1)',
+            marginBottom: 'var(--space-3)',
+          }}
+        >
+          {desc}
+        </p>
+      )}
       {children}
-    </div>
+    </Card>
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** The quiet line under a control that is not a field's own hint. */
+function Note({ children }: { children: React.ReactNode }) {
   return (
-    <label className="block mb-3">
-      <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">{label}</span>
+    <p
+      style={{
+        fontSize: 'var(--text-meta)',
+        lineHeight: 'var(--leading-snug)',
+        color: 'var(--ink-3)',
+        marginTop: 'var(--space-2)',
+      }}
+    >
       {children}
-      {hint && <span className="text-[10px] text-[var(--ink-3)] block mt-1 leading-snug">{hint}</span>}
-    </label>
+    </p>
   )
 }
-
-const inputStyle = {
-  background: 'var(--surface-1)',
-  border: '1px solid var(--edge)',
-  color: 'var(--ink-1)',
-} as const
-
-const INPUT = 'w-full px-3 py-2 rounded-xl text-sm outline-none'
-const BTN = 'text-xs font-bold px-3 py-2 rounded-xl active:scale-95 transition-all disabled:opacity-40'
 
 function AccountPanel({
   status,
@@ -218,13 +241,15 @@ function AccountPanel({
     >
       <div className="flex flex-wrap gap-2 mb-3">
         {status === 'suspended' ? (
-          <button disabled={busy} onClick={() => onStatus('active')} className={BTN} style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}>
+          <Button variant="primary" size="sm" loading={busy} onClick={() => onStatus('active')}>
             Reinstate
-          </button>
+          </Button>
         ) : (
-          <button disabled={busy} onClick={() => onStatus('suspended')} className={BTN} style={{ background: 'var(--surface-1)', color: 'var(--tone-critical)', border: '1px solid var(--edge)' }}>
+          // Destructive rather than secondary-in-red: it signs them out, refuses
+          // their code at checkout and stops commission accruing.
+          <Button variant="destructive" size="sm" loading={busy} onClick={() => onStatus('suspended')}>
             Suspend
-          </button>
+          </Button>
         )}
       </div>
       <InviteLink partnerId={partnerId} isNew={status === 'invited'} />
@@ -271,29 +296,32 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
   if (!link) {
     return (
       <div>
-        <button
-          disabled={busy}
-          onClick={mint}
-          className={BTN}
-          style={{ background: 'var(--surface-1)', color: 'var(--accent)', border: '1px solid var(--edge)' }}
-        >
-          {busy ? 'Creating…' : isNew ? 'Create sign-in link' : 'Create a password-reset link'}
-        </button>
-        {error && <p className="text-[11px] mt-1.5" style={{ color: 'var(--tone-critical)' }}>{error}</p>}
-        <p className="text-[10px] text-[var(--ink-3)] leading-snug mt-1.5">
-          Send it to them yourself. It works once and expires in 7 days.
-        </p>
+        <Button variant="secondary" size="sm" loading={busy} onClick={mint}>
+          {isNew ? 'Create sign-in link' : 'Create a password-reset link'}
+        </Button>
+        {error && (
+          <p role="status" style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-critical)', marginTop: 'var(--space-2)' }}>
+            {error}
+          </p>
+        )}
+        <Note>Send it to them yourself. It works once and expires in 7 days.</Note>
       </div>
     )
   }
 
   return (
     <div>
-      <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Send them this — you won’t see it again</span>
-      <div className="flex gap-2">
-        <input readOnly value={link} onFocus={(e) => e.currentTarget.select()} className={INPUT} style={{ ...inputStyle, fontSize: '11px' }} />
-        <button
-          type="button"
+      <div className="flex items-end gap-2">
+        <Input
+          label="Send them this — you won’t see it again"
+          className="flex-1"
+          readOnly
+          value={link}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <Button
+          variant="primary"
+          icon={copied ? 'check' : 'link'}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(link)
@@ -303,15 +331,11 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
               /* clipboard blocked — the field is selectable, which is the fallback */
             }
           }}
-          className={BTN}
-          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
         >
           {copied ? 'Copied' : 'Copy'}
-        </button>
+        </Button>
       </div>
-      <p className="text-[10px] text-[var(--ink-3)] leading-snug mt-1.5">
-        Only a hash is stored, so this cannot be looked up later — if it goes missing, issue another.
-      </p>
+      <Note>Only a hash is stored, so this cannot be looked up later — if it goes missing, issue another.</Note>
     </div>
   )
 }
@@ -328,52 +352,71 @@ function CodePanel({ code, busy, onSave }: { code: PartnerCode; busy: boolean; o
     <Group title={code.code} desc={`Used ${code.terms.uses} time${code.terms.uses === 1 ? '' : 's'}. Created ${code.createdAt.slice(0, 10)}.`}>
       <ShareLink code={code.code} />
 
-      <Field
-        label="Discount (%)"
-        hint="What a follower gets off the regular price. It REPLACES the bundle deal or the first month of Subscribe & Save rather than stacking on top, and works on stacks, bundles and subscriptions only — not on single products from the shop. Set it below those rates and the code simply does nothing extra."
-      >
-        <input className={INPUT} style={inputStyle} inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
-      </Field>
+      <div className="space-y-3">
+        <Input
+          label="Discount"
+          suffix="%"
+          align="right"
+          inputMode="decimal"
+          hint="What a follower gets off the regular price. It REPLACES the bundle deal or the first month of Subscribe & Save rather than stacking on top, and works on stacks, bundles and subscriptions only — not on single products from the shop. Set it below those rates and the code simply does nothing extra."
+          value={discount}
+          onChange={(e) => setDiscount(e.target.value)}
+        />
 
-      <Field label="Status">
-        <select className={INPUT} style={inputStyle} value={status} onChange={(e) => setStatus(e.target.value as PartnerCode['status'])}>
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value as PartnerCode['status'])}>
           <option value="active">Active</option>
           <option value="paused">Paused</option>
           <option value="expired">Expired</option>
-        </select>
-      </Field>
+        </Select>
 
-      <label className="flex items-start gap-2 mb-3">
-        <input type="checkbox" className="mt-0.5" checked={t.firstOrderOnly} onChange={(e) => setTerms({ firstOrderOnly: e.target.checked })} />
-        <span className="text-[11px] text-[var(--ink-3)] leading-snug">
-          <span className="font-bold text-[var(--ink-1)]">First order only.</span> Leave this on unless you mean it —
-          without it the code is a permanent site-wide discount the moment it reaches a deal site.
-        </span>
-      </label>
+        <Checkbox
+          label={
+            <>
+              <span style={{ fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>First order only.</span> Leave
+              this on unless you mean it — without it the code is a permanent site-wide discount the moment it reaches a
+              deal site.
+            </>
+          }
+          checked={t.firstOrderOnly}
+          onChange={(e) => setTerms({ firstOrderOnly: e.target.checked })}
+        />
 
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Max uses" hint="Blank = uncapped.">
-          <input className={INPUT} style={inputStyle} inputMode="numeric" value={t.maxUses ?? ''} onChange={(e) => setTerms({ maxUses: num(e.target.value) })} />
-        </Field>
-        <Field label="Min spend (£)" hint="Blank = none.">
-          <input className={INPUT} style={inputStyle} inputMode="decimal" value={t.minSpend ?? ''} onChange={(e) => setTerms({ minSpend: num(e.target.value) })} />
-        </Field>
-        <Field label="Starts">
-          <input type="date" className={INPUT} style={inputStyle} value={toDateInput(t.startsAt)} onChange={(e) => setTerms({ startsAt: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-        </Field>
-        <Field label="Ends">
-          <input type="date" className={INPUT} style={inputStyle} value={toDateInput(t.endsAt)} onChange={(e) => setTerms({ endsAt: e.target.value ? new Date(e.target.value).toISOString() : null })} />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Input
+            label="Max uses"
+            align="right"
+            inputMode="numeric"
+            hint="Blank = uncapped."
+            value={t.maxUses ?? ''}
+            onChange={(e) => setTerms({ maxUses: num(e.target.value) })}
+          />
+          <Input
+            label="Min spend"
+            prefix="£"
+            align="right"
+            inputMode="decimal"
+            hint="Blank = none."
+            value={t.minSpend ?? ''}
+            onChange={(e) => setTerms({ minSpend: num(e.target.value) })}
+          />
+          <Input
+            label="Starts"
+            type="date"
+            value={toDateInput(t.startsAt)}
+            onChange={(e) => setTerms({ startsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+          />
+          <Input
+            label="Ends"
+            type="date"
+            value={toDateInput(t.endsAt)}
+            onChange={(e) => setTerms({ endsAt: e.target.value ? new Date(e.target.value).toISOString() : null })}
+          />
+        </div>
+
+        <Button variant="primary" size="sm" loading={busy} onClick={() => onSave({ discountPct: pctOut(Number(discount) || 0), status, terms: t })}>
+          Save code
+        </Button>
       </div>
-
-      <button
-        disabled={busy}
-        onClick={() => onSave({ discountPct: pctOut(Number(discount) || 0), status, terms: t })}
-        className={BTN}
-        style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
-      >
-        {busy ? 'Saving…' : 'Save code'}
-      </button>
     </Group>
   )
 }
@@ -393,17 +436,17 @@ function ShareLink({ code }: { code: string }) {
 
   return (
     <div className="mb-3">
-      <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Their link</span>
-      <div className="flex gap-2">
-        <input
+      <div className="flex items-end gap-2">
+        <Input
+          label="Their link"
+          className="flex-1"
           readOnly
           value={url}
           onFocus={(e) => e.currentTarget.select()}
-          className={INPUT}
-          style={{ ...inputStyle, fontSize: '11px' }}
         />
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          icon={copied ? 'check' : 'link'}
           onClick={async () => {
             try {
               await navigator.clipboard.writeText(url)
@@ -413,19 +456,17 @@ function ShareLink({ code }: { code: string }) {
               /* clipboard blocked — the field is selectable, which is the fallback */
             }
           }}
-          className={BTN}
-          style={{ background: 'var(--surface-1)', color: 'var(--accent)', border: '1px solid var(--edge)' }}
         >
           {copied ? 'Copied' : 'Copy'}
-        </button>
+        </Button>
       </div>
       {/* The 30 days is the LINK's memory — how long a browser holds the
           referral — not how long the code works. Read the other way round it
           says a partner's deal expires in a month. */}
-      <span className="text-[10px] text-[var(--ink-3)] block mt-1 leading-snug">
+      <Note>
         Anyone following this gets the code applied at checkout without typing it. Their browser remembers it for 30
         days. The code itself does not expire — it works while the partner is active, unless you cap or end it above.
-      </span>
+      </Note>
     </div>
   )
 }
@@ -447,84 +488,110 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
   return (
     <>
       <Group title="In force now" desc={`Since ${terms.effectiveFrom.slice(0, 10)}${terms.createdBy ? `, set by ${terms.createdBy}` : ''}.`}>
-        <p className="text-sm text-[var(--ink-1)] leading-snug mb-1">{describeTerms(terms)}</p>
-        <p className="text-[11px] text-[var(--ink-3)] leading-snug">{describePayout(terms.payout)}</p>
+        <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-1)' }}>
+          {describeTerms(terms)}
+        </p>
+        <Note>{describePayout(terms.payout)}</Note>
       </Group>
 
       <Group
         title="Change the deal"
         desc="This writes a new dated row rather than editing this one. The old terms stay readable, and the partner sees both the change and the reason."
       >
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="First order %">
-            <input className={INPUT} style={inputStyle} inputMode="decimal" value={first} onChange={(e) => setFirst(e.target.value)} />
-          </Field>
-          <Field label="Renewal %">
-            <input className={INPUT} style={inputStyle} inputMode="decimal" value={renewal} onChange={(e) => setRenewal(e.target.value)} />
-          </Field>
-          <Field label="For (months)">
-            <input className={INPUT} style={inputStyle} inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} />
-          </Field>
-        </div>
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-3">
+            <Input label="First order" suffix="%" align="right" inputMode="decimal" value={first} onChange={(e) => setFirst(e.target.value)} />
+            <Input label="Renewal" suffix="%" align="right" inputMode="decimal" value={renewal} onChange={(e) => setRenewal(e.target.value)} />
+            <Input label="For" suffix="months" align="right" inputMode="numeric" value={months} onChange={(e) => setMonths(e.target.value)} />
+          </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Payout cadence">
-            <select className={INPUT} style={inputStyle} value={payout.cadence} onChange={(e) => setPayout({ ...payout, cadence: e.target.value as 'monthly' | 'quarterly' })}>
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Payout cadence"
+              value={payout.cadence}
+              onChange={(e) => setPayout({ ...payout, cadence: e.target.value as 'monthly' | 'quarterly' })}
+            >
               <option value="monthly">Monthly</option>
               <option value="quarterly">Quarterly</option>
-            </select>
-          </Field>
-          <Field label="Minimum payout (£)" hint="Below this the balance carries forward.">
-            <input className={INPUT} style={inputStyle} inputMode="decimal" value={payout.minimum} onChange={(e) => setPayout({ ...payout, minimum: Number(e.target.value) || 0 })} />
-          </Field>
-        </div>
-
-        <label className="flex items-center gap-2 mb-2">
-          <input type="checkbox" checked={payout.selfBilled} onChange={(e) => setPayout({ ...payout, selfBilled: e.target.checked })} />
-          <span className="text-[11px] text-[var(--ink-3)]">We raise the invoice for them (self-billed)</span>
-        </label>
-        <label className="flex items-center gap-2 mb-3">
-          <input type="checkbox" checked={payout.chargesVat} onChange={(e) => setPayout({ ...payout, chargesVat: e.target.checked })} />
-          <span className="text-[11px] text-[var(--ink-3)]">
-            VAT-registered — their commission costs 20% more than the rate says
-          </span>
-        </label>
-
-        {/* Not a <Field>: that renders a <label>, and a <button> inside a label
-            is invalid markup that hands clicks to the wrong control. */}
-        <div className="mb-3">
-          <span className="text-[11px] font-bold text-[var(--ink-3)] block mb-1">Takes effect</span>
-          <div className="flex gap-2 mb-2">
-            {(['now', 'date'] as const).map((w) => (
-              <button
-                key={w}
-                type="button"
-                onClick={() => setWhen(w)}
-                className="px-3 py-1.5 rounded-full text-xs font-bold"
-                style={{
-                  background: when === w ? 'var(--accent)' : 'var(--surface-1)',
-                  color: when === w ? 'var(--ground-base)' : 'var(--ink-3)',
-                  border: '1px solid var(--edge)',
-                }}
-              >
-                {w === 'now' ? 'Immediately' : 'On a date'}
-              </button>
-            ))}
+            </Select>
+            <Input
+              label="Minimum payout"
+              prefix="£"
+              align="right"
+              inputMode="decimal"
+              hint="Below this the balance carries forward."
+              value={payout.minimum}
+              onChange={(e) => setPayout({ ...payout, minimum: Number(e.target.value) || 0 })}
+            />
           </div>
-          {when === 'date' && (
-            <input type="date" className={INPUT} style={inputStyle} value={on} onChange={(e) => setOn(e.target.value)} />
-          )}
-          <span className="text-[10px] text-[var(--ink-3)] block mt-1 leading-snug">
-            Cannot start before commission already earned at the current rate, or before the terms already recorded.
-          </span>
-        </div>
 
-        <Field label="Reason" hint="Required. The partner reads this in their account.">
-          <textarea className={INPUT} style={inputStyle} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Negotiated up for the January campaign." />
-        </Field>
+          <Checkbox
+            label="We raise the invoice for them (self-billed)"
+            checked={payout.selfBilled}
+            onChange={(e) => setPayout({ ...payout, selfBilled: e.target.checked })}
+          />
+          <Checkbox
+            label="VAT-registered — their commission costs 20% more than the rate says"
+            checked={payout.chargesVat}
+            onChange={(e) => setPayout({ ...payout, chargesVat: e.target.checked })}
+          />
 
-        <button
-          disabled={busy || !note.trim() || (when === 'date' && !on)}
+          {/* A `<fieldset>`, not a label with buttons in it: two mutually
+              exclusive choices need a name of their own, and a `<button>` inside
+              a `<label>` is invalid markup that hands clicks to the wrong
+              control. `aria-pressed` is what tells a screen reader which of the
+              two is currently chosen. */}
+          <fieldset>
+            <legend
+              style={{
+                fontSize: 'var(--text-micro)',
+                fontWeight: 'var(--weight-strong)',
+                fontFamily: 'var(--font-display)',
+                letterSpacing: 'var(--tracking-eyebrow)',
+                textTransform: 'uppercase',
+                color: 'var(--ink-3)',
+                marginBottom: 'var(--space-2)',
+              }}
+            >
+              Takes effect
+            </legend>
+            <div className="flex gap-2">
+              {(['now', 'date'] as const).map((w) => (
+                <Button
+                  key={w}
+                  size="sm"
+                  variant={when === w ? 'primary' : 'secondary'}
+                  aria-pressed={when === w}
+                  onClick={() => setWhen(w)}
+                >
+                  {w === 'now' ? 'Immediately' : 'On a date'}
+                </Button>
+              ))}
+            </div>
+            {when === 'date' && (
+              <div style={{ marginTop: 'var(--space-2)' }}>
+                <Input label="Effective date" type="date" value={on} onChange={(e) => setOn(e.target.value)} />
+              </div>
+            )}
+            <Note>
+              Cannot start before commission already earned at the current rate, or before the terms already recorded.
+            </Note>
+          </fieldset>
+
+          <Textarea
+            label="Reason"
+            hint="Required. The partner reads this in their account."
+            rows={2}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="e.g. Negotiated up for the January campaign."
+          />
+
+        <Button
+          variant="primary"
+          size="sm"
+          loading={busy}
+          disabled={!note.trim() || (when === 'date' && !on)}
           onClick={() =>
             onSave({
               firstOrderPct: pctOut(Number(first) || 0),
@@ -537,11 +604,10 @@ function TermsPanel({ terms, busy, onSave }: { terms: PartnerTerms; busy: boolea
               note,
             })
           }
-          className={BTN}
-          style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
         >
-          {busy ? 'Saving…' : 'Record new terms'}
-        </button>
+          Record new terms
+        </Button>
+        </div>
       </Group>
     </>
   )
@@ -583,7 +649,7 @@ function MoneyPanel({
 
   useEffect(() => { void load() }, [load])
 
-  if (!data) return <p className="text-sm text-[var(--ink-3)]">Loading…</p>
+  if (!data) return <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Loading…</p>
 
   const { balance, commissions, payouts } = data
 
@@ -599,44 +665,40 @@ function MoneyPanel({
           <Figure label="Paid to date" value={balance.paid} />
           <Figure label="Reversed" value={balance.reversed} tone={balance.reversed > 0 ? 'var(--tone-critical)' : undefined} />
         </div>
-        <div className="flex gap-2">
-          <button
-            disabled={busy || balance.payableNow <= 0}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            loading={busy}
+            disabled={balance.payableNow <= 0}
             onClick={async () => { if (await onSettle(false)) await load() }}
-            className={BTN}
-            style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)' }}
           >
-            {busy ? 'Working…' : 'Raise a payout'}
-          </button>
-          <button
-            disabled={busy || balance.payableNow <= 0}
+            Raise a payout
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={busy}
+            disabled={balance.payableNow <= 0}
             onClick={async () => { if (await onSettle(true)) await load() }}
-            className={BTN}
-            style={{ background: 'var(--surface-1)', color: 'var(--ink-3)', border: '1px solid var(--edge)' }}
             title="Pay it even though it is under their agreed minimum"
           >
             Ignore the minimum
-          </button>
+          </Button>
         </div>
       </Group>
 
       <Group title={`Payouts (${payouts.length})`} desc="Raised here; marked paid once the money has actually gone.">
         {payouts.length === 0 ? (
-          <p className="text-[11px] text-[var(--ink-3)]">None yet.</p>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>None yet.</p>
         ) : (
           <div className="space-y-1.5">
             {payouts.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-[var(--ink-2)]">{p.period} · {money(p.amount)}</span>
-                <span
-                  className="font-bold px-2 py-0.5 rounded-full"
-                  style={{
-                    color: p.state === 'paid' ? 'var(--tone-positive)' : 'var(--tone-attention)',
-                    background: `color-mix(in srgb, ${p.state === 'paid' ? 'var(--tone-positive)' : 'var(--tone-attention)'} 14%, transparent)`,
-                  }}
-                >
+              <div key={p.id} className="flex items-center justify-between gap-2" style={{ fontSize: 'var(--text-meta)' }}>
+                <span style={{ color: 'var(--ink-2)' }}>{p.period} · {money(p.amount)}</span>
+                <Badge tone={p.state === 'paid' ? 'positive' : 'attention'}>
                   {p.state === 'paid' ? 'paid' : 'due'}
-                </span>
+                </Badge>
               </div>
             ))}
           </div>
@@ -645,22 +707,25 @@ function MoneyPanel({
 
       <Group title={`Commissions (${commissions.length})`} desc="The rate stored is the one that applied on the day, not today's.">
         {commissions.length === 0 ? (
-          <p className="text-[11px] text-[var(--ink-3)]">Nothing earned yet.</p>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>Nothing earned yet.</p>
         ) : (
           <div className="space-y-1.5">
             {commissions.slice(0, 40).map((c) => (
-              <div key={c.id} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="text-[var(--ink-2)] truncate">
+              <div key={c.id} className="flex items-center justify-between gap-2" style={{ fontSize: 'var(--text-meta)' }}>
+                <span className="truncate" style={{ color: 'var(--ink-2)' }}>
                   {c.createdAt.slice(0, 10)} · {c.kind} · {Math.round(c.rate * 100)}% of {money(c.netBasis)}
                 </span>
-                <span className="flex items-center gap-2 flex-shrink-0">
+                <span className="flex items-center gap-2 shrink-0">
                   <span
-                    className="font-semibold"
-                    style={{ color: c.state === 'reversed' ? 'var(--tone-critical)' : 'var(--ink-1)', textDecoration: c.state === 'reversed' ? 'line-through' : undefined }}
+                    style={{
+                      fontWeight: 'var(--weight-strong)',
+                      color: c.state === 'reversed' ? 'var(--tone-critical)' : 'var(--ink-1)',
+                      textDecoration: c.state === 'reversed' ? 'line-through' : undefined,
+                    }}
                   >
                     {money(c.amount)}
                   </span>
-                  <span className="text-[10px] text-[var(--ink-3)]">{c.state}</span>
+                  <span style={{ color: 'var(--ink-3)' }}>{c.state}</span>
                 </span>
               </div>
             ))}
@@ -673,12 +738,31 @@ function MoneyPanel({
 
 function Figure({ label, value, tone }: { label: string; value: number; tone?: string }) {
   return (
-    <div className="rounded-xl px-3 py-2" style={{ background: 'var(--surface-1)', border: '1px solid var(--edge)' }}>
-      <p className="text-[10px] font-bold uppercase tracking-wide text-[var(--ink-3)]">{label}</p>
-      <p className="text-sm font-black" style={{ color: tone ?? 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+    <Card padding="tight">
+      <p
+        style={{
+          fontSize: 'var(--text-micro)',
+          fontWeight: 'var(--weight-strong)',
+          fontFamily: 'var(--font-display)',
+          letterSpacing: 'var(--tracking-eyebrow)',
+          textTransform: 'uppercase',
+          color: 'var(--ink-3)',
+        }}
+      >
+        {label}
+      </p>
+      <p
+        style={{
+          fontSize: 'var(--text-body-sm)',
+          fontWeight: 'var(--weight-display)',
+          fontFamily: 'var(--font-display)',
+          fontVariantNumeric: 'tabular-nums',
+          color: tone ?? 'var(--ink-1)',
+        }}
+      >
         {money(value)}
       </p>
-    </div>
+    </Card>
   )
 }
 
@@ -691,32 +775,49 @@ function HistoryPanel({ history }: { history: PartnerTerms[] }) {
 
   return (
     <div className="space-y-2">
-      <p className="text-[11px] text-[var(--ink-3)] leading-snug mb-1">
+      <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' }}>
         Every deal this partner has been on, newest first. Nothing here is ever edited or removed — it is what we told a
         counterparty, and they can read the same list.
       </p>
       {history.map((t, i) => (
-        <div key={t.id} className="rounded-2xl border border-[var(--edge)] p-4" style={{ background: 'var(--surface-2)' }}>
+        <Card key={t.id} elevation={2}>
           <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-xs font-black text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
+            <p
+              style={{
+                fontSize: 'var(--text-body-sm)',
+                fontWeight: 'var(--weight-display)',
+                fontFamily: 'var(--font-display)',
+                color: 'var(--ink-1)',
+              }}
+            >
               From {when(t.effectiveFrom)}
             </p>
-            {i === 0 && new Date(t.effectiveFrom) <= new Date() && (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: 'var(--accent)', background: `var(--accent-fill)` }}>
-                In force
-              </span>
-            )}
-            {i === 0 && new Date(t.effectiveFrom) > new Date() && (
-              <span className="text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full" style={{ color: 'var(--tone-attention)', background: 'color-mix(in srgb, var(--tone-attention) 14%, transparent)' }}>
-                Starts later
-              </span>
-            )}
+            {i === 0 && new Date(t.effectiveFrom) <= new Date() && <Badge tone="accent">In force</Badge>}
+            {i === 0 && new Date(t.effectiveFrom) > new Date() && <Badge tone="attention">Starts later</Badge>}
           </div>
-          <p className="text-[12px] text-[var(--ink-1)] leading-snug">{describeTerms(t)}</p>
-          <p className="text-[11px] text-[var(--ink-3)] leading-snug mt-1">{describePayout(t.payout)}</p>
-          {t.note && <p className="text-[11px] text-[var(--ink-3)] leading-snug mt-2 italic">“{t.note}”</p>}
-          {t.createdBy && <p className="text-[10px] text-[var(--ink-3)] mt-1">— {t.createdBy}</p>}
-        </div>
+          <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-1)' }}>
+            {describeTerms(t)}
+          </p>
+          <Note>{describePayout(t.payout)}</Note>
+          {t.note && (
+            <p
+              style={{
+                fontSize: 'var(--text-meta)',
+                lineHeight: 'var(--leading-snug)',
+                color: 'var(--ink-3)',
+                fontStyle: 'italic',
+                marginTop: 'var(--space-2)',
+              }}
+            >
+              “{t.note}”
+            </p>
+          )}
+          {t.createdBy && (
+            <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+              — {t.createdBy}
+            </p>
+          )}
+        </Card>
       ))}
     </div>
   )

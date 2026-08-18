@@ -10,9 +10,10 @@ import { assembleBundle, bundleToDraft, emptyDraft, type BundleDraft } from '@/l
 import { bundleReadiness } from '@/lib/bundles/readiness'
 import { calculatePricing, formatGBP } from '@/lib/stack-blueprint/pricing'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
-import { Input, Modal, ModalBody, ModalHeader } from '@/components/system'
+import { Badge, Button, Card, Input, Modal, ModalBody, ModalHeader, Select, Textarea } from '@/components/system'
 
-const DOT: Record<'ok' | 'warn' | 'fail', string> = { ok: 'var(--tone-positive)', warn: 'var(--tone-attention)', fail: 'var(--tone-critical)' }
+/** Readiness status → the system's semantic tone. The colours live in `Badge`. */
+const TONE = { ok: 'positive', warn: 'attention', fail: 'critical' } as const
 const GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
 interface Props {
@@ -20,24 +21,25 @@ interface Props {
   isNew: boolean
 }
 
-// ── Small styled primitives ───────────────────────────────────────────────────
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--ink-3)]" style={{ fontFamily: 'var(--font-display)' }}>{label}</span>
-      <div className="mt-1">{children}</div>
-    </label>
-  )
-}
-const inputCls = 'w-full px-3 py-2 rounded-xl text-sm outline-none'
-const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
-
+/**
+ * `Section` is the one piece of local scaffolding left. It is layout — a card
+ * with a heading — and everything inside it is a primitive.
+ */
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-1)] p-4 space-y-3">
-      <h2 className="text-sm font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>{title}</h2>
+    <Card as="section" elevation={1} className="space-y-3">
+      <h2
+        style={{
+          fontSize: 'var(--text-body-sm)',
+          fontWeight: 'var(--weight-display)',
+          fontFamily: 'var(--font-display)',
+          color: 'var(--ink-1)',
+        }}
+      >
+        {title}
+      </h2>
       {children}
-    </section>
+    </Card>
   )
 }
 
@@ -107,57 +109,86 @@ export function BundleEditor({ initial, isNew }: Props) {
     <div className="space-y-4 pb-24">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <button onClick={() => router.push('/founderhub/products/bundles')} className="text-[11px] font-semibold text-[var(--ink-3)] mb-1">← Bundles</button>
-          <h1 className="text-2xl font-black" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+          <Button
+            variant="ghost"
+            size="sm"
+            icon="arrow-left"
+            onClick={() => router.push('/founderhub/products/bundles')}
+          >
+            Bundles
+          </Button>
+          <h1
+            style={{
+              fontSize: 'var(--text-display)',
+              fontWeight: 'var(--weight-display)',
+              fontFamily: 'var(--font-display)',
+              lineHeight: 'var(--leading-tight)',
+              color: 'var(--ink-1)',
+              marginTop: 'var(--space-1)',
+            }}
+          >
             {isNew ? 'New bundle' : `Edit — ${initial?.name}`}
           </h1>
         </div>
-        <button
-          onClick={() => setPreview(true)}
-          disabled={draft.cores.length === 0}
-          className="text-xs font-bold px-3 py-2 rounded-xl disabled:opacity-40"
-          style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}
-        >
+        <Button variant="secondary" size="sm" onClick={() => setPreview(true)} disabled={draft.cores.length === 0}>
           Preview
-        </button>
+        </Button>
       </div>
 
-      {error && <div className="rounded-xl border border-[var(--tone-critical)]/30 bg-[var(--tone-critical)]/8 px-4 py-2.5 text-xs text-[var(--tone-critical)]">{error}</div>}
+      {error && (
+        <Card tone="critical" padding="tight">
+          <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
+            {error}
+          </p>
+        </Card>
+      )}
 
       {/* Live readiness + price */}
-      <div className="rounded-2xl border border-[var(--edge)] bg-[var(--surface-2)] p-4 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3 text-xs">
+      <Card elevation={2} className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center" style={{ gap: 'var(--space-3)', fontSize: 'var(--text-body-sm)' }}>
           {pricing ? (
             <>
-              <span className="font-black" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>{formatGBP(pricing.oneOffTotal)}</span>
-              <span className="text-[var(--ink-3)]">one-off · {pricing.subscriptionMinOrderMet ? `${formatGBP(pricing.subscriptionTotal)}/mo` : 'no monthly'}</span>
+              <span style={{ color: 'var(--accent)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(pricing.oneOffTotal)}
+              </span>
+              <span style={{ color: 'var(--ink-3)' }}>
+                one-off · {pricing.subscriptionMinOrderMet ? `${formatGBP(pricing.subscriptionTotal)}/mo` : 'no monthly'}
+              </span>
             </>
-          ) : <span className="text-[var(--ink-3)]">Add a product to price the bundle</span>}
+          ) : (
+            <span style={{ color: 'var(--ink-3)' }}>Add a product to price the bundle</span>
+          )}
         </div>
         {readiness && (
-          <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: DOT[readiness.overall] }} />
-            <span className="text-[11px] font-bold text-[var(--ink-2)]">{readiness.sellable ? 'Sellable' : 'Not sellable'}</span>
-          </div>
+          <Badge tone={TONE[readiness.overall]} dot>
+            {readiness.sellable ? 'Sellable' : 'Not sellable'}
+          </Badge>
         )}
-      </div>
+      </Card>
 
       {/* Identity & story */}
       <Section title="Identity & story">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Name"><input value={draft.name} onChange={(e) => onName(e.target.value)} className={inputCls} style={inputStyle} placeholder="Big Night, Big Morning" /></Field>
-          <Field label="Slug (URL)"><input value={draft.slug} onChange={(e) => { setSlugTouched(true); set('slug', bundleSlug(e.target.value)) }} disabled={!isNew} className={inputCls} style={{ ...inputStyle, opacity: isNew ? 1 : 0.6 }} placeholder="big-night-big-morning" /></Field>
-          <Field label="Tagline"><input value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} className={inputCls} style={inputStyle} placeholder="Hydrate. Move. Refuel. Reset." /></Field>
-          <Field label="Series name"><input value={draft.seriesName} onChange={(e) => set('seriesName', e.target.value)} className={inputCls} style={inputStyle} placeholder="Sunday Reset Sessions" /></Field>
+          <Input label="Name" value={draft.name} onChange={(e) => onName(e.target.value)} placeholder="Big Night, Big Morning" />
+          <Input
+            label="Slug (URL)"
+            value={draft.slug}
+            onChange={(e) => { setSlugTouched(true); set('slug', bundleSlug(e.target.value)) }}
+            disabled={!isNew}
+            // The URL is the bundle's identity once it is live: changing it
+            // breaks every link anyone has to it.
+            hint={isNew ? 'Set once. It cannot be changed after saving.' : 'Fixed — the bundle is already at this address.'}
+            placeholder="big-night-big-morning"
+          />
+          <Input label="Tagline" value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} placeholder="Hydrate. Move. Refuel. Reset." />
+          <Input label="Series name" value={draft.seriesName} onChange={(e) => set('seriesName', e.target.value)} placeholder="Sunday Reset Sessions" />
         </div>
-        <Field label="Description"><textarea value={draft.description} onChange={(e) => set('description', e.target.value)} rows={3} className={inputCls} style={inputStyle} placeholder="What it's built for…" /></Field>
-        <Field label="Honesty line"><input value={draft.honestyLine} onChange={(e) => set('honestyLine', e.target.value)} className={inputCls} style={inputStyle} placeholder="Not a hangover cure. Just the get-back-on-track stack." /></Field>
-        <Field label="Disclaimer"><textarea value={draft.disclaimer} onChange={(e) => set('disclaimer', e.target.value)} rows={2} className={inputCls} style={inputStyle} placeholder="Bundle-specific safety note…" /></Field>
-        <Field label="Primary goal">
-          <select value={draft.primaryGoal} onChange={(e) => set('primaryGoal', e.target.value as Goal)} className={inputCls} style={inputStyle}>
-            {GOALS.map((g) => <option key={g} value={g}>{g}</option>)}
-          </select>
-        </Field>
+        <Textarea label="Description" value={draft.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="What it's built for…" />
+        <Input label="Honesty line" value={draft.honestyLine} onChange={(e) => set('honestyLine', e.target.value)} placeholder="Not a hangover cure. Just the get-back-on-track stack." />
+        <Textarea label="Disclaimer" value={draft.disclaimer} onChange={(e) => set('disclaimer', e.target.value)} rows={2} placeholder="Bundle-specific safety note…" />
+        <Select label="Primary goal" value={draft.primaryGoal} onChange={(e) => set('primaryGoal', e.target.value as Goal)}>
+          {GOALS.map((g) => <option key={g} value={g}>{g}</option>)}
+        </Select>
       </Section>
 
       {/* Stack builder */}
@@ -165,21 +196,70 @@ export function BundleEditor({ initial, isNew }: Props) {
         {draft.cores.map((core, i) => {
           const product = products.find((p) => p.id === core.productId)
           return (
-            <div key={core.productId} className="rounded-xl border border-[var(--edge)] p-3 space-y-2" style={{ background: 'var(--surface-2)' }}>
+            // `solid`: these stack up and the section scrolls, and translucency
+            // over a scrolling parent is the expensive case.
+            <Card key={core.productId} solid padding="tight" className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product?.title ?? core.productId}</p>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <button onClick={() => setDraft((d) => { const c = [...d.cores]; if (i > 0) [c[i - 1], c[i]] = [c[i], c[i - 1]]; return { ...d, cores: c } })} disabled={i === 0} className="w-6 h-6 rounded text-xs disabled:opacity-30" style={inputStyle}>↑</button>
-                  <button onClick={() => setDraft((d) => { const c = [...d.cores]; if (i < c.length - 1) [c[i + 1], c[i]] = [c[i], c[i + 1]]; return { ...d, cores: c } })} disabled={i === draft.cores.length - 1} className="w-6 h-6 rounded text-xs disabled:opacity-30" style={inputStyle}>↓</button>
-                  <button onClick={() => setDraft((d) => ({ ...d, cores: d.cores.filter((_, j) => j !== i) }))} className="w-6 h-6 rounded text-xs" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
+                <p
+                  className="truncate"
+                  style={{
+                    fontSize: 'var(--text-body-sm)',
+                    fontWeight: 'var(--weight-strong)',
+                    fontFamily: 'var(--font-display)',
+                    color: 'var(--ink-1)',
+                  }}
+                >
+                  {product?.title ?? core.productId}
+                </p>
+                {/* Named, not drawn. These were bare ↑ ↓ ✕ glyphs, which a
+                    screen reader reads out as arrows with no idea what moves. */}
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="chevron-up"
+                    aria-label={`Move ${product?.title ?? core.productId} up`}
+                    disabled={i === 0}
+                    onClick={() => setDraft((d) => { const c = [...d.cores]; if (i > 0) [c[i - 1], c[i]] = [c[i], c[i - 1]]; return { ...d, cores: c } })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="chevron-down"
+                    aria-label={`Move ${product?.title ?? core.productId} down`}
+                    disabled={i === draft.cores.length - 1}
+                    onClick={() => setDraft((d) => { const c = [...d.cores]; if (i < c.length - 1) [c[i + 1], c[i]] = [c[i], c[i + 1]]; return { ...d, cores: c } })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="trash"
+                    aria-label={`Remove ${product?.title ?? core.productId} from the stack`}
+                    onClick={() => setDraft((d) => ({ ...d, cores: d.cores.filter((_, j) => j !== i) }))}
+                  />
                 </div>
               </div>
-              <input value={core.title} onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], title: e.target.value }; return { ...d, cores: c } })} className={inputCls} style={inputStyle} placeholder="Slot label, e.g. Hydration" />
-              <textarea value={core.reason} onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], reason: e.target.value }; return { ...d, cores: c } })} rows={2} className={inputCls} style={inputStyle} placeholder="Why it's in the stack (claim-safe)…" />
-            </div>
+              <Input
+                label={`Slot label for ${product?.title ?? core.productId}`}
+                compact
+                value={core.title}
+                onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], title: e.target.value }; return { ...d, cores: c } })}
+                placeholder="Slot label, e.g. Hydration"
+                className="w-full"
+              />
+              <Textarea
+                label={`Why ${product?.title ?? core.productId} is in the stack`}
+                value={core.reason}
+                onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], reason: e.target.value }; return { ...d, cores: c } })}
+                rows={2}
+                placeholder="Why it's in the stack (claim-safe)…"
+              />
+            </Card>
           )
         })}
-        <button onClick={() => setPicker('core')} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: 'var(--accent-fill)', color: 'var(--accent)', border: '1px dashed var(--accent-line)', fontFamily: 'var(--font-display)' }}>+ Add product</button>
+        <Button variant="secondary" size="sm" icon="plus" fullWidth onClick={() => setPicker('core')}>
+          Add product
+        </Button>
       </Section>
 
       {/* Add-ons */}
@@ -187,88 +267,198 @@ export function BundleEditor({ initial, isNew }: Props) {
         {draft.addOns.map((addon, i) => {
           const product = products.find((p) => p.id === addon.productId)
           return (
-            <div key={addon.productId} className="rounded-xl border border-[var(--edge)] p-3 space-y-2" style={{ background: 'var(--surface-2)' }}>
+            <Card key={addon.productId} solid padding="tight" className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{product?.title ?? addon.productId}</p>
-                <button onClick={() => setDraft((d) => ({ ...d, addOns: d.addOns.filter((_, j) => j !== i) }))} className="w-6 h-6 rounded text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
+                <p
+                  className="truncate"
+                  style={{
+                    fontSize: 'var(--text-body-sm)',
+                    fontWeight: 'var(--weight-strong)',
+                    fontFamily: 'var(--font-display)',
+                    color: 'var(--ink-1)',
+                  }}
+                >
+                  {product?.title ?? addon.productId}
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="trash"
+                  aria-label={`Remove ${product?.title ?? addon.productId} from the add-ons`}
+                  onClick={() => setDraft((d) => ({ ...d, addOns: d.addOns.filter((_, j) => j !== i) }))}
+                />
               </div>
-              <input value={addon.title} onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], title: e.target.value }; return { ...d, addOns: a } })} className={inputCls} style={inputStyle} placeholder="Add-on label, e.g. Evening Reset" />
-              <textarea value={addon.reason} onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], reason: e.target.value }; return { ...d, addOns: a } })} rows={2} className={inputCls} style={inputStyle} placeholder="Why someone might add it…" />
-            </div>
+              <Input
+                label={`Add-on label for ${product?.title ?? addon.productId}`}
+                compact
+                value={addon.title}
+                onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], title: e.target.value }; return { ...d, addOns: a } })}
+                placeholder="Add-on label, e.g. Evening Reset"
+                className="w-full"
+              />
+              <Textarea
+                label={`Why someone might add ${product?.title ?? addon.productId}`}
+                value={addon.reason}
+                onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], reason: e.target.value }; return { ...d, addOns: a } })}
+                rows={2}
+                placeholder="Why someone might add it…"
+              />
+            </Card>
           )
         })}
-        <button onClick={() => setPicker('addon')} className="w-full py-2.5 rounded-xl text-xs font-bold" style={{ background: 'var(--surface-2)', color: 'var(--ink-2)', border: '1px dashed var(--edge-strong)', fontFamily: 'var(--font-display)' }}>+ Add optional product</button>
+        <Button variant="ghost" size="sm" icon="plus" fullWidth onClick={() => setPicker('addon')}>
+          Add optional product
+        </Button>
       </Section>
 
       {/* Workout */}
       <Section title="Workout">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Title"><input value={draft.workout.title} onChange={(e) => set('workout', { ...draft.workout, title: e.target.value })} className={inputCls} style={inputStyle} placeholder="Full Body Reset" /></Field>
-          <Field label="Warm-up"><input value={draft.workout.warmup} onChange={(e) => set('workout', { ...draft.workout, warmup: e.target.value })} className={inputCls} style={inputStyle} placeholder="8–10 min incline walk" /></Field>
+          <Input label="Title" value={draft.workout.title} onChange={(e) => set('workout', { ...draft.workout, title: e.target.value })} placeholder="Full Body Reset" />
+          <Input label="Warm-up" value={draft.workout.warmup} onChange={(e) => set('workout', { ...draft.workout, warmup: e.target.value })} placeholder="8–10 min incline walk" />
         </div>
-        <Field label="Intro"><textarea value={draft.workout.intro} onChange={(e) => set('workout', { ...draft.workout, intro: e.target.value })} rows={2} className={inputCls} style={inputStyle} /></Field>
+        <Textarea label="Intro" value={draft.workout.intro} onChange={(e) => set('workout', { ...draft.workout, intro: e.target.value })} rows={2} />
         <div>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-[var(--ink-3)]" style={{ fontFamily: 'var(--font-display)' }}>Exercises</span>
+          <p
+            style={{
+              fontSize: 'var(--text-micro)',
+              fontWeight: 'var(--weight-strong)',
+              fontFamily: 'var(--font-display)',
+              letterSpacing: 'var(--tracking-eyebrow)',
+              textTransform: 'uppercase',
+              color: 'var(--ink-3)',
+            }}
+          >
+            Exercises
+          </p>
           <div className="mt-1 space-y-2">
+            {/* Two compact fields and a remove: the row is the record, and a
+                stacked label above each would triple its height. */}
             {draft.workout.exercises.map((ex, i) => (
               <div key={i} className="flex gap-2">
-                <input value={ex.name} onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })} className={inputCls} style={inputStyle} placeholder="Goblet squat" />
-                <input value={ex.prescription} onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, prescription: e.target.value } : x) })} className="w-28 px-3 py-2 rounded-xl text-sm outline-none flex-shrink-0" style={inputStyle} placeholder="3 × 10" />
-                <button onClick={() => set('workout', { ...draft.workout, exercises: draft.workout.exercises.filter((_, j) => j !== i) })} className="w-9 rounded-xl text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
+                <Input
+                  label={`Exercise ${i + 1} name`}
+                  compact
+                  className="flex-1"
+                  value={ex.name}
+                  onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })}
+                  placeholder="Goblet squat"
+                />
+                <Input
+                  label={`Exercise ${i + 1} sets and reps`}
+                  compact
+                  className="w-28"
+                  value={ex.prescription}
+                  onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, prescription: e.target.value } : x) })}
+                  placeholder="3 × 10"
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon="trash"
+                  aria-label={`Remove exercise ${i + 1}`}
+                  onClick={() => set('workout', { ...draft.workout, exercises: draft.workout.exercises.filter((_, j) => j !== i) })}
+                />
               </div>
             ))}
-            <button onClick={() => set('workout', { ...draft.workout, exercises: [...draft.workout.exercises, { name: '', prescription: '' }] })} className="text-[11px] font-bold text-[var(--accent)]">+ Add exercise</button>
+            <Button variant="ghost" size="sm" icon="plus" onClick={() => set('workout', { ...draft.workout, exercises: [...draft.workout.exercises, { name: '', prescription: '' }] })}>
+              Add exercise
+            </Button>
           </div>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Finisher"><input value={draft.workout.finisher} onChange={(e) => set('workout', { ...draft.workout, finisher: e.target.value })} className={inputCls} style={inputStyle} /></Field>
-          <Field label="Post-workout"><input value={draft.workout.postWorkout} onChange={(e) => set('workout', { ...draft.workout, postWorkout: e.target.value })} className={inputCls} style={inputStyle} /></Field>
+          <Input label="Finisher" value={draft.workout.finisher} onChange={(e) => set('workout', { ...draft.workout, finisher: e.target.value })} />
+          <Input label="Post-workout" value={draft.workout.postWorkout} onChange={(e) => set('workout', { ...draft.workout, postWorkout: e.target.value })} />
         </div>
-        <Field label="The rule (intensity)"><input value={draft.workout.rule} onChange={(e) => set('workout', { ...draft.workout, rule: e.target.value })} className={inputCls} style={inputStyle} placeholder="Leave 2–3 reps in the tank." /></Field>
+        <Input label="The rule (intensity)" value={draft.workout.rule} onChange={(e) => set('workout', { ...draft.workout, rule: e.target.value })} placeholder="Leave 2–3 reps in the tank." />
       </Section>
 
       {/* How to use */}
       <Section title="How to use it">
         {draft.howToUse.map((step, i) => (
           <div key={i} className="flex gap-2">
-            <input value={step.title} onChange={(e) => set('howToUse', draft.howToUse.map((s, j) => j === i ? { ...s, title: e.target.value } : s))} className="w-40 px-3 py-2 rounded-xl text-sm outline-none flex-shrink-0" style={inputStyle} placeholder="Step title" />
-            <input value={step.detail} onChange={(e) => set('howToUse', draft.howToUse.map((s, j) => j === i ? { ...s, detail: e.target.value } : s))} className={inputCls} style={inputStyle} placeholder="Detail" />
-            <button onClick={() => set('howToUse', draft.howToUse.filter((_, j) => j !== i))} className="w-9 rounded-xl text-xs flex-shrink-0" style={{ ...inputStyle, color: 'var(--tone-critical)' }}>✕</button>
+            <Input
+              label={`Step ${i + 1} title`}
+              compact
+              className="w-40"
+              value={step.title}
+              onChange={(e) => set('howToUse', draft.howToUse.map((s, j) => j === i ? { ...s, title: e.target.value } : s))}
+              placeholder="Step title"
+            />
+            <Input
+              label={`Step ${i + 1} detail`}
+              compact
+              className="flex-1"
+              value={step.detail}
+              onChange={(e) => set('howToUse', draft.howToUse.map((s, j) => j === i ? { ...s, detail: e.target.value } : s))}
+              placeholder="Detail"
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon="trash"
+              aria-label={`Remove step ${i + 1}`}
+              onClick={() => set('howToUse', draft.howToUse.filter((_, j) => j !== i))}
+            />
           </div>
         ))}
-        <button onClick={() => set('howToUse', [...draft.howToUse, { title: '', detail: '' }])} className="text-[11px] font-bold text-[var(--accent)]">+ Add step</button>
+        <Button variant="ghost" size="sm" icon="plus" onClick={() => set('howToUse', [...draft.howToUse, { title: '', detail: '' }])}>
+          Add step
+        </Button>
       </Section>
 
       {/* SEO */}
       <Section title="SEO metadata">
-        <Field label="Meta title"><input value={draft.metaTitle} onChange={(e) => set('metaTitle', e.target.value)} className={inputCls} style={inputStyle} placeholder="Auto from name if blank" /></Field>
-        <Field label="Meta description"><textarea value={draft.metaDescription} onChange={(e) => set('metaDescription', e.target.value)} rows={2} className={inputCls} style={inputStyle} placeholder="Auto from description if blank" /></Field>
+        <Input label="Meta title" value={draft.metaTitle} onChange={(e) => set('metaTitle', e.target.value)} placeholder="Auto from name if blank" />
+        <Textarea label="Meta description" value={draft.metaDescription} onChange={(e) => set('metaDescription', e.target.value)} rows={2} placeholder="Auto from description if blank" />
       </Section>
 
       {/* Readiness checklist */}
       {readiness && (
         <Section title="Readiness">
-          <div className="space-y-1.5">
+          <ul className="space-y-1.5">
             {readiness.checks.map((c) => (
-              <div key={c.id} className="flex items-center gap-2 text-[11px]">
-                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: DOT[c.status] }} />
-                <span className="text-[var(--ink-2)] font-semibold">{c.label}</span>
-                {c.detail && <span className="text-[var(--ink-3)]">— {c.detail}</span>}
-              </div>
+              <li key={c.id} className="flex items-center gap-2" style={{ fontSize: 'var(--text-meta)' }}>
+                <Badge tone={TONE[c.status]} dot>
+                  {c.label}
+                </Badge>
+                {c.detail && <span style={{ color: 'var(--ink-3)' }}>{c.detail}</span>}
+              </li>
             ))}
-          </div>
+          </ul>
         </Section>
       )}
 
       {/* Sticky save bar */}
-      <div className="fixed inset-x-0 bottom-0 z-20 border-t border-[var(--edge)] px-5 py-3" style={{ background: 'var(--surface-1)' }}>
+      {/* Solid, not blurred. The blur budget is three surfaces and the shell's
+          sticky header already holds one — open the preview and the modal panel
+          and its scrim take the other two. A fourth would be over budget, and a
+          save bar is the one that can afford to be opaque: nothing needs to be
+          read through it. */}
+      <div
+        className="fixed inset-x-0 bottom-0 z-20"
+        style={{
+          background: 'var(--surface-solid)',
+          borderTop: '1px solid var(--edge)',
+          padding: 'var(--space-3) var(--gutter)',
+        }}
+      >
         <div className="max-w-3xl mx-auto flex items-center justify-end gap-2">
-          <button onClick={() => save(false)} disabled={!canSave || saving} className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40" style={{ background: 'var(--surface-2)', color: 'var(--ink-1)', border: '1px solid var(--edge)', fontFamily: 'var(--font-display)' }}>
-            {saving ? 'Saving…' : 'Save draft'}
-          </button>
-          <button onClick={() => save(true)} disabled={!canPublish || saving} className="text-xs font-bold px-4 py-2.5 rounded-xl disabled:opacity-40" style={{ background: 'var(--accent)', color: 'var(--ink-on-accent)', fontFamily: 'var(--font-display)' }} title={canPublish ? '' : 'Complete the readiness checks first'}>
-            {saving ? 'Saving…' : 'Publish'}
-          </button>
+          {/* `loading` rather than a separate disabled flag: one prop blocks the
+              press, swaps the glyph and marks it busy, so the error path cannot
+              leave a button disabled forever. */}
+          <Button variant="secondary" onClick={() => save(false)} disabled={!canSave} loading={saving}>
+            Save draft
+          </Button>
+          <Button
+            variant="primary"
+            onClick={() => save(true)}
+            disabled={!canPublish}
+            loading={saving}
+            title={canPublish ? undefined : 'Complete the readiness checks first'}
+          >
+            Publish
+          </Button>
         </div>
       </div>
 
@@ -323,13 +513,36 @@ function ProductPicker({ products, disabledIds, onPick, onClose }: { products: C
           {filtered.map((p) => {
             const disabled = disabledIds.has(p.id)
             return (
-              <button key={p.id} onClick={() => !disabled && onPick(p)} disabled={disabled} className="w-full text-left px-3 py-2.5 rounded-xl flex items-center justify-between gap-3 disabled:opacity-40" style={{ background: 'transparent' }}>
-                <div className="min-w-0">
-                  <p className="text-sm font-bold text-[var(--ink-1)] truncate" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
-                  <p className="text-[11px] text-[var(--ink-3)]">{p.category} · {p.stackSlots[0]}</p>
-                </div>
-                <span className="text-[11px] font-bold text-[var(--accent)] flex-shrink-0">{disabled ? 'Added' : 'Add +'}</span>
-              </button>
+              <Button
+                key={p.id}
+                variant="ghost"
+                fullWidth
+                disabled={disabled}
+                onClick={() => onPick(p)}
+                className="justify-between text-left"
+              >
+                <span className="min-w-0">
+                  <span
+                    className="block truncate"
+                    style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}
+                  >
+                    {p.title}
+                  </span>
+                  <span
+                    className="block"
+                    style={{
+                      fontSize: 'var(--text-meta)',
+                      fontWeight: 'var(--weight-body)',
+                      color: 'var(--ink-3)',
+                    }}
+                  >
+                    {p.category} · {p.stackSlots[0]}
+                  </span>
+                </span>
+                <span style={{ fontSize: 'var(--text-meta)', color: 'var(--accent)' }}>
+                  {disabled ? 'Added' : 'Add'}
+                </span>
+              </Button>
             )
           })}
         {filtered.length === 0 && (

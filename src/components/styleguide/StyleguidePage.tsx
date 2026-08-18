@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   ChargeMeter,
+  Checkbox,
   Ground,
   Input,
   Modal,
@@ -14,6 +15,7 @@ import {
   ModalHeader,
   Select,
   Tabs,
+  Textarea,
 } from '@/components/system'
 
 /**
@@ -243,6 +245,43 @@ export function StyleguidePage() {
               <option value="uk">United Kingdom</option>
             </Select>
           </div>
+        </Section>
+
+        <Section
+          title="Textarea and Checkbox"
+          note="The same box as an Input, opened up — and the one control whose name sits beside it rather than above it. The checkbox is drawn rather than native: appearance:none loses the platform tick, and a UA checkbox on a dark page renders as a light square, which is the most obviously-unstyled thing a dark interface can show."
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Textarea
+              label="Why it's in the stack"
+              hint="Claim-safe. This is read by customers."
+              rows={3}
+              placeholder="What it does, without saying it cures anything…"
+            />
+            <Textarea
+              label="Reason"
+              rows={3}
+              defaultValue="Bumped for January."
+              error="A reason has to say what changed, not just that it did."
+            />
+          </div>
+
+          <SubLabel>Checkbox</SubLabel>
+          <Card padding="normal" className="space-y-3">
+            <Checkbox label="We raise the invoice for them (self-billed)" defaultChecked />
+            <Checkbox
+              label={
+                <>
+                  <span style={{ fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>First order only.</span>{' '}
+                  Leave this on unless you mean it.
+                </>
+              }
+              hint="Without it the code is a permanent site-wide discount the moment it reaches a deal site."
+              defaultChecked
+            />
+            <Checkbox label="Send a postage notice before the next charge" />
+            <Checkbox label="Locked by finance" defaultChecked disabled />
+          </Card>
         </Section>
 
         <Section

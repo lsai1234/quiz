@@ -73,7 +73,9 @@ const GLYPHS = {
   // These replace characters the hub was typing as text: ✕ ▲ ▼ + − ← →.
   x: <path d="M6 6l12 12M18 6 6 18" />,
   'chevron-down': <path d="M6 9.5 12 15.5l6-6" />,
+  'chevron-up': <path d="M6 14.5 12 8.5l6 6" />,
   'chevron-right': <path d="M9.5 6 15.5 12l-6 6" />,
+  'chevron-left': <path d="M14.5 6 8.5 12l6 6" />,
   'arrow-left': <><path d="M19 12H5" /><path d="M11 6l-6 6 6 6" /></>,
   'arrow-right': <><path d="M5 12h14" /><path d="M13 6l6 6-6 6" /></>,
   plus: <path d="M12 5v14M5 12h14" />,

@@ -4,10 +4,12 @@ import userEvent from '@testing-library/user-event'
 import { Badge } from '../Badge'
 import { Button } from '../Button'
 import { Card } from '../Card'
+import { Checkbox } from '../Checkbox'
 import { Input } from '../Input'
 import { Modal, ModalBody, ModalFooter, ModalHeader } from '../Modal'
 import { Select } from '../Select'
 import { Tabs } from '../Tabs'
+import { Textarea } from '../Textarea'
 
 /**
  * The behaviour the primitives promise.
@@ -427,5 +429,73 @@ describe('Select, compact', () => {
     )
     expect(screen.getByRole('combobox', { name: 'Cadence' })).toBeInTheDocument()
     expect(screen.queryByText('Cadence')).not.toBeInTheDocument()
+  })
+})
+
+describe('Textarea', () => {
+  it('labels the control, so tapping the label focuses it', async () => {
+    const user = userEvent.setup()
+    render(<Textarea label="Description" />)
+    await user.click(screen.getByText('Description'))
+    expect(screen.getByRole('textbox', { name: 'Description' })).toHaveFocus()
+  })
+
+  it('announces its error and marks itself invalid', () => {
+    render(<Textarea label="Reason" error="A reason is required." />)
+    const field = screen.getByRole('textbox', { name: 'Reason' })
+    expect(field).toHaveAttribute('aria-invalid', 'true')
+    expect(field).toHaveAccessibleDescription('A reason is required.')
+  })
+
+  it('keeps the caller rows — the control surface would otherwise flatten it', () => {
+    // `controlSurface` sets a single control's `minHeight`. If that won every
+    // textarea in the system is one line tall whatever `rows` says.
+    render(<Textarea label="Notes" rows={5} />)
+    expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveAttribute('rows', '5')
+  })
+
+  it('has a focus ring', () => {
+    render(<Textarea label="Notes" />)
+    expect(screen.getByRole('textbox', { name: 'Notes' }).className).toContain('system-focus')
+  })
+})
+
+describe('Checkbox', () => {
+  it('toggles when the sentence beside it is clicked, not only the box', async () => {
+    const user = userEvent.setup()
+    render(<Checkbox label="First order only" />)
+    const box = screen.getByRole('checkbox', { name: 'First order only' })
+    expect(box).not.toBeChecked()
+    await user.click(screen.getByText('First order only'))
+    expect(box).toBeChecked()
+  })
+
+  it('is a real checkbox, so the space bar works', async () => {
+    const user = userEvent.setup()
+    render(<Checkbox label="Self-billed" />)
+    const box = screen.getByRole('checkbox', { name: 'Self-billed' })
+    box.focus()
+    await user.keyboard(' ')
+    expect(box).toBeChecked()
+  })
+
+  it('describes itself with the hint', () => {
+    render(<Checkbox label="First order only" hint="Without it the code is site-wide." />)
+    expect(screen.getByRole('checkbox', { name: 'First order only' })).toHaveAccessibleDescription(
+      'Without it the code is site-wide.',
+    )
+  })
+
+  it('does not toggle when disabled', async () => {
+    const user = userEvent.setup()
+    render(<Checkbox label="Locked" disabled />)
+    const box = screen.getByRole('checkbox', { name: 'Locked' })
+    await user.click(screen.getByText('Locked'))
+    expect(box).not.toBeChecked()
+  })
+
+  it('has a focus ring', () => {
+    render(<Checkbox label="Locked" />)
+    expect(screen.getByRole('checkbox', { name: 'Locked' }).className).toContain('system-focus')
   })
 })
