@@ -12,4 +12,5 @@ design value comes from a token, glass goes on nav and modals only, and small
 text has a contrast floor that is easy to break and invisible when you do. Both
 rules are enforced by tests.
 
-Review changes at `/styleguide`.
+Review changes at `/styleguide`. The remaining rollout, in phases, is
+`docs/DESIGN_ROLLOUT.md`.
