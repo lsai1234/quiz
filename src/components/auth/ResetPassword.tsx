@@ -1,11 +1,10 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Eyebrow } from '@/components/hub/Eyebrow'
+import { Button, Input, Note } from '@/components/system'
 import { CHRGDMark } from '@/components/brand/CHRGDLogo'
-import { Button } from '@/components/ui/Button'
-import { Eyebrow } from '@/components/ui/Eyebrow'
-import { Note } from '@/components/ui/Note'
-import { ACCENT, GLASS, RED, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 
 /** Kept in step with `passwordProblem` on the server, which is the real gate. */
 const MIN_LENGTH = 8
@@ -93,12 +92,12 @@ export function ResetPassword() {
   const wrap = 'min-h-[80vh] flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
   const inputClass =
     'w-full px-4 py-3.5 min-h-13 rounded-2xl text-sm outline-none transition-all duration-200 ' +
-    'focus-visible:ring-2 focus:border-[color:var(--color-accent)]'
+    'focus-visible:ring-2 focus:border-[color:var(--accent)]'
   const inputStyle = {
-    background: GLASS.surface,
-    border: `1px solid ${GLASS.hairline}`,
-    color: 'var(--color-text)',
-    ['--tw-ring-color' as string]: tint(ACCENT, 45),
+    background: 'var(--surface-1)',
+    border: `1px solid var(--edge)`,
+    color: 'var(--ink-1)',
+    ['--tw-ring-color' as string]: tint('var(--accent)', 45),
   }
 
   if (dead) {
@@ -107,11 +106,11 @@ export function ResetPassword() {
         <CHRGDMark size={34} className="mb-5" />
         <h1
           className="text-2xl font-black mb-2"
-          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
+          style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}
         >
           This link won’t work
         </h1>
-        <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-6">{dead}</p>
+        <p className="text-sm text-[var(--ink-3)] leading-relaxed mb-6">{dead}</p>
         {/* Straight back into the flow that issues a new one, rather than to a
             sign-in screen they already know they cannot get past. */}
         <Button variant="primary" onClick={() => { window.location.href = '/myhub?forgot=1' }}>
@@ -124,14 +123,14 @@ export function ResetPassword() {
   return (
     <div className={wrap}>
       <CHRGDMark size={34} className="mb-5" />
-      <Eyebrow color={ACCENT} className="mb-2">Subscriber hub</Eyebrow>
+      <Eyebrow color="var(--accent)" className="mb-2">Subscriber hub</Eyebrow>
       <h1
         className="text-3xl font-black mb-2"
-        style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
+        style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}
       >
         {name ? `Welcome back, ${name.split(' ')[0]}` : 'Set a new password'}
       </h1>
-      <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-7">
+      <p className="text-sm text-[var(--ink-3)] leading-relaxed mb-7">
         Choose a new password and you’re straight back in. This link only works once.
       </p>
 
@@ -139,39 +138,37 @@ export function ResetPassword() {
         onSubmit={(e) => { e.preventDefault(); void submit() }}
         className="w-full space-y-3"
       >
-        <input
+        <Input
+          label="New password"
+          hideLabel
           type="password"
           autoComplete="new-password"
-          aria-label="New password"
           placeholder={`New password (${MIN_LENGTH}+ characters)`}
           value={password}
           onChange={(e) => { setPassword(e.target.value); setError(null) }}
-          className={inputClass}
-          style={inputStyle}
         />
-        <input
+        <Input
+          label="Confirm new password"
+          hideLabel
           type="password"
           autoComplete="new-password"
-          aria-label="Confirm new password"
           placeholder="Type it again"
           value={confirm}
           onChange={(e) => { setConfirm(e.target.value); setError(null) }}
-          className={inputClass}
-          style={inputStyle}
         />
 
         {tooShort && (
-          <p className="text-xs text-left px-1" style={{ color: 'var(--color-muted)' }}>
+          <p className="text-xs text-left px-1" style={{ color: 'var(--ink-3)' }}>
             At least {MIN_LENGTH} characters.
           </p>
         )}
         {mismatch && (
-          <p className="text-xs font-semibold text-left px-1" style={{ color: RED }}>
+          <p className="text-xs font-semibold text-left px-1" style={{ color: 'var(--tone-critical)' }}>
             Those don’t match.
           </p>
         )}
         {error && (
-          <p className="text-xs font-semibold text-left px-1" style={{ color: RED }} role="alert">
+          <p className="text-xs font-semibold text-left px-1" style={{ color: 'var(--tone-critical)' }} role="alert">
             {error}
           </p>
         )}

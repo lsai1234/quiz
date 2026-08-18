@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { Button, Input, Note } from '@/components/system'
 import { requestPasswordReset } from '@/lib/auth-client'
-import { Button } from '@/components/ui/Button'
-import { Note } from '@/components/ui/Note'
-import { ACCENT, GLASS, RED, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 
 /**
  * Asking for a reset link.
@@ -57,22 +56,22 @@ export function ForgotPassword({
 
   const inputClass =
     'w-full px-4 py-3.5 min-h-13 rounded-2xl text-sm outline-none transition-all duration-200 ' +
-    'focus-visible:ring-2 focus:border-[color:var(--color-accent)]'
+    'focus-visible:ring-2 focus:border-[color:var(--accent)]'
   const inputStyle = {
-    background: GLASS.surface,
-    border: `1px solid ${GLASS.hairline}`,
-    color: 'var(--color-text)',
-    ['--tw-ring-color' as string]: tint(ACCENT, 45),
+    background: 'var(--surface-1)',
+    border: `1px solid var(--edge)`,
+    color: 'var(--ink-1)',
+    ['--tw-ring-color' as string]: tint('var(--accent)', 45),
   }
 
   if (sent) {
     return (
       <div className="w-full space-y-4 text-left">
-        <Note icon="check" live>
+        <Note icon="check" live="polite">
           If we have an account for <strong>{email.trim()}</strong>, a link to set a new password is on
           its way. It works once, for the next 60 minutes.
         </Note>
-        <p className="text-xs text-[var(--color-muted)] leading-relaxed px-1">
+        <p className="text-xs text-[var(--ink-3)] leading-relaxed px-1">
           Nothing yet? Check the spam folder before asking for another — a second link cancels the
           first, and they arrive in the order they were sent, not the order you asked.
         </p>
@@ -85,7 +84,7 @@ export function ForgotPassword({
 
   return (
     <div className="w-full space-y-3 text-left">
-      <p className="text-xs text-[var(--color-muted)] leading-relaxed px-1">
+      <p className="text-xs text-[var(--ink-3)] leading-relaxed px-1">
         Type the email address on your account and we’ll send a link to set a new password. Signing in
         with Google works too — a reset just adds a password alongside it.
       </p>
@@ -97,25 +96,27 @@ export function ForgotPassword({
         }}
         className="space-y-3"
       >
-        <input
+        <Input
+          label="Email address"
+          hideLabel
           type="email"
           inputMode="email"
           autoComplete="email"
           placeholder="you@email.com"
-          aria-label="Email address"
           value={email}
           onChange={(e) => {
             setEmail(e.target.value)
             setError(null)
           }}
-          className={inputClass}
-          style={inputStyle}
         />
 
+        {/* `assertive`: they pressed the button and are waiting on the answer,
+            so interrupting is what they want. The success note above is
+            `polite` — it is an outcome, not a failure. */}
         {error && (
-          <p className="text-xs font-semibold px-1" style={{ color: RED }} role="alert">
+          <Note icon="alert-triangle" tone="critical" live="assertive">
             {error}
-          </p>
+          </Note>
         )}
 
         <Button type="submit" variant="primary" disabled={!valid || busy}>

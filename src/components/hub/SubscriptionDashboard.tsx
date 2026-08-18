@@ -1,17 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Eyebrow } from './Eyebrow'
+import { Button, Card, Disclosure, EmptyState, Note, Segmented } from '@/components/system'
 import { gsap } from 'gsap'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Disclosure } from '@/components/ui/Disclosure'
-import { EmptyState } from '@/components/ui/EmptyState'
-import { Eyebrow } from '@/components/ui/Eyebrow'
 import { Icon } from '@/components/ui/Icon'
-import { Note } from '@/components/ui/Note'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
-import { ACCENT, AMBER, GLASS, ordinalSuffix, tint } from '@/lib/ui/tokens'
+import { ordinalSuffix, tint } from '@/lib/ui/tokens'
 import { selectShopAxes } from '@/lib/stack-stats'
 import { useHubStore } from '@/lib/hub-store'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
@@ -229,21 +225,21 @@ export function SubscriptionDashboard() {
           greeted paying members as "Hi lewissiara". A real first name if the
           account has one, and otherwise nothing pretending to be one. */}
       <div className="mb-6" data-reveal>
-        <Eyebrow color={ACCENT}>Your subscription</Eyebrow>
-        <h1 className="text-2xl font-black mt-1.5" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <Eyebrow color="var(--accent)">Your subscription</Eyebrow>
+        <h1 className="text-2xl font-black mt-1.5" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           {greeting}
         </h1>
       </div>
 
       {sub.status === 'cancelled' ? (
         <Card className="text-center py-8" data-reveal>
-          <span className="inline-flex items-center justify-center w-11 h-11 rounded-full mb-3" style={{ background: GLASS.raised, color: 'var(--color-muted)' }}>
+          <span className="inline-flex items-center justify-center w-11 h-11 rounded-full mb-3" style={{ background: 'var(--surface-2)', color: 'var(--ink-3)' }}>
             <Icon name="check" size={20} />
           </span>
-          <p className="text-base font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+          <p className="text-base font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
             Your subscription has ended
           </p>
-          <p className="text-sm text-[var(--color-text-2)] mt-1.5 leading-relaxed">
+          <p className="text-sm text-[var(--ink-2)] mt-1.5 leading-relaxed">
             You won&apos;t be charged again. Everything already sent is yours to keep, and you can start a new plan whenever you like.
           </p>
         </Card>
@@ -253,21 +249,21 @@ export function SubscriptionDashboard() {
           <div
             className="rounded-3xl p-5 mb-5 relative overflow-hidden"
             data-reveal
-            style={{ background: GLASS.surface, border: `1px solid ${tint(ACCENT, 30)}` }}
+            style={{ background: 'var(--surface-1)', border: `1px solid ${tint('var(--accent)', 30)}` }}
           >
-            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full" style={{ background: `radial-gradient(circle, ${tint(ACCENT, 22)}, transparent 70%)` }} />
+            <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full" style={{ background: `radial-gradient(circle, ${tint('var(--accent)', 22)}, transparent 70%)` }} />
             <div className="relative">
               {/* A scheduled free exit. Shown above everything else because it is
                   the most consequential thing about the plan right now — and
                   because the copy promised they could change their mind, which
                   is only true if there is somewhere to do it. */}
               {sub.scheduledExitMonth != null && (
-                <div className="mb-4 rounded-xl px-3 py-2.5" style={{ background: tint(AMBER, 10), border: `1px solid ${tint(AMBER, 30)}` }}>
-                  <p className="text-xs font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                <div className="mb-4 rounded-xl px-3 py-2.5" style={{ background: tint('var(--tone-attention)', 10), border: `1px solid ${tint('var(--tone-attention)', 30)}` }}>
+                  <p className="text-xs font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
                     Your plan ends in {Math.max(0, sub.scheduledExitMonth - sub.monthsActive)} month
                     {Math.max(0, sub.scheduledExitMonth - sub.monthsActive) === 1 ? '' : 's'} — nothing to pay
                   </p>
-                  <p className="text-[11px] text-[var(--color-text-2)] mt-0.5 leading-relaxed">
+                  <p className="text-[11px] text-[var(--ink-2)] mt-0.5 leading-relaxed">
                     Everything carries on as normal until then, which is what clears your balance.
                   </p>
                   <Button
@@ -289,23 +285,23 @@ export function SubscriptionDashboard() {
               )}
               {sub.status === 'paused' ? (
                 <>
-                  <div className="flex items-center gap-2 mb-1.5" style={{ color: AMBER }}>
+                  <div className="flex items-center gap-2 mb-1.5" style={{ color: 'var(--tone-attention)' }}>
                     <Icon name="pause" size={14} />
-                    <Eyebrow color={AMBER}>{sub.snoozeUntil ? 'Snoozed' : 'Paused'}</Eyebrow>
+                    <Eyebrow color="var(--tone-attention)">{sub.snoozeUntil ? 'Snoozed' : 'Paused'}</Eyebrow>
                   </div>
-                  <p className="text-lg font-black text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Your deliveries are on hold</p>
+                  <p className="text-lg font-black text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Your deliveries are on hold</p>
                   {sub.snoozeUntil && (
-                    <p className="text-xs text-[var(--color-text-2)] mb-3">Back on {new Date(sub.snoozeUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} — nothing billed until then.</p>
+                    <p className="text-xs text-[var(--ink-2)] mb-3">Back on {new Date(sub.snoozeUntil).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })} — nothing billed until then.</p>
                   )}
                   <Button variant="primary" icon="play" onClick={resume} fullWidth={false} className="mt-1">Resume now</Button>
                 </>
               ) : next ? (
                 <>
-                  <div className="flex items-center gap-2 mb-1.5" style={{ color: ACCENT }}>
+                  <div className="flex items-center gap-2 mb-1.5" style={{ color: 'var(--accent)' }}>
                     <Icon name="truck" size={14} />
-                    <Eyebrow color={ACCENT}>Your next box · {countdownLabel(next.date)}</Eyebrow>
+                    <Eyebrow color="var(--accent)">Your next box · {countdownLabel(next.date)}</Eyebrow>
                   </div>
-                  <p className="text-2xl font-black text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+                  <p className="text-2xl font-black text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
                     {new Date(next.date).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
                   </p>
 
@@ -325,13 +321,13 @@ export function SubscriptionDashboard() {
                         />
                       ))}
                       {next.items.length > 5 && (
-                        <span className="text-xs font-bold text-[var(--color-muted)]" style={{ fontFamily: 'var(--font-display)' }}>
+                        <span className="text-xs font-bold text-[var(--ink-3)]" style={{ fontFamily: 'var(--font-display)' }}>
                           +{next.items.length - 5}
                         </span>
                       )}
                     </div>
                   )}
-                  <p className="text-xs text-[var(--color-text-2)] mt-2.5">
+                  <p className="text-xs text-[var(--ink-2)] mt-2.5">
                     {next.items.map((it) => it.productTitle).slice(0, 3).join(', ')}{next.items.length > 3 ? ` +${next.items.length - 3} more` : ''}
                   </p>
 
@@ -387,7 +383,7 @@ export function SubscriptionDashboard() {
           <div className="flex items-end justify-between gap-3 mt-8 mb-3" data-reveal>
             <div>
               <Eyebrow>Your stack</Eyebrow>
-              <p className="text-xs font-semibold text-[var(--color-text-2)] mt-1">
+              <p className="text-xs font-semibold text-[var(--ink-2)] mt-1">
                 {summary || `${sub.lines.length} products`}
               </p>
             </div>
@@ -420,52 +416,39 @@ export function SubscriptionDashboard() {
               <div className="space-y-4 pt-1">
                 {/* Regular ship day */}
                 <Card>
-                  <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Regular ship day</p>
-                  <p className="text-xs text-[var(--color-muted)] mb-3">Boxes default to the {sub.dispatchDayOfMonth}th. Move any single box from the calendar.</p>
-                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Regular ship day">
-                    {DAY_OPTIONS.map((day) => {
-                      const active = sub.dispatchDayOfMonth === day
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          role="radio"
-                          aria-checked={active}
-                          aria-label={`${day}${ordinalSuffix(day)} of the month`}
-                          onClick={() => {
-                            if (active) return
-                            setPending({
-                              title: 'Change your regular ship day',
-                              subtitle: `The ${sub.dispatchDayOfMonth}${ordinalSuffix(sub.dispatchDayOfMonth)} → the ${day}${ordinalSuffix(day)} of the month`,
-                              monthlyBefore: sub.flatMonthly,
-                              monthlyAfter: sub.flatMonthly,
-                              effectiveFrom: nextDispatchDate(day).toISOString(),
-                              note: 'This moves every future box, not just the next one. Your payment date follows your ship day, and the amount is unchanged.',
-                              confirmLabel: 'Change ship day',
-                              onConfirm: () => setDispatchDay(day),
-                            })
-                          }}
-                          className="w-11 h-11 rounded-xl text-sm font-bold transition-all duration-200 active:scale-90 focus-visible:outline-none focus-visible:ring-2"
-                          style={{
-                            background: active ? tint(ACCENT, 14) : GLASS.surface,
-                            border: `1px solid ${active ? tint(ACCENT, 55) : GLASS.hairline}`,
-                            color: active ? ACCENT : 'var(--color-text-2)',
-                            fontFamily: 'var(--font-display)',
-                            ['--tw-ring-color' as string]: tint(ACCENT, 45),
-                          }}
-                        >
-                          {day}
-                        </button>
-                      )
-                    })}
-                  </div>
+                  <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Regular ship day</p>
+                  <p className="text-xs text-[var(--ink-3)] mb-3">Boxes default to the {sub.dispatchDayOfMonth}th. Move any single box from the calendar.</p>
+                  {/* `ariaLabel` per option: the visible label is a bare number,
+                      and "17" on its own is not something anyone can act on. */}
+                  <Segmented
+                    label="Regular ship day"
+                    value={sub.dispatchDayOfMonth}
+                    onChange={(day) => {
+                      if (day === sub.dispatchDayOfMonth) return
+                      setPending({
+                        title: 'Change your regular ship day',
+                        subtitle: `The ${sub.dispatchDayOfMonth}${ordinalSuffix(sub.dispatchDayOfMonth)} → the ${day}${ordinalSuffix(day)} of the month`,
+                        monthlyBefore: sub.flatMonthly,
+                        monthlyAfter: sub.flatMonthly,
+                        effectiveFrom: nextDispatchDate(day).toISOString(),
+                        note: 'This moves every future box, not just the next one. Your payment date follows your ship day, and the amount is unchanged.',
+                        confirmLabel: 'Change ship day',
+                        onConfirm: () => setDispatchDay(day),
+                      })
+                    }}
+                    options={DAY_OPTIONS.map((day) => ({
+                      value: day,
+                      label: day,
+                      ariaLabel: `${day}${ordinalSuffix(day)} of the month`,
+                    }))}
+                  />
                 </Card>
 
                 {/* If a product becomes unavailable — the plan-wide default.
                     Per-product overrides live in each line's manage sheet. */}
                 <Card>
-                  <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>If something goes out of stock</p>
-                  <p className="text-xs text-[var(--color-muted)] mb-3">
+                  <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>If something goes out of stock</p>
+                  <p className="text-xs text-[var(--ink-3)] mb-3">
                     What we do by default. {overriddenPolicyCount > 0
                       ? `${overriddenPolicyCount} product${overriddenPolicyCount === 1 ? ' has' : 's have'} their own setting — change those on the product itself.`
                       : 'Set it per product from any product’s manage sheet.'}
@@ -480,13 +463,13 @@ export function SubscriptionDashboard() {
 
                 {/* Billing */}
                 <Card>
-                  <p className="text-sm font-bold text-[var(--color-text)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Billing &amp; payment</p>
+                  <p className="text-sm font-bold text-[var(--ink-1)] mb-2" style={{ fontFamily: 'var(--font-display)' }}>Billing &amp; payment</p>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 text-xs text-[var(--color-text-2)]">
-                      <Icon name="credit-card" size={14} className="text-[var(--color-muted)]" />
+                    <span className="inline-flex items-center gap-2 text-xs text-[var(--ink-2)]">
+                      <Icon name="credit-card" size={14} className="text-[var(--ink-3)]" />
                       {sub.paymentMethod ? `${sub.paymentMethod.brand} ending ${sub.paymentMethod.last4}` : 'No card on file'}
                     </span>
-                    <span className="text-[11px] text-[var(--color-muted)]">Direct debit · monthly</span>
+                    <span className="text-[11px] text-[var(--ink-3)]">Direct debit · monthly</span>
                   </div>
                   {/* This was `alert()` — a browser dialog, in production, on a
                       paying member's billing panel — while the route it needed
@@ -500,7 +483,7 @@ export function SubscriptionDashboard() {
                   >
                     {openingPortal ? 'Opening…' : 'Manage billing'}
                   </Button>
-                  {portalError && <Note icon="alert-triangle" color={AMBER} live className="mt-3">{portalError}</Note>}
+                  {portalError && <Note icon="alert-triangle" tone="attention" live="assertive" className="mt-3">{portalError}</Note>}
                 </Card>
 
                 {/* Pause / cancel — routed through the save flow */}

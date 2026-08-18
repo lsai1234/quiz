@@ -82,7 +82,7 @@
   outline: none;
 }
 
-/* ── The Founders Hub safety net ──────────────────────────────────────────────
+/* ── The migrated-region safety net ───────────────────────────────────────────
    Not one file in the Founders Hub had any focus styling: 131 buttons and 88
    form controls, and a keyboard user got the user-agent outline over a dark
    surface or nothing at all. That is a defect rather than an inconsistency, and
@@ -91,20 +91,24 @@
    So the ring is applied to the region rather than to each control. Anything
    already on `.system-focus` resolves to the same declaration, so migrating a
    control changes nothing here — and, more usefully, this cannot be regressed:
-   a raw `<button>` added to the hub tomorrow is covered the day it lands.
+   a raw `<button>` added to either hub tomorrow is covered the day it lands.
 
-   Scoped to the hub deliberately. It is a floor under an internal tool being
-   migrated, not a global default that would let the rest of the app skip the
-   primitives. `founder-hub.test.ts` holds it in place. */
-.founder-hub :is(button, [role='button'], a[href], input, select, textarea):focus-visible {
+   `.my-hub` covers My Hub and the Partners Hub, whose roots carry it for the
+   same reason. Scoped to the migrated regions deliberately: this is a floor
+   under what has been converted, not a global default that would let the quiz
+   and the shop skip the primitives. `founder-hub.test.ts` and `my-hub.test.ts`
+   hold it in place. */
+:is(.founder-hub, .my-hub)
+  :is(button, [role='button'], a[href], input, select, textarea):focus-visible {
   outline: none;
   box-shadow: var(--focus-ring), var(--rest-shadow, var(--shadow-none));
 }
 
-/* Fields in the hub are still raw `<input>`s with their own class strings, most
-   of which set `outline-none`. Giving them the recessed surface here means the
-   ring above lands on something that already reads as a field. */
-.founder-hub :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
+/* Any field still rendered raw inside a migrated region carries its own class
+   string, most of which set `outline-none`. Giving them the recessed shape here
+   means the ring above lands on something that already reads as a field. */
+:is(.founder-hub, .my-hub)
+  :is(input, select, textarea):not([type='checkbox']):not([type='radio']) {
   border-radius: var(--radius-row);
 }
 
@@ -447,6 +451,59 @@
   to { opacity: 0; transform: translateY(10px) scale(0.985); }
 }
 
+/* ── Sheet ────────────────────────────────────────────────────────────────────
+   The phone-only half of `Modal`'s `sheet` presentation. On a phone the panel is
+   flush to the bottom edge with only its top corners rounded, which is what makes
+   it read as something pulled up from off-screen rather than a card that landed
+   near the bottom. Above `sm` it is a centred panel like any other, so everything
+   here is undone. */
+.system-sheet {
+  max-width: none;
+  border-bottom: 0;
+  border-left: 0;
+  border-right: 0;
+  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+}
+
+@media (min-width: 40rem) {
+  .system-sheet {
+    max-width: var(--modal-md);
+    border: 1px solid var(--edge);
+    border-top-color: var(--edge-top);
+    border-radius: var(--radius-sheet);
+  }
+}
+
+/* The pulse `ChargeScale` fires on the segment a new answer reaches. Fades out
+   rather than in: the fill underneath is already painted, so this is a flash
+   over it, not the arrival of the colour. */
+/* ── Skeleton ─────────────────────────────────────────────────────────────────
+   A band of light travelling across a placeholder. Stopped entirely under
+   reduced motion rather than slowed: the whole objection to it is the repetition,
+   and a slow pulse is still a pulse. */
+.system-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.system-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--surface-3), transparent);
+  transform: translateX(-100%);
+  animation: system-shimmer 1.4s var(--ease-settle) infinite;
+}
+
+@keyframes system-shimmer {
+  to { transform: translateX(100%); }
+}
+
+@keyframes system-charge-surge {
+  from { opacity: 0.85; }
+  to { opacity: 0; }
+}
+
 @keyframes system-scrim-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -506,5 +563,12 @@
   .system-meniscus,
   .system-charge-flow {
     animation: none !important;
+  }
+
+  /* The shimmer goes entirely rather than slowing down: the objection to it is
+     the repetition, and a slow pulse is still a pulse. The block stays visible,
+     which is all it was ever there to do. */
+  .system-shimmer::after {
+    display: none;
   }
 }

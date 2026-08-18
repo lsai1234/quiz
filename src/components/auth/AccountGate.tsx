@@ -1,16 +1,13 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { Button, Input, Modal, ModalBody, ModalFooter, ModalHeader, Note } from '@/components/system'
 import { ForgotPassword } from './ForgotPassword'
 import { ProviderButtons } from './ProviderButtons'
 import { fetchAuthContext, authenticateAccount } from '@/lib/auth-client'
 import { CheckoutConsent } from '@/components/legal/CheckoutConsent'
 import { CheckoutSteps } from '@/components/checkout/CheckoutSteps'
 import { PlanBeingBought } from '@/components/checkout/PlanBeingBought'
-import { Button } from '@/components/ui/Button'
-import { Note } from '@/components/ui/Note'
-import { Sheet, SheetBody, SheetFooter, SheetHeader } from '@/components/ui/Sheet'
-import { GLASS } from '@/lib/ui/tokens'
 import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
 import type { ConsentSubmission } from '@/lib/legal/consent'
 import type { CheckoutPayload } from '@/lib/checkout/types'
@@ -29,17 +26,17 @@ const CONSENT_REQUIRED = 'Please confirm you’ve read and agree to the terms an
  * `onAuthenticated`, OAuth by stashing it with the pending order — because the
  * server refuses to finalize a checkout without one.
  *
- * ── Why this is a Sheet ──────────────────────────────────────────────────────
+ * ── Why this is a sheet ──────────────────────────────────────────────────────
  * It used to be a hand-rolled `fixed inset-0` overlay rendered inline. The stack
  * review page renders inside a GSAP-animated wrapper, and a transformed ancestor
  * makes `position: fixed` resolve against THAT rather than the viewport — so the
  * gate opened halfway down the page, below the fold, at the exact moment someone
  * was trying to buy something. The sticky checkout bar on the same page already
- * portals itself for this reason; this one didn't. `Sheet` portals to
+ * portals itself for this reason; this one didn't. `Modal` portals to
  * `document.body`, and brings the scroll lock, focus trap and Escape handling
  * that a hand-rolled overlay never had.
  *
- * The action lives in a pinned `SheetFooter` for the same class of reason: the
+ * The action lives in a pinned `ModalFooter` for the same class of reason: the
  * consent points are long enough to push a button off the bottom of a phone, and
  * the one thing this screen exists to do must not be the part you have to scroll
  * to find.
@@ -150,12 +147,6 @@ export function AccountGate({
     }
   }
 
-  const inputStyle = {
-    background: GLASS.surface,
-    border: `1px solid ${GLASS.hairline}`,
-    color: 'var(--color-text)',
-  }
-
   /**
    * Resetting a password without losing the sale.
    *
@@ -170,12 +161,12 @@ export function AccountGate({
    */
   if (mode === 'forgot') {
     return (
-      <Sheet onClose={onCancel} label="Reset your password">
-        <SheetHeader eyebrow="Forgotten password" title="We’ll email you a link">
+      <Modal onClose={onCancel} presentation="sheet" label="Reset your password">
+        <ModalHeader eyebrow="Forgotten password" title="We’ll email you a link">
           <CheckoutSteps current="account" />
-        </SheetHeader>
+        </ModalHeader>
 
-        <SheetBody className="space-y-4">
+        <ModalBody className="space-y-4">
           <ForgotPassword
             initialEmail={email}
             backLabel="Back to sign in"
@@ -185,34 +176,34 @@ export function AccountGate({
             The link opens your hub in a new page. Set your password there, then come back to this
             tab and sign in with it — your stack is still here.
           </Note>
-        </SheetBody>
+        </ModalBody>
 
-        <SheetFooter>
+        <ModalFooter>
           <Button variant="secondary" onClick={onCancel}>Cancel</Button>
           <Button variant="ghost" onClick={() => { setMode('login'); setError(null) }}>
             Back to sign in
           </Button>
-        </SheetFooter>
-      </Sheet>
+        </ModalFooter>
+      </Modal>
     )
   }
 
   return (
-    <Sheet onClose={onCancel} label="Create your account to subscribe">
-      <SheetHeader
+    <Modal onClose={onCancel} presentation="sheet" label="Create your account to subscribe">
+      <ModalHeader
         eyebrow="One last step"
         title={mode === 'signup' ? 'Create your account' : 'Welcome back'}
       >
         <CheckoutSteps current="account" />
-      </SheetHeader>
+      </ModalHeader>
 
-      <SheetBody className="space-y-4">
+      <ModalBody className="space-y-4">
         {/* What they are actually buying. The gate used to open over the stack
             with no figures on it at all, so the last thing anyone saw before
             typing a password was a form. */}
         <PlanBeingBought subscription={payload.subscription} />
 
-        <p className="text-xs text-[var(--color-muted)] leading-relaxed">
+        <p className="text-xs text-[var(--ink-3)] leading-relaxed">
           We save your stack and quiz answers to your account so you can log back in to see and
           manage your subscription any time.
         </p>
@@ -222,16 +213,27 @@ export function AccountGate({
           onSubmit={(e) => { e.preventDefault(); void submit() }}
           className="space-y-3"
         >
-          <input
-            type="email" inputMode="email" autoComplete="email" placeholder="you@email.com"
-            value={email} onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none" style={inputStyle}
+          {/* `hideLabel`: named for a screen reader, undrawn above a two-field
+              form that already says what it is. They had a placeholder and
+              nothing else, and a placeholder disappears as you type. */}
+          <Input
+            label="Email address"
+            hideLabel
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="you@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
           />
-          <input
-            type="password" autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+          <Input
+            label="Password"
+            hideLabel
+            type="password"
+            autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
             placeholder={mode === 'signup' ? 'Choose a password (8+ characters)' : 'Password'}
-            value={password} onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none" style={inputStyle}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
           />
           {error && <p className="text-xs font-semibold px-1" style={{ color: '#ff6b6b' }} role="alert">{error}</p>}
         </form>
@@ -239,9 +241,9 @@ export function AccountGate({
         {providers.length > 0 && (
           <>
             <div className="flex items-center gap-3">
-              <div className="h-px flex-1" style={{ background: GLASS.hairline }} />
-              <span className="text-[10px] uppercase tracking-widest text-[var(--color-muted)]">or</span>
-              <div className="h-px flex-1" style={{ background: GLASS.hairline }} />
+              <div className="h-px flex-1" style={{ background: 'var(--edge)' }} />
+              <span className="text-[10px] uppercase tracking-widest text-[var(--ink-3)]">or</span>
+              <div className="h-px flex-1" style={{ background: 'var(--edge)' }} />
             </div>
             <ProviderButtons
               providers={providers}
@@ -269,31 +271,27 @@ export function AccountGate({
         </Note>
 
         <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => { setMode(mode === 'signup' ? 'login' : 'signup'); setError(null) }}
-            className="text-xs font-semibold underline text-[var(--color-muted)]"
           >
             {mode === 'signup' ? 'Already have an account?' : 'New here? Create one'}
-          </button>
+          </Button>
 
           {/* Only when signing in, and only when a link can actually be sent.
               A returning member who cannot remember their password is otherwise
               stuck one step from paying, with no way forward that keeps the
               stack they just built. */}
           {mode === 'login' && canResetPassword && (
-            <button
-              type="button"
-              onClick={() => { setMode('forgot'); setError(null) }}
-              className="text-xs font-semibold underline text-[var(--color-muted)]"
-            >
+            <Button variant="ghost" size="sm" onClick={() => { setMode('forgot'); setError(null) }}>
               Forgotten it?
-            </button>
+            </Button>
           )}
         </div>
-      </SheetBody>
+      </ModalBody>
 
-      <SheetFooter>
+      <ModalFooter>
         <Button variant="secondary" onClick={onCancel}>Cancel</Button>
         <Button
           type="submit"
@@ -304,7 +302,7 @@ export function AccountGate({
         >
           {busy ? 'One sec…' : 'Continue to payment'}
         </Button>
-      </SheetFooter>
-    </Sheet>
+      </ModalFooter>
+    </Modal>
   )
 }

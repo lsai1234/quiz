@@ -11,7 +11,7 @@ interface Props {
 }
 
 /** A small circular progress ring for "building" products. */
-export function ProgressRing({ pct, size = 38, stroke = 3, color = '#00D4FF', children }: Props) {
+export function ProgressRing({ pct, size = 38, stroke = 3, color = 'var(--accent)', children }: Props) {
   const r = (size - stroke) / 2
   const c = 2 * Math.PI * r
   const clamped = Math.max(0, Math.min(1, pct))
@@ -19,7 +19,7 @@ export function ProgressRing({ pct, size = 38, stroke = 3, color = '#00D4FF', ch
   return (
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <svg width={size} height={size} className="-rotate-90">
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--color-border-2)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--edge)" strokeWidth={stroke} />
         <circle
           cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
           strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - clamped)}
@@ -27,7 +27,15 @@ export function ProgressRing({ pct, size = 38, stroke = 3, color = '#00D4FF', ch
         />
       </svg>
       {children != null && (
-        <div className="absolute inset-0 flex items-center justify-center text-[11px] font-black" style={{ color, fontFamily: 'var(--font-display)' }}>
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            fontSize: 'var(--text-meta)',
+            fontWeight: 'var(--weight-display)',
+            fontFamily: 'var(--font-display)',
+            color,
+          }}
+        >
           {children}
         </div>
       )}

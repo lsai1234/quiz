@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-const ACCENT = '#00D4FF'
-
 /**
  * Setting a password from an invite link.
  *
@@ -71,16 +69,16 @@ export function SetPassword() {
 
   const wrap = 'min-h-screen flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
   const input = 'w-full px-4 py-3.5 rounded-2xl text-sm outline-none'
-  const inputStyle = { background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' } as const
+  const inputStyle = { background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' } as const
 
   if (dead) {
     return (
-      <div className={wrap} style={{ background: 'var(--color-bg)' }}>
-        <h1 className="text-2xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <div className={wrap} style={{ background: 'var(--ground-base)' }}>
+        <h1 className="text-2xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           This link won’t work
         </h1>
-        <p className="text-xs text-[var(--color-muted)] leading-snug mb-6">{dead}</p>
-        <a href="/partner" className="text-xs font-bold underline" style={{ color: ACCENT }}>
+        <p className="text-xs text-[var(--ink-3)] leading-snug mb-6">{dead}</p>
+        <a href="/partner" className="text-xs font-bold underline" style={{ color: 'var(--accent)' }}>
           Go to sign-in
         </a>
       </div>
@@ -88,14 +86,14 @@ export function SetPassword() {
   }
 
   return (
-    <div className={wrap} style={{ background: 'var(--color-bg)' }}>
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+    <div className={wrap} style={{ background: 'var(--ground-base)' }}>
+      <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
         CHRGD Partners
       </p>
-      <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <h1 className="text-2xl font-black mb-1" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
         {name ? `Welcome, ${name.split(' ')[0]}` : 'Set your password'}
       </h1>
-      <p className="text-xs text-[var(--color-muted)] mb-6 leading-snug">
+      <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
         Choose a password and you’re in. This link only works once.
       </p>
 
@@ -119,7 +117,7 @@ export function SetPassword() {
           style={inputStyle}
         />
 
-        {tooShort && <p className="text-[11px]" style={{ color: 'var(--color-muted)' }}>At least 10 characters.</p>}
+        {tooShort && <p className="text-[11px]" style={{ color: 'var(--ink-3)' }}>At least 10 characters.</p>}
         {mismatch && <p className="text-[11px]" style={{ color: '#f87171' }}>Those don’t match.</p>}
         {error && <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{error}</p>}
 
@@ -127,7 +125,7 @@ export function SetPassword() {
           type="submit"
           disabled={!valid || saving || !name}
           className="w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-          style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+          style={{ background: 'var(--accent)', color: 'var(--ground-base)', fontFamily: 'var(--font-display)' }}
         >
           {saving ? 'Setting it…' : name ? 'Set password & sign in' : 'Checking your link…'}
         </button>

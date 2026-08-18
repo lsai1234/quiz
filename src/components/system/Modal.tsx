@@ -57,12 +57,23 @@ export interface ModalProps {
   children: ReactNode
   onClose: () => void
   size?: Size
+  /**
+   * `panel` is a dialog: it floats, and on a phone it docks to the bottom with
+   * its corners intact. `sheet` is the bottom-sheet My Hub is built around — on
+   * a phone it fills the width, sits flush to the bottom edge, and carries a
+   * grab handle so it reads as something you pull down.
+   *
+   * The distinction is a phone-only one. Above `sm` both are a centred panel,
+   * because a sheet stuck to the bottom of a desktop window is just a panel that
+   * has fallen over.
+   */
+  presentation?: 'panel' | 'sheet'
   /** Accessible name, when the modal has no `ModalHeader` to label it. */
   label?: string
   className?: string
 }
 
-export function Modal({ children, onClose, size = 'md', label, className }: ModalProps) {
+export function Modal({ children, onClose, size = 'md', presentation = 'panel', label, className }: ModalProps) {
   const [mounted, setMounted] = useState(false)
   const [closing, setClosing] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -160,7 +171,11 @@ export function Modal({ children, onClose, size = 'md', label, className }: Moda
         // through the panel instead of washing out to a neutral haze.
         backdropFilter: 'blur(var(--blur-scrim)) saturate(var(--blur-saturate))',
         WebkitBackdropFilter: 'blur(var(--blur-scrim)) saturate(var(--blur-saturate))',
-        padding: 'var(--space-4)',
+        // A sheet is flush to the bottom on a phone, so the scrim's inset would
+        // show as a gap beneath it. `.system-sheet` restores a normal panel
+        // above `sm`, where the inset is wanted again — hence the media query
+        // there rather than a second value here.
+        padding: presentation === 'sheet' ? 0 : 'var(--space-4)',
         animation: reduced
           ? undefined
           : `${closing ? 'system-scrim-out' : 'system-scrim-in'} ${closing ? EXIT_MS : 200}ms var(--ease-settle) both`,
@@ -172,10 +187,16 @@ export function Modal({ children, onClose, size = 'md', label, className }: Moda
         aria-modal="true"
         aria-label={label}
         tabIndex={-1}
-        className={`system-glass w-full flex flex-col overflow-hidden outline-none ${className ?? ''}`}
+        className={[
+          'system-glass w-full flex flex-col overflow-hidden outline-none',
+          presentation === 'sheet' ? 'system-sheet' : '',
+          className ?? '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         style={{
           maxWidth: WIDTH[size],
-          maxHeight: '86dvh',
+          maxHeight: presentation === 'sheet' ? '92dvh' : '86dvh',
           background: 'var(--surface-3)',
           backdropFilter: 'blur(var(--blur-panel)) saturate(var(--blur-saturate))',
           WebkitBackdropFilter: 'blur(var(--blur-panel)) saturate(var(--blur-saturate))',
@@ -190,6 +211,22 @@ export function Modal({ children, onClose, size = 'md', label, className }: Moda
               : `system-panel-in var(--duration-slow) var(--ease-spring) both`,
         }}
       >
+        {/* The grab handle. Decorative — the sheet is dismissed by the backdrop,
+            Escape or the header's close button, all of which are reachable. It
+            is here because a panel flush to the bottom of a phone screen needs
+            to say it can be pulled away. */}
+        {presentation === 'sheet' && (
+          <div className="shrink-0 flex justify-center sm:hidden" style={{ paddingTop: 'var(--space-2)' }} aria-hidden>
+            <span
+              style={{
+                width: 'var(--space-8)',
+                height: 'var(--space-1)',
+                borderRadius: 'var(--radius-pill)',
+                background: 'var(--edge-strong)',
+              }}
+            />
+          </div>
+        )}
         <ModalCloseContext.Provider value={requestClose}>{children}</ModalCloseContext.Provider>
       </div>
     </div>,
@@ -198,19 +235,53 @@ export function Modal({ children, onClose, size = 'md', label, className }: Moda
 }
 
 /** The title block. Does not scroll. */
-export function ModalHeader({ title, subtitle }: { title: ReactNode; subtitle?: ReactNode }) {
+export function ModalHeader({
+  eyebrow,
+  title,
+  subtitle,
+  children,
+}: {
+  /**
+   * Context above the title — what this dialog is about rather than what it
+   * asks. "Your subscription", "Add to your stack", the line being edited.
+   *
+   * Above rather than below because it is read first: it tells you where you
+   * are, and the title tells you what to do. A subtitle is the other way round —
+   * a qualification on the title you have already read.
+   */
+  eyebrow?: ReactNode
+  title: ReactNode
+  subtitle?: ReactNode
+  /** Anything under the heading that is still chrome — a step rail, a summary. */
+  children?: ReactNode
+}) {
   const close = useContext(ModalCloseContext)
 
   return (
     <div
-      className="flex items-start justify-between shrink-0"
+      className="shrink-0"
       style={{
-        gap: 'var(--space-3)',
         padding: 'var(--space-4) var(--space-5)',
         borderBottom: '1px solid var(--edge)',
       }}
     >
+    <div className="flex items-start justify-between" style={{ gap: 'var(--space-3)' }}>
       <div className="min-w-0">
+        {eyebrow && (
+          <p
+            style={{
+              fontSize: 'var(--text-micro)',
+              fontWeight: 'var(--weight-strong)',
+              fontFamily: 'var(--font-display)',
+              letterSpacing: 'var(--tracking-eyebrow)',
+              textTransform: 'uppercase',
+              color: 'var(--accent)',
+              marginBottom: 'var(--space-1)',
+            }}
+          >
+            {eyebrow}
+          </p>
+        )}
         <h2
           style={{
             fontSize: 'var(--text-title)',
@@ -259,6 +330,8 @@ export function ModalHeader({ title, subtitle }: { title: ReactNode; subtitle?: 
           <Icon name="x" size={16} />
         </button>
       )}
+    </div>
+    {children}
     </div>
   )
 }

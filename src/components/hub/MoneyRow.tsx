@@ -1,7 +1,6 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { GLASS } from '@/lib/ui/tokens'
 
 /**
  * A label, a dotted leader, and a figure.
@@ -36,12 +35,13 @@ export function MoneyRow({
 }) {
   return (
     <div className={className}>
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-baseline" style={{ gap: 'var(--space-2)' }}>
         <span
-          className={strong ? 'text-sm font-bold' : 'text-xs'}
           style={{
-            color: strong ? 'var(--color-text)' : 'var(--color-text-2)',
+            fontSize: strong ? 'var(--text-body-sm)' : 'var(--text-meta)',
+            fontWeight: strong ? 'var(--weight-strong)' : undefined,
             fontFamily: strong ? 'var(--font-display)' : undefined,
+            color: strong ? 'var(--ink-1)' : 'var(--ink-2)',
           }}
         >
           {label}
@@ -49,20 +49,25 @@ export function MoneyRow({
         <span
           aria-hidden
           className="flex-1 translate-y-[-3px]"
-          style={{ borderBottom: `1px dotted ${GLASS.hairlineStrong}`, minWidth: 12 }}
+          style={{ borderBottom: '1px dotted var(--edge-strong)', minWidth: 'var(--space-3)' }}
         />
         <span
-          className={strong ? 'text-sm font-black' : 'text-xs font-semibold'}
           style={{
-            color: color ?? 'var(--color-text)',
+            fontSize: strong ? 'var(--text-body-sm)' : 'var(--text-meta)',
+            fontWeight: strong ? 'var(--weight-display)' : 'var(--weight-strong)',
             fontFamily: 'var(--font-display)',
             fontVariantNumeric: 'tabular-nums',
+            color: color ?? 'var(--ink-1)',
           }}
         >
           {value}
         </span>
       </div>
-      {sub && <p className="text-[11px] text-[var(--color-muted)] mt-0.5 leading-snug">{sub}</p>}
+      {sub && (
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+          {sub}
+        </p>
+      )}
     </div>
   )
 }

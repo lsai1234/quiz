@@ -1,13 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Eyebrow } from '@/components/ui/Eyebrow'
+import { Eyebrow } from './Eyebrow'
+import { Button, Card } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
 import { LEGAL_ENTITY } from '@/lib/legal/content'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
-import { ACCENT, GLASS, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 
 /**
  * The hub, for somebody who is signed in and has no plan.
@@ -68,14 +67,14 @@ export function NoSubscription({
   return (
     <div>
       <div className="mb-6">
-        <Eyebrow color={ACCENT}>Your hub</Eyebrow>
+        <Eyebrow color="var(--accent)">Your hub</Eyebrow>
         <h1
           className="text-2xl font-black mt-1.5"
-          style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}
+          style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}
         >
           {greeting}
         </h1>
-        <p className="text-sm text-[var(--color-text-2)] mt-2 leading-relaxed">
+        <p className="text-sm text-[var(--ink-2)] mt-2 leading-relaxed">
           You’re signed in — there’s just no plan on this account yet. Build one and this page becomes
           your stack: what’s coming, when, and everything you can change about it.
         </p>
@@ -95,31 +94,31 @@ export function NoSubscription({
           'focus-visible:outline-none focus-visible:ring-2',
         ].join(' ')}
         style={{
-          background: `linear-gradient(100deg, ${tint(ACCENT, 12)}, ${tint(ACCENT, 4)})`,
-          border: `1px solid ${tint(ACCENT, 28)}`,
-          boxShadow: `0 8px 30px -14px ${tint(ACCENT, 45)}`,
-          ['--tw-ring-color' as string]: tint(ACCENT, 45),
+          background: `linear-gradient(100deg, ${tint('var(--accent)', 12)}, ${tint('var(--accent)', 4)})`,
+          border: `1px solid ${tint('var(--accent)', 28)}`,
+          boxShadow: `0 8px 30px -14px ${tint('var(--accent)', 45)}`,
+          ['--tw-ring-color' as string]: tint('var(--accent)', 45),
         }}
       >
         <span
           className="shrink-0 inline-flex items-center justify-center w-11 h-11 rounded-full"
-          style={{ background: tint(ACCENT, 16), color: ACCENT }}
+          style={{ background: tint('var(--accent)', 16), color: 'var(--accent)' }}
         >
           <Icon name="sparkle" size={20} />
         </span>
         <span className="flex-1 text-left">
           <span
-            className="block text-base font-black text-[var(--color-text)]"
+            className="block text-base font-black text-[var(--ink-1)]"
             style={{ fontFamily: 'var(--font-display)' }}
           >
             Build your stack
           </span>
-          <span className="block text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
+          <span className="block text-xs text-[var(--ink-2)] mt-1 leading-relaxed">
             A few questions about your training and what you’re chasing, then a stack picked around
             the answers. About two minutes.
           </span>
         </span>
-        <span aria-hidden className="mt-0.5" style={{ color: ACCENT }}>→</span>
+        <span aria-hidden className="mt-0.5" style={{ color: 'var(--accent)' }}>→</span>
       </Link>
 
       {/* A plan is not the only way to be a customer. */}
@@ -131,23 +130,24 @@ export function NoSubscription({
           'focus-visible:outline-none focus-visible:ring-2',
         ].join(' ')}
         style={{
-          background: GLASS.surface,
-          border: `1px solid ${GLASS.hairline}`,
-          ['--tw-ring-color' as string]: tint(ACCENT, 45),
+          background: 'var(--surface-1)',
+          border: `1px solid var(--edge)`,
+          ['--tw-ring-color' as string]: tint('var(--accent)', 45),
         }}
       >
-        <span className="shrink-0 text-[var(--color-muted)]">
+        <span className="shrink-0 text-[var(--ink-3)]">
           <Icon name="box" size={17} />
         </span>
-        <span className="flex-1 text-left text-xs font-semibold text-[var(--color-text)]">
+        <span className="flex-1 text-left text-xs font-semibold text-[var(--ink-1)]">
           Just after one thing? Buy it once from the shop
         </span>
-        <span aria-hidden className="text-[var(--color-muted)]">→</span>
+        <span aria-hidden className="text-[var(--ink-3)]">→</span>
       </Link>
 
       {/* Why a plan, in the terms someone weighing one up actually cares about:
           what it costs them to change their mind. */}
-      <Card eyebrow="What a plan gives you" className="mb-3">
+      <Card className="mb-3">
+      <Eyebrow className="mb-3">What a plan gives you</Eyebrow>
         <ul className="space-y-3">
           <Benefit icon="swap">
             Swap or drop anything on it, any month, from this page.
@@ -164,15 +164,16 @@ export function NoSubscription({
       {/* The person this screen most easily fails. Last, because it is the
           smallest group — but said plainly, because for them nothing else here
           makes sense. */}
-      <Card eyebrow="Already subscribed?">
-        <p className="text-xs text-[var(--color-text-2)] leading-relaxed">
+      <Card>
+      <Eyebrow className="mb-3">Already subscribed?</Eyebrow>
+        <p className="text-xs text-[var(--ink-2)] leading-relaxed">
           A plan lives with the email address that paid for it. This hub is showing
           {email ? (
             <>
               {' '}
               {/* A long address must wrap inside the card rather than push it
                   wider than the phone. */}
-              <strong className="text-[var(--color-text)] break-all">{email}</strong>
+              <strong className="text-[var(--ink-1)] break-all">{email}</strong>
             </>
           ) : (
             ' the account you signed in with'
@@ -186,9 +187,9 @@ export function NoSubscription({
           </Button>
         )}
         {support && (
-          <p className="text-[11px] text-[var(--color-muted)] mt-3 leading-relaxed">
+          <p className="text-[11px] text-[var(--ink-3)] mt-3 leading-relaxed">
             Still can’t find it?{' '}
-            <a href={`mailto:${support}`} className="underline text-[var(--color-text-2)]">
+            <a href={`mailto:${support}`} className="underline text-[var(--ink-2)]">
               {support}
             </a>{' '}
             — tell us the address you paid with and we’ll sort it.
@@ -204,11 +205,11 @@ function Benefit({ icon, children }: { icon: IconName; children: React.ReactNode
     <li className="flex items-start gap-3">
       <span
         className="shrink-0 mt-0.5 inline-flex items-center justify-center w-7 h-7 rounded-full"
-        style={{ background: GLASS.raised, color: 'var(--color-muted)' }}
+        style={{ background: 'var(--surface-2)', color: 'var(--ink-3)' }}
       >
         <Icon name={icon} size={14} />
       </span>
-      <span className="text-xs text-[var(--color-text-2)] leading-relaxed">{children}</span>
+      <span className="text-xs text-[var(--ink-2)] leading-relaxed">{children}</span>
     </li>
   )
 }

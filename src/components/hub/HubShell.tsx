@@ -2,8 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
-import { IconButton } from '@/components/ui/IconButton'
-import { GLASS } from '@/lib/ui/tokens'
+import { Button, Ground } from '@/components/system'
 
 /**
  * The chrome around the hub.
@@ -26,23 +25,37 @@ export function HubShell({
   onSignOut?: () => void
 }) {
   return (
-    <div className="min-h-screen" style={{ background: 'var(--color-bg)' }}>
+    // `my-hub` is the region class the focus floor in `system.css` hangs off,
+    // the same safety net the Founders Hub roots carry. See `my-hub.test.ts`.
+    <Ground className="my-hub">
+      {/* One of the three surfaces allowed to blur: persistent chrome over a
+          page that does not move under it. */}
       <header
         className="sticky top-0 z-30"
         style={{
-          background: 'color-mix(in srgb, var(--color-bg) 82%, transparent)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          borderBottom: `1px solid ${GLASS.hairline}`,
+          background: 'var(--surface-2)',
+          backdropFilter: 'blur(var(--blur-nav)) saturate(var(--blur-saturate))',
+          WebkitBackdropFilter: 'blur(var(--blur-nav)) saturate(var(--blur-saturate))',
+          borderBottom: '1px solid var(--edge)',
         }}
       >
-        <div className="max-w-lg mx-auto px-5 h-14 flex items-center justify-between gap-3">
+        <div
+          className="max-w-lg mx-auto flex items-center justify-between"
+          style={{ padding: 'var(--space-3) var(--gutter)', gap: 'var(--space-3)' }}
+        >
           <CHRGDLogo markSize={20} wordClassName="text-base" />
-          {onSignOut && <IconButton icon="log-out" label="Sign out" size="sm" onClick={onSignOut} className="-mr-2" />}
+          {onSignOut && (
+            <Button variant="ghost" size="sm" icon="log-out" aria-label="Sign out" onClick={onSignOut} />
+          )}
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-5 pt-6 pb-20">{children}</main>
-    </div>
+      <main
+        className="max-w-lg mx-auto"
+        style={{ padding: 'var(--space-6) var(--gutter) var(--space-8)' }}
+      >
+        {children}
+      </main>
+    </Ground>
   )
 }

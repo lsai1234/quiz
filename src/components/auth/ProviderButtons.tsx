@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { Button, Note, buttonSurface } from '@/components/system'
 
 /**
  * OAuth sign-in buttons for every configured provider. Used by the hub login
@@ -85,7 +86,7 @@ const MONOGRAM_COLOURS: Record<string, string> = {
 }
 
 function Monogram({ id, label }: { id: string; label: string }) {
-  const colour = MONOGRAM_COLOURS[id] ?? 'var(--color-muted)'
+  const colour = MONOGRAM_COLOURS[id] ?? 'var(--ink-3)'
   return (
     <span
       aria-hidden="true"
@@ -122,14 +123,9 @@ export function ProviderButtons({
   const folded = providers.length > PRIMARY_COUNT + 1 && !expanded
   const visible = folded ? providers.slice(0, PRIMARY_COUNT) : providers
 
-  const className =
-    'w-full py-3.5 rounded-2xl text-sm font-bold tracking-wide active:scale-95 transition-all flex items-center justify-center gap-2.5'
-  const style = {
-    fontFamily: 'var(--font-display)',
-    background: 'var(--color-surface-2)',
-    border: '1px solid var(--color-border)',
-    color: 'var(--color-text)',
-  } as const
+  // The anchor form has to look identical to the button form — a member cannot
+  // tell which one they are getting, and should not be able to.
+  const linkSurface = buttonSurface('secondary', 'lg')
 
   const go = async (id: string) => {
     if (pending) return
@@ -151,40 +147,48 @@ export function ProviderButtons({
         const icon = ICONS[p.id] ?? <Monogram id={p.id} label={p.label} />
         const busy = pending === p.id
         return beforeNavigate ? (
-          <button
+          // `loading` carries the busy state, the block on a second press and
+          // the spinner in one prop — this used to dim the other buttons by
+          // hand and say nothing about being busy beyond `aria-busy`.
+          <Button
             key={p.id}
-            type="button"
-            onClick={() => void go(p.id)}
+            size="lg"
+            fullWidth
+            loading={busy}
             disabled={pending !== null}
-            aria-busy={busy}
-            className={className}
-            style={{ ...style, opacity: pending !== null && !busy ? 0.5 : 1 }}
+            onClick={() => void go(p.id)}
           >
             {icon}
             {busy ? `Taking you to ${p.label}…` : `Continue with ${p.label}`}
-          </button>
+          </Button>
         ) : (
-          <a key={p.id} href={`/api/auth/${p.id}${query}`} className={className} style={style}>
+          // A real link when there is no pre-step: OAuth is a full-page
+          // redirect, and a link is what can be middle-clicked and what
+          // announces itself as going somewhere.
+          <a
+            key={p.id}
+            href={`/api/auth/${p.id}${query}`}
+            {...linkSurface}
+            className={`${linkSurface.className} w-full`}
+          >
             {icon}
             Continue with {p.label}
           </a>
         )
       })}
 
+      {/* Was a hardcoded `#ff6b6b` — the second, differently-wrong red the audit
+          found. Tone rather than colour now. */}
       {error && (
-        <p role="alert" className="text-xs font-semibold px-1 pt-1" style={{ color: '#ff6b6b' }}>
+        <Note icon="alert-triangle" tone="critical" live="assertive">
           {error}
-        </p>
+        </Note>
       )}
 
       {folded && (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="w-full py-2.5 text-xs font-semibold underline text-[var(--color-muted)]"
-        >
+        <Button variant="ghost" size="sm" fullWidth onClick={() => setExpanded(true)}>
           More ways to sign in ({providers.length - PRIMARY_COUNT})
-        </button>
+        </Button>
       )}
     </div>
   )

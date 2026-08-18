@@ -1,14 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Chip } from '@/components/ui/Chip'
-import { EmptyState } from '@/components/ui/EmptyState'
+import { Badge, Button, Card, EmptyState, Modal, ModalBody, ModalHeader, OptionRow, Segmented } from '@/components/system'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { ACCENT, GLASS, GREEN, tint } from '@/lib/ui/tokens'
-import { OptionRow } from '@/components/ui/OptionRow'
+import { tint } from '@/lib/ui/tokens'
 import type { IconName } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { CHANGE_REASONS, recommendReplacements, replacementRationale } from '@/lib/feedback'
@@ -59,8 +54,8 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
     : 'Confirm your change'
 
   return (
-    <Sheet onClose={onClose}>
-      <SheetHeader eyebrow={`${line.slotTitle} · currently ${line.productTitle}`} title={heading}>
+    <Modal onClose={onClose} presentation="sheet">
+      <ModalHeader eyebrow={`${line.slotTitle} · currently ${line.productTitle}`} title={heading}>
         {/* Where they are in the three steps, in the quiz's own rail — the flow
             gave no sense of length or progress at all. */}
         <div className="flex items-center gap-1.5 mt-3">
@@ -68,17 +63,17 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
             <div
               key={s}
               className="h-1 rounded-full flex-1 transition-all duration-200"
-              style={{ background: i <= STEP_INDEX[step] ? ACCENT : GLASS.hairline }}
+              style={{ background: i <= STEP_INDEX[step] ? 'var(--accent)' : 'var(--edge)' }}
             />
           ))}
         </div>
-      </SheetHeader>
+      </ModalHeader>
 
-      <SheetBody>
+      <ModalBody>
         {/* Step 1: reason */}
         {step === 'reason' && (
           <div className="space-y-2">
-            <p className="text-xs text-[var(--color-muted)] mb-2">What's prompting the change? We'll tailor the recommendation.</p>
+            <p className="text-xs text-[var(--ink-3)] mb-2">What's prompting the change? We'll tailor the recommendation.</p>
             {CHANGE_REASONS.map((r) => (
               <OptionRow key={r.id} label={r.label} icon={REASON_ICON[r.id]} navigates onClick={() => setReason(r.id)} />
             ))}
@@ -101,28 +96,47 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
               alternatives.map((alt) => {
                 const imp = computeSwapImpact(subscription, line.id, alt)
                 return (
-                  <button
-                    key={alt.id}
-                    type="button"
+                  // The card is the surface, the button inside it is the
+                  // target — so the whole tile is pressable rather than the
+                  // words in the middle of it.
+                  <Card key={alt.id} interactive padding="none">
+                  <Button
+                    variant="ghost"
+                    fullWidth
+                    className="text-left flex-col items-stretch"
+                    aria-label={`Change to ${alt.title}`}
                     onClick={() => setSelected(alt)}
-                    className="w-full text-left rounded-2xl p-4 transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2"
-                    style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}`, ['--tw-ring-color' as string]: tint(ACCENT, 45) }}
                   >
-                    <div className="flex items-start gap-3">
+                    <span className="flex items-start gap-3">
                       {/* A replacement is a purchase decision. Making it from
                           a title and a delta, with no picture of the thing,
                           is the same mistake the whole hub was making. */}
                       <ProductTile imageUrl={alt.imageUrl} slot={alt.stackSlots[0]} title={alt.title} size={48} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-sm font-medium text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{alt.title}</p>
-                          <span className="text-xs font-black shrink-0" style={{ color: imp.monthlyDelta > 0 ? 'var(--color-text-2)' : GREEN, fontFamily: 'var(--font-display)' }}>{deltaLabel(imp.monthlyDelta)}</span>
-                        </div>
-                        <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed line-clamp-2">{alt.description}</p>
-                      </div>
-                    </div>
-                    <Chip color={ACCENT} className="mt-2.5">{reason ? replacementRationale(alt, reason) : ''}</Chip>
-                  </button>
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-start justify-between gap-2">
+                          <span style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-1)' }}>
+                            {alt.title}
+                          </span>
+                          <span
+                            className="shrink-0"
+                            style={{ fontSize: 'var(--text-meta)', fontFamily: 'var(--font-display)', color: imp.monthlyDelta > 0 ? 'var(--ink-2)' : 'var(--tone-positive)' }}
+                          >
+                            {deltaLabel(imp.monthlyDelta)}
+                          </span>
+                        </span>
+                        <span
+                          className="block line-clamp-2"
+                          style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-body)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)', marginTop: 'var(--space-1)' }}
+                        >
+                          {alt.description}
+                        </span>
+                      </span>
+                    </span>
+                    <Badge tone="accent" className="mt-2.5 self-start">
+                      {reason ? replacementRationale(alt, reason) : ''}
+                    </Badge>
+                  </Button>
+                  </Card>
                 )
               })
             )}
@@ -138,39 +152,28 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
               <div className="flex items-center gap-3">
                 <ProductTile imageUrl={selected.imageUrl} slot={selected.stackSlots[0]} title={selected.title} size={48} />
                 <div className="min-w-0">
-                  <p className="text-xs text-[var(--color-muted)]">Switching to</p>
-                  <p className="text-base font-black text-[var(--color-text)] mt-0.5" style={{ fontFamily: 'var(--font-display)' }}>{selected.title}</p>
+                  <p className="text-xs text-[var(--ink-3)]">Switching to</p>
+                  <p className="text-base font-black text-[var(--ink-1)] mt-0.5" style={{ fontFamily: 'var(--font-display)' }}>{selected.title}</p>
                 </div>
               </div>
             </Card>
 
             {/* When */}
             <div>
-              <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--color-text-2)' }}>When should it start?</p>
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="When should it start?">
-                {([true, false] as const).map((when) => {
-                  const active = applyToNextBox === when
-                  return (
-                    <button
-                      key={String(when)}
-                      type="button"
-                      role="radio"
-                      aria-checked={active}
-                      onClick={() => setApplyToNextBox(when)}
-                      className="py-3 px-2 min-h-11 rounded-xl text-xs font-bold transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2"
-                      style={{
-                        background: active ? tint(ACCENT, 12) : GLASS.surface,
-                        border: `1px solid ${active ? tint(ACCENT, 55) : GLASS.hairline}`,
-                        color: active ? ACCENT : 'var(--color-text-2)',
-                        fontFamily: 'var(--font-display)',
-                        ['--tw-ring-color' as string]: tint(ACCENT, 45),
-                      }}
-                    >
-                      {when ? `Next box · ${effectiveDate}` : 'From next payment'}
-                    </button>
-                  )
-                })}
-              </div>
+              <p className="text-xs font-semibold mb-1.5" style={{ color: 'var(--ink-2)' }}>When should it start?</p>
+              {/* `'next' | 'payment'` rather than a boolean: `Segmented` keys on
+                  the value, and `true`/`false` make for keys and aria state a
+                  screen reader would read out as "true". */}
+              <Segmented
+                label="When should it start?"
+                columns={2}
+                value={applyToNextBox ? 'next' : 'payment'}
+                onChange={(v) => setApplyToNextBox(v === 'next')}
+                options={[
+                  { value: 'next', label: `Next box · ${effectiveDate}` },
+                  { value: 'payment', label: 'From next payment' },
+                ]}
+              />
             </div>
 
             {/* Pricing impact */}
@@ -190,7 +193,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
             </Button>
           </div>
         )}
-      </SheetBody>
-    </Sheet>
+      </ModalBody>
+    </Modal>
   )
 }

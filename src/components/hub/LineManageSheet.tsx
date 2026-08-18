@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
-import { Button } from '@/components/ui/Button'
+import { Button, Card, Modal, ModalBody, ModalHeader, Segmented } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
-import { GLASS, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 import { formatGBP, USAGE_LEVELS, type UsageLevel } from '@/lib/stack-blueprint/pricing'
 import {
   computeRemoveImpact,
@@ -20,9 +19,6 @@ import { ChangePolicyChoice } from '@/components/subscription/ChangePolicyChoice
 import { BillingImpact } from './BillingImpact'
 import type { ChangePolicy, MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-
-const ACCENT = '#00D4FF'
-const AMBER = '#fbbf24'
 
 interface Props {
   subscription: MemberSubscription
@@ -42,20 +38,25 @@ const USAGE_LABEL: Record<UsageLevel, string> = { light: 'A little', standard: '
 /** One of the two one-tap moves — an action card, not a bordered grey box. */
 function QuickMove({ icon, title, sub, onClick }: { icon: IconName; title: string; sub: string; onClick: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="rounded-2xl p-3.5 text-left transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2"
-      style={{
-        background: GLASS.surface,
-        border: `1px solid ${GLASS.hairline}`,
-        ['--tw-ring-color' as string]: tint(ACCENT, 45),
-      }}
-    >
-      <Icon name={icon} size={17} className="text-[var(--color-muted)]" />
-      <p className="text-sm font-bold text-[var(--color-text)] mt-2" style={{ fontFamily: 'var(--font-display)' }}>{title}</p>
-      <p className="text-[11px] text-[var(--color-muted)] mt-0.5 leading-snug">{sub}</p>
-    </button>
+    <Card interactive padding="none">
+      <Button variant="ghost" fullWidth className="flex-col items-start text-left" onClick={onClick}>
+        <span style={{ color: 'var(--ink-3)' }}>
+          <Icon name={icon} size={17} />
+        </span>
+        <span
+          className="block"
+          style={{ fontSize: 'var(--text-body-sm)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)', marginTop: 'var(--space-2)' }}
+        >
+          {title}
+        </span>
+        <span
+          className="block"
+          style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}
+        >
+          {sub}
+        </span>
+      </Button>
+    </Card>
   )
 }
 
@@ -81,43 +82,26 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
   const constraintsLabel = describeConstraints(constraintsFor(subscription))
 
   return (
-    <Sheet onClose={onClose}>
-      <SheetHeader eyebrow={line.slotTitle} title={`Manage ${line.productTitle}`} />
+    <Modal onClose={onClose} presentation="sheet">
+      <ModalHeader eyebrow={line.slotTitle} title={`Manage ${line.productTitle}`} />
 
-      <SheetBody className="space-y-6">
+      <ModalBody className="space-y-6">
         {/* How much you get through — one slider, we do the maths */}
         <div>
-          <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>How much do you get through?</p>
-          <p className="text-xs text-[var(--color-muted)] mb-3">Pick the one that sounds like you — we&apos;ll sort how much ships and how often. You only ever pay for what ships.</p>
+          <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>How much do you get through?</p>
+          <p className="text-xs text-[var(--ink-3)] mb-3">Pick the one that sounds like you — we&apos;ll sort how much ships and how often. You only ever pay for what ships.</p>
           {/* A segmented control, not an unstyled `input[type=range]`. The
               native slider drew a different widget in every browser and gave
               no clue that it had exactly three stops. */}
-          <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="How much do you get through?">
-            {USAGE_LEVELS.map((lvl) => {
-              const active = usage === lvl
-              return (
-                <button
-                  key={lvl}
-                  type="button"
-                  role="radio"
-                  aria-checked={active}
-                  onClick={() => setUsage(lvl)}
-                  className="rounded-xl px-2 py-3 min-h-11 text-xs font-bold transition-all duration-200 active:scale-95 focus-visible:outline-none focus-visible:ring-2"
-                  style={{
-                    background: active ? tint(ACCENT, 12) : GLASS.surface,
-                    border: `1px solid ${active ? tint(ACCENT, 55) : GLASS.hairline}`,
-                    color: active ? ACCENT : 'var(--color-text-2)',
-                    fontFamily: 'var(--font-display)',
-                    ['--tw-ring-color' as string]: tint(ACCENT, 45),
-                  }}
-                >
-                  {USAGE_LABEL[lvl]}
-                </button>
-              )
-            })}
-          </div>
+          <Segmented
+            label="How much do you get through?"
+            columns={3}
+            value={usage}
+            onChange={setUsage}
+            options={USAGE_LEVELS.map((lvl) => ({ value: lvl, label: USAGE_LABEL[lvl] }))}
+          />
           {/* Live preview of the pending choice — text only, so nothing reflows. */}
-          <p className="text-xs text-[var(--color-muted)] mt-3">
+          <p className="text-xs text-[var(--ink-3)] mt-3">
             {shipSummary(previewLine.quantity, previewLine.deliveryIntervalMonths, noun)} · {formatGBP(previewLine.pricePerDelivery)}/box
           </p>
           {/* Always rendered (disabled when unchanged) so it never shifts the layout. */}
@@ -131,15 +115,15 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
           <QuickMove icon="skip-forward" title="Get one now" sub={`One-off ${formatGBP(oneOff)} · ships ASAP`} onClick={() => onExpedite(1)} />
           <QuickMove icon="pause" title="Skip next" sub={`Credit ${formatGBP(line.pricePerDelivery)} to next payment`} onClick={onSkip} />
         </div>
-        <p className="text-[11px] text-[var(--color-muted)] -mt-3">Next box: {nextBox}.</p>
+        <p className="text-[11px] text-[var(--ink-3)] -mt-3">Next box: {nextBox}.</p>
 
         {/* What happens if this product becomes unavailable */}
         {onSetChangePolicy && (
           <div>
-            <p className="text-sm font-bold text-[var(--color-text)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+            <p className="text-sm font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>
               If it&apos;s out of stock
             </p>
-            <p className="text-xs text-[var(--color-muted)] mb-3">
+            <p className="text-xs text-[var(--ink-3)] mb-3">
               We&apos;ll sort it without holding up your box, and email you either way.
             </p>
             <ChangePolicyChoice
@@ -160,8 +144,8 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
               Remove from stack
             </Button>
           ) : (
-            <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: `color-mix(in srgb, ${AMBER} 40%, transparent)`, background: `color-mix(in srgb, ${AMBER} 6%, transparent)` }}>
-              <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>Remove {line.productTitle}?</p>
+            <div className="rounded-2xl border p-4 space-y-3" style={{ borderColor: `color-mix(in srgb, ${'var(--tone-attention)'} 40%, transparent)`, background: `color-mix(in srgb, ${'var(--tone-attention)'} 6%, transparent)` }}>
+              <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>Remove {line.productTitle}?</p>
               <BillingImpact
                 monthlyBefore={removeImpact.currentMonthly}
                 monthlyAfter={removeImpact.newMonthly}
@@ -172,12 +156,12 @@ export function LineManageSheet({ subscription, line, product, onSetUsage, onSki
               />
               <div className="flex gap-2">
                 <Button variant="secondary" size="sm" onClick={() => setConfirmRemove(false)}>Keep it</Button>
-                <Button variant="danger" size="sm" icon="trash" onClick={onRemove}>Remove</Button>
+                <Button variant="destructive" size="sm" icon="trash" onClick={onRemove}>Remove</Button>
               </div>
             </div>
           )}
         </div>
-      </SheetBody>
-    </Sheet>
+      </ModalBody>
+    </Modal>
   )
 }

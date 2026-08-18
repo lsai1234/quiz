@@ -1,11 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { IconButton } from '@/components/ui/IconButton'
-import { Button } from '@/components/ui/Button'
-import { ACCENT, GLASS, tint } from '@/lib/ui/tokens'
+import { Button } from '@/components/system'
+import { tint } from '@/lib/ui/tokens'
 import type { ConsentStanding } from '@/lib/legal/campaign'
-
 
 interface Notice {
   headline: string
@@ -64,19 +62,19 @@ export function ReconsentNotice() {
     <div
       className="rounded-2xl p-4 mb-4"
       style={{
-        background: `color-mix(in srgb, ${ACCENT} 6%, transparent)`,
-        border: `1px solid color-mix(in srgb, ${ACCENT} 30%, transparent)`,
+        background: `color-mix(in srgb, ${'var(--accent)'} 6%, transparent)`,
+        border: `1px solid color-mix(in srgb, ${'var(--accent)'} 30%, transparent)`,
       }}
     >
       <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>
+        <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>
           {payload.notice.headline}
         </p>
-        <IconButton icon="x" label="Dismiss" size="sm" onClick={() => setDismissed(true)} className="-mr-1 -mt-1" />
+        <Button variant="ghost" size="sm" icon="x" aria-label="Dismiss" onClick={() => setDismissed(true)} className="-mr-1 -mt-1" />
       </div>
 
       {payload.notice.body.map((line) => (
-        <p key={line.slice(0, 24)} className="text-xs text-[var(--color-text-2)] mt-2 leading-relaxed">
+        <p key={line.slice(0, 24)} className="text-xs text-[var(--ink-2)] mt-2 leading-relaxed">
           {line}
         </p>
       ))}
@@ -89,11 +87,11 @@ export function ReconsentNotice() {
           href="/legal/terms"
           className="inline-flex items-center px-4 py-2.5 min-h-10 rounded-xl text-xs font-bold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2"
           style={{
-            background: GLASS.surface,
-            border: `1px solid ${GLASS.hairline}`,
-            color: 'var(--color-text-2)',
+            background: 'var(--surface-1)',
+            border: `1px solid var(--edge)`,
+            color: 'var(--ink-2)',
             fontFamily: 'var(--font-display)',
-            ['--tw-ring-color' as string]: tint(ACCENT, 45),
+            ['--tw-ring-color' as string]: tint('var(--accent)', 45),
           }}
         >
           Read the terms

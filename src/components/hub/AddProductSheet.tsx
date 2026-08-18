@@ -1,22 +1,17 @@
 'use client'
 
 import { useMemo } from 'react'
-import { Sheet, SheetBody, SheetHeader } from '@/components/ui/Sheet'
-import { Button } from '@/components/ui/Button'
-import { Eyebrow } from '@/components/ui/Eyebrow'
-import { EmptyState } from '@/components/ui/EmptyState'
+import { Eyebrow } from './Eyebrow'
+import { Button, EmptyState, Modal, ModalBody, ModalHeader } from '@/components/system'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { productBars, selectShopAxes, type StatAxis } from '@/lib/stack-stats'
-import { GLASS } from '@/lib/ui/tokens'
 import { Icon } from '@/components/ui/Icon'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
-
-const ACCENT = '#00D4FF'
 
 /** One addable product, with what it does to the monthly. */
 function ProductCard({
@@ -33,7 +28,7 @@ function ProductCard({
   const econ = projectedEconomics(p)
   const bars = axes.length > 0 ? productBars(p, axes) : null
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ background: GLASS.surface, border: `1px solid ${GLASS.hairline}` }}>
+    <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--surface-1)', border: `1px solid var(--edge)` }}>
       <div className="p-4">
         <div className="flex items-start gap-3">
           {/* This sheet is asking a member to buy something. Selling it as a
@@ -42,13 +37,13 @@ function ProductCard({
           <ProductTile imageUrl={p.imageUrl} slot={p.stackSlots[0]} title={p.title} size={52} />
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
-              <span className="text-xs font-black shrink-0" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
+              <p className="text-sm font-medium text-[var(--ink-1)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
+              <span className="text-xs font-black shrink-0" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
             </div>
-            <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
+            <p className="text-xs text-[var(--ink-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
           </div>
         </div>
-        <p className="text-[11px] text-[var(--color-muted)] mt-2.5">
+        <p className="text-[11px] text-[var(--ink-3)] mt-2.5">
           {econ.discountPct > 0 && <><span className="line-through">{formatGBP(econ.listUnit)}</span> {formatGBP(econ.discountedUnit)} · save {econ.discountPct}% · </>}
           {econ.shipEveryMonths > 1 ? `ships every ${econ.shipEveryMonths} months, spread to ${formatGBP(econ.perMonth)}/mo` : 'ships every month'}
         </p>
@@ -62,7 +57,7 @@ function ProductCard({
           animate={false}
           label="What it supports"
           className="px-4 pt-3 pb-3.5"
-          style={{ borderTop: `1px solid ${GLASS.hairline}` }}
+          style={{ borderTop: `1px solid var(--edge)` }}
         />
       )}
     </div>
@@ -126,13 +121,13 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
   }, [catalogue, inStack, focusedIds])
 
   return (
-    <Sheet onClose={onClose}>
-      <SheetHeader eyebrow="Add to your stack" title="What would you like to add?" />
+    <Modal onClose={onClose} presentation="sheet">
+      <ModalHeader eyebrow="Add to your stack" title="What would you like to add?" />
 
-      <SheetBody className="space-y-5">
+      <ModalBody className="space-y-5">
         {focused.length > 0 && (
           <div>
-            <Eyebrow color={ACCENT} className="mb-2">In place of what you lost</Eyebrow>
+            <Eyebrow color="var(--accent)" className="mb-2">In place of what you lost</Eyebrow>
             <div className="space-y-2">
               {focused.map((p) => (
                 <ProductCard key={p.id} product={p} subscription={subscription} catalogue={catalogue} axes={axes} onAdd={onAdd} />
@@ -155,7 +150,7 @@ export function AddProductSheet({ subscription, catalogue, onAdd, onClose, focus
             </div>
           </div>
         ))}
-      </SheetBody>
-    </Sheet>
+      </ModalBody>
+    </Modal>
   )
 }

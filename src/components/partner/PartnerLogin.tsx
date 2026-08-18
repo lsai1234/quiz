@@ -2,8 +2,6 @@
 
 import { useState } from 'react'
 
-const ACCENT = '#00D4FF'
-
 /**
  * Partner sign-in.
  *
@@ -81,25 +79,25 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
 
   const inputClass = 'w-full px-4 py-3.5 rounded-2xl text-sm outline-none'
   const inputStyle = {
-    background: 'var(--color-surface-2)',
-    border: '1px solid var(--color-border)',
-    color: 'var(--color-text)',
+    background: 'var(--surface-2)',
+    border: '1px solid var(--edge)',
+    color: 'var(--ink-1)',
   } as const
   const wrap = 'min-h-screen flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center'
 
   if (forgot) {
     return (
-      <div className={wrap} style={{ background: 'var(--color-bg)' }}>
-        <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+      <div className={wrap} style={{ background: 'var(--ground-base)' }}>
+        <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
           CHRGD Partners
         </p>
-        <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
           Forgotten password
         </h1>
 
         {resetSent ? (
           <>
-            <p className="text-xs text-[var(--color-muted)] mb-6 leading-snug">
+            <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
               If we have a partner account for <strong>{email.trim()}</strong>, a link to set a new
               password is on its way. It works once, for the next 60 minutes.
             </p>
@@ -107,14 +105,14 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
               type="button"
               onClick={() => { setForgot(false); setResetSent(false) }}
               className="text-xs font-bold underline"
-              style={{ color: ACCENT }}
+              style={{ color: 'var(--accent)' }}
             >
               Back to sign-in
             </button>
           </>
         ) : (
           <>
-            <p className="text-xs text-[var(--color-muted)] mb-6 leading-snug">
+            <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
               Type the email on your partner account and we’ll send a link to set a new one.
             </p>
             <form onSubmit={requestReset} className="w-full space-y-3">
@@ -136,7 +134,7 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
                 type="submit"
                 disabled={!emailValid || loading}
                 className="w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-                style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+                style={{ background: 'var(--accent)', color: 'var(--ground-base)', fontFamily: 'var(--font-display)' }}
               >
                 {loading ? 'Sending…' : 'Email me a link'}
               </button>
@@ -145,7 +143,7 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
               type="button"
               onClick={() => { setForgot(false); setError(null) }}
               className="text-xs font-bold underline mt-5"
-              style={{ color: ACCENT }}
+              style={{ color: 'var(--accent)' }}
             >
               Back to sign-in
             </button>
@@ -156,14 +154,14 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
   }
 
   return (
-    <div className={wrap} style={{ background: 'var(--color-bg)' }}>
-      <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+    <div className={wrap} style={{ background: 'var(--ground-base)' }}>
+      <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
         CHRGD Partners
       </p>
-      <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
         Partner sign-in
       </h1>
-      <p className="text-xs text-[var(--color-muted)] mb-6 leading-snug">
+      <p className="text-xs text-[var(--ink-3)] mb-6 leading-snug">
         Your code, your numbers and your terms.
       </p>
 
@@ -176,7 +174,7 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
         <input
           type="password"
@@ -185,7 +183,7 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full px-4 py-3.5 rounded-2xl text-sm outline-none"
-          style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', color: 'var(--color-text)' }}
+          style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)', color: 'var(--ink-1)' }}
         />
 
         {error && <p className="text-xs font-semibold" style={{ color: '#f87171' }}>{error}</p>}
@@ -194,7 +192,7 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
           type="submit"
           disabled={!valid || loading}
           className="w-full py-3.5 rounded-2xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-          style={{ background: ACCENT, color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+          style={{ background: 'var(--accent)', color: 'var(--ground-base)', fontFamily: 'var(--font-display)' }}
         >
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
@@ -205,13 +203,13 @@ export function PartnerLogin({ canResetPassword = false }: { canResetPassword?: 
           type="button"
           onClick={() => { setForgot(true); setError(null) }}
           className="text-xs font-bold underline mt-5"
-          style={{ color: ACCENT }}
+          style={{ color: 'var(--accent)' }}
         >
           Forgotten your password?
         </button>
       )}
 
-      <p className="text-[11px] text-[var(--color-muted)] mt-6 leading-snug">
+      <p className="text-[11px] text-[var(--ink-3)] mt-6 leading-snug">
         {canResetPassword
           ? 'Haven’t set a password yet? Use the link we sent you, or ask for a new one above.'
           : 'Haven’t set a password yet? Use the link we sent you. Lost it, or need a new one — email us and we’ll send another.'}

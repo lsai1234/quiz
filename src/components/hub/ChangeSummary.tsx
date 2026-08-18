@@ -1,7 +1,6 @@
 'use client'
 
-import { Button } from '@/components/ui/Button'
-import { Sheet, SheetBody, SheetFooter, SheetHeader } from '@/components/ui/Sheet'
+import { Button, Modal, ModalBody, ModalFooter, ModalHeader } from '@/components/system'
 import { BillingImpact } from './BillingImpact'
 import type { LineEconomics } from '@/lib/recharge/mock'
 
@@ -29,17 +28,17 @@ export interface PendingChange {
  * changes the price routes through this: it shows exactly what happens to the
  * bill (via BillingImpact) and only applies on Confirm.
  *
- * `layer="over"` because it is raised BY a sheet and has to sit above it — the
- * one legitimate two-deep case in the hub.
+ * Two-deep on purpose, and the one legitimate case in the hub: it is raised BY a
+ * sheet and has to sit above it. `Modal` restores the previous scroll-lock value
+ * rather than clearing it, so closing the upper one does not unlock the page
+ * underneath the lower one.
  */
 export function ChangeSummary({ change, onClose }: { change: PendingChange; onClose: () => void }) {
   return (
-    <Sheet onClose={onClose} layer="over">
-      <SheetHeader eyebrow="Review your change" title={change.title}>
-        {change.subtitle && <p className="text-xs text-[var(--color-muted)] mt-0.5">{change.subtitle}</p>}
-      </SheetHeader>
+    <Modal onClose={onClose} presentation="sheet">
+      <ModalHeader title={change.title} subtitle={change.subtitle} />
 
-      <SheetBody>
+      <ModalBody>
         <BillingImpact
           monthlyBefore={change.monthlyBefore}
           monthlyAfter={change.monthlyAfter}
@@ -50,14 +49,16 @@ export function ChangeSummary({ change, onClose }: { change: PendingChange; onCl
           economics={change.economics}
           note={change.note}
         />
-      </SheetBody>
+      </ModalBody>
 
-      <SheetFooter>
-        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+      <ModalFooter>
+        <Button variant="secondary" onClick={onClose}>
+          Cancel
+        </Button>
         <Button variant="primary" onClick={() => { change.onConfirm(); onClose() }}>
           {change.confirmLabel ?? 'Confirm change'}
         </Button>
-      </SheetFooter>
-    </Sheet>
+      </ModalFooter>
+    </Modal>
   )
 }

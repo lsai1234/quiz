@@ -1,11 +1,9 @@
 'use client'
 
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { Eyebrow } from '@/components/ui/Eyebrow'
-import { AMBER, GLASS, GREEN } from '@/lib/ui/tokens'
+import { Eyebrow } from './Eyebrow'
 import { MoneyRow } from './MoneyRow'
 import type { ExitStatement as Statement } from '@/lib/recharge/exit-ledger'
-
 
 /**
  * What we sent, what they paid, and the difference — as a statement rather than
@@ -26,8 +24,8 @@ export function ExitStatementView({ statement }: { statement: Statement }) {
     new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
   return (
-    <div className="rounded-2xl overflow-hidden" style={{ border: `1px solid ${GLASS.hairline}` }}>
-      <div className="px-4 py-2.5" style={{ background: GLASS.raised }}>
+    <div className="overflow-hidden" style={{ border: '1px solid var(--edge)', borderRadius: 'var(--radius-card)' }}>
+      <div className="px-4 py-2.5" style={{ background: 'var(--surface-2)' }}>
         <Eyebrow>Everything we sent you</Eyebrow>
       </div>
 
@@ -41,14 +39,14 @@ export function ExitStatementView({ statement }: { statement: Statement }) {
           />
         ))}
         {statement.shipments.length === 0 && (
-          <p className="text-xs text-[var(--color-muted)]">Nothing has shipped yet.</p>
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Nothing has shipped yet.</p>
         )}
-        <div className="pt-2" style={{ borderTop: `1px solid ${GLASS.hairline}` }}>
+        <div className="pt-2" style={{ borderTop: '1px solid var(--edge)' }}>
           <MoneyRow label="Total sent" value={formatGBP(statement.shippedTotal)} strong />
         </div>
       </div>
 
-      <div className="px-4 py-2.5" style={{ background: GLASS.raised }}>
+      <div className="px-4 py-2.5" style={{ background: 'var(--surface-2)' }}>
         <Eyebrow>Everything you paid</Eyebrow>
       </div>
 
@@ -57,31 +55,31 @@ export function ExitStatementView({ statement }: { statement: Statement }) {
           <MoneyRow key={payment.orderId} label={dated(payment.at)} value={formatGBP(payment.amount)} />
         ))}
         {statement.payments.length === 0 && (
-          <p className="text-xs text-[var(--color-muted)]">No payments recorded.</p>
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>No payments recorded.</p>
         )}
-        <div className="pt-2" style={{ borderTop: `1px solid ${GLASS.hairline}` }}>
+        <div className="pt-2" style={{ borderTop: '1px solid var(--edge)' }}>
           <MoneyRow label="Total paid" value={`−${formatGBP(statement.paidTotal)}`} strong />
         </div>
       </div>
 
-      <div className="px-4 py-3 space-y-2" style={{ borderTop: `1px solid ${GLASS.hairline}` }}>
+      <div className="px-4 py-3 space-y-2" style={{ borderTop: '1px solid var(--edge)' }}>
         {/* Only shown when they changed the answer — a line saying "£0.00 was
             knocked off" is noise, and a line saying £10.00 was is reassurance. */}
         {statement.introKept > 0 && (
-          <MoneyRow label="Intro offer — not reclaimed" value={`−${formatGBP(statement.introKept)}`} color={GREEN} />
+          <MoneyRow label="Intro offer — not reclaimed" value={`−${formatGBP(statement.introKept)}`} color="var(--tone-positive)" />
         )}
         {statement.cappedBy > 0 && (
-          <MoneyRow label="Capped at what you have paid" value={`−${formatGBP(statement.cappedBy)}`} color={GREEN} />
+          <MoneyRow label="Capped at what you have paid" value={`−${formatGBP(statement.cappedBy)}`} color="var(--tone-positive)" />
         )}
         {statement.waived > 0 && (
-          <MoneyRow label="Too small to bother with — waived" value={`−${formatGBP(statement.waived)}`} color={GREEN} />
+          <MoneyRow label="Too small to bother with — waived" value={`−${formatGBP(statement.waived)}`} color="var(--tone-positive)" />
         )}
-        <div className="pt-1.5" style={{ borderTop: `1px solid ${GLASS.hairline}` }}>
+        <div className="pt-1.5" style={{ borderTop: '1px solid var(--edge)' }}>
           <MoneyRow
             strong
             label={statement.overpayment > 0 ? 'We owe you' : 'To settle'}
             value={formatGBP(statement.overpayment > 0 ? statement.overpayment : statement.settlement)}
-            color={statement.overpayment > 0 ? GREEN : statement.settlement > 0 ? AMBER : GREEN}
+            color={statement.settlement > 0 && statement.overpayment <= 0 ? 'var(--tone-attention)' : 'var(--tone-positive)'}
           />
         </div>
       </div>

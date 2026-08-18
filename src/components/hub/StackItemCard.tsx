@@ -1,16 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { Badge, Button, ChargeScale } from '@/components/system'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { dimensionForSlot } from '@/lib/feedback'
 import { productBars } from '@/lib/stack-stats'
-import { ChargeScale } from '@/components/ui/ChargeScale'
 import { Icon } from '@/components/ui/Icon'
-import { Button } from '@/components/ui/Button'
-import { Chip } from '@/components/ui/Chip'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
-import { ACCENT, AMBER, GLASS, GREEN, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 import { StatusBadge, toneColor } from './StatusBadge'
 import { ProgressRing } from './ProgressRing'
 import type { StatAxis } from '@/lib/stack-stats'
@@ -76,16 +74,16 @@ export function StackItemCard({
     <div
       className="rounded-2xl overflow-hidden"
       style={{
-        background: GLASS.surface,
+        background: 'var(--surface-1)',
         // The review state is a tinted hairline, not a heavy amber box. It needs
         // to be findable in a scroll, not to shout over the four cards that are
         // perfectly fine.
-        border: `1px solid ${review ? tint(AMBER, 40) : GLASS.hairline}`,
+        border: `1px solid ${review ? tint('var(--tone-attention)', 40) : 'var(--edge)'}`,
       }}
     >
       <div className="p-4">
         <div className="flex items-start justify-between gap-2 mb-3">
-          <Chip color={ACCENT}>{line.slotTitle}</Chip>
+          <Badge tone="accent">{line.slotTitle}</Badge>
           <StatusBadge label={rec.statusLabel} icon={rec.statusIcon} tone={rec.statusTone} />
         </div>
 
@@ -107,21 +105,21 @@ export function StackItemCard({
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="text-[15px] font-medium text-[var(--color-text)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
+            <p className="text-[15px] font-medium text-[var(--ink-1)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>
               {line.productTitle}
             </p>
-            {line.variantTitle && <p className="text-xs text-[var(--color-muted)] mt-0.5">{line.variantTitle}</p>}
-            <p className="text-xs text-[var(--color-text-2)] mt-1">{cadence(line)}</p>
+            {line.variantTitle && <p className="text-xs text-[var(--ink-3)] mt-0.5">{line.variantTitle}</p>}
+            <p className="text-xs text-[var(--ink-2)] mt-1">{cadence(line)}</p>
           </div>
 
           {/* Weight is rationed to the number. Everything else on this card is
               medium or semibold, so the price is the thing the eye lands on. */}
-          <span className="text-sm font-black shrink-0" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+          <span className="text-sm font-black shrink-0" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>
             {formatGBP(line.pricePerDelivery)}
           </span>
         </div>
 
-        <p className="text-xs leading-relaxed mt-3" style={{ color: 'var(--color-text-2)' }}>
+        <p className="text-xs leading-relaxed mt-3" style={{ color: 'var(--ink-2)' }}>
           {rec.reason}
         </p>
 
@@ -130,7 +128,7 @@ export function StackItemCard({
           <div className="mt-3.5">
             {tapped == null ? (
               <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-[var(--color-muted)] shrink-0">Feeling it?</span>
+                <span className="text-[11px] font-semibold text-[var(--ink-3)] shrink-0">Feeling it?</span>
                 {/* Three segments, still worth 1 / 3 / 5 — the ratings the three
                     emoji faces sent, so no stored feedback gets rescaled. */}
                 <ChargeScale
@@ -143,7 +141,7 @@ export function StackItemCard({
                 />
               </div>
             ) : (
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: GREEN }}>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold" style={{ color: 'var(--tone-positive)' }}>
                 <Icon name="check" size={13} />
                 Thanks — logged
               </span>
@@ -153,7 +151,7 @@ export function StackItemCard({
 
         <div className="flex gap-2 mt-4">
           {review ? (
-            <Button variant="tone" tone={AMBER} size="sm" icon="swap" onClick={() => onChange(line.id)} fullWidth>
+            <Button variant="destructive" size="sm" icon="swap" onClick={() => onChange(line.id)} fullWidth>
               Find a better fit
             </Button>
           ) : (
@@ -176,7 +174,7 @@ export function StackItemCard({
           animate={false}
           label="What it supports"
           className="px-4 pt-3.5 pb-4"
-          style={{ borderTop: `1px solid ${GLASS.hairline}` }}
+          style={{ borderTop: `1px solid var(--edge)` }}
         />
       )}
     </div>

@@ -67,7 +67,15 @@ describe('ChangeSummary', () => {
   it('layers above the sheet that raised it', () => {
     render(<ChangeSummary change={change()} onClose={jest.fn()} />)
     // Two sheets deep is the one legitimate case in the hub: a manage sheet
-    // opens this to confirm what it is about to charge.
-    expect(document.querySelector('.z-\\[60\\]')).not.toBeNull()
+    // opens this to confirm what it is about to charge. Both are portalled to
+    // the end of <body> at the same z-index, so the later one paints on top —
+    // asserted as "it is the last dialog in the document" rather than as a
+    // z-index, because the z-index is not what makes it work.
+    const dialogs = document.querySelectorAll('[role="dialog"]')
+    expect(dialogs.length).toBeGreaterThan(0)
+    expect(dialogs[dialogs.length - 1]).toBe(screen.getByRole('dialog'))
+    // And it locks scrolling while it is open, so the sheet underneath does not
+    // scroll away behind it.
+    expect(document.body.style.overflow).toBe('hidden')
   })
 })

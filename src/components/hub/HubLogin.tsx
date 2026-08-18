@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Eyebrow } from './Eyebrow'
+import { Button, Input, Note } from '@/components/system'
 import { ForgotPassword } from '@/components/auth/ForgotPassword'
 import { ProviderButtons } from '@/components/auth/ProviderButtons'
 import { CHRGDMark } from '@/components/brand/CHRGDLogo'
-import { Button } from '@/components/ui/Button'
-import { Eyebrow } from '@/components/ui/Eyebrow'
-import { Note } from '@/components/ui/Note'
-import { ACCENT, GLASS, RED, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 
 interface Props {
   /** Sign in or create an account. Resolves to an error message, or null on success. */
@@ -86,26 +85,17 @@ export function HubLogin({ onAuthenticate, loading, providers = [], canResetPass
    * and put nothing back, so a keyboard user could not tell which field they
    * were in.
    */
-  const inputClass =
-    'w-full px-4 py-3.5 min-h-13 rounded-2xl text-sm outline-none transition-all duration-200 ' +
-    'focus-visible:ring-2 focus:border-[color:var(--color-accent)]'
-  const inputStyle = {
-    background: GLASS.surface,
-    border: `1px solid ${GLASS.hairline}`,
-    color: 'var(--color-text)',
-    ['--tw-ring-color' as string]: tint(ACCENT, 45),
-  }
 
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center px-6 max-w-sm mx-auto text-center">
       {/* The one screen in the app that greets a member by name carried no
           brand mark at all. */}
       <CHRGDMark size={34} className="mb-5" />
-      <Eyebrow color={ACCENT} className="mb-2">Subscriber hub</Eyebrow>
-      <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <Eyebrow color="var(--accent)" className="mb-2">Subscriber hub</Eyebrow>
+      <h1 className="text-3xl font-black mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
         {mode === 'forgot' ? 'Forgotten password' : 'Manage your stack'}
       </h1>
-      <p className="text-sm text-[var(--color-muted)] leading-relaxed mb-7">
+      <p className="text-sm text-[var(--ink-3)] leading-relaxed mb-7">
         {mode === 'forgot'
           ? 'Happens to everyone. We’ll email you a link and you’ll be back in a minute.'
           : mode === 'login'
@@ -126,7 +116,7 @@ export function HubLogin({ onAuthenticate, loading, providers = [], canResetPass
       {mode !== 'forgot' && (
         <>
           {ssoError && (
-            <Note icon="alert-triangle" color={RED} live className="w-full mb-4 text-left">
+            <Note icon="alert-triangle" tone="critical" live="assertive" className="w-full mb-4 text-left">
               {ssoError}
             </Note>
           )}
@@ -135,30 +125,35 @@ export function HubLogin({ onAuthenticate, loading, providers = [], canResetPass
             onSubmit={(e) => { e.preventDefault(); void submit() }}
             className="w-full space-y-3"
           >
-            <input
+            {/* `hideLabel`, not no label: these had a placeholder and nothing
+                else, so a screen reader announced two unnamed edit boxes and a
+                placeholder vanishes the moment you start typing. The name is
+                real now; it is simply not given a line above a two-field form
+                that plainly says what it is. */}
+            <Input
+              label="Email address"
+              hideLabel
               type="email"
               inputMode="email"
               autoComplete="email"
               placeholder="you@email.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={inputClass}
-              style={inputStyle}
             />
-            <input
+            <Input
+              label="Password"
+              hideLabel
               type="password"
               autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
               placeholder={mode === 'signup' ? 'Choose a password (8+ characters)' : 'Password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className={inputClass}
-              style={inputStyle}
             />
 
             {error && (
-              <p className="text-xs font-semibold text-left px-1" style={{ color: RED }} role="alert">
+              <Note icon="alert-triangle" tone="critical" live="assertive">
                 {error}
-              </p>
+              </Note>
             )}
 
             <Button type="submit" variant="primary" size="lg" disabled={!valid || loading || submitting}>

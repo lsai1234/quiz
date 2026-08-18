@@ -1,9 +1,10 @@
 'use client'
 
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { Eyebrow } from '@/components/ui/Eyebrow'
+import { Button, Card } from '@/components/system'
+import { Eyebrow } from './Eyebrow'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { ACCENT, AMBER, GLASS, tint } from '@/lib/ui/tokens'
+import { tint } from '@/lib/ui/tokens'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Delivery } from '@/lib/recharge/schedule'
 
@@ -40,9 +41,9 @@ export function DeliveryCalendar({ deliveries, catalogue = [], onSelect }: Props
     <div>
       <div className="flex items-center justify-between mb-1.5">
         <Eyebrow>Delivery calendar</Eyebrow>
-        <span className="text-[11px] text-[var(--color-muted)]">Tap a box to edit</span>
+        <span className="text-[11px] text-[var(--ink-3)]">Tap a box to edit</span>
       </div>
-      <p className="text-[11px] text-[var(--color-muted)] mb-2.5 leading-relaxed">
+      <p className="text-[11px] text-[var(--ink-3)] mb-2.5 leading-relaxed">
         Amounts show each box’s value — you’re billed one flat monthly amount, not per box.
       </p>
 
@@ -56,41 +57,47 @@ export function DeliveryCalendar({ deliveries, catalogue = [], onSelect }: Props
           {deliveries.map((d) => {
             const { weekday, day, month } = parts(d.date)
             const skipped = d.status === 'skipped'
-            const tone = d.isNext ? ACCENT : skipped ? AMBER : 'var(--color-muted)'
+            const tone = d.isNext ? 'var(--accent)' : skipped ? 'var(--tone-attention)' : 'var(--ink-3)'
             return (
-              <button
+              // `glow` on the next box only: it is the one card on this rail
+              // that is the point of the rail. More than one and it stops
+              // meaning anything.
+              <Card
                 key={d.id}
-                type="button"
-                onClick={() => onSelect(d)}
-                className="shrink-0 w-40 rounded-2xl p-3.5 text-left transition-all duration-200 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2"
-                style={{
-                  scrollSnapAlign: 'start',
-                  background: GLASS.surface,
-                  border: `1px solid ${d.isNext ? tint(ACCENT, 55) : skipped ? tint(AMBER, 40) : GLASS.hairline}`,
-                  ...(d.isNext ? { boxShadow: `0 0 24px -10px ${ACCENT}` } : {}),
-                  opacity: skipped ? 0.7 : 1,
-                  ['--tw-ring-color' as string]: tint(ACCENT, 45),
-                }}
+                padding="none"
+                interactive
+                tone={d.isNext ? 'accent' : skipped ? 'attention' : undefined}
+                glow={d.isNext ? 'accent' : undefined}
+                className="shrink-0 w-40"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <Eyebrow color={tone} className="text-[9px]">
-                    {d.isNext ? 'Next' : skipped ? 'Skipped' : month}
-                  </Eyebrow>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: tone }} />
-                </div>
+              <Button
+                variant="ghost"
+                fullWidth
+                className="flex-col items-stretch text-left"
+                aria-label={`${d.isNext ? 'Next box, ' : ''}${weekday} ${day} ${month}${skipped ? ', skipped' : ''}`}
+                onClick={() => onSelect(d)}
+              >
+                <span className="flex items-center justify-between mb-2">
+                  <Eyebrow color={tone}>{d.isNext ? 'Next' : skipped ? 'Skipped' : month}</Eyebrow>
+                </span>
 
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-3xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{day}</span>
-                  <span className="text-xs font-bold text-[var(--color-text-2)]">{weekday}</span>
-                </div>
+                <span className="flex items-baseline gap-1.5">
+                  <span style={{ fontSize: 'var(--text-hero)', fontFamily: 'var(--font-display)', lineHeight: 'var(--leading-tight)', color: 'var(--ink-1)' }}>
+                    {day}
+                  </span>
+                  <span style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}>{weekday}</span>
+                </span>
 
                 {skipped || d.items.length === 0 ? (
-                  <p className="text-[11px] text-[var(--color-muted)] mt-2.5 leading-snug">
+                  <span
+                    className="block"
+                    style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-3)' }}
+                  >
                     {skipped ? 'Tap to restore' : 'Nothing due'}
-                  </p>
+                  </span>
                 ) : (
                   <>
-                    <div className="flex items-center gap-1 mt-2.5">
+                    <span className="flex items-center gap-1 mt-2.5">
                       {d.items.slice(0, 4).map((it, i) => (
                         <ProductTile
                           key={`${it.productId}-${i}`}
@@ -101,22 +108,23 @@ export function DeliveryCalendar({ deliveries, catalogue = [], onSelect }: Props
                         />
                       ))}
                       {d.items.length > 4 && (
-                        <span className="text-[10px] font-bold text-[var(--color-muted)] ml-0.5" style={{ fontFamily: 'var(--font-display)' }}>
+                        <span style={{ fontSize: 'var(--text-micro)', fontFamily: 'var(--font-display)', color: 'var(--ink-3)', marginLeft: 'var(--space-1)' }}>
                           +{d.items.length - 4}
                         </span>
                       )}
-                    </div>
-                    <div className="flex items-center justify-between mt-2.5">
-                      <span className="text-[10px] font-bold text-[var(--color-text-2)]">
+                    </span>
+                    <span className="flex items-center justify-between mt-2.5">
+                      <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-2)' }}>
                         {d.items.length} item{d.items.length === 1 ? '' : 's'}
                       </span>
-                      <span className="text-[11px] font-black" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
+                      <span style={{ fontSize: 'var(--text-meta)', fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>
                         {formatGBP(d.total)}
                       </span>
-                    </div>
+                    </span>
                   </>
                 )}
-              </button>
+              </Button>
+              </Card>
             )
           })}
         </div>
@@ -124,7 +132,7 @@ export function DeliveryCalendar({ deliveries, catalogue = [], onSelect }: Props
         <div
           aria-hidden
           className="pointer-events-none absolute inset-y-0 right-0 w-10"
-          style={{ background: 'linear-gradient(to right, transparent, var(--color-bg))' }}
+          style={{ background: 'linear-gradient(to right, transparent, var(--ground-base))' }}
         />
       </div>
     </div>

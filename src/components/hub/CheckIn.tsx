@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { ChargeScale } from '@/components/ui/ChargeScale'
-import { Button } from '@/components/ui/Button'
-import { Card } from '@/components/ui/Card'
-import { Eyebrow } from '@/components/ui/Eyebrow'
-import { ACCENT, GLASS, tint } from '@/lib/ui/tokens'
+import { Eyebrow } from './Eyebrow'
+import { Button, Card, ChargeScale } from '@/components/system'
+import { tint } from '@/lib/ui/tokens'
 import type { CheckInPlan, FeedbackDimension } from '@/lib/feedback'
 
 interface Props {
@@ -45,8 +43,8 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
       <Card className="mb-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>How are you feeling?</p>
-            <p className="text-xs text-[var(--color-muted)] mt-0.5">
+            <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>How are you feeling?</p>
+            <p className="text-xs text-[var(--ink-3)] mt-0.5">
               {lastCheckIn
                 ? `Last check-in ${new Date(lastCheckIn).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
                 : questions.length > 0
@@ -66,14 +64,14 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
   if (questions.length === 0) {
     return (
       <Card className="mb-4">
-        <p className="text-sm font-bold text-[var(--color-text)]" style={{ fontFamily: 'var(--font-display)' }}>It&apos;s early days</p>
-        <p className="text-xs text-[var(--color-text-2)] mt-1 leading-relaxed">
+        <p className="text-sm font-bold text-[var(--ink-1)]" style={{ fontFamily: 'var(--font-display)' }}>It&apos;s early days</p>
+        <p className="text-xs text-[var(--ink-2)] mt-1 leading-relaxed">
           Nothing to rate just yet — your stack is still settling in. Here&apos;s what to expect:
         </p>
         <div className="mt-3 space-y-2">
           {expectations.map((e) => (
-            <div key={e.lineId} className="rounded-xl p-3" style={{ background: GLASS.raised, border: `1px solid ${GLASS.hairline}` }}>
-              <p className="text-xs text-[var(--color-text-2)] leading-relaxed">{e.message}</p>
+            <div key={e.lineId} className="rounded-xl p-3" style={{ background: 'var(--surface-2)', border: `1px solid var(--edge)` }}>
+              <p className="text-xs text-[var(--ink-2)] leading-relaxed">{e.message}</p>
             </div>
           ))}
         </div>
@@ -86,16 +84,16 @@ export function CheckIn({ lastCheckIn, plan, onComplete }: Props) {
 
   // ── One question at a time ──
   return (
-    <div className="rounded-2xl p-5 mb-4" style={{ background: GLASS.surface, border: `1px solid ${tint(ACCENT, 30)}` }}>
+    <div className="rounded-2xl p-5 mb-4" style={{ background: 'var(--surface-1)', border: `1px solid ${tint('var(--accent)', 30)}` }}>
       {/* Progress */}
       <div className="flex items-center gap-1.5 mb-4">
         {questions.map((_, i) => (
-          <div key={i} className="h-1 rounded-full flex-1 transition-all" style={{ background: i <= index ? ACCENT : GLASS.hairline }} />
+          <div key={i} className="h-1 rounded-full flex-1 transition-all" style={{ background: i <= index ? 'var(--accent)' : 'var(--edge)' }} />
         ))}
       </div>
 
-      <Eyebrow color={ACCENT} className="mb-1">{question.immediate ? 'Felt the same session' : 'How it’s landing'}</Eyebrow>
-      <p className="text-base font-black text-[var(--color-text)] leading-snug mb-4" style={{ fontFamily: 'var(--font-display)' }}>
+      <Eyebrow color="var(--accent)" className="mb-1">{question.immediate ? 'Felt the same session' : 'How it’s landing'}</Eyebrow>
+      <p className="text-base font-black text-[var(--ink-1)] leading-snug mb-4" style={{ fontFamily: 'var(--font-display)' }}>
         {question.prompt}
       </p>
 

@@ -59,7 +59,10 @@ describe('what it says afterwards', () => {
     const { user } = setup({ initialEmail: 'member@example.com' })
     await user.click(submit())
 
-    const confirmation = await screen.findByRole('alert')
+    // `status`, not `alert`: this is an outcome rather than a failure, so it
+    // waits for a pause instead of interrupting. The refusal below is still an
+    // `alert`, which is the distinction worth keeping.
+    const confirmation = await screen.findByRole('status')
     expect(confirmation).toHaveTextContent(/if we have an account/i)
     // The tell-tale phrasings, both of which answer a question nobody may ask
     // this form: "we've emailed you" and "no account with that address".
@@ -71,7 +74,7 @@ describe('what it says afterwards', () => {
     // the same thing, and so must this.
     const { user } = setup({ initialEmail: 'stranger@example.com' })
     await user.click(submit())
-    const first = (await screen.findByRole('alert')).textContent
+    const first = (await screen.findByRole('status')).textContent
 
     expect(first).toContain('stranger@example.com')
     expect(first).toMatch(/if we have an account/i)
@@ -84,7 +87,7 @@ describe('what it says afterwards', () => {
     const { user } = setup({ initialEmail: 'member@example.com' })
     await user.click(submit())
 
-    await screen.findByRole('alert')
+    await screen.findByRole('status')
     expect(screen.queryByRole('button', { name: /email me a link/i })).not.toBeInTheDocument()
   })
 

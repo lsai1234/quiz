@@ -1,9 +1,8 @@
 'use client'
 
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { OptionRow } from '@/components/system'
 import type { ChangePolicy } from '@/lib/recharge/types'
-
-const ACCENT = '#00D4FF'
 
 /**
  * "What should we do if this becomes unavailable?" — two options, one component.
@@ -74,49 +73,25 @@ export function ChangePolicyChoice({
 
   return (
     <div>
-      <div className="grid gap-2" role="radiogroup" aria-label="If this becomes unavailable">
-        {options.map((option) => {
-          const active = policy === option.id
-          return (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              onClick={() => onChange(option.id)}
-              className="text-left rounded-2xl p-3.5 transition-all active:scale-[0.99]"
-              style={{
-                background: active ? `color-mix(in srgb, ${ACCENT} 10%, transparent)` : 'var(--color-surface-2)',
-                border: `1px solid ${active ? ACCENT : 'var(--color-border)'}`,
-              }}
-            >
-              <div className="flex items-start gap-2.5">
-                <span
-                  aria-hidden="true"
-                  className="mt-0.5 w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center"
-                  style={{ border: `2px solid ${active ? ACCENT : 'var(--color-border-2)'}` }}
-                >
-                  {active && <span className="w-2 h-2 rounded-full" style={{ background: ACCENT }} />}
-                </span>
-                <span className="min-w-0">
-                  <span
-                    className="block text-sm font-bold"
-                    style={{ color: active ? ACCENT : 'var(--color-text)', fontFamily: 'var(--font-display)' }}
-                  >
-                    {option.label}
-                  </span>
-                  <span className="block text-[11px] leading-relaxed text-[var(--color-muted)] mt-0.5">
-                    {option.consequence}
-                  </span>
-                </span>
-              </div>
-            </button>
-          )
-        })}
+      {/* `OptionRow` rather than `Segmented`: each answer needs a sentence
+          explaining what it does to a plan, and a sentence does not fit in a
+          segment. The group is still a radiogroup, so arrow keys work and each
+          option announces its position. */}
+      <div className="grid" style={{ gap: 'var(--space-2)' }} role="radiogroup" aria-label="If this becomes unavailable">
+        {options.map((option) => (
+          <OptionRow
+            key={option.id}
+            role="radio"
+            label={option.label}
+            sub={option.consequence}
+            selected={policy === option.id}
+            onClick={() => onChange(option.id)}
+          />
+        ))}
       </div>
 
       {constraintsLabel && policy === 'auto-swap' && (
-        <p className="text-[11px] leading-relaxed mt-2.5 px-1" style={{ color: ACCENT }}>
+        <p className="text-[11px] leading-relaxed mt-2.5 px-1" style={{ color: 'var(--accent)' }}>
           You told us you need {constraintsLabel} products, so we’ll only ever swap to another one.
           If there isn’t a suitable match, we’ll take it off and lower your bill instead of sending
           you something that might not suit you.
@@ -124,7 +99,7 @@ export function ChangePolicyChoice({
       )}
 
       {variant === 'full' && (
-        <p className="text-[11px] leading-relaxed text-[var(--color-muted)] mt-2.5 px-1">
+        <p className="text-[11px] leading-relaxed text-[var(--ink-3)] mt-2.5 px-1">
           Either way we’ll email you to say what happened — and you can always change it yourself in
           your hub.
         </p>

@@ -40,8 +40,13 @@ describe('the Founders Hub', () => {
     // and 88 raw form controls were still waiting to become primitives. They are
     // primitives now, so it protects one thing: the next raw control somebody
     // adds, which is covered the day it lands rather than the day it is noticed.
+    // The selector covers both migrated regions — `.founder-hub` here and
+    // `.my-hub` for My Hub and the Partners Hub. Asserted loosely enough that
+    // adding a third region does not fail this, and tightly enough that dropping
+    // this one does.
+    expect(SYSTEM_CSS).toMatch(/:is\(\.founder-hub, \.my-hub\)/)
     expect(SYSTEM_CSS).toMatch(
-      /\.founder-hub :is\(button, \[role='button'\], a\[href\], input, select, textarea\):focus-visible/,
+      /:is\(button, \[role='button'\], a\[href\], input, select, textarea\):focus-visible/,
     )
   })
 
