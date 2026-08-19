@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Card, ChargeMeter } from '@/components/system'
+import { Button, Card, ChargeMeter } from '@/components/system'
 import type { DashboardSummary, MoneyWindow } from '@/lib/portal/dashboard'
 import type { QuizFunnel } from '@/lib/analytics/funnel'
 
@@ -13,6 +13,8 @@ interface Payload {
   windowDays: number
   summary: DashboardSummary
   funnel: QuizFunnel
+  /** When the funnel was computed — it is cached for a few minutes. */
+  funnelAsOf?: string
 }
 
 /**
@@ -27,12 +29,23 @@ export default function HubDashboard() {
   const [data, setData] = useState<Payload | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    fetch('/api/portal/dashboard')
+  const load = useCallback((fresh = false) => {
+    fetch(`/api/portal/dashboard${fresh ? '?fresh=1' : ''}`)
       .then((r) => (r.ok ? r.json() : Promise.reject()))
       .then(setData)
       .catch(() => setError('Could not load the dashboard.'))
   }, [])
+
+  useEffect(() => load(), [load])
+
+  /* The funnel is the one figure on this page that is not read fresh — it is
+     built from every event in the window, which is the most expensive read in
+     the hub, so it stands for a few minutes. This is for the founder who has
+     just run the quiz themselves and wants to watch it move. */
+  const recount = useCallback(() => {
+    setData(null)
+    load(true)
+  }, [load])
 
   if (!data) {
     return (
@@ -189,6 +202,32 @@ export default function HubDashboard() {
       {/* ── Quiz funnel ───────────────────────────────────────────────────── */}
       <section>
         <SectionTitle>Where people fall off</SectionTitle>
+        {/* The funnel is the one figure on this page that is not read fresh —
+            it is computed from every event in the window, which is the most
+            expensive read in the hub, so it stands for a few minutes. A number
+            somebody is watching change has to say when it was taken. */}
+        {data.funnelAsOf && funnel.started > 0 && (
+          <div
+            className="flex items-center"
+            style={{ gap: 'var(--space-2)', marginTop: 'calc(-1 * var(--space-2))', marginBottom: 'var(--space-3)' }}
+          >
+            <span
+              style={{
+                // `--ink-2`, not `--ink-3`: this line sits on the page ground
+                // rather than on a surface, which is the one place the small-text
+                // contrast floor in DESIGN.md forbids the quiet tier.
+                fontSize: 'var(--text-meta)',
+                color: 'var(--ink-2)',
+              }}
+            >
+              Counted at{' '}
+              {new Date(data.funnelAsOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+            <Button size="sm" variant="ghost" onClick={recount}>
+              Recount
+            </Button>
+          </div>
+        )}
         {funnel.started === 0 ? (
           <Card elevation={1}>
             <p style={{ fontSize: 'var(--text-body)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-3)' }}>

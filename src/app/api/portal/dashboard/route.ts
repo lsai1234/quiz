@@ -6,8 +6,7 @@ import { listActiveSubscriptions } from '@/lib/db/hub-data'
 import { listChanges } from '@/lib/changes/repo'
 import { summarise } from '@/lib/changes/health'
 import { OPEN_STATUSES } from '@/lib/changes/types'
-import { listEventsSince } from '@/lib/analytics/repo'
-import { buildQuizFunnel } from '@/lib/analytics/funnel'
+import { quizFunnel } from '@/lib/analytics/funnel-cache'
 import { buildDashboard } from '@/lib/portal/dashboard'
 import { buildVatPosition } from '@/lib/pricing/vat-position'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
@@ -30,15 +29,18 @@ export async function GET(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await syncPortalRuntime()
 
-  const days = Math.min(365, Math.max(1, Number(new URL(req.url).searchParams.get('days')) || 30))
-  const since = new Date(Date.now() - days * 86_400_000).toISOString()
+  const params = new URL(req.url).searchParams
+  const days = Math.min(365, Math.max(1, Number(params.get('days')) || 30))
 
-  const [orders, unfulfilled, subs, openChanges, events, catalogue] = await Promise.all([
+  const [orders, unfulfilled, subs, openChanges, funnel, catalogue] = await Promise.all([
     listOrders({ limit: 500 }),
     listAwaitingFulfilment(),
     listActiveSubscriptions(),
     listChanges({ status: OPEN_STATUSES }),
-    listEventsSince(since),
+    // Cached for a few minutes — see `funnel-cache.ts` for why this one read is
+    // worth treating differently from everything else on this page. `?fresh=1`
+    // recomputes it for somebody who has just run the quiz to see it move.
+    quizFunnel(days, { fresh: params.get('fresh') === '1' }),
     getResolvedCatalogue(),
   ])
 
@@ -76,6 +78,7 @@ export async function GET(req: Request) {
       productsNeedingAttention: notReady,
       vat: vat.verdict,
     }),
-    funnel: buildQuizFunnel(events),
+    funnel: funnel.funnel,
+    funnelAsOf: funnel.asOf,
   })
 }

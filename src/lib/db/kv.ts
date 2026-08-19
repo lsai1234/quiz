@@ -6,14 +6,29 @@
 import { getEngine, now } from './engine'
 
 export async function kvGet<T>(key: string): Promise<T | undefined> {
-  const db = await getEngine()
-  const row = await db.get<{ value: string }>('SELECT value FROM kv WHERE key = ?', [key])
-  if (!row) return undefined
+  const raw = await kvGetRaw(key)
+  if (raw === null) return undefined
   try {
-    return JSON.parse(row.value) as T
+    return JSON.parse(raw) as T
   } catch {
     return undefined
   }
+}
+
+/**
+ * The stored JSON as text, or `null` when there is no row.
+ *
+ * One query answers both "is it there" and "what is it", which `kvGet` alone
+ * cannot: it returns `undefined` for a missing row and for an unparseable one
+ * alike, so a caller that needs to tell them apart had to ask twice — and the
+ * portal's persistence seam did exactly that, doubling the round trips on the
+ * hottest reads in the hub. Text rather than a parsed object so a caller can
+ * cache the bytes without handing two callers the same mutable object.
+ */
+export async function kvGetRaw(key: string): Promise<string | null> {
+  const db = await getEngine()
+  const row = await db.get<{ value: string }>('SELECT value FROM kv WHERE key = ?', [key])
+  return row ? row.value : null
 }
 
 export async function kvSet<T>(key: string, value: T): Promise<void> {
