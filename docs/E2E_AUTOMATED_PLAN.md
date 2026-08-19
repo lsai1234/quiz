@@ -313,16 +313,32 @@ against a live sandbox account the answers are about the account.
 | Delivery services | Whether the account has more than one service. Until it returns two, delivery options can only be prices we set, not speeds we buy |
 | Read orders back | How status and tracking come back to us |
 | Read one order | The single-order path, when there is an order to read |
-| Place an order | **Never run from here.** Reported as "not run", with no control to make it happen |
+| Place a test order | Off unless asked for, and gated twice — see below |
 
 It also names PowerBody's sandbox tells when it sees them — placeholder names,
 flat prices, stock of exactly 10 or 100 — so none of that is chased as a bug
 while the account is still in DEMO.
 
-**Placing an order is deliberately absent.** It is the one call with a
-consequence at the other end, and it belongs to Commerce → Review queue, behind
-its own confirmation and the Order sending switch. A diagnostics screen that can
-place a real order is a diagnostics screen somebody will place a real order from.
+### The test order
+
+The write path is off by default and needs two things before it will run: the
+supplier has to actually be PowerBody, and the founder has to confirm **in that
+request** that the account is a DEMO/sandbox one. There is no field in
+PowerBody's API that says so — their guide describes DEMO as a state they put an
+account in, visible only as limited stock and orders that fail by themselves — so
+the confirmation is a person's. It is asked again every run rather than
+remembered, because "is this still a sandbox?" is a question whose answer changes
+exactly once and without warning.
+
+The order it places is marked as a test in the reference, the comment and the
+recipient, so nobody at their end picks it. **A refusal is the pass**: their guide
+says a DEMO account fails orders automatically until the integration is verified,
+so a decline means the payload reached them in a shape they could read.
+`ALREADY_EXISTS` counts too. What fails the check is an order that never got a
+decision out of them at all.
+
+Sending a *customer's* order is still not possible from here — that is Commerce →
+Review queue, behind its own confirmation and the Order sending switch.
 
 The runner is unit-tested against providers that fail in specific ways
 (`src/lib/supplier/__tests__/diagnostics.test.ts`): a login failure, an account

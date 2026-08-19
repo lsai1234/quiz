@@ -72,6 +72,20 @@ const DETAIL_CONCURRENCY = 6
 const DEFAULT_BUILD_DEADLINE_MS = 20_000
 
 /**
+ * The budget one list build actually gets, for anything that needs to explain
+ * itself afterwards.
+ *
+ * `sampleSkus` and the rest hand back whatever pages landed before the clock
+ * ran out, so "no products" and "we stopped waiting" arrive as the same empty
+ * array. The diagnostics screen tells them apart by comparing how long the call
+ * took against this — a distinction worth drawing, because one of them is fixed
+ * by raising `POWERBODY_BUILD_DEADLINE_MS` and the other is not.
+ */
+export function buildDeadlineMs(): number {
+  return envInt('POWERBODY_BUILD_DEADLINE_MS', DEFAULT_BUILD_DEADLINE_MS)
+}
+
+/**
  * How long the SKU → list-row index is reused.
  *
  * Looking up three SKUs and then adding them is two requests that need the same

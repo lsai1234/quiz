@@ -182,3 +182,116 @@ describe('the summary', () => {
     expect(summarise(report).sentence).not.toMatch(new RegExp(`of ${report.checks.length} `))
   })
 })
+
+describe('the test order', () => {
+  /**
+   * The one call with a consequence at PowerBody's end. It is off unless asked
+   * for, and the API route additionally requires the founder to confirm the
+   * account is a sandbox — see the route, which is where that gate lives.
+   */
+  it('is not placed unless the run asks for it', async () => {
+    const placeOrder = jest.fn()
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }))
+    expect(placeOrder).not.toHaveBeenCalled()
+    expect(check(report, 'place-order').status).toBe('skip')
+    expect(report.placedTestOrder).toBe(false)
+  })
+
+  it('sends one line, marked as a test in every field a human reads', async () => {
+    const placeOrder = jest.fn(async (_order: unknown) => ({ supplierOrderId: 'PB-1', status: 'received' as const }))
+    await runSupplierDiagnostics(await providerWith({ placeOrder } as never), { placeTestOrder: true })
+
+    expect(placeOrder).toHaveBeenCalledTimes(1)
+    const order = placeOrder.mock.calls[0][0] as unknown as {
+      reference: string
+      comment: string
+      lines: Array<{ sku: string; quantity: number }>
+      shippingAddress: { line1: string }
+    }
+    expect(order.reference).toMatch(/^CHRGD-TEST-/)
+    expect(order.comment).toMatch(/DO NOT PICK OR SHIP/i)
+    expect(order.shippingAddress.line1).toMatch(/DO NOT SHIP/i)
+    expect(order.lines).toHaveLength(1)
+    expect(order.lines[0].quantity).toBe(1)
+  })
+
+  it('reads a DEMO account’s refusal as the pass it is', async () => {
+    /* Their guide: "your API account will be activated in a DEMO / sandbox
+       version, with access limited stock and automatic failure of orders". A
+       decline means the payload reached them and was understood — which is what
+       this check is for. */
+    const placeOrder = jest.fn(async () => {
+      throw new Error('PowerBody rejected order CHRGD-TEST-X: FAIL. Nothing has shipped.')
+    })
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
+    const order = check(report, 'place-order')
+    expect(order.status).toBe('pass')
+    expect(order.detail).toMatch(/DEMO/)
+  })
+
+  it('reads a duplicate reference as a pass too', async () => {
+    const placeOrder = jest.fn(async () => { throw new Error('ALREADY_EXISTS') })
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
+    expect(check(report, 'place-order').status).toBe('pass')
+  })
+
+  it('fails when the order never reached a decision', async () => {
+    const placeOrder = jest.fn(async () => { throw new Error('socket hang up') })
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
+    const order = check(report, 'place-order')
+    expect(order.status).toBe('fail')
+    expect(order.detail).toMatch(/socket hang up/)
+  })
+
+  it('says so, and orders nothing, when the feed gave us no SKU', async () => {
+    const placeOrder = jest.fn()
+    const report = await runSupplierDiagnostics(
+      await providerWith({ placeOrder, sampleSkus: async () => [], getProductsBySku: async () => [] }),
+      { placeTestOrder: true },
+    )
+    expect(placeOrder).not.toHaveBeenCalled()
+    expect(check(report, 'place-order').status).toBe('skip')
+  })
+
+  it('reports an accepted order as a real thing now on the account', async () => {
+    const placeOrder = jest.fn(async () => ({ supplierOrderId: 'PB-99', status: 'received' as const }))
+    const report = await runSupplierDiagnostics(await providerWith({ placeOrder }), { placeTestOrder: true })
+    const order = check(report, 'place-order')
+    expect(order.status).toBe('pass')
+    expect(order.detail).toMatch(/real order/i)
+    expect(report.placedTestOrder).toBe(true)
+  })
+})
+
+describe('an empty feed is not always an empty account', () => {
+  /**
+   * The provider hands back whatever pages landed before its own clock ran out,
+   * so "this account has no products" and "we stopped waiting" arrive as the
+   * same empty array. On a slow sandbox the second is much the likelier, and
+   * telling the founder their account is empty sends them to their account
+   * manager over a timeout they could have raised themselves.
+   *
+   * These drive the mock provider, whose name is `mock`, so the budget is zero
+   * and the timeout branch cannot fire — the live branch is exercised through
+   * `buildDeadlineMs` in the module under test. What is asserted here is the
+   * wording either side of the distinction.
+   */
+  it('says the feed answered quickly when it really was empty', async () => {
+    const report = await runSupplierDiagnostics(
+      await providerWith({ sampleSkus: async () => [] }),
+    )
+    const skus = check(report, 'sample-skus')
+    expect(skus.status).toBe('warn')
+    expect(skus.detail).toMatch(/answered quickly/i)
+    expect(skus.detail).toMatch(/Not a timeout/i)
+  })
+
+  it('skips the checks that needed a SKU rather than inventing one', async () => {
+    const report = await runSupplierDiagnostics(
+      await providerWith({ sampleSkus: async () => [] }),
+    )
+    for (const id of ['product-detail', 'single-product', 'stock']) {
+      expect(check(report, id).status).toBe('skip')
+    }
+  })
+})

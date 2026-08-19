@@ -261,9 +261,11 @@ test.describe('the supplier integration check', () => {
       'Look up one product',
       'Read stock and cost',
       'Read orders back',
-      'Place an order',
+      'Place a test order',
     ]) {
-      await expect(page.getByText(title, { exact: true })).toBeVisible({ timeout: 30_000 })
+      // `.first()`: "Place a test order" names both its row in the list and the
+      // gated card below it, and this loop is about the list.
+      await expect(page.getByText(title, { exact: true }).first()).toBeVisible({ timeout: 30_000 })
     }
   })
 
@@ -274,16 +276,16 @@ test.describe('the supplier integration check', () => {
     await expect(page.getByText(/Switch Supplier to/)).toBeVisible({ timeout: 30_000 })
   })
 
-  test('never offers to place an order from the settings screen', async ({ page }) => {
+  test('the read-only run reports the order check as not run', async ({ page }) => {
     await founderSessionViaApi(page)
     await page.goto('/founderhub/settings/supplier')
-    await page.getByRole('button', { name: /Run the checks/ }).click()
-    await expect(page.getByText('Place an order', { exact: true })).toBeVisible({ timeout: 30_000 })
+    await page.getByRole('button', { name: /^Run the checks$/ }).click()
 
-    /* Reported as "not run", and there is no control to make it happen — sending
-       belongs to the fulfilment queue, behind its own confirmation. */
-    const row = page.locator('li').filter({ hasText: 'Place an order' }).first()
-    await expect(row.getByText('Not run').first()).toBeVisible()
+    /* The row in the list is a report, never a control — placing an order has
+       its own gated card below, and sending a customer's order belongs to the
+       fulfilment queue. */
+    const row = page.locator('li').filter({ hasText: 'Place a test order' }).first()
+    await expect(row.getByText('Not run').first()).toBeVisible({ timeout: 30_000 })
     await expect(row.getByRole('button')).toHaveCount(0)
   })
 
@@ -300,5 +302,52 @@ test.describe('the supplier integration check', () => {
     await page.goto('/')
     const res = await page.request.post('/api/portal/supplier/diagnostics')
     expect(res.status()).toBe(401)
+  })
+
+  test.describe('the test order', () => {
+    /**
+     * The one call that writes. PowerBody's API has no field saying "this is a
+     * sandbox" — their guide describes DEMO as a state they put an account in —
+     * so the gate is a person's confirmation, required per request rather than
+     * remembered.
+     */
+    test('is refused without the sandbox confirmation', async ({ page }) => {
+      await founderSessionViaApi(page)
+      const res = await page.request.post('/api/portal/supplier/diagnostics', {
+        data: { placeTestOrder: true },
+      })
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toMatch(/sandbox/i)
+    })
+
+    test('is refused when the supplier is the sample feed, confirmed or not', async ({ page }) => {
+      await founderSessionViaApi(page)
+      const res = await page.request.post('/api/portal/supplier/diagnostics', {
+        data: { placeTestOrder: true, confirmSandbox: true },
+      })
+      // The suite runs on the sample feed, so there is no account to order on.
+      expect(res.status()).toBe(400)
+      expect((await res.json()).error).toMatch(/sample feed/i)
+    })
+
+    test('the read-only run never places one', async ({ page }) => {
+      await founderSessionViaApi(page)
+      const res = await page.request.post('/api/portal/supplier/diagnostics')
+      expect(res.status()).toBe(200)
+      const { report } = await res.json()
+      expect(report.placedTestOrder).toBe(false)
+      expect(report.checks.find((c: { id: string }) => c.id === 'place-order').status).toBe('skip')
+    })
+
+    test('the control is explained rather than offered, on the sample feed', async ({ page }) => {
+      await founderSessionViaApi(page)
+      await page.goto('/founderhub/settings/supplier')
+      await page.getByRole('button', { name: /^Run the checks$/ }).click()
+
+      // Explained — and with nothing to order against, not offered.
+      await expect(page.getByText(/no account to order against/i)).toBeVisible({ timeout: 30_000 })
+      await expect(page.getByRole('checkbox', { name: /DEMO \/ sandbox account/i })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: /place a test order/i })).toHaveCount(0)
+    })
   })
 })

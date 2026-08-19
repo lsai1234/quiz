@@ -24,6 +24,7 @@
  * Server-only: it calls the supplier.
  */
 import { getSupplier, getSupplierMode, getSupplierSource, hasPowerBodyCredentials } from './index'
+import { buildDeadlineMs } from './powerbody/live'
 import type { SupplierProduct, SupplierProvider } from './types'
 
 export type CheckStatus =
@@ -53,6 +54,8 @@ export interface SupplierDiagnosticsReport {
   credentials: boolean
   /** True when the answers carry PowerBody's sandbox tells — see `sandboxTells`. */
   looksLikeSandbox: boolean
+  /** Whether the write path ran. Only ever true on a confirmed sandbox account. */
+  placedTestOrder: boolean
   checks: SupplierCheck[]
   ranAt: string
   ms: number
@@ -107,8 +110,10 @@ function sandboxTells(products: SupplierProduct[]): boolean {
  */
 export async function runSupplierDiagnostics(
   supplier?: SupplierProvider,
+  options: { placeTestOrder?: boolean } = {},
 ): Promise<SupplierDiagnosticsReport> {
   const started = Date.now()
+  const placeTestOrder = options.placeTestOrder === true
   const provider = supplier ?? (await getSupplier())
   const checks: SupplierCheck[] = []
   const add = (check: SupplierCheck) => checks.push(check)
@@ -143,15 +148,27 @@ export async function runSupplierDiagnostics(
   // ── 2. Can we get a SKU at all? ──
   const sample = await timed(() => provider.sampleSkus(5))
   const skus = sample.value ?? []
+
+  /* An empty list has two very different causes and the provider cannot tell
+     them apart: it hands back whatever pages landed before its clock ran out, so
+     "this account has no products" and "we stopped waiting" are the same empty
+     array. The elapsed time separates them — a feed that answered emptily does
+     so quickly, and one that timed out took the whole budget. Worth drawing,
+     because only one of them is fixed by raising the budget. */
+  const budget = source === 'powerbody' ? buildDeadlineMs() : 0
+  const ranOutOfTime = budget > 0 && !skus.length && sample.ms >= budget * 0.9
+
   add({
     id: 'sample-skus',
     title: 'Find some SKUs',
-    status: sample.error ? 'fail' : skus.length ? 'pass' : 'warn',
+    status: sample.error || ranOutOfTime ? 'fail' : skus.length ? 'pass' : 'warn',
     detail: sample.error
       ? `The list feed could not be paged: ${sample.error}`
-      : skus.length
-        ? `The feed answered with ${skus.length} product code${skus.length === 1 ? '' : 's'}.`
-        : 'The feed answered, but with no product codes — an empty account, or a filter returning nothing.',
+      : ranOutOfTime
+        ? `Nothing came back within ${Math.round(sample.ms / 1000)}s, which is the whole budget for paging the feed — so this is their API being slow rather than an account with no products in it. Every check below that needs a SKU is skipped as a result. Raise POWERBODY_BUILD_DEADLINE_MS (currently ${Math.round(budget / 1000)}s) and run this again.`
+        : skus.length
+          ? `The feed answered with ${skus.length} product code${skus.length === 1 ? '' : 's'}.`
+          : 'The feed answered quickly and with no product codes — an empty account, or a filter returning nothing. Not a timeout: it did not use its budget.',
     evidence: skus.slice(0, 5).join(', ') || undefined,
     ms: sample.ms,
   })
@@ -298,24 +315,119 @@ export async function runSupplierDiagnostics(
     })
   }
 
-  // ── 9. Placing an order is deliberately not here ──
-  add({
-    id: 'place-order',
-    title: 'Place an order',
-    status: 'skip',
-    detail:
-      'Not run from this screen, on purpose — placing an order has a consequence at PowerBody’s end. Send one from Commerce → Review queue, which has its own confirmation and honours Settings → Supplier → Order sending.',
-    ms: 0,
-  })
+  // ── 9. Placing an order — only when the account has been confirmed a sandbox ──
+  if (!placeTestOrder) {
+    add({
+      id: 'place-order',
+      title: 'Place a test order',
+      status: 'skip',
+      detail:
+        'Not run. Placing an order has a consequence at PowerBody’s end, so it needs the account confirmed as a DEMO/sandbox one first — the control is under this list. A customer order is never sent from here; that is Commerce → Review queue.',
+      ms: 0,
+    })
+  } else {
+    add(await testOrderCheck(provider, detailed))
+  }
 
   return {
     source,
     mode: getSupplierMode(),
     credentials,
     looksLikeSandbox: sandboxTells(detailed),
+    placedTestOrder: placeTestOrder,
     checks,
     ranAt: new Date().toISOString(),
     ms: Date.now() - started,
+  }
+}
+
+/**
+ * Place one order, on an account the founder has confirmed is a sandbox.
+ *
+ * ── Why a rejection is a pass ───────────────────────────────────────────────
+ * PowerBody's guide is explicit: *"Your API account will be activated in a DEMO
+ * / sandbox version, with access limited stock and automatic failure of orders,
+ * until we have verified that the integration is successful."* So a DEMO account
+ * refusing the order is the documented behaviour, not a fault in the payload —
+ * what is being tested here is that we can build a `createOrder` they accept the
+ * shape of, reach it, and read their answer back.
+ *
+ * Their `api_response` distinguishes the two: `FAIL` is an order they looked at
+ * and declined (the DEMO behaviour), while a transport error never got that far.
+ * `ALREADY_EXISTS` means our reference collided, which is its own answer.
+ *
+ * The order is marked as a test in every field a human at their end will read —
+ * the reference, the comment and the recipient — because the one thing that must
+ * not happen is somebody picking and packing it.
+ */
+async function testOrderCheck(
+  provider: SupplierProvider,
+  detailed: SupplierProduct[],
+): Promise<SupplierCheck> {
+  const sku = detailed.find((p) => p.inStock)?.sku ?? detailed[0]?.sku
+  if (!sku) {
+    return {
+      id: 'place-order',
+      title: 'Place a test order',
+      status: 'skip',
+      detail:
+        'No SKU came back from the feed, so there is nothing to order. Fix the product-list check above first — an order with no line is not a test of anything.',
+      ms: 0,
+    }
+  }
+
+  const reference = `CHRGD-TEST-${Date.now().toString(36).toUpperCase()}`
+  const attempt = await timed(() =>
+    provider.placeOrder({
+      reference,
+      comment: 'INTEGRATION TEST — DO NOT PICK OR SHIP. Placed from the CHRGD founders hub.',
+      shippingPrice: 0,
+      weightKg: null,
+      shippingAddress: {
+        name: 'CHRGD Integration',
+        line1: 'DO NOT SHIP — API test order',
+        city: 'Leeds',
+        postcode: 'LS1 4DY',
+        country: 'United Kingdom',
+      },
+      lines: [{ sku, quantity: 1, name: 'Integration test line', unitPrice: 0.01, taxPercent: 20 }],
+    }),
+  )
+
+  if (attempt.value) {
+    /* Accepted. On a DEMO account this is the less likely answer, and it is
+       worth saying out loud that something now exists at their end. */
+    const readBack = await timed(() => provider.getOrder(attempt.value!.supplierOrderId))
+    return {
+      id: 'place-order',
+      title: 'Place a test order',
+      status: 'pass',
+      detail:
+        `They accepted it as ${attempt.value.supplierOrderId} (status "${attempt.value.status}")` +
+        `${readBack.value ? ' and it reads back' : ' — but it did not read back yet, which is normal if their list is date-scoped'}. ` +
+        'It is a real order on the account: cancel it at their end if this was not a DEMO account after all.',
+      evidence: reference,
+      ms: attempt.ms + readBack.ms,
+    }
+  }
+
+  const message = attempt.error ?? 'no answer'
+  const declined = /\bFAIL\b|rejected/i.test(message)
+  const duplicate = /ALREADY_EXISTS/i.test(message)
+
+  return {
+    id: 'place-order',
+    title: 'Place a test order',
+    // A declined order on a DEMO account is the documented behaviour and is the
+    // result this check is looking for; a transport error is not.
+    status: declined || duplicate ? 'pass' : 'fail',
+    detail: duplicate
+      ? `They answered ALREADY_EXISTS — our reference collided with an order already on the account. The call reached them and was understood, which is what this check is for.`
+      : declined
+        ? `They received the order and declined it: ${message} — which is exactly what a DEMO account does, and means the payload reached them in a shape they could read. Ask your account manager to take the account out of DEMO once they have seen it.`
+        : `The order never got a decision out of them: ${message}`,
+    evidence: reference,
+    ms: attempt.ms,
   }
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Badge, Button, Card, Note } from '@/components/system'
+import { Badge, Button, Card, Checkbox, Note } from '@/components/system'
 import { Icon, type IconName } from '@/components/ui/Icon'
 
 /**
@@ -34,6 +34,7 @@ interface Report {
   mode: string
   credentials: boolean
   looksLikeSandbox: boolean
+  placedTestOrder: boolean
   checks: Check[]
   ranAt: string
   ms: number
@@ -52,12 +53,24 @@ export function SupplierDiagnostics() {
   const [summary, setSummary] = useState<{ status: CheckStatus; sentence: string } | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /* Deliberately not remembered between runs. "Is this still a sandbox?" is a
+     question whose answer changes exactly once and without warning, so it is
+     asked again every time rather than stored. */
+  const [sandboxConfirmed, setSandboxConfirmed] = useState(false)
 
-  async function run() {
+  const onLiveSupplier = report?.source === 'powerbody'
+
+  async function run(placeTestOrder = false) {
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch('/api/portal/supplier/diagnostics', { method: 'POST' })
+      const res = await fetch('/api/portal/supplier/diagnostics', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(
+          placeTestOrder ? { placeTestOrder: true, confirmSandbox: sandboxConfirmed } : {},
+        ),
+      })
       const body = await res.json()
       if (!res.ok) {
         setError(body.error ?? 'The check could not be run.')
@@ -76,7 +89,7 @@ export function SupplierDiagnostics() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-3">
-        <Button variant="secondary" onClick={run} loading={busy} icon="activity">
+        <Button variant="secondary" onClick={() => run(false)} loading={busy} icon="activity">
           {report ? 'Run the checks again' : 'Run the checks'}
         </Button>
         {report && (
@@ -146,6 +159,70 @@ export function SupplierDiagnostics() {
               )
             })}
           </ul>
+
+          {/*
+            The write path, kept apart from the list above and gated on a
+            person's word.
+
+            There is no field in PowerBody's API that says "this account is a
+            sandbox". Their guide describes DEMO as a state they put an account
+            in — visible only as limited stock and orders that fail by
+            themselves — so the only reliable signal is the founder's own
+            knowledge of which account this is. The tells we can see are shown
+            as evidence, never as the decision.
+          */}
+          <Card elevation={1} padding="tight">
+            <p
+              style={{
+                fontSize: 'var(--text-body-sm)',
+                fontWeight: 'var(--weight-strong)',
+                fontFamily: 'var(--font-display)',
+                color: 'var(--ink-1)',
+                marginBottom: 'var(--space-1)',
+              }}
+            >
+              Place a test order
+            </p>
+            <p className="text-xs leading-relaxed text-[var(--ink-2)] mb-3">
+              The one call the checks above will not make on their own. It sends a real{' '}
+              <code>createOrder</code>, marked as a test in the reference, the comment and the
+              recipient. On a DEMO account they will decline it — their guide says orders fail
+              automatically until the integration is verified — and that decline is the pass:
+              it means the payload reached them in a shape they could read.
+            </p>
+
+            {!onLiveSupplier ? (
+              <Note tone="info">
+                The supplier is set to the sample feed, so there is no account to order against.
+                Switch to Live PowerBody above first.
+              </Note>
+            ) : (
+              <>
+                <Checkbox
+                  checked={sandboxConfirmed}
+                  onChange={(e) => setSandboxConfirmed(e.target.checked)}
+                  label="This is a PowerBody DEMO / sandbox account, and an order placed on it will not be picked or shipped."
+                />
+                <div className="mt-3">
+                  <Button
+                    variant="secondary"
+                    onClick={() => run(true)}
+                    loading={busy}
+                    disabled={!sandboxConfirmed}
+                    icon="box"
+                  >
+                    Run the checks and place a test order
+                  </Button>
+                </div>
+                {report.looksLikeSandbox && (
+                  <p className="text-[11px] mt-2 text-[var(--ink-3)]">
+                    The answers above carry the sandbox tells, which agrees with you — but it is
+                    your confirmation that decides, not ours.
+                  </p>
+                )}
+              </>
+            )}
+          </Card>
         </>
       )}
     </div>
