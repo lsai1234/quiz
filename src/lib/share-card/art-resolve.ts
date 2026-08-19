@@ -4,7 +4,21 @@ import type { ArtKey } from './art'
 
 /**
  * The picture for a card, in the brief's resolution order:
- * uploaded → bundled → nothing, where nothing means the gradient field.
+ * uploaded → bundled → the product render → nothing, where nothing means the
+ * gradient field.
+ *
+ * ── The product render goes LAST, not first ─────────────────────────────────
+ * It used to go first: `if (heroImage) return heroImage`, before the database
+ * was ever consulted. And `heroImage` is set by `payload.ts` from the first
+ * product in the stack — so every real stack had one, and an uploaded
+ * photograph could only ever appear on a card whose lineup was empty. A founder
+ * could upload all six images, see them stored, and never see one on a card.
+ *
+ * The brief is unambiguous about which way round these go: the product render
+ * from `public/hero/` is the *placeholder* the art set exists to replace —
+ * "the card is about a stack, not a product, so a single bottle under a headline
+ * about six supplements is the wrong picture". A picture somebody chose beats
+ * the stand-in that was there because nobody had.
  *
  * ── Why the bytes are inlined ───────────────────────────────────────────────
  * Satori fetches an `<img src>` over the network unless it is already a data
@@ -24,8 +38,6 @@ export async function resolveCardArt(
   key: ArtKey | undefined,
   heroImage?: string | null,
 ): Promise<string | null> {
-  if (heroImage) return heroImage
-
   try {
     const upload = await readArtUpload(key ?? 'wellbeing')
     if (upload) return `data:${upload.mime};base64,${upload.data}`
@@ -34,5 +46,11 @@ export async function resolveCardArt(
     // table is unreachable. The founder sees the placeholder and knows.
   }
 
-  return cardArt(key, null)
+  // Bundled art next. `null` for the hero here on purpose — `cardArt` returns
+  // whatever it is handed before it looks at its own set, and the product render
+  // is the rung below the art set rather than above it.
+  const bundled = cardArt(key, null)
+  if (bundled) return bundled
+
+  return heroImage ?? null
 }

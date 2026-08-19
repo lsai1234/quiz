@@ -87,8 +87,35 @@ describe('artSetVersion', () => {
 })
 
 describe('resolveCardArt', () => {
-  it('prefers a real catalogue picture over everything', async () => {
+  it('prefers the uploaded photograph over the product render', async () => {
+    /**
+     * This assertion used to run the other way — "prefers a real catalogue
+     * picture over everything" — and that is the bug the settings screen was
+     * built into. `payload.ts` sets `heroImage` from the first product in the
+     * stack, so every real stack carries one; with the hero winning, an uploaded
+     * photograph could only ever appear on a card whose lineup was empty. A
+     * founder could upload all six, see them stored, and never see one on a card.
+     *
+     * The brief is unambiguous about the order: the render from `public/hero/`
+     * is the placeholder the art set exists to replace — "the card is about a
+     * stack, not a product, so a single bottle under a headline about six
+     * supplements is the wrong picture".
+     */
     await upload('strength')
+    expect(await resolveCardArt('strength', 'https://cdn.example/hero.jpg'))
+      .toBe(`data:image/jpeg;base64,${PIXEL}`)
+  })
+
+  it('still uses the product render when nothing has been uploaded', async () => {
+    // The rung below the art set, not above it — and with no bundled files yet,
+    // it is what a card falls back to today.
+    expect(await resolveCardArt('performance', 'https://cdn.example/hero.jpg'))
+      .toBe('https://cdn.example/hero.jpg')
+  })
+
+  it('drops an upload back to the product render when it is removed', async () => {
+    await upload('strength')
+    await deleteArtUpload('strength')
     expect(await resolveCardArt('strength', 'https://cdn.example/hero.jpg'))
       .toBe('https://cdn.example/hero.jpg')
   })
