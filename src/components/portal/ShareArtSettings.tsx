@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ArtKey } from '@/lib/share-card/art'
 import type { ArtUploadMeta } from '@/lib/db/share-card-art'
 import {
-  ART_MIMES, ART_MAX_BYTES, DERIVATIVE, CARD_WINDOW, LEFT_THIRD,
+  ART_MIMES, ART_MAX_BYTES, DERIVATIVE, SOURCE_MIN, CARD_WINDOW, LEFT_THIRD,
   validateSource, leftThirdWarning,
 } from '@/lib/share-card/art-upload'
 import { Button, Checkbox } from '@/components/system'
@@ -181,9 +181,10 @@ export function ShareArtSettings() {
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs text-[var(--ink-3)]">
-          3:4 portrait, at least 1200 × 1600, under {Math.round(ART_MAX_BYTES / 1024 / 1024)}MB.
-          Stored at {DERIVATIVE.width} × {DERIVATIVE.height}. Any slot left empty draws the
-          gradient stand-in, so the card never shows a broken image.
+          3:4 portrait, at least {SOURCE_MIN.width} × {SOURCE_MIN.height}, under{' '}
+          {Math.round(ART_MAX_BYTES / 1024 / 1024)}MB. Stored at {DERIVATIVE.width} ×{' '}
+          {DERIVATIVE.height}. Any slot left empty draws the gradient stand-in, so the card never
+          shows a broken image.
         </p>
         <Checkbox
           className="shrink-0"

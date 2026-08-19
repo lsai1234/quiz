@@ -96,3 +96,29 @@ describe('the derivative', () => {
     expect(DERIVATIVE.width / DERIVATIVE.height).toBeCloseTo(0.75, 5)
   })
 })
+
+describe('the size floor is the derivative, not a round number above it', () => {
+  /**
+   * The rule is "storing this must not mean upscaling it". The derivative is
+   * 1080 × 1440, so anything at or above that downsamples. The floor used to be
+   * 1200 × 1600 — a stricter rule than the one written beside it, which refused
+   * photographs that were genuinely big enough.
+   */
+  it('accepts a source a hair larger than what gets stored', () => {
+    // 1086 × 1448 is exactly 3:4 and bigger than the derivative in both axes.
+    expect(validateSource({ ...OK, width: 1086, height: 1448 })).toBeNull()
+  })
+
+  it('accepts the derivative size exactly', () => {
+    expect(validateSource({ ...OK, width: DERIVATIVE.width, height: DERIVATIVE.height })).toBeNull()
+  })
+
+  it('still refuses anything that would have to be upscaled', () => {
+    expect(validateSource({ ...OK, width: 1079, height: 1439 })).not.toBeNull()
+    expect(validateSource({ ...OK, width: 900, height: 1200 })).not.toBeNull()
+  })
+
+  it('keeps the floor tied to the derivative, so the two cannot drift', () => {
+    expect(SOURCE_MIN).toEqual({ width: DERIVATIVE.width, height: DERIVATIVE.height })
+  })
+})

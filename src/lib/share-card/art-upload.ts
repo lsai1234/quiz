@@ -12,15 +12,27 @@ export const ART_MAX_BYTES = 8 * 1024 * 1024
 
 export const ART_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 
-/** The smallest source worth keeping. Below this the derivative is an upscale. */
-export const SOURCE_MIN = { width: 1200, height: 1600 }
-
 /** 3:4 portrait, to ±2%. */
 export const ART_RATIO = 3 / 4
 export const RATIO_TOLERANCE = 0.02
 
 /** What is stored and what the renderer draws. */
 export const DERIVATIVE = { width: 1080, height: 1440 }
+
+/**
+ * The smallest source worth keeping: the size of the derivative itself.
+ *
+ * The rule is "storing this must not mean upscaling it", and the derivative is
+ * 1080 × 1440 — so that, exactly, is the floor. It used to be 1200 × 1600, which
+ * is a different and stricter rule than the one written beside it: a 1086 × 1448
+ * photograph is a hair *larger* than what gets stored, downsamples rather than
+ * upscales, and was still refused. Any real upscale — 900 × 1200, 1079 × 1439 —
+ * fails exactly as it did.
+ *
+ * Derived rather than typed out, so the floor cannot drift away from the thing
+ * it is the floor for.
+ */
+export const SOURCE_MIN = { width: DERIVATIVE.width, height: DERIVATIVE.height }
 
 /**
  * What the card actually shows.
@@ -55,8 +67,8 @@ export interface SourceFile {
  * Whether a file can be used, and if not, what was wrong with the one supplied.
  *
  * The message names what was received. "Needs to be 3:4" is a rule; "this is
- * 1000 × 1000 (1:1) — needs to be 3:4 portrait, at least 1200 × 1600" is
- * something the founder can act on without opening the image again.
+ * 1000 × 1000 (1:1) — needs to be 3:4 portrait" is something the founder can act
+ * on without opening the image again.
  */
 export function validateSource(file: SourceFile): string | null {
   if (!ART_MIMES.includes(file.type)) {

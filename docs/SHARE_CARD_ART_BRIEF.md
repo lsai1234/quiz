@@ -28,7 +28,7 @@ changes a card somebody has already posted.
 
 | | |
 |---|---|
-| **Dimensions** | 1200 × 1600 minimum — **3:4 portrait**. Rendered at ~520 × 700 on the story card, so keep the subject central with room around it. |
+| **Dimensions** | 1080 × 1440 minimum — **3:4 portrait**. That is the size it is stored at, so anything smaller would have to be upscaled. Bigger is welcome; it is downsampled. Rendered at ~520 × 700 on the story card, so keep the subject central with room around it. |
 | **Format** | PNG. Transparent background is fine and preferred — the card paints its own ground behind. |
 | **File size** | Under 250KB each after compression. They are read per render on the image route. |
 | **Ground** | Near-black (`#07070a`) or transparent. Never a light or busy background — the card's image panel is dark and the picture sits on a cyan bloom. |
