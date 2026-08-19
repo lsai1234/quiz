@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { founderSessionViaApi, signInAtFounderHub, createPartner, FOUNDER } from '../support/accounts'
 import { openShop, addProductToBasket, openBasket } from '../support/shop'
+import { inspect, report } from '../support/inspect'
 
 /**
  * The Founders Hub — the business side.
@@ -188,5 +189,69 @@ test.describe('emails', () => {
        receipt exists as a record without anything leaving the building. */
     const body = await page.locator('body').innerText()
     expect(body).not.toMatch(/£NaN|undefined/)
+  })
+})
+
+test.describe('the supplier integration check', () => {
+  /**
+   * `docs/E2E_TEST_PLAN.md` phase B as a button: every read-only call we make to
+   * PowerBody, run one at a time, so a failure names the call. The suite runs on
+   * the sample feed, so what is proved here is the panel and the code path —
+   * against a real sandbox account the same run answers for the account.
+   */
+  test('runs every read-only call and reports each separately', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/settings')
+    await expect(page.getByRole('heading', { name: 'Test the supplier integration' })).toBeVisible()
+
+    await page.getByRole('button', { name: /Run the checks/ }).click()
+
+    // Each capability reports on its own row rather than as one verdict.
+    for (const title of [
+      'Which supplier is being read',
+      'Find some SKUs',
+      'Fetch full product detail',
+      'Look up one product',
+      'Read stock and cost',
+      'Read orders back',
+      'Place an order',
+    ]) {
+      await expect(page.getByText(title, { exact: true })).toBeVisible({ timeout: 30_000 })
+    }
+  })
+
+  test('says the run proves nothing about PowerBody while on the sample feed', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/settings')
+    await page.getByRole('button', { name: /Run the checks/ }).click()
+    await expect(page.getByText(/Switch Supplier to/)).toBeVisible({ timeout: 30_000 })
+  })
+
+  test('never offers to place an order from the settings screen', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/settings')
+    await page.getByRole('button', { name: /Run the checks/ }).click()
+    await expect(page.getByText('Place an order', { exact: true })).toBeVisible({ timeout: 30_000 })
+
+    /* Reported as "not run", and there is no control to make it happen — sending
+       belongs to the fulfilment queue, behind its own confirmation. */
+    const row = page.locator('li').filter({ hasText: 'Place an order' }).first()
+    await expect(row.getByText('Not run').first()).toBeVisible()
+    await expect(row.getByRole('button')).toHaveCount(0)
+  })
+
+  test('the panel renders cleanly', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/settings')
+    await page.getByRole('button', { name: /Run the checks/ }).click()
+    await expect(page.getByText('Read orders back', { exact: true })).toBeVisible({ timeout: 30_000 })
+    const findings = await inspect(page)
+    expect(report('the supplier check', findings), report('the supplier check', findings)).toBe('')
+  })
+
+  test('the API refuses anyone who is not a founder', async ({ page }) => {
+    await page.goto('/')
+    const res = await page.request.post('/api/portal/supplier/diagnostics')
+    expect(res.status()).toBe(401)
   })
 })

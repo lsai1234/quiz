@@ -98,6 +98,11 @@ No keys, no supplier, no money. Just proves nothing is broken before you add var
 
 Read PowerBody for real; sell nothing yet.
 
+> **Do B1–B3 with the button.** Settings → **Test the supplier integration** runs
+> every read-only call below one at a time and names the one that failed,
+> including the `getProductInfo` check in B3. Run it first; work the list by hand
+> only for what it cannot answer.
+
 - [ ] **B1** Set `POWERBODY_API_URL` / `_USER` / `_KEY`, then Settings → Supplier → **Live
       PowerBody**. It should not fall back to mock — if it does, a credential is missing.
 - [ ] **B2** Products → PowerBody → **Show me some SKUs** returns codes. This is the only

@@ -63,9 +63,10 @@ The widths are not decorative. Both faults in the round below were invisible at
 | `03-bundles` | Bundles | The shop rail, every seeded bundle page, contents/price/saving, an unknown slug 404ing |
 | `04-checkout` | Buying | Shop basket → confirmation; quiz stack as a one-off; quiz stack → subscription → account gate; the `quiz` vs `shop` channel; partner codes refused on a plain basket; postage on the receipt matching postage on the order |
 | `05-myhub` | My Hub | Sign-in and its refusals; next box, billing breakdown and the three figures adding up; delivery calendar; stack controls; re-consent notice accept/dismiss/stale-version; exit-charge guards (401, bogus settlement); the empty-hub screen |
-| `06-founderhub` | Founders Hub | Gate and refusals; every section reachable; dashboard against the orders API; the review queue and its simulation notice; mock orders blocked for having no address; order detail; UK date order; settings resolving to mock; partners; the outbox |
+| `06-founderhub` | Founders Hub | Gate and refusals; every section reachable; dashboard against the orders API; the review queue and its simulation notice; mock orders blocked for having no address; order detail; UK date order; settings resolving to mock; partners; the outbox; the supplier integration check |
 | `07-partner` | Partners Hub | Create → invite → the one-time link names its owner without spending it → set password → signed straight in → link now spent; sign-in refusals; own-numbers-only; all three tabs |
 | `08-share-legal` | Share card, legal | The share sheet; a minted short link opened in a browser that never took the quiz; an invented token; the three legal screens including the honest "no competition is running" |
+| `11-subscription-changes` | My Hub | Swapping: alternatives quote their monthly effect, the confirmation quotes old → new, nothing persists until Confirm, backing out is safe, and the quoted figure is the billed figure. Removing and re-cadencing. Eight checks that the browser cannot set its own price |
 | `09-formatting` | Everything | The rendered-output inspector over 31 routes, plus the basket drawer, product sheet, finished stack, hub dashboard and partner tabs |
 | `10-visual` | Everything | Pixel baselines for the hero, first question, shop, a bundle page, all three gates, the styleguide and the hub shell |
 
@@ -289,6 +290,45 @@ Worth recording, because both gaps are now closed and the reasons generalise.
 
 Each fix was verified the honest way round: the new specs were run against the
 un-fixed code first and both went red, so they are guarding something.
+
+---
+
+## Testing the supplier integration against the sandbox
+
+`Founders Hub → Settings → Test the supplier integration` runs every read-only
+call we make to PowerBody, one at a time, and reports each separately — so a
+failure names the call rather than the screen. It is `E2E_TEST_PLAN.md` phase B
+as a button, and it runs through `getSupplier()` exactly as the app does, so
+against a live sandbox account the answers are about the account.
+
+| Check | Answers |
+|---|---|
+| Which supplier is being read | Whether this run touches PowerBody at all, and the resolved mode/source/credentials |
+| API credentials | Whether all three of URL, user and key are set — their SOAP `login` needs all three |
+| Find some SKUs | Can the list feed be paged? On a sandbox whose products exist nowhere else, this is the only way to get a code |
+| Fetch full product detail | **The one to run before importing anything.** If products come back named after their own SKU, `getProductInfo` is not enabled — and everything imported inherits it |
+| Look up one product | The single-SKU path the import screen uses |
+| Read stock and cost | The call the daily sync runs |
+| Shipped weight | Whether the feed carries one. It normally does not, which is expected and only affects the margin model's delivery estimate |
+| Delivery services | Whether the account has more than one service. Until it returns two, delivery options can only be prices we set, not speeds we buy |
+| Read orders back | How status and tracking come back to us |
+| Read one order | The single-order path, when there is an order to read |
+| Place an order | **Never run from here.** Reported as "not run", with no control to make it happen |
+
+It also names PowerBody's sandbox tells when it sees them — placeholder names,
+flat prices, stock of exactly 10 or 100 — so none of that is chased as a bug
+while the account is still in DEMO.
+
+**Placing an order is deliberately absent.** It is the one call with a
+consequence at the other end, and it belongs to Commerce → Review queue, behind
+its own confirmation and the Order sending switch. A diagnostics screen that can
+place a real order is a diagnostics screen somebody will place a real order from.
+
+The runner is unit-tested against providers that fail in specific ways
+(`src/lib/supplier/__tests__/diagnostics.test.ts`): a login failure, an account
+with `getProductInfo` off, one shipping service, two, a provider that does not
+implement the call at all. A panel that says "all good" whatever the account does
+is worse than no panel, because it is trusted.
 
 ---
 

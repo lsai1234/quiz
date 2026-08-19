@@ -1,6 +1,7 @@
 import { DataSourceToggle } from '@/components/portal/DataSourceToggle'
 import { IntegrationToggle } from '@/components/portal/IntegrationToggle'
 import { OrderSendingToggle } from '@/components/portal/OrderSendingToggle'
+import { SupplierDiagnostics } from '@/components/portal/SupplierDiagnostics'
 import { CompetitionSettings } from '@/components/portal/CompetitionSettings'
 import { ShareArtSettings } from '@/components/portal/ShareArtSettings'
 
@@ -60,6 +61,18 @@ export default function SettingsPage() {
           liveLabel="Live PowerBody"
           credentialsHint={<><strong>Can’t switch to PowerBody yet.</strong> No API credentials are set — add <code>POWERBODY_API_URL</code>, <code>POWERBODY_API_USER</code> and <code>POWERBODY_API_KEY</code>, then switch. Still serving the mock feed.</>}
         />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-bold mb-2" style={heading}>Test the supplier integration</h2>
+        <p className="text-xs text-[var(--ink-3)] mb-2">
+          Every read-only call we make to PowerBody, run one at a time, so a failure names the call
+          rather than the screen. This is <code>docs/E2E_TEST_PLAN.md</code> phase B as a button —
+          including the one that matters most before importing anything, which is whether{' '}
+          <code>getProductInfo</code> is enabled on the account. Nothing here writes; placing an
+          order stays in Commerce → Review queue.
+        </p>
+        <SupplierDiagnostics />
       </section>
 
       <section>
