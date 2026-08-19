@@ -17,7 +17,39 @@ function toPgPlaceholders(sql: string): string {
   return sql.replace(/\?/g, () => `$${++i}`)
 }
 
+/**
+ * Whether the schema is already current, in one query and without a lock.
+ *
+ * ── Why this exists ─────────────────────────────────────────────────────────
+ * `migrate` runs once per process, and on serverless that means once per
+ * cold-started instance — which, for a hub used in bursts, is most requests. It
+ * was costing four round trips before that instance could answer anything: take
+ * an advisory lock, `CREATE TABLE IF NOT EXISTS`, read the version, release. On
+ * a database in another region than the functions, at ~90ms a trip, that is
+ * more than a third of a second added to a request that had not started yet.
+ *
+ * Worse than the trips: the lock is global. Open a hub screen that fires five
+ * calls, cold-start five instances, and they queue behind each other for a lock
+ * none of them needs — every one of them is about to discover there is nothing
+ * to do. That is the shape of "everything takes ages, all at once".
+ *
+ * So the common case asks one question — is the recorded version current — and
+ * takes the lock only when the answer is no. A missing `schema_migrations`
+ * table throws here, which is the correct answer (there is work to do) and puts
+ * the caller on the locked path that creates it.
+ */
+async function schemaIsCurrent(pool: Pool): Promise<boolean> {
+  try {
+    const res = await pool.query('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations')
+    return Number(res.rows[0].version) >= MIGRATIONS.length
+  } catch {
+    return false
+  }
+}
+
 async function migrate(pool: Pool): Promise<void> {
+  if (await schemaIsCurrent(pool)) return
+
   const client = await pool.connect()
   try {
     await client.query(`SELECT pg_advisory_lock(${MIGRATION_LOCK_KEY})`)

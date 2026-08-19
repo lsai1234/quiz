@@ -6,8 +6,7 @@ import { Icon, type IconName } from '@/components/ui/Icon'
 /**
  * Settings, as an index you go into rather than one long scroll.
  *
- * There are five topics on this screen and they have nothing to do with each
- * other: which catalogue the shop serves, which supplier we read, whether
+ * The topics on this screen have nothing to do with each other: which catalogue the shop serves, which supplier we read, whether
  * orders really leave the building, how we take money, and two marketing
  * features. As one page it read as a wall — and the switch you wanted was
  * always the one below the fold.
@@ -56,6 +55,17 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         title: 'Payments',
         blurb: 'How the shop, quiz and subscriptions take money.',
         icon: 'credit-card',
+      },
+    ],
+  },
+  {
+    label: 'The app itself',
+    sections: [
+      {
+        slug: 'speed',
+        title: 'Speed',
+        blurb: 'Why a screen took as long as it did — measured on the server that served it.',
+        icon: 'activity',
       },
     ],
   },
