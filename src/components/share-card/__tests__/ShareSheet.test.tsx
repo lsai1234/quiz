@@ -432,4 +432,52 @@ describe('while the card is being built', () => {
     render(<ShareSheet payload={payload} onClose={jest.fn()} />)
     expect(sheen()?.closest('[aria-hidden="true"]')).toBeInTheDocument()
   })
+
+  /**
+   * The reveal page preloads this exact image, so on the common path the card is
+   * in the browser cache before the sheet opens and `load` fires immediately.
+   * Swapping it in at that point is the "it just popped up" the build was
+   * supposed to replace — the skeleton, the sheen and the whole idea that a
+   * poster is being made go past in two frames.
+   */
+  it('holds the build a beat rather than swapping a cached card in', () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const img = document.querySelector('img') as HTMLImageElement
+    fireEvent.load(img)
+
+    // Synchronously after the load: still building, card still hidden.
+    expect(sheen()).toBeInTheDocument()
+    expect(img).toHaveStyle({ opacity: '0' })
+  })
+
+  it('reveals the card rather than cross-fading it', async () => {
+    setNavigator({ userAgent: 'desktop' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+
+    const img = document.querySelector('img') as HTMLImageElement
+    fireEvent.load(img)
+
+    // The settle on the card and the pass of light over it, both of which are
+    // one-shot classes — a card still wearing them a second later would mean
+    // the reveal never ended.
+    await waitFor(() => expect(img).toHaveClass('card-reveal'))
+    expect(document.querySelector('.card-scan')).toBeInTheDocument()
+    await waitFor(() => expect(document.querySelector('.card-scan')).not.toBeInTheDocument())
+    expect(img).not.toHaveClass('card-reveal')
+  })
+
+  it('does not hold the build on the press-and-hold rung', async () => {
+    // iOS Safari, where every rung fails and the image is the thing being saved
+    // rather than a preview of it.
+    setNavigator({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0) Safari/604.1' })
+    render(<ShareSheet payload={payload} onClose={jest.fn()} />)
+    await userEvent.click(primary())
+    await screen.findByText(/press and hold the card/i)
+
+    const img = document.querySelector('img') as HTMLImageElement
+    fireEvent.load(img)
+    await waitFor(() => expect(img).toHaveStyle({ opacity: '1' }))
+  })
 })

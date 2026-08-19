@@ -317,6 +317,26 @@
 .card-build-sheen { animation: card-build-sheen 1.5s var(--ease-settle, ease-in-out) infinite; }
 .card-build-bar   { animation: card-build-pulse 1.4s ease-in-out infinite; }
 
+/* The card's arrival.
+   It used to cross-fade in over 240ms, which on an image the reveal page has
+   already cached is indistinguishable from it popping into place: the skeleton
+   and its sheen went past too fast to register, and what was left was a wait
+   with nothing at the end of it. The card settles in from a hair over size and
+   one pass of light runs down it — a print coming out of the machine rather
+   than a picture swapping in. Roughly six hundred milliseconds, once. */
+@keyframes card-settle {
+  from { transform: scale(1.018); }
+  to   { transform: scale(1); }
+}
+@keyframes card-scan {
+  0%   { transform: translateY(-120%); opacity: 0; }
+  14%  { opacity: 1; }
+  86%  { opacity: 1; }
+  100% { transform: translateY(560%); opacity: 0; }
+}
+.card-reveal { animation: card-settle 620ms var(--ease-settle, cubic-bezier(0.32, 0.72, 0, 1)) both; }
+.card-scan   { animation: card-scan 620ms cubic-bezier(0.4, 0, 0.2, 1) both; }
+
 /* The selection pill on the share sheet's card picker. It travels between
    segments rather than blinking from one to the next, which is what makes a
    segmented control read as one control instead of three buttons. */
@@ -328,6 +348,10 @@
      reduced-motion user unable to tell a slow card from a dead one. */
   .card-build-sheen { animation: none !important; opacity: 0 !important; }
   .card-build-bar { animation-duration: 2.8s; }
+  /* The arrival keeps its cross-fade — the image's own opacity transition — and
+     loses the movement, which is the part the setting is about. */
+  .card-reveal { animation: none !important; }
+  .card-scan { animation: none !important; opacity: 0 !important; }
   /* The pill still moves — it just arrives immediately. Removing the travel is
      the point of the setting; removing the selection would be a bug. */
   .segmented-pill { transition: none; }

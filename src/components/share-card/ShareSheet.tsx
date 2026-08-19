@@ -126,7 +126,6 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
   const [busy, setBusy] = useState(false)
   /** Something went wrong but the step did not change — shown in place. */
   const [notice, setNotice] = useState<string | null>(null)
-  const [ready, setReady] = useState(false)
   const [comp, setComp] = useState<Live | null>(null)
 
   const shared = useRef(false)
@@ -214,7 +213,6 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
     setFormat((current) => {
       if (next === current) return current
       shareEvents.format({ from: current, to: next })
-      setReady(false)
       return next
     })
   }, [])
@@ -299,14 +297,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
       <Sheet onClose={close} label="Save your card">
         <SheetHeader eyebrow="Last step" title="Press and hold to save" />
         <SheetBody className="flex flex-col items-center">
-          <CardFrame
-            spec={spec}
-            imageUrl={imageUrl}
-            format={format}
-            ready={ready}
-            onReady={() => setReady(true)}
-            full
-          />
+          <CardFrame key={imageUrl} spec={spec} imageUrl={imageUrl} format={format} full />
           <p className="text-sm mt-4 leading-relaxed text-center" style={{ color: 'var(--color-text-2)' }}>
             Your browser won’t save the image for us. Press and hold the card above,
             then choose <strong style={{ color: 'var(--color-text)' }}>Save to Photos</strong>.
@@ -343,7 +334,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
         <SheetFooter>
           <Button
             variant="ghost"
-            onClick={() => { setStep({ kind: 'compose' }); setReady(false) }}
+            onClick={() => setStep({ kind: 'compose' })}
           >
             Share another
           </Button>
@@ -362,13 +353,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
       />
 
       <SheetBody className="flex flex-col items-center">
-        <CardFrame
-          spec={spec}
-          imageUrl={imageUrl}
-          format={format}
-          ready={ready}
-          onReady={() => setReady(true)}
-        />
+        <CardFrame key={imageUrl} spec={spec} imageUrl={imageUrl} format={format} />
 
         {offered.length > 1 && (
           <FormatTabs
@@ -438,6 +423,29 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
 }
 
 /**
+ * The beat the skeleton is held for before the card is allowed to replace it.
+ *
+ * The reveal page preloads this exact image into the browser cache — that is
+ * most of why the sheet feels fast — so on the common path the card is *there*
+ * when the sheet opens and the skeleton would otherwise flash for two frames and
+ * vanish. A build that flickers reads as a glitch; the same wait, held long
+ * enough to be a wait and then resolved deliberately, reads as a poster being
+ * printed. This is the smallest hold that reads as the latter.
+ *
+ * Not applied on the manual rung: there the image is the thing being saved and
+ * somebody is already one failed share deep, so it appears as soon as it can.
+ */
+const MIN_BUILD_MS = 420
+
+/** How long the reveal runs. Matches `card-settle` / `card-scan` in globals.css. */
+const REVEAL_MS = 620
+
+/** How long the skeleton takes to fade under the card. Matches its transition. */
+const SKELETON_OUT_MS = 220
+
+type Phase = 'building' | 'revealing' | 'shown'
+
+/**
  * The card, framed.
  *
  * Sized against the viewport rather than a fixed width so it takes whatever the
@@ -445,22 +453,104 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
  * bigger card, and on a short one it shrinks instead of pushing the button off
  * the bottom. `full` is the manual rung, where the image is the thing being
  * saved rather than a preview of it.
+ *
+ * ── Why the arrival is staged ───────────────────────────────────────────────
+ * The card used to cross-fade in over 240ms, which on a cached image is
+ * indistinguishable from it popping into place — the skeleton, the sheen and the
+ * whole "a poster is being made" idea went past too fast to register, and what
+ * was left was a wait with nothing at the end of it. This is the one moment in
+ * the flow where somebody finds out that what they are being asked to share is a
+ * designed thing, so the arrival is an event: the skeleton fades, the card
+ * settles in from a hair over size, and a light passes down it once. It is
+ * roughly a second in total and it is the reason to stay.
+ *
+ * The phases are held here rather than in the parent because only this component
+ * knows when the image landed, and the parent has no use for the answer.
+ * Remounted per format by its `key`, so switching tabs prints the new card
+ * rather than swapping the picture inside the old one.
  */
-function CardFrame({ spec, imageUrl, format, ready, onReady, full = false }: {
+function CardFrame({ spec, imageUrl, format, full = false }: {
   spec: { width: number; height: number }
   imageUrl: string
   format: ShareFormat
-  ready: boolean
-  onReady: () => void
   full?: boolean
 }) {
   const portrait = spec.height > spec.width
+  const [phase, setPhase] = useState<Phase>('building')
+  /** Kept a beat past the start of the reveal, then dropped: a transparent
+   *  overlay left sitting on the card is a thing to forget to remove. */
+  const [skeleton, setSkeleton] = useState(true)
+  const img = useRef<HTMLImageElement>(null)
+  const mountedAt = useRef(Date.now())
+  const landed = useRef(false)
+  const timers = useRef<Array<ReturnType<typeof setTimeout>>>([])
+
+  useEffect(() => {
+    const running = timers.current
+    return () => {
+      running.forEach(clearTimeout)
+      running.length = 0
+      /* And the guard goes with them.
+         Strict Mode mounts, cleans up and mounts again on the same instance, so
+         a `landed` ref that survived this cleanup would describe a load whose
+         timers had just been cancelled: the card sat at zero opacity under a
+         skeleton that never stopped building, on exactly the cached path this
+         is here to serve. Same trap as the mint effect above — a one-shot ref
+         guard paired with a cleanup that cancels its result is a contradiction,
+         and here the fix is for the cleanup to undo both halves. */
+      landed.current = false
+    }
+  }, [])
+
+  const onLoad = useCallback(() => {
+    // Guarded by a ref rather than by `phase`: the two ways in below can both
+    // arrive, and a second run would restart the reveal on a card already
+    // showing.
+    if (landed.current) return
+    landed.current = true
+
+    const later = (fn: () => void, ms: number) => { timers.current.push(setTimeout(fn, ms)) }
+    const held = Date.now() - mountedAt.current
+    later(() => {
+      setPhase('revealing')
+      later(() => setSkeleton(false), SKELETON_OUT_MS)
+      later(() => setPhase('shown'), REVEAL_MS)
+    }, full ? 0 : Math.max(0, MIN_BUILD_MS - held))
+  }, [full])
+
+  /**
+   * The other way in, and the one that matters.
+   *
+   * `load` does not fire for an image the browser already has: it is dispatched
+   * as the element's source resolves, which for a cached hit is before React has
+   * finished attaching the handler. And this image is cached on the common path
+   * *by design* — the tile on the reveal page pulls exactly this URL so the sheet
+   * opens with the card already there. So the sheet's own fast path was the one
+   * that could leave it building forever, with a skeleton over a card that had
+   * arrived: the picture never faded in because nothing ever said it had landed.
+   *
+   * Asking the element on mount is the fix. `naturalWidth` as well as `complete`
+   * because `complete` is also true for an image that failed.
+   */
+  useEffect(() => {
+    const el = img.current
+    if (el?.complete && el.naturalWidth > 0) onLoad()
+  }, [onLoad])
+
   return (
     <div
       className="relative rounded-2xl overflow-hidden shrink-0"
       style={{
         aspectRatio: `${spec.width} / ${spec.height}`,
-        maxHeight: full ? undefined : portrait ? '40dvh' : '28dvh',
+        // A *definite* height, not a ceiling. `max-height` with an auto height
+        // left the box to be sized by its contents, and its only in-flow content
+        // is an image that is `h-full` of it — so until that image loaded the
+        // frame was two pixels tall, the skeleton was drawn inside two pixels,
+        // and the card's arrival shoved the whole sheet down the screen. The
+        // comment above about the preview not jumping was describing an
+        // intention. With the height stated, the aspect ratio gives the width
+        // and the frame is the card's shape from the first frame.
+        height: full ? undefined : portrait ? '40dvh' : '28dvh',
         width: full ? '100%' : 'auto',
         maxWidth: '100%',
         background: 'rgba(255,255,255,0.04)',
@@ -473,13 +563,42 @@ function CardFrame({ spec, imageUrl, format, ready, onReady, full = false }: {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={imageUrl}
+        ref={img}
         src={imageUrl}
         alt={`Your CHRGD stack, ${FORMAT_LABEL[format]} card`}
-        onLoad={onReady}
-        className="w-full h-full object-cover"
-        style={{ opacity: ready ? 1 : 0, transition: 'opacity 240ms' }}
+        onLoad={onLoad}
+        className={`w-full h-full object-cover${phase === 'revealing' ? ' card-reveal' : ''}`}
+        style={{ opacity: phase === 'building' ? 0 : 1, transition: 'opacity 260ms' }}
       />
-      {!ready && <CardBuilding />}
+
+      {/* The skeleton stays mounted for the first breath of the reveal and fades
+          under the card, so the two are one movement rather than a swap. */}
+      {skeleton && (
+        <div
+          className="absolute inset-0"
+          style={{
+            opacity: phase === 'revealing' ? 0 : 1,
+            transition: 'opacity 200ms',
+            pointerEvents: 'none',
+          }}
+        >
+          <CardBuilding complete={phase === 'revealing'} />
+        </div>
+      )}
+
+      {/* The pass of light that says the card is finished, rather than that it
+          is still coming. Drawn over the card, once, and then gone. */}
+      {phase === 'revealing' && (
+        <div
+          aria-hidden="true"
+          className="card-scan absolute inset-x-0"
+          style={{
+            height: '18%',
+            backgroundImage:
+              'linear-gradient(to bottom, transparent 0%, rgba(0,212,255,0.22) 42%, rgba(255,255,255,0.34) 52%, rgba(0,212,255,0.18) 62%, transparent 100%)',
+          }}
+        />
+      )}
     </div>
   )
 }

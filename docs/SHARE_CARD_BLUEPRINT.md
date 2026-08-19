@@ -638,6 +638,45 @@ first tap. It ranks the set now, in the same precedence `getArchetype` uses, and
 **Exit met:** full suite 2913 green; `tsc --noEmit` clean. All four formats rendered over
 a bright stand-in frame and looked at.
 
+### Phase 10 — The wait · 0.5d — **done**
+
+The sheet's preview had a skeleton, a sheen and a line of text, and none of it was
+landing, for three reasons that compounded.
+
+**The frame had no size.** `max-height` on a box whose height was auto left it to be
+sized by its contents, and its only in-flow content is an image that is `h-full` of it —
+so until the image loaded the frame was two pixels tall. The skeleton was being drawn
+inside two pixels, and the card's arrival pushed the tabs, the note and the footer down
+the screen. The comment claiming the preview does not jump when the image lands was
+describing an intention. The height is stated now and the aspect ratio gives the width,
+so the frame is the card's shape from the first frame.
+
+**The card could arrive and never be shown.** `load` does not fire for an image the
+browser already has, and the reveal page preloads this exact URL on purpose — so the
+fast path was the one that could strand the sheet on a skeleton over a card that had
+already arrived. The element is asked on mount as well as listened to. The first fix for
+that stranded it a different way: a `landed` ref paired with a cleanup that cancelled the
+timers it had scheduled, which is the same contradiction the mint effect above documents,
+and Strict Mode's mount-cleanup-mount is enough to trigger it. The cleanup undoes both
+halves now.
+
+**And the arrival was a cross-fade.** 240ms of opacity on a cached image is
+indistinguishable from the card popping into place: the skeleton and the sheen went past
+too fast to register and the wait had nothing at the end of it. The build is now held a
+minimum beat, the skeleton carries a meter and a line that moves through what the
+renderer is actually doing, and the card settles in under a single pass of light. About
+a second in total, and it is the moment somebody finds out that what they are being
+asked to share is a designed thing.
+
+The meter is an activity indicator paced from measured renders, not a report from the
+server — the image route either has a PNG or does not. It is asymptotic, stops at 92%,
+and only reaches the end when the image has, which is the one promise a bar like that
+has to keep.
+
+**Exit met:** full suite 2920 green; `tsc --noEmit` clean. Both paths traced in a real
+browser at 390×844 through `/styleguide/share-flow` — cached, where the reveal starts at
+409ms, and a 4s render, where the meter eases to 85% and then completes.
+
 ---
 
 ## 5. Test personas
