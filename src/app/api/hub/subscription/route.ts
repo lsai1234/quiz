@@ -3,6 +3,7 @@ import { getHubUser } from '@/lib/auth/session'
 import { getSubscription, saveSubscription, listFeedback, getQuiz } from '@/lib/db/hub-data'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { createMockSubscription } from '@/lib/recharge/mock'
+import { normaliseIncomingSubscription } from '@/lib/recharge/reprice'
 import { seedsDemoSubscription } from '@/lib/recharge/demo-seed'
 import { syncSubscriptionToStripe } from '@/lib/payments/subscription-sync'
 import { syncPortalRuntime } from '@/lib/portal/store'
@@ -86,7 +87,7 @@ export async function PUT(req: Request) {
   }
 
   // Server-held fields the browser has no business changing.
-  const subscription: MemberSubscription = {
+  const claimed: MemberSubscription = {
     ...incoming,
     stripeSubscriptionId: previous.stripeSubscriptionId,
     stripeCustomerId: previous.stripeCustomerId,
@@ -96,6 +97,19 @@ export async function PUT(req: Request) {
   }
 
   await syncPortalRuntime()
+
+  /* Everything above is identity; this is the money. The prices, the monthly
+     total, the subscribe-&-save rate, the skip credits and the shipped counts
+     are all re-derived from what we already hold — see `normaliseIncomingSubscription`,
+     which is also where the list of what a hand-written PUT used to be able to
+     do is written down. */
+  const { products } = await getResolvedCatalogue()
+  const priced = normaliseIncomingSubscription(previous, claimed, products)
+  if (!priced.ok) {
+    return NextResponse.json({ error: priced.reason }, { status: 400 })
+  }
+  const subscription = priced.subscription
+
   const sync = await syncSubscriptionToStripe(previous, subscription)
   if (!sync.ok) {
     return NextResponse.json(

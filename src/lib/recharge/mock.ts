@@ -314,7 +314,7 @@ export function swappableForLine(
 // settlement on removal, intro discount never re-applied, one-offs at full price.
 
 /** A unit's discounted subscription price for `product` (margin-floored, at the member's bundle rate). */
-function discountedUnitFor(product: CatalogueProduct, config = getPricingConfig(), rate = config.subscriptionDiscount): { unitPrice: number; discountedUnit: number } {
+export function discountedUnitFor(product: CatalogueProduct, config = getPricingConfig(), rate = config.subscriptionDiscount): { unitPrice: number; discountedUnit: number } {
   const variant = product.variants.find((v) => v.available) ?? product.variants[0]
   const unitPrice = variant?.price ?? product.basePrice
   const cost = unitCostOf(product, unitPrice, config)
@@ -600,8 +600,11 @@ export function cadenceOptions(config = getPricingConfig()): number[] {
  * time"). Keeps the same discounted unit price, re-prices the delivery and the
  * flat monthly. Clamped to 1–6.
  */
+/** Units per delivery a member may set on one line. */
+export const MAX_LINE_UNITS = 6
+
 export function setLineQuantity(sub: MemberSubscription, lineId: string, quantity: number): MemberSubscription {
-  const q = Math.min(6, Math.max(1, Math.round(quantity)))
+  const q = Math.min(MAX_LINE_UNITS, Math.max(1, Math.round(quantity)))
   const lines = sub.lines.map((l) => {
     if (l.id !== lineId) return l
     const unit = l.pricePerDelivery / Math.max(1, l.quantity)
