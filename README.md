@@ -93,6 +93,11 @@ Both default to the safe option and can be flipped at runtime from the Founders 
 (Settings → Supplier, where both switches live). `live` ordering also requires the live
 supplier — mock SKUs are sample data. See `docs/POWERBODY_API.md`.
 
+**Going live** — turning all of this on for real, Stripe and PowerBody together and in
+the order they have to happen, is `docs/GO_LIVE.md`. Note that PowerBody has no separate
+live endpoint: the same credentials stay, and PowerBody promote the account out of their
+DEMO mode once you have placed a test order through the API and told them.
+
 ## Accounts & database
 
 Customer accounts (hub sign-in), sessions, subscriptions, feedback and portal

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Badge } from '../Badge'
 import { Button } from '../Button'
@@ -299,10 +299,11 @@ describe('Modal', () => {
     const user = userEvent.setup()
     render(<Harness onClose={onClose} />)
     await user.keyboard('{Escape}')
-    // The exit animation runs first; reduced motion is off in jsdom, so wait.
+    // The exit animation runs first; reduced motion is off in jsdom, so wait for
+    // the callback rather than for a fixed duration — the animation is not on a
+    // clock this test controls.
     await screen.findByRole('dialog')
-    await new Promise((r) => setTimeout(r, 250))
-    expect(onClose).toHaveBeenCalled()
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
   it('closes when the scrim is clicked', async () => {
@@ -312,8 +313,7 @@ describe('Modal', () => {
 
     const scrim = screen.getByRole('dialog').parentElement
     await user.click(scrim!)
-    await new Promise((r) => setTimeout(r, 250))
-    expect(onClose).toHaveBeenCalled()
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
   })
 
   it('does not close when the panel itself is clicked', async () => {
@@ -325,6 +325,8 @@ describe('Modal', () => {
     render(<Harness onClose={onClose} />)
 
     await user.click(screen.getByRole('dialog'))
+    // A real wait, not a poll: this asserts something NEVER happens, and
+    // `waitFor` would pass the instant it first checked.
     await new Promise((r) => setTimeout(r, 250))
     expect(onClose).not.toHaveBeenCalled()
   })
@@ -368,8 +370,11 @@ describe('Modal', () => {
     expect(screen.getByRole('dialog')).toHaveFocus()
 
     await user.keyboard('{Escape}')
-    await new Promise((r) => setTimeout(r, 250))
-    expect(opener).toHaveFocus()
+    // Focus returns after the close transition. Polled rather than slept on: a
+    // fixed wait races the transition under full-suite load, and this test
+    // failed intermittently for timing reasons that had nothing to do with the
+    // behaviour it describes.
+    await waitFor(() => expect(opener).toHaveFocus())
   })
 
   it('locks the page behind it, and unlocks it after', async () => {

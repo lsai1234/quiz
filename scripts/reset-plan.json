@@ -1,0 +1,40 @@
+{
+  "_comment": "The go-live reset plan, in data. Read by scripts/reset-data.mjs and asserted against the schema by src/lib/db/__tests__/reset-plan.test.ts — a table added to migrations.ts and not classified here fails that test. It lives in JSON rather than inside the script so the test can read it without importing an ES module into a CommonJS test environment.",
+
+  "wipe": [
+    "sessions",
+    "identities",
+    "password_resets",
+    "feedback",
+    "consents",
+    "subscription_changes",
+    "stock_exceptions",
+    "subscriptions",
+
+    "competition_entries",
+    "share_cards",
+
+    "notifications",
+    "analytics_events",
+    "orders",
+
+    "supplier_snapshots",
+
+    "partner_commissions",
+    "partner_payouts",
+    "partner_codes",
+    "partner_sessions",
+    "partner_invites",
+    "partner_terms",
+    "partners",
+
+    "users"
+  ],
+
+  "keep": {
+    "kv": "Founder-authored: the curated catalogue, bundles and hub settings. Cleared row-by-row against kvKeep, and only entirely with --everything.",
+    "share_card_art": "Uploaded share-card photography — founder-authored, not transactional. Cleared only with --everything."
+  },
+
+  "kvKeep": ["portal:products", "portal:bundles", "portal:settings"]
+}

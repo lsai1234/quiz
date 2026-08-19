@@ -11,10 +11,18 @@ import type { SqlEngine } from './engine'
 
 function databasePath(): string {
   const configured = process.env.DATABASE_PATH
-  if (configured) return configured
-  const dir = path.join(process.cwd(), '.data')
-  fs.mkdirSync(dir, { recursive: true })
-  return path.join(dir, 'chrgd.db')
+  const file = configured || path.join(process.cwd(), '.data', 'chrgd.db')
+  // `.data/` is git-ignored, so it does not exist in a fresh clone and
+  // better-sqlite3 fails to open a file inside it rather than creating it. The
+  // directory used to be created only on the default path, which meant setting
+  // DATABASE_PATH — as the e2e suite does (`.data/e2e.db`) — moved the database
+  // somewhere nothing had made, and every database-backed journey failed on a
+  // clean checkout for a reason that pointed at the journey.
+  // `:memory:` (and its URI forms) name no directory; tests use it.
+  if (!file.startsWith(':memory:') && !file.startsWith('file::memory:')) {
+    fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true })
+  }
+  return file
 }
 
 export function createSqliteEngine(): SqlEngine {

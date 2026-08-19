@@ -110,7 +110,7 @@ Then copy the endpoint's **Signing secret** (`whsec_…`).
 | `APP_URL` | `https://getchrgd.co.uk` | Used for Stripe return URLs and email links. Get it wrong and members land on localhost |
 | `CRON_SECRET` | a long random string | `openssl rand -hex 32`. Without it the cron route is **closed** in production, so the daily job never runs |
 | `DATABASE_URL` | *(already set)* | |
-| `SUPPLIER_SOURCE` | `mock` | Leave it — you don't have PowerBody API access yet |
+| `SUPPLIER_SOURCE` | `mock` | Leave it while testing Stripe. Switching it to `powerbody` is a separate journey with its own gate — see `GO_LIVE.md` |
 | `NOTIFY_SOURCE` | `manual` | Leave it — emails queue in the hub for you to send |
 
 Then **redeploy**. Vercel does not apply env var changes to a running deployment.
@@ -159,7 +159,9 @@ Card `4242 4242 4242 4242`, any future expiry, any CVC.
 4. Add a product in the hub. Stripe's subscription amount changes.
 5. Pause. Stripe shows `pause_collection`. Resume. It clears.
 6. Cancel. **The Stripe subscription ends.** The hub shows the outstanding
-   balance and its arithmetic first — but nothing charges it yet (see §8).
+   balance and its arithmetic first, and then **charges it** — in test mode that
+   is a test-mode invoice, but the code path is the live one (see §8). Check the
+   invoice appears on the Stripe customer.
 
 **A failed payment**
 7. `stripe trigger invoice.payment_failed`, or use card `4000 0000 0000 0341`.
@@ -222,23 +224,39 @@ are compiled into the browser bundle.
 
 ---
 
-## 8. What is NOT wired up yet
+## 8. What happens the moment this goes live
 
-Be clear about this before you launch:
+This section used to list things that were built but not connected. Most of them
+have since been connected, which changes what "flip the switch" means — so read
+it as *what starts happening*, not as a list of gaps.
 
-- **The cancellation balance is calculated and shown, but not charged.** A member
-  cancels, sees what they owe, confirms — and no money is taken. Everything
-  underneath it is built and tested; what's missing is the charge itself.
-  Before switching that on: get the terms wording reviewed by a solicitor, and
-  model the numbers across your real bundles (in the published example someone
-  owes £80 having paid £70 — with a 50% scratch card it's £115).
-- **Delivery is always free.** The £50 free-delivery threshold is advertised but
-  no shipping is ever charged.
-- **No VAT handling.** Stripe Tax is not enabled.
-- **Three-month tubs are dropshipped every month.** The pricing understands the
-  cadence; the supplier order doesn't. Fixing it changes what physically ships.
-- **PowerBody is mock.** Orders are raised and can be walked through the
-  lifecycle, but nothing is actually sent to a supplier.
+- **Cancelling charges the member.** The exit settlement is calculated, shown,
+  agreed to and then billed off-session against the card on file
+  (`chargeSettlement`, called from `/api/hub/subscription/cancel`). A decline
+  never blocks the cancellation — it leaves an open invoice. The protections are
+  in code and in the Terms: capped at what they have already paid, balances of £5
+  or less waived, intro discount never reclaimed. **Get `EXIT_LEGAL_REVIEW.md` in
+  front of a solicitor before the first real member can cancel** — it is written
+  to be sent as-is, and the first run of this takes real money.
+- **Delivery is charged.** Checkout charges postage on the customer rate ladder
+  (`delivery.customerRates`), and `shipping_price` goes to PowerBody so the
+  invoice in the parcel is right. One-off orders let the customer pick
+  mainland vs Highlands, because Stripe fixes shipping options before it knows
+  the postcode; the fulfilment queue flags a mainland rate paid on a Highlands
+  address. Subscriptions get no such pick — Stripe only accepts shipping options
+  in payment mode — so postage recurs as a line item at the mainland rate.
+- **Delivery cadence is respected.** A three-month tub ships once every three
+  months, not monthly: `shipsAtCycle` gates which lines go into each fulfilment
+  order. This is what makes the flat monthly price honest, and the exit
+  settlement bills against the same model.
+- **Still no VAT.** Stripe Tax is not enabled and we are not registered — a
+  deliberate position, not an omission. The hub tracks rolling turnover against
+  the HMRC threshold (`lib/pricing/vat-position.ts`) and says when registration
+  becomes compulsory. The settlement invoice carries no VAT line while that
+  holds (`settlement.chargeVat`, its own flag on purpose).
+- **PowerBody is only mock until you say otherwise.** Whether orders reach the
+  supplier is a separate switch from Stripe entirely — see `GO_LIVE.md`, which
+  is the runbook that covers both halves in the order they have to happen.
 
 ---
 
