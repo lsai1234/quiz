@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { signUpViaApi, signInAtHub, newCustomer } from '../support/accounts'
+import { subscribeFromQuiz } from '../support/quiz'
 import { inspect, report } from '../support/inspect'
 
 /**
@@ -135,6 +136,63 @@ test.describe('the exit is a charge, so it is guarded like one', () => {
       data: { expectedSettlement: -999 },
     })
     expect(res.status(), 'a bogus settlement was accepted').toBeGreaterThanOrEqual(400)
+  })
+})
+
+test.describe('a brand-new subscriber', () => {
+  /**
+   * The state the demo plan cannot show.
+   *
+   * Every other hub spec sees the seeded subscription, which is two months old,
+   * so its lines read "Tell us how it's going". A plan created a minute ago is in
+   * its first week and reads "Building long-term health · wk 0 of 6" — three
+   * times longer, and `Badge` is `shrink-0` with `white-space: nowrap`, so it
+   * used to run out of the card and be sliced off mid-word by the card's rounded
+   * overflow. Nothing in the static route sweep could reach it, because it only
+   * exists for somebody who has just signed up.
+   */
+  test('sees a hub with nothing cut off', async ({ page }) => {
+    const who = newCustomer('fresh')
+    await subscribeFromQuiz(page, who)
+
+    await page.goto('/myhub')
+    await expect(page.getByText('YOUR SUBSCRIPTION')).toBeVisible({ timeout: 20_000 })
+    await dismissReconsent(page)
+
+    // The long-form status pill is on screen — otherwise this is testing nothing.
+    await expect(page.getByText(/Building .* · wk \d+ of \d+/i).first()).toBeVisible()
+
+    const findings = await inspect(page)
+    expect(report('/myhub (new subscriber)', findings), report('/myhub (new subscriber)', findings)).toBe('')
+  })
+
+  test('the delivery calendar boxes hold their own contents', async ({ page }) => {
+    const who = newCustomer('fresh-cal')
+    await subscribeFromQuiz(page, who)
+    await page.goto('/myhub')
+    await expect(page.getByText('YOUR SUBSCRIPTION')).toBeVisible({ timeout: 20_000 })
+    await dismissReconsent(page)
+    await expect(page.getByText(/DELIVERY CALENDAR/i)).toBeVisible()
+
+    /* Each box is a `Button layout="stack"`. It used to be a default row-layout
+       button carrying four stacked children, which laid them out side by side
+       inside a 160px card and — being centred — spilled out of both edges at
+       once, so the dates and prices were cut off left and right. */
+    const boxes = page.getByRole('button').filter({ hasText: /^(NEXT|SEPT|OCT|NOV|DEC|JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SKIPPED)/ })
+    expect(await boxes.count()).toBeGreaterThan(2)
+
+    for (let i = 0; i < Math.min(3, await boxes.count()); i++) {
+      const box = boxes.nth(i)
+      const fits = await box.evaluate((el) => {
+        const b = el.getBoundingClientRect()
+        return Array.from(el.querySelectorAll('*')).every((child) => {
+          const c = child.getBoundingClientRect()
+          if (c.width === 0) return true
+          return c.left >= b.left - 1 && c.right <= b.right + 1
+        })
+      })
+      expect(fits, `delivery box ${i} has content outside its own edges`).toBe(true)
+    }
   })
 })
 

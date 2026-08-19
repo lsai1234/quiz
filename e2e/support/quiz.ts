@@ -186,3 +186,35 @@ export async function checkoutFromStack(page: Page): Promise<void> {
   await cta.scrollIntoViewIfNeeded()
   await cta.click()
 }
+
+/**
+ * The full new-member journey: quiz → subscribe → account → the hub.
+ *
+ * Worth having as a helper because a brand-new subscription is a *different*
+ * screen from the demo one every other hub spec sees. The demo plan is seeded
+ * two months in, so its lines read "Tell us how it's going"; a plan created
+ * moments ago is in its first week, and its lines read
+ * "Building long-term health · wk 0 of 6" — a status pill three times longer,
+ * and the one that used to be sliced in half by the card's edge.
+ */
+export async function subscribeFromQuiz(
+  page: Page,
+  who: { email: string; password: string },
+): Promise<void> {
+  await completeQuiz(page)
+  await choosePlan(page, 'subscription')
+  await checkoutFromStack(page)
+
+  // Signed out, the subscription path opens the account gate inline.
+  const submit = page.getByRole('button', { name: /Continue to payment/ })
+  await expect(submit).toBeVisible({ timeout: 30_000 })
+  await page.locator('input[type="email"]:visible').first().fill(who.email)
+  await page.locator('input[type="password"]:visible').first().fill(who.password)
+
+  // Consent is captured on the way through the gate.
+  const boxes = page.locator('input[type="checkbox"]:visible')
+  for (let i = 0; i < (await boxes.count()); i++) await boxes.nth(i).check().catch(() => {})
+
+  await submit.click()
+  await expect(page.getByText(/You’re subscribed|You're subscribed/)).toBeVisible({ timeout: 45_000 })
+}

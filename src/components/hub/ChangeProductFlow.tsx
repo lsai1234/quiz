@@ -103,7 +103,7 @@ export function ChangeProductFlow({ subscription, line, catalogue, onConfirm, on
                   <Button
                     variant="ghost"
                     fullWidth
-                    className="text-left flex-col items-stretch"
+                    layout="stack"
                     aria-label={`Change to ${alt.title}`}
                     onClick={() => setSelected(alt)}
                   >

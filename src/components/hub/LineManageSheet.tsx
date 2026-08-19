@@ -39,7 +39,7 @@ const USAGE_LABEL: Record<UsageLevel, string> = { light: 'A little', standard: '
 function QuickMove({ icon, title, sub, onClick }: { icon: IconName; title: string; sub: string; onClick: () => void }) {
   return (
     <Card interactive padding="none">
-      <Button variant="ghost" fullWidth className="flex-col items-start text-left" onClick={onClick}>
+      <Button variant="ghost" fullWidth layout="stack" onClick={onClick}>
         <span style={{ color: 'var(--ink-3)' }}>
           <Icon name={icon} size={17} />
         </span>

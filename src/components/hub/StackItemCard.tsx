@@ -82,7 +82,12 @@ export function StackItemCard({
       }}
     >
       <div className="p-4">
-        <div className="flex items-start justify-between gap-2 mb-3">
+        {/* Wraps, because the status label is a sentence rather than a word:
+            "Building long-term health · wk 0 of 6" beside a slot name is wider
+            than a phone. `Badge` is `shrink-0` with `white-space: nowrap` — it
+            will not give way — so without this the status pill ran out of the
+            card and the card's rounded overflow sliced it off mid-word. */}
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
           <Badge tone="accent">{line.slotTitle}</Badge>
           <StatusBadge label={rec.statusLabel} icon={rec.statusIcon} tone={rec.statusTone} />
         </div>

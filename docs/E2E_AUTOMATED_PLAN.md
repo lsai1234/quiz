@@ -48,9 +48,13 @@ production build refuses.
 
 ## Coverage
 
-171 tests across ten spec files, run at two viewports — a 412px phone (the
-storefront is mobile-first and its README says so) and a 1280px laptop (where
-the three hubs actually live).
+Ten spec files, run at three viewports: a 390px phone (the width of the iPhone
+most people are holding), a 1280px laptop (where the three hubs live), and a
+360px "narrow" pass over the formatting spec alone — the floor the README
+promises when it says to open the app at 360px+.
+
+The widths are not decorative. Both faults in the round below were invisible at
+412px, which is what the suite originally used.
 
 | Spec | Product | Journeys |
 |---|---|---|
@@ -96,7 +100,7 @@ it cannot see is the page after React has run.
 | `icon-size` / `icon-aspect` | A 24-grid glyph drawn tiny, or squashed |
 | `icon-stroke` / `icon-fill` | A literal hex where the token should be |
 | `icon-colour` | A glyph the same colour as what it sits on |
-| `clipped-x` / `clipped-y` | Text cut off with no ellipsis and no clamp |
+| `clipped-x` / `clipped-y` | Text cut off by any ancestor, with no ellipsis and no clamp |
 | `unnamed-control` | A control a screen reader announces as nothing |
 
 Three distinctions took real calibration, and each was a page of false positives
@@ -110,6 +114,11 @@ first. They are worth knowing before extending it:
    purpose. The check measures the text's own rectangles with a `Range` instead.
 3. **A leaked id is the whole label; an id in prose is English.** "A stim-free
    lift" and "a plant-based protein" are sentences. `16-24` on its own is a bug.
+4. **The clip is usually not on the element holding the text.** A badge overflows
+   a card three levels up; the badge clips nothing and the card has no text of
+   its own. So the check walks up to the nearest clipping ancestor rather than
+   comparing an element against itself — which is what it did at first, and why
+   it missed both My Hub faults.
 
 The last test in the file injects one of every fault and asserts each is
 reported, so "all green" keeps meaning something.
@@ -231,6 +240,55 @@ One more thing worth a look, also not changed: the Founders Hub order page
 titles itself with the internal id (`ord_cd75a…`) and does not show the
 `CHRGD-…` reference anywhere. A customer quoting their reference cannot be
 matched to an order from that screen.
+
+---
+
+## What the second round found — My Hub on a real phone
+
+Two layout faults, reported from screenshots of a live account and reproduced
+here at 390px. Both are the same underlying shape: **a design-system primitive
+that could not express what the call site needed, and silently did something
+else instead.**
+
+**5 · The delivery calendar's boxes laid their contents out sideways.**
+`Button` wraps its children in a span that was unconditionally `inline-flex
+items-center justify-center`. Three My Hub call sites pass several stacked
+children and asked for a column in `className` — which reached the button and
+never reached its content. So each 160px calendar box laid four stacked rows out
+*side by side*, and because the wrapper centres, the row spilled out of **both**
+edges at once: dates cut off on the left, prices cut off on the right, up to 82px
+each way. `Button` now has a `layout="stack"` prop that puts both the control and
+its content on the same axis, and the three call sites use it.
+*`src/components/system/Button.tsx`, `DeliveryCalendar.tsx`, `LineManageSheet.tsx`,
+`ChangeProductFlow.tsx`*
+
+**6 · The status pill was sliced off mid-word.**
+`Badge` is `shrink-0` with `white-space: nowrap` — correct for a status mark, and
+a problem when the status is a sentence. A new member's lines read
+"Building long-term health · wk 0 of 6", which beside a slot name is wider than a
+phone, so it ran out of the card and the card's rounded overflow cut it at the
+screen edge. The badge row wraps now, and the pill drops to its own line when it
+has to.
+*`src/components/hub/StackItemCard.tsx`*
+
+### Why the first round missed them
+
+Worth recording, because both gaps are now closed and the reasons generalise.
+
+- **The clipping check only compared an element against its own text.** It could
+  see a paragraph outgrowing its own box, but not a badge overflowing the card
+  three levels above it — and in both faults above, nothing in the chain clipped
+  its *own* text. The check now finds, for every run of text, the nearest
+  ancestor that clips, and measures against that.
+- **The state never occurred.** Every hub spec signed in against the seeded demo
+  plan, which is two months old, so its lines read "Tell us how it's going" —
+  a short pill that fits. The long one only exists in a plan's first week.
+  There is now a `brand-new subscriber` block that walks quiz → subscribe →
+  account gate → hub and inspects what a member sees on day one.
+- **The viewport was too wide.** 412px hid both.
+
+Each fix was verified the honest way round: the new specs were run against the
+un-fixed code first and both went red, so they are guarding something.
 
 ---
 

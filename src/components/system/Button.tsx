@@ -59,6 +59,26 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
    */
   fullWidth?: boolean
   /**
+   * How the label is arranged inside the control.
+   *
+   * `row` — the default, and what a button normally is: an optional glyph
+   * beside a short label, both centred.
+   *
+   * `stack` — a column whose children stretch to the full width, for the few
+   * controls that are really a small card you press. My Hub has three: the
+   * delivery calendar's boxes, the line-manage rows and the product-change
+   * options.
+   *
+   * This is a prop rather than something a caller styles because styling it
+   * *looks* like it works and does not. The children live inside a wrapper span
+   * that is always `inline-flex items-center justify-center`, so `flex-col` in
+   * `className` reached the button and never reached its content: the calendar's
+   * boxes laid four stacked rows out side by side inside a 160px-wide card,
+   * and — being centred — spilled out of both edges at once. On a 390px phone
+   * that read as a row of half-cut dates and prices.
+   */
+  layout?: 'row' | 'stack'
+  /**
    * Work in progress. Swaps the leading glyph for a spinner, blocks presses and
    * marks the control busy — so the caller never has to disable it separately
    * and remember to re-enable it on the error path.
@@ -189,6 +209,7 @@ export function Button({
   icon,
   iconRight,
   fullWidth = false,
+  layout = 'row',
   loading = false,
   className,
   children,
@@ -211,7 +232,8 @@ export function Button({
         // No `shrink-0`: a button that cannot shrink, sitting in a flex row
         // beside a `fullWidth` one, pushes itself off the end of the container.
         // That is how the "Add" button left the screen in the hub comparison.
-        'system-control system-sheen inline-flex items-center justify-center',
+        'system-control system-sheen inline-flex',
+        layout === 'stack' ? 'flex-col items-stretch justify-start text-left' : 'items-center justify-center',
         variant === 'destructive' ? 'system-focus-critical' : 'system-focus',
         fullWidth ? 'w-full' : '',
         className ?? '',
@@ -233,7 +255,14 @@ export function Button({
     >
       {/* One element, so `.system-sheen > *` lifts the whole label above the
           travelling highlight rather than only its first child. */}
-      <span className="inline-flex items-center justify-center" style={{ gap: s.gap }}>
+      <span
+        className={
+          layout === 'stack'
+            ? 'flex flex-col items-stretch w-full min-w-0'
+            : 'inline-flex items-center justify-center min-w-0'
+        }
+        style={{ gap: s.gap }}
+      >
         {loading ? (
           <Spinner size={s.glyph} />
         ) : (

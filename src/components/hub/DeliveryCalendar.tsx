@@ -73,7 +73,7 @@ export function DeliveryCalendar({ deliveries, catalogue = [], onSelect }: Props
               <Button
                 variant="ghost"
                 fullWidth
-                className="flex-col items-stretch text-left"
+                layout="stack"
                 aria-label={`${d.isNext ? 'Next box, ' : ''}${weekday} ${day} ${month}${skipped ? ', skipped' : ''}`}
                 onClick={() => onSelect(d)}
               >

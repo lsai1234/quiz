@@ -179,84 +179,90 @@ export async function findIconFaults(page: Page): Promise<Finding[]> {
 /* ─── Layout faults ───────────────────────────────────────────────────────── */
 
 /**
- * Text the box cut off *silently*.
+ * Text that is cut off *silently*.
  *
- * Three things had to be separated out before this was worth running, and each
- * one was a page of false positives first:
+ * The measurement is: for every run of text on the page, find the nearest
+ * ancestor that clips, and check whether the glyphs actually fit inside it.
+ *
+ * The "nearest ancestor" part is the whole point, and the first version of this
+ * check got it wrong. It only compared an element against its own direct text
+ * children, so it could see a paragraph outgrowing its own box but not a badge
+ * overflowing the card three levels above it — which is exactly the shape the
+ * real bug took: `Badge` is `shrink-0` with `white-space: nowrap`, so a long
+ * status label ("Building long-term health · wk 0 of 3") pushes straight out of
+ * the card, and the card's rounded `overflow: hidden` slices it off at the
+ * screen edge. Nothing in that chain clips its *own* text, so nothing was
+ * reported.
+ *
+ * Three things are deliberately not faults, each of which was a page of false
+ * positives before it was excluded:
  *
  * 1. **Truncation that announces itself** — `text-overflow: ellipsis` and
- *    `-webkit-line-clamp` — is a decision, not a defect. A hub table full of
- *    product names is supposed to end in an ellipsis.
- * 2. **Content behind a scroller** is still reachable. The delivery calendar's
- *    chips overflow their own rounded boxes inside an `overflow-x: auto` rail;
- *    the member scrolls and sees them.
- * 3. **`scrollWidth` is not a measure of text.** Every button in the design
- *    system carries an absolutely-positioned sheen band, and every raised card a
- *    decorative bloom, both wider than the box on purpose. Comparing
- *    `scrollWidth` to `clientWidth` reported the entire component library.
- *
- * So the measurement is of the text itself: a `Range` over the element's own
- * text nodes gives the rectangles the glyphs actually occupy, and those are
- * compared against the element's padding box. What survives is text a reader
- * cannot see and was given no sign of.
+ *    `-webkit-line-clamp` — is a decision. A hub table full of product names is
+ *    supposed to end in an ellipsis.
+ * 2. **Content behind a scroller** is still reachable: the walk up stops at the
+ *    first `overflow: auto/scroll` ancestor, because the reader can scroll to it.
+ * 3. **Visually-hidden labels** are a 1px box with the text scrolled out of it,
+ *    which is the correct way to name a control and the exact shape of a fault.
  */
 export async function findClippedText(page: Page): Promise<Finding[]> {
   const raw = await page.evaluate((ignored) => {
     const out: Array<{ kind: string; detail: string; snippet: string }> = []
 
-    /** Can the reader scroll to it after all? */
-    function insideScroller(el: Element): boolean {
-      let parent = el.parentElement
-      while (parent && parent !== document.body) {
-        const style = getComputedStyle(parent)
-        if (/(auto|scroll)/.test(style.overflowX + style.overflowY)) return true
-        parent = parent.parentElement
-      }
-      return false
-    }
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+    let node: Node | null
+    while ((node = walker.nextNode())) {
+      const text = (node.nodeValue ?? '').trim()
+      if (!text) continue
+      const parent = node.parentElement
+      if (!parent || parent.closest(ignored)) continue
+      if (parent.tagName === 'SCRIPT' || parent.tagName === 'STYLE') continue
 
-    document.querySelectorAll('*').forEach((el) => {
-      if (el.closest(ignored)) return
-      const style = getComputedStyle(el)
-      if (style.overflowX !== 'hidden' && style.overflowY !== 'hidden') return
-      if (style.textOverflow === 'ellipsis') return
-      if (style.webkitLineClamp && style.webkitLineClamp !== 'none') return
-      if (style.visibility === 'hidden' || style.display === 'none') return
-
-      const box = el.getBoundingClientRect()
-      // A visually-hidden label is a 1px box on purpose — the correct way to
-      // name a control, and the exact shape of a clipping fault.
-      if (box.width <= 2 || box.height <= 2) return
-      if (insideScroller(el)) return
-
-      // Only this element's own text, not a descendant's — the descendant is
-      // where that fault belongs, and it is visited in its own right.
-      let worstX = 0
-      let worstY = 0
-      let sample = ''
-      for (const node of Array.from(el.childNodes)) {
-        if (node.nodeType !== Node.TEXT_NODE) continue
-        const text = (node.nodeValue ?? '').trim()
-        if (!text) continue
-        const range = document.createRange()
-        range.selectNodeContents(node)
-        for (const rect of Array.from(range.getClientRects())) {
-          if (rect.width === 0 || rect.height === 0) continue
-          worstX = Math.max(worstX, rect.right - box.right)
-          worstY = Math.max(worstY, rect.bottom - box.bottom)
-          if (rect.right - box.right > 1 || rect.bottom - box.bottom > 1) sample = text
+      /* Walk up for the first ancestor that either clips or scrolls. A scroller
+         wins: whatever is outside it can still be reached. */
+      let clipper: HTMLElement | null = null
+      let el: HTMLElement | null = parent
+      let announced = false
+      while (el && el !== document.body) {
+        const style = getComputedStyle(el)
+        if (style.visibility === 'hidden' || style.display === 'none') { announced = true; break }
+        if (style.textOverflow === 'ellipsis') { announced = true; break }
+        if (style.webkitLineClamp && style.webkitLineClamp !== 'none') { announced = true; break }
+        if (/(auto|scroll)/.test(style.overflowX + style.overflowY)) { announced = true; break }
+        if (/(hidden|clip)/.test(style.overflowX) || /(hidden|clip)/.test(style.overflowY)) {
+          clipper = el
+          break
         }
-        range.detach()
+        el = el.parentElement
       }
+      if (announced || !clipper) continue
+
+      const box = clipper.getBoundingClientRect()
+      // A visually-hidden label is a 1px box on purpose.
+      if (box.width <= 2 || box.height <= 2) continue
+
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0)
+      range.detach()
+      if (!rects.length) continue
+
+      const clipsX = /(hidden|clip)/.test(getComputedStyle(clipper).overflowX)
+      const clipsY = /(hidden|clip)/.test(getComputedStyle(clipper).overflowY)
 
       // 1px of tolerance: sub-pixel layout rounds against us constantly.
-      if (style.overflowX === 'hidden' && worstX > 1) {
-        out.push({ kind: 'clipped-x', detail: `text runs ${Math.round(worstX)}px past its box and is cut off, with no ellipsis`, snippet: sample.slice(0, 90) })
+      const pastRight = Math.max(...rects.map((r) => r.right)) - box.right
+      const pastLeft = box.left - Math.min(...rects.map((r) => r.left))
+      const pastBottom = Math.max(...rects.map((r) => r.bottom)) - box.bottom
+
+      if (clipsX && (pastRight > 1 || pastLeft > 1)) {
+        const side = pastRight > pastLeft ? `${Math.round(pastRight)}px past its right edge` : `${Math.round(pastLeft)}px past its left edge`
+        out.push({ kind: 'clipped-x', detail: `text is cut off — ${side}, with no ellipsis`, snippet: text.slice(0, 90) })
       }
-      if (style.overflowY === 'hidden' && worstY > 1) {
-        out.push({ kind: 'clipped-y', detail: `text runs ${Math.round(worstY)}px below its box and is cut off, with no clamp`, snippet: sample.slice(0, 90) })
+      if (clipsY && pastBottom > 1) {
+        out.push({ kind: 'clipped-y', detail: `text runs ${Math.round(pastBottom)}px below its box and is cut off, with no clamp`, snippet: text.slice(0, 90) })
       }
-    })
+    }
     return out
   }, IGNORED_HOSTS)
   return dedupe(raw)

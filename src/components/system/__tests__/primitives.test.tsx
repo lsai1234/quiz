@@ -79,6 +79,28 @@ describe('Button', () => {
     expect(screen.getByRole('button').className).toContain('system-focus')
   })
 
+  it('stacks its content when asked, so it can be a card you press', () => {
+    /* The three places in My Hub that press like a card — the delivery
+       calendar's boxes, the line-manage rows, the product-change options — pass
+       several stacked children. They used to say so in `className`, which
+       reached the button and never reached its content: the children live in a
+       wrapper span that was unconditionally `inline-flex items-center
+       justify-center`, so four stacked rows were laid out side by side inside a
+       160px box and, being centred, spilled out of both edges at once. */
+    const { container, rerender } = render(
+      <Button layout="stack"><span>one</span><span>two</span></Button>,
+    )
+    const stacked = container.querySelector('button > span')!
+    expect(stacked.className).toContain('flex-col')
+    expect(stacked.className).not.toContain('justify-center')
+    expect(container.querySelector('button')!.className).toContain('flex-col')
+
+    rerender(<Button><span>one</span></Button>)
+    const row = container.querySelector('button > span')!
+    expect(row.className).toContain('items-center')
+    expect(row.className).not.toContain('flex-col')
+  })
+
   it('rings a destructive action in its own colour, not the accent', () => {
     // One ring colour for everything disappears against a coloured fill, which
     // is the state a keyboard user most needs to see on a delete.

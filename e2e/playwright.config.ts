@@ -64,12 +64,24 @@ export default defineConfig({
   },
 
   projects: [
-    { name: 'mobile', use: { viewport: { width: 412, height: 915 } } },
+    /* 390px is the logical width of the iPhone most people are holding, and it
+       is where the hub's clipped status pills and half-cut calendar boxes showed
+       up — 412px was wide enough to hide both. */
+    { name: 'mobile', use: { viewport: { width: 390, height: 844 } } },
     {
       name: 'desktop',
       use: { viewport: { width: 1280, height: 900 }, hasTouch: false },
       /* The hubs are the desktop surfaces; the storefront is checked at both. */
       testMatch: /(founderhub|partner|formatting|visual)\.spec\.ts/,
+    },
+    {
+      /* The floor the README promises — "open it on mobile or in DevTools mobile
+         view (360px+)". Text that fits at 390 and not at 360 is a broken promise,
+         so the formatting pass runs here too. Screenshots do not: three sets of
+         baselines to review is how a visual suite stops being read. */
+      name: 'narrow',
+      use: { viewport: { width: 360, height: 780 } },
+      testMatch: /formatting\.spec\.ts/,
     },
   ],
 
