@@ -165,6 +165,47 @@ export function patchMean(image: Decoded, x0: number, y0: number, w: number, h: 
 }
 
 /**
+ * The worst ground any type on the card is sitting on.
+ *
+ * Walks the rows between two y bounds, keeps the ones that have type in them —
+ * a row whose brightest pixel reaches `typeAt`, which near-white ink does and a
+ * scrimmed photograph does not — and returns the highest row median among them.
+ * The median is the ground rather than the type: type covers a minority of any
+ * row it is on, so the middle of the row is what is behind it.
+ *
+ * It finds the type rather than being told where they are, which is the whole
+ * point: the block is bottom-anchored and its height is its contents, so a test
+ * that named y positions would be a test that passed a card whose type had
+ * moved.
+ *
+ * Meaningful only over a *flat* stand-in photograph. Over a frame with its own
+ * highlights the picture trips `typeAt` on its own and the answer is the
+ * picture's brightness, not the card's.
+ */
+export function worstTypeGround(
+  image: Decoded,
+  fromY: number,
+  toY: number,
+  typeAt = 224,
+): { y: number; ground: number } {
+  let worst = { y: -1, ground: -1 }
+  for (let y = Math.max(0, fromY); y < Math.min(image.height, toY); y += 1) {
+    const values: number[] = []
+    let max = 0
+    for (let x = 0; x < image.width; x += 1) {
+      const v = luminance(image.data, (y * image.width + x) * 4)
+      values.push(v)
+      if (v > max) max = v
+    }
+    if (max < typeAt) continue
+    values.sort((a, b) => a - b)
+    const ground = values[Math.floor(values.length / 2)]
+    if (ground > worst.ground) worst = { y, ground }
+  }
+  return worst
+}
+
+/**
  * A solid-colour PNG, as a data URI.
  *
  * Stands in for an uploaded photograph. Written by hand rather than fetched or

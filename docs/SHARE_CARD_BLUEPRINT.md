@@ -596,6 +596,48 @@ screen reviewed at 390×844 in a real browser via `/styleguide/share-flow`, whic
 because none of this was reviewable without finishing a quiz — which is how it got that
 way.
 
+### Phase 9 — The card over real photography · 0.5d — **done**
+
+The first uploaded frames went into the slots and the card stopped working. Two faults,
+both of which had been invisible while every card drew the gradient stand-in.
+
+**The scrim was cut against the stand-ins.** Those fields are near-black by
+construction, keep their left third dark on purpose and fade to the ink in their own
+last layer, so a scrim that did almost nothing through the middle of the picture looked
+correct over them. Measured over a light frame, the band the headline sits in was
+passing about 98% of the picture: near-white type on a ground of 198, a contrast ratio
+of 1.6:1. The stamp and the second headline line were not there at all, and the seam at
+the foot of the picture — which only ever closed to 88% of the ground — left a visible
+edge across the product rows.
+
+It is four layers now, in `lib/share-card/scrim.ts`, each one stating what it protects:
+the header rail, held to the foot of the rail rather than to a fixed fraction of a
+picture whose height changes per format; a flat exposure pull-down, so a frame shot
+brighter than the set cannot light up the crop marks and the outlined score; the type
+side, because every mark on this card is set from the left margin and the art brief's
+"nothing in the left third" is a brief rather than a guarantee; and the seam, closing to
+the ink. The type block carries a fifth of its own, drawn from inside it because the
+block is bottom-anchored and only it knows where its top edge lands once the entry
+card's prize and steps have been laid out. The Founders Hub upload slots import the same
+list instead of the copy that had been typed into a `style` prop, which is the only way
+"this is what the card will look like" stays true.
+
+Held to a number rather than to an eye: `worstTypeGround` walks the raster, finds the
+rows that have type on them and returns the worst ground behind any of them. Over a
+bright flat frame the story and entry cards measure under 80, where the ink clears 7:1.
+
+**The picture disagreed with the kicker.** `pickArtKey` took the first goal in the list,
+on the stated reasoning that the list is in the customer's own order of importance. It is
+not — `setGoals` appends in tap order, and the goals step lists the performance block
+above a second block of everyday-wellness ones. So a customer who tapped "General health"
+before "Performance" got a card whose kicker read THE PERFORMANCE ATHLETE over the
+wellbeing photograph. The archetype ranks the whole goal set; the picture was taking the
+first tap. It ranks the set now, in the same precedence `getArchetype` uses, and
+`art.test.ts` holds the two rules to agreeing over every goal set of up to three.
+
+**Exit met:** full suite 2913 green; `tsc --noEmit` clean. All four formats rendered over
+a bright stand-in frame and looked at.
+
 ---
 
 ## 5. Test personas

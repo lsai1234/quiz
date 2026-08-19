@@ -5,6 +5,7 @@ import { FONT_DISPLAY, FONT_MONO } from '@/lib/share-card/fonts'
 import { cardArt } from '@/lib/share-card/art-file'
 import { artField } from '@/lib/share-card/art'
 import { numeralPath, DIGIT_UPEM } from '@/lib/share-card/digits'
+import { scrimLayers, typeScrim, TYPE_SCRIM_RISE } from '@/lib/share-card/scrim'
 
 /**
  * The share card.
@@ -180,6 +181,9 @@ function withAlpha(hex: string, alpha: number): string {
 
 const RULE = withAlpha(P.ink1, 0.2)
 const MUTED = withAlpha(P.ink1, 0.44)
+
+/** The foot of the header rail, which is what the top of the scrim covers. */
+const railFloor = (g: Geometry) => g.safeTop + Math.round(g.mono * 2.4)
 
 /**
  * The headline, broken and sized to fit.
@@ -561,16 +565,23 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
       ) : (
         <ArtField artKey={view.artKey} g={g} />
       )}
-      {/* The scrim. Holds the header rail at the top and hands the photo to the
-          ink at the bottom, so the body block can break the seam. */}
-      <div
-        style={{
-          display: 'flex',
-          position: 'absolute',
-          top: 0, left: 0, width: g.w, height: g.artH,
-          backgroundImage: `linear-gradient(to bottom, ${withAlpha(P.groundBase, 0.55)} 0%, transparent 22%, transparent 62%, ${withAlpha(P.groundBase, 0.88)} 100%)`,
-        }}
-      />
+      {/* ── The scrim ───────────────────────────────────────────────────────
+          Four layers, each stating what it protects — the header rail, the
+          picture's exposure, the type side, the seam. They live in `scrim.ts`
+          because the Founders Hub upload slots draw the same gradients over the
+          same crop, and a preview that has typed its own copy of them is a
+          preview that quietly stops being one. */}
+      {scrimLayers({ artH: g.artH, railFloor: railFloor(g) }).map((layer, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            top: 0, left: 0, width: g.w, height: g.artH,
+            backgroundImage: layer,
+          }}
+        />
+      ))}
       <div
         style={{
           display: 'flex',
@@ -634,6 +645,25 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
           bottom: g.h - g.safeBottom,
         }}
       >
+        {/* The type block's own ground.
+            Absolutely positioned inside the block, so it is sized by the block:
+            the entry card carries a prize and three steps that the story card
+            does not, its type starts ~270px higher, and neither format has to
+            state where. Full card width and run past the bottom edge, because
+            the qty column and the footer reach further than this column does.
+            First child, since Satori paints in tree order and has no z-index. */}
+        <div
+          style={{
+            display: 'flex',
+            position: 'absolute',
+            left: -g.margin,
+            top: -TYPE_SCRIM_RISE,
+            width: g.w,
+            bottom: -(g.h - g.safeBottom),
+            backgroundImage: typeScrim(),
+          }}
+        />
+
         <div style={{ display: 'flex', ...mono(railSize + 1, 600, P.accent, 0.3), marginBottom: 14 }}>
           {view.kicker}
         </div>

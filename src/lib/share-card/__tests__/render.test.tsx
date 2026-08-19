@@ -7,7 +7,7 @@ import { ShareCard } from '@/components/share-card/ShareCard'
 import { buildShareCardView, FORMATS, type CompetitionBand, type ShareFormat } from '../format'
 import { loadShareCardFonts } from '../fonts'
 import { sharePersonas } from '../personas'
-import { decodePng, brightPixels, patchDeviation, patchMean, solidPngDataUri } from './png'
+import { decodePng, brightPixels, patchDeviation, patchMean, solidPngDataUri, worstTypeGround } from './png'
 import { ART_KEYS } from '../art'
 
 /**
@@ -116,21 +116,28 @@ describe('the card rasterises', () => {
 describe('with uploaded art', () => {
   const [persona] = PERSONAS
 
+  /** A bright frame, which is the case the scrim has to survive. Real
+   *  photography is rarely this even, and never darker than its own average. */
+  const BRIGHT: [number, number, number] = [205, 205, 210]
+
+  /** Where the picture still belongs to the picture: right of the type side's
+   *  grade, above the block, below the header rail's own scrim. */
+  const WINDOW = { x: 700, y: 330, w: 260, h: 200 }
+
   it.each(ART_KEYS)('draws the upload rather than the field — %s', async (key) => {
     const view = buildShareCardView({ ...persona.payload, artKey: key }, 'story')
     const res = new ImageResponse(
-      // Mid grey: bright enough to be unmistakable against a card whose art is
-      // near-black either way, and dark enough that the scrim still reads.
-      <ShareCard view={view} art={solidPngDataUri(108, 144, [128, 128, 128])} />,
+      <ShareCard view={view} art={solidPngDataUri(108, 121, BRIGHT)} />,
       { width: 1080, height: 1920, fonts: await loadShareCardFonts() },
     )
     expect(res.status).toBe(200)
 
     const image = decodePng(Buffer.from(await res.arrayBuffer()))
-    // The middle of the art window, where nothing else is drawn. The gradient
-    // fields all sit under 60 here; the upload puts it near 128 before the
-    // scrim's transparent midsection.
-    expect(patchMean(image, 120, 560, 200, 200)).toBeGreaterThan(90)
+    // The gradient fields all measure under 50 here, a bright upload about
+    // 157: the picture keeps three quarters of itself on this side of the
+    // frame. Sampled here rather than on the left because the type side is
+    // graded on purpose now, and a patch there would measure the scrim.
+    expect(patchMean(image, WINDOW.x, WINDOW.y, WINDOW.w, WINDOW.h)).toBeGreaterThan(100)
 
     // And the picture still stops where the card says it does. Sampled below
     // the safe line, where nothing but ground and grain is ever drawn — a patch
@@ -144,6 +151,40 @@ describe('with uploaded art', () => {
       width: 1080, height: 1920, fonts: await loadShareCardFonts(),
     })
     const image = decodePng(Buffer.from(await res.arrayBuffer()))
-    expect(patchMean(image, 120, 560, 200, 200)).toBeLessThan(90)
+    expect(patchMean(image, WINDOW.x, WINDOW.y, WINDOW.w, WINDOW.h)).toBeLessThan(60)
+  })
+
+  /**
+   * The card has to be readable over a photograph nobody has art-directed.
+   *
+   * This is the regression the scrim was rebuilt for. Its stops were cut
+   * against the gradient stand-ins, which are near-black by construction and
+   * carry their own fade to the ink; over an uploaded frame the band the
+   * headline sits in was passing about 98% of the picture, which put near-white
+   * type on a ground of 198 — a contrast ratio of 1.6:1. The stamp and the
+   * second headline line were simply not there.
+   *
+   * Asserted as "wherever there is type, what is behind it is dark", found from
+   * the raster rather than from named coordinates, so it holds as the block
+   * grows and shrinks with its contents. 110 is the ground at which the card's
+   * near-white ink still clears 5:1; both story frames measure under 80.
+   */
+  it.each(['story', 'entry'] as ShareFormat[])('keeps type on a dark ground — %s', async (format) => {
+    const view = buildShareCardView(persona.payload, format, format === 'entry' ? BAND : null)
+    const res = new ImageResponse(
+      <ShareCard view={view} art={solidPngDataUri(108, 121, BRIGHT)} />,
+      { width: 1080, height: 1920, fonts: await loadShareCardFonts() },
+    )
+    const image = decodePng(Buffer.from(await res.arrayBuffer()))
+
+    // Instagram's safe band, which is where all of the type is.
+    const worst = worstTypeGround(image, 250, 1620)
+    expect(worst.ground).toBeGreaterThan(0) // the walk found type at all
+    expect(worst.ground).toBeLessThan(110)
+
+    // And the seam closes. The last product row sits a few pixels above where
+    // the picture ends, so a picture still visible there is a picture behind
+    // the type — and the hard edge it left was visible as a line.
+    expect(patchMean(image, 0, 1180, 1080, 24)).toBeLessThan(40)
   })
 })

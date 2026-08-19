@@ -167,13 +167,7 @@ export function artField(key: ArtKey | undefined): ArtField {
   return ART_SET[key ?? 'wellbeing'].field
 }
 
-/**
- * Which family a goal belongs to.
- *
- * Ordered by how strongly each goal implies a picture: `muscle` says strength
- * far more loudly than `health` says wellbeing, so the first match down the
- * user's own goal list wins rather than the most common one.
- */
+/** Which family a goal belongs to. */
 const GOAL_FAMILY: Record<Goal, ArtKey> = {
   muscle: 'strength',
   bulking: 'strength',
@@ -193,20 +187,48 @@ const GOAL_FAMILY: Record<Goal, ArtKey> = {
 }
 
 /**
+ * How loudly a family claims the picture, most insistent first.
+ *
+ * `muscle` says strength far more than `health` says wellbeing, so a stack built
+ * for both gets the strength image. This is the same precedence
+ * `getArchetype()` applies to the same goals — strength, then performance, then
+ * energy, then the rest — and that is the point: the archetype is printed on the
+ * card as its kicker, so a picture chosen by a different rule is a card
+ * disagreeing with itself in public.
+ *
+ * Hydration sits above recovery because it is the goal whose name *is* its
+ * picture: someone asking for hydration has already described the frame.
+ * Wellbeing is last because it is where the goals with no picture of their own
+ * land — it is the family you get when nothing louder was asked for.
+ */
+const FAMILY_RANK: ArtKey[] = [
+  'strength', 'performance', 'energy', 'hydration', 'recovery', 'wellbeing',
+]
+
+/**
  * The art family for a stack.
  *
- * Takes the goals in the customer's own order, so the picture follows what they
- * said mattered most. Drinks mode overrides everything — an LQD package is a
- * box of drinks whatever it is for, and the hydration image is the one that says
- * so.
+ * ── Not the first goal in the list ──────────────────────────────────────────
+ * It used to be: the first goal whose family was known won, on the stated
+ * reasoning that the list is in the customer's own order of importance. It is
+ * not. `setGoals` records goals in the order they were *tapped* and sets
+ * `primaryGoal` to whichever was tapped first, and on the combined track the
+ * goals step lists performance goals above a second block of everyday-wellness
+ * ones. So a customer who tapped "General health" before "Performance" got a
+ * card whose kicker read THE PERFORMANCE ATHLETE over the wellbeing photograph
+ * — the archetype ranks the whole goal set, the picture took the first tap.
+ *
+ * Ranking the set fixes the disagreement at its source, and costs nothing that
+ * was actually being expressed: tap order is not a ranking, and nothing in the
+ * quiz asks the customer to make one.
+ *
+ * Drinks mode still overrides everything — an LQD package is a box of drinks
+ * whatever it is for, and the hydration image is the one that says so.
  */
 export function pickArtKey(goals: Goal[], drinksMode = false): ArtKey {
   if (drinksMode) return 'hydration'
-  for (const goal of goals) {
-    const family = GOAL_FAMILY[goal]
-    if (family) return family
-  }
-  return 'wellbeing'
+  const families = new Set(goals.map((goal) => GOAL_FAMILY[goal]).filter(Boolean))
+  return FAMILY_RANK.find((family) => families.has(family)) ?? 'wellbeing'
 }
 
 /** Whether this family is still standing in for art that has not been made. */

@@ -7,6 +7,7 @@ import {
   ART_MIMES, ART_MAX_BYTES, DERIVATIVE, SOURCE_MIN, CARD_WINDOW, LEFT_THIRD,
   validateSource, leftThirdWarning,
 } from '@/lib/share-card/art-upload'
+import { scrimLayers, STORY_SCRIM } from '@/lib/share-card/scrim'
 import { Button, Checkbox } from '@/components/system'
 
 /**
@@ -271,13 +272,18 @@ function ArtSlot({ slot, guide, busy, error, warning, onFile, onReset }: {
         )}
 
         {/* The card's own scrim, so the preview is what the card will look like
-            rather than what the photograph looks like. */}
+            rather than what the photograph looks like — the same layers the
+            renderer draws, from `scrim.ts`, rather than a copy typed here that
+            can drift from them. Reversed because CSS paints the first image in
+            a list on top and the card paints its first layer at the back.
+
+            The type block's own ground is not in this list: it is drawn from
+            inside the block, which is the only thing that knows where its top
+            edge lands. So a slot previews the picture with a little more of
+            itself showing than a finished card has under the headline. */}
         <div
           className="absolute inset-0"
-          style={{
-            backgroundImage:
-              'linear-gradient(to bottom, rgba(5,6,8,.55) 0%, transparent 22%, transparent 62%, rgba(5,6,8,.88) 100%)',
-          }}
+          style={{ backgroundImage: scrimLayers(STORY_SCRIM).slice().reverse().join(', ') }}
         />
 
         {guide ? (
