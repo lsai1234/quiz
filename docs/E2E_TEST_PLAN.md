@@ -22,10 +22,10 @@ fourth is Stripe's own test/live mode. Everything below refers back to this tabl
 
 | | Setting | Where | Values |
 |---|---|---|---|
-| **Shop** | `NEXT_PUBLIC_DATA_SOURCE` | Settings → Data source | `mock` · `real` |
+| **Shop** | `NEXT_PUBLIC_DATA_SOURCE` | Settings → Catalogue | `mock` · `real` |
 | **Read** | `SUPPLIER_SOURCE` | Settings → Supplier | `mock` · `powerbody` |
-| **Write** | `SUPPLIER_ORDERING` | Settings → Order sending | `simulate` · `live` |
-| **Money** | `PAYMENTS_SOURCE` | Settings → Payments (Stripe) | `mock` · `stripe` |
+| **Write** | `SUPPLIER_ORDERING` | Settings → Supplier → Order sending | `simulate` · `live` |
+| **Money** | `PAYMENTS_SOURCE` | Settings → Payments | `mock` · `stripe` |
 
 ### Phases
 
@@ -98,7 +98,7 @@ No keys, no supplier, no money. Just proves nothing is broken before you add var
 
 Read PowerBody for real; sell nothing yet.
 
-> **Do B1–B3 with the button.** Settings → **Test the supplier integration** runs
+> **Do B1–B3 with the button.** Settings → Supplier → **Test the integration** runs
 > every read-only call below one at a time and names the one that failed,
 > including the `getProductInfo` check in B3. Run it first; work the list by hand
 > only for what it cannot answer.
@@ -122,7 +122,7 @@ Read PowerBody for real; sell nothing yet.
 - [ ] **B8** Try to merge two different *sizes* → refused, naming the differing cost
 - [ ] **B9** Products → **Check now** (supplier sync) → stock/cost refresh, nothing
       founder-edited is overwritten
-- [ ] **B10** Settings → Data source → **real** → the shop now serves only imported
+- [ ] **B10** Settings → Catalogue → **real** → the shop now serves only imported
       products, and the quiz recommends from them
 - [ ] **B11** `GET /api/portal/supplier/shipping-methods` → how many delivery services this
       account actually has. One (or an "not callable" error) means their published card is

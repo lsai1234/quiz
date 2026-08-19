@@ -28,7 +28,7 @@ import { getSupplierSource } from './index'
 
 export type OrderingMode = 'simulate' | 'live'
 
-// Runtime override set by the portal (Settings → Order sending), persisted in
+// Runtime override set by the portal (Settings → Supplier → Order sending), persisted in
 // the DB and hydrated by `syncPortalRuntime()`. Wins over env so it can be
 // flipped without a redeploy — and, more to the point, flipped back fast.
 let _runtimeOverride: OrderingMode | null = null

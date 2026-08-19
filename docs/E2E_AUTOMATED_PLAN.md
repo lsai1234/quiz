@@ -63,12 +63,12 @@ The widths are not decorative. Both faults in the round below were invisible at
 | `03-bundles` | Bundles | The shop rail, every seeded bundle page, contents/price/saving, an unknown slug 404ing |
 | `04-checkout` | Buying | Shop basket → confirmation; quiz stack as a one-off; quiz stack → subscription → account gate; the `quiz` vs `shop` channel; partner codes refused on a plain basket; postage on the receipt matching postage on the order |
 | `05-myhub` | My Hub | Sign-in and its refusals; next box, billing breakdown and the three figures adding up; delivery calendar; stack controls; re-consent notice accept/dismiss/stale-version; exit-charge guards (401, bogus settlement); the empty-hub screen |
-| `06-founderhub` | Founders Hub | Gate and refusals; every section reachable; dashboard against the orders API; the review queue and its simulation notice; mock orders blocked for having no address; order detail; UK date order; settings resolving to mock; partners; the outbox; the supplier integration check |
+| `06-founderhub` | Founders Hub | Gate and refusals; every section reachable; dashboard against the orders API; the review queue and its simulation notice; mock orders blocked for having no address; order detail; UK date order; the settings index and every topic page behind it; partners; the outbox; the supplier integration check |
 | `07-partner` | Partners Hub | Create → invite → the one-time link names its owner without spending it → set password → signed straight in → link now spent; sign-in refusals; own-numbers-only; all three tabs |
 | `08-share-legal` | Share card, legal | The share sheet; a minted short link opened in a browser that never took the quiz; an invented token; the three legal screens including the honest "no competition is running" |
 | `11-subscription-changes` | My Hub | Swapping: alternatives quote their monthly effect, the confirmation quotes old → new, nothing persists until Confirm, backing out is safe, and the quoted figure is the billed figure. Removing and re-cadencing. Eight checks that the browser cannot set its own price |
 | `09-formatting` | Everything | The rendered-output inspector over 31 routes, plus the basket drawer, product sheet, finished stack, hub dashboard and partner tabs |
-| `10-visual` | Everything | Pixel baselines for the hero, first question, shop, a bundle page, all three gates, the styleguide and the hub shell |
+| `10-visual` | Everything | Pixel baselines for the hero, first question, shop, a bundle page, all three gates, the styleguide, the settings index and a settings detail screen |
 
 Journeys are driven by what a person reads — `getByRole`, accessible names, the
 copy on the button — rather than by CSS paths or test ids. That makes the specs
@@ -295,7 +295,7 @@ un-fixed code first and both went red, so they are guarding something.
 
 ## Testing the supplier integration against the sandbox
 
-`Founders Hub → Settings → Test the supplier integration` runs every read-only
+`Founders Hub → Settings → Supplier → Test the integration` runs every read-only
 call we make to PowerBody, one at a time, and reports each separately — so a
 failure names the call rather than the screen. It is `E2E_TEST_PLAN.md` phase B
 as a button, and it runs through `getSupplier()` exactly as the app does, so

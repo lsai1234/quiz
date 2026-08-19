@@ -51,6 +51,11 @@ const FOUNDER_ROUTES: Array<{ path: string; name: string }> = [
   { path: '/founderhub/actions', name: 'Actions' },
   { path: '/founderhub/emails', name: 'Emails' },
   { path: '/founderhub/settings', name: 'Settings' },
+  { path: '/founderhub/settings/catalogue', name: 'Settings → Catalogue' },
+  { path: '/founderhub/settings/supplier', name: 'Settings → Supplier' },
+  { path: '/founderhub/settings/payments', name: 'Settings → Payments' },
+  { path: '/founderhub/settings/competition', name: 'Settings → Competition' },
+  { path: '/founderhub/settings/share-cards', name: 'Settings → Share cards' },
 ]
 
 /**

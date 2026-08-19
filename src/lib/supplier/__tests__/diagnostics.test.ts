@@ -127,7 +127,7 @@ describe('the getProductInfo trap', () => {
 describe('delivery services', () => {
   it('treats one service as an answer, not a failure', async () => {
     const report = await runSupplierDiagnostics(
-      await providerWith({ shippingMethods: async () => [{ code: 'STD', name: 'Standard' }] }),
+      await providerWith({ shippingMethods: async () => [{ code: 'STD', name: 'Standard', price: null }] }),
     )
     const methods = check(report, 'shipping-methods')
     expect(methods.status).toBe('warn')
@@ -138,8 +138,8 @@ describe('delivery services', () => {
     const report = await runSupplierDiagnostics(
       await providerWith({
         shippingMethods: async () => [
-          { code: 'STD', name: 'Standard' },
-          { code: 'EXP', name: 'Express' },
+          { code: 'STD', name: 'Standard', price: null },
+          { code: 'EXP', name: 'Express', price: 4.95 },
         ],
       }),
     )

@@ -72,7 +72,7 @@ NEXT_PUBLIC_DATA_SOURCE=mock   # mock | real
   you actually sell, and it starts empty: add products in Hub → Products → PowerBody.
 
 No credentials are involved, so this can't silently fall back. Flip it at runtime in the
-Founders Hub (Settings → Data source). A previous storefront integration was the old
+Founders Hub (Settings → Catalogue). A previous storefront integration was the old
 "live" side of this switch and has been removed — a stale `shopify` or `auto` value reads
 as `mock`, so an old deploy degrades quietly.
 
@@ -90,7 +90,7 @@ SUPPLIER_ORDERING=simulate       # simulate | live — does "Send" really place 
 ```
 
 Both default to the safe option and can be flipped at runtime from the Founders Hub
-(Settings → Supplier, Settings → Order sending). `live` ordering also requires the live
+(Settings → Supplier, where both switches live). `live` ordering also requires the live
 supplier — mock SKUs are sample data. See `docs/POWERBODY_API.md`.
 
 ## Accounts & database

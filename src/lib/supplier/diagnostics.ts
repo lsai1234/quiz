@@ -124,7 +124,7 @@ export async function runSupplierDiagnostics(
     detail:
       source === 'powerbody'
         ? 'Live PowerBody. Everything below is a real call to their API.'
-        : 'The built-in sample catalogue. Nothing below touches PowerBody — set Settings → Supplier to Live PowerBody to test the real thing.',
+        : 'The built-in sample catalogue. Nothing below touches PowerBody — set the switch above to Live PowerBody to test the real thing.',
     evidence: `mode=${getSupplierMode()} · source=${getSupplierSource()} · credentials=${credentials ? 'set' : 'missing'}`,
     ms: 0,
   })
@@ -304,7 +304,7 @@ export async function runSupplierDiagnostics(
     title: 'Place an order',
     status: 'skip',
     detail:
-      'Not run from this screen, on purpose — placing an order has a consequence at PowerBody’s end. Send one from Commerce → Review queue, which has its own confirmation and honours Settings → Order sending.',
+      'Not run from this screen, on purpose — placing an order has a consequence at PowerBody’s end. Send one from Commerce → Review queue, which has its own confirmation and honours Settings → Supplier → Order sending.',
     ms: 0,
   })
 

@@ -166,7 +166,7 @@ export function OrderingModeBanner({ ordering }: { ordering: 'simulate' | 'live'
       ) : (
         <>
           <strong>Simulation mode.</strong> Send moves orders through the flow but nothing reaches PowerBody and
-          nothing ships. Change this in Settings → Order sending.
+          nothing ships. Change this in Settings → Supplier → Order sending.
         </>
       )}
     </p>

@@ -150,14 +150,61 @@ test.describe('orders', () => {
 })
 
 test.describe('settings', () => {
-  test('shows every integration resolved to its mock', async ({ page }) => {
+  /**
+   * Settings is an index of topics, each opening its own page — five unrelated
+   * subjects that used to be one long scroll where the switch you wanted was
+   * always below the fold.
+   */
+  test('lists every topic, grouped, one tap away', async ({ page }) => {
     await founderSessionViaApi(page)
     await page.goto('/founderhub/settings')
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
-    const body = await page.locator('body').innerText()
-    for (const control of [/Data source/i, /Supplier/i, /Order sending/i, /Payments/i]) {
-      expect(body).toMatch(control)
+    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
+
+    for (const group of ['Selling', 'Marketing']) {
+      await expect(page.getByRole('heading', { name: group, level: 2 })).toBeVisible()
     }
+    for (const topic of ['Catalogue', 'Supplier', 'Payments', 'Competition', 'Share cards']) {
+      await expect(page.getByRole('link', { name: new RegExp(`^${topic}`) })).toBeVisible()
+    }
+  })
+
+  test('each topic opens its own page, and offers the way back', async ({ page }) => {
+    await founderSessionViaApi(page)
+
+    const topics: Array<[link: string, slug: string, control: RegExp]> = [
+      ['Catalogue', 'catalogue', /Mock catalogue/i],
+      ['Supplier', 'supplier', /Where we read from/i],
+      ['Payments', 'payments', /Mock payments/i],
+      ['Competition', 'competition', /competition/i],
+      ['Share cards', 'share-cards', /share card/i],
+    ]
+
+    for (const [link, slug, control] of topics) {
+      await page.goto('/founderhub/settings')
+      await page.getByRole('link', { name: new RegExp(`^${link}`) }).click()
+      await expect(page).toHaveURL(new RegExp(`/founderhub/settings/${slug}$`))
+      await expect(page.getByRole('heading', { name: link, level: 1 })).toBeVisible()
+      await expect(page.getByText(control).first()).toBeVisible()
+
+      // The way out, for somebody who arrived by tapping a row.
+      await page.getByRole('link', { name: 'Settings', exact: true }).first().click()
+      await expect(page).toHaveURL(/\/founderhub\/settings$/)
+    }
+  })
+
+  test('the switches still resolve to mock, on their own pages', async ({ page }) => {
+    await founderSessionViaApi(page)
+
+    await page.goto('/founderhub/settings/supplier')
+    await expect(page.getByRole('heading', { name: 'Order sending' })).toBeVisible()
+    /* "Now using" is rendered from the toggle's own fetch, so this waits for it
+       rather than reading the page once — reading immediately after `goto`
+       catches the screen before the state has arrived. */
+    await expect(page.getByText(/Now using:/i)).toBeVisible()
+    await expect(page.getByText('Mock', { exact: true }).first()).toBeVisible()
+
+    await page.goto('/founderhub/settings/payments')
+    await expect(page.getByText(/Mock payments/i).first()).toBeVisible()
   })
 
   test('the data source can be read back over the API', async ({ page }) => {
@@ -201,8 +248,8 @@ test.describe('the supplier integration check', () => {
    */
   test('runs every read-only call and reports each separately', async ({ page }) => {
     await founderSessionViaApi(page)
-    await page.goto('/founderhub/settings')
-    await expect(page.getByRole('heading', { name: 'Test the supplier integration' })).toBeVisible()
+    await page.goto('/founderhub/settings/supplier')
+    await expect(page.getByRole('heading', { name: 'Test the integration' })).toBeVisible()
 
     await page.getByRole('button', { name: /Run the checks/ }).click()
 
@@ -222,14 +269,14 @@ test.describe('the supplier integration check', () => {
 
   test('says the run proves nothing about PowerBody while on the sample feed', async ({ page }) => {
     await founderSessionViaApi(page)
-    await page.goto('/founderhub/settings')
+    await page.goto('/founderhub/settings/supplier')
     await page.getByRole('button', { name: /Run the checks/ }).click()
     await expect(page.getByText(/Switch Supplier to/)).toBeVisible({ timeout: 30_000 })
   })
 
   test('never offers to place an order from the settings screen', async ({ page }) => {
     await founderSessionViaApi(page)
-    await page.goto('/founderhub/settings')
+    await page.goto('/founderhub/settings/supplier')
     await page.getByRole('button', { name: /Run the checks/ }).click()
     await expect(page.getByText('Place an order', { exact: true })).toBeVisible({ timeout: 30_000 })
 
@@ -242,7 +289,7 @@ test.describe('the supplier integration check', () => {
 
   test('the panel renders cleanly', async ({ page }) => {
     await founderSessionViaApi(page)
-    await page.goto('/founderhub/settings')
+    await page.goto('/founderhub/settings/supplier')
     await page.getByRole('button', { name: /Run the checks/ }).click()
     await expect(page.getByText('Read orders back', { exact: true })).toBeVisible({ timeout: 30_000 })
     const findings = await inspect(page)

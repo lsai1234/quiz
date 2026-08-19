@@ -30,8 +30,8 @@ They are deliberately independent, which gives you a safe path in:
 
 Only step 4 can ship a parcel.
 
-All three can be flipped at runtime from the Founders Hub (**Settings → Data source**,
-**Settings → Supplier**, **Settings → Order sending**) without a redeploy; the portal
+All three can be flipped at runtime from the Founders Hub (**Settings → Catalogue**,
+**Settings → Supplier**, and **Order sending** on the same page) without a redeploy; the portal
 choice is persisted in the database and wins over the environment variables.
 
 Two safety properties are enforced in code, not by convention:
@@ -331,7 +331,7 @@ caller must not be able to get past them by not having looked at the UI.
 
 1. Confirm the catalogue is on live PowerBody and stock looks right.
 2. Work a day's queue in simulate mode end to end.
-3. **Settings → Order sending → Send orders to PowerBody** (asks for confirmation).
+3. **Settings → Supplier → Order sending → Send orders to PowerBody** (asks for confirmation).
 4. Send one real order and check it appears in the PowerBody portal.
 
 Orders arrive at PowerBody **unpaid**, resting at `holded`. They ship once paid — log in at

@@ -116,10 +116,21 @@ test.describe('the hubs', () => {
   test('the founders hub shell', async ({ page }) => {
     await founderSessionViaApi(page)
     await page.goto('/founderhub/settings')
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible()
     await settle(page)
-    /* Settings rather than the dashboard: the dashboard is all live figures and
-       would change with every order any other spec raises. */
+    /* The settings index rather than the dashboard: the dashboard is all live
+       figures and would change with every order any other spec raises. This one
+       is a fixed list, and it exercises the shell, the card surface, the icon
+       set and the grouped-list layout in one frame. */
     await expect(page).toHaveScreenshot('founderhub-settings.png', STILL)
+  })
+
+  test('a settings detail screen', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/settings/supplier')
+    await expect(page.getByRole('heading', { name: 'Supplier', level: 1 })).toBeVisible()
+    await settle(page)
+    // Two option groups and a back link — the shape every detail page shares.
+    await expect(page).toHaveScreenshot('founderhub-settings-supplier.png', STILL)
   })
 })

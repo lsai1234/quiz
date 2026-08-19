@@ -517,7 +517,7 @@ async function supplierOrderInputFor(order: Order, lines: OrderLine[]): Promise<
  * Send the order to PowerBody for dropship fulfilment. Requires approval.
  *
  * Whether this actually reaches PowerBody depends on the ordering mode
- * (`SUPPLIER_ORDERING`, or Settings → Order sending in the hub). In `simulate`
+ * (`SUPPLIER_ORDERING`, or Settings → Supplier → Order sending in the hub). In `simulate`
  * — the default — the order walks the exact same states and writes the same
  * audit trail against the mock supplier, but nothing reaches PowerBody and
  * nothing ships. The gate lives HERE rather than in the route so that a cron, a
