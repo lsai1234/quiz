@@ -13,6 +13,7 @@ import {
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
 import { calculatePricing, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
+import { planTiers, tierPlanFor, type TierPlan } from '@/lib/stack-blueprint/tier-plan'
 import { selectStatAxes } from '@/lib/stack-stats'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
@@ -40,7 +41,7 @@ import { buildSharePayload } from '@/lib/share-card/payload'
 import { ConsentGate } from '@/components/legal/ConsentGate'
 import { funnel } from '@/lib/analytics/quiz'
 import type { StackLevel, Goal } from '@/lib/types'
-import { TIER_ORDER, TIER_SIZES, TIER_META } from '@/lib/quiz-core'
+import { TIER_META } from '@/lib/quiz-core'
 
 // Compact goal labels for the honest "no strong match" note.
 const GOAL_LABEL: Partial<Record<Goal, string>> = {
@@ -50,17 +51,20 @@ const GOAL_LABEL: Partial<Record<Goal, string>> = {
   recovery: 'recovery', health: 'general health', cutting: 'getting lean', bulking: 'gaining mass',
 }
 
-interface TierInfo { level: StackLevel; size: number; oneOff: number; monthly: number }
-
 /**
  * The value-first depth selector: build the full stack, let the customer choose
  * how deep to go. Shows what each depth contains (count) and its price, so the
  * value is visible before the price — and picking a depth reprices instantly.
+ *
+ * Each depth is priced to its band (`TIER_PRICE_BANDS`), so Essentials is the
+ * same sort of money for every member and the count is what moves. A stack with
+ * too few products to fill three bands offers two options, or one — `planTiers`
+ * folds the rest rather than showing the same stack twice.
  */
 function StackTierSelector({
   tiers, current, isSub, onChange,
 }: {
-  tiers: TierInfo[]
+  tiers: TierPlan[]
   current: StackLevel
   isSub: boolean
   onChange: (level: StackLevel) => void
@@ -70,8 +74,9 @@ function StackTierSelector({
       <p className="text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-3" style={{ fontFamily: 'var(--font-display)' }}>
         Choose your depth
       </p>
-      <div className="grid grid-cols-3 gap-2">
-        {tiers.map(({ level, size, oneOff, monthly }) => {
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${tiers.length}, minmax(0, 1fr))` }}>
+        {tiers.map(({ level, slots, oneOff, monthly }) => {
+          const size = slots.length
           const meta = TIER_META[level]
           const active = current === level
           return (
@@ -252,17 +257,18 @@ export function StackReviewPage() {
   // so what is shown and what is charged come from the same number.
   const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
 
-  const subOpts = useMemo(
+  // Everything the price depends on EXCEPT the depth — the depth is what the
+  // tier planner is deciding, so it can't be an input to it.
+  const priceOpts = useMemo(
     () => ({
       usageByProductId: subscriptionUsage,
-      level: stackLevel,
       introDiscountOverride: revealedIntroDiscount,
       defaultChangePolicy: changePolicy.default,
       changePolicyByProductId: changePolicy.byProductId,
       partnerDiscountPct: partnerCode?.discountPct ?? null,
       partnerCode: partnerCode?.code ?? null,
     }),
-    [subscriptionUsage, stackLevel, revealedIntroDiscount, changePolicy, partnerCode],
+    [subscriptionUsage, revealedIntroDiscount, changePolicy, partnerCode],
   )
 
   const sortedSlots = useMemo(
@@ -272,13 +278,43 @@ export function StackReviewPage() {
 
   // ── Value-first tiers ──────────────────────────────────────────────────────
   // The engine builds the full stack; the customer chooses a depth here, seeing
-  // the value before the price. Each tier is a ranked prefix of the complete
-  // bundle. Drinks mode is pace-sized (not tiered), so it shows the whole box.
+  // the value before the price. Each depth is filled to its own monthly price
+  // band (`planTiers`), so Essentials costs about the same whatever the quiz
+  // said and the number of products is what varies — not the other way round.
+  // Drinks mode is pace-sized (not tiered), so it shows the whole box.
   const isDrinks = !!answers.drinksMode
-  const tierSize = isDrinks ? sortedSlots.length : Math.min(TIER_SIZES[stackLevel], sortedSlots.length)
-  const activeSlots = useMemo(() => sortedSlots.slice(0, tierSize), [sortedSlots, tierSize])
-  const activeBlueprint = useMemo(() => ({ ...blueprint, slots: activeSlots }), [blueprint, activeSlots])
-  const showTiers = !isDrinks && sortedSlots.length > 3
+  const tierPlans = useMemo(
+    () => planTiers(blueprint, products, answers, undefined, priceOpts),
+    [blueprint, products, answers, priceOpts],
+  )
+  // The depth actually on offer for the member's choice: `planTiers` folds
+  // depths a small stack can't tell apart, so the stored level may no longer be
+  // one of them. Everything downstream — pricing, the receipt, checkout — uses
+  // THIS level rather than the stored one, so the card is charged what the
+  // selector showed.
+  const activePlan = tierPlanFor(tierPlans, stackLevel)
+  const activeLevel = isDrinks ? stackLevel : activePlan.level
+  const activeSlots = isDrinks ? sortedSlots : activePlan.slots
+  const activeBlueprint = useMemo(
+    () => ({ ...blueprint, slots: activeSlots, level: activeLevel }),
+    [blueprint, activeSlots, activeLevel],
+  )
+  const showTiers = !isDrinks && tierPlans.length > 1
+
+  const subOpts = useMemo(() => ({ ...priceOpts, level: activeLevel }), [priceOpts, activeLevel])
+
+  // Keep the stored depth honest: a fold (or a swap that reshapes the stack) can
+  // retire the depth the member last chose, and anything else reading the store
+  // — the bundle screen's advertised save rate, the checkout payload — would go
+  // on quoting a bundle that is no longer on offer.
+  //
+  // Never while the catalogue is still loading: with no products every depth
+  // prices at £0, they all fold into one, and the member's default would be
+  // rewritten from a plan built out of nothing.
+  useEffect(() => {
+    if (isDrinks || products.length === 0) return
+    if (activeLevel !== stackLevel) setStackLevel(activeLevel)
+  }, [isDrinks, products.length, activeLevel, stackLevel, setStackLevel])
 
   const handleCheckout = useCallback(
     () => checkout(activeBlueprint, products, planType, answers, subOpts),
@@ -294,18 +330,6 @@ export function StackReviewPage() {
     [activeBlueprint, products, answers, subOpts],
   )
   const slotTitleById = Object.fromEntries(blueprint.slots.map((s) => [s.slotId, s.title]))
-
-  // Per-tier price summary for the selector (one-off + monthly at each depth), so
-  // the price follows the depth the customer picks.
-  const tierInfos = useMemo(
-    () => TIER_ORDER.map((level) => {
-      const size = Math.min(TIER_SIZES[level], sortedSlots.length)
-      const bp = { ...blueprint, slots: sortedSlots.slice(0, size) }
-      const pr = calculatePricing(bp, products, answers, undefined, { ...subOpts, level })
-      return { level, size, oneOff: pr.oneOffTotal, monthly: pr.subscriptionTotal }
-    }),
-    [blueprint, sortedSlots, products, answers, subOpts],
-  )
 
   /**
    * The share card's snapshot.
@@ -474,12 +498,12 @@ export function StackReviewPage() {
         )}
 
         {/* Value-first depth selector — choose Essentials / Balanced / Complete,
-            each a ranked prefix of the full stack, priced so value comes first. */}
+            each filled to its own monthly price band, so value comes first. */}
         {showTiers && (
           <div className="pt-6">
             <StackTierSelector
-              tiers={tierInfos}
-              current={stackLevel}
+              tiers={tierPlans}
+              current={activeLevel}
               isSub={planType === 'subscription'}
               onChange={setStackLevel}
             />
@@ -677,10 +701,10 @@ export function StackReviewPage() {
 
       {journeyOpen && (
         <SubscriptionJourney
-          blueprint={blueprint}
+          blueprint={activeBlueprint}
           products={products}
           answers={answers}
-          level={stackLevel}
+          level={activeLevel}
           usage={subscriptionUsage}
           onUsageChange={setSubscriptionUsage}
           onTrainingFrequencyChange={(freq) => setAnswer('trainingFrequency', freq)}

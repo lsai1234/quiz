@@ -127,6 +127,27 @@ the normal stack gets the stack version; **drinks mode leans into drinks &
 convenience** ("one box in the fridge — no tubs, no pills, no scoops"). Tapping
 the chip dismisses it.
 
+## The three depths on the reveal (`Act4Reveal`)
+
+There is no budget question. The engine builds one ranked stack and
+`StackReviewPage` offers **Essentials / Balanced / Complete** over it, each
+filled to a **monthly subscription price bracket** — up to £35, £35–55, £55–80
+(`TIER_PRICE_BANDS` in `src/lib/quiz-core/tiers.ts`, filled by
+`planTiers` in `src/lib/stack-blueprint/tier-plan.ts`).
+
+Price is the constant and the product count is what moves, so Essentials means
+the same money whatever the quiz said. The depths nest — each contains
+everything the one below it has — and required slots plus anything the member
+added from the upgrades card are in every depth however much they cost. A stack
+too small to fill three brackets offers two options, or one, rather than the
+same list at two prices. Drinks mode is pace-sized rather than banded and shows
+the whole box.
+
+Everything downstream (receipt, subscription journey, checkout) prices the
+depth on screen at that depth's subscribe-&-save rung, so the number the member
+chose is the number the card is charged. `docs/PRICING_GUIDE.md` §4 has the
+brackets and the reasoning.
+
 ## Liquid brand chrome (LQD)
 
 In drinks mode the whole run *feels* like liquid, not just the copy:

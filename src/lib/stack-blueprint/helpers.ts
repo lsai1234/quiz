@@ -153,6 +153,7 @@ export function addBoosterSlot(
     required: false,
     canRemove: true,
     canSwap: true,
+    addedByUser: true,
     displayOrder: maxOrder + 1,
   }
   return { ...blueprint, slots: [...blueprint.slots, newSlot] }

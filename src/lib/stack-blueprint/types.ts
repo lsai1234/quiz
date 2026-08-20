@@ -17,6 +17,12 @@ export interface StackSlotEntry {
   reason: string                    // plain-English reason this slot is included
   confidenceScore: number           // 0-100, how confident the engine is
   displayOrder: number              // sort order in UI
+  /**
+   * True when the member added this themselves from the upgrades card, rather
+   * than the engine choosing it. Depth tiers keep it whatever their price band
+   * says — a product someone asked for is never sized back out of their stack.
+   */
+  addedByUser?: boolean
 }
 
 export interface StackBlueprint {

@@ -239,6 +239,41 @@ not on single products from the shop.
 15%, including the scratch card — which used to be the one discount that slipped
 past the guardrail.
 
+### The three depths cost the same whoever takes the quiz
+
+Essentials, Balanced and Complete are **price brackets, not product counts**:
+
+| Depth | Monthly subscription |
+| --- | --- |
+| Essentials | up to **£35** |
+| Balanced | **£35–£55** |
+| Complete | **£55–£80** |
+
+The engine builds one ranked stack and each depth is filled with the most
+relevant products that fit its bracket, so the *number* of products is what
+changes between two members — not the price. It used to be the other way round:
+the depths were fixed at 3 / 5 / 7 products, which made "Essentials" mean £26 to
+one member and £68 to another, and put Complete anywhere between £50 and £120.
+Two people comparing notes on the same three options were looking at two
+different shops.
+
+Three things the brackets are not allowed to do:
+
+- **Drop something the stack is for.** A product the quiz marked required — a
+  bulking member's mass builder at £37/month — is in every depth even when it
+  alone costs more than the bracket. Same for anything the member added
+  themselves.
+- **Fake a choice.** A small stack can run out of products before it runs out of
+  brackets. Rather than show the same list twice, or two prices eight pence
+  apart, it offers two depths, or one.
+- **Disagree with the till.** The price on the depth card is produced by the
+  same `calculatePricing` call the checkout bills from.
+
+The brackets live in `src/lib/quiz-core/tiers.ts` (`TIER_PRICE_BANDS`) and the
+fill is `src/lib/stack-blueprint/tier-plan.ts`. Anything a depth can't fit stays
+on the results page as an upgrade, so the member chooses to go above £80 rather
+than being shown it.
+
 ---
 
 ## 5. Where prices come from — one rule
