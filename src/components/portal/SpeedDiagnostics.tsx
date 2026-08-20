@@ -23,6 +23,7 @@ interface Timing { label: string; ms: number; detail: string }
 interface Report {
   engine: 'sqlite' | 'postgres'
   host: string | null
+  where: { function: string | null; database: string | null }
   pooled: boolean
   instance: { ageMs: number; requestsServed: number }
   ping: { samples: number; bestMs: number; medianMs: number; worstMs: number }
@@ -99,6 +100,7 @@ export function SpeedDiagnostics() {
           <span style={meta}>
             {report.engine === 'postgres' ? report.host ?? 'Postgres' : 'SQLite, on this machine'}
             {report.engine === 'postgres' && report.pooled ? ' · pooled endpoint' : ''}
+            {report.where.function ? ` · functions in ${report.where.function}` : ''}
           </span>
         )}
       </div>

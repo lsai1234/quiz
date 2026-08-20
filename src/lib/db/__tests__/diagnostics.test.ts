@@ -19,6 +19,15 @@ describe('the verdict', () => {
     expect(v).toMatch(/0\.6s/)
   })
 
+  it('names both ends when it knows them, because that is the decision', () => {
+    const v = verdictFor('postgres', 79, 78, 600_000, 40, {
+      function: 'iad1 (Washington DC)',
+      database: 'eu-west-2 (London)',
+    })
+    expect(v).toContain('iad1 (Washington DC)')
+    expect(v).toContain('eu-west-2 (London)')
+  })
+
   it('names the cold start when the trips are fast but the server is new', () => {
     const v = verdictFor('postgres', 2, 1, 800, 1)
     expect(v).toMatch(/brand new|starting up/i)

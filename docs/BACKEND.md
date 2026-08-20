@@ -263,3 +263,33 @@ already in place.
 Without `DATABASE_URL` the deploy still works, but data lives in a per-instance
 SQLite file that resets on redeploy — fine for a quick preview, not for real
 accounts.
+
+### The functions and the database go in the same region
+
+`vercel.json` pins the functions to `lhr1` (London) because the Neon database is
+in `eu-west-2` (London). This is not a preference. Vercel's default region is
+`iad1` (Washington DC), and with the database in London that put an ocean
+between the app and its data:
+
+| | Functions in `iad1` | Functions in `lhr1` |
+|---|---|---|
+| One query, before it does anything | **79ms** | ~1–2ms |
+| The catalogue read behind every product screen | **661ms** | tens of ms |
+| Recounting the quiz funnel (746 events) | **427ms** | tens of ms |
+
+Those are measured numbers from the live site, not estimates — Founders Hub →
+Settings → Speed reports them, and it names both regions so a mismatch says so
+outright rather than leaving the arithmetic to whoever reads it.
+
+Worse than the per-query cost: opening a Postgres connection is a TCP handshake,
+then TLS, then authentication — five or six round trips before the first query,
+paid again by every cold-started instance. At 79ms that is most of half a second
+of a request that has not started work yet, which is why a hub used in bursts
+felt slow on *every* screen rather than on the heavy ones.
+
+**If either side moves, move the other.** A database in `us-east-1` wants
+`iad1`; the region here is a pair, and splitting it is invisible in code and
+expensive in every request. On a Vercel Hobby plan only one region may be set —
+if the `regions` key is ever rejected at build time, the same setting lives in
+Project Settings → Functions → Function Region, and a redeploy is needed either
+way for it to take effect.

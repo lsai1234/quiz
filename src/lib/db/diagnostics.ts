@@ -55,6 +55,8 @@ export interface DbDiagnostics {
   engine: 'sqlite' | 'postgres'
   /** Host only — never the credentials in the connection string. */
   host: string | null
+  /** Where this function is running, and where its database is. */
+  where: { function: string | null; database: string | null }
   /** True when the URL is one of the pooled endpoints hosted Postgres offers. */
   pooled: boolean
   instance: {
@@ -88,6 +90,40 @@ function hostOf(url: string | undefined): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * The two ends of every query, named.
+ *
+ * A latency figure tells you there is a distance; it does not tell you which
+ * side to move, and that is the only decision it leads to. Both ends announce
+ * themselves if you know where to look — the platform puts its region in the
+ * environment, and hosted Postgres puts its own in the hostname
+ * (`ep-something.eu-west-2.aws.neon.tech`) — so the check can say "these two,
+ * and they are not the same place" instead of leaving the arithmetic to
+ * whoever reads it.
+ */
+const PLACES: Record<string, string> = {
+  iad1: 'Washington DC', cle1: 'Cleveland', sfo1: 'San Francisco', pdx1: 'Portland',
+  lhr1: 'London', cdg1: 'Paris', fra1: 'Frankfurt', dub1: 'Dublin', arn1: 'Stockholm',
+  hnd1: 'Tokyo', icn1: 'Seoul', sin1: 'Singapore', syd1: 'Sydney', bom1: 'Mumbai',
+  gru1: 'São Paulo', hkg1: 'Hong Kong', kix1: 'Osaka', cpt1: 'Cape Town',
+  'us-east-1': 'N. Virginia', 'us-east-2': 'Ohio', 'us-west-2': 'Oregon',
+  'eu-west-1': 'Ireland', 'eu-west-2': 'London', 'eu-central-1': 'Frankfurt',
+  'ap-southeast-1': 'Singapore', 'ap-southeast-2': 'Sydney', 'ap-northeast-1': 'Tokyo',
+}
+
+function named(code: string | null): string | null {
+  if (!code) return null
+  const place = PLACES[code]
+  return place ? `${code} (${place})` : code
+}
+
+/** The cloud region a hosted Postgres hostname carries, if it carries one. */
+function databaseRegion(host: string | null): string | null {
+  if (!host) return null
+  const match = host.match(/\b((?:us|eu|ap|sa|ca|me|af)-[a-z]+-\d)\b/)
+  return match ? match[1] : null
 }
 
 async function time<T>(label: string, detail: string, fn: () => Promise<T>): Promise<Timing> {
@@ -151,16 +187,22 @@ export async function runDbDiagnostics(): Promise<DbDiagnostics> {
 
   const med = median(pings)
   const best = Math.min(...pings)
+  const host = hostOf(url)
+  const where = {
+    function: named(process.env.VERCEL_REGION ?? null),
+    database: named(databaseRegion(host)),
+  }
 
   return {
     engine: db.kind,
-    host: hostOf(url),
+    host,
+    where,
     pooled: /-pooler|pgbouncer|pooler\./.test(url ?? ''),
     instance: { ageMs: Date.now() - STARTED_AT, requestsServed: served },
     ping: { samples: pings.length, bestMs: best, medianMs: med, worstMs: Math.max(...pings) },
     work: [catalogue, orders, funnel],
     counts,
-    verdict: verdictFor(db.kind, med, best, Date.now() - STARTED_AT, served),
+    verdict: verdictFor(db.kind, med, best, Date.now() - STARTED_AT, served, where),
     ranAt: new Date().toISOString(),
   }
 }
@@ -180,6 +222,7 @@ export function verdictFor(
   bestPingMs: number,
   instanceAgeMs: number,
   requestsServed: number,
+  where: { function: string | null; database: string | null } = { function: null, database: null },
 ): string {
   if (engine === 'sqlite') {
     return 'Running on SQLite, on this machine. There is no network between the app and its data, so nothing here reflects the deployed site.'
@@ -188,7 +231,11 @@ export function verdictFor(
   const fresh = instanceAgeMs < 5_000 && requestsServed <= 1
 
   if (medianPingMs >= 40) {
-    return `Every query costs about ${Math.round(medianPingMs)}ms before it does anything, which is a database in a different region from the functions. A screen making six reads spends roughly ${(medianPingMs * 6 / 1000).toFixed(1)}s waiting on the network alone. Moving one to the other's region is the single biggest thing available here.`
+    const ends =
+      where.function && where.database
+        ? ` The functions are in ${where.function} and the database is in ${where.database}.`
+        : ''
+    return `Every query costs about ${Math.round(medianPingMs)}ms before it does anything, which is a database in a different region from the functions.${ends} A screen making six reads spends roughly ${(medianPingMs * 6 / 1000).toFixed(1)}s waiting on the network alone — and a cold start pays it several times over just to open the connection. Moving one to the other's region is the single biggest thing available here.`
   }
 
   if (bestPingMs >= 15) {
