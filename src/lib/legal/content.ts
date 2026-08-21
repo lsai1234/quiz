@@ -87,11 +87,49 @@ export interface LegalDocument {
   sections: LegalSection[]
 }
 
-export type LegalDocumentId = 'terms' | 'disclaimer'
+export type LegalDocumentId = 'terms' | 'disclaimer' | 'privacy'
 
 /** Bump on a material change. Triggers the in-hub re-consent notice. */
 export const TERMS_VERSION = '2026-08-12'
 export const DISCLAIMER_VERSION = '2026-07-29'
+export const PRIVACY_VERSION = '2026-08-21'
+
+/**
+ * The sentence beside the marketing tick, versioned on its own.
+ *
+ * Its own version rather than the privacy notice's because it is the thing a
+ * consent record has to reproduce years later: "what exactly did this person
+ * agree to?" is answered by these words, not by a policy that has been edited
+ * six times since. Bump it when the WORDING changes, and old records keep
+ * pointing at the old text.
+ */
+export const MARKETING_CONSENT_VERSION = '2026-08-21'
+
+/**
+ * What the tick says. One definition — the quiz card, the account gate and the
+ * consent record all read it from here, so what was shown and what was stored
+ * cannot be two different sentences.
+ *
+ * Written to be specific about what is being agreed to (marketing email, from
+ * us, about our products) and to state the way out in the same breath, because
+ * "how do I stop this?" answered up front is what makes the agreement informed.
+ */
+export const MARKETING_CONSENT_STATEMENT =
+  'Email me tips, offers and new products from CHRGD. One click to stop, any time.'
+
+/** The line under the email field, wherever an address is asked for. */
+export const EMAIL_CAPTURE_NOTICE =
+  'We’ll email your stack to this address so you don’t lose it. We won’t share it with anyone.'
+
+/**
+ * How long an address that never becomes a customer is kept, in months.
+ *
+ * Storage limitation (UK GDPR Art. 5(1)(e)) is a promise, not a preference: the
+ * privacy notice says this number, and `lib/audience/retention.ts` is what makes
+ * it true. Change both together — the notice reads this constant, so it can
+ * only be changed here.
+ */
+export const LEAD_RETENTION_MONTHS = 24
 
 /**
  * The first terms version that discloses the cancel settlement — the balance a
@@ -288,6 +326,111 @@ export function getTermsDocument(
           `If something has gone wrong, email ${entity.contactEmail} and we will come back to you. We would much rather fix it than have you cancel.`,
           'These terms are governed by the law of England and Wales, and the courts of England and Wales have jurisdiction. If you live in Scotland or Northern Ireland you can also bring proceedings in your local courts.',
           'Nothing in these terms affects your statutory rights as a consumer.',
+        ],
+      },
+    ],
+  }
+}
+
+// ─── Privacy notice ───────────────────────────────────────────────────────────
+
+/**
+ * What we do with someone's personal data, in the order they'd ask it.
+ *
+ * Required before a single address can lawfully be collected: UK GDPR Art. 13
+ * says the telling happens AT the point of collection, not somewhere findable
+ * afterwards, so every capture point links here and this document is what it
+ * links to.
+ *
+ * Built from constants rather than prose where a number is involved — the
+ * retention period below is `LEAD_RETENTION_MONTHS`, the same constant the purge
+ * job reads, so the notice cannot promise one thing while the code does another.
+ */
+export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
+  return {
+    id: 'privacy',
+    title: 'Privacy notice',
+    version: PRIVACY_VERSION,
+    effectiveFrom: PRIVACY_VERSION,
+    summary:
+      'What we collect, why, how long we keep it, and how to get it back or get rid of it.',
+    sections: [
+      {
+        id: 'who-we-are',
+        heading: 'Who we are',
+        body: [
+          `${entity.tradingName} is a trading name of ${entity.legalName} (company number ${entity.companyNumber}), registered at ${entity.registeredAddress}. We are the data controller for the information described here.`,
+          `Any question about your data — including everything under "Your rights" below — goes to ${entity.contactEmail} and we will answer within one month.`,
+        ],
+      },
+      {
+        id: 'what-we-collect',
+        heading: 'What we collect, and why',
+        body: [
+          'Your quiz answers — goals, training, diet, anything you tell us to avoid, and what you already take. These are what build your stack, and the safety answers are what exclude products that are not right for you. Some of it (an allergy, a pregnancy, a medication) is health data, which the law treats as special category data: we use it only to work out which products to exclude, only because you have given it to us for that purpose, and we do not share it.',
+          'Your email address, if you give us one. Two separate things happen with it, and they are separate on purpose: we email you the stack you asked for, and — only if you tick the box — we send you marketing.',
+          'Your name, address and order history if you buy, because we cannot send you anything or answer a question about an order otherwise.',
+          'Basic technical information when you use the site: pages viewed, and the IP address and browser recorded alongside a consent so we can show when and how it was given.',
+        ],
+      },
+      {
+        id: 'lawful-basis',
+        heading: 'The basis we rely on',
+        body: [
+          'Your consent, for marketing email and for using health information from the quiz. You can withdraw it at any time and it is as easy to withdraw as it was to give — one click in any email we send, no account and no form.',
+          'Performing our contract with you, for taking and fulfilling an order, running a subscription and sending the receipts and service messages that go with it. Those are not marketing and cannot be switched off while you have a plan, because they are the record of what you bought.',
+          'Our legitimate interests, for keeping the site working, preventing fraud and abuse, and — where you have bought from us — telling you about similar products, which you can refuse in every message and at any time.',
+          'Legal obligation, for keeping records of sales for tax and accounting.',
+        ],
+      },
+      {
+        id: 'marketing',
+        heading: 'Marketing email',
+        body: [
+          `We only send marketing to someone who asked for it, or who has bought from us and has not said no. Every marketing email carries a one-click way out, and taking it stops the marketing immediately — for good, not for a while.`,
+          'Opting out of marketing never stops the emails that are part of the service: your receipts, changes to your plan, price-change notices and anything about a payment. We say the same thing on the page the opt-out link takes you to.',
+          `If you would rather we had never had your address at all, ask us at ${entity.contactEmail} and we will delete it. We keep one record of the fact you opted out — without it, the address could be added again by a later sign-up and we would be emailing you exactly what you asked us not to.`,
+        ],
+      },
+      {
+        id: 'how-long',
+        heading: 'How long we keep it',
+        body: [
+          `An email address that never becomes an order is kept for ${LEAD_RETENTION_MONTHS} months from the last time you engaged with us, and then deleted automatically.`,
+          'Order and subscription records are kept for six years after your last order, which is what tax law requires of us.',
+          'Records of consent are kept for as long as we rely on that consent and for a period afterwards, because being able to show that someone agreed is the only way to answer a complaint that they did not.',
+        ],
+      },
+      {
+        id: 'who-else',
+        heading: 'Who else sees it',
+        body: [
+          'The companies that run parts of the service for us, and only for that purpose: Stripe (payments), PowerBody (the supplier who packs and ships your order), Google Workspace or Resend (sending email), Vercel (hosting), and OpenAI (which helps write the explanation of why a product was chosen for you).',
+          'We do not sell your data, and we do not share it with anyone for their own marketing. Where a provider processes data outside the UK, that transfer is covered by the safeguards the law requires — normally the UK addendum to the standard contractual clauses.',
+        ],
+      },
+      {
+        id: 'your-rights',
+        heading: 'Your rights',
+        body: [
+          'You can ask for a copy of what we hold, ask us to correct it, ask us to delete it, ask us to restrict what we do with it, ask for it in a portable form, and object to us using it — including objecting to direct marketing, which we always honour and never argue with.',
+          `Email ${entity.contactEmail} and we will do it within one month, free of charge.`,
+          'If you think we have got it wrong, you can complain to the Information Commissioner’s Office at ico.org.uk or on 0303 123 1113. We would rather you told us first so we can fix it.',
+        ],
+      },
+      {
+        id: 'cookies',
+        heading: 'Cookies and analytics',
+        body: [
+          'We use the small number of cookies the site needs to work — keeping you signed in, and remembering the quiz you are part-way through so a refresh does not wipe it. Those do not need your permission because without them the thing you asked for does not function.',
+          'We count what happens on the site (how many people finish the quiz, which step they leave on) to make it better. It is not used to identify you, and we honour your browser’s Do Not Track or Global Privacy Control setting if it is switched on.',
+        ],
+      },
+      {
+        id: 'changes',
+        heading: 'Changes to this notice',
+        body: [
+          'If we change how we use your data in a way that affects you, we will tell you rather than quietly updating this page. The version and date at the top is how you can tell which one you are reading.',
         ],
       },
     ],

@@ -435,6 +435,55 @@ export const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+  // v14 — the marketing audience: people who gave us an email address.
+  //
+  // A separate table from `users` because most of these people do not have an
+  // account and may never have one. Modelling a lead as "a user without a
+  // password" would put someone who typed an address into a quiz card into the
+  // same table as paying customers, where every query about members would then
+  // have to remember to exclude them.
+  //
+  // `email` is the identity, stored normalised (trimmed, lowercased) and UNIQUE:
+  // one person, one row, however many times they take the quiz.
+  //
+  // `marketing_consents` is APPEND-ONLY and it is the whole point of the table.
+  // The current state — may we email this person? — is derivable from the last
+  // row, but the history is what answers a complaint: what exactly did they see,
+  // when, from which page, and on what basis did we then email them. An UPDATE
+  // that overwrote a preference would destroy the only evidence we have.
+  //
+  // `statement_version` + `statement_hash` tie a row to the exact sentence shown
+  // (`MARKETING_CONSENT_STATEMENT`), the same way `consents` ties a checkout to
+  // the terms text. A version alone would let re-worded copy silently reattach
+  // itself to old agreements.
+  `
+  CREATE TABLE email_leads (
+    email          TEXT PRIMARY KEY,
+    first_name     TEXT,
+    source         TEXT NOT NULL,
+    track          TEXT,
+    primary_goal   TEXT,
+    user_id        TEXT,
+    first_seen_at  TEXT NOT NULL,
+    last_seen_at   TEXT NOT NULL
+  );
+  CREATE INDEX email_leads_user ON email_leads(user_id);
+  CREATE INDEX email_leads_seen ON email_leads(last_seen_at);
+
+  CREATE TABLE marketing_consents (
+    id                TEXT PRIMARY KEY,
+    email             TEXT NOT NULL,
+    action            TEXT NOT NULL,
+    basis             TEXT NOT NULL,
+    statement_version TEXT,
+    statement_hash    TEXT,
+    source            TEXT NOT NULL,
+    ip                TEXT,
+    user_agent        TEXT,
+    created_at        TEXT NOT NULL
+  );
+  CREATE INDEX marketing_consents_email ON marketing_consents(email, created_at);
+  `,
 ]
 
 /**
