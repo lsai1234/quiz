@@ -24,6 +24,7 @@ import { LineManageSheet } from './LineManageSheet'
 import { DeliveryCalendar } from './DeliveryCalendar'
 import { DeliveryDetailSheet } from './DeliveryDetailSheet'
 import { BillingSummary } from './BillingSummary'
+import { EmailPreferences } from './EmailPreferences'
 import { CancelSaveFlow } from './CancelSaveFlow'
 import { ReconsentNotice } from './ReconsentNotice'
 import { ChangeSummary, type PendingChange } from './ChangeSummary'
@@ -443,6 +444,11 @@ export function SubscriptionDashboard() {
                     }))}
                   />
                 </Card>
+
+                {/* Marketing email, where a member can actually find it.
+                    Withdrawal has to be as easy as giving (Art. 7(3)), and "as
+                    easy" cannot mean hunting for a link in an old email. */}
+                <EmailPreferences />
 
                 {/* If a product becomes unavailable — the plan-wide default.
                     Per-product overrides live in each line's manage sheet. */}

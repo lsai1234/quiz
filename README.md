@@ -106,6 +106,22 @@ credentials are set — add `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` and
 "Continue with Google" shows up. See `docs/BACKEND.md` (includes the Vercel
 deploy steps).
 
+## The marketing list
+
+The quiz asks for an email address on the reveal — "keep your stack" — and
+emails the stack to whoever gives one. A separate, unticked box beside it is the
+marketing opt-in; the stack is sent either way, which is what makes that consent
+real rather than a toll. Everyone who has given an address is in **Founders Hub
+→ Audience**, with the count of who may actually be emailed, a CSV export whose
+every row carries its own working unsubscribe link, and a composer for sending a
+campaign from the hub itself.
+
+The rules it is built to — opt-in for prospects, PECR's soft opt-in for
+customers, consent recorded with the exact wording shown, one-click unsubscribe
+everywhere, a retention window that empties itself — are in
+`docs/EMAIL_CAPTURE_PLAN.md`; the day-to-day is in `docs/EMAILS.md`. A privacy
+notice lives at `/legal/privacy` and is versioned like the terms.
+
 ## Customer emails
 
 Order and subscription confirmations carry the same printed receipt the website

@@ -416,6 +416,44 @@ Someone who opts out stops getting the promotional block and nothing else. Their
 receipts, price-change notices and payment emails carry on — those are the record
 of what they bought, not marketing, and the opt-out page says so plainly.
 
+### The list itself
+
+The quiz asks for an email address on the reveal — "keep your stack" — and
+everyone who gives one lands in **Founders Hub → Audience**. Two numbers sit at
+the top of that page and they are different numbers:
+
+- **Addresses** — everyone who gave us one.
+- **You may email** — the ones who ticked the marketing box, or who bought from
+  us and have not since opted out. Only these are in an export.
+
+**The tick is what makes the difference, and the stack is emailed either way.**
+That is deliberate and it is what makes the list usable: if the email only
+arrived when the box was ticked, the tick would be the price of the thing they
+came for, and consent obtained that way is not consent at all.
+
+**Sending it.** Two routes, and they end in the same place:
+
+1. **Export the CSV** and send from Gmail, Mailchimp or anything else. Every row
+   carries its own `unsubscribe_url`. Use it as a merge field in the footer —
+   that is what makes the campaign lawful, and it means opt-outs land back here
+   rather than in a suppression list you cannot see.
+2. **Send from the hub.** Write it on the Audience page, press *Check who this
+   goes to*, then *Send*. Permission is re-checked for each person at the moment
+   their copy goes out, so somebody who unsubscribes mid-send does not get it.
+
+Marketing leaves from its own address (`NOTIFY_FROM_MARKETING`, or `hello@` when
+you set `NOTIFY_DOMAIN`), and carries the one-click unsubscribe headers Gmail and
+Yahoo have required of bulk senders since 2024.
+
+**Someone asking to be forgotten.** Founders Hub → Audience finds the address;
+erasing it deletes everything except the fact that they opted out. That one
+record has to stay — without it the same address could be collected again next
+week and start receiving exactly what they asked you to stop.
+
+**Addresses that never buy** are deleted automatically after the period in the
+privacy notice (24 months since you last heard from them). The nightly job does
+it; nobody has to remember.
+
 ---
 
 ## When something goes wrong

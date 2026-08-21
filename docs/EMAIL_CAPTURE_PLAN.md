@@ -3,6 +3,16 @@
 Collecting email addresses through the quiz, lawfully, without slowing anyone
 down on the way to a stack. Five phases, each shippable on its own.
 
+> **Status: all five phases are built** (2026-08). What shipped follows the plan
+> below with two deliberate differences, both noted in §"Where the email is
+> asked for" and Phase 2: the build-screen capture *holds* the auto-advance
+> while somebody is typing rather than racing it, and the reveal card pre-fills
+> from anything already captured. The three open questions in "What I need from
+> you" were answered by building the defaults recommended there — 24 months'
+> retention (`LEAD_RETENTION_MONTHS`), single opt-in with a welcome email, and
+> the entity details still on their placeholders, which the privacy page warns
+> about until they are filled in.
+
 > **Not legal advice.** The reasoning below is what UK GDPR and PECR require as
 > we understand them, and the code is built to satisfy it. The *wording* shown to
 > customers (§ "The words people will read") is the part worth twenty minutes of

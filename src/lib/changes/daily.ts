@@ -37,6 +37,8 @@ export interface DailyRunResult {
   productsMissing?: number
   /** Partner commissions whose return window passed, now payable. */
   commissionsConfirmed?: number
+  /** Marketing addresses deleted for reaching the end of the retention window. */
+  leadsPurged?: number
   /** Snoozed plans whose return date arrived and are now active again. */
   snoozesResumed?: number
   note?: string
@@ -125,10 +127,24 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     console.error('[daily] share card sweep failed:', err)
   }
 
+  // Marketing addresses nobody has heard from since the retention window
+  // opened. The privacy notice states the number of months; this is what makes
+  // that sentence true rather than aspirational. Customers are exempt — their
+  // address is part of an order record we must keep. Never allowed to fail the
+  // rest of the job.
+  let leadsPurged = 0
+  try {
+    const { purgeStaleLeads } = await import('@/lib/audience/rights')
+    leadsPurged = (await purgeStaleLeads()).purged
+  } catch (err) {
+    console.error('[daily] marketing retention purge failed:', err)
+  }
+
   return {
     dryRun: false,
     baselineOnly: detection.baselineOnly,
     shareCardsSwept,
+    leadsPurged,
     ...base,
     cancelled: detection.cancelled.length,
     // Applied during detection, plus anything whose own clock came due.

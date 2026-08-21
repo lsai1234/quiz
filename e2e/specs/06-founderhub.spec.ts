@@ -351,3 +351,31 @@ test.describe('the supplier integration check', () => {
     })
   })
 })
+
+test.describe('the audience', () => {
+  test('an address collected on the quiz is on the list, and exports with a way out', async ({ page }) => {
+    const { completeQuiz } = await import('../support/quiz')
+
+    // Collect one the way a visitor does — through the whole quiz.
+    await completeQuiz(page, 'performance')
+    const email = `hub-${Date.now()}@example.com`
+    await page.getByLabel(/email address/i).fill(email)
+    await page.getByRole('checkbox').check()
+    await page.getByRole('button', { name: /email me my stack/i }).click()
+    await expect(page.getByText(/check your inbox/i)).toBeVisible()
+
+    // Then look at it from the other side.
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/audience')
+    await expect(page.getByRole('heading', { name: 'Audience', exact: true })).toBeVisible()
+    await expect(page.getByText(email)).toBeVisible({ timeout: 15_000 })
+
+    /* The export is what a campaign is actually sent from, so what matters is
+       that the address is in it AND that it carries its own unsubscribe link —
+       without which a campaign sent from Gmail has no lawful way out. */
+    const csv = await page.evaluate(async () => (await fetch('/api/portal/audience/export')).text())
+    expect(csv).toContain(email)
+    expect(csv).toContain('unsubscribe_url')
+    expect(csv).toContain('/api/notify/marketing-opt-out?t=')
+  })
+})
