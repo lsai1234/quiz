@@ -135,7 +135,22 @@ export type AutoSendPolicy = 'none' | 'confirmations' | 'all'
  * call, and leaves behind an audit row with the link taken out. See the note on
  * `recordDirectSend`.
  */
-const SELF_SENDING: readonly TemplateId[] = ['order-confirmation', 'subscription-confirmation']
+const SELF_SENDING: readonly TemplateId[] = [
+  'order-confirmation',
+  'subscription-confirmation',
+  /**
+   * The stack somebody asked us to email them, and the note confirming they
+   * opted in. Both belong here for the receipt's reason rather than by analogy:
+   * the person pressed a button seconds ago that said this would happen, they
+   * are watching for it, and there is no judgement in either for a founder to
+   * check. A "here's your stack" that lands on Tuesday because nobody was at a
+   * laptop on Sunday is not a saved stack, it is a broken promise — and the
+   * welcome exists precisely to reach someone while they still remember ticking
+   * the box, which is what makes a mis-click fixable instead of a spam report.
+   */
+  'stack-email',
+  'marketing-welcome',
+]
 
 export function getAutoSendPolicy(): AutoSendPolicy {
   const raw = (process.env.NOTIFY_AUTO_SEND ?? '').trim().toLowerCase()

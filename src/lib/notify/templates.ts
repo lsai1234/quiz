@@ -660,3 +660,127 @@ export function passwordChanged(ctx: PasswordChangedContext, brand: BrandContext
     }, brand),
   }
 }
+
+// ─── The stack somebody asked us to email them ────────────────────────────────
+
+export interface StackEmailContext {
+  firstName?: string | null
+  /** What the engine called their stack, e.g. "The Strength Foundation". */
+  stackName: string
+  /** One line per product: the title and what it is there for. */
+  items: { title: string; reason: string }[]
+  /** The subscribed monthly and the one-off, as the reveal priced them. */
+  monthly: number
+  oneOff: number
+  /** Back to their stack. Carries nothing secret — it rebuilds from the quiz. */
+  quizUrl: string
+  /** True when they also ticked the marketing box, which changes the sign-off. */
+  optedIn: boolean
+}
+
+/**
+ * "Here's your stack."
+ *
+ * The email a quiz-taker asked for by typing their address, and the only one in
+ * this file sent to somebody who has bought nothing. Two decisions shape it:
+ *
+ *  1. **The stack is IN the email, not behind a link.** The reason they gave us
+ *     an address was so they would not lose the thing they had just been shown.
+ *     A link back to a site that rebuilds it from a quiz they no longer have
+ *     open does not honour that, and it is also the shape that reads as a
+ *     capture rather than a favour.
+ *
+ *  2. **The marketing strip is governed by the tick, not by this template.**
+ *     The shell only renders a strip when an opt-out link is supplied, and the
+ *     sender supplies one only for somebody who opted in — so a person who took
+ *     their stack and refused the marketing gets exactly what they asked for and
+ *     nothing else. That is what makes the tick meaningful rather than decorative.
+ */
+export function stackEmail(ctx: StackEmailContext, brand: BrandContext = {}): RenderedEmail {
+  const count = ctx.items.length
+  const lines = ctx.items.map((item) => `• ${item.title} — ${item.reason}`)
+
+  return {
+    subject: `${ctx.stackName} — your CHRGD stack`,
+    ...layout(
+      ctx.firstName ? `${ctx.firstName}, here's your stack` : 'Here’s your stack',
+      {
+        preheader: `${count} product${count === 1 ? '' : 's'}, ${formatGBP(ctx.monthly)} a month subscribed.`,
+        intro: `You built this on the quiz. It’s ${ctx.stackName} — ${count} product${count === 1 ? '' : 's'}, chosen from what you told us.`,
+        paragraphs: [
+          lines.join('\n'),
+          `${formatGBP(ctx.monthly)} a month on a plan, or ${formatGBP(ctx.oneOff)} to buy it once. Nothing has been ordered — this is the plan, saved, so you can come back to it.`,
+          ctx.optedIn
+            ? 'You also asked us to send you tips and offers. There is a one-click way out at the foot of every one of those, and this email included.'
+            : 'We will not email you anything else unless you ask us to.',
+        ],
+        cta: { label: 'Open your stack', url: ctx.quizUrl },
+        footnote: 'Prices move with the products in it — the figures above are what your stack cost on the day you built it.',
+        // The strip is offered; the shell drops it when no opt-out link is
+        // supplied, which is precisely the case for someone who did not tick.
+        marketing: 'prospect',
+      },
+      brand,
+    ),
+  }
+}
+
+// ─── Marketing ────────────────────────────────────────────────────────────────
+
+export interface MarketingWelcomeContext {
+  firstName?: string | null
+  quizUrl: string
+}
+
+/**
+ * The email that confirms an opt-in.
+ *
+ * Sent once, immediately, and it earns its place by being the fastest way for
+ * somebody to discover a mistake: if this arrives and they did not mean to tick
+ * anything, the way out is one click away while they still remember doing it.
+ * The alternative — saying nothing until the first campaign weeks later — is how
+ * an opt-in becomes a spam report.
+ */
+export function marketingWelcome(ctx: MarketingWelcomeContext, brand: BrandContext = {}): RenderedEmail {
+  return {
+    subject: 'You’re on the list',
+    ...layout(ctx.firstName ? `Thanks, ${ctx.firstName}` : 'You’re on the list', {
+      preheader: 'Tips, offers and new products — and one click to stop, any time.',
+      paragraphs: [
+        'You asked us to send you tips, offers and new products. We will — not often, and never to anyone else, because we do not share or sell addresses.',
+        'If that was a mistake, the link at the foot of this email takes you straight back out. No account, no form, nothing to explain.',
+      ],
+      cta: { label: 'Build a stack', url: ctx.quizUrl },
+      marketing: false,
+    }, brand),
+  }
+}
+
+export interface MarketingBroadcastContext {
+  firstName?: string | null
+  heading: string
+  /** The campaign body, one string per paragraph. */
+  paragraphs: string[]
+  cta?: { label: string; url: string } | null
+}
+
+/**
+ * A campaign — the email that IS the marketing.
+ *
+ * No promotional strip: a strip inside an email that is already a promotion is
+ * the same pitch twice. The opt-out is not in the strip anyway; it is in the
+ * footer of every email the shell renders, which is what makes this lawful to
+ * send at all.
+ */
+export function marketingBroadcast(ctx: MarketingBroadcastContext, brand: BrandContext = {}): RenderedEmail {
+  return {
+    subject: ctx.heading,
+    ...layout(ctx.heading, {
+      preheader: ctx.paragraphs[0] ?? ctx.heading,
+      intro: ctx.firstName ? `${ctx.firstName},` : undefined,
+      paragraphs: ctx.paragraphs,
+      cta: ctx.cta ?? undefined,
+      marketing: false,
+    }, brand),
+  }
+}

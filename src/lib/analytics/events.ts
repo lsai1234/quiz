@@ -59,6 +59,12 @@ export const QUIZ_EVENTS = [
   'stack_swap',
   'stack_add',
   'stack_remove',
+  // Email capture. The gaps between these four are the funnel: offered →
+  // submitted → opted in, with dismissals separating "refused" from "unseen".
+  'lead_prompt_view',
+  'lead_submit',
+  'lead_opt_in',
+  'lead_dismiss',
 ] as const
 
 export type QuizEvent = (typeof QUIZ_EVENTS)[number]
@@ -136,7 +142,13 @@ export function track(event: AnalyticsEvent, props: EventProps = {}): void {
     if (typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon('/api/analytics', new Blob([body], { type: 'application/json' }))
     } else {
-      void fetch('/api/analytics', { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true })
+      // `.catch`, not `void`: the try/catch around this cannot see an async
+      // rejection, so a beacon sent from a phone that has just lost signal
+      // became an unhandled promise rejection — noise in the console of a page
+      // that is otherwise working, and a failed test anywhere this is asserted.
+      // Analytics must never break the app, including by failing loudly.
+      fetch('/api/analytics', { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true })
+        .catch(() => {})
     }
     if (process.env.NODE_ENV !== 'production') console.debug('[analytics]', event, props)
   } catch {

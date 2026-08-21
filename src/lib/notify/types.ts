@@ -54,6 +54,24 @@ export type TemplateId =
   | 'password-reset'
   /** Their password was changed — the notice that catches it if it wasn't them. */
   | 'password-changed'
+  /**
+   * The stack somebody asked us to email them from the quiz.
+   *
+   * The one template here sent to a person who has bought nothing — `userId` is
+   * null and there is no order behind it. It is transactional in the sense that
+   * matters: they typed their address and pressed a button that said what would
+   * happen, and this is that thing happening. The marketing tick beside that
+   * button governs the promotional strip only, never whether this arrives.
+   */
+  | 'stack-email'
+  /**
+   * A campaign: the email that IS the marketing, rather than one carrying a
+   * strip of it. Sent only to an address `mayMarket()` currently says yes to,
+   * re-checked at the moment of sending.
+   */
+  | 'marketing-broadcast'
+  /** Confirming a marketing opt-in, and offering the way straight back out. */
+  | 'marketing-welcome'
 
 export type NotificationStatus = 'queued' | 'sent' | 'failed'
 

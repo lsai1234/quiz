@@ -93,6 +93,34 @@ export const funnel = {
     track('stack_remove', { slotId: p.slotId })
   },
 
+  // ── Email capture ──
+  //
+  // Four events, because the interesting numbers are the gaps between them:
+  // how many people were offered the card, how many gave an address, and how
+  // many of those also ticked the marketing box. `leadDismiss` is what tells us
+  // the card is being read and refused rather than simply scrolled past — a
+  // distinction that decides whether it is worth keeping.
+
+  /** The capture card was rendered. The denominator for everything below. */
+  leadPromptView(p: { source: string }) {
+    track('lead_prompt_view', { source: p.source })
+  },
+
+  /** An address was submitted, and whether the marketing box was ticked. */
+  leadSubmit(p: { source: string; optIn: boolean }) {
+    track('lead_submit', { source: p.source, optIn: p.optIn })
+  },
+
+  /** The submission carried a marketing opt-in — the list actually growing. */
+  leadOptIn(p: { source: string }) {
+    track('lead_opt_in', { source: p.source })
+  },
+
+  /** They read it and said no. Not the same as never seeing it. */
+  leadDismiss(p: { source: string }) {
+    track('lead_dismiss', { source: p.source })
+  },
+
   // ── Checkout (reuses the shop events, tagged as quiz-sourced) ──
   //
   // Start only. There is deliberately no `checkoutSuccess` here: it fired when

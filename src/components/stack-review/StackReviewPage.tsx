@@ -37,6 +37,8 @@ import { defaultVariantId } from '@/lib/pour-plan'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { ShareSheet } from '@/components/share-card/ShareSheet'
 import { ShareStackButton } from '@/components/share-card/ShareStackButton'
+import { SaveStackCard } from './SaveStackCard'
+import { fetchAuthContext } from '@/lib/auth-client'
 import { buildSharePayload } from '@/lib/share-card/payload'
 import { ConsentGate } from '@/components/legal/ConsentGate'
 import { funnel } from '@/lib/analytics/quiz'
@@ -134,6 +136,7 @@ export function StackReviewPage() {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
     stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
     revealedIntroDiscount, setRevealedIntroDiscount, identity,
+    stackEmailCaptured, setStackEmailCaptured,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -392,6 +395,50 @@ export function StackReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [checkoutState.status])
 
+  // ── Email capture ──────────────────────────────────────────────────────────
+  // A signed-in member should never retype an address we already hold, so the
+  // card is pre-filled from the session. Failure is silent and simply means an
+  // empty field: this is a convenience, and the reveal must not wait on it.
+  const [knownEmail, setKnownEmail] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    void fetchAuthContext().then((ctx) => { if (live) setKnownEmail(ctx.user?.email ?? null) })
+    return () => { live = false }
+  }, [])
+
+  // Offered once the stack is on screen and not yet dealt with. Drinks mode gets
+  // it too — a box of drinks is as worth keeping as a stack of tubs.
+  const showSaveCard = !stackEmailCaptured && checkoutState.status === 'idle'
+
+  const savePromptSeen = useRef(false)
+  useEffect(() => {
+    if (!showSaveCard || savePromptSeen.current) return
+    savePromptSeen.current = true
+    funnel.leadPromptView({ source: 'quiz-reveal' })
+  }, [showSaveCard])
+
+  /**
+   * What gets emailed: the stack exactly as it stands on screen — after tier
+   * changes, swaps and additions — and the prices from the same `pricing` the
+   * sticky bar and the checkout read, so the email cannot quote a stack the
+   * member never saw or a figure the card was never going to charge.
+   */
+  const stackEmailPayload = useMemo(
+    () => ({
+      stackName: activeBlueprint.stackName,
+      items: activeSlots.map((slot) => {
+        const product = products.find((p) => p.id === slot.selectedProductId)
+        return {
+          title: product?.title ?? slot.title,
+          reason: slot.reason || product?.shortReason || slot.description,
+        }
+      }),
+      monthly: pricing.subscriptionTotal,
+      oneOff: pricing.oneOffTotal,
+    }),
+    [activeBlueprint.stackName, activeSlots, products, pricing.subscriptionTotal, pricing.oneOffTotal],
+  )
+
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
 
@@ -477,7 +524,23 @@ export function StackReviewPage() {
 
         <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
 
-        <div className="h-px bg-[var(--color-border)] mx-5" />
+        {/* Keep your stack — the email capture. Under the stack they were just
+            given, never over it: nothing here gates the reveal or the checkout. */}
+        {showSaveCard && (
+          <div className="pt-5">
+            <SaveStackCard
+              defaultEmail={knownEmail}
+              defaultFirstName={answers.name}
+              source="quiz-reveal"
+              track={answers.track}
+              primaryGoal={blueprint.primaryGoal}
+              stack={stackEmailPayload}
+              onDone={() => setStackEmailCaptured(true)}
+            />
+          </div>
+        )}
+
+        <div className="h-px bg-[var(--color-border)] mx-5 mt-5" />
 
         {/* Honest "no strong match" note — a chosen goal whose only products were
             removed by a hard gate (safety / dietary). Surfaced, never silently dropped. */}

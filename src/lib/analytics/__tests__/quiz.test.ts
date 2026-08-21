@@ -70,6 +70,10 @@ describe('funnel', () => {
     funnel.stackSwap({ slotId: 's', to: 'p' })
     funnel.stackAdd({ productId: 'p' })
     funnel.stackRemove({ slotId: 's' })
+    funnel.leadPromptView({ source: 'quiz-reveal' })
+    funnel.leadSubmit({ source: 'quiz-reveal', optIn: true })
+    funnel.leadOptIn({ source: 'quiz-reveal' })
+    funnel.leadDismiss({ source: 'quiz-reveal' })
     funnel.checkoutStart({ plan: 'oneoff', total: 40 })
 
     const emitted = new Set(mockTrack.mock.calls.map((c) => c[0] as string))

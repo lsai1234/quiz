@@ -29,7 +29,7 @@
  */
 import type { TemplateId } from './types'
 
-export type MailStream = 'orders' | 'subscriptions' | 'billing' | 'account'
+export type MailStream = 'orders' | 'subscriptions' | 'billing' | 'account' | 'marketing'
 
 interface StreamSpec {
   /** Shown in the Founders Hub, and the display name on the From header. */
@@ -71,6 +71,22 @@ const STREAMS: Record<MailStream, StreamSpec> = {
     localPart: 'account.noreply',
     purpose: 'Password resets and security notices.',
   },
+  /**
+   * Anything sent because somebody asked to hear from us: the stack they wanted
+   * emailed, the welcome that confirms an opt-in, and campaigns.
+   *
+   * Its own stream for the reason the others have in theory and this one has in
+   * practice. Marketing is the only mail here sent to people who have bought
+   * nothing, in volume, to addresses that were typed rather than transacted
+   * with — so it is the stream that will collect the bounces and the spam
+   * reports. Keeping it away from the receipts means a bad campaign costs a
+   * campaign's reputation and not a paying customer's confirmation.
+   */
+  marketing: {
+    label: 'getCHRGD',
+    localPart: 'hello',
+    purpose: 'Stacks people asked us to email them, and anything they opted in to.',
+  },
 }
 
 /**
@@ -94,6 +110,9 @@ const STREAM_FOR_TEMPLATE: Record<TemplateId, MailStream> = {
   'exit-charge-failed': 'billing',
   'password-reset': 'account',
   'password-changed': 'account',
+  'stack-email': 'marketing',
+  'marketing-broadcast': 'marketing',
+  'marketing-welcome': 'marketing',
 }
 
 export function streamFor(template: TemplateId): MailStream {
@@ -121,6 +140,7 @@ const ENV_KEY: Record<MailStream, string> = {
   subscriptions: 'NOTIFY_FROM_SUBSCRIPTIONS',
   billing: 'NOTIFY_FROM_BILLING',
   account: 'NOTIFY_FROM_ACCOUNT',
+  marketing: 'NOTIFY_FROM_MARKETING',
 }
 
 /** The full From header for a stream, e.g. `getCHRGD Orders <…@getchrgd.co.uk>`. */
