@@ -16,7 +16,8 @@
  */
 import { randomUUID } from 'crypto'
 import { getEngine, now } from '@/lib/db/engine'
-import { canSendFromHub, getNotifier, isAutoSendEnabled, sendsAutomatically } from './index'
+import { appBaseUrl, canSendFromHub, getNotifier, isAutoSendEnabled, sendsAutomatically } from './index'
+import { optOutUrl } from './marketing'
 import { fromAddressFor, replyToAddress, streamFor } from './streams'
 import type { Notification, NotificationStatus, QueueInput, SendEnvelope, TemplateId } from './types'
 
@@ -48,11 +49,41 @@ export function dedupeKeyFor(changeEventId: string, template: TemplateId): strin
  * stream, so a notification written before streams existed still leaves from a
  * sensible address rather than from nothing.
  */
-function envelopeFor(notification: Notification): SendEnvelope {
+async function envelopeFor(notification: Notification): Promise<SendEnvelope> {
   const stream = notification.stream ?? streamFor(notification.template)
   return {
     from: notification.from ?? fromAddressFor(stream),
     replyTo: notification.replyTo ?? replyToAddress(),
+    listUnsubscribeUrl: await listUnsubscribeFor(notification),
+  }
+}
+
+/**
+ * The one-click unsubscribe link for an email, or null when it must not have one.
+ *
+ * Two rules decide it, and the second is the one worth stating:
+ *
+ *  1. Only email a reader may lawfully refuse gets the header — anything on the
+ *     `marketing` stream, and anything whose rendered body already carries the
+ *     promotional strip's opt-out.
+ *  2. A receipt never gets it. A mailbox provider's unsubscribe button is a
+ *     promise, and offering it on the only record somebody has of what they paid
+ *     is a promise we cannot keep: pressing it would stop nothing, and a member
+ *     who believes their receipts are off is a support ticket at best.
+ *
+ * Failure is silent and answers null — a missing header costs deliverability;
+ * an exception here would cost the email.
+ */
+async function listUnsubscribeFor(notification: Notification): Promise<string | null> {
+  const stream = notification.stream ?? streamFor(notification.template)
+  const carriesStrip = notification.rendered.html.includes('marketing-opt-out')
+  if (stream !== 'marketing' && !carriesStrip) return null
+
+  try {
+    return await optOutUrl(appBaseUrl(), notification.email)
+  } catch (err) {
+    console.error('[notify] could not mint a List-Unsubscribe link:', err)
+    return null
   }
 }
 
@@ -296,7 +327,7 @@ export async function flushOutbox(
   for (const notification of queued) {
     const attempt = { ...notification, attempts: notification.attempts + 1, updatedAt: now() }
     try {
-      const { providerId } = await notifier.send(notification.email, notification.rendered, envelopeFor(notification))
+      const { providerId } = await notifier.send(notification.email, notification.rendered, await envelopeFor(notification))
       const sent: Notification = { ...attempt, status: 'sent', providerId: providerId ?? null, error: null, sentAt: now() }
       await write(sent)
       result.sent.push(sent)
@@ -351,7 +382,7 @@ export async function sendNotificationNow(id: string): Promise<Notification | nu
   const attempt = { ...notification, attempts: notification.attempts + 1, updatedAt: now() }
   try {
     const notifier = await getNotifier()
-    const { providerId } = await notifier.send(notification.email, notification.rendered, envelopeFor(notification))
+    const { providerId } = await notifier.send(notification.email, notification.rendered, await envelopeFor(notification))
     const sent: Notification = {
       ...attempt,
       status: 'sent',
@@ -457,7 +488,7 @@ export async function sendTestCopy(id: string, to: string): Promise<{ ok: boolea
   }
   try {
     const notifier = await getNotifier()
-    await notifier.send(to, notification.rendered, envelopeFor(notification))
+    await notifier.send(to, notification.rendered, await envelopeFor(notification))
     return { ok: true }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }

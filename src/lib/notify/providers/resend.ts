@@ -46,6 +46,18 @@ export function createResendProvider(): NotificationProvider {
           subject: email.subject,
           html: email.html,
           text: email.text,
+          // RFC 8058 one-click. Both headers are required together: the URL
+          // alone means "unsubscribe by visiting this", and the POST header is
+          // what tells the mailbox provider it may do it on the reader's behalf
+          // from its own button. See `SendEnvelope`.
+          ...(envelope?.listUnsubscribeUrl
+            ? {
+                headers: {
+                  'List-Unsubscribe': `<${envelope.listUnsubscribeUrl}>`,
+                  'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                },
+              }
+            : {}),
         }),
       })
 

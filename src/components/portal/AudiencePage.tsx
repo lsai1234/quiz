@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Input, Select } from '@/components/system'
+import { BroadcastComposer } from './BroadcastComposer'
 import type { AudienceMember, LeadSource } from '@/lib/audience/types'
 
 /**
@@ -143,6 +144,8 @@ export function AudiencePage() {
           come back here.
         </p>
       </Card>
+
+      <BroadcastComposer />
 
       {data.members.length === 0 ? (
         <p className="text-sm text-[var(--ink-3)] py-8 text-center">

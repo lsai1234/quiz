@@ -224,7 +224,7 @@ function base64Body(value: string): string {
 export function buildMimeMessage(
   to: string,
   email: RenderedEmail,
-  envelope: { from: string; replyTo?: string | null },
+  envelope: { from: string; replyTo?: string | null; listUnsubscribeUrl?: string | null },
 ): string {
   const boundary = `chrgd_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
 
@@ -233,6 +233,16 @@ export function buildMimeMessage(
     `To: ${to}`,
     ...(envelope.replyTo ? [`Reply-To: ${encodeAddress(envelope.replyTo)}`] : []),
     `Subject: ${encodeHeader(email.subject)}`,
+    // RFC 8058 one-click, on anything a reader may lawfully refuse. Gmail has
+    // required this of bulk senders since February 2024 and enforces it by
+    // filing mail without it as spam. Both headers or neither — see
+    // `SendEnvelope`.
+    ...(envelope.listUnsubscribeUrl
+      ? [
+          `List-Unsubscribe: <${envelope.listUnsubscribeUrl}>`,
+          'List-Unsubscribe-Post: List-Unsubscribe=One-Click',
+        ]
+      : []),
     'MIME-Version: 1.0',
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ]

@@ -146,6 +146,22 @@ export interface QueueInput {
 export interface SendEnvelope {
   from?: string
   replyTo?: string | null
+  /**
+   * The one-click unsubscribe link, for `List-Unsubscribe` /
+   * `List-Unsubscribe-Post` (RFC 8058).
+   *
+   * Not decoration. Since February 2024 Gmail and Yahoo require bulk senders to
+   * offer one-click unsubscribe in the headers, and the penalty for not doing it
+   * is not a warning — it is delivery to spam, silently, for everything from
+   * that domain. The link is the same token that sits in the footer, so a
+   * mailbox provider's unsubscribe button and a human clicking the link do
+   * exactly the same thing.
+   *
+   * Set only on email a reader can lawfully refuse: marketing, and anything
+   * carrying a promotional strip. A receipt is not unsubscribable and must not
+   * claim to be.
+   */
+  listUnsubscribeUrl?: string | null
 }
 
 export interface NotificationProvider {
