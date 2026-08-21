@@ -30,6 +30,7 @@ const NAV = [
   { href: '/founderhub/partners', label: 'Partners' },
   { href: '/founderhub/actions', label: 'Requires action' },
   { href: '/founderhub/emails', label: 'Emails' },
+  { href: '/founderhub/audience', label: 'Audience' },
   { href: '/founderhub/settings', label: 'Settings' },
 ]
 
