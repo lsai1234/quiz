@@ -1,0 +1,529 @@
+<title>Quiz Email Capture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground: #fbfbfc;
+    --surface: #ffffff;
+    --surface-2: #f4f6f8;
+    --ink: #0d1014;
+    --ink-2: #3d4854;
+    --muted: #5c6672;
+    --hairline: #e2e7ec;
+    --hairline-2: #cfd6dd;
+    --accent: #00738c;
+    --accent-mark: #00b4d8;
+    --built: #0e7c5a;
+    --built-bg: #e7f6ef;
+    --missing: #8a5a00;
+    --missing-bg: #fdf3de;
+    --shadow: 0 1px 2px rgba(13, 16, 20, .05), 0 8px 24px -16px rgba(13, 16, 20, .18);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0b0d10;
+      --surface: #12151a;
+      --surface-2: #171b21;
+      --ink: #f1f4f7;
+      --ink-2: #c3ccd6;
+      --muted: #8a95a1;
+      --hairline: #1e242b;
+      --hairline-2: #2b333c;
+      --accent: #4fd8f5;
+      --accent-mark: #00d4ff;
+      --built: #34d399;
+      --built-bg: #0f2a22;
+      --missing: #fbbf24;
+      --missing-bg: #2a2213;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground: #0b0d10;
+    --surface: #12151a;
+    --surface-2: #171b21;
+    --ink: #f1f4f7;
+    --ink-2: #c3ccd6;
+    --muted: #8a95a1;
+    --hairline: #1e242b;
+    --hairline-2: #2b333c;
+    --accent: #4fd8f5;
+    --accent-mark: #00d4ff;
+    --built: #34d399;
+    --built-bg: #0f2a22;
+    --missing: #fbbf24;
+    --missing-bg: #2a2213;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -16px rgba(0, 0, 0, .8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink-2);
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 46rem;
+    margin: 0 auto;
+    padding: clamp(2.5rem, 6vw, 5rem) clamp(1.15rem, 4vw, 2rem) 6rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.5rem;
+  }
+
+  h1, h2, h3, .display { font-family: "Space Grotesk", Inter, system-ui, sans-serif; }
+
+  h1 {
+    font-size: clamp(2rem, 5.5vw, 2.9rem);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -.03em;
+    color: var(--ink);
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h2 {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    color: var(--ink);
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-size: 1.02rem;
+    font-weight: 700;
+    letter-spacing: -.01em;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  p { margin: 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+
+  .eyebrow {
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-size: .69rem;
+    font-weight: 700;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .lede { font-size: 1.08rem; color: var(--ink-2); }
+
+  header { display: flex; flex-direction: column; gap: 1.15rem; }
+
+  .rule-top {
+    height: 3px;
+    width: 3.5rem;
+    background: var(--accent-mark);
+    border-radius: 2px;
+  }
+
+  section { display: flex; flex-direction: column; gap: 1.25rem; }
+
+  .note {
+    background: var(--surface-2);
+    border-left: 3px solid var(--hairline-2);
+    padding: .95rem 1.15rem;
+    border-radius: 0 8px 8px 0;
+    font-size: .92rem;
+    color: var(--muted);
+  }
+
+  /* ── Ledger ───────────────────────────────────────────────── */
+  .ledger { display: flex; flex-direction: column; gap: 1px; background: var(--hairline); border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; }
+
+  .row {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .35rem 1rem;
+    align-items: baseline;
+    padding: .8rem 1.05rem;
+  }
+
+  .row .what { color: var(--ink); font-weight: 500; font-size: .95rem; }
+  .row .where { grid-column: 1 / -1; font-size: .8rem; color: var(--muted); font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  .chip {
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-size: .66rem;
+    font-weight: 700;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .22rem .5rem;
+    border-radius: 5px;
+    white-space: nowrap;
+  }
+
+  .chip.built { background: var(--built-bg); color: var(--built); }
+  .chip.missing { background: var(--missing-bg); color: var(--missing); }
+
+  /* ── Rules ────────────────────────────────────────────────── */
+  .rules { display: flex; flex-direction: column; gap: 1.4rem; }
+
+  .rule { display: grid; grid-template-columns: 1.9rem 1fr; gap: .1rem 1rem; }
+
+  .rule .n {
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-size: .95rem;
+    color: var(--accent);
+    padding-top: .05rem;
+  }
+
+  .rule h3 { grid-column: 2; }
+  .rule p { grid-column: 2; font-size: .95rem; }
+  .rule .law { grid-column: 2; font-size: .8rem; color: var(--muted); letter-spacing: .01em; }
+
+  /* ── Capture specimen ─────────────────────────────────────── */
+  .specimen {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 16px;
+    padding: 1.35rem;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+  }
+
+  .specimen .field {
+    border: 1px solid var(--hairline-2);
+    border-radius: 10px;
+    padding: .8rem .95rem;
+    color: var(--muted);
+    font-size: .95rem;
+    background: var(--surface-2);
+  }
+
+  .specimen .helper { font-size: .82rem; color: var(--muted); }
+
+  .specimen .tick { display: grid; grid-template-columns: 1.1rem 1fr; gap: .7rem; align-items: start; font-size: .88rem; color: var(--ink-2); }
+
+  .specimen .box {
+    width: 1.1rem; height: 1.1rem;
+    border: 1.5px solid var(--hairline-2);
+    border-radius: 5px;
+    margin-top: .15rem;
+  }
+
+  .specimen .cta {
+    background: var(--accent-mark);
+    color: #04222b;
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-weight: 700;
+    font-size: .95rem;
+    text-align: center;
+    padding: .8rem;
+    border-radius: 10px;
+  }
+
+  .annotation {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .5rem .7rem;
+    font-size: .87rem;
+    color: var(--muted);
+  }
+
+  .annotation .marker { color: var(--accent); font-weight: 600; }
+
+  /* ── Phases ───────────────────────────────────────────────── */
+  .phases { display: flex; flex-direction: column; gap: 1.1rem; }
+
+  .phase {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    padding: 1.35rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+  }
+
+  .phase-head { display: flex; align-items: baseline; gap: .8rem; flex-wrap: wrap; }
+
+  .phase-n {
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-variant-numeric: tabular-nums;
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .phase p { font-size: .95rem; }
+
+  .meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.4rem;
+    padding-top: .3rem;
+    border-top: 1px solid var(--hairline);
+    font-size: .8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  .test {
+    background: var(--surface-2);
+    border-radius: 9px;
+    padding: .7rem .9rem;
+    font-size: .87rem;
+    color: var(--ink-2);
+  }
+
+  .test .label {
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-size: .64rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: .15rem;
+  }
+
+  /* ── Decisions ────────────────────────────────────────────── */
+  .decisions { display: flex; flex-direction: column; gap: 1.1rem; }
+  .decision { display: flex; flex-direction: column; gap: .2rem; }
+  .decision .q { color: var(--ink); font-weight: 600; font-size: .97rem; }
+  .decision p { font-size: .92rem; }
+
+  /* ── Table ────────────────────────────────────────────────── */
+  .table-wrap { overflow-x: auto; }
+
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; min-width: 30rem; }
+
+  th, td { text-align: left; padding: .6rem .8rem; border-bottom: 1px solid var(--hairline); }
+
+  th {
+    font-family: "Space Grotesk", Inter, sans-serif;
+    font-size: .68rem;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  td:last-child, th:last-child { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td:first-child { color: var(--accent); font-weight: 600; font-variant-numeric: tabular-nums; }
+  tbody tr:last-child td { border-bottom: none; }
+
+  footer { font-size: .85rem; color: var(--muted); border-top: 1px solid var(--hairline); padding-top: 1.25rem; }
+</style>
+
+<div class="page">
+
+  <header>
+    <div class="rule-top"></div>
+    <p class="eyebrow">getCHRGD · quiz</p>
+    <h1>Collecting emails through the quiz</h1>
+    <p class="lede">Five phases to a marketing list that is lawful, that fills itself from the moment people are happiest, and that you can export and send from on day one.</p>
+    <p class="note">Not legal advice. The code is built to satisfy UK GDPR and PECR as I read them; the <strong>wording</strong> customers see is the part worth twenty minutes of a solicitor's time — and the cheapest part to change, since it is versioned data rather than markup.</p>
+  </header>
+
+  <section>
+    <h2>Over half of this already exists</h2>
+    <p>The plumbing for marketing email was built for the promotional strip at the foot of receipts. It assumes the person already bought something and has an account. A quiz-taker has neither — that gap is the whole job.</p>
+    <div class="ledger">
+      <div class="row">
+        <span class="what">Unguessable per-address opt-out tokens</span><span class="chip built">Built</span>
+        <span class="where">lib/notify/marketing.ts</span>
+      </div>
+      <div class="row">
+        <span class="what">One-click opt-out page, with undo</span><span class="chip built">Built</span>
+        <span class="where">api/notify/marketing-opt-out</span>
+      </div>
+      <div class="row">
+        <span class="what">Consent evidence — versioned, hashed, IP + agent, append-only</span><span class="chip built">Built</span>
+        <span class="where">lib/legal/consent.ts · tied to an account</span>
+      </div>
+      <div class="row">
+        <span class="what">An outbox that can email someone who isn't a member</span><span class="chip built">Built</span>
+        <span class="where">lib/notify/outbox.ts · userId: null</span>
+      </div>
+      <div class="row">
+        <span class="what">A privacy notice</span><span class="chip missing">Missing</span>
+        <span class="where">no lawful collection without one — Phase 0</span>
+      </div>
+      <div class="row">
+        <span class="what">Anywhere to put an address that isn't a customer</span><span class="chip missing">Missing</span>
+        <span class="where">Phase 0</span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Four rules, and what each one changes</h2>
+    <div class="rules">
+
+      <div class="rule">
+        <span class="n">1</span>
+        <h3>Marketing to a non-customer needs a real opt-in</h3>
+        <p>Unticked, separate from the terms, and — the part usually missed — <strong>the email has to work without it.</strong> If ticking is the price of getting your stack, the consent isn't freely given and the whole list is built on sand.</p>
+        <p class="law">UK GDPR Art. 4(11) · PECR reg. 22 → Phase 1's headline test: submit unticked, still get the stack.</p>
+      </div>
+
+      <div class="rule">
+        <span class="n">2</span>
+        <h3>A customer is a different case</h3>
+        <p>Someone who bought can be marketed similar products under the soft opt-in, provided every message can be refused. So each address records <strong>which basis</strong> applies — they are not interchangeable, and a list that forgot can only be treated as the stricter one.</p>
+        <p class="law">PECR reg. 22(3) → a <code>basis</code> column, not a boolean.</p>
+      </div>
+
+      <div class="rule">
+        <span class="n">3</span>
+        <h3>Tell them at the field, not in a policy nobody opens</h3>
+        <p>Who we are, what we do with it, how long we keep it, how to stop — linked and legible at the point of collection.</p>
+        <p class="law">Art. 13 → the privacy notice is Phase 0, not a later tidy-up.</p>
+      </div>
+
+      <div class="rule">
+        <span class="n">4</span>
+        <h3>Stopping must be as easy as starting</h3>
+        <p>One click, no login, no form. That already ships — what it doesn't yet do is cover someone who never had an account, or separate "stop the marketing" from "stop everything", which matters because receipts can't stop.</p>
+        <p class="law">Art. 7(3) → Phase 4's preference centre.</p>
+      </div>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Where the ask goes</h2>
+    <p>On the reveal, underneath the stack they have just been given. It is the one moment where an email address is a <strong>favour to them</strong> — save this, don't lose it — rather than a toll on the way to something they want.</p>
+    <p>The rule the card is built against: <strong>it never gates anything.</strong> No modal, no "enter your email to see your results", no disabled button. The quiz completes, prices and checks out identically for someone who ignores it.</p>
+
+    <div class="specimen" role="img" aria-label="Mock-up of the capture card: an email field, helper text, an unticked marketing checkbox, and a button reading Email me my stack">
+      <h3>Keep your stack</h3>
+      <div class="field">you@example.com</div>
+      <p class="helper">We'll email your stack to this address so you don't lose it. We won't share it. <span style="color:var(--accent)">How we handle your data</span></p>
+      <div class="tick">
+        <span class="box"></span>
+        <span>Email me tips, offers and new products from getCHRGD. One click to stop, any time.</span>
+      </div>
+      <div class="cta">Email me my stack</div>
+    </div>
+
+    <div class="annotation">
+      <span class="marker">Unticked</span><span>Pre-ticking is the single most common way a list becomes unlawful.</span>
+      <span class="marker">Separate</span><span>Never bundled into a terms acceptance — consent has to be specific to marketing.</span>
+      <span class="marker">Not a gate</span><span>The button works either way, which is what makes the tick meaningful.</span>
+      <span class="marker">"My stack"</span><span>Not "Subscribe" — subscribing isn't what the person thinks they're doing.</span>
+    </div>
+
+    <p class="note">A field inside the questionnaire itself is the one place we're <em>not</em> putting this. It walls the flow, and it collects addresses from people who never saw a stack — the least valuable list we could build.</p>
+  </section>
+
+  <section>
+    <h2>The phases</h2>
+    <div class="phases">
+
+      <article class="phase">
+        <div class="phase-head"><span class="phase-n">Phase 0</span><h2>The legal spine</h2></div>
+        <p>A privacy notice, somewhere to put a non-customer, and one function that answers "may we market to this address?" for leads and members alike. No capture UI — this is what makes the next phase lawful.</p>
+        <p class="test"><span class="label">Proves it works</span>A consent record can re-render the exact sentence the person saw and match its hash — the same property the checkout consents already have.</p>
+        <div class="meta"><span><b>1.5 days</b></span><span>Risk: <b>low</b> — additive</span><span>Depends on: <b>nothing</b></span></div>
+      </article>
+
+      <article class="phase">
+        <div class="phase-head"><span class="phase-n">Phase 1</span><h2>The capture</h2></div>
+        <p>The card above, live on the reveal: a rate-limited endpoint, the stack email itself as a new template, consent evidence written with the statement version and hash, and funnel events so we can see what it does.</p>
+        <p class="test"><span class="label">Proves it works</span>Submit with the box unticked → the stack email arrives and <strong>no</strong> marketing consent is written. Then the opt-out link in that email suppresses the address, end to end, in the browser suite.</p>
+        <div class="meta"><span><b>2 days</b></span><span>Risk: <b>medium</b> — new UI on the best screen we have</span><span>Guardrail: <b>reveal → checkout not down</b></span></div>
+      </article>
+
+      <article class="phase">
+        <div class="phase-head"><span class="phase-n">Phase 2</span><h2>A second moment, one identity</h2></div>
+        <p>The build screen's 3.4 seconds of dead time gets the same field, behind a flag so it is measured rather than assumed — it sits before the payoff, which is the shape that can cost conversion. Buyers get recorded under the soft opt-in at the account gate, and a lead who later signs up becomes one record with one preference.</p>
+        <p class="test"><span class="label">Proves it works</span>Opting out anywhere opts out everywhere, and the flag off is today's behaviour byte for byte.</p>
+        <div class="meta"><span><b>1.5 days</b></span><span>Risk: <b>medium</b> — the conversion-sensitive one</span><span>Depends on: <b>Phase 1</b></span></div>
+      </article>
+
+      <article class="phase">
+        <div class="phase-head"><span class="phase-n">Phase 3</span><h2>Seeing them, and getting them out</h2></div>
+        <p>Founders Hub → Audience: counts across the top, a filterable list below, and a CSV export. Every exported row carries <strong>its own unsubscribe link</strong> — so a campaign sent from Gmail or Mailchimp can drop a working opt-out into the footer as a merge field, and the opt-out lands back in our database where the next export already excludes it.</p>
+        <p class="test"><span class="label">Proves it works</span>A suppressed address can never appear in a default export, and every export is logged: who, when, how many, which filter.</p>
+        <div class="meta"><span><b>1.5 days</b></span><span>Risk: <b>low</b></span><span>Can jump ahead of Phase 2</span></div>
+      </article>
+
+      <article class="phase">
+        <div class="phase-head"><span class="phase-n">Phase 4</span><h2>Sending, and the opt-out that has to work</h2></div>
+        <p>A preference centre behind the existing one-click link — stop marketing, or stop everything that isn't the service — that works for someone with no account. Plus the one-click unsubscribe headers Gmail and Yahoo have required from bulk senders since 2024. Optionally, sending from the hub itself, re-checking suppression at send time rather than compose time.</p>
+        <p class="test"><span class="label">Proves it works</span>An address that opts out between composing and sending is not sent to — and nobody loses a receipt by unsubscribing from marketing.</p>
+        <div class="meta"><span><b>2–3 days</b></span><span>Halves if we send from Gmail</span><span>Risk: <b>medium</b> — real inboxes</span></div>
+      </article>
+
+      <article class="phase">
+        <div class="phase-head"><span class="phase-n">Phase 5</span><h2>Rights, retention, hygiene</h2></div>
+        <p>The obligations that arrive with a list and don't announce themselves: an email-preferences row in My Hub, a retention purge on the nightly job, and one-button answers to "send me everything you hold" and "delete me".</p>
+        <p class="test"><span class="label">Proves it works</span>Erasure removes the lead but <strong>keeps</strong> the opt-out record — deleting that would let the address be re-added and re-emailed, which is the opposite of what they asked for.</p>
+        <div class="meta"><span><b>1.5 days</b></span><span>Risk: <b>low</b></span><span>Depends on: <b>Phase 3</b></span></div>
+      </article>
+
+    </div>
+  </section>
+
+  <section>
+    <h2>Three things I need from you</h2>
+    <p>None of them block Phase 0 starting.</p>
+    <div class="decisions">
+      <div class="decision">
+        <span class="q">How long do we keep an address that never buys?</span>
+        <p>24 months is the usual answer and what the notice will say unless you'd rather it were shorter.</p>
+      </div>
+      <div class="decision">
+        <span class="q">Double opt-in, or single?</span>
+        <p>Confirming by email costs 20–30% of sign-ups and buys cleaner deliverability. My recommendation: single now, with the switch built so it's a config change if the list ever gets used hard.</p>
+      </div>
+      <div class="decision">
+        <span class="q">The privacy notice's specifics.</span>
+        <p>The registered entity and address, whether we're registered with the ICO (a controller doing direct marketing generally must be — around £52 a year), and a confirmed processor list: Stripe, PowerBody, Google Workspace or Resend, Vercel, OpenAI.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Order and effort</h2>
+    <p>Phases 0 and 1 together are the smallest thing worth shipping: a lawful list that fills itself from the reveal. Phase 3 is what makes it useful to <em>you</em>, and can jump the queue if you'd rather have the export than the second capture point.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Phase</th><th>Ships</th><th>Effort</th></tr></thead>
+        <tbody>
+          <tr><td>0</td><td>Privacy notice, lead + consent tables, one suppression answer</td><td>1.5 d</td></tr>
+          <tr><td>1</td><td>Capture on the reveal, stack email, opt-in evidence</td><td>2 d</td></tr>
+          <tr><td>2</td><td>Build-screen capture (flagged), buyers, one identity per address</td><td>1.5 d</td></tr>
+          <tr><td>3</td><td>Founders Hub → Audience, CSV with per-address opt-out links</td><td>1.5 d</td></tr>
+          <tr><td>4</td><td>Preference centre, one-click headers, optional in-app sending</td><td>2–3 d</td></tr>
+          <tr><td>5</td><td>Hub preferences, retention purge, data requests, bounces</td><td>1.5 d</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    The implementation spec, with file paths, acceptance criteria and rollback per phase, is <code>docs/EMAIL_CAPTURE_PLAN.md</code> in the repo.
+  </footer>
+
+</div>
