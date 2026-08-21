@@ -98,8 +98,14 @@ export interface RecordConsentInput {
 export async function recordMarketingConsent(
   input: RecordConsentInput,
 ): Promise<MarketingConsentRecord> {
+  // `statement: null` explicitly means "there was no wording" — a soft opt-in
+  // has an order behind it, not a tick, and inventing a sentence they never saw
+  // would be evidence of something that did not happen. Omitting the field
+  // entirely still defaults to the current statement.
   const statement =
-    input.action === 'opt-in' ? (input.statement ?? MARKETING_CONSENT_STATEMENT) : null
+    input.action !== 'opt-in' || input.statement === null
+      ? null
+      : (input.statement ?? MARKETING_CONSENT_STATEMENT)
 
   const record: MarketingConsentRecord = {
     id: `mkc_${randomUUID()}`,

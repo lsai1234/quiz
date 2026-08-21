@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
+import { BuildCapture, buildCaptureEnabled } from './BuildCapture'
 
 interface Props {
   onComplete: () => void
@@ -48,6 +49,16 @@ const CORE_R = 52
 const CORE_CIRC = 2 * Math.PI * CORE_R
 
 export function Act3Analysis({ onComplete, reducedMotion }: Props) {
+  /**
+   * Somebody typing their address into the capture field below is not waiting
+   * for this screen to leave — so while they are engaged with it, the
+   * auto-advance holds. A ref rather than state: `finish` is captured by
+   * timers and a GSAP callback set up once, and re-running that effect to see
+   * a new value would restart the whole animation mid-flight.
+   */
+  const holdRef = useRef(false)
+  const finishRef = useRef<() => void>(() => {})
+  const [captureDone, setCaptureDone] = useState(false)
   const vizRef = useRef<HTMLDivElement>(null)
   const batteryRef = useRef<HTMLDivElement>(null)
   const fillRef = useRef<HTMLDivElement>(null)
@@ -98,7 +109,7 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
     }
 
     const finish = () => {
-      if (finished || !animDone || !ready) return
+      if (finished || !animDone || !ready || holdRef.current) return
       finished = true
       if (reducedMotion) { onComplete(); return }
       if (textRef.current) textRef.current.textContent = 'Powering on'
@@ -112,6 +123,7 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
       gsap.to(textRef.current, { opacity: 0, duration: 0.35, ease: 'power2.in', delay: 0.6 })
     }
 
+    finishRef.current = finish
     const unsub = useQuizStore.subscribe((s) => { if (s.stackReady && !ready) { ready = true; finish() } })
     const minTimer = setTimeout(() => {
       animDone = true
@@ -400,6 +412,19 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         <p className="text-[10px] tracking-[0.22em] uppercase text-white/25 flex items-center gap-2 mt-3" style={{ fontFamily: 'var(--font-display)' }}>
           <span className="inline-block w-1 h-1 rounded-full bg-[#00D4FF]" /> Powered by your charge
         </p>
+
+        {/* Off unless NEXT_PUBLIC_QUIZ_BUILD_CAPTURE=on. Engaging with it holds
+            the auto-advance; finishing — sent or refused — releases it. */}
+        {buildCaptureEnabled() && !captureDone && (
+          <BuildCapture
+            onHold={() => { holdRef.current = true }}
+            onRelease={() => {
+              holdRef.current = false
+              setCaptureDone(true)
+              finishRef.current()
+            }}
+          />
+        )}
       </div>
     </div>
   )

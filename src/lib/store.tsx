@@ -23,6 +23,14 @@ interface QuizStore {
    * second time, which is the difference between an offer and a nag.
    */
   stackEmailCaptured: boolean
+  /**
+   * An address given on the build screen, before there was a stack to send.
+   * The reveal pre-fills its card from it so nobody types the same address
+   * twice, and `capturedOptIn` stops it asking again about marketing they have
+   * already agreed to.
+   */
+  capturedEmail: string | null
+  capturedOptIn: boolean
   selectedProducts: Product[]
   // Which offer the user is viewing on the stack page: one-off bundle vs monthly subscription
   planType: PlanType
@@ -69,6 +77,7 @@ interface QuizStore {
   setIdentity: (identity: StackIdentity) => void
   setStackLevel: (level: StackLevel) => void
   setStackEmailCaptured: (captured: boolean) => void
+  setCapturedEmail: (email: string | null, optIn: boolean) => void
   setSelectedProducts: (products: Product[]) => void
   setPlanType: (plan: PlanType) => void
   setSubscriptionUsage: (usage: Record<string, UsageLevel>) => void
@@ -123,6 +132,8 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   identity: null,
   stackLevel: 'performance',
   stackEmailCaptured: false,
+  capturedEmail: null,
+  capturedOptIn: false,
   selectedProducts: [],
   planType: 'oneoff',
   subscriptionUsage: {},
@@ -162,6 +173,7 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   setIdentity: (identity) => set({ identity }),
   setStackLevel: (level) => set({ stackLevel: level }),
   setStackEmailCaptured: (captured) => set({ stackEmailCaptured: captured }),
+  setCapturedEmail: (email, optIn) => set({ capturedEmail: email, capturedOptIn: optIn }),
   setSelectedProducts: (products) => set({ selectedProducts: products }),
   setPlanType: (plan) => set({ planType: plan }),
   setSubscriptionUsage: (usage) => set({ subscriptionUsage: usage }),
@@ -183,14 +195,20 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, stackEmailCaptured: false, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
+  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, stackEmailCaptured: false, capturedEmail: null, capturedOptIn: false, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
 }), {
   // Persist just the in-progress answers + step so a refresh no longer wipes the
   // quiz (audit §5.3 / drop-off risk #3). Heavy/transient state (catalogue,
   // blueprint, identity) is deliberately excluded via `partialize`.
   name: 'chrgd-quiz',
   version: 1,
-  partialize: (s) => ({ answers: s.answers, step: s.step, stackEmailCaptured: s.stackEmailCaptured }),
+  partialize: (s) => ({
+    answers: s.answers,
+    step: s.step,
+    stackEmailCaptured: s.stackEmailCaptured,
+    capturedEmail: s.capturedEmail,
+    capturedOptIn: s.capturedOptIn,
+  }),
   // Rehydrate manually after mount (ScrollExperience) so server and client both
   // start from defaults — no hydration mismatch from persisted answers.
   skipHydration: true,

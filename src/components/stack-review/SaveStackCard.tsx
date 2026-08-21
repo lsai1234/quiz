@@ -44,6 +44,14 @@ interface Props {
   /** Pre-filled for a signed-in member; they should not retype what we know. */
   defaultEmail?: string | null
   defaultFirstName?: string | null
+  /**
+   * True when this person has already agreed to marketing — on the build screen,
+   * or at checkout. The tick is then replaced by a plain statement of what they
+   * already said yes to: asking twice invites a second answer to a question that
+   * has one, and a box they have to tick again reads as though the first one
+   * didn't count.
+   */
+  alreadyOptedIn?: boolean
   source: LeadSource
   track: string | null
   primaryGoal: string | null
@@ -55,10 +63,10 @@ interface Props {
 type State = 'idle' | 'sending' | 'sent' | 'error'
 
 export function SaveStackCard({
-  defaultEmail, defaultFirstName, source, track, primaryGoal, stack, onDone,
+  defaultEmail, defaultFirstName, alreadyOptedIn, source, track, primaryGoal, stack, onDone,
 }: Props) {
   const [email, setEmail] = useState(defaultEmail ?? '')
-  const [optIn, setOptIn] = useState(false)
+  const [optIn, setOptIn] = useState(alreadyOptedIn === true)
   const [website, setWebsite] = useState('')
   const [state, setState] = useState<State>('idle')
 
@@ -178,17 +186,24 @@ export function SaveStackCard({
         </a>
       </p>
 
-      <label className="flex gap-3 mt-3 cursor-pointer">
-        <input
-          type="checkbox"
-          checked={optIn}
-          onChange={(e) => setOptIn(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 accent-[#00D4FF]"
-        />
-        <span className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          {MARKETING_CONSENT_STATEMENT}
-        </span>
-      </label>
+      {alreadyOptedIn ? (
+        <p className="text-xs mt-3 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          You already asked us for tips and offers — there&rsquo;s a one-click way out at the foot
+          of every one.
+        </p>
+      ) : (
+        <label className="flex gap-3 mt-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={optIn}
+            onChange={(e) => setOptIn(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-[#00D4FF]"
+          />
+          <span className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            {MARKETING_CONSENT_STATEMENT}
+          </span>
+        </label>
+      )}
 
       {state === 'error' && (
         <p className="text-xs mt-3" style={{ color: '#fbbf24' }} role="alert">

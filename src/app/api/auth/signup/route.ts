@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createUser, getUserByEmail, toPublicUser } from '@/lib/db/users'
 import { hashPassword, passwordProblem } from '@/lib/auth/password'
 import { startHubSession } from '@/lib/auth/session'
+import { linkAccountAddress } from '@/lib/audience/buyers'
 
 /**
  * POST /api/auth/signup
@@ -34,5 +35,9 @@ export async function POST(req: Request) {
 
   const user = await createUser({ email, name, passwordHash: hashPassword(password) })
   await startHubSession(user.id)
+  // An address we already hold from the quiz becomes this account's address —
+  // one row, one preference, however it arrived. Signing up is NOT itself a
+  // marketing permission: that comes from a tick or from an order.
+  await linkAccountAddress(user.email, user.id)
   return NextResponse.json({ ok: true, user: toPublicUser(user) })
 }

@@ -136,7 +136,7 @@ export function StackReviewPage() {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
     stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
     revealedIntroDiscount, setRevealedIntroDiscount, identity,
-    stackEmailCaptured, setStackEmailCaptured,
+    stackEmailCaptured, setStackEmailCaptured, capturedEmail, capturedOptIn,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -529,7 +529,8 @@ export function StackReviewPage() {
         {showSaveCard && (
           <div className="pt-5">
             <SaveStackCard
-              defaultEmail={knownEmail}
+              defaultEmail={capturedEmail ?? knownEmail}
+              alreadyOptedIn={capturedOptIn}
               defaultFirstName={answers.name}
               source="quiz-reveal"
               track={answers.track}

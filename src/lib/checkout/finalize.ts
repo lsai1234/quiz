@@ -31,6 +31,7 @@ import {
   type ConsentVersions,
 } from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
+import { recordSoftOptIn } from '@/lib/audience/buyers'
 
 export const PENDING_COOKIE = 'pending_checkout'
 export const PENDING_KEY_PREFIX = 'pending:'
@@ -226,6 +227,26 @@ export async function finalizeCheckout(
     ip: opts.ip,
     userAgent: opts.userAgent,
   })
+
+  // The buyer joins the audience under the soft opt-in — PECR reg. 22(3), which
+  // permits similar products to somebody who has bought or negotiated to buy,
+  // provided every message can be refused. Recorded with basis `soft-opt-in`
+  // rather than `consent`, because they are different permissions and a list
+  // that has forgotten which is which can only be treated as the stricter one.
+  // Never fails a checkout: a marketing preference is not worth a payment.
+  try {
+    await recordSoftOptIn({
+      email: subscription.customerEmail || email,
+      userId,
+      firstName: payload.quiz?.answers?.name ?? null,
+      track: payload.quiz?.answers?.track ?? null,
+      primaryGoal: payload.quiz?.answers?.goals?.[0] ?? null,
+      ip: opts.ip,
+      userAgent: opts.userAgent,
+    })
+  } catch (err) {
+    console.error('[finalizeCheckout] audience record failed:', err)
+  }
 
   // Bank the granted rate against the allocation ledger. This is the only place
   // the giveaway budget is spent — cards revealed by people who never got here

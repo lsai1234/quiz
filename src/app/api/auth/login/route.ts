@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getUserByEmail, toPublicUser } from '@/lib/db/users'
 import { verifyPassword } from '@/lib/auth/password'
 import { startHubSession } from '@/lib/auth/session'
+import { linkAccountAddress } from '@/lib/audience/buyers'
 
 /**
  * POST /api/auth/login
@@ -31,5 +32,9 @@ export async function POST(req: Request) {
   }
 
   await startHubSession(user.id)
+  // Somebody who took the quiz first and made an account weeks later is one
+  // person: tying the address to the account here is what keeps a single
+  // marketing preference governing both. Never blocks a sign-in.
+  await linkAccountAddress(user.email, user.id)
   return NextResponse.json({ ok: true, user: toPublicUser(user) })
 }
