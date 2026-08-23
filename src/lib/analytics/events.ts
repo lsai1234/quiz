@@ -99,7 +99,15 @@ function newId(): string {
     : Math.random().toString(36).slice(2)
 }
 
-function getSessionId(): string {
+/**
+ * The per-visit id, shared with the error reporter.
+ *
+ * Exported so a crash report can be tied to the funnel steps that led to it —
+ * "this person reached the reveal, then the page threw" is a far more useful
+ * bug report than either half alone, and it costs no extra identifier because
+ * it is the same anonymous, session-scoped value.
+ */
+export function getSessionId(): string {
   if (sessionId) return sessionId
   try {
     const stored = window.sessionStorage.getItem(SESSION_KEY)
@@ -116,7 +124,8 @@ function getSessionId(): string {
   return sessionId
 }
 
-function privacyOptedOut(): boolean {
+/** Honour DNT / GPC. Exported so error reporting can respect it too. */
+export function privacyOptedOut(): boolean {
   const nav = navigator as Navigator & { globalPrivacyControl?: boolean; msDoNotTrack?: string }
   return nav.doNotTrack === '1' || nav.msDoNotTrack === '1' || nav.globalPrivacyControl === true
 }

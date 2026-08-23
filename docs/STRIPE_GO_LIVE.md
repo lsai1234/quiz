@@ -177,6 +177,13 @@ curl -H "Authorization: Bearer $CRON_SECRET" \
 
 ## 6. Going live
 
+> **Before you swap the keys**, open **Founders Hub → Settings → Going live**. It
+> checks everything in §3 against the *running* deployment — so a variable you
+> set but never redeployed shows up as outstanding rather than as a surprise —
+> and clears the orders and subscriptions you made while testing, so your first
+> real month starts at zero. It refuses to delete anything created against a live
+> key, so it stays safe to open afterwards. See `docs/GO_LIVE_RESET.md`.
+
 Test mode and live mode share **nothing** — not keys, not customers, not
 webhooks, not the portal config. Repeat §2 with the Test-mode toggle **off**:
 
@@ -243,6 +250,12 @@ Be clear about this before you launch:
 ---
 
 ## 9. Watch these in week one
+
+> Most of this section is now answered by **Founders Hub → Monitoring**, which
+> checks for stuck orders, a webhook that stopped arriving, a cron that stopped
+> firing and an outbox that stopped draining — and raises a banner on the hub
+> dashboard when any of them trips. See `docs/MONITORING.md`. The Stripe
+> dashboard is still the authority on webhook delivery itself.
 
 - **Stripe → Developers → Webhooks → your endpoint.** Any non-`200` means an
   order didn't register. This is the first place to look when something's wrong.

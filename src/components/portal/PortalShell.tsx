@@ -29,6 +29,7 @@ const NAV = [
   { href: '/founderhub/pricing', label: 'Pricing' },
   { href: '/founderhub/partners', label: 'Partners' },
   { href: '/founderhub/actions', label: 'Requires action' },
+  { href: '/founderhub/monitoring', label: 'Monitoring' },
   { href: '/founderhub/emails', label: 'Emails' },
   { href: '/founderhub/settings', label: 'Settings' },
 ]

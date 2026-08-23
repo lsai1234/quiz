@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Button, Card, ChargeMeter } from '@/components/system'
+import { HealthBanner } from '@/components/portal/HealthBanner'
 import type { DashboardSummary, MoneyWindow } from '@/lib/portal/dashboard'
 import type { QuizFunnel } from '@/lib/analytics/funnel'
 
@@ -58,6 +59,11 @@ export default function HubDashboard() {
 
   return (
     <div className="flex flex-col" style={{ gap: 'var(--space-8)' }}>
+      {/* Above the heading, because it is the only thing on this page that can
+          be more urgent than everything else on it. Renders nothing when the
+          checks are clean. */}
+      <HealthBanner />
+
       <div>
         <h1
           style={{

@@ -56,6 +56,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         blurb: 'How the shop, quiz and subscriptions take money.',
         icon: 'credit-card',
       },
+      {
+        slug: 'go-live',
+        title: 'Going live',
+        blurb:
+          'The checklist before you swap the sandbox keys for real ones, and the reset that clears everything you ordered while testing.',
+        icon: 'bolt',
+      },
     ],
   },
   {

@@ -4,6 +4,7 @@ import { getHubUser } from '@/lib/auth/session'
 import { CheckoutRejected, PaymentStartFailed, finalizeCheckout } from '@/lib/checkout/finalize'
 import { requestMetadata } from '@/lib/legal/consent'
 import { resolveCheckoutCode } from '@/lib/partners/referral'
+import { reportError } from '@/lib/monitoring/report'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import type { CheckoutPayload } from '@/lib/checkout/types'
 
@@ -62,6 +63,22 @@ export async function POST(req: Request) {
     // chk_7f3a91" is the log line, on the phone, without a laptop.
     const ref = `chk_${randomUUID().slice(0, 8)}`
     console.error(`[checkout/finalize] ${ref} failed for user ${user.id}:`, err)
+
+    // Critical, and invisible without this line: the failure is caught and
+    // answered with a tidy 500, so nothing throws out of the request and
+    // `instrumentation.ts` never hears about it. A member who wanted to
+    // subscribe just couldn't.
+    //
+    // `ref` goes into the context because it is the string the member is
+    // looking at. Someone emails "it said chk_7f3a91" and it can be found here
+    // rather than by scrolling a hosting dashboard's log tail.
+    await reportError(err, {
+      surface: 'checkout',
+      severity: 'critical',
+      path: '/api/checkout/finalize',
+      userId: user.id,
+      context: { ref, lines: payload.subscription?.lines?.length ?? 0 },
+    })
 
     // A founder signed into the portal gets the real reason — they're the one
     // who has to fix it, and reading it on the device that hit the failure

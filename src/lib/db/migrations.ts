@@ -435,6 +435,85 @@ export const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+
+  // v14 — the error log the Founders Hub reads.
+  //
+  // Until now a crash on the shop, the quiz or the hub reached `console.error`
+  // and stopped there: visible in a Vercel log tail if you happened to be
+  // looking, invisible everywhere else. A founder cannot watch a log tail, so in
+  // practice nothing was monitored at all.
+  //
+  // Two tables rather than one, because an error log has two different lifetimes:
+  //
+  //   `error_events` — every occurrence, append-only, pruned on a window. This is
+  //     the evidence: when, where, which stack, how often.
+  //   `error_groups` — one row per distinct fault, carrying the state a human put
+  //     on it (open / resolved / muted). This is the triage, and it must survive
+  //     the pruning of the events that produced it — otherwise resolving a bug
+  //     un-resolves itself a fortnight later when the events age out.
+  //
+  // `fingerprint` is the join and the whole point of the design: it is derived
+  // from the error's shape (surface + normalised message + top frame), not its
+  // text, so four hundred occurrences of one broken checkout collapse into a
+  // single row you can read, rather than four hundred you cannot.
+  //
+  // Anonymity matches `analytics_events`: `session_id` is the same per-visit id,
+  // `user_id` is only ever set for errors raised inside an authenticated hub
+  // request, and messages are truncated on the way in.
+  `
+  CREATE TABLE error_events (
+    id          TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL,
+    surface     TEXT NOT NULL,
+    severity    TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    message     TEXT NOT NULL,
+    stack       TEXT,
+    path        TEXT,
+    session_id  TEXT,
+    user_id     TEXT,
+    context     TEXT NOT NULL,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX error_events_fingerprint ON error_events(fingerprint);
+  CREATE INDEX error_events_created_at ON error_events(created_at);
+  CREATE INDEX error_events_surface ON error_events(surface);
+  CREATE INDEX error_events_severity ON error_events(severity);
+
+  CREATE TABLE error_groups (
+    fingerprint TEXT PRIMARY KEY,
+    state       TEXT NOT NULL,
+    note        TEXT,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX error_groups_state ON error_groups(state);
+  `,
+
+  // v15 — which Stripe world a row was created in.
+  //
+  // Test mode and live mode share this database. Once real money starts moving,
+  // "clear the test data" and "destroy the business" are the same DELETE unless
+  // something on the row itself says which is which — and the Stripe ids alone
+  // don't, because a mock-payments order has none at all.
+  //
+  // So every row that can represent money records the mode that created it:
+  //   'mock'    — no Stripe involved
+  //   'sandbox' — a test-mode key (sk_test_…)
+  //   'live'    — a live key (sk_live_…)
+  //
+  // The go-live reset then targets mock + sandbox and refuses live, which turns
+  // the dangerous button into a safe one. Existing rows are backfilled to
+  // 'sandbox': everything written before this migration predates the live key by
+  // definition, so that is the truthful value, and it is also the safe one —
+  // mislabelling old test data as live would only ever leave it behind.
+  `
+  ALTER TABLE orders ADD COLUMN mode TEXT;
+  UPDATE orders SET mode = 'sandbox' WHERE mode IS NULL;
+  CREATE INDEX orders_mode ON orders(mode);
+
+  ALTER TABLE subscriptions ADD COLUMN mode TEXT;
+  UPDATE subscriptions SET mode = 'sandbox' WHERE mode IS NULL;
+  `,
 ]
 
 /**

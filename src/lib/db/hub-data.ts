@@ -8,6 +8,7 @@
  * repository surface stays the same.
  */
 import crypto from 'crypto'
+import { currentStripeWorld } from '@/lib/payments'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { FeedbackCheckIn } from '@/lib/feedback'
 import { getEngine, now } from './engine'
@@ -23,12 +24,23 @@ export async function getSubscription(userId: string): Promise<MemberSubscriptio
   }
 }
 
+/**
+ * `mode` marks which Stripe world this subscription belongs to, for the go-live
+ * reset. It follows the same one-way rule as `orders`: once `live`, always
+ * `live`. That matters more here than there, because a subscription row can be
+ * created by `setQuiz` *before* anybody pays — at which point the world is
+ * whatever the quiz was taken under — and only becomes real money later.
+ */
 export async function saveSubscription(userId: string, subscription: MemberSubscription): Promise<void> {
   const db = await getEngine()
   await db.run(
-    `INSERT INTO subscriptions (user_id, data, updated_at) VALUES (?, ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`,
-    [userId, JSON.stringify(subscription), now()],
+    `INSERT INTO subscriptions (user_id, data, mode, updated_at) VALUES (?, ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       data = excluded.data,
+       mode = CASE WHEN subscriptions.mode = 'live' OR excluded.mode = 'live' THEN 'live'
+                   ELSE COALESCE(subscriptions.mode, excluded.mode) END,
+       updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(subscription), currentStripeWorld(), now()],
   )
 }
 
@@ -48,9 +60,13 @@ export async function getQuiz<T = unknown>(userId: string): Promise<T | null> {
 export async function saveQuiz(userId: string, quiz: unknown): Promise<void> {
   const db = await getEngine()
   await db.run(
-    `INSERT INTO subscriptions (user_id, data, quiz, updated_at) VALUES (?, '{}', ?, ?)
-     ON CONFLICT(user_id) DO UPDATE SET quiz = excluded.quiz, updated_at = excluded.updated_at`,
-    [userId, JSON.stringify(quiz), now()],
+    `INSERT INTO subscriptions (user_id, data, quiz, mode, updated_at) VALUES (?, '{}', ?, ?, ?)
+     ON CONFLICT(user_id) DO UPDATE SET
+       quiz = excluded.quiz,
+       mode = CASE WHEN subscriptions.mode = 'live' OR excluded.mode = 'live' THEN 'live'
+                   ELSE COALESCE(subscriptions.mode, excluded.mode) END,
+       updated_at = excluded.updated_at`,
+    [userId, JSON.stringify(quiz), currentStripeWorld(), now()],
   )
 }
 

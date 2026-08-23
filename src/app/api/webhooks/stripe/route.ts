@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { constructWebhookEvent } from '@/lib/payments/stripe'
 import { handleStripeEvent } from '@/lib/payments/webhook'
+import { reportError } from '@/lib/monitoring/report'
 
 export const dynamic = 'force-dynamic'
 
@@ -8,6 +9,14 @@ export const dynamic = 'force-dynamic'
  * POST /api/webhooks/stripe
  * Verifies the signature against STRIPE_WEBHOOK_SECRET, then dispatches the
  * event. Raw body is required for signature verification, so we read req.text().
+ *
+ * Every failure path here is reported at `critical`, and none of them would be
+ * caught by `instrumentation.ts`: each one is handled, so nothing throws out of
+ * the request and the framework sees a perfectly ordinary response. That is
+ * precisely what makes this route dangerous. A webhook that fails quietly means
+ * a customer has been charged for an order the business has no record of, and
+ * the only outward sign is an order sitting at `pending_payment` — which is why
+ * `health.ts` counts those too.
  */
 export async function POST(req: Request) {
   const signature = req.headers.get('stripe-signature')
@@ -19,6 +28,16 @@ export async function POST(req: Request) {
     event = constructWebhookEvent(rawBody, signature)
   } catch (err) {
     console.error('[stripe webhook] signature verification failed:', err instanceof Error ? err.message : err)
+    // Almost always a stale or wrong STRIPE_WEBHOOK_SECRET — the classic
+    // go-live mistake, since test and live endpoints have different ones. Until
+    // it is fixed *no* payment is ever recorded, so it is as critical as a
+    // failure gets, even though the route is behaving correctly by rejecting it.
+    await reportError(err, {
+      surface: 'webhook',
+      severity: 'critical',
+      path: '/api/webhooks/stripe',
+      context: { stage: 'signature-verification', hasSecret: !!process.env.STRIPE_WEBHOOK_SECRET },
+    })
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -34,6 +53,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true, ...outcome })
   } catch (err) {
     console.error('[stripe webhook] handler error:', err)
+    await reportError(err, {
+      surface: 'webhook',
+      severity: 'critical',
+      path: '/api/webhooks/stripe',
+      context: { stage: 'handler', eventType: event.type, eventId: event.id },
+    })
     return NextResponse.json({ error: 'Webhook handler failed' }, { status: 500 })
   }
 }

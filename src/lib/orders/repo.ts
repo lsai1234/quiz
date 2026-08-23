@@ -10,6 +10,7 @@
  * repositories so it runs on SQLite and Postgres unchanged.
  */
 import { getEngine, now } from '@/lib/db/engine'
+import { currentStripeWorld } from '@/lib/payments'
 import type { Order, OrderChannel, OrderStatus } from './types'
 
 interface Row { data: string }
@@ -23,13 +24,25 @@ function parse(row: Row | undefined): Order | null {
   }
 }
 
-/** Insert or replace an order, keeping the indexed columns in sync with `data`. */
+/**
+ * Insert or replace an order, keeping the indexed columns in sync with `data`.
+ *
+ * `mode` records which Stripe world the row belongs to — mock, sandbox or live.
+ * The go-live reset refuses to delete anything marked `live`, so the column is
+ * only worth having if it can never drift the *unsafe* way.
+ *
+ * Hence the one-way rule in the upsert: once `live`, always `live`, and
+ * otherwise the original value stands. It is monotone toward safety —
+ * mislabelling a test order as live costs a row left behind for someone to
+ * delete by hand, while the opposite loses a real customer's order. Those are
+ * not comparable mistakes, so the tie is broken the same way every time.
+ */
 export async function saveOrder(order: Order): Promise<void> {
   const db = await getEngine()
   await db.run(
     `INSERT INTO orders
-       (id, user_id, email, channel, status, data, stripe_session_id, stripe_payment_id, supplier_order_id, partner_code, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       (id, user_id, email, channel, status, data, stripe_session_id, stripe_payment_id, supplier_order_id, partner_code, mode, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(id) DO UPDATE SET
        user_id = excluded.user_id,
        email = excluded.email,
@@ -40,6 +53,8 @@ export async function saveOrder(order: Order): Promise<void> {
        stripe_payment_id = excluded.stripe_payment_id,
        supplier_order_id = excluded.supplier_order_id,
        partner_code = excluded.partner_code,
+       mode = CASE WHEN orders.mode = 'live' OR excluded.mode = 'live' THEN 'live'
+                   ELSE COALESCE(orders.mode, excluded.mode) END,
        updated_at = excluded.updated_at`,
     [
       order.id,
@@ -52,6 +67,7 @@ export async function saveOrder(order: Order): Promise<void> {
       order.stripePaymentIntentId,
       order.supplierOrderId,
       order.partnerCode ?? null,
+      currentStripeWorld(),
       order.createdAt,
       order.updatedAt,
     ],

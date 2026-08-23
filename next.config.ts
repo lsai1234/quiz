@@ -3,6 +3,46 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   serverExternalPackages: ['three', 'better-sqlite3', 'pg'],
   turbopack: undefined,
+  /**
+   * Keep the database drivers out of the Edge bundle.
+   *
+   * `src/instrumentation.ts` is compiled for *both* server runtimes, and this
+   * app has an edge-runtime proxy (`src/middleware.ts`), so the edge
+   * compilation really is produced. `onRequestError` records to the database,
+   * which reaches `pg` and `better-sqlite3` — both of which require `fs` and
+   * `path`, neither of which exists on Edge. Without this the build fails
+   * outright with `Module not found: Can't resolve 'fs'`.
+   *
+   * Two things that do *not* fix it, for whoever tries them next:
+   *   - `serverExternalPackages` above: that governs the Node server bundle only.
+   *   - A `process.env.NEXT_RUNTIME` guard around the import: webpack resolves
+   *     the module graph before it folds the branch, so the dependency is
+   *     traced whether or not the code can ever run. Aliasing the `@/…`
+   *     specifier does not work either — Next resolves those through a resolve
+   *     plugin rather than through `resolve.alias`, so the entry never matches.
+   *
+   * Aliasing the two driver packages themselves does work, because a bare
+   * package name goes through `resolve.alias` normally. It is also honest:
+   * middleware states in its own header that it runs "on the edge with no
+   * database", and `engine.ts` only ever loads a driver from inside an async
+   * function, so nothing on Edge can reach one at runtime either.
+   */
+  webpack: (config, { nextRuntime }) => {
+    if (nextRuntime === 'edge') {
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'better-sqlite3': false,
+        pg: false,
+        // The engines' own Node builtins, reached transitively. Edge has no
+        // filesystem, so these are absent there in fact as well as in the
+        // bundle — this makes the graph agree with the runtime instead of
+        // failing on a dependency that could never have loaded.
+        fs: false,
+        path: false,
+      }
+    }
+    return config
+  },
   // Skip type-checking in the build worker to avoid OOM on constrained machines.
   // Run `npx tsc --noEmit` separately for type safety.
   typescript: { ignoreBuildErrors: true },

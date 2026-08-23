@@ -83,3 +83,26 @@ export function getPaymentSource(): PaymentSource {
 export function isStripeLive(): boolean {
   return getPaymentSource() === 'stripe'
 }
+
+/**
+ * Which Stripe *world* a row is being written into.
+ *
+ * `getPaymentSource()` answers "are we charging anybody?", which is not the same
+ * question. Once real money starts moving, test-mode and live-mode rows sit side
+ * by side in one database, and "clear the test data" and "destroy the business"
+ * become the same DELETE unless each row records which world made it.
+ *
+ * Read from the key itself rather than from a setting, because the key is the
+ * thing that actually decides: a portal override or a `PAYMENTS_SOURCE` can be
+ * changed after the fact, but a row created against `sk_live_…` took real money
+ * and no later setting change makes that untrue.
+ *
+ * See `src/lib/portal/go-live.ts`, which refuses to delete anything marked
+ * `live`.
+ */
+export type StripeWorld = 'mock' | 'sandbox' | 'live'
+
+export function currentStripeWorld(): StripeWorld {
+  if (getPaymentSource() !== 'stripe') return 'mock'
+  return (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_live_') ? 'live' : 'sandbox'
+}
