@@ -197,6 +197,31 @@ export async function listAwaitingFulfilment(limit = 500): Promise<Order[]> {
   return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
 }
 
+/**
+ * Orders that are with the supplier and have not finished their journey —
+ * submitted, confirmed, or shipped but not yet delivered.
+ *
+ * This is what the daily status sweep walks. The three statuses are exactly the
+ * ones where the supplier still knows something we don't: `delivered` is the
+ * end of the line, and `cancelled`/`refunded` are terminal side-exits that a
+ * later supplier status must not drag back (see `syncSupplierStatus`), so
+ * asking about any of them is a call that can only do harm.
+ *
+ * Oldest first: an order that has been sitting at "received" for a week is more
+ * interesting than one sent an hour ago, and if the sweep hits its limit those
+ * are the ones worth spending it on.
+ */
+export async function listInFlightWithSupplier(limit = 500): Promise<Order[]> {
+  const db = await getEngine()
+  const rows = await db.all<Row>(
+    `SELECT data FROM orders
+      WHERE status IN ('submitted_to_supplier', 'supplier_confirmed', 'shipped')
+        AND supplier_order_id IS NOT NULL
+      ORDER BY created_at ASC LIMIT ${Math.min(Math.max(1, limit), 1000)}`,
+  )
+  return rows.map((r) => parse(r)).filter((o): o is Order => o !== null)
+}
+
 export interface OrderFilter {
   status?: OrderStatus
   channel?: OrderChannel

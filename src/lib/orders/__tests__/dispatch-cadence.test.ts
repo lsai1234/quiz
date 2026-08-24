@@ -260,3 +260,60 @@ describe('what a subscription order records for delivery', () => {
     expect(order.shipping).toBeCloseTo(recurringDeliveryOption(30)!.price, 2)
   })
 })
+
+/**
+ * The plan terms travel with the box.
+ *
+ * A subscription delivery is reviewed in the same queue as a one-off, and the
+ * founder approving it needs to know whether this is somebody's first month and
+ * what they are signing up to pay. None of that can be looked up later: a plan's
+ * price and lines move, and a cancelled plan would take the terms with it.
+ */
+describe('the plan snapshot on a subscription order', () => {
+  it('records which delivery this is, so a first box is identifiable', async () => {
+    const first = await createSubscriptionOrder({
+      id: 'ord_snap_first',
+      sub: plan(),
+      catalogue: CATALOGUE,
+      cycle: 0,
+    })
+    const renewal = await createSubscriptionOrder({
+      id: 'ord_snap_renewal',
+      sub: plan(),
+      catalogue: CATALOGUE,
+      cycle: 4,
+    })
+    expect(first.subscription?.cycle).toBe(0)
+    expect(renewal.subscription?.cycle).toBe(4)
+  })
+
+  it('carries the money and the commitment, not just the plan id', async () => {
+    const order = await createSubscriptionOrder({
+      id: 'ord_snap_terms',
+      sub: plan({ minMonths: 3, dispatchDayOfMonth: 12, introDiscountRate: 0.5, firstMonth: 27.47 }),
+      catalogue: CATALOGUE,
+      cycle: 0,
+      billedAmount: 27.47,
+    })
+    expect(order.subscription).toMatchObject({
+      id: 'sub_1',
+      monthly: 54.94,
+      minMonths: 3,
+      dispatchDayOfMonth: 12,
+      introDiscountRate: 0.5,
+      firstMonth: 27.47,
+    })
+    // The cycle's own charge stays where it was — the snapshot adds to it
+    // rather than replacing it.
+    expect(order.billedAmount).toBe(27.47)
+  })
+
+  it('leaves a one-off order without one', async () => {
+    const { createOrderFromCheckout } = await import('@/lib/orders/service')
+    const order = await createOrderFromCheckout({
+      channel: 'shop',
+      lines: [{ sku: 'SKU-1', productId: 'p', title: 'P', quantity: 1, unitPrice: 10 }],
+    })
+    expect(order.subscription).toBeNull()
+  })
+})

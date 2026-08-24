@@ -76,6 +76,47 @@ export interface OrderReview {
   note?: string | null
 }
 
+/**
+ * The plan a subscription delivery came from, snapshotted onto the order.
+ *
+ * Subscription orders are reviewed in the same daily queue as one-off ones, but
+ * the question being asked of them is different. A first box is a new member
+ * committing to a recurring charge; a renewal is a plan that has already been
+ * approved once. Telling them apart — and seeing what the member is actually
+ * paying each month before waving the box through — is the whole point of this.
+ *
+ * Snapshotted rather than looked up when the queue renders, for the same reason
+ * `billedAmount` and `partnerCode` are: a plan's price, minimum term and lines
+ * all move, and what was true when this delivery was raised is what the review
+ * has to be judged against. A plan cancelled tomorrow must not erase the terms
+ * the box that shipped today went out under.
+ */
+export interface OrderSubscriptionContext {
+  /** The subscription this delivery belongs to. */
+  id: string
+  /**
+   * Which delivery this is: 0 is the box that ships at signup, 1 the first
+   * renewal, and so on. This is the fact that makes a first box visible as one.
+   */
+  cycle: number
+  /** The flat amount billed every month (£). */
+  monthly: number
+  /** Minimum commitment in months. 1 = none, cancel or pause any time. */
+  minMonths: number
+  /** Day of the month deliveries and charges land (1–28). */
+  dispatchDayOfMonth: number
+  /**
+   * The first-month intro discount rate claimed at checkout (0–1), when any.
+   * Only meaningful on cycle 0, and worth seeing there: it is the difference
+   * between what this member paid to join and what they will pay from now on.
+   */
+  introDiscountRate?: number | null
+  /** What the first month actually billed (£), after intro and partner discount. */
+  firstMonth?: number | null
+  /** When the plan started (ISO). */
+  startedAt: string
+}
+
 export interface Order {
   id: string
   /**
@@ -157,6 +198,12 @@ export interface Order {
    * for that month, and the reason those empty orders are worth keeping.
    */
   billedAmount?: number | null
+  /**
+   * The plan behind this delivery. Subscription orders only, and absent on
+   * subscription orders raised before this existed — the queue reads it
+   * defensively so those still render, just without the plan detail.
+   */
+  subscription?: OrderSubscriptionContext | null
   // ── Audit ──
   events: OrderEvent[]
   createdAt: string
@@ -188,4 +235,6 @@ export interface CreateOrderInput {
   partnerDiscountPct?: number | null
   /** What the cycle was billed at — see `Order.billedAmount`. */
   billedAmount?: number | null
+  /** The plan behind this delivery — see `Order.subscription`. */
+  subscription?: OrderSubscriptionContext | null
 }

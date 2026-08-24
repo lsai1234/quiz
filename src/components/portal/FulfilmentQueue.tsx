@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/system'
-import type { FulfilmentQueue as Queue, QueueKind, QueueOrder } from '@/lib/orders/queue'
+import type { FulfilmentQueue as Queue, InFlightOrder, QueueKind, QueueOrder } from '@/lib/orders/queue'
 import { OrderingModeBanner } from './OrderSendingToggle'
 import { Checkbox } from '@/components/system'
 
-/** The queue endpoint adds the current ordering mode to the queue payload. */
-type QueueWithOrdering = Queue & { ordering?: 'simulate' | 'live' }
+/**
+ * The queue endpoint adds the current ordering mode and the orders already sent
+ * to the queue payload.
+ */
+type QueueWithOrdering = Queue & { ordering?: 'simulate' | 'live'; inFlight?: InFlightOrder[] }
 
 
 const REVIEW: Record<string, { label: string; colour: string }> = {
@@ -19,6 +22,12 @@ const REVIEW: Record<string, { label: string; colour: string }> = {
 }
 
 const money = (n: number, ccy = 'GBP') => `${ccy === 'GBP' ? '£' : ''}${n.toFixed(2)}`
+
+/** 1 → "1st", 22 → "22nd". Dispatch days are 1–28, so no need to handle beyond. */
+function ordinal(n: number): string {
+  if (n >= 11 && n <= 13) return `${n}th`
+  return `${n}${['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`
+}
 
 function dayLabel(iso: string): string {
   const today = new Date().toISOString().slice(0, 10)
@@ -91,6 +100,42 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
     [load],
   )
 
+  /**
+   * Ask the supplier what has happened to everything already sent.
+   *
+   * The daily job does this on its own; this is the same read on demand, for
+   * the founder who has just pressed Send and wants to see it acknowledged
+   * rather than wait until tomorrow to find out it wasn't.
+   */
+  const checkAll = useCallback(async () => {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await fetch('/api/portal/fulfilment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'check-all' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d.error ?? 'Could not check with the supplier.')
+      } else {
+        setMessage(
+          d.checked === 0
+            ? 'Nothing is with the supplier to check.'
+            : `Checked ${d.checked} order${d.checked === 1 ? '' : 's'} — ${d.updated} had moved${d.delivered ? `, ${d.delivered} delivered` : ''}.`,
+        )
+        if (d.failures?.length) {
+          setError(d.failures.map((f: { id: string; error: string }) => `${f.id}: ${f.error}`).join(' · '))
+        }
+      }
+    } finally {
+      setBusy(false)
+      load()
+    }
+  }, [load])
+
   const allPending = useMemo(
     () => (queue?.days ?? []).flatMap((d) => d.orders).filter((o) => o.review === 'pending').map((o) => o.id),
     [queue],
@@ -129,6 +174,19 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
           Northern Ireland, Guernsey, Jersey and anywhere outside the UK are off-limits on a UK dropshipping account.
           These look like ordinary UK orders — refund {queue.undeliverable === 1 ? 'it' : 'them'} rather than leaving
           someone waiting for a parcel that was never coming.
+        </p>
+      )}
+
+      {/* First boxes get their own call-out rather than being left to spot in the
+          list. Approving one is not "send a parcel" — it is accepting a member
+          onto a recurring charge, and the monthly total is what that decision is
+          actually worth. */}
+      {queue.firstBoxes > 0 && (
+        <p className="text-xs rounded-xl px-3 py-2" style={{ background: 'var(--info-fill)', border: '1px solid var(--info-line)', color: 'var(--tone-info)' }}>
+          <strong>{queue.firstBoxes} first subscription box{queue.firstBoxes === 1 ? '' : 'es'} waiting.</strong>{' '}
+          {queue.firstBoxes === 1 ? 'This is a new member’s opening delivery' : 'These are new members’ opening deliveries'} —
+          approving {queue.firstBoxes === 1 ? 'it commits them' : 'them commits'} to {money(queue.firstBoxMonthly)} a month
+          from here on. Check the plan and the price before waving {queue.firstBoxes === 1 ? 'it' : 'them'} through.
         </p>
       )}
 
@@ -205,6 +263,21 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                           <span className="text-[10px] font-semibold uppercase text-[var(--ink-3)]">
                             {o.kind === 'subscription' ? 'subscription' : o.channel}
                           </span>
+                          {/* Which delivery on the plan this is. A first box is
+                              the approval that starts a recurring charge, so it
+                              gets the emphasis rather than a quiet "cycle 0". */}
+                          {o.subscription && (
+                            <span
+                              className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
+                              style={
+                                o.subscription.isFirstBox
+                                  ? { color: 'var(--tone-info)', background: 'var(--info-fill)' }
+                                  : { color: 'var(--ink-3)', background: 'var(--surface-2)' }
+                              }
+                            >
+                              {o.subscription.isFirstBox ? 'First box' : `Month ${o.subscription.cycle + 1}`}
+                            </span>
+                          )}
                           <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full whitespace-nowrap"
                             style={{ color: meta.colour, background: `color-mix(in srgb, ${meta.colour} 14%, transparent)` }}>
                             {meta.label}
@@ -224,6 +297,23 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
                           )}
                           {o.supplierCost != null && ` · costs us ${money(o.supplierCost, o.currency)}`}
                         </p>
+                        {/* What the member is actually on. The box's own value
+                            (shown on the right) is not the plan's price — on a
+                            smoothed plan they differ by design — so the monthly
+                            rate, the term and what this cycle billed are spelled
+                            out rather than inferred from the total. */}
+                        {o.subscription && (
+                          <p className="text-[11px] mt-1 text-[var(--ink-2)]">
+                            {money(o.subscription.monthly, o.currency)}/month
+                            {o.subscription.minMonths > 1 && ` · ${o.subscription.minMonths}-month minimum`}
+                            {` · ships on the ${ordinal(o.subscription.dispatchDayOfMonth)}`}
+                            {o.subscription.billed != null &&
+                              ` · billed ${money(o.subscription.billed, o.currency)} this cycle`}
+                            {o.subscription.isFirstBox && o.subscription.introDiscountRate
+                              ? ` · ${Math.round(o.subscription.introDiscountRate * 100)}% first-month intro discount`
+                              : ''}
+                          </p>
+                        )}
                         {blocked && <p className="text-[11px] mt-1" style={{ color: 'var(--tone-critical)' }}>Can&apos;t send — {blocked}.</p>}
                         {o.reviewNote && <p className="text-[11px] mt-1 text-[var(--ink-2)]">“{o.reviewNote}”</p>}
                       </div>
@@ -249,8 +339,117 @@ export function FulfilmentQueue({ kind }: { kind?: QueueKind }) {
           </section>
         ))
       )}
+
+      <InFlight orders={queue.inFlight ?? []} busy={busy} onCheck={checkAll} />
     </div>
   )
+}
+
+/**
+ * What has already been sent, and whether the supplier has admitted to it.
+ *
+ * Approving and sending is only half the job — the other half is knowing the
+ * order was accepted, and until this existed the only evidence of that was the
+ * Send button not erroring. Sits below the queue because it is the thing you
+ * look at after clearing it, not before.
+ */
+function InFlight({
+  orders,
+  busy,
+  onCheck,
+}: {
+  orders: InFlightOrder[]
+  busy: boolean
+  onCheck: () => void
+}) {
+  const stalled = orders.filter((o) => o.stalled).length
+
+  return (
+    <section className="pt-2">
+      <div className="flex items-baseline justify-between gap-2 mb-2 flex-wrap">
+        <div>
+          <h2 className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+            With the supplier
+          </h2>
+          <p className="text-[11px] text-[var(--ink-3)]">
+            Sent and not yet delivered. Checked automatically once a day.
+          </p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={onCheck} disabled={busy}>
+          {busy ? 'Checking…' : 'Check status now'}
+        </Button>
+      </div>
+
+      {stalled > 0 && (
+        <p className="text-xs rounded-xl px-3 py-2 mb-2" style={{ background: 'var(--attention-fill)', border: '1px solid var(--attention-line)', color: 'var(--tone-attention)' }}>
+          <strong>{stalled} order{stalled === 1 ? '' : 's'} the supplier has not picked up.</strong>{' '}
+          Still sitting at “received” two days after being sent — worth chasing before the customer does.
+        </p>
+      )}
+
+      {orders.length === 0 ? (
+        <p className="text-sm text-[var(--ink-3)] py-6 text-center">
+          Nothing with the supplier right now.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {orders.map((o) => (
+            <div
+              key={o.id}
+              className="rounded-2xl border p-3 flex items-start gap-3"
+              style={{ background: 'var(--surface-1)', borderColor: o.stalled ? 'var(--attention-line)' : 'var(--edge)' }}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Link href={`/founderhub/commerce/orders/${o.id}`} className="text-sm font-bold text-[var(--ink-1)] underline" style={{ fontFamily: 'var(--font-display)' }}>
+                    {o.reference ?? o.id}
+                  </Link>
+                  <span className="text-[10px] font-semibold uppercase text-[var(--ink-3)]">{o.kind}</span>
+                  {/* Says plainly that nothing left the building. A simulated
+                      order looks identical to a real one everywhere else. */}
+                  {o.simulated && (
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full" style={{ color: 'var(--tone-attention)', background: 'var(--attention-fill)' }}>
+                      Simulated
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5 truncate">
+                  {o.email ?? 'guest'}
+                  {o.supplierOrderId && ` · supplier ref ${o.supplierOrderId}`}
+                  {o.trackingNumber && ` · tracking ${o.trackingNumber}`}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-bold" style={{ color: o.stalled ? 'var(--tone-attention)' : 'var(--ink-1)' }}>
+                  {SUPPLIER_STATE[o.supplierStatus ?? ''] ?? o.supplierStatus ?? 'Awaiting confirmation'}
+                </p>
+                <p className="text-[11px] text-[var(--ink-3)] mt-0.5">
+                  {o.daysWaiting == null
+                    ? money(o.total, o.currency)
+                    : `${money(o.total, o.currency)} · ${waitLabel(o.daysWaiting)}`}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/** The supplier's own words, in ours. */
+const SUPPLIER_STATE: Record<string, string> = {
+  received: 'Received',
+  processing: 'Being packed',
+  shipped: 'Shipped',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+}
+
+function waitLabel(days: number): string {
+  if (days <= 0) return 'sent today'
+  if (days === 1) return 'sent yesterday'
+  return `sent ${days} days ago`
 }
 
 

@@ -22,7 +22,14 @@ import type { SupplierOrderStatus, SupplierAddress, SupplierOrderInput } from '@
 import { now } from '@/lib/db/engine'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
-import { getOrder, getOrderByReference, listStalePendingOrders, saveOrder, updateOrder } from './repo'
+import {
+  getOrder,
+  getOrderByReference,
+  listInFlightWithSupplier,
+  listStalePendingOrders,
+  saveOrder,
+  updateOrder,
+} from './repo'
 import type {
   CreateOrderInput,
   Order,
@@ -95,6 +102,7 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     partnerCode: input.partnerCode ?? null,
     partnerDiscountPct: input.partnerDiscountPct ?? null,
     billedAmount: input.billedAmount ?? null,
+    subscription: input.subscription ?? null,
     events: [
       event('created', `channel=${input.channel}`),
       ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),
@@ -283,6 +291,19 @@ export async function createSubscriptionOrder(input: {
     // What the member paid for this cycle, recorded now because it cannot be
     // re-derived once the plan's price moves.
     billedAmount: input.billedAmount ?? null,
+    // The terms this delivery went out under, so the review queue can tell a
+    // first box from a renewal and show what the member is committing to
+    // without going and reading the plan — which by then may have moved.
+    subscription: {
+      id: input.sub.id,
+      cycle: input.cycle,
+      monthly: input.sub.flatMonthly,
+      minMonths: input.sub.minMonths,
+      dispatchDayOfMonth: input.sub.dispatchDayOfMonth,
+      introDiscountRate: input.sub.introDiscountRate ?? null,
+      firstMonth: input.sub.firstMonth ?? null,
+      startedAt: input.sub.startedAt,
+    },
   })
 }
 
@@ -621,6 +642,60 @@ export async function syncSupplierStatus(id: string): Promise<Order | null> {
     if (!['cancelled', 'refunded'].includes(o.status)) o.status = mapped
     if (changed) o.events.push(event('supplier_status', `${supplierOrder.status}${supplierOrder.trackingNumber ? ` · ${supplierOrder.trackingNumber}` : ''}`))
   })
+}
+
+/** What a status sweep did. */
+export interface SupplierSweepResult {
+  /** Orders asked about. */
+  checked: number
+  /** Orders whose supplier status or tracking number moved. */
+  updated: number
+  /** Orders that reached a delivered state on this run. */
+  delivered: number
+  /** Orders the supplier could not be asked about, with the reason. */
+  failures: { id: string; error: string }[]
+}
+
+/**
+ * Pull supplier status onto every order that is still in flight.
+ *
+ * `syncSupplierStatus` has always existed, but only ever ran when a founder
+ * opened one order and pressed a button — so an order's status was only as
+ * fresh as the last time somebody happened to look at it, and tracking numbers
+ * arrived when they were chased rather than when the supplier had them. This is
+ * the same call on a schedule: the daily job walks what is out there and asks.
+ *
+ * Deliberately NOT a place where anything gets sent. The sweep only reads from
+ * the supplier and writes what came back — the approval gate in
+ * `submitOrderToSupplier` is untouched, and a cron gaining the ability to
+ * dispatch is exactly what that gate exists to prevent.
+ *
+ * One order's failure never stops the sweep. A supplier 404 on a single id, a
+ * timeout, an order submitted against a sandbox that has since been reset — all
+ * of them are one row's problem, and abandoning the rest of the run over any of
+ * them would mean the whole thing stops working the first time one order goes
+ * odd.
+ */
+export async function sweepSupplierStatuses(limit = 500): Promise<SupplierSweepResult> {
+  const orders = await listInFlightWithSupplier(limit)
+  const result: SupplierSweepResult = { checked: 0, updated: 0, delivered: 0, failures: [] }
+
+  for (const order of orders) {
+    result.checked += 1
+    try {
+      const before = { status: order.supplierStatus, tracking: order.trackingNumber }
+      const after = await syncSupplierStatus(order.id)
+      if (!after) continue
+      if (after.supplierStatus !== before.status || after.trackingNumber !== before.tracking) {
+        result.updated += 1
+      }
+      if (after.status === 'delivered') result.delivered += 1
+    } catch (err) {
+      result.failures.push({ id: order.id, error: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  return result
 }
 
 export async function refundOrder(id: string, detail?: string): Promise<Order | null> {

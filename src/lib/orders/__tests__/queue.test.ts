@@ -190,4 +190,71 @@ describe('the daily queue', () => {
     })
     expect(buildFulfilmentQueue([partial]).days[0].orders[0].supplierCost).toBeNull()
   })
+
+  describe('subscription orders', () => {
+    const plan = (over: Partial<Order['subscription']> = {}) => ({
+      id: 'sub_1',
+      cycle: 0,
+      monthly: 49.5,
+      minMonths: 3,
+      dispatchDayOfMonth: 12,
+      startedAt: '2026-08-03T09:00:00.000Z',
+      ...over,
+    })
+
+    const box = (cycle: number, over: Partial<Order> = {}) =>
+      at('2026-08-03', {
+        channel: 'subscription',
+        subscription: plan({ cycle }),
+        ...over,
+      })
+
+    it('marks the opening delivery as a first box, and a renewal as not', () => {
+      const q = buildFulfilmentQueue([box(0), box(3)])
+      const rows = q.days[0].orders
+      expect(rows.find((o) => o.subscription?.cycle === 0)?.subscription?.isFirstBox).toBe(true)
+      expect(rows.find((o) => o.subscription?.cycle === 3)?.subscription?.isFirstBox).toBe(false)
+    })
+
+    it('counts pending first boxes and what approving them commits per month', () => {
+      const q = buildFulfilmentQueue([
+        box(0),
+        box(0, { subscription: plan({ cycle: 0, monthly: 30 }) }),
+        // A renewal is not a first box, however new it looks.
+        box(1),
+        // Already approved, so no longer waiting on a decision.
+        box(0, { review: { state: 'approved' } }),
+      ])
+      expect(q.firstBoxes).toBe(2)
+      expect(q.firstBoxMonthly).toBe(79.5)
+    })
+
+    it('carries the plan terms onto the row, so the monthly is visible before approving', () => {
+      const row = buildFulfilmentQueue([box(0, { billedAmount: 24.75 })]).days[0].orders[0]
+      expect(row.subscription).toMatchObject({
+        id: 'sub_1',
+        monthly: 49.5,
+        minMonths: 3,
+        dispatchDayOfMonth: 12,
+        // What the member actually paid this cycle — deliberately not the
+        // monthly, so an intro discount is visible as the gap between them.
+        billed: 24.75,
+      })
+    })
+
+    it('leaves a one-off order with no plan attached', () => {
+      expect(buildFulfilmentQueue([at('2026-08-03')]).days[0].orders[0].subscription).toBeNull()
+      expect(buildFulfilmentQueue([at('2026-08-03')]).firstBoxes).toBe(0)
+    })
+
+    it('still renders a subscription order raised before the plan was snapshotted', () => {
+      // These exist in the table already. They must not vanish from the queue,
+      // and must not be miscounted as first boxes for want of a cycle number.
+      const legacy = at('2026-08-03', { channel: 'subscription' })
+      const q = buildFulfilmentQueue([legacy])
+      expect(q.days[0].orders[0].subscription).toBeNull()
+      expect(q.subscription).toBe(1)
+      expect(q.firstBoxes).toBe(0)
+    })
+  })
 })

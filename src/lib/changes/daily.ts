@@ -8,7 +8,7 @@
  * Server-only.
  */
 import { syncPortalRuntime } from '@/lib/portal/store'
-import { sweepStalePendingOrders } from '@/lib/orders/service'
+import { sweepStalePendingOrders, sweepSupplierStatuses } from '@/lib/orders/service'
 import { syncImportedProducts } from '@/lib/supplier/sync'
 import { applyDueChanges, flushChangeNotifications, runChangeDetection } from './service'
 
@@ -29,6 +29,14 @@ export interface DailyRunResult {
   awaitingSend?: number
   /** Abandoned checkouts closed off (see `sweepStalePendingOrders`). */
   staleOrdersClosed?: number
+  /** Orders in flight with the supplier that were asked for a status. */
+  supplierChecked?: number
+  /** Of those, how many had moved since we last looked. */
+  supplierUpdated?: number
+  /** Of those, how many arrived. */
+  supplierDelivered?: number
+  /** Orders the supplier could not be asked about this run. */
+  supplierCheckFailed?: number
   /** Anonymous share cards swept past their retention window. */
   shareCardsSwept?: number
   /** Imported products whose stock/cost was refreshed from the supplier. */
@@ -57,8 +65,13 @@ export interface DailyRunResult {
  *     `checkout.session.expired` webhook never arrived. Webhooks are
  *     best-effort; without this those rows sit at `pending_payment` forever and
  *     quietly poison anything counting conversions.
+ *   • `sweepSupplierStatuses`, which asks the supplier what happened to every
+ *     order already sent. PowerBody push us nothing, so status and tracking only
+ *     ever moved when a founder opened an order and pressed sync — this is the
+ *     same read on a schedule. It cannot send anything: the approval gate lives
+ *     in `submitOrderToSupplier` and nothing here calls it.
  *
- * Both are idempotent — applying an applied event is a no-op, and the outbox's
+ * All are idempotent — applying an applied event is a no-op, and the outbox's
  * dedupe key means nobody is told the same thing twice — so running this more
  * often than daily is harmless.
  */
@@ -82,6 +95,22 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
   const dueNow = await applyDueChanges()
   const outbox = await flushChangeNotifications()
   const staleOrdersClosed = await sweepStalePendingOrders()
+
+  // Ask the supplier what happened to everything already sent. Read-only, and
+  // it cannot dispatch anything — the approval gate is in `submitOrderToSupplier`
+  // and this never calls it. Without this, an order's status was only ever as
+  // fresh as the last time a founder opened it and pressed sync, so a parcel
+  // could ship and be delivered while the hub still said "submitted".
+  // Never allowed to fail the rest of the job.
+  let supplier = { checked: 0, updated: 0, delivered: 0, failures: [] as { id: string; error: string }[] }
+  try {
+    supplier = await sweepSupplierStatuses()
+    if (supplier.failures.length > 0) {
+      console.error(`[daily] ${supplier.failures.length} order(s) could not be checked with the supplier`)
+    }
+  } catch (err) {
+    console.error('[daily] supplier status sweep failed:', err)
+  }
   // Refresh the stock and cost stored against imported products. Detection above
   // works off snapshots of the feed; this is what writes today's numbers onto the
   // products the shop actually sells, so an item that went out of stock at the
@@ -137,6 +166,10 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     notifyFailed: outbox.failed,
     awaitingSend: outbox.awaitingSend,
     staleOrdersClosed,
+    supplierChecked: supplier.checked,
+    supplierUpdated: supplier.updated,
+    supplierDelivered: supplier.delivered,
+    supplierCheckFailed: supplier.failures.length,
     productsRefreshed: productSync.updated,
     productsMissing: productSync.missing.length,
     commissionsConfirmed,
