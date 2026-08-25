@@ -68,16 +68,42 @@ export function SupplierImport() {
     setError(null)
     setNotice(null)
     try {
-      const res = await fetch('/api/portal/supplier/export', { method: 'POST' })
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}))
-        setError(d.error ?? 'Could not read the supplier feed.')
-        return
+      // Read the feed in passes and stitch them together. One request cannot
+      // hold a long feed — the platform caps it and the supplier is throttled —
+      // so the server reads what fits and says where it got to. Looping here is
+      // what turns that from a ceiling into a pause: without it the file simply
+      // stopped at whatever the first pass reached, and every product beyond
+      // that looked like one the account does not carry.
+      const parts: string[] = []
+      let rows = 0
+      let passes = 0
+      let page: number | null = 1
+      let complete = false
+
+      // A stop of last resort. The feed ending is what normally halts this; the
+      // cap only matters if the supplier were to page forever.
+      while (page !== null && passes < 60) {
+        const res: Response = await fetch('/api/portal/supplier/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromPage: page }),
+        })
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}))
+          setError(d.error ?? 'Could not read the supplier feed.')
+          return
+        }
+        parts.push(await res.text())
+        rows += Number(res.headers.get('X-Row-Count') ?? 0)
+        complete = res.headers.get('X-Feed-Complete') !== 'no'
+        const next = res.headers.get('X-Next-Page')
+        page = next ? Number(next) : null
+        passes += 1
+        setNotice(`Reading the feed… ${rows} products so far.`)
       }
-      const blob = await res.blob()
-      const rows = res.headers.get('X-Row-Count')
-      const complete = res.headers.get('X-Feed-Complete') !== 'no'
-      const pages = res.headers.get('X-Feed-Pages')
+
+      const blob = new Blob(parts, { type: 'text/csv;charset=utf-8' })
+      const pages = String(passes)
       // Saved through a temporary link: the response is a POST, so there is no
       // URL the browser could have downloaded on its own.
       const url = URL.createObjectURL(blob)
@@ -90,8 +116,8 @@ export function SupplierImport() {
       URL.revokeObjectURL(url)
       if (complete) {
         setNotice(
-          `Downloaded ${rows ?? 'the'} product${rows === '1' ? '' : 's'} from the feed. Match your list against the ` +
-            'sku column: anything missing is not on this account, and the productId column is what the ID box takes.',
+          `Downloaded all ${rows} product${rows === 1 ? '' : 's'} on this account. Match your list against the ` +
+            'sku column: anything missing really is not on the account, and the productId column is what the ID box takes.',
         )
       } else {
         // The file is still useful for what IS in it — a product listed here is
@@ -100,9 +126,9 @@ export function SupplierImport() {
         // roster because it "isn't on the account". So this is an error, not a
         // footnote on a success.
         setError(
-          `The feed stopped after ${pages ?? 'some'} pages, so this file is only part of the catalogue. ` +
-            `The ${rows ?? ''} products in it are real and their IDs work — but anything MISSING proves nothing, ` +
-            'because it may simply be on a page that was never read. Run it again before striking anything off.',
+          `Stopped after ${pages} passes with ${rows} products, so this file is only part of the catalogue. ` +
+            'What is in it is real and the IDs work — but anything MISSING proves nothing, because it may be on ' +
+            'a page that was never read. Do not strike anything off a list using this file.',
         )
       }
     } catch {

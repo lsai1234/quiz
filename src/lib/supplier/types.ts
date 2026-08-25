@@ -102,11 +102,29 @@ export interface SupplierStockLevel {
  */
 export interface SupplierFeed {
   levels: SupplierStockLevel[]
-  /** False when the pager gave up (page cap or deadline) rather than reaching
-   *  the end of the feed. Rows are still usable; absences are not. */
+  /** False when the pager gave up (page budget or deadline) rather than
+   *  reaching the end of the feed. Rows are still usable; absences are not. */
   complete: boolean
-  /** Pages actually read, so a short read can be reasoned about. */
+  /** Pages actually read by this call. */
   pages: number
+  /**
+   * The page to resume from when `complete` is false; null when the feed ended.
+   *
+   * The difference between a ceiling and a pause. A single request cannot read
+   * an arbitrarily long feed — it has a platform timeout and the supplier is
+   * rate-limited — so the honest design is to read as much as fits, say where
+   * it got to, and let the caller come back for the rest.
+   */
+  nextPage: number | null
+}
+
+/** Where to start reading, and how much to read, so a long feed can be taken in
+ *  passes that each fit inside one request. */
+export interface SupplierFeedOptions {
+  /** First page to read. Omit to start at the beginning. */
+  fromPage?: number
+  /** Pages this call may read before handing back. */
+  pageBudget?: number
 }
 
 // ─── Orders ────────────────────────────────────────────────────────────────────
@@ -266,7 +284,7 @@ export interface SupplierProvider {
    * the pager stopped for its own reasons — the page cap, or a deadline — rather
    * than because the feed ended.
    */
-  getFeed(): Promise<SupplierFeed>
+  getFeed(options?: SupplierFeedOptions): Promise<SupplierFeed>
   /**
    * The delivery services this account can ask for, if any.
    *

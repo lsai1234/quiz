@@ -202,29 +202,44 @@ describe('SupplierImport', () => {
    * not. The export asks "what is there?" once, which is the right shape when
    * you have a list of a hundred to check against the account.
    */
-  it('downloads the whole feed as a file', async () => {
+  /** A pass that says `X-Next-Page` is a pause, not the end of the file. */
+  it('keeps reading until the feed actually ends, and stitches the passes', async () => {
     const createObjectURL = jest.fn(() => 'blob:feed')
     const revokeObjectURL = jest.fn()
     Object.assign(URL, { createObjectURL, revokeObjectURL })
     const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
-    global.fetch = jest.fn(() =>
+    const pass = (body: string, rows: string, next: string) =>
       Promise.resolve({
         ok: true,
         status: 200,
-        headers: new Headers({ 'X-Row-Count': '842' }),
-        blob: async () => new Blob(['productId,sku\n1001,PB-1\n'], { type: 'text/csv' }),
-      } as unknown as Response),
-    ) as unknown as typeof fetch
+        headers: new Headers({
+          'X-Row-Count': rows,
+          'X-Feed-Complete': next ? 'no' : 'yes',
+          'X-Next-Page': next,
+        }),
+        text: async () => body,
+        json: async () => ({}),
+      } as unknown as Response)
+
+    const fetchMock = jest
+      .fn()
+      .mockReturnValueOnce(pass('productId,sku\n1,PB-1\n', '3000', '151'))
+      .mockReturnValueOnce(pass('2,PB-2\n', '1200', ''))
+    global.fetch = fetchMock as unknown as typeof fetch
 
     render(<SupplierImport />)
     await userEvent.setup().click(screen.getByRole('button', { name: /download the full product list/i }))
 
-    expect(await screen.findByText(/Downloaded 842 products from the feed/)).toBeInTheDocument()
-    // The mapping is the point of the file, so the notice has to name the column.
+    // 3000 + 1200 — the first pass alone was the bug.
+    expect(await screen.findByText(/Downloaded all 4200 products/)).toBeInTheDocument()
     expect(screen.getByText(/productId column is what the ID box takes/)).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // The second pass has to resume, not restart.
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ fromPage: 151 })
+    // Only the first pass carries a header, so the file has exactly one.
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob))
     expect(click).toHaveBeenCalled()
-    // Held object URLs leak; the component must let go of it.
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:feed')
   })
 
@@ -237,14 +252,22 @@ describe('SupplierImport', () => {
     Object.assign(URL, { createObjectURL: jest.fn(() => 'blob:feed'), revokeObjectURL: jest.fn() })
     jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 
-    global.fetch = jest.fn(() =>
-      Promise.resolve({
+    // A supplier that never stops paging: the loop must give up and SAY so
+    // rather than presenting a partial file as the catalogue.
+    global.fetch = jest.fn((_url: string, init?: RequestInit) => {
+      const from = JSON.parse(String(init?.body ?? '{}')).fromPage ?? 1
+      return Promise.resolve({
         ok: true,
         status: 200,
-        headers: new Headers({ 'X-Row-Count': '9000', 'X-Feed-Complete': 'no', 'X-Feed-Pages': '200' }),
-        blob: async () => new Blob(['productId,sku\n'], { type: 'text/csv' }),
-      } as unknown as Response),
-    ) as unknown as typeof fetch
+        headers: new Headers({
+          'X-Row-Count': '10',
+          'X-Feed-Complete': 'no',
+          'X-Next-Page': String(from + 150),
+        }),
+        text: async () => 'productId,sku\n',
+        json: async () => ({}),
+      } as unknown as Response)
+    }) as unknown as typeof fetch
 
     render(<SupplierImport />)
     await userEvent.setup().click(screen.getByRole('button', { name: /download the full product list/i }))

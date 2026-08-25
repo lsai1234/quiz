@@ -41,8 +41,28 @@ export const maxDuration = 60
  * of real, rate-limited calls to a third party, which is not something a link
  * preview or a browser prefetch should be able to set off.
  */
-export async function POST() {
+/**
+ * Pages read per request.
+ *
+ * A whole feed does not fit in one request — the platform caps the request and
+ * the supplier is rate-limited — so it is read in passes that each finish
+ * comfortably inside `maxDuration`, and the caller comes back for the rest.
+ * Sized to leave room for a slow page rather than to be fast: a pass that gets
+ * cut off delivers nothing, and the cost of another round trip is one request.
+ */
+const PAGES_PER_PASS = 150
+
+export async function POST(req: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let body: { fromPage?: unknown } = {}
+  try {
+    body = await req.json()
+  } catch {
+    // No body: start at the beginning, which is the common case.
+  }
+  const raw = Number(body.fromPage)
+  const fromPage = Number.isFinite(raw) && raw >= 1 ? Math.floor(raw) : 1
 
   try {
     await syncPortalRuntime()
@@ -52,9 +72,14 @@ export async function POST() {
     // does this account carry?" — it is a WRONG answer to "what does it not
     // carry?", because every SKU on the pages we never read looks absent. That
     // is the answer people act on, so it cannot be guessed at.
-    const { levels, complete, pages } = await supplier.getFeed()
+    const { levels, complete, pages, nextPage } = await supplier.getFeed({
+      fromPage,
+      pageBudget: PAGES_PER_PASS,
+    })
 
-    const csv = toFeedCsv(levels)
+    // The header belongs to the file, not to each pass — the caller stitches the
+    // passes together, so only the first one carries it.
+    const csv = toFeedCsv(levels, { header: fromPage === 1 })
     const stamp = new Date().toISOString().slice(0, 10)
     return new NextResponse(csv, {
       status: 200,
@@ -66,9 +91,11 @@ export async function POST() {
         // Read before the file is opened, so a run that came back suspiciously
         // small can be spotted without counting rows by hand.
         'X-Row-Count': String(levels.length),
-        // The load-bearing one. False means absences in this file prove nothing.
+        // The load-bearing one. False means absences in this pass prove nothing
+        // — and `X-Next-Page` is where to go for the rest.
         'X-Feed-Complete': complete ? 'yes' : 'no',
         'X-Feed-Pages': String(pages),
+        'X-Next-Page': nextPage === null ? '' : String(nextPage),
       },
     })
   } catch (err) {

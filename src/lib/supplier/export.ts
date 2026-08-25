@@ -47,8 +47,10 @@ function field(value: unknown): string {
  * real loss: the order products come back in is the order they page in, which is
  * what tells you whether a truncated read stopped early.
  */
-export function toFeedCsv(levels: SupplierStockLevel[]): string {
-  const lines = [COLUMNS.join(',')]
+export function toFeedCsv(levels: SupplierStockLevel[], options: { header?: boolean } = {}): string {
+  // A long feed is read in passes and stitched back together by the caller, so
+  // only the first pass carries the header row.
+  const lines = options.header === false ? [] : [COLUMNS.join(',')]
   for (const level of levels) {
     lines.push(
       [
@@ -62,7 +64,8 @@ export function toFeedCsv(levels: SupplierStockLevel[]): string {
       ].join(','),
     )
   }
-  // A trailing newline: POSIX text, and it stops the last row being glued to
-  // whatever a tool appends next.
-  return `${lines.join('\n')}\n`
+  // A trailing newline: POSIX text, and — since passes are concatenated — it is
+  // also what stops the last row of one pass being glued to the first of the
+  // next. An empty pass must stay empty rather than become a blank line.
+  return lines.length === 0 ? '' : `${lines.join('\n')}\n`
 }

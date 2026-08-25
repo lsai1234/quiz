@@ -178,19 +178,52 @@ describe('live PowerBody adapter', () => {
       expect(feed.levels.map((l) => l.sku)).toEqual(['PB-1', 'PB-2'])
     })
 
-    it('admits a short read when the pager gives up before the end', async () => {
-      // A feed that never returns an empty page: the pager hits its own cap.
-      const { client } = fakeClient({
-        'dropshipping.getProductList': (args: unknown) => [
-          { product_id: String((args as { page: number }).page), sku: `PB-${(args as { page: number }).page}`, price: '1.00', qty: '1' },
-        ],
-      })
-      const feed = await createPowerBodyProvider({ client }).getFeed()
+    /**
+     * The bug this exists for. A real export stopped dead on the page budget at
+     * 3,000 products, and because the feed is ordered by product id every SKU
+     * beyond that point read as "not on the account" — including five the
+     * founder had physically ordered the month before.
+     */
+    it('admits a short read, and says where to resume from', async () => {
+      // A feed that never returns an empty page: the pager spends its budget.
+      const endless = {
+        'dropshipping.getProductList': (args: unknown) => {
+          const page = (args as { page: number }).page
+          return [{ product_id: String(page), sku: `PB-${page}`, price: '1.00', qty: '1' }]
+        },
+      }
+      const { client } = fakeClient(endless)
+      const feed = await createPowerBodyProvider({ client }).getFeed({ pageBudget: 3 })
 
       expect(feed.complete).toBe(false)
       // The rows it did read are still real and still usable.
-      expect(feed.levels.length).toBeGreaterThan(0)
-      expect(feed.pages).toBeGreaterThan(1)
+      expect(feed.levels.map((l) => l.sku)).toEqual(['PB-1', 'PB-2', 'PB-3'])
+      // The difference between a ceiling and a pause.
+      expect(feed.nextPage).toBe(4)
+    })
+
+    it('resumes from where the last pass stopped, not from the beginning', async () => {
+      const { client, calls } = fakeClient({
+        'dropshipping.getProductList': (args: unknown) => {
+          const page = (args as { page: number }).page
+          return page <= 5 ? [{ product_id: String(page), sku: `PB-${page}`, price: '1.00', qty: '1' }] : []
+        },
+      })
+      const feed = await createPowerBodyProvider({ client }).getFeed({ fromPage: 4 })
+
+      expect(feed.levels.map((l) => l.sku)).toEqual(['PB-4', 'PB-5'])
+      expect(feed.complete).toBe(true)
+      expect(feed.nextPage).toBeNull()
+      // It must not re-read pages 1–3 the caller already has.
+      expect(calls.map((c) => (c.args as { page: number }).page)).toEqual([4, 5, 6])
+    })
+
+    it('reports the end of the feed rather than a resume point', async () => {
+      const { client } = fakeClient(catalogueHandlers())
+      const feed = await createPowerBodyProvider({ client }).getFeed()
+
+      expect(feed.complete).toBe(true)
+      expect(feed.nextPage).toBeNull()
     })
 
     it('narrows to the requested SKUs', async () => {

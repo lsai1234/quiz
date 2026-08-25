@@ -197,9 +197,21 @@ roster on the strength of it. So a short read is reported as an error on the
 screen rather than a footnote, and it says plainly that the rows present are real
 but the absences prove nothing.
 
-The pager stops short for two reasons: the `MAX_PAGES` cap (a feed that never
-returns an empty page) or a deadline. Neither is a supplier failure, so neither
-throws — which is exactly why the flag has to be carried out and shown.
+The pager stops short for two reasons: its page budget or a deadline. Neither is
+a supplier failure, so neither throws — which is exactly why the flag has to be
+carried out and shown.
+
+**And it resumes.** The first version of this export read up to `MAX_PAGES` and
+stopped, which on a real account produced a file of exactly 3,000 products
+(200 pages × 15 rows). The feed is ordered by ascending `product_id`, so the
+truncation was invisible in the worst possible way: everything above `P43546`
+was simply absent, including five products the founder had ordered the month
+before. A quarter of the roster "wasn't on the account" and all of it was.
+
+So `getFeed({ fromPage, pageBudget })` reads one pass and returns `nextPage`,
+and the screen loops until the feed genuinely ends — each request finishing well
+inside `maxDuration` while the whole feed, however long, still gets read. The
+page budget is a pause, not a ceiling.
 
 Two consequences worth knowing:
 

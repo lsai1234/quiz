@@ -33,6 +33,7 @@ import type {
   SupplierShippingMethod,
   SupplierProduct,
   SupplierFeed,
+  SupplierFeedOptions,
   SupplierProvider,
   SupplierStockLevel,
 } from '../types'
@@ -185,32 +186,47 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** Rows are appended here as they arrive, so a caller that stops waiting can
      *  still use the pages that did land. */
     into?: PbProductListItem[]
+    /** First page to read. Lets a caller resume where a previous read stopped
+     *  instead of starting the whole feed again. */
+    fromPage?: number
+    /** Pages this call may read before handing back. Defaults to `MAX_PAGES`. */
+    pageBudget?: number
   }
 
   interface ListFeed {
     items: PbProductListItem[]
-    /** False when we stopped early (deadline or page cap) rather than reaching
-     *  the end of the feed. */
+    /** False when we stopped early (deadline or page budget) rather than
+     *  reaching the end of the feed. */
     complete: boolean
-    /** Pages actually read, so a short read can be reasoned about afterwards. */
+    /** Pages actually read by this call. */
     pages: number
+    /** The page to resume from when `complete` is false; null when the feed
+     *  ended. This is what turns a short read from a dead end into a pause. */
+    nextPage: number | null
   }
 
   /** Page through `getProductList` until a page comes back empty — or until the
    *  caller has enough, or the clock runs out. */
   async function fetchListItems(listOptions: ListFeedOptions = {}): Promise<ListFeed> {
     const all: PbProductListItem[] = listOptions.into ?? []
-    for (let page = 1; page <= MAX_PAGES; page++) {
+    const first = Math.max(1, listOptions.fromPage ?? 1)
+    const budget = Math.max(1, listOptions.pageBudget ?? MAX_PAGES)
+    let read = 0
+    for (let page = first; page < first + budget; page++) {
       const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, pages: page }
+      read += 1
+      // An empty page is the feed's own full stop — the only signal it gives
+      // that there is nothing after this.
+      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, pages: read, nextPage: null }
       all.push(...rows)
-      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: page }
+      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null }
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
-        return { items: all, complete: false, pages: page }
+        return { items: all, complete: false, pages: read, nextPage: page + 1 }
       }
     }
-    // Hit the page cap — a feed that never returns an empty page.
-    return { items: all, complete: false, pages: MAX_PAGES }
+    // Out of budget rather than out of feed. `nextPage` is what makes that a
+    // pause the caller can resume from instead of a silent ceiling.
+    return { items: all, complete: false, pages: read, nextPage: first + budget }
   }
 
   /**
@@ -476,13 +492,17 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    * So the pager's own verdict is carried out rather than dropped on the floor,
    * which is what `getStockLevels` used to do with it.
    */
-  async function readFeed(): Promise<SupplierFeed> {
-    const { items, complete, pages } = await fetchListItems()
+  async function readFeed(options: SupplierFeedOptions = {}): Promise<SupplierFeed> {
+    const { items, complete, pages, nextPage } = await fetchListItems({
+      fromPage: options.fromPage,
+      pageBudget: options.pageBudget,
+    })
     const updatedAt = new Date().toISOString()
     return {
       levels: items.map((item) => toStockLevel(item, updatedAt)).filter((level) => level.sku !== ''),
       complete,
       pages,
+      nextPage,
     }
   }
 
