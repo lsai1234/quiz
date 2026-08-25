@@ -318,6 +318,20 @@ export interface CatalogueProduct {
    * sits against the market rather than only against our own costs.
    */
   supplierRrp?: number | null
+  /**
+   * PowerBody's own `product_id` for this product, once anything has resolved it.
+   *
+   * Worth storing because resolving it is the expensive part. A SKU above their
+   * feed's 3,000-product ceiling cannot be looked up by paging at all, and the
+   * binary search that finds it costs tens of throttled requests. The id itself
+   * never changes, so paying for it twice is pure waste — and every later call
+   * (picture, description, live cost) is one request with no paging and no
+   * deadline once it is known.
+   *
+   * A shortcut, never a source of truth: price, stock and name are still fetched
+   * live, and a stale id can only ever cost a wasted call, never a wrong price.
+   */
+  supplierProductId?: string | null
   /** Can this product appear in the recommended core stack? */
   isCoreEligible: boolean
   /** Can this product appear as an upgrade/booster suggestion? */

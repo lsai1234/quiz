@@ -12,10 +12,15 @@ import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { getSupplier } from '@/lib/supplier'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
+import { resolveProductIdForSku } from '@/lib/supplier/resolve-sku'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import type { SupplierProduct } from '@/lib/supplier/types'
 
 export const dynamic = 'force-dynamic'
+// The SKU search is tens of throttled requests, so this route needs the long
+// budget. `resolveProductIdForSku` keeps its own clock well inside it.
+export const maxDuration = 60
 
 /**
  * The import review queue.
@@ -150,12 +155,62 @@ export async function POST(req: Request) {
 
     try {
       const supplier = await getSupplier()
-      const [found] = await supplier.getProductsBySku([sku])
+
+      /**
+       * Three routes to the same product, cheapest first.
+       *
+       * 1. A product id we already hold — one request, no paging, cannot time out.
+       * 2. The SKU, via the list feed. Free when the SKU is inside the feed's
+       *    3,000-product ceiling.
+       * 3. A binary search over `getProductInfo`, for a SKU above that ceiling.
+       *    The feed cannot reach those AT ALL — no parameter raises the cap — so
+       *    without this a quarter of the roster is permanently unimportable.
+       *    It costs tens of throttled requests, which is why it is last and why
+       *    the id it finds is written back to the product.
+       */
+      let found: SupplierProduct | undefined
+      let resolvedId: string | null = null
+      let via: 'id' | 'feed' | 'search' = 'feed'
+      let probes = 0
+
+      if (target.supplierProductId) {
+        const [byId] = await supplier.getProductsById([target.supplierProductId])
+        // Verified, never assumed: an id that now answers with a different SKU
+        // has moved, and trusting it would import somebody else's product.
+        if (byId?.sku === sku) { found = byId; via = 'id' }
+      }
+
       if (!found) {
-        return NextResponse.json(
-          { error: `PowerBody returned nothing for ${sku}. It may be past their feed's 3,000-product ceiling.` },
-          { status: 404 },
-        )
+        // A SKU past the ceiling makes this walk the whole feed and run out of
+        // its build deadline, which arrives as a throw. That is not a supplier
+        // outage and must not end the attempt — it is the exact case the search
+        // below exists for.
+        found = await supplier.getProductsBySku([sku]).then((r) => r[0]).catch(() => undefined)
+      }
+
+      if (!found) {
+        const outcome = await resolveProductIdForSku(sku, supplier)
+        probes = outcome.probes
+        via = 'search'
+        if (outcome.productId === null) {
+          // Each reason is a different instruction to the person reading it, so
+          // they are never collapsed into one message. A clock that ran out is
+          // "try again"; an exhausted range is "this is not on the account".
+          const why: Record<string, string> = {
+            deadline: `Searched ${outcome.probes} product ids for ${sku} without finding it before running out of time. Press again to carry on from a fresh budget.`,
+            'probe-budget': `Searched ${outcome.probes} product ids for ${sku} without finding it. Press again to search further.`,
+            'not-found': `${sku} is not on this PowerBody account — searched their product ids either side of where this code should sit and it is not there. Check the code.`,
+            'no-anchors': 'Could not read any of PowerBody\'s product list, so there is nothing to work out where this code sits from. Check the supplier credentials.',
+            'unusable-sku': `${sku} has no number in it, so there is no way to work out where it sits in their catalogue. Use the product ID box instead.`,
+          }
+          return NextResponse.json({ error: why[outcome.reason] ?? `Could not resolve ${sku}.` }, { status: 404 })
+        }
+        resolvedId = String(outcome.productId)
+        const [byId] = await supplier.getProductsById([resolvedId])
+        if (byId?.sku !== sku) {
+          return NextResponse.json({ error: `Found a product id for ${sku} but it answered for ${byId?.sku ?? 'nothing'}. Not importing it.` }, { status: 502 })
+        }
+        found = byId
       }
 
       // Cost is theirs, and the shelf price is our rule applied to it — the same
@@ -171,6 +226,10 @@ export async function POST(req: Request) {
         ...(found.rrp > 0 ? { compareAtPrice: found.rrp, supplierRrp: found.rrp } : {}),
         ...(cost != null && cost > 0 ? { cost, basePrice: listPriceFor(cost) } : {}),
       }
+      // The id is the expensive half. Written back so no later pull, price
+      // refresh or stock check ever pays for the search again.
+      const supplierProductId = resolvedId ?? found.productId ?? target.supplierProductId ?? null
+      if (supplierProductId) patch.supplierProductId = String(supplierProductId)
       const next: CatalogueProduct = { ...target, ...patch }
       // Variant prices follow the product's, or the shop would ring up the old one.
       if (patch.basePrice != null) {
@@ -185,6 +244,8 @@ export async function POST(req: Request) {
         id: target.id,
         filled: Object.keys(patch),
         gotImage: Boolean(found.imageUrl),
+        via,
+        probes,
       })
     } catch (err) {
       return NextResponse.json(

@@ -303,6 +303,35 @@ node --env-file=.env.local ./node_modules/.bin/tsx \
   scripts/backfill-product-ids.ts --file roster.csv --column sku
 ```
 
+### And now it happens on the button, too
+
+The backfill is the bulk route; it does not help someone who has one product open
+in Review and is looking at "No picture yet". So **Pull from PowerBody** now runs
+the same search on demand: id we already hold → SKU via the feed → binary search
+over `getProductInfo`. Whatever it resolves is written to
+`CatalogueProduct.supplierProductId`, so the expensive half is paid once per
+product, ever.
+
+Three things make it safe to run against a live account:
+
+- **A canary probe first.** `getProductsById` throws identically for "no product
+  at that id" and "getProductInfo is not enabled on this account". During a
+  search the first is normal and constant, so the second would be invisible —
+  a permissions failure would spend the whole budget and then report the SKU
+  missing. So one probe goes to an id the feed just named: if THAT fails, the
+  account is the problem and it says so.
+- **A request allowance, not just a clock.** A clock stops limiting anything
+  when replies are quick — 45 seconds of 50ms answers is nine hundred calls, and
+  PowerBody answer 429 long before that.
+- **Running out is never "not found".** `deadline` and `probe-budget` mean press
+  again; `not-found` means strike it off the roster. Collapsing them is the
+  original sin this whole area was built to escape.
+
+The bracket is measured rather than assumed: the feed's real extent is found by
+doubling and bisecting pages, the fit's own residuals size the margin, and when
+the SKU sits above everything the feed can see, a galloping probe finds a product
+PAST it so the bisect searches a range known to contain the answer.
+
 `--seed-only` stops after step 1 — the right flag to reach for the day PowerBody
 lift the cap. `--dry-run` writes nothing.
 

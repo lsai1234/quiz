@@ -189,7 +189,13 @@ export default function ReviewPage() {
         setError(d.error ?? 'Could not reach PowerBody.')
         return
       }
-      setNotice(d.gotImage ? 'Picture and details pulled from PowerBody.' : 'Details pulled — they have no picture for this one.')
+      const how =
+        d.via === 'search'
+          ? ` Their list feed cannot reach this code, so it was found by searching ${d.probes} of their product ids — the id is saved, so this is instant from now on.`
+          : ''
+      setNotice(
+        (d.gotImage ? 'Picture and details pulled from PowerBody.' : 'Details pulled — they have no picture for this one.') + how,
+      )
       await load()
     } catch {
       setError('Could not reach PowerBody.')
@@ -519,9 +525,14 @@ function ProductReview({
           <p className="flex-1" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', minWidth: '12rem' }}>
             {product.imageUrl ? 'No description yet.' : 'No picture or description yet.'} PowerBody hold both —
             fetching also refreshes what they charge us, and the shelf price with it.
+            {/* Their list feed stops at 3,000 products. A code above that has to
+                be found by searching their product ids, which is tens of
+                throttled requests — worth saying before someone assumes a
+                half-minute wait means it has hung. */}
+            {!product.supplierProductId && ' If it is past their list feed, this searches for it and can take up to a minute.'}
           </p>
           <Button variant="secondary" size="sm" loading={enriching} onClick={onEnrich}>
-            Pull from PowerBody
+            {enriching ? 'Looking…' : 'Pull from PowerBody'}
           </Button>
         </Card>
       )}
