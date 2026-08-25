@@ -81,6 +81,7 @@ describe('the getProductInfo trap', () => {
    */
   const bare = (sku: string): SupplierProduct => ({
     sku,
+    productId: null,
     name: sku,
     brand: '',
     category: '',

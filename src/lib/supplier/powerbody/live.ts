@@ -404,6 +404,66 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   }
 
   /**
+   * Products by PowerBody product id — the detail call, with no search in front.
+   *
+   * `getProductsBySku` spends most of its time and all of its risk on the half
+   * that turns a SKU into a product id: paging the cheap feed. This skips that
+   * entirely, so it is one throttled `getProductInfo` per id, no paging, and
+   * nothing that can exhaust the build deadline.
+   *
+   * DETAIL IS RE-FETCHED, NOT SERVED FROM CACHE
+   * ───────────────────────────────────────────
+   * The SKU path is free to trust the 7-day detail cache because it overlays
+   * the fresh list row on top, so price and stock always come from today. Here
+   * there is no list row — `getProductInfo` is the only source of every field —
+   * so reading a cached entry would hand back a price and a stock level up to a
+   * week old, which is the one thing that cache must never do. The call is made
+   * every time and the answer refreshes the cache for everyone else.
+   *
+   * Ids that answer with no product in them are dropped, so the caller can
+   * report exactly which did not resolve. If NOTHING resolved and something
+   * failed, the supplier's own words are thrown rather than an empty result —
+   * "PowerBody refused" and "no such product" must not look the same.
+   */
+  async function getProductsById(productIds: string[]): Promise<SupplierProduct[]> {
+    const ids = [...new Set(productIds.map((id) => String(id ?? '').trim()).filter(Boolean))]
+    if (ids.length === 0) return []
+
+    const failures: unknown[] = []
+    const fetched = await mapLimit(ids, DETAIL_CONCURRENCY, async (id) => {
+      try {
+        return { id, info: await fetchDetail(id) }
+      } catch (err) {
+        // Collected, not thrown: one unreadable id in a batch must not lose the
+        // rest — the same rule the SKU path follows.
+        failures.push(err)
+        return { id, info: null }
+      }
+    })
+
+    const resolved = fetched.filter((f): f is { id: string; info: PbProductInfo } => f.info !== null)
+    if (resolved.length === 0) {
+      if (failures.length > 0) throw failures[0]
+      return []
+    }
+
+    // Refresh the shared cache with what we just paid for, so a later SKU
+    // lookup of the same product costs no detail call.
+    const cache = await detailStore.load()
+    const now = Date.now()
+    for (const { id, info } of resolved) cache[id] = { info, at: now }
+    await detailStore.save(cache)
+
+    const updatedAt = new Date().toISOString()
+    return resolved.map(({ id, info }) =>
+      // Their reply does not always echo the id back, and the whole point of
+      // this path is that the caller already knows it — so it is put back on
+      // rather than left null.
+      toSupplierProduct({ ...info, product_id: info.product_id ?? id }, updatedAt),
+    )
+  }
+
+  /**
    * A handful of SKUs that exist, so you have something to type into the box.
    *
    * Deliberately not a catalogue: no detail is fetched, nothing is named, and it
@@ -444,6 +504,8 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     },
 
     getProductsBySku,
+
+    getProductsById,
 
     sampleSkus,
 

@@ -14,7 +14,7 @@ const UPDATED = '2026-07-20T09:00:00.000Z'
 
 type Seed = Omit<
   SupplierProduct,
-  'currency' | 'inStock' | 'updatedAt' | 'weightGrams' | 'vatRate' | 'detailed'
+  'currency' | 'inStock' | 'updatedAt' | 'weightGrams' | 'vatRate' | 'detailed' | 'productId'
 > & {
   /** Override when the name doesn't state a size (capsules, multipacks). */
   weightGrams?: number
@@ -89,8 +89,25 @@ const SEED: Seed[] = [
   { sku: 'APP-BODYFUEL-12', name: 'Body Fuel Energy Water 500ml (12 pack)', brand: 'Applied Nutrition', category: 'Ready To Drink', description: 'Ready-to-drink energy water with BCAAs and 100mg caffeine.', imageUrl: null, wholesalePrice: 11.0, rrp: 21.99, stock: 60, barcode: '5060398125555', flavours: ['Watermelon', 'Cherry'], servings: 12 },
 ]
 
+/**
+ * A stand-in PowerBody product id for a fixture.
+ *
+ * The real feed keys detail on a numeric `product_id` that has nothing to do
+ * with the SKU, and the hub can now look a product up by one. Deriving a stable
+ * pseudo-id from the SKU keeps that path exercisable against the mock — the
+ * shape is right (a `P` and digits, like `P44338`) even though the number is
+ * ours. Stable across runs because the journey depends on it: an id you read
+ * off one screen has to still work on the next.
+ */
+function mockProductId(sku: string): string {
+  let h = 0
+  for (let i = 0; i < sku.length; i++) h = (h * 31 + sku.charCodeAt(i)) >>> 0
+  return `P${(h % 90000) + 10000}`
+}
+
 export const POWERBODY_FIXTURES: SupplierProduct[] = SEED.map((s) => ({
   ...s,
+  productId: mockProductId(s.sku),
   currency: 'GBP',
   inStock: s.stock > 0,
   weightGrams: s.weightGrams ?? weightFromName(s.name),

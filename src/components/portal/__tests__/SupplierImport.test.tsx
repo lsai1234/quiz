@@ -10,6 +10,9 @@ function reply(body: string, { ok = true, status = 200 } = {}) {
 
 const ROW = {
   sku: 'PB-WHEY-1KG',
+  // Null on purpose: these fixtures exercise the fallback for a supplier row
+  // that resolved no product id, so Add still has to go by SKU.
+  productId: null as string | null,
   name: 'Whey Protein 1kg',
   brand: 'PowerBody',
   category: 'Protein',
@@ -106,6 +109,94 @@ describe('SupplierImport', () => {
     expect(screen.getByText(/Codes only/)).toBeInTheDocument()
   })
 
+  /**
+   * The ID box exists because a SKU has to be SEARCHED for in PowerBody's feed
+   * before it can be fetched, and a SKU that isn't there takes that search to
+   * the end of the catalogue and times out. An id needs no search.
+   */
+  it('looks a product up by ID without needing a SKU', async () => {
+    const fetchMock = jest.fn(() =>
+      reply(JSON.stringify({ products: [{ ...ROW, productId: '44338' }], notFound: [], notFoundIds: [] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/44338/), '44338')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+
+    expect(await screen.findByText('Whey Protein 1kg')).toBeInTheDocument()
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      skus: '',
+      productIds: '44338',
+    })
+  })
+
+  /** Adding by the id the lookup already resolved is what stops the feed being
+   *  paged a second time for a mapping we are holding. */
+  it('adds by the product ID the lookup resolved, not by SKU', async () => {
+    const fetchMock = jest.fn((url: string) =>
+      url === '/api/portal/supplier'
+        ? reply(JSON.stringify({ ok: true, added: 1, combined: false, skusAdded: 1, aiUsed: false }))
+        : reply(JSON.stringify({ products: [{ ...ROW, productId: '44338' }], notFound: [], notFoundIds: [] })),
+    )
+    global.fetch = fetchMock as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/ON-GOLD-WHEY-2270/), 'PB-WHEY-1KG')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+    await user.click(await screen.findByRole('button', { name: /Add Whey Protein 1kg/i }))
+
+    const add = fetchMock.mock.calls.find(([url]) => url === '/api/portal/supplier')
+    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: [], productIds: ['44338'], combine: false })
+  })
+
+  it('shows the resolved ID, so a SKU that works once yields a code that keeps working', async () => {
+    global.fetch = jest
+      .fn()
+      .mockReturnValue(
+        reply(JSON.stringify({ products: [{ ...ROW, productId: '44338' }], notFound: [] })),
+      ) as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/ON-GOLD-WHEY-2270/), 'PB-WHEY-1KG')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+
+    expect(await screen.findByText(/ID 44338/)).toBeInTheDocument()
+  })
+
+  it('points a not-found SKU at the box that cannot time out', async () => {
+    global.fetch = jest
+      .fn()
+      .mockReturnValue(reply(JSON.stringify({ products: [], notFound: ['P44338'] }))) as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/ON-GOLD-WHEY-2270/), 'P44338')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+
+    expect(await screen.findByText(/Not in the feed: P44338/)).toBeInTheDocument()
+    expect(screen.getByText(/take its product ID from the page/)).toBeInTheDocument()
+  })
+
+  it('reports a failed ID separately from a failed SKU', async () => {
+    global.fetch = jest
+      .fn()
+      .mockReturnValue(
+        reply(JSON.stringify({ products: [], notFound: [], notFoundIds: ['99999'] })),
+      ) as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    const user = userEvent.setup()
+    await user.type(screen.getByPlaceholderText(/44338/), '99999')
+    await user.click(screen.getByRole('button', { name: /look up/i }))
+
+    // Different problem, different fix — so it must not read as "not in the feed".
+    expect(await screen.findByText(/PowerBody returned no product for ID: 99999/)).toBeInTheDocument()
+  })
+
   it('can add several SKUs as one product with a variant each', async () => {
     // PowerBody sell every flavour as its own SKU, so this is the only way four
     // codes become one product with a flavour picker rather than four listings.
@@ -125,7 +216,7 @@ describe('SupplierImport', () => {
     await user.click(await screen.findByRole('button', { name: /Add as ONE product/i }))
 
     const add = fetchMock.mock.calls.find(([url]) => url === '/api/portal/supplier')
-    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: ['W-CHOC', 'W-VAN'], combine: true })
+    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: ['W-CHOC', 'W-VAN'], productIds: [], combine: true })
     expect(await screen.findByText(/2 SKUs combined into one product/)).toBeInTheDocument()
   })
 
@@ -146,7 +237,7 @@ describe('SupplierImport', () => {
     await user.click(await screen.findByRole('button', { name: /Add all 2 separately/i }))
 
     const add = fetchMock.mock.calls.find(([url]) => url === '/api/portal/supplier')
-    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: ['W-CHOC', 'W-VAN'], combine: false })
+    expect(JSON.parse(String(add?.[1]?.body))).toEqual({ skus: ['W-CHOC', 'W-VAN'], productIds: [], combine: false })
   })
 
   it('surfaces the supplier’s own error', async () => {

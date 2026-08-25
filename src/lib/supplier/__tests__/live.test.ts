@@ -48,6 +48,108 @@ describe('live PowerBody adapter', () => {
   afterEach(() => __resetPowerBodyCache())
 
 
+  describe('getProductsById', () => {
+    /**
+     * The reason the method exists. Resolving a SKU means paging the list feed
+     * until its row turns up, and a SKU that is NOT in the feed can never stop
+     * that walk — so it reads the whole catalogue and usually dies on the build
+     * deadline, reporting a timeout for what is really "no such product". An id
+     * needs no search, so nothing here may touch getProductList.
+     */
+    it('never pages the list feed', async () => {
+      const { client, calls } = fakeClient(catalogueHandlers())
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+      }).getProductsById(['1'])
+
+      expect(calls.map((c) => c.path)).toEqual(['dropshipping.getProductInfo'])
+      expect(products).toHaveLength(1)
+      expect(products[0]).toMatchObject({ name: 'Whey 1kg', brand: 'PB' })
+    })
+
+    it('puts the id back on the product even when their reply omits it', async () => {
+      const { client } = fakeClient(catalogueHandlers())
+      const [product] = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+      }).getProductsById(['1'])
+
+      // INFO carries no product_id — the caller's id is the authority here.
+      expect(product.productId).toBe('1')
+    })
+
+    /**
+     * Unlike the SKU path, there is no feed here to tell "no such product"
+     * apart from "getProductInfo is refusing us" — PowerBody answer both with
+     * nothing. So a lone id that resolves to nothing says what they sent rather
+     * than returning an empty list, which is the shape that once turned a
+     * disabled detail call into a page that simply would not fill in.
+     */
+    it('says what PowerBody sent when an id resolves to nothing', async () => {
+      const { client } = fakeClient({ 'dropshipping.getProductInfo': () => null })
+      await expect(
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['nope']),
+      ).rejects.toThrow('no product detail in it')
+    })
+
+    /**
+     * The SKU path may trust cached detail because it overlays today's list row
+     * on top, so price and stock always come from the feed. There is no list row
+     * here, so a cached entry would be the ONLY source — and serving a week-old
+     * price is the one thing this cache must never do.
+     */
+    it('re-fetches rather than serving a cached price or stock level', async () => {
+      const store = createMemoryDetailStore({
+        1: { info: { name: 'Whey 1kg', price: '99.00', qty: '0', status: 'active' }, at: Date.now() },
+      })
+      const { client, calls } = fakeClient({
+        'dropshipping.getProductInfo': () => ({ name: 'Whey 1kg', price: '10.00', qty: '5', status: 'active' }),
+      })
+
+      const [product] = await createPowerBodyProvider({ client, detailStore: store }).getProductsById(['1'])
+
+      expect(calls).toHaveLength(1)
+      expect(product.wholesalePrice).toBe(10)
+      expect(product.stock).toBe(5)
+    })
+
+    it('keeps what it fetched, so a later lookup of the same product is free', async () => {
+      const store = createMemoryDetailStore()
+      const { client } = fakeClient(catalogueHandlers())
+      await createPowerBodyProvider({ client, detailStore: store }).getProductsById(['1'])
+
+      expect(await store.load()).toHaveProperty('1.info.name', 'Whey 1kg')
+    })
+
+    it('one unreadable id does not lose the others', async () => {
+      const { client } = fakeClient({
+        'dropshipping.getProductInfo': (args: unknown) => {
+          if (detailId(args) === 'bad') throw new Error('Access denied')
+          return INFO[detailId(args)] ?? null
+        },
+      })
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+      }).getProductsById(['bad', '1'])
+
+      expect(products.map((p) => p.name)).toEqual(['Whey 1kg'])
+    })
+
+    /** "PowerBody refused" and "no such product" must not look the same. */
+    it('reports their own words when nothing at all resolved', async () => {
+      const { client } = fakeClient({
+        'dropshipping.getProductInfo': () => {
+          throw new Error('Access denied')
+        },
+      })
+      await expect(
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['1']),
+      ).rejects.toThrow('Access denied')
+    })
+  })
+
   describe('getStockLevels', () => {
     it('uses only the cheap list feed — never the per-product detail call', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())

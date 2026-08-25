@@ -26,6 +26,14 @@ import { unitEconomics } from '@/lib/pricing/unit-economics'
 
 export interface SupplierRow {
   sku: string
+  /**
+   * PowerBody's product id, when the lookup resolved one.
+   *
+   * Sent back when the row is added so the add can go straight to the detail
+   * call instead of paging the feed a second time to rediscover a mapping this
+   * lookup already paid for. Null on a supplier that has no ids.
+   */
+  productId: string | null
   name: string
   brand: string
   category: string
@@ -74,6 +82,7 @@ export function toSupplierRow(sp: SupplierProduct, addedIds: Set<string>): Suppl
 
   return {
     sku: sp.sku,
+    productId: sp.productId,
     name: sp.name,
     brand: sp.brand,
     category: sp.category,

@@ -5,6 +5,7 @@ import type { SupplierProduct } from '@/lib/supplier/types'
 
 const BASE: SupplierProduct = {
   sku: 'PB-1',
+  productId: '1001',
   name: 'Whey Protein 1kg',
   brand: 'PB',
   category: 'Protein',

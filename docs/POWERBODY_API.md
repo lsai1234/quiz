@@ -140,6 +140,46 @@ stay under the route's `maxDuration` (60s): a single wire call can otherwise run
 for over two minutes on its own (30s per attempt, retried four times), and a
 request that outlives its own timeout is delivered to nobody.
 
+### The product ID box — the way in when a SKU won't resolve
+
+A SKU is not what the detail call takes. `getProductInfo` is keyed on
+PowerBody's `product_id`, and the only way from one to the other is to page the
+list feed until the row turns up. That search is cheap when the SKU is there —
+the pager stops as soon as everything asked for is found — and pathological when
+it is not: nothing can satisfy the stop condition, so it reads the whole
+catalogue and normally spends the build deadline first. **An unknown SKU
+therefore reports `did not answer within 20s`, not `not in the feed`**, which
+reads as an outage and sends you looking at credentials.
+
+So the import screen takes **either**. The ID box calls
+`getProductsById` → `getProductInfo` directly: one throttled request, no paging,
+nothing that can time out. It is the dependable path for a product you can
+already identify (ids are on PowerBody's own product pages) and the escape hatch
+when the feed is slow or a code cannot be found in it.
+
+Two consequences worth knowing:
+
+- **Every looked-up row now carries the id it resolved** (`SupplierProduct.productId`,
+  surfaced on `SupplierRow` and shown on the card). A SKU that works once yields
+  an id that keeps working.
+- **Adding prefers the id.** Adding by SKU pages the feed again to rediscover a
+  mapping the lookup already paid for — the same walk, the same deadline
+  exposure, for nothing. `POST /api/portal/supplier` takes `productIds` as well
+  as `skus`, and the screen sends ids whenever it has them.
+
+Unlike the SKU path, `getProductsById` **re-fetches rather than reading the
+7-day detail cache**. The SKU path may trust that cache because it overlays the
+live list row on top, so price and stock always come from today; there is no
+list row here, so a cached entry would be the only source and would serve a
+week-old price. The answer still refreshes the cache for everyone else.
+
+An id that resolves to nothing is dropped so the caller can report it — but only
+while others succeeded. When nothing at all resolved, PowerBody's own words are
+thrown: with no feed to cross-check, "no such product" and "`getProductInfo` is
+not enabled on this account" arrive identically, and answering both with an
+empty list is how a disabled detail call comes to look like a screen that will
+not fill in.
+
 **Where do you get a SKU from?** Off their site, a spreadsheet, an email — or
 **Show me some SKUs** on the page, which reads one page of the cheap feed and
 lists the codes in it. Codes only: no detail is fetched and nothing is named,
@@ -156,7 +196,7 @@ swallowed, so the message is the diagnosis:
 |---|---|
 | *Resource path is not callable* / *Access denied* | `getProductInfo` is not enabled on this API account. New accounts start in PowerBody's **DEMO/sandbox** — placeholder products (`P64`, uniform prices, stock 10/100), no detail, orders auto-fail. Ask your account manager to enable API access and permissions. |
 | *…with no product detail in it — they sent a record with only: x, y* | Both argument shapes were answered, neither with a product in it. The named keys are the clue: an echo of the request means the method is refusing rather than failing. |
-| *…did not answer within 20s* | Their feed is slow or rate-limiting; try again. |
+| *…did not answer within 20s* | Their feed is slow or rate-limiting — **or the SKU simply isn't in it**, which cannot be told apart from here: a SKU that is missing never stops the pager, so the walk runs to the end of the catalogue and spends the budget. Try the product ID box, which does no paging at all. |
 | *…sent these products without a product id* | The list feed changed shape. `product_id` is what `getProductInfo` is keyed on. |
 
 `getProductInfo` is asked with a named argument (`{product_id}`) first, matching

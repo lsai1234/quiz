@@ -15,6 +15,19 @@
 export interface SupplierProduct {
   /** Supplier SKU — the stable key for stock lookups and order lines. */
   sku: string
+  /**
+   * PowerBody's own numeric product id — the key `getProductInfo` takes.
+   *
+   * The SKU is what a person has; the product id is what the detail call wants,
+   * and the only way to get from one to the other is to page the list feed. So
+   * once a lookup has paid for that walk, the id it found is worth carrying:
+   * adding the product afterwards can then go straight to the detail call
+   * instead of paging the feed a second time for a mapping we already have.
+   *
+   * Null when the record came from somewhere with no id in it (the mock, or a
+   * list row PowerBody sent without one).
+   */
+  productId: string | null
   name: string
   brand: string
   /** Supplier's own category string, e.g. "Protein", "Pre-Workout". */
@@ -177,6 +190,31 @@ export interface SupplierProvider {
    * than erroring — the caller reports which were not found.
    */
   getProductsBySku(skus: string[]): Promise<SupplierProduct[]>
+  /**
+   * Fully-detailed products for specific PowerBody PRODUCT IDs.
+   *
+   * The same destination as `getProductsBySku`, reached without the search.
+   * Resolving a SKU means paging the cheap list feed to find the row that
+   * carries its `product_id`, and that walk is the expensive, fragile half: a
+   * SKU that IS in the feed stops it early, but one that ISN'T can never
+   * satisfy the stop condition, so it reads the whole catalogue and usually
+   * runs out of the build budget — reporting a timeout for what is really "no
+   * such SKU".
+   *
+   * A product id skips all of it and calls `getProductInfo` directly, which is
+   * one throttled request with no paging and no deadline exposure. Ids are
+   * visible on PowerBody's own site and travel with a looked-up row, so this is
+   * the reliable path for a known product and the escape hatch when the feed is
+   * slow or a SKU cannot be found in it.
+   *
+   * An id that resolves to nothing is omitted so the caller can report which
+   * did not answer — but only while others succeeded. When NOTHING resolved,
+   * the supplier's own reason is thrown instead: with no feed to cross-check
+   * against, "no such product" and "getProductInfo is not enabled on this
+   * account" arrive identically, and answering both with an empty list is how a
+   * disabled detail call comes to look like a screen that will not fill in.
+   */
+  getProductsById(productIds: string[]): Promise<SupplierProduct[]>
   /**
    * A few SKUs that exist, for when you haven't got a code to hand.
    *

@@ -155,6 +155,10 @@ export function toSupplierProduct(info: PbProductInfo, updatedAt = new Date().to
 
   return {
     sku: str(info.sku),
+    // Carried so a looked-up product can be re-fetched (or added) without
+    // paging the feed again to rediscover the mapping — see `productId` on
+    // SupplierProduct.
+    productId: str(info.product_id) || null,
     name: str(info.name) || str(info.sku),
     brand: str(info.manufacturer),
     category: str(info.category),

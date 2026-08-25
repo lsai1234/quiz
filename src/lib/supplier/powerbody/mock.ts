@@ -101,6 +101,14 @@ export function createMockSupplier(): SupplierProvider {
       return POWERBODY_FIXTURES.filter((p) => wanted.has(p.sku)).map(withCurrentStock)
     },
 
+    async getProductsById(productIds) {
+      // The live adapter skips the feed walk here; the mock has no feed to walk,
+      // so this is the same lookup against the fixtures' stand-in ids. Unknown
+      // ids drop out, matching the SKU path.
+      const wanted = new Set(productIds.map((id) => String(id ?? '').trim()).filter(Boolean))
+      return POWERBODY_FIXTURES.filter((p) => p.productId && wanted.has(p.productId)).map(withCurrentStock)
+    },
+
     async getStockLevels(skus) {
       const wanted = skus && skus.length > 0 ? new Set(skus) : null
       return POWERBODY_FIXTURES.filter((p) => !wanted || wanted.has(p.sku)).map((p) => {

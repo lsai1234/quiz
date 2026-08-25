@@ -19,11 +19,30 @@ import { Badge, Button, Card, Textarea } from '@/components/system'
  * off their site, a spreadsheet or an email — and asking for exactly those costs
  * exactly those calls. What comes back is the whole product: image, name, brand,
  * real RRP, live stock, and what we would charge and keep for it.
+ *
+ * WHY THERE ARE TWO BOXES
+ * ───────────────────────
+ * A SKU is not what the detail call takes. PowerBody key `getProductInfo` on a
+ * product id, and the only way to get from a SKU to one is to page their list
+ * feed until the row turns up. That search is fine when the SKU is there and
+ * awful when it isn't: nothing tells the pager to stop, so it reads the whole
+ * catalogue and usually runs out of the build budget first — which is why a
+ * mistyped or unstocked SKU reports "PowerBody did not answer within 20s"
+ * instead of "not in the feed".
+ *
+ * The product ID box skips the search. It calls `getProductInfo` directly: one
+ * request, no paging, nothing that can time out. So it is both the fast path for
+ * a product you can already identify and the way through when the feed is slow
+ * or a SKU cannot be found in it. Ids are on PowerBody's own product pages, and
+ * every looked-up row shows the one it resolved — so a SKU that works once
+ * yields an id that keeps working.
  */
 export function SupplierImport() {
   const [input, setInput] = useState('')
+  const [idInput, setIdInput] = useState('')
   const [results, setResults] = useState<SupplierRow[] | null>(null)
   const [notFound, setNotFound] = useState<string[]>([])
+  const [notFoundIds, setNotFoundIds] = useState<string[]>([])
   const [source, setSource] = useState<string | null>(null)
   const [looking, setLooking] = useState(false)
   const [adding, setAdding] = useState(false)
@@ -52,7 +71,7 @@ export function SupplierImport() {
   }, [])
 
   const lookup = useCallback(async () => {
-    if (!input.trim()) return
+    if (!input.trim() && !idInput.trim()) return
     setLooking(true)
     setError(null)
     setNotice(null)
@@ -60,7 +79,7 @@ export function SupplierImport() {
       const res = await fetch('/api/portal/supplier/lookup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus: input }),
+        body: JSON.stringify({ skus: input, productIds: idInput }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -70,6 +89,7 @@ export function SupplierImport() {
       }
       setResults(d.products ?? [])
       setNotFound(d.notFound ?? [])
+      setNotFoundIds(d.notFoundIds ?? [])
       setSource(d.source ?? null)
     } catch {
       setError('Could not reach the supplier.')
@@ -77,17 +97,28 @@ export function SupplierImport() {
     } finally {
       setLooking(false)
     }
-  }, [input])
+  }, [input, idInput])
 
-  const add = useCallback(async (skus: string[], combine = false) => {
-    if (skus.length === 0) return
+  /**
+   * Add looked-up rows.
+   *
+   * Rows rather than SKUs, because a row already knows the product id the
+   * lookup resolved — and sending that back means the add goes straight to the
+   * detail call instead of paging the feed all over again to rediscover a
+   * mapping we have in our hands. Rows without one (a supplier with no ids)
+   * fall back to their SKU.
+   */
+  const add = useCallback(async (rows: SupplierRow[], combine = false) => {
+    if (rows.length === 0) return
     setAdding(true)
     setError(null)
     try {
+      const productIds = rows.map((r) => r.productId).filter((id): id is string => Boolean(id))
+      const skus = rows.filter((r) => !r.productId).map((r) => r.sku)
       const res = await fetch('/api/portal/supplier', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skus, combine }),
+        body: JSON.stringify({ skus, productIds, combine }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -158,9 +189,43 @@ export function SupplierImport() {
             rows={2}
             placeholder="e.g. ON-GOLD-WHEY-2270, APP-CREA-250"
           />
-          <Button variant="primary" loading={looking} disabled={!input.trim()} onClick={lookup}>
+          <Button
+            variant="primary"
+            loading={looking}
+            disabled={!input.trim() && !idInput.trim()}
+            onClick={lookup}
+          >
             Look up
           </Button>
+        </div>
+
+        <div className="pt-1">
+          <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+            …or by product ID
+          </p>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+            PowerBody look products up by ID, not SKU — so a SKU has to be searched for in their feed first, and a SKU
+            that isn’t there takes the search to the end of the catalogue and times out. An ID skips the search: one
+            call, no waiting. Use this when a SKU won’t resolve.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2 items-end">
+          <Textarea
+            label="Product IDs to look up"
+            hideLabel
+            className="flex-1 min-w-[14rem]"
+            value={idInput}
+            onChange={(e) => setIdInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                lookup()
+              }
+            }}
+            rows={2}
+            placeholder="e.g. 44338, 28352"
+          />
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
@@ -208,29 +273,44 @@ export function SupplierImport() {
       </Card>
 
       {notFound.length > 0 && (
+        <div role="status" className="space-y-1">
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
+            Not in the feed: {notFound.join(', ')}
+          </p>
+          {/* The feed answered and these were not in it, which is a real answer
+              — but it is also what a slow feed looks like, so point at the box
+              that cannot fail the same way. */}
+          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+            If you can see one of these on PowerBody’s site, take its product ID from the page and use the ID box —
+            that skips the feed search entirely.
+          </p>
+        </div>
+      )}
+
+      {notFoundIds.length > 0 && (
         <p role="status" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--tone-critical)' }}>
-          Not in the feed: {notFound.join(', ')}
+          PowerBody returned no product for {notFoundIds.length === 1 ? 'ID' : 'IDs'}: {notFoundIds.join(', ')}
         </p>
       )}
 
-      {results && results.length === 0 && notFound.length === 0 && (
-        <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Nothing found for those SKUs.</p>
+      {results && results.length === 0 && notFound.length === 0 && notFoundIds.length === 0 && (
+        <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)' }}>Nothing found for those codes.</p>
       )}
 
       {results && results.length > 0 && (
         <div className="space-y-2">
           {results.map((r) => (
-            <ProductCard key={r.sku} row={r} adding={adding} onAdd={() => add([r.sku])} />
+            <ProductCard key={r.productId ?? r.sku} row={r} adding={adding} onAdd={() => add([r])} />
           ))}
 
           {addable.length > 1 && (
             <div className="flex flex-wrap items-center gap-2">
-              <Button variant="primary" size="sm" loading={adding} onClick={() => add(addable.map((r) => r.sku))}>
+              <Button variant="primary" size="sm" loading={adding} onClick={() => add(addable)}>
                 {`Add all ${addable.length} separately`}
               </Button>
               {/* PowerBody sell each flavour as its own SKU, so this is how four
                   codes become one product with a flavour picker. */}
-              <Button size="sm" loading={adding} onClick={() => add(addable.map((r) => r.sku), true)}>
+              <Button size="sm" loading={adding} onClick={() => add(addable, true)}>
                 Add as ONE product ({addable.length} variants)
               </Button>
             </div>
@@ -269,6 +349,14 @@ function ProductCard({ row: r, adding, onAdd }: { row: SupplierRow; adding: bool
         </div>
         <div className="flex items-center gap-2 flex-wrap mt-1 text-[11px] text-[var(--ink-3)]">
           <span>{r.sku}</span>
+          {/* Shown because it is the code that always works: looking this
+              product up again by ID needs no feed search and cannot time out. */}
+          {r.productId && (
+            <>
+              <span>·</span>
+              <span>ID {r.productId}</span>
+            </>
+          )}
           {r.category && (
             <>
               <span>·</span>
