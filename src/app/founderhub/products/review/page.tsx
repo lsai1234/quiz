@@ -59,6 +59,16 @@ export default function ReviewPage() {
   const [picked, setPicked] = useState<Set<string>>(new Set())
   /** How many a pending "discard" press would remove — the confirm step. */
   const [confirmBulk, setConfirmBulk] = useState<number | null>(null)
+  /**
+   * Walk the queue one product at a time instead of picking off a list.
+   *
+   * A hundred imported products is not a list anybody works through by choosing
+   * what to click next — the choosing IS the work, and it is what makes a queue
+   * of a hundred feel unfinishable. In journey mode the next product is simply
+   * there, and every action moves to the one after it.
+   */
+  const [journey, setJourney] = useState(false)
+  const [enriching, setEnriching] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -109,7 +119,8 @@ export default function ReviewPage() {
     if (!d) return
     invalidateCatalogue() // it is sellable from this moment
     setNotice(`${title} is approved and on sale.`)
-    setOpenId(null)
+    if (journey) advance(id)
+    else setOpenId(null)
     load()
   }
 
@@ -155,11 +166,52 @@ export default function ReviewPage() {
     load()
   }
 
+  /**
+   * Fetch this product's picture, description and live cost from PowerBody.
+   *
+   * One call, for the product on screen. The bulk import deliberately does not
+   * do this for a hundred products in a row: that is what trips their rate
+   * limiter, and a refused batch leaves every product pictureless at once.
+   */
+  async function enrich(id: string) {
+    setEnriching(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/portal/products/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'enrich' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        // PowerBody's own words when they gave any — the reason is the useful part.
+        setError(d.error ?? 'Could not reach PowerBody.')
+        return
+      }
+      setNotice(d.gotImage ? 'Picture and details pulled from PowerBody.' : 'Details pulled — they have no picture for this one.')
+      await load()
+    } catch {
+      setError('Could not reach PowerBody.')
+    } finally {
+      setEnriching(false)
+    }
+  }
+
+  /** Move to the next product in the queue, or end the journey when done. */
+  function advance(fromId: string) {
+    const list = rows ?? []
+    const index = list.findIndex((r) => r.product.id === fromId)
+    const next = list.slice(index + 1).find((r) => r.product.id !== fromId)
+    setOpenId(next ? next.product.id : null)
+    if (!next) setJourney(false)
+  }
+
   async function discard(id: string, title: string) {
     const d = await send(id, { action: 'discard' })
     if (!d) return
     setNotice(`${title} discarded. Nothing was published.`)
-    setOpenId(null)
+    if (journey) advance(id)
+    else setOpenId(null)
     load()
   }
 
@@ -218,6 +270,18 @@ export default function ReviewPage() {
           }}
           onApprove={() => approve(open.product.id, open.product.title)}
           onDiscard={() => discard(open.product.id, open.product.title)}
+          onEnrich={() => enrich(open.product.id)}
+          enriching={enriching}
+          journey={
+            journey
+              ? {
+                  position: (rows ?? []).findIndex((r) => r.product.id === open.product.id) + 1,
+                  total: (rows ?? []).length,
+                  onSkip: () => advance(open.product.id),
+                  onLeave: () => { setJourney(false); setOpenId(null) },
+                }
+              : null
+          }
         />
       ) : (
         <div className="space-y-2">
@@ -233,6 +297,17 @@ export default function ReviewPage() {
               }}
             />
             <span className="flex-1" />
+            {/* The way in. Working a hundred products means never choosing
+                which one is next — see the `journey` note above. */}
+            {picked.size === 0 && rows.length > 0 && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => { setJourney(true); setOpenId(rows[0].product.id) }}
+              >
+                Review all {rows.length}, one at a time
+              </Button>
+            )}
             {picked.size > 0 && (
               <>
                 <Button variant="primary" size="sm" loading={busy} disabled={picked.size < 2} onClick={combine}>
@@ -324,6 +399,9 @@ function ProductReview({
   onSave,
   onApprove,
   onDiscard,
+  onEnrich,
+  enriching,
+  journey,
 }: {
   row: Row
   busy: boolean
@@ -331,6 +409,11 @@ function ProductReview({
   onSave: (patch: Partial<CatalogueProduct>, confirm: string[]) => Promise<void>
   onApprove: () => void
   onDiscard: () => void
+  /** Fetch this one product's picture and details from PowerBody. */
+  onEnrich: () => void
+  enriching: boolean
+  /** Set when walking the queue rather than picking off the list. */
+  journey: { position: number; total: number; onSkip: () => void; onLeave: () => void } | null
 }) {
   const { product, remaining, complete } = row
   const sources = product.review?.sources ?? {}
@@ -350,6 +433,9 @@ function ProductReview({
     return raw
   }
 
+  // What the supplier could fill in that the roster never could.
+  const missingFromSupplier = !product.imageUrl || !product.description
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -360,6 +446,30 @@ function ProductReview({
           {product.title}
         </p>
       </div>
+
+      {/* Offered here rather than done during the import: a hundred throttled
+          calls in a row is what makes PowerBody start refusing, and a refused
+          batch leaves every product pictureless at once. One call, for the
+          product actually on screen. */}
+      {missingFromSupplier && (
+        <Card padding="tight" className="flex items-center gap-2 flex-wrap">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          {product.imageUrl ? (
+            <img src={product.imageUrl} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-xl shrink-0 grid place-items-center" style={{ background: 'var(--surface-2)', fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+              No image
+            </div>
+          )}
+          <p className="flex-1" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', minWidth: '12rem' }}>
+            {product.imageUrl ? 'No description yet.' : 'No picture or description yet.'} PowerBody hold both —
+            fetching also refreshes what they charge us, and the shelf price with it.
+          </p>
+          <Button variant="secondary" size="sm" loading={enriching} onClick={onEnrich}>
+            Pull from PowerBody
+          </Button>
+        </Card>
+      )}
 
       <Card elevation={2} padding="tight">
         <p style={{ fontSize: 'var(--text-body-sm)', lineHeight: 'var(--leading-loose)', color: 'var(--ink-2)' }}>

@@ -10,6 +10,8 @@ import {
 import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed } from '@/lib/catalogue/review'
 import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
 import { uniqueProductId } from '@/lib/supplier/mapping'
+import { getSupplier } from '@/lib/supplier'
+import { listPriceFor } from '@/lib/pricing/list-price'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 export const dynamic = 'force-dynamic'
@@ -42,7 +44,7 @@ interface ReviewBody {
   patch?: Partial<CatalogueProduct>
   /** Fields being ticked off as checked. */
   confirm?: string[]
-  action?: 'save' | 'approve' | 'discard' | 'combine'
+  action?: 'save' | 'approve' | 'discard' | 'combine' | 'enrich'
   /** For `combine`: the products to fold into one. */
   ids?: string[]
   /** For `combine`: what to call the result. Defaults to what the titles share. */
@@ -117,7 +119,81 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, discarded: body.id })
   }
 
-  const pending = await getPendingReviewProducts()
+  const pendingForAction = await getPendingReviewProducts()
+
+  /**
+   * Pull the descriptive half from PowerBody for ONE product, on demand.
+   *
+   * Doing this during a bulk import means a hundred throttled calls in a row,
+   * which is exactly when their rate limiter starts refusing and every product
+   * arrives pictureless. Doing it here costs one call at the moment somebody is
+   * actually looking at the product, which is both far kinder to the limit and
+   * the point at which a missing picture is worth noticing.
+   *
+   * Only the descriptive fields and the cost are taken. The roster's judgement —
+   * swap group, actives, contraindications, servings — is never overwritten:
+   * that is the half PowerBody cannot answer, and a founder decided it.
+   */
+  if (body.action === 'enrich') {
+    if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    const target = pendingForAction.find((p) => p.id === body.id)
+    if (!target) return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
+
+    const sku = target.variants.find((v) => v.sku)?.sku
+    if (!sku) {
+      return NextResponse.json(
+        { error: 'This product has no supplier SKU, so there is nothing to look up.' },
+        { status: 400 },
+      )
+    }
+
+    try {
+      const supplier = await getSupplier()
+      const [found] = await supplier.getProductsBySku([sku])
+      if (!found) {
+        return NextResponse.json(
+          { error: `PowerBody returned nothing for ${sku}. It may be past their feed's 3,000-product ceiling.` },
+          { status: 404 },
+        )
+      }
+
+      // Cost is theirs, and the shelf price is our rule applied to it — the same
+      // way the importer does it, so a product enriched here and one enriched at
+      // import cannot end up priced differently.
+      const cost = found.wholesalePrice > 0 ? found.wholesalePrice : target.cost
+      const patch: Partial<CatalogueProduct> = {
+        ...(found.imageUrl ? { imageUrl: found.imageUrl } : {}),
+        ...(found.description ? { description: found.description } : {}),
+        ...(found.category ? { category: found.category } : {}),
+        ...(found.weightGrams != null ? { weightGrams: found.weightGrams } : {}),
+        ...(found.vatRate != null ? { vatRate: found.vatRate } : {}),
+        ...(found.rrp > 0 ? { compareAtPrice: found.rrp, supplierRrp: found.rrp } : {}),
+        ...(cost != null && cost > 0 ? { cost, basePrice: listPriceFor(cost) } : {}),
+      }
+      const next: CatalogueProduct = { ...target, ...patch }
+      // Variant prices follow the product's, or the shop would ring up the old one.
+      if (patch.basePrice != null) {
+        next.variants = next.variants.map((v) => ({ ...v, price: patch.basePrice as number }))
+      }
+      // Fields PowerBody answered for are confirmed BY them — nobody needs to
+      // re-check a picture that came straight from the supplier.
+      await saveImportedProduct(withConfirmed(next, Object.keys(patch), []))
+
+      return NextResponse.json({
+        ok: true,
+        id: target.id,
+        filled: Object.keys(patch),
+        gotImage: Boolean(found.imageUrl),
+      })
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'PowerBody could not be reached.' },
+        { status: 502 },
+      )
+    }
+  }
+
+  const pending = pendingForAction
   const current = pending.find((p) => p.id === body.id)
   if (!current) {
     return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
