@@ -53,6 +53,10 @@ export const SCORING = {
     shiftSleep: 8,
     jointCollagen: 22,
     jointOmega: 15,
+    /** Purpose-built joint formulas, for the same `joint-issues` flag. Ranked
+     *  above collagen: glucosamine/MSM/curcumin products exist for this and
+     *  nothing else, whereas collagen is a skin product that also helps. */
+    jointSupport: 26,
   },
 
   /** sleep-better → magnesium, but only when no sleep follow-up was answered. */

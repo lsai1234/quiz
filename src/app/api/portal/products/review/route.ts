@@ -95,6 +95,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, id: combined.id, variants: combined.variants.length })
   }
 
+  /**
+   * Discard several at once.
+   *
+   * Checked BEFORE the single-id guard, because a bulk discard has ids and no
+   * id. Worth having as its own path rather than looping in the browser: a
+   * hundred sequential requests is a hundred chances to half-finish, and
+   * clearing a queue you are about to re-import has to either happen or not.
+   */
+  if (body.action === 'discard' && Array.isArray(body.ids)) {
+    const ids = body.ids.filter((v): v is string => typeof v === 'string' && v !== '')
+    if (ids.length === 0) return NextResponse.json({ error: 'No products selected.' }, { status: 400 })
+    for (const id of ids) await discardImportedProduct(id)
+    return NextResponse.json({ ok: true, discarded: ids.length })
+  }
+
   if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 
   if (body.action === 'discard') {

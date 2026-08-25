@@ -15,6 +15,13 @@
  * complete alone: a row here with no supplier behind it has no picture, and a
  * supplier product with no row has no idea what slot it fills.
  *
+ * PRICES ARE NOT READ FROM THE SHEET AT ALL. A cost column is a snapshot of what
+ * the supplier charged on the day it was typed, and pricing a live shop off that
+ * is how a stale figure becomes a real margin. Cost comes from PowerBody, and
+ * the shelf price is computed from it by our own rule — so a product we cannot
+ * reach the supplier for arrives UNPRICED and says so, rather than arriving
+ * confidently wrong.
+ *
  * Pure parsing — no I/O, no network — so the column handling is testable without
  * standing up a request or a supplier.
  */
@@ -26,7 +33,7 @@ import type { SwapGroup, DietaryTag, SafetyFlag } from '@/lib/catalogue/types'
 const VALID_SWAP_GROUPS = new Set<string>([
   'protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine',
   'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3',
-  'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'sleep-support', 'fat-burner',
+  'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'joint-support', 'sleep-support', 'fat-burner',
   'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c', 'general',
 ])
 
@@ -58,8 +65,6 @@ export interface RosterRow {
   swapGroup: SwapGroup
   /** The spelling the sheet used, when it was not one the engine knows. */
   unrecognisedSwapGroup: string | null
-  cost: number | null
-  rrp: number | null
   servings: number | null
   weightGrams: number | null
   stock: number | null
@@ -115,11 +120,11 @@ const DIETARY: Record<string, DietaryTag> = {
  * Read the safety column into the flags the engine gates on, keeping anything it
  * cannot represent as a visible warning.
  *
- * The engine has exactly two flags — pregnancy and medication — because those
- * are the two the quiz asks about. A sheet saying "thyroid medication" or
- * "SSRIs" means medication; one saying "shellfish allergy" means something real
- * that the quiz has no question for, and dropping it silently would be the worst
- * possible handling of a safety field.
+ * The engine gates on three flags, because those are the three the safety screen
+ * asks about. A sheet saying "thyroid medication" or "SSRIs" means medication;
+ * "crustacean" means shellfish. Anything it cannot represent is kept as a
+ * visible warning rather than dropped, because silently discarding a
+ * contraindication is the worst possible handling of a safety field.
  */
 function safety(v: string | undefined): { flags: SafetyFlag[]; other: string[] } {
   const flags = new Set<SafetyFlag>()
@@ -127,6 +132,7 @@ function safety(v: string | undefined): { flags: SafetyFlag[]; other: string[] }
   for (const entry of list(v)) {
     const lower = entry.toLowerCase()
     if (lower.includes('pregnan') || lower.includes('breastfeed')) flags.add('pregnancy')
+    else if (lower.includes('shellfish') || lower.includes('crustacean')) flags.add('shellfish')
     else if (lower.includes('medication') || lower.includes('ssri') || lower.includes('thinner')) flags.add('medication')
     else other.push(entry)
   }
@@ -236,8 +242,6 @@ export function parseRosterCsv(text: string): RosterParse {
       name: clean(at(cells, 'name')),
       swapGroup,
       unrecognisedSwapGroup: unrecognised,
-      cost: num(at(cells, 'cost')),
-      rrp: num(at(cells, 'rrp')),
       servings: num(at(cells, 'servings')),
       weightGrams: num(at(cells, 'weightGrams')),
       stock: num(at(cells, 'stock')),

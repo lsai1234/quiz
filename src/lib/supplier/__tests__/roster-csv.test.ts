@@ -20,7 +20,8 @@ describe('parseRosterCsv', () => {
     expect(rows).toHaveLength(1)
     expect(rows[0].name).toBe('Ashwagandha, 300mg - 120 vcaps')
     expect(rows[0].swapGroup).toBe('adaptogen')
-    expect(rows[0].cost).toBe(14.53)
+    // Price columns are deliberately not read — see roster-csv's header note.
+    expect(rows[0]).not.toHaveProperty('cost')
   })
 
   it('reads a semicolon file, which is what PowerBody export', () => {
@@ -41,26 +42,46 @@ describe('parseRosterCsv', () => {
    * engine would then recommend it to the wrong person with full confidence.
    */
   it('refuses to guess a swap group it does not recognise, and says so', () => {
-    const { rows, warnings } = row('P48000,NOW,Turmeric,joint-support,16.24,26.97,30,130,10,capsule,vegan,False,pregnancy,curcumin 500mg,True,P48000,x')
+    const { rows, warnings } = row('P1,B,Nootropic,brain-boost,10,20,30,100,10,capsule,,False,,x 1mg,True,P1,y')
 
     expect(rows[0].swapGroup).toBe('general')
-    expect(rows[0].unrecognisedSwapGroup).toBe('joint-support')
-    expect(warnings[0]).toContain('joint-support')
+    expect(rows[0].unrecognisedSwapGroup).toBe('brain-boost')
+    expect(warnings[0]).toContain('brain-boost')
     expect(warnings[0]).toContain('no targeted scoring')
   })
 
-  it('maps safety text onto the two flags the quiz actually gates on', () => {
+  it('maps safety text onto the flags the quiz actually gates on', () => {
     const { rows } = row('P1,B,N,adaptogen,1,2,30,10,5,capsule,,False,"pregnancy, thyroid medication",x 1mg,True,P1,y')
     expect(rows[0].contraindications.sort()).toEqual(['medication', 'pregnancy'])
   })
 
-  /** A real contraindication the quiz has no question for must not vanish. */
-  it('keeps a safety note it cannot gate on, rather than dropping it', () => {
+  /** Shellfish is a real flag now, with a real question on the safety screen —
+   *  krill oil and shellfish-derived glucosamine are both in the range. */
+  it('gates a shellfish allergy rather than filing it as a note', () => {
     const { rows, warnings } = row('P1,B,N,omega-3,1,2,30,10,5,capsule,,False,shellfish allergy,krill 1180mg,True,P1,y')
 
+    expect(rows[0].contraindications).toEqual(['shellfish'])
+    expect(rows[0].otherWarnings).toEqual([])
+    expect(warnings.some((w) => w.includes('shellfish'))).toBe(false)
+  })
+
+  /** Anything the engine still has no flag for must not vanish silently. */
+  it('keeps a safety note it cannot gate on, rather than dropping it', () => {
+    const { rows, warnings } = row('P1,B,N,omega-3,1,2,30,10,5,capsule,,False,avoid under 18s,krill 1180mg,True,P1,y')
+
     expect(rows[0].contraindications).toEqual([])
-    expect(rows[0].otherWarnings).toEqual(['shellfish allergy'])
-    expect(warnings.some((w) => w.includes('shellfish'))).toBe(true)
+    expect(rows[0].otherWarnings).toEqual(['avoid under 18s'])
+    expect(warnings.some((w) => w.includes('under 18s'))).toBe(true)
+  })
+
+  /** joint-support is a real group now: glucosamine/MSM/turmeric products
+   *  exist for joints and nothing else, and the engine can score them. */
+  it('accepts joint-support as a real swap group', () => {
+    const { rows, warnings } = row('P48000,NOW,Turmeric,joint-support,16.24,26.97,30,130,10,capsule,vegan,False,pregnancy,curcumin 500mg,True,P48000,x')
+
+    expect(rows[0].swapGroup).toBe('joint-support')
+    expect(rows[0].unrecognisedSwapGroup).toBeNull()
+    expect(warnings).toEqual([])
   })
 
   it('flags a row whose own SKU is missing from its variant list', () => {
@@ -153,9 +174,12 @@ describe('rosterRowToProduct', () => {
 
     expect(enriched).toBe(false)
     expect(product.variants[0].sku).toBe('P1')
-    expect(product.cost).toBe(20)
+    // Unpriced on purpose: cost is the supplier's to give, and an unpriced
+    // product sits under the quiz's floor so a guess can never reach a customer.
+    expect(product.cost).toBe(0)
+    expect(product.basePrice).toBe(0)
     expect(notes.some((n) => n.includes('No picture'))).toBe(true)
-    expect(notes.some((n) => n.includes('spreadsheet, not live'))).toBe(true)
+    expect(notes.some((n) => n.includes('no price yet'))).toBe(true)
   })
 
   it('warns when servings put it beyond a month on subscription', () => {
@@ -174,8 +198,14 @@ describe('rosterRowToProduct', () => {
   })
 
   it('carries an ungateable safety note into the customer-facing warnings', () => {
-    const shellfish = row('P6,B,Krill,omega-3,10,20,30,79,10,capsule,,False,shellfish allergy,krill 1180mg,True,P6,x').rows[0]
-    const { product } = rosterRowToProduct(shellfish, null)
-    expect(product.warnings).toContain('shellfish allergy')
+    const note = row('P6,B,Krill,omega-3,10,20,30,79,10,capsule,,False,avoid under 18s,krill 1180mg,True,P6,x').rows[0]
+    const { product } = rosterRowToProduct(note, null)
+    expect(product.warnings).toContain('avoid under 18s')
+  })
+
+  it('carries a shellfish allergy as a contraindication the engine can gate on', () => {
+    const krill = row('P6,B,Krill,omega-3,10,20,30,79,10,capsule,,False,shellfish allergy,krill 1180mg,True,P6,x').rows[0]
+    const { product } = rosterRowToProduct(krill, null)
+    expect(product.contraindications).toEqual(['shellfish'])
   })
 })

@@ -45,6 +45,9 @@ const RULES: Rule[] = [
   { test: (t) => /energy water|energy drink/.test(t), result: { stackSlots: ['energy'], swapGroup: 'pre-workout-stim', goals: ['energy', 'hydration'], hasStimulants: true, cadence: 'per-workout' } },
   { test: (t) => /eaa|bcaa|amino/.test(t), result: { stackSlots: ['recovery', 'hydration'], swapGroup: 'aminos', goals: ['recovery', 'hydration'], hasStimulants: false, cadence: 'per-workout' } },
   { test: (t) => /electrolyte|hydro|hydrate/.test(t), result: { stackSlots: ['hydration'], swapGroup: 'electrolytes', goals: ['hydration'], hasStimulants: false, cadence: 'per-workout' } },
+  // Before collagen on purpose: "Joints & Flex with collagen" is a joint
+  // formula, not a collagen product, and first-match-wins would file it wrong.
+  { test: (t) => /glucosamine|chondroitin|\bmsm\b|turmeric|curcumin|joint/.test(t), result: { stackSlots: ['recovery'], swapGroup: 'joint-support', goals: ['recovery', 'health'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /collagen/.test(t), result: { stackSlots: ['recovery'], swapGroup: 'collagen', goals: ['recovery', 'skin-hair-nails'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /omega|fish oil/.test(t), result: { stackSlots: ['health'], swapGroup: 'omega-3', goals: ['health'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /magnesium/.test(t), result: { stackSlots: ['sleep'], swapGroup: 'magnesium', goals: ['sleep-better', 'less-stress'], hasStimulants: false, cadence: 'daily' } },
@@ -74,7 +77,7 @@ function formatsFor(text: string, isRtd: boolean): string[] {
 const ANCHOR_BY_SWAP: Partial<Record<SwapGroup, PourAnchor>> = {
   multivitamin: 'morning', 'vitamin-d': 'morning', 'vitamin-c': 'morning', 'omega-3': 'morning',
   greens: 'midday', probiotic: 'morning', adaptogen: 'morning', fibre: 'morning',
-  collagen: 'evening', magnesium: 'wind-down', 'sleep-support': 'wind-down',
+  collagen: 'evening', 'joint-support': 'morning', magnesium: 'wind-down', 'sleep-support': 'wind-down',
   'pre-workout-stim': 'pre-workout', 'pre-workout-stim-free': 'pre-workout', aminos: 'pre-workout',
   electrolytes: 'hot-days', creatine: 'morning',
   'protein-whey': 'post-workout', 'protein-plant': 'post-workout', 'protein-clear': 'post-workout', 'protein-mass': 'post-workout',

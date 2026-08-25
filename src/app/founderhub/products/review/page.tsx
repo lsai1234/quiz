@@ -57,6 +57,8 @@ export default function ReviewPage() {
   const [notice, setNotice] = useState<string | null>(null)
   /** Products ticked in the queue, for combining flavours into one product. */
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  /** How many a pending "discard" press would remove — the confirm step. */
+  const [confirmBulk, setConfirmBulk] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -129,6 +131,30 @@ export default function ReviewPage() {
     load()
   }
 
+  /**
+   * Discard everything ticked.
+   *
+   * Two-step on purpose: a hundred products are a morning's curation, and a
+   * single mis-tap on a "Discard all" is not something anyone can undo — a
+   * discarded import leaves no trace by design, so there is nothing to restore
+   * from. The second press is the confirmation.
+   */
+  async function discardPicked() {
+    const ids = [...picked]
+    if (ids.length === 0) return
+    if (confirmBulk !== ids.length) {
+      setConfirmBulk(ids.length)
+      return
+    }
+    const d = await send('', { action: 'discard', ids })
+    setConfirmBulk(null)
+    if (!d) return
+    setPicked(new Set())
+    setNotice(`${d.discarded} discarded. Nothing was published.`)
+    setOpenId(null)
+    load()
+  }
+
   async function discard(id: string, title: string) {
     const d = await send(id, { action: 'discard' })
     if (!d) return
@@ -195,19 +221,47 @@ export default function ReviewPage() {
         />
       ) : (
         <div className="space-y-2">
-          {picked.size > 0 && (
-            <Card tone="accent" padding="tight" className="flex flex-wrap items-center gap-2">
-              <p className="flex-1" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)', minWidth: '11rem' }}>
-                {picked.size} ticked. Combine them when they are flavours of the same product — each keeps its own
-                supplier SKU and becomes a variant.
-              </p>
-              <Button variant="primary" size="sm" loading={busy} disabled={picked.size < 2} onClick={combine}>
-                Combine into one product
-              </Button>
-              <Button variant="ghost" size="sm" onClick={() => setPicked(new Set())}>
-                Clear
-              </Button>
-            </Card>
+          {/* Always shown, so clearing a queue of a hundred does not require
+              ticking a hundred boxes first. */}
+          <Card padding="tight" className="flex flex-wrap items-center gap-2">
+            <Checkbox
+              label={picked.size === rows.length ? 'Deselect all' : `Select all ${rows.length}`}
+              checked={rows.length > 0 && picked.size === rows.length}
+              onChange={() => {
+                setConfirmBulk(null)
+                setPicked((prev) => (prev.size === rows.length ? new Set() : new Set(rows.map((r) => r.product.id))))
+              }}
+            />
+            <span className="flex-1" />
+            {picked.size > 0 && (
+              <>
+                <Button variant="primary" size="sm" loading={busy} disabled={picked.size < 2} onClick={combine}>
+                  Combine into one
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  loading={busy}
+                  onClick={discardPicked}
+                  // The count is in the label so the confirm press says what it
+                  // is about to do, rather than asking twice for "are you sure".
+                >
+                  {confirmBulk === picked.size
+                    ? `Tap again to discard ${picked.size}`
+                    : `Discard ${picked.size}`}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => { setPicked(new Set()); setConfirmBulk(null) }}>
+                  Clear
+                </Button>
+              </>
+            )}
+          </Card>
+
+          {picked.size > 1 && (
+            <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+              Combine only when these are flavours of the same product — each keeps its own supplier SKU and becomes
+              a variant. Different sizes must stay separate.
+            </p>
           )}
 
           {rows.map(({ product, remaining, complete }) => (

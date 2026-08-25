@@ -62,6 +62,14 @@ export const APPROVED_CLAIMS: Record<SwapGroup, string[]> = {
     'contributes to the maintenance of normal skin',
     'a source of collagen peptides commonly used to support joints and connective tissue',
   ],
+  // Deliberately structure/function only. Glucosamine, MSM and curcumin have no
+  // authorised EU/UK health claim for joints, so nothing here may say one — the
+  // wording describes what the product IS and what it is traditionally used
+  // for, which is the line the claim gate exists to hold.
+  'joint-support': [
+    'traditionally used to support joints and connective tissue',
+    'a source of glucosamine, MSM and botanicals commonly taken by active people',
+  ],
   'sleep-support': [
     'formulated with ingredients traditionally used to support relaxation and wind-down',
     'may support a normal, restful sleep routine',

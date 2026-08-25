@@ -14,9 +14,9 @@
  * cannot answer any of that, and the quiz reads almost nothing else.
  *
  * So the supplier wins on description and money, and the roster wins on meaning.
- * Where the supplier is absent — a product whose id could not be resolved — the
- * roster's own cost and stock stand in, and the product is marked so nobody
- * mistakes a spreadsheet figure for a live one.
+ * Prices are never read from the sheet at all: a cost column is a snapshot, and
+ * a product we cannot reach the supplier for arrives UNPRICED and says so rather
+ * than arriving confidently wrong.
  */
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { SupplierProduct } from './types'
@@ -50,16 +50,20 @@ export function rosterRowToProduct(row: RosterRow, supplier: SupplierProduct | n
   const notes: string[] = []
   const id = slugify(row.name || row.sku) || slugify(row.sku)
 
-  // Money: theirs when we have it, the sheet's when we do not — and said out
-  // loud either way, because every margin in the hub hangs off this number.
-  const cost = supplier?.wholesalePrice ?? row.cost ?? 0
-  if (!supplier && row.cost != null) {
-    notes.push('Cost is from the spreadsheet, not live from PowerBody — re-check before going live.')
+  // ── Money comes from the supplier, never from the sheet ──────────────────
+  // A cost column is a snapshot of what PowerBody charged on the day somebody
+  // typed it. Pricing a live shop off that is how a stale figure turns into a
+  // real margin, so it is not read: cost is theirs, and the shelf price is our
+  // own rule applied to it (`listPriceFor` — cost × 2 → .99). A product we
+  // could not reach them for therefore arrives UNPRICED and says so, which is
+  // the honest failure. Unpriced also means it sits under the quiz's £8 floor
+  // and cannot be recommended, so a guess can never reach a customer.
+  const cost = supplier?.wholesalePrice ?? 0
+  const sellPrice = cost > 0 ? listPriceFor(cost) : 0
+  if (cost <= 0) {
+    notes.push('No cost from PowerBody, so this has no price yet and cannot be recommended. Fix the lookup, or set the cost here.')
   }
-  if (cost <= 0) notes.push('No cost on file, so every margin figure for this product is a guess.')
-
-  const sellPrice = listPriceFor(cost)
-  const rrp = supplier?.rrp ?? row.rrp ?? null
+  const rrp = supplier?.rrp ?? null
   const stock = supplier?.stock ?? row.stock ?? 0
 
   if (!supplier) notes.push('No picture or description — PowerBody could not be reached for this SKU.')

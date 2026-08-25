@@ -184,6 +184,10 @@ function pickWellbeingQuestions(goals: Goal[]): WellbeingQuestion[] {
 const SAFETY_DATA: Array<{ id: SafetyFlag; label: string }> = [
   { id: 'pregnancy',  label: 'Pregnant or breastfeeding' },
   { id: 'medication', label: 'On prescription medication' },
+  // Real products in the range carry this: krill oil is shellfish, and
+  // glucosamine is commonly shellfish-derived. Without the question the flag on
+  // those products could never fire.
+  { id: 'shellfish',  label: 'Shellfish allergy' },
 ]
 
 // Age brackets. The id is a range and the label is prose ("Under 25"), so this

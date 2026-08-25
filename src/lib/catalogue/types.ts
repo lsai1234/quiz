@@ -64,6 +64,7 @@ export type SwapGroup =
   | 'vitamin-d'
   | 'multivitamin'
   | 'collagen'
+  | 'joint-support'
   | 'sleep-support'
   | 'fat-burner'
   | 'adaptogen'
@@ -121,8 +122,12 @@ export type AsNeededTrigger = 'sweat' | 'sleep' | 'stress' | 'immunity' | 'diges
  * the recommendation for anyone who ticked that flag (see scoreProduct).
  *   • pregnancy  — pregnant or breastfeeding (avoid certain botanicals/stimulants)
  *   • medication — on prescription medication (avoid interaction-prone blends)
+ *   • shellfish  — shellfish allergy. Added because the roster genuinely
+ *     contains products that carry one (krill oil, glucosamine from shellfish),
+ *     and a contraindication the quiz cannot ask about is one it cannot act on.
+ *     A flag with no question behind it is decoration, so the safety screen asks.
  */
-export type SafetyFlag = 'pregnancy' | 'medication'
+export type SafetyFlag = 'pregnancy' | 'medication' | 'shellfish'
 
 /** When a drink is best taken — drives the Pour Plan protocol copy (guidance,
  *  not a rigid schedule). */

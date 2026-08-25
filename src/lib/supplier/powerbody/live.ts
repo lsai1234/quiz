@@ -271,6 +271,23 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     return carriesDetail(value as PbProductInfo) ? (value as PbProductInfo) : null
   }
 
+  /**
+   * PowerBody's own error text, when the reply is one of their envelopes.
+   *
+   * `api_response` is the field they answer `createOrder` with, and a
+   * `getProductInfo` reply carrying it plus `status`/`time`/`ip` is not product
+   * detail — it is them telling us why they said no. Reporting that verbatim is
+   * strictly better than any cause we could infer from the shape.
+   */
+  function readApiResponse(reply: unknown): string | null {
+    const value = Array.isArray(reply) ? reply[0] : reply
+    if (!value || typeof value !== 'object') return null
+    const row = value as Record<string, unknown>
+    const said = row.api_response ?? row.message ?? row.error
+    const text = typeof said === 'string' ? said.trim() : ''
+    return text === '' ? null : text
+  }
+
   /** What came back, trimmed to something a person can read in an error. */
   function describeReply(reply: unknown): string {
     const value = Array.isArray(reply) ? reply[0] : reply
@@ -325,6 +342,19 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     // Say what they actually sent. Guessing at this from the outside is what
     // cost a round of "it still doesn't work" — the reply is the diagnosis.
     if (lastReply !== undefined) {
+      // Their own words first, when they gave any. A reply carrying
+      // `api_response` is PowerBody's error envelope — the same field
+      // `createOrder` answers with — so it says WHY, and quoting it beats
+      // guessing at a cause. Leading with the sandbox theory sent a real
+      // investigation down the wrong path for an afternoon: the account was
+      // fine and the call was being refused for another reason entirely.
+      const said = readApiResponse(lastReply)
+      if (said) {
+        throw new Error(
+          `PowerBody refused the detail call for product ${id}: "${said}". That is their own message — ` +
+            'it is usually rate limiting or a permission on the API account, not a missing product.',
+        )
+      }
       throw new Error(
         `PowerBody answered for product ${id} with no product detail in it — they sent ${describeReply(lastReply)}. ` +
           'getProductInfo may not be enabled on this API account (new accounts start in their DEMO sandbox).',

@@ -191,6 +191,38 @@ describe('live PowerBody adapter', () => {
     })
   })
 
+  describe('when PowerBody refuse the detail call', () => {
+    /**
+     * `api_response` is their error envelope — the field `createOrder` answers
+     * with. A getProductInfo reply carrying it plus status/time/ip is them
+     * saying why they said no, and quoting that beats inferring a cause: the
+     * old message led with "getProductInfo may not be enabled (DEMO sandbox)"
+     * and sent a real investigation the wrong way for an afternoon.
+     */
+    it('quotes their own words instead of guessing at the sandbox', async () => {
+      const { client } = fakeClient({
+        'dropshipping.getProductInfo': () => ({
+          api_response: 'TOO_MANY_REQUESTS',
+          status: 'error',
+          time: '2026-08-25 14:47:01',
+          ip: '1.2.3.4',
+        }),
+      })
+
+      await expect(
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['7816']),
+      ).rejects.toThrow('TOO_MANY_REQUESTS')
+    })
+
+    it('still falls back to describing the shape when they said nothing at all', async () => {
+      const { client } = fakeClient({ 'dropshipping.getProductInfo': () => ({ status: 'denied' }) })
+
+      await expect(
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['1']),
+      ).rejects.toThrow('a record with only: status')
+    })
+  })
+
   describe('getProductInfo argument shape', () => {
     /**
      * Their guide, page 11: "Parameters: (int) product id", with the example

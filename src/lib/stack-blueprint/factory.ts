@@ -25,6 +25,7 @@ const SWAP_GROUP_LABELS: Record<string, string> = {
   'vitamin-c':      'Immune Support',
   'magnesium':      'Magnesium',
   'collagen':       'Collagen',
+  'joint-support':  'Joint Support',
   'sleep-support':  'Sleep & Recovery',
   'adaptogen':      'Stress Support',
   'probiotic':      'Gut Health',
@@ -346,6 +347,7 @@ export function scoreProduct(
   // When the user flags joint issues (captured in lifestyle step), these two
   // products move to the top — they have direct mechanistic support.
   if (answers.lifestyle.includes('joint-issues')) {
+    if (product.swapGroup === 'joint-support') score += SCORING.lifestyle.jointSupport
     if (product.swapGroup === 'collagen') score += SCORING.lifestyle.jointCollagen
     if (product.swapGroup === 'omega-3') score += SCORING.lifestyle.jointOmega
   }
