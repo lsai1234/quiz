@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { REVIEW_FIELDS, type ReviewField } from '@/lib/catalogue/review'
+import { REVIEW_FIELDS, blankFillableFields, type ReviewField } from '@/lib/catalogue/review'
 import type { CatalogueProduct, FieldSource } from '@/lib/catalogue/types'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { Badge, Button, Card, Checkbox, Input, Textarea } from '@/components/system'
@@ -69,6 +69,7 @@ export default function ReviewPage() {
    */
   const [journey, setJourney] = useState(false)
   const [enriching, setEnriching] = useState(false)
+  const [filling, setFilling] = useState(false)
 
   const load = useCallback(async () => {
     setError(null)
@@ -197,6 +198,49 @@ export default function ReviewPage() {
     }
   }
 
+  /**
+   * Ask the classifier to fill every field this product has left blank.
+   *
+   * Blanks only, and never a supplier field — see the `ai-fill` action. The
+   * point is the fields that decide who gets recommended this product: a row
+   * that imported with no stack slots, no goals and a swap group of "general"
+   * is invisible to the quiz, and typing all three out a hundred times is how a
+   * roster stops getting finished.
+   *
+   * Filling is NOT confirming. The count of fields left to check does not move,
+   * because a machine answering a blank is the start of the review, not the end
+   * of it.
+   */
+  async function aiFill(id: string) {
+    setFilling(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/portal/products/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action: 'ai-fill' }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d.error ?? 'Could not fill the blanks.')
+        return
+      }
+      const filledKeys: string[] = d.filled ?? []
+      const names = filledKeys.map((k) => REVIEW_FIELDS.find((f) => (f.key as string) === k)?.label ?? k)
+      const how = d.source === 'ai' ? 'the model' : 'keyword matching'
+      setNotice(
+        names.length === 0
+          ? 'Nothing it could fill — every blank left is one only you or PowerBody can answer.'
+          : `Filled ${names.join(', ')} using ${how}. Still unchecked: read each one before approving.`,
+      )
+      await load()
+    } catch {
+      setError('Could not fill the blanks.')
+    } finally {
+      setFilling(false)
+    }
+  }
+
   /** Move to the next product in the queue, or end the journey when done. */
   function advance(fromId: string) {
     const list = rows ?? []
@@ -272,6 +316,8 @@ export default function ReviewPage() {
           onDiscard={() => discard(open.product.id, open.product.title)}
           onEnrich={() => enrich(open.product.id)}
           enriching={enriching}
+          onAiFill={() => aiFill(open.product.id)}
+          filling={filling}
           journey={
             journey
               ? {
@@ -401,6 +447,8 @@ function ProductReview({
   onDiscard,
   onEnrich,
   enriching,
+  onAiFill,
+  filling,
   journey,
 }: {
   row: Row
@@ -412,6 +460,9 @@ function ProductReview({
   /** Fetch this one product's picture and details from PowerBody. */
   onEnrich: () => void
   enriching: boolean
+  /** Fill every blank field from the classifier, in one press. */
+  onAiFill: () => void
+  filling: boolean
   /** Set when walking the queue rather than picking off the list. */
   journey: { position: number; total: number; onSkip: () => void; onLeave: () => void } | null
 }) {
@@ -435,6 +486,10 @@ function ProductReview({
 
   // What the supplier could fill in that the roster never could.
   const missingFromSupplier = !product.imageUrl || !product.description
+  // What nobody has filled in and a machine is allowed to: the judgement
+  // fields, never the supplier's. Recomputed from the product each render, so
+  // it empties as fields get filled and the offer disappears when it is spent.
+  const blanks = blankFillableFields(product)
 
   return (
     <div className="space-y-4">
@@ -467,6 +522,24 @@ function ProductReview({
           </p>
           <Button variant="secondary" size="sm" loading={enriching} onClick={onEnrich}>
             Pull from PowerBody
+          </Button>
+        </Card>
+      )}
+
+      {/* Offered only while there is something to fill. A blank stack-slots or
+          goals list means the quiz cannot see this product at all, and a
+          hundred of those is a roster that never gets finished by hand. */}
+      {blanks.length > 0 && (
+        <Card padding="tight" tone="attention" className="flex items-center gap-2 flex-wrap">
+          <p className="flex-1" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)', minWidth: '12rem' }}>
+            <strong style={{ color: 'var(--ink-1)' }}>
+              {blanks.length} field{blanks.length === 1 ? ' is' : 's are'} blank
+            </strong>{' '}
+            — {blanks.map((f) => f.label).join(', ')}. Fill them from the product name and description, then read
+            them back. Nothing already filled in is touched, and prices are never guessed.
+          </p>
+          <Button variant="secondary" size="sm" loading={filling} onClick={onAiFill}>
+            Fill the blanks
           </Button>
         </Card>
       )}
@@ -606,6 +679,23 @@ function ProductReview({
         <Button variant="destructive" loading={busy} onClick={onDiscard}>
           Discard
         </Button>
+        {/* Skip has to exist for the journey to be worth entering: without it
+            the first product you cannot decide on ends the run, and a queue you
+            can get stuck in is one nobody starts. */}
+        {journey && (
+          <>
+            <span className="flex-1" />
+            <span style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+              {journey.position} of {journey.total}
+            </span>
+            <Button variant="ghost" size="sm" onClick={journey.onSkip}>
+              Skip for now
+            </Button>
+            <Button variant="ghost" size="sm" onClick={journey.onLeave}>
+              Back to the queue
+            </Button>
+          </>
+        )}
       </Card>
     </div>
   )

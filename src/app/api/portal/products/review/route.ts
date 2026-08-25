@@ -7,10 +7,11 @@ import {
   discardImportedProduct,
   syncPortalRuntime,
 } from '@/lib/portal/store'
-import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed } from '@/lib/catalogue/review'
+import { approved, isReviewComplete, fieldsNeedingReview, withConfirmed, withoutSupplierOwned, isBlankValue } from '@/lib/catalogue/review'
 import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { getSupplier } from '@/lib/supplier'
+import { autopopulateProduct } from '@/lib/supplier/autopopulate'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -44,7 +45,7 @@ interface ReviewBody {
   patch?: Partial<CatalogueProduct>
   /** Fields being ticked off as checked. */
   confirm?: string[]
-  action?: 'save' | 'approve' | 'discard' | 'combine' | 'enrich'
+  action?: 'save' | 'approve' | 'discard' | 'combine' | 'enrich' | 'ai-fill'
   /** For `combine`: the products to fold into one. */
   ids?: string[]
   /** For `combine`: what to call the result. Defaults to what the titles share. */
@@ -188,6 +189,87 @@ export async function POST(req: Request) {
     } catch (err) {
       return NextResponse.json(
         { error: err instanceof Error ? err.message : 'PowerBody could not be reached.' },
+        { status: 502 },
+      )
+    }
+  }
+
+  /**
+   * Fill the BLANKS with the classifier, and nothing else.
+   *
+   * "Blank" is the whole contract. A field somebody has already filled — from
+   * the roster, from PowerBody, or by hand in this screen — is a decision, and
+   * a model overwriting a decision is the single worst thing this could do. So
+   * every candidate is checked against the product as it stands and dropped if
+   * that field already holds anything.
+   *
+   * WHAT IT MAY NOT TOUCH
+   * `withoutSupplierOwned` strips the fields PowerBody own and the ones our own
+   * pricing rule computes. A model guessing a cost or a shelf price would put a
+   * fabricated number straight into the margin model.
+   *
+   * WHAT IT LEAVES UNDONE, ON PURPOSE
+   * Filled fields are recorded as `ai` (or `heuristic`) and are deliberately NOT
+   * marked confirmed. That is the difference between this and the PowerBody
+   * pull: a picture from the supplier is a fact and needs no second opinion,
+   * whereas a model's answer to "what is this product for" is a suggestion and
+   * must still be ticked by a person before the product can be approved. The
+   * queue's "N fields left to check" counter therefore does not fall.
+   *
+   * Claim safety is hard-gated upstream in `autopopulateProduct`: generated card
+   * copy has to be grounded in `APPROVED_CLAIMS` for the product's swap group or
+   * it is replaced, so no new health claim can be invented here.
+   */
+  if (body.action === 'ai-fill') {
+    if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+    const target = pendingForAction.find((p) => p.id === body.id)
+    if (!target) return NextResponse.json({ error: 'That product is not waiting for review.' }, { status: 404 })
+
+    try {
+      const { patch, source } = await autopopulateProduct(target)
+      const candidate = withoutSupplierOwned(patch)
+
+      const filled: Partial<CatalogueProduct> = {}
+      for (const [key, value] of Object.entries(candidate)) {
+        // Blanks only. An already-filled field is somebody's decision, and a
+        // model quietly overwriting a decision is the worst thing this could do.
+        if (!isBlankValue(key, (target as unknown as Record<string, unknown>)[key])) continue
+        if (value === null || value === undefined) continue
+        if (typeof value === 'string' && value.trim() === '') continue
+        if (Array.isArray(value) && value.length === 0) continue
+        ;(filled as Record<string, unknown>)[key] = value
+      }
+
+      const keys = Object.keys(filled)
+      if (keys.length === 0) {
+        return NextResponse.json({ ok: true, id: target.id, filled: [], source })
+      }
+
+      const review = target.review
+      const next: CatalogueProduct = {
+        ...target,
+        ...filled,
+        ...(review
+          ? {
+              review: {
+                ...review,
+                sources: {
+                  ...review.sources,
+                  ...Object.fromEntries(keys.map((k) => [k, source])),
+                },
+                // Confirmed is untouched: a machine wrote these, so a person
+                // still has to tick them before this product can be approved.
+                confirmed: review.confirmed.filter((k) => !keys.includes(k)),
+              },
+            }
+          : {}),
+      }
+      await saveImportedProduct(next)
+
+      return NextResponse.json({ ok: true, id: target.id, filled: keys, source })
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'Could not fill the blanks.' },
         { status: 502 },
       )
     }

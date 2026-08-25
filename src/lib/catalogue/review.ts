@@ -106,6 +106,38 @@ export function withoutSupplierOwned(patch: Partial<CatalogueProduct>): Partial<
 }
 
 /**
+ * Empty in the sense the fill step means it: nothing there to overwrite.
+ *
+ * `swapGroup: 'general'` is checked BEFORE the string case and counts as blank,
+ * because "general" is the engine's way of saying it does not know — a product
+ * left there gets no swap alternatives and no targeted scoring, so it is a gap
+ * wearing a value's clothes. Order matters: behind the string test that case
+ * never fires.
+ */
+export function isBlankValue(key: string, value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (key === 'swapGroup') return value === 'general'
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  return false
+}
+
+/**
+ * The review fields that are empty AND that a machine is allowed to fill.
+ *
+ * Supplier- and rule-owned fields are excluded for the same reason
+ * `withoutSupplierOwned` excludes them: a blank cost is PowerBody's silence, not
+ * an invitation to guess a wholesale price. What is left is the judgement —
+ * slots, goals, group, copy — which is exactly what the classifier is for.
+ */
+export function blankFillableFields(product: CatalogueProduct): ReviewField[] {
+  const owned = new Set<string>([...SUPPLIER_FIELDS, ...RULE_FIELDS])
+  return REVIEW_FIELDS.filter(
+    (field) => !owned.has(field.key as string) && isBlankValue(field.key as string, product[field.key]),
+  )
+}
+
+/**
  * Provenance for a freshly imported product.
  *
  * `aiFields` are the keys the autopopulate step actually wrote, and `aiUsed`

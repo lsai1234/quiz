@@ -1,7 +1,9 @@
 import {
   approved,
   asPendingReview,
+  blankFillableFields,
   fieldsNeedingReview,
+  isBlankValue,
   isPendingReview,
   isReviewComplete,
   sourcesForImport,
@@ -114,5 +116,63 @@ describe('the import gate', () => {
     expect(isPendingReview(live)).toBe(false)
     // Approving is itself a statement about everything on the screen.
     expect(live.review?.confirmed).toEqual(expect.arrayContaining(REVIEW_FIELDS.map((f) => f.key as string)))
+  })
+})
+
+describe('blankFillableFields', () => {
+  const blank = {
+    ...PRODUCT,
+    stackSlots: [],
+    goals: [],
+    dietaryTags: [],
+    formats: ['powder'],
+    swapGroup: 'general',
+    shortReason: '   ',
+    warnings: [],
+    cost: 0,
+  } as unknown as CatalogueProduct
+
+  it('names every gap a machine is allowed to close', () => {
+    const keys = blankFillableFields(blank).map((f) => f.key)
+
+    expect(keys).toEqual(expect.arrayContaining(['stackSlots', 'goals', 'dietaryTags', 'shortReason', 'warnings']))
+    // Filled in, so not a gap — a fill must never overwrite a decision.
+    expect(keys).not.toContain('formats')
+  })
+
+  it('counts a swap group of "general" as blank', () => {
+    // "general" is the engine's way of saying it does not know. A product left
+    // there gets no swap alternatives and no affinity bonus, so treating it as
+    // a filled-in value is how a product silently never gets recommended.
+    expect(blankFillableFields(blank).map((f) => f.key)).toContain('swapGroup')
+    expect(isBlankValue('swapGroup', 'general')).toBe(true)
+    expect(isBlankValue('swapGroup', 'creatine')).toBe(false)
+  })
+
+  it('never offers to fill a price or anything else the supplier owns', () => {
+    // A cost of 0 means PowerBody did not answer. Guessing one puts a made-up
+    // wholesale price behind every margin figure in the hub.
+    const keys = blankFillableFields(blank).map((f) => f.key)
+    expect(keys).not.toContain('cost')
+    expect(keys).not.toContain('basePrice')
+    expect(keys).not.toContain('imageUrl')
+    expect(keys).not.toContain('description')
+  })
+
+  it('has nothing to offer once the gaps are closed', () => {
+    const full = {
+      ...PRODUCT,
+      stackSlots: ['protein'],
+      goals: ['muscle'],
+      dietaryTags: ['vegan'],
+      formats: ['powder'],
+      swapGroup: 'protein-whey',
+      shortReason: 'Copy.',
+      warnings: ['Contains caffeine'],
+      hasStimulants: false,
+      servings: 30,
+    } as unknown as CatalogueProduct
+
+    expect(blankFillableFields(full)).toEqual([])
   })
 })
