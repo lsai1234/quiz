@@ -76,6 +76,8 @@ export function SupplierImport() {
       }
       const blob = await res.blob()
       const rows = res.headers.get('X-Row-Count')
+      const complete = res.headers.get('X-Feed-Complete') !== 'no'
+      const pages = res.headers.get('X-Feed-Pages')
       // Saved through a temporary link: the response is a POST, so there is no
       // URL the browser could have downloaded on its own.
       const url = URL.createObjectURL(blob)
@@ -86,10 +88,23 @@ export function SupplierImport() {
       a.click()
       a.remove()
       URL.revokeObjectURL(url)
-      setNotice(
-        `Downloaded ${rows ?? 'the'} product${rows === '1' ? '' : 's'} from the feed. Match your list against the ` +
-          'sku column: anything missing is not on this account, and the productId column is what the ID box takes.',
-      )
+      if (complete) {
+        setNotice(
+          `Downloaded ${rows ?? 'the'} product${rows === '1' ? '' : 's'} from the feed. Match your list against the ` +
+            'sku column: anything missing is not on this account, and the productId column is what the ID box takes.',
+        )
+      } else {
+        // The file is still useful for what IS in it — a product listed here is
+        // real, and its id works. What it can no longer support is the opposite
+        // reading, and that is the one people act on: striking a product off a
+        // roster because it "isn't on the account". So this is an error, not a
+        // footnote on a success.
+        setError(
+          `The feed stopped after ${pages ?? 'some'} pages, so this file is only part of the catalogue. ` +
+            `The ${rows ?? ''} products in it are real and their IDs work — but anything MISSING proves nothing, ` +
+            'because it may simply be on a page that was never read. Run it again before striking anything off.',
+        )
+      }
     } catch {
       setError('Could not read the supplier feed.')
     } finally {

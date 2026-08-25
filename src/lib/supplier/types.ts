@@ -92,6 +92,23 @@ export interface SupplierStockLevel {
   updatedAt: string
 }
 
+/**
+ * The supplier's whole product feed, with an honest word about whether it is.
+ *
+ * The `complete` flag is the load-bearing part. A truncated feed is not a
+ * smaller answer to "what does this account carry?" — it is a wrong answer to
+ * "what does it NOT carry?", and the two are indistinguishable from the rows
+ * alone.
+ */
+export interface SupplierFeed {
+  levels: SupplierStockLevel[]
+  /** False when the pager gave up (page cap or deadline) rather than reaching
+   *  the end of the feed. Rows are still usable; absences are not. */
+  complete: boolean
+  /** Pages actually read, so a short read can be reasoned about. */
+  pages: number
+}
+
 // ─── Orders ────────────────────────────────────────────────────────────────────
 
 export interface SupplierAddress {
@@ -235,6 +252,21 @@ export interface SupplierProvider {
   sampleSkus(limit: number): Promise<string[]>
   /** Live stock + price. Pass SKUs to narrow it; omit for everything. */
   getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]>
+  /**
+   * The whole feed, and whether it is actually the whole feed.
+   *
+   * `getStockLevels` answers "what is the stock for these?", where a short read
+   * costs a product its update and the next run fixes it. Exporting asks the
+   * opposite question — "what does this account NOT carry?" — and there a short
+   * read is a wrong answer that looks exactly like a right one: every SKU on the
+   * unread pages reads as absent. Somebody then strikes real products off a
+   * roster on the strength of it.
+   *
+   * So completeness is returned rather than assumed. `complete` is false when
+   * the pager stopped for its own reasons — the page cap, or a deadline — rather
+   * than because the feed ended.
+   */
+  getFeed(): Promise<SupplierFeed>
   /**
    * The delivery services this account can ask for, if any.
    *

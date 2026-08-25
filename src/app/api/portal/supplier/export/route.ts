@@ -47,9 +47,12 @@ export async function POST() {
   try {
     await syncPortalRuntime()
     const supplier = await getSupplier()
-    // No SKUs passed: the whole feed. This is the same call the daily stock
-    // check makes, so nothing new is being asked of the supplier.
-    const levels = await supplier.getStockLevels()
+    // `getFeed`, not `getStockLevels`: this needs the pager's verdict on whether
+    // it reached the end. A truncated export is not a smaller answer to "what
+    // does this account carry?" — it is a WRONG answer to "what does it not
+    // carry?", because every SKU on the pages we never read looks absent. That
+    // is the answer people act on, so it cannot be guessed at.
+    const { levels, complete, pages } = await supplier.getFeed()
 
     const csv = toFeedCsv(levels)
     const stamp = new Date().toISOString().slice(0, 10)
@@ -63,6 +66,9 @@ export async function POST() {
         // Read before the file is opened, so a run that came back suspiciously
         // small can be spotted without counting rows by hand.
         'X-Row-Count': String(levels.length),
+        // The load-bearing one. False means absences in this file prove nothing.
+        'X-Feed-Complete': complete ? 'yes' : 'no',
+        'X-Feed-Pages': String(pages),
       },
     })
   } catch (err) {

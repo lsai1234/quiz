@@ -228,6 +228,31 @@ describe('SupplierImport', () => {
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:feed')
   })
 
+  /**
+   * A truncated export is not a smaller answer — it is a wrong one to the
+   * question people act on. "Not in the file" has to stop meaning "not on the
+   * account" the moment the read fell short.
+   */
+  it('warns that a truncated export proves nothing about what is missing', async () => {
+    Object.assign(URL, { createObjectURL: jest.fn(() => 'blob:feed'), revokeObjectURL: jest.fn() })
+    jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-Row-Count': '9000', 'X-Feed-Complete': 'no', 'X-Feed-Pages': '200' }),
+        blob: async () => new Blob(['productId,sku\n'], { type: 'text/csv' }),
+      } as unknown as Response),
+    ) as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    await userEvent.setup().click(screen.getByRole('button', { name: /download the full product list/i }))
+
+    expect(await screen.findByText(/only part of the catalogue/)).toBeInTheDocument()
+    expect(screen.getByText(/anything MISSING proves nothing/)).toBeInTheDocument()
+  })
+
   it('surfaces why the feed could not be exported', async () => {
     global.fetch = jest
       .fn()

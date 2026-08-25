@@ -12,6 +12,7 @@ import type {
   SupplierOrder,
   SupplierOrderInput,
   SupplierOrderResult,
+  SupplierFeed,
   SupplierProduct,
   SupplierProvider,
   SupplierStockLevel,
@@ -107,6 +108,12 @@ export function createMockSupplier(): SupplierProvider {
       // ids drop out, matching the SKU path.
       const wanted = new Set(productIds.map((id) => String(id ?? '').trim()).filter(Boolean))
       return POWERBODY_FIXTURES.filter((p) => p.productId && wanted.has(p.productId)).map(withCurrentStock)
+    },
+
+    async getFeed() {
+      // The fixtures are the whole feed by definition — there is no paging to
+      // fall short of, so this is always complete.
+      return { levels: await this.getStockLevels(), complete: true, pages: 1 }
     },
 
     async getStockLevels(skus) {

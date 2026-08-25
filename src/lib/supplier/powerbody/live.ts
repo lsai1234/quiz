@@ -32,6 +32,7 @@ import type {
   SupplierOrderResult,
   SupplierShippingMethod,
   SupplierProduct,
+  SupplierFeed,
   SupplierProvider,
   SupplierStockLevel,
 } from '../types'
@@ -191,6 +192,8 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** False when we stopped early (deadline or page cap) rather than reaching
      *  the end of the feed. */
     complete: boolean
+    /** Pages actually read, so a short read can be reasoned about afterwards. */
+    pages: number
   }
 
   /** Page through `getProductList` until a page comes back empty — or until the
@@ -199,15 +202,15 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const all: PbProductListItem[] = listOptions.into ?? []
     for (let page = 1; page <= MAX_PAGES; page++) {
       const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true }
+      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, pages: page }
       all.push(...rows)
-      if (listOptions.enough?.(all)) return { items: all, complete: true }
+      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: page }
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
-        return { items: all, complete: false }
+        return { items: all, complete: false, pages: page }
       }
     }
     // Hit the page cap — a feed that never returns an empty page.
-    return { items: all, complete: false }
+    return { items: all, complete: false, pages: MAX_PAGES }
   }
 
   /**
@@ -464,6 +467,26 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   }
 
   /**
+   * Read the whole feed, and say whether it really was the whole feed.
+   *
+   * `complete` is not decoration. The export exists to answer "what does this
+   * account NOT carry?", and a short read answers that wrongly while looking
+   * identical to a right answer: every SKU on the pages we never reached reads
+   * as absent. Someone then strikes real products off a roster because of it.
+   * So the pager's own verdict is carried out rather than dropped on the floor,
+   * which is what `getStockLevels` used to do with it.
+   */
+  async function readFeed(): Promise<SupplierFeed> {
+    const { items, complete, pages } = await fetchListItems()
+    const updatedAt = new Date().toISOString()
+    return {
+      levels: items.map((item) => toStockLevel(item, updatedAt)).filter((level) => level.sku !== ''),
+      complete,
+      pages,
+    }
+  }
+
+  /**
    * A handful of SKUs that exist, so you have something to type into the box.
    *
    * Deliberately not a catalogue: no detail is fetched, nothing is named, and it
@@ -511,13 +534,12 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     async getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]> {
       // Always live — this is the call the daily check exists to make.
-      const { items } = await fetchListItems()
-      const updatedAt = new Date().toISOString()
+      const { levels } = await readFeed()
       const wanted = skus && skus.length > 0 ? new Set(skus) : null
-      return items
-        .map((item) => toStockLevel(item, updatedAt))
-        .filter((level) => level.sku !== '' && (!wanted || wanted.has(level.sku)))
+      return wanted ? levels.filter((level) => wanted.has(level.sku)) : levels
     },
+
+    getFeed: readFeed,
 
     /**
      * Ask what delivery services this account has.

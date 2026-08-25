@@ -164,6 +164,35 @@ describe('live PowerBody adapter', () => {
       expect(calls.some((c) => c.path === 'dropshipping.getProductInfo')).toBe(false)
     })
 
+    /**
+     * The verdict `getStockLevels` used to drop on the floor. Exporting asks
+     * "what does this account NOT carry?", and a short read answers that wrongly
+     * while looking exactly like a right answer — every SKU on the unread pages
+     * reads as absent, and someone strikes real products off a roster for it.
+     */
+    it('says the feed was complete when it reached the end', async () => {
+      const { client } = fakeClient(catalogueHandlers())
+      const feed = await createPowerBodyProvider({ client }).getFeed()
+
+      expect(feed.complete).toBe(true)
+      expect(feed.levels.map((l) => l.sku)).toEqual(['PB-1', 'PB-2'])
+    })
+
+    it('admits a short read when the pager gives up before the end', async () => {
+      // A feed that never returns an empty page: the pager hits its own cap.
+      const { client } = fakeClient({
+        'dropshipping.getProductList': (args: unknown) => [
+          { product_id: String((args as { page: number }).page), sku: `PB-${(args as { page: number }).page}`, price: '1.00', qty: '1' },
+        ],
+      })
+      const feed = await createPowerBodyProvider({ client }).getFeed()
+
+      expect(feed.complete).toBe(false)
+      // The rows it did read are still real and still usable.
+      expect(feed.levels.length).toBeGreaterThan(0)
+      expect(feed.pages).toBeGreaterThan(1)
+    })
+
     it('narrows to the requested SKUs', async () => {
       const { client } = fakeClient(catalogueHandlers())
       const levels = await createPowerBodyProvider({ client }).getStockLevels(['PB-2'])

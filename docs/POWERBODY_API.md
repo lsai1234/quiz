@@ -185,6 +185,22 @@ export is the same call the nightly sync makes. Rows keep the feed's own order �
 sorting would be a small kindness and a real loss, because the order rows page in
 is what shows a read that stopped early.
 
+**Completeness is reported, not assumed.** The export reads through `getFeed()`,
+which returns the pager's own verdict alongside the rows (`X-Feed-Complete`,
+`X-Feed-Pages`). `getStockLevels` used to destructure `items` and drop
+`complete` on the floor, which was survivable for a stock refresh — a short read
+costs a product its update and the next run fixes it — and not survivable here.
+Exporting asks *"what does this account NOT carry?"*, and a truncated read
+answers that **wrongly while looking identical to a right answer**: every SKU on
+the pages never reached shows as absent, and somebody strikes real products off a
+roster on the strength of it. So a short read is reported as an error on the
+screen rather than a footnote, and it says plainly that the rows present are real
+but the absences prove nothing.
+
+The pager stops short for two reasons: the `MAX_PAGES` cap (a feed that never
+returns an empty page) or a deadline. Neither is a supplier failure, so neither
+throws — which is exactly why the flag has to be carried out and shown.
+
 Two consequences worth knowing:
 
 - **Every looked-up row now carries the id it resolved** (`SupplierProduct.productId`,
