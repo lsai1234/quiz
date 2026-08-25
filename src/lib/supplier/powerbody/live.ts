@@ -287,14 +287,20 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    *
    * Two things here are deliberate.
    *
-   * **Both argument shapes are tried.** Their methods take a JSON string, and
-   * `getProductList` takes a named argument (`{page}`) — so `{product_id}` is
-   * the shape that matches. A bare id is the other reading of their guide, and
-   * which one an account answers to is not something we can settle from here.
-   * The named form goes first; a null or a fault falls through to the bare id
-   * before giving up. That costs a second call only when the first shape is
-   * wrong, and the failure mode it replaces — every product silently unnamed —
-   * is far worse than an extra request.
+   * **The bare id goes first, because that is what their guide documents.**
+   * Page 11: "getProductInfo – acquiring information for a single product.
+   * Parameters: (int) product id", with the example
+   * `$client->call($session, 'dropshipping.getProductInfo', $productId)` —
+   * a raw id, not a JSON object. It is the one method here that does not take
+   * a JSON string, which is easy to miss because every other one does.
+   *
+   * This used to try `{product_id}` first, reasoning by analogy with
+   * `getProductList`'s `{page}`. That reasoning was wrong, and it cost a
+   * wasted call on a rate-limited API for EVERY product fetched — the
+   * documented shape was only ever reached as the fallback. The named form is
+   * kept as the fallback because it costs nothing when the first call works,
+   * and the failure it guards against — every product silently unnamed — is
+   * far worse than one extra request on an account that wants the other shape.
    *
    * **Errors are NOT swallowed.** This is only ever called because someone asked
    * for this exact product, so "PowerBody said X" has to reach them. Returning
@@ -304,7 +310,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   async function fetchDetail(id: string): Promise<PbProductInfo> {
     let firstFailure: unknown = null
     let lastReply: unknown = undefined
-    for (const args of [{ product_id: id }, id]) {
+    for (const args of [id, { product_id: id }]) {
       try {
         const reply = await client.call<unknown>('dropshipping.getProductInfo', args)
         const info = readInfo(reply)

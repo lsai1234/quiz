@@ -122,26 +122,45 @@ describe('getProductsBySku — live', () => {
     expect(found).toMatchObject({ sku: 'PB-90', name: 'Product 90', detailed: true })
   })
 
-  it('asks by named argument, and falls back to a bare id', async () => {
-    // Their guide reads both ways and `getProductList` takes a named argument,
-    // so {product_id} goes first — but an account that only answers to the bare
-    // id must still work, because the alternative is every product unnamed.
+  it('asks by the documented bare id, and falls back to the named argument', async () => {
+    // Their guide, page 11: "Parameters: (int) product id" — a raw id, not a
+    // JSON object, and the only method here that works that way. The named
+    // shape stays as a fallback so an account that wants it still works, since
+    // the alternative is every product arriving unnamed.
     const seen: unknown[] = []
     const { client } = fakeClient({
       'dropshipping.getProductList': (args: unknown) =>
         (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
       'dropshipping.getProductInfo': (args: unknown) => {
         seen.push(args)
-        // Only understands the bare id.
-        return typeof args === 'string' ? { name: 'Whey 1kg', manufacturer: 'PB' } : null
+        // Only understands the named shape — the fallback case.
+        return typeof args === 'string' ? null : { name: 'Whey 1kg', manufacturer: 'PB' }
       },
     })
 
     const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
       .getProductsBySku(['PB-7'])
 
-    expect(seen).toEqual([{ product_id: '7' }, '7'])
+    expect(seen).toEqual(['7', { product_id: '7' }])
     expect(found).toMatchObject({ sku: 'PB-7', name: 'Whey 1kg', detailed: true })
+  })
+
+  it('costs ONE call when the documented shape works', async () => {
+    // The regression this guards: sending {product_id} first burned a wasted
+    // call on a rate-limited API for every single product ever fetched.
+    const seen: unknown[] = []
+    const { client } = fakeClient({
+      'dropshipping.getProductList': (args: unknown) =>
+        (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
+      'dropshipping.getProductInfo': (args: unknown) => {
+        seen.push(args)
+        return typeof args === 'string' ? { name: 'Whey 1kg', manufacturer: 'PB' } : null
+      },
+    })
+
+    await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsBySku(['PB-7'])
+
+    expect(seen).toEqual(['7'])
   })
 
   it('does not accept an empty record as detail, and tries the other shape', async () => {
@@ -154,7 +173,9 @@ describe('getProductsBySku — live', () => {
         (args as { page: number }).page === 1 ? [{ product_id: '7', sku: 'PB-7', price: '10.00', qty: '5' }] : [],
       'dropshipping.getProductInfo': (args: unknown) => {
         seen.push(args)
-        return typeof args === 'string' ? { name: 'Whey 1kg' } : { product_id: '7', success: false }
+        // The bare id is tried first and answers with an echo carrying no
+        // detail; only the named shape yields a real product.
+        return typeof args === 'string' ? { product_id: '7', success: false } : { name: 'Whey 1kg' }
       },
     })
 

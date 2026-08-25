@@ -150,6 +150,41 @@ describe('live PowerBody adapter', () => {
     })
   })
 
+  describe('getProductInfo argument shape', () => {
+    /**
+     * Their guide, page 11: "Parameters: (int) product id", with the example
+     * `call($session, 'dropshipping.getProductInfo', $productId)` — a raw id,
+     * not JSON. It is the one method here that does not take a JSON string.
+     * We used to send `{product_id}` first by analogy with getProductList's
+     * `{page}`, which burned a wasted call on a rate-limited API for every
+     * single product fetched.
+     */
+    it('sends the documented bare id first, not a JSON object', async () => {
+      const { client, calls } = fakeClient(catalogueHandlers())
+      await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['1'])
+
+      const detail = calls.filter((c) => c.path === 'dropshipping.getProductInfo')
+      expect(detail).toHaveLength(1)
+      expect(detail[0].args).toBe('1')
+    })
+
+    /** Kept as a fallback: free when the first shape works, and it guards the
+     *  far worse failure of every product arriving unnamed. */
+    it('still falls back to the named shape when the bare id is refused', async () => {
+      const { client, calls } = fakeClient({
+        'dropshipping.getProductInfo': (args: unknown) =>
+          typeof args === 'object' && args !== null ? INFO['1'] : null,
+      })
+      const [product] = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+      }).getProductsById(['1'])
+
+      expect(product.name).toBe('Whey 1kg')
+      expect(calls.map((c) => c.args)).toEqual(['1', { product_id: '1' }])
+    })
+  })
+
   describe('getStockLevels', () => {
     it('uses only the cheap list feed — never the per-product detail call', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())

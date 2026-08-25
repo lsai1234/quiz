@@ -255,11 +255,41 @@ swallowed, so the message is the diagnosis:
 | *…did not answer within 20s* | Their feed is slow or rate-limiting — **or the SKU simply isn't in it**, which cannot be told apart from here: a SKU that is missing never stops the pager, so the walk runs to the end of the catalogue and spends the budget. Try the product ID box, which does no paging at all. |
 | *…sent these products without a product id* | The list feed changed shape. `product_id` is what `getProductInfo` is keyed on. |
 
-`getProductInfo` is asked with a named argument (`{product_id}`) first, matching
-`getProductList`'s `{page}`, and retried with a bare id if that comes back empty —
-their guide reads both ways and which one an account answers to is not something
-the code can settle in advance. The second call only happens when the first shape
-is wrong.
+`getProductInfo` is asked with the **bare id first**, because that is what their
+guide documents — page 11: *"Parameters: (int) product id"*, with the example
+`call($session, 'dropshipping.getProductInfo', $productId)`. It is the one
+dropshipping method that does **not** take a JSON string, which is easy to miss
+because every other one does. The named `{product_id}` shape is retried only when
+the documented one yields nothing, so the second call happens on an account that
+wants the other shape and never otherwise.
+
+This was the wrong way round until the guide was read properly: reasoning by
+analogy with `getProductList`'s `{page}` put `{product_id}` first, so the
+documented shape was only ever reached as a fallback and **every product fetch
+burned a wasted call on a rate-limited API**.
+
+### The 3,000-product ceiling is undocumented
+
+Their guide gives `getProductList` exactly one parameter — `page`, as
+`{"page":N}`. There is **no** `limit`, `page_size`, `offset` or `start`; no
+documented cap on pages or products; and no category, brand, date or stock
+filter that would let the catalogue be pulled in slices. There is no
+`getFullProductList`, no SKU-based lookup, and no documented SKU → `product_id`
+mapping anywhere in the API.
+
+So the 200-page / 3,000-product ceiling this account hits is **undocumented
+server behaviour**, not a documented limit — which is why it is worth asking
+PowerBody to lift it rather than designing around it. There is precedent for
+account-scoped API settings: `getPromoProductList` has to be enabled by an
+account manager.
+
+The full catalogue does exist outside the API, as the **CSV Dropshipping Feed**
+(guide chapter 6) downloaded by hand from the Dropshipping Panel — 8,023 products
+against the API's 3,000, semicolon-delimited. It carries `sku`, manufacturer,
+name, qty, flavour, weight, image url and retail price, but **no `product_id`**
+and no wholesale cost. So it cannot be joined to API data on its own, and it
+cannot price a product either: the two halves of what an import needs sit in two
+sources and neither has both.
 
 A reply only counts as detail if it actually carries one of `name`,
 `manufacturer`, `category`, `detail_price`, `description_en` or `image`. An echo
