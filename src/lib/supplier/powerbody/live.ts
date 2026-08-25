@@ -38,6 +38,7 @@ import type {
   SupplierStockLevel,
 } from '../types'
 import { createSoapClient, type PowerBodySoapClient } from './soap'
+import { partitionBySkuMap } from '../product-id-map'
 import { createKvDetailStore, isStale, type DetailStore } from './detail-cache'
 import {
   readOrderAck,
@@ -347,8 +348,29 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   }
 
   async function getProductsBySku(skus: string[]): Promise<SupplierProduct[]> {
-    const wanted = new Set(skus.filter(Boolean))
-    if (wanted.size === 0) return []
+    const asked = skus.filter(Boolean)
+    if (asked.length === 0) return []
+
+    // ── The committed id map goes first ────────────────────────────────────
+    // A SKU we already know the id for needs no search at all: straight to the
+    // detail call, one throttled request, no paging and nothing that can time
+    // out. This is the only route to a product past the feed's 3,000-item
+    // ceiling, because there the walk cannot find the row however long it runs.
+    // See `product-id-map.ts` and `scripts/backfill-product-ids.ts`.
+    const { mapped, unmapped } = partitionBySkuMap(asked)
+    const fromMap = mapped.length > 0 ? await getProductsById(mapped.map((m) => String(m.productId))) : []
+    // Verified, not assumed: a mapped id is only accepted when the product it
+    // returns actually carries the SKU we asked for. A stale entry then costs a
+    // wasted call and falls back to the feed, instead of quietly importing
+    // somebody else's product under our SKU.
+    const askedSet = new Set(asked)
+    const verified = fromMap.filter((p) => askedSet.has(p.sku))
+    const stillMissing = asked.filter((sku) => !verified.some((p) => p.sku === sku))
+
+    if (stillMissing.length === 0) return verified
+    // Anything the map could not answer for — or answered wrongly — falls
+    // through to the feed exactly as before.
+    const wanted = new Set(stillMissing)
 
     const deadline = Date.now() + buildDeadlineMs
     let matches = matchesFromIndex(wanted)
@@ -376,7 +398,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       rememberListItems(listing.items)
       matches = listing.items.filter((item) => wanted.has(String(item.sku ?? '')))
     }
-    if (matches.length === 0) return []
+    if (matches.length === 0) return verified
 
     const cache = await detailStore.load()
     const now = Date.now()
@@ -420,12 +442,13 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     if (added === 0 && failures.length > 0) throw failures[0]
 
     const updatedAt = new Date().toISOString()
-    return matches.map((item) => {
+    const fromFeed = matches.map((item) => {
       const entry = usableEntry(idOf(item), cache, now)
       // Fresh list row on top: cached detail must never supply today's price
       // or stock.
       return toSupplierProduct(entry ? { ...entry.info, ...item } : item, updatedAt)
     })
+    return [...verified, ...fromFeed]
   }
 
   /**

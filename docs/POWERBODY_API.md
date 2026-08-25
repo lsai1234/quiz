@@ -283,6 +283,46 @@ PowerBody to lift it rather than designing around it. There is precedent for
 account-scoped API settings: `getPromoProductList` has to be enabled by an
 account manager.
 
+### Getting past it: the committed SKU → product id map
+
+`getProductInfo` takes an id and its reply **carries the SKU**, so it can be run
+backwards: probe an id, read which SKU lives there, and you know whether the one
+you want is above or below. Ids run near-monotone in SKU number (Spearman 0.9997
+over 3,000 known pairs), so that is a binary search.
+
+`scripts/backfill-product-ids.ts` does it offline and writes
+`src/lib/supplier/product-id-map.json`, which `getProductsBySku` consults before
+touching the feed. Two steps, and **step 1 stands alone**:
+
+1. Walk `getProductList` and record every `{sku, product_id}`. Free and exact.
+   On an account without the cap this resolves everything and step 2 never runs.
+2. Binary-search `getProductInfo` for whatever step 1 could not reach.
+
+```bash
+node --env-file=.env.local ./node_modules/.bin/tsx \
+  scripts/backfill-product-ids.ts --file roster.csv --column sku
+```
+
+`--seed-only` stops after step 1 — the right flag to reach for the day PowerBody
+lift the cap. `--dry-run` writes nothing.
+
+Three properties matter more than the search itself:
+
+- **An id is recorded only on an exact SKU match.** Ids and SKU numbers
+  correlate, so a near miss returns a *real* product — the wrong one — and
+  writing that into the map would import another brand's product under your SKU.
+  The fit is used to say where to start looking, never to answer.
+- **An empty id is not a direction.** Ids are sparse, so most probes land on
+  nothing; bisecting on one would discard half the range on no evidence. The
+  search steps to the nearest real neighbour first. (Density is far better than
+  the global 2.8% suggests near the top of the range — median gap 3 across the
+  last 500 known rows — which is where the unreachable SKUs sit.)
+- **The map is a shortcut, never a source of truth.** Price, stock, name and
+  weight are still fetched live; this only answers *which id to ask about*, and
+  a mapped id whose product comes back under a different SKU is discarded and
+  the feed walked instead. A stale entry can cost a wasted call, never a wrong
+  price.
+
 The full catalogue does exist outside the API, as the **CSV Dropshipping Feed**
 (guide chapter 6) downloaded by hand from the Dropshipping Panel — 8,023 products
 against the API's 3,000, semicolon-delimited. It carries `sku`, manufacturer,

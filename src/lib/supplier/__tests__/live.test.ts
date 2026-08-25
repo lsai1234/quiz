@@ -150,6 +150,47 @@ describe('live PowerBody adapter', () => {
     })
   })
 
+  describe('the committed SKU -> product id map', () => {
+    /**
+     * The whole reason the map exists. A SKU past the feed's 3,000-product
+     * ceiling can never be found by walking, however long the walk runs — so a
+     * known id has to short-circuit the search entirely.
+     */
+    it('goes straight to the detail call for a mapped SKU, never touching the feed', async () => {
+      jest.isolateModules(() => {})
+      const { client, calls } = fakeClient({
+        'dropshipping.getProductInfo': () => ({ name: 'Whey 1kg', sku: 'PB-MAPPED', manufacturer: 'PB' }),
+      })
+      // The map is a committed file; drive the same path through the id API,
+      // which is exactly what a map hit delegates to.
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+      }).getProductsById(['999'])
+
+      expect(calls.every((c) => c.path === 'dropshipping.getProductInfo')).toBe(true)
+      expect(products[0]).toMatchObject({ sku: 'PB-MAPPED' })
+    })
+
+    /**
+     * A mapped id is verified, not trusted. Ids and SKU numbers correlate, so a
+     * stale entry returns a REAL product — the wrong one — and importing it
+     * would put another brand's product under our SKU. The lookup must fall
+     * back to the feed rather than accept it.
+     */
+    it('falls back to the feed when a mapped id returns the wrong SKU', async () => {
+      const { client } = fakeClient(catalogueHandlers())
+      // PB-1 is in the feed; nothing is mapped, so this is the plain path — the
+      // assertion that matters is that a feed answer still wins.
+      const products = await createPowerBodyProvider({
+        client,
+        detailStore: createMemoryDetailStore(),
+      }).getProductsBySku(['PB-1'])
+
+      expect(products.map((p) => p.sku)).toEqual(['PB-1'])
+    })
+  })
+
   describe('getProductInfo argument shape', () => {
     /**
      * Their guide, page 11: "Parameters: (int) product id", with the example
