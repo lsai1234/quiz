@@ -100,6 +100,10 @@ describe('the Founders Hub', () => {
     // `className="hidden"` and never focusable — the Button is the control, and
     // this is the only way to open a native file picker.
     'src/components/portal/ShareArtSettings.tsx': ['input'],
+    // The same pattern in `RosterImport`: a `className="hidden"` file input
+    // behind the Choose-a-CSV Button. Opening a native file picker has no other
+    // route, and the Button is the labelled, focusable control.
+    'src/components/portal/RosterImport.tsx': ['input'],
   } as const
 
   it.each(FILES)('%s builds its controls from the primitives', (file) => {

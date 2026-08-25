@@ -1,3 +1,4 @@
+import { RosterImport } from '@/components/portal/RosterImport'
 import { SupplierImport } from '@/components/portal/SupplierImport'
 import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
 
@@ -16,6 +17,9 @@ export default function SupplierPage() {
 
       {/* What moved under us since yesterday — read before adding anything new. */}
       <SupplierSyncPanel />
+
+      {/* A whole roster at once, enriched per row — see RosterImport. */}
+      <RosterImport />
 
       <SupplierImport />
     </div>
