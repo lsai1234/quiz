@@ -28,8 +28,9 @@ const BASE: SupplierProduct = {
 const product = (over: Partial<SupplierProduct> = {}): CatalogueProduct =>
   supplierProductToCatalogue({ ...BASE, ...over })
 
-const level = (over: Partial<{ sku: string; stock: number; inStock: boolean; wholesalePrice: number; rrp: number }> = {}) => ({
+const level = (over: Partial<{ sku: string; productId: string | null; stock: number; inStock: boolean; wholesalePrice: number; rrp: number }> = {}) => ({
   sku: 'PB-1',
+  productId: '1001',
   stock: 20,
   inStock: true,
   wholesalePrice: 10,

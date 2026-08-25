@@ -115,7 +115,7 @@ describe('SupplierImport', () => {
    * the end of the catalogue and times out. An id needs no search.
    */
   it('looks a product up by ID without needing a SKU', async () => {
-    const fetchMock = jest.fn(() =>
+    const fetchMock = jest.fn((_url: string, _init?: RequestInit) =>
       reply(JSON.stringify({ products: [{ ...ROW, productId: '44338' }], notFound: [], notFoundIds: [] })),
     )
     global.fetch = fetchMock as unknown as typeof fetch
@@ -135,7 +135,7 @@ describe('SupplierImport', () => {
   /** Adding by the id the lookup already resolved is what stops the feed being
    *  paged a second time for a mapping we are holding. */
   it('adds by the product ID the lookup resolved, not by SKU', async () => {
-    const fetchMock = jest.fn((url: string) =>
+    const fetchMock = jest.fn((url: string, _init?: RequestInit) =>
       url === '/api/portal/supplier'
         ? reply(JSON.stringify({ ok: true, added: 1, combined: false, skusAdded: 1, aiUsed: false }))
         : reply(JSON.stringify({ products: [{ ...ROW, productId: '44338' }], notFound: [], notFoundIds: [] })),
@@ -195,6 +195,50 @@ describe('SupplierImport', () => {
 
     // Different problem, different fix — so it must not read as "not in the feed".
     expect(await screen.findByText(/PowerBody returned no product for ID: 99999/)).toBeInTheDocument()
+  })
+
+  /**
+   * Looking a code up asks "is this one there?" and answers slowly when it is
+   * not. The export asks "what is there?" once, which is the right shape when
+   * you have a list of a hundred to check against the account.
+   */
+  it('downloads the whole feed as a file', async () => {
+    const createObjectURL = jest.fn(() => 'blob:feed')
+    const revokeObjectURL = jest.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
+
+    global.fetch = jest.fn(() =>
+      Promise.resolve({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'X-Row-Count': '842' }),
+        blob: async () => new Blob(['productId,sku\n1001,PB-1\n'], { type: 'text/csv' }),
+      } as unknown as Response),
+    ) as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    await userEvent.setup().click(screen.getByRole('button', { name: /download the full product list/i }))
+
+    expect(await screen.findByText(/Downloaded 842 products from the feed/)).toBeInTheDocument()
+    // The mapping is the point of the file, so the notice has to name the column.
+    expect(screen.getByText(/productId column is what the ID box takes/)).toBeInTheDocument()
+    expect(click).toHaveBeenCalled()
+    // Held object URLs leak; the component must let go of it.
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:feed')
+  })
+
+  it('surfaces why the feed could not be exported', async () => {
+    global.fetch = jest
+      .fn()
+      .mockReturnValue(
+        reply(JSON.stringify({ error: 'PowerBody is rate limiting us (HTTP 429).' }), { ok: false, status: 502 }),
+      ) as unknown as typeof fetch
+
+    render(<SupplierImport />)
+    await userEvent.setup().click(screen.getByRole('button', { name: /download the full product list/i }))
+
+    expect(await screen.findByText(/rate limiting us/)).toBeInTheDocument()
   })
 
   it('can add several SKUs as one product with a variant each', async () => {

@@ -156,8 +156,8 @@ describe('live PowerBody adapter', () => {
       const levels = await createPowerBodyProvider({ client }).getStockLevels()
 
       expect(levels).toEqual([
-        { sku: 'PB-1', stock: 5, inStock: true, wholesalePrice: 10, rrp: 12, updatedAt: expect.any(String) },
-        { sku: 'PB-2', stock: 0, inStock: false, wholesalePrice: 20, rrp: 24, updatedAt: expect.any(String) },
+        { sku: 'PB-1', productId: '1', stock: 5, inStock: true, wholesalePrice: 10, rrp: 12, updatedAt: expect.any(String) },
+        { sku: 'PB-2', productId: '2', stock: 0, inStock: false, wholesalePrice: 20, rrp: 24, updatedAt: expect.any(String) },
       ])
       // The whole point: a nightly stock check must not fan out to thousands of
       // getProductInfo calls.

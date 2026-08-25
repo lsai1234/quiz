@@ -157,6 +157,34 @@ nothing that can time out. It is the dependable path for a product you can
 already identify (ids are on PowerBody's own product pages) and the escape hatch
 when the feed is slow or a code cannot be found in it.
 
+### Exporting the feed — checking a list instead of a code
+
+Looking a code up asks *"is this one there?"*, and answers slowly when it is
+not. With a hundred codes to check that is a hundred full-catalogue walks, and
+each one that fails is indistinguishable from an outage.
+
+**Download the full product list (CSV)** (`POST /api/portal/supplier/export`)
+asks the other question — *"what is there?"* — once. It pages the cheap feed a
+single time and writes every row out: `productId`, `sku`, `wholesalePrice`,
+`sellPrice` (our own cost × 2 → .99 rule), `stock`, `inStock`, `updatedAt`.
+That answers for every code at the same time, offline, in a spreadsheet:
+
+- **a SKU not in the file is not on this account** — the answer a timeout can
+  never give;
+- **the `productId` column is what the ID box takes**, so the mapping stops
+  having to be rediscovered a product at a time.
+
+It is deliberately the cheap half. No names, brands or images — those come from
+`getProductInfo`, one throttled call per product, and a catalogue's worth is
+thousands of requests. This is what a few pages can buy, and it is the half that
+*identifies* a product rather than describing it.
+
+`SupplierStockLevel` carries `productId` for this reason: the daily stock check
+already reads the whole feed, so the mapping costs nothing to carry and the
+export is the same call the nightly sync makes. Rows keep the feed's own order —
+sorting would be a small kindness and a real loss, because the order rows page in
+is what shows a read that stopped early.
+
 Two consequences worth knowing:
 
 - **Every looked-up row now carries the id it resolved** (`SupplierProduct.productId`,

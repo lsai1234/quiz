@@ -151,9 +151,12 @@ describe('PowerBody wire mapping', () => {
 
   describe('toStockLevel', () => {
     it('maps the cheap list row', () => {
-      const level = toStockLevel({ sku: 'PB-1', price: '10.00', price_tax: '12.00', qty: '5' }, AT)
+      const level = toStockLevel({ product_id: '1001', sku: 'PB-1', price: '10.00', price_tax: '12.00', qty: '5' }, AT)
       expect(level).toEqual({
         sku: 'PB-1',
+        // The mapping the export exists to publish — this row is the only place
+        // a SKU and its product id appear together.
+        productId: '1001',
         stock: 5,
         inStock: true,
         wholesalePrice: 10,
@@ -164,6 +167,10 @@ describe('PowerBody wire mapping', () => {
 
     it('is out of stock at zero qty', () => {
       expect(toStockLevel({ sku: 'PB-1', price: '10.00', qty: '0' }, AT).inStock).toBe(false)
+    })
+
+    it('leaves the id null when the row carries none, rather than inventing one', () => {
+      expect(toStockLevel({ sku: 'PB-1', price: '10.00', qty: '5' }, AT).productId).toBeNull()
     })
   })
 

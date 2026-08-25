@@ -115,6 +115,7 @@ export function createMockSupplier(): SupplierProvider {
         const stock = currentStock(p.sku, p.stock)
         const level: SupplierStockLevel = {
           sku: p.sku,
+          productId: p.productId,
           stock,
           inStock: stock > 0,
           wholesalePrice: currentWholesale(p.sku, p.wholesalePrice),

@@ -200,6 +200,7 @@ export function toStockLevel(item: PbProductListItem, updatedAt = new Date().toI
   const wholesale = round(num(item.price))
   return {
     sku: str(item.sku),
+    productId: str(item.product_id) || null,
     stock: qty,
     inStock: qty > 0,
     wholesalePrice: wholesale,

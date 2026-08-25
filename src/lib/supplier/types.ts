@@ -76,6 +76,15 @@ export interface SupplierProduct {
 /** A live stock + price snapshot for one SKU (the daily-sync / recheck shape). */
 export interface SupplierStockLevel {
   sku: string
+  /**
+   * PowerBody's product id for this row.
+   *
+   * The list feed is the ONLY place the SKU → product id mapping exists, and it
+   * is already read in full by the daily stock check — so carrying the id costs
+   * nothing here and is what lets the whole mapping be exported in one pass
+   * instead of being rediscovered a product at a time.
+   */
+  productId: string | null
   stock: number
   inStock: boolean
   wholesalePrice: number

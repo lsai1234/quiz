@@ -51,6 +51,51 @@ export function SupplierImport() {
   /** Codes sampled from the feed, for when you haven't got one to hand. */
   const [samples, setSamples] = useState<string[] | null>(null)
   const [sampling, setSampling] = useState(false)
+  const [exporting, setExporting] = useState(false)
+
+  /**
+   * Download the whole feed as a spreadsheet.
+   *
+   * Looking a code up asks "is this one there?", and answers slowly when it is
+   * not, because the search has to reach the end of the catalogue to be sure.
+   * This asks "what is there?" once, and answers for every code at the same
+   * time — which is the shape of the question when you have a list of a hundred
+   * to check. What comes back is the SKU → product ID mapping, plus cost and
+   * stock; names and images are the expensive half and are not in it.
+   */
+  const exportFeed = useCallback(async () => {
+    setExporting(true)
+    setError(null)
+    setNotice(null)
+    try {
+      const res = await fetch('/api/portal/supplier/export', { method: 'POST' })
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}))
+        setError(d.error ?? 'Could not read the supplier feed.')
+        return
+      }
+      const blob = await res.blob()
+      const rows = res.headers.get('X-Row-Count')
+      // Saved through a temporary link: the response is a POST, so there is no
+      // URL the browser could have downloaded on its own.
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `powerbody-feed-${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setNotice(
+        `Downloaded ${rows ?? 'the'} product${rows === '1' ? '' : 's'} from the feed. Match your list against the ` +
+          'sku column: anything missing is not on this account, and the productId column is what the ID box takes.',
+      )
+    } catch {
+      setError('Could not read the supplier feed.')
+    } finally {
+      setExporting(false)
+    }
+  }, [])
 
   const loadSamples = useCallback(async () => {
     setSampling(true)
@@ -231,6 +276,11 @@ export function SupplierImport() {
         <div className="flex items-center gap-2 flex-wrap">
           <Button variant="ghost" size="sm" loading={sampling} onClick={loadSamples}>
             Show me some SKUs
+          </Button>
+          {/* The whole mapping in one read, for checking a list rather than a
+              code — see `exportFeed`. */}
+          <Button variant="ghost" size="sm" loading={exporting} onClick={exportFeed}>
+            Download the full product list (CSV)
           </Button>
           {source && results && (
             <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
