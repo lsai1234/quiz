@@ -17,7 +17,8 @@
     "e2e:report": "playwright show-report e2e/.report",
     "e2e:update-snapshots": "playwright test --config e2e/playwright.config.ts --update-snapshots",
     "e2e:reset": "rm -rf .data/e2e.db e2e/.artifacts e2e/.report",
-    "backfill:product-ids": "tsx scripts/backfill-product-ids.ts"
+    "backfill:product-ids": "tsx scripts/backfill-product-ids.ts",
+    "clean:descriptions": "tsx scripts/clean-descriptions.ts"
   },
   "dependencies": {
     "@types/canvas-confetti": "^1.9.0",

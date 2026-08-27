@@ -19,6 +19,7 @@ import type {
   SupplierProduct,
   SupplierStockLevel,
 } from '../types'
+import { cleanDescription } from '@/lib/catalogue/description'
 
 // ─── Wire types ────────────────────────────────────────────────────────────────
 
@@ -162,7 +163,11 @@ export function toSupplierProduct(info: PbProductInfo, updatedAt = new Date().to
     name: str(info.name) || str(info.sku),
     brand: str(info.manufacturer),
     category: str(info.category),
-    description: str(info.description_en),
+    // Their `description_en` is a raw HTML fragment out of the PowerBody
+    // storefront (`<div class="RichText3-paragraph…">`, `<li>`, `&phi;`). We
+    // render descriptions as text, so it has to arrive as text — this adapter
+    // is where their format stops and ours starts.
+    description: cleanDescription(str(info.description_en)),
     imageUrl: str(info.image) || null,
     wholesalePrice: wholesale,
     rrp: rrp > 0 ? rrp : wholesale,

@@ -151,7 +151,10 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
             {product.shortReason && product.shortReason !== product.description && (
               <p className="text-sm font-semibold leading-snug mb-1.5" style={{ color: 'var(--color-text)' }}>{product.shortReason}</p>
             )}
-            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)' }}>{product.description}</p>
+            {/* `pre-line`, because `cleanDescription` keeps the supplier's
+                paragraph and bullet breaks as newlines — without it they
+                collapse and the whole description runs together as one block. */}
+            <p className="text-sm leading-relaxed" style={{ color: 'var(--color-text-2)', whiteSpace: 'pre-line' }}>{product.description}</p>
           </section>
 
           {product.subscriptionEligible && (

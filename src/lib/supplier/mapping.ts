@@ -12,6 +12,7 @@ import type { AsNeededTrigger, CatalogueProduct, CatalogueVariant, ConsumptionCa
 import type { Goal } from '@/lib/types'
 import type { SupplierProduct } from './types'
 import { listPriceFor } from '@/lib/pricing/list-price'
+import { cleanDescription } from '@/lib/catalogue/description'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -205,7 +206,12 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     id,
     title: sp.name,
     handle: id,
-    description: sp.description,
+    // Cleaned again here, not only in the PowerBody adapter: this function maps
+    // ANY `SupplierProduct`, so this is where the invariant "a catalogue
+    // description is plain text" actually belongs. `cleanDescription` is
+    // idempotent, so the second pass over already-clean text costs nothing and
+    // the next supplier we add cannot reintroduce the markup leak.
+    description: cleanDescription(sp.description),
     imageUrl: sp.imageUrl,
     category: sp.category,
     stackSlots: c.stackSlots,

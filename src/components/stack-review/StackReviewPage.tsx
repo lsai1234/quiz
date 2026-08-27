@@ -18,7 +18,7 @@ import { selectStatAxes } from '@/lib/stack-stats'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
-import { lqdOnly } from '@/lib/catalogue/filters'
+import { lqdOnly, inStockOnly } from '@/lib/catalogue/filters'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
@@ -397,8 +397,14 @@ export function StackReviewPage() {
 
   // LQD (drinks mode): boosters and swap alternatives only ever offer drinks,
   // so the package can't accidentally grow a capsule product.
+  //
+  // Out-of-stock products are held out of both for the same reason the engine
+  // won't recommend one: the swap sheet exists to get someone OUT of an
+  // unavailable pick, so offering another unavailable product sends them round
+  // the same loop. The slot's current product is added back by
+  // `swapAlternatives` below, so it stays visible in its own list.
   const offerableProducts = useMemo(
-    () => lqdOnly(products, !!answers.drinksMode),
+    () => inStockOnly(lqdOnly(products, !!answers.drinksMode)),
     [products, answers.drinksMode],
   )
 

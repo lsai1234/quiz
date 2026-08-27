@@ -2,6 +2,7 @@ import type { QuizAnswers } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackBlueprint } from './types'
 import type { SlotOption, BlueprintAIResult } from '@/lib/ai-stack'
+import { isInStock } from '@/lib/catalogue/filters'
 import { getApprovedClaims } from './approved-claims'
 import { getArchetype, scoreProduct, type SlotType } from './factory'
 import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig, type PricingConfig } from './pricing'
@@ -28,8 +29,15 @@ export function buildSlotOptions(
       blueprint.slots.filter(s => s.slotId !== slot.slotId).map(s => s.selectedProductId),
     )
 
+    // Out of stock is a hard gate here too. The AI only ever sees what it may
+    // choose, so an unavailable option in this list is an unavailable product
+    // in the finished stack — the engine's in-stock pick swapped out for one
+    // that cannot ship. The current pick is exempt (and re-added below): it is
+    // already in the stack, and dropping it silently would leave a slot the AI
+    // has no way to write a reason for.
     const scored = catalogue
       .filter(p => p.stackSlots.includes(slot.slotType) && !usedElsewhere.has(p.id))
+      .filter(p => isInStock(p) || p.id === slot.selectedProductId)
       .map(p => ({ p, score: scoreProduct(p, slot.slotType as SlotType, answers, archetype) }))
       .filter(({ p, score }) => score > -Infinity || p.id === slot.selectedProductId)
       .sort((a, b) => b.score - a.score)

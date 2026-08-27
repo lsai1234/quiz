@@ -5,7 +5,7 @@ import type { QuizAnswers, Goal } from '@/lib/types'
 import { PERFORMANCE_GOALS } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
-import { lqdOnly } from '@/lib/catalogue/filters'
+import { lqdOnly, inStockOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } from './pricing'
@@ -486,9 +486,15 @@ export function buildStackBlueprint(
   // cover it. Such products are still perfectly sellable — as an add-on to a box
   // already going out — but giving one a slot in the recommendation means
   // building a stack that loses money on that line every month.
+  //
+  // Out-of-stock products never enter the pool. Availability is live supplier
+  // data, so without this the engine happily builds a stack around something
+  // nobody can buy — and the member only finds out at `validateCheckout`, after
+  // the quiz, the reveal and the price. A slot with no in-stock candidate falls
+  // away through the same graceful omission as every other empty slot.
   const minLinePrice = getPricingConfig().minQuizProductPrice
   const effectiveCatalogue = lqdOnly(
-    (catalogue.length > 0 ? catalogue : MOCK_CATALOGUE).filter(
+    inStockOnly(catalogue.length > 0 ? catalogue : MOCK_CATALOGUE).filter(
       (p) => !p.isSubscriptionOnly && (minLinePrice <= 0 || p.basePrice >= minLinePrice),
     ),
     answers.drinksMode,

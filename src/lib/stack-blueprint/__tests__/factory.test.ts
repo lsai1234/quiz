@@ -365,7 +365,14 @@ describe('buildStackBlueprint — eligibility gates', () => {
         id: 'test-fat-burner', title: 'Test Thermo', handle: 'test-fat-burner',
         description: 'A thermogenic fat burner', imageUrl: null, category: 'Body Composition',
         stackSlots: ['health'], goals: ['cutting'],
-        dietaryTags: [], formats: ['capsule'], variants: [],
+        dietaryTags: [], formats: ['capsule'],
+        // A real product always has at least one variant to sell. An empty list
+        // means nothing to put in a basket, which the availability gate now
+        // (correctly) reads as out of stock — so the fixture carries one.
+        variants: [{
+          id: 'test-fat-burner', title: 'Test Thermo', flavour: null, size: null,
+          price: 29.99, compareAtPrice: null, available: true,
+        }],
         basePrice: 29.99, compareAtPrice: null, subscriptionEligible: false, servings: 30,
         swapGroup: 'fat-burner', recommendationPriority: 7, marginPriority: 5,
         isCoreEligible: false, isBoosterEligible: false, hasStimulants: true,

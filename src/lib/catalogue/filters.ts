@@ -91,3 +91,34 @@ export function getCoreProducts(products: CatalogueProduct[]): CatalogueProduct[
 export function getBoosterProducts(products: CatalogueProduct[]): CatalogueProduct[] {
   return products.filter((p) => p.isBoosterEligible)
 }
+
+// ─── Availability ─────────────────────────────────────────────────────────────
+
+/**
+ * Buyable right now — at least one variant the supplier says is in stock.
+ *
+ * `available` is live data, not a static flag: `applyStockLevels` writes the
+ * supplier's `inStock` onto every variant on each sync, and an import sets it
+ * from the feed. A product with no available variant can be browsed, but it
+ * cannot be bought — `validateCheckout` rejects it.
+ *
+ * NOTE the deliberate asymmetry with the shop, which still lists sold-out
+ * products behind a "Sold out" button. Browsing something unavailable is
+ * informative; being *recommended* it is not, because the member did not choose
+ * it and only finds out at the checkout gate.
+ */
+export function isInStock(product: CatalogueProduct): boolean {
+  return product.variants.some((v) => v.available)
+}
+
+/**
+ * The catalogue with everything currently unbuyable removed — what any
+ * recommendation must be drawn from.
+ *
+ * `restockingSoon` products are dropped too. The shop can honestly say "back in
+ * stock soon" because the member is standing in front of the product; a stack
+ * cannot, because every line has to ship together in this month's box.
+ */
+export function inStockOnly(products: CatalogueProduct[]): CatalogueProduct[] {
+  return products.filter(isInStock)
+}
