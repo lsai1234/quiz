@@ -12,7 +12,7 @@ import { canMerge, mergeProducts } from '@/lib/catalogue/merge'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { getSupplier } from '@/lib/supplier'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
-import { resolveProductIdForSku } from '@/lib/supplier/resolve-sku'
+import { resolveProductIdForSku, type ResolveStep } from '@/lib/supplier/resolve-sku'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { SupplierProduct } from '@/lib/supplier/types'
@@ -55,6 +55,8 @@ interface ReviewBody {
   ids?: string[]
   /** For `combine`: what to call the result. Defaults to what the titles share. */
   title?: string
+  /** For `enrich`: stream progress as newline-delimited JSON instead of waiting. */
+  stream?: boolean
 }
 
 export async function POST(req: Request) {
@@ -153,106 +155,177 @@ export async function POST(req: Request) {
       )
     }
 
-    try {
-      const supplier = await getSupplier()
+    type EnrichResult =
+      | { ok: true; id: string; filled: string[]; gotImage: boolean; via: string; probes: number; trace: ResolveStep[] }
+      | { ok: false; status: number; error: string; trace: ResolveStep[] }
 
-      /**
-       * Three routes to the same product, cheapest first.
-       *
-       * 1. A product id we already hold — one request, no paging, cannot time out.
-       * 2. The SKU, via the list feed. Free when the SKU is inside the feed's
-       *    3,000-product ceiling.
-       * 3. A binary search over `getProductInfo`, for a SKU above that ceiling.
-       *    The feed cannot reach those AT ALL — no parameter raises the cap — so
-       *    without this a quarter of the roster is permanently unimportable.
-       *    It costs tens of throttled requests, which is why it is last and why
-       *    the id it finds is written back to the product.
-       */
-      let found: SupplierProduct | undefined
-      let resolvedId: string | null = null
-      let via: 'id' | 'feed' | 'search' = 'feed'
-      let probes = 0
-
-      if (target.supplierProductId) {
-        const [byId] = await supplier.getProductsById([target.supplierProductId])
-        // Verified, never assumed: an id that now answers with a different SKU
-        // has moved, and trusting it would import somebody else's product.
-        if (byId?.sku === sku) { found = byId; via = 'id' }
+    /**
+     * The whole pull, reporting itself as it goes.
+     *
+     * `emit` exists because this can spend a minute making throttled requests,
+     * and a screen showing nothing for a minute is indistinguishable from one
+     * that has hung. The same steps are also kept and returned, so a failure can
+     * be read back afterwards rather than guessed at.
+     */
+    const run = async (emit: (step: ResolveStep) => void): Promise<EnrichResult> => {
+      const trace: ResolveStep[] = []
+      const note = (phase: ResolveStep['phase'], message: string, probes = 0) => {
+        const step: ResolveStep = { phase, message, probes }
+        trace.push(step)
+        emit(step)
       }
 
-      if (!found) {
-        // A SKU past the ceiling makes this walk the whole feed and run out of
-        // its build deadline, which arrives as a throw. That is not a supplier
-        // outage and must not end the attempt — it is the exact case the search
-        // below exists for.
-        found = await supplier.getProductsBySku([sku]).then((r) => r[0]).catch(() => undefined)
-      }
+      try {
+        const supplier = await getSupplier()
 
-      if (!found) {
-        const outcome = await resolveProductIdForSku(sku, supplier)
-        probes = outcome.probes
-        via = 'search'
-        if (outcome.productId === null) {
-          // Each reason is a different instruction to the person reading it, so
-          // they are never collapsed into one message. A clock that ran out is
-          // "try again"; an exhausted range is "this is not on the account".
-          const why: Record<string, string> = {
-            deadline: `Searched ${outcome.probes} product ids for ${sku} without finding it before running out of time. Press again to carry on from a fresh budget.`,
-            'probe-budget': `Searched ${outcome.probes} product ids for ${sku} without finding it. Press again to search further.`,
-            'not-found': `${sku} is not on this PowerBody account — searched their product ids either side of where this code should sit and it is not there. Check the code.`,
-            'no-anchors': 'Could not read any of PowerBody\'s product list, so there is nothing to work out where this code sits from. Check the supplier credentials.',
-            'unusable-sku': `${sku} has no number in it, so there is no way to work out where it sits in their catalogue. Use the product ID box instead.`,
+        /**
+         * Three routes to the same product, cheapest first.
+         *
+         * 1. A product id we already hold — one request, no paging, cannot time out.
+         * 2. The SKU, via the list feed. Free when the SKU is inside the feed's
+         *    3,000-product ceiling.
+         * 3. A binary search over `getProductInfo`, for a SKU above that ceiling.
+         *    The feed cannot reach those AT ALL — no parameter raises the cap — so
+         *    without this a quarter of the roster is permanently unimportable.
+         *    It costs tens of throttled requests, which is why it is last and why
+         *    the id it finds is written back to the product.
+         */
+        let found: SupplierProduct | undefined
+        let resolvedId: string | null = null
+        let via: 'id' | 'feed' | 'search' = 'feed'
+        let probes = 0
+
+        if (target.supplierProductId) {
+          note('canary', `Asking PowerBody for product ${target.supplierProductId}, the id we already hold for ${sku}.`)
+          const [byId] = await supplier.getProductsById([target.supplierProductId]).catch(() => [])
+          // Verified, never assumed: an id that now answers with a different SKU
+          // has moved, and trusting it would import somebody else's product.
+          if (byId?.sku === sku) { found = byId; via = 'id' }
+          else note('canary', `That id no longer answers for ${sku}, so it is being resolved again.`)
+        }
+
+        if (!found) {
+          note('anchors', `Looking for ${sku} in PowerBody's product list.`)
+          // A SKU past the ceiling makes this walk the whole feed and run out of
+          // its build deadline, which arrives as a throw. That is not a supplier
+          // outage and must not end the attempt — it is the exact case the search
+          // below exists for.
+          found = await supplier
+            .getProductsBySku([sku])
+            .then((r) => r[0])
+            .catch((err: unknown) => {
+              note('anchors', `Their list did not answer: ${err instanceof Error ? err.message : String(err)}`)
+              return undefined
+            })
+        }
+
+        if (!found) {
+          const outcome = await resolveProductIdForSku(sku, supplier, {
+            onStep: (step) => { trace.push(step); emit(step) },
+          })
+          probes = outcome.probes
+          via = 'search'
+          if (outcome.productId === null) {
+            // Each reason is a different instruction to the person reading it, so
+            // they are never collapsed into one message. A clock that ran out is
+            // "try again"; an exhausted range is "this is not on the account".
+            const why: Record<string, string> = {
+              deadline: `Searched ${outcome.probes} of PowerBody's product ids for ${sku} without finding it before running out of time. Press again to carry on with a fresh budget.`,
+              'probe-budget': `Searched ${outcome.probes} of PowerBody's product ids for ${sku} without finding it. Press again to search further.`,
+              'not-found': `${sku} is not on this PowerBody account — searched product ids ${outcome.bracket?.lo}–${outcome.bracket?.hi}, either side of where this code should sit, and it is not there. Check the code.`,
+              // The feed's own words, not a guess. This used to say "check the
+              // supplier credentials", which is one cause out of several.
+              'no-anchors': outcome.feedError ?? 'PowerBody\'s product list could not be read.',
+              'unusable-sku': `${sku} has no number in it, so there is no way to work out where it sits in their catalogue. Use the product ID box instead.`,
+            }
+            return { ok: false, status: 404, error: why[outcome.reason] ?? `Could not resolve ${sku}.`, trace }
           }
-          return NextResponse.json({ error: why[outcome.reason] ?? `Could not resolve ${sku}.` }, { status: 404 })
+          resolvedId = String(outcome.productId)
+          note('done', `Fetching the full details for product ${resolvedId}.`, probes)
+          const [byId] = await supplier.getProductsById([resolvedId])
+          if (byId?.sku !== sku) {
+            return {
+              ok: false, status: 502, trace,
+              error: `Found a product id for ${sku} but it answered for ${byId?.sku ?? 'nothing'}. Not importing it.`,
+            }
+          }
+          found = byId
         }
-        resolvedId = String(outcome.productId)
-        const [byId] = await supplier.getProductsById([resolvedId])
-        if (byId?.sku !== sku) {
-          return NextResponse.json({ error: `Found a product id for ${sku} but it answered for ${byId?.sku ?? 'nothing'}. Not importing it.` }, { status: 502 })
+
+        // Cost is theirs, and the shelf price is our rule applied to it — the same
+        // way the importer does it, so a product enriched here and one enriched at
+        // import cannot end up priced differently.
+        const cost = found.wholesalePrice > 0 ? found.wholesalePrice : target.cost
+        const patch: Partial<CatalogueProduct> = {
+          ...(found.imageUrl ? { imageUrl: found.imageUrl } : {}),
+          ...(found.description ? { description: found.description } : {}),
+          ...(found.category ? { category: found.category } : {}),
+          ...(found.weightGrams != null ? { weightGrams: found.weightGrams } : {}),
+          ...(found.vatRate != null ? { vatRate: found.vatRate } : {}),
+          ...(found.rrp > 0 ? { compareAtPrice: found.rrp, supplierRrp: found.rrp } : {}),
+          ...(cost != null && cost > 0 ? { cost, basePrice: listPriceFor(cost) } : {}),
         }
-        found = byId
-      }
+        // The id is the expensive half. Written back so no later pull, price
+        // refresh or stock check ever pays for the search again.
+        const supplierProductId = resolvedId ?? found.productId ?? target.supplierProductId ?? null
+        if (supplierProductId) patch.supplierProductId = String(supplierProductId)
+        const next: CatalogueProduct = { ...target, ...patch }
+        // Variant prices follow the product's, or the shop would ring up the old one.
+        if (patch.basePrice != null) {
+          next.variants = next.variants.map((v) => ({ ...v, price: patch.basePrice as number }))
+        }
+        // Fields PowerBody answered for are confirmed BY them — nobody needs to
+        // re-check a picture that came straight from the supplier.
+        await saveImportedProduct(withConfirmed(next, Object.keys(patch), []))
 
-      // Cost is theirs, and the shelf price is our rule applied to it — the same
-      // way the importer does it, so a product enriched here and one enriched at
-      // import cannot end up priced differently.
-      const cost = found.wholesalePrice > 0 ? found.wholesalePrice : target.cost
-      const patch: Partial<CatalogueProduct> = {
-        ...(found.imageUrl ? { imageUrl: found.imageUrl } : {}),
-        ...(found.description ? { description: found.description } : {}),
-        ...(found.category ? { category: found.category } : {}),
-        ...(found.weightGrams != null ? { weightGrams: found.weightGrams } : {}),
-        ...(found.vatRate != null ? { vatRate: found.vatRate } : {}),
-        ...(found.rrp > 0 ? { compareAtPrice: found.rrp, supplierRrp: found.rrp } : {}),
-        ...(cost != null && cost > 0 ? { cost, basePrice: listPriceFor(cost) } : {}),
+        note('done', `Saved ${Object.keys(patch).length} fields from PowerBody.`, probes)
+        return { ok: true, id: target.id, filled: Object.keys(patch), gotImage: Boolean(found.imageUrl), via, probes, trace }
+      } catch (err) {
+        return {
+          ok: false, status: 502, trace,
+          error: err instanceof Error ? err.message : 'PowerBody could not be reached.',
+        }
       }
-      // The id is the expensive half. Written back so no later pull, price
-      // refresh or stock check ever pays for the search again.
-      const supplierProductId = resolvedId ?? found.productId ?? target.supplierProductId ?? null
-      if (supplierProductId) patch.supplierProductId = String(supplierProductId)
-      const next: CatalogueProduct = { ...target, ...patch }
-      // Variant prices follow the product's, or the shop would ring up the old one.
-      if (patch.basePrice != null) {
-        next.variants = next.variants.map((v) => ({ ...v, price: patch.basePrice as number }))
-      }
-      // Fields PowerBody answered for are confirmed BY them — nobody needs to
-      // re-check a picture that came straight from the supplier.
-      await saveImportedProduct(withConfirmed(next, Object.keys(patch), []))
-
-      return NextResponse.json({
-        ok: true,
-        id: target.id,
-        filled: Object.keys(patch),
-        gotImage: Boolean(found.imageUrl),
-        via,
-        probes,
-      })
-    } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : 'PowerBody could not be reached.' },
-        { status: 502 },
-      )
     }
+
+    /**
+     * Stream the steps as they happen when the caller asks for it.
+     *
+     * Newline-delimited JSON rather than SSE: there is one consumer, it wants
+     * objects, and NDJSON needs no event framing to parse. The response is
+     * marked no-transform and no-buffering because a proxy that helpfully
+     * buffers it turns live progress back into a minute of silence.
+     */
+    if (body.stream) {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const write = (line: unknown) => controller.enqueue(encoder.encode(`${JSON.stringify(line)}\n`))
+          try {
+            const result = await run((step) => write({ type: 'step', ...step }))
+            write({ type: 'result', ...result })
+          } catch (err) {
+            write({
+              type: 'result', ok: false, status: 500, trace: [],
+              error: err instanceof Error ? err.message : 'The lookup stopped unexpectedly.',
+            })
+          }
+          controller.close()
+        },
+      })
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'application/x-ndjson; charset=utf-8',
+          'Cache-Control': 'no-store, no-transform',
+          'X-Accel-Buffering': 'no',
+        },
+      })
+    }
+
+    const result = await run(() => {})
+    return result.ok
+      ? NextResponse.json(result)
+      : NextResponse.json({ error: result.error, trace: result.trace }, { status: result.status })
   }
 
   /**

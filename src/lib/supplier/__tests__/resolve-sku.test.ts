@@ -198,6 +198,60 @@ describe('resolveProductIdForSku', () => {
     expect(out.productId).toBeNull()
   })
 
+  it('reports the feed\u2019s own refusal instead of blaming the credentials', async () => {
+    // "Check the supplier credentials" is one cause out of several — the feed
+    // may have been rate-limited, timed out, or changed shape. Guessing the
+    // scariest one sends someone to rotate a working API key.
+    const supplier = {
+      async getFeed() { throw new Error('429 Too Many Requests') },
+    } as unknown as SupplierProvider
+
+    const out = await resolveProductIdForSku('P43200', supplier)
+
+    expect(out.reason).toBe('no-anchors')
+    expect(out.feedError).toContain('429 Too Many Requests')
+  })
+
+  it('reports rows that carry no product id as exactly that', async () => {
+    // The invisible failure: the feed answers, the rows look fine, and every
+    // one is dropped for lacking the only field the search needs. Without this
+    // it is indistinguishable from an empty feed.
+    const supplier = {
+      async getFeed() {
+        return {
+          levels: [
+            { sku: 'P43000', productId: null, stock: 1, inStock: true, wholesalePrice: 1, updatedAt: '' },
+            { sku: 'P43001', productId: null, stock: 1, inStock: true, wholesalePrice: 1, updatedAt: '' },
+          ],
+          complete: true, pages: 1, nextPage: null,
+        }
+      },
+    } as unknown as SupplierProvider
+
+    const out = await resolveProductIdForSku('P43200', supplier)
+
+    expect(out.reason).toBe('no-anchors')
+    expect(out.feedError).toContain('none carried a product id')
+  })
+
+  it('narrates what it is doing as it goes', async () => {
+    // The trace is both the live progress and the debugging record. A resolve
+    // can spend a minute on throttled requests, and a screen that shows nothing
+    // for a minute is indistinguishable from one that has hung.
+    const catalogue = buildCatalogue()
+    const { supplier } = fakeSupplier({ catalogue, ceiling: 300 })
+    const live: string[] = []
+
+    const out = await resolveProductIdForSku('P43450', supplier, { onStep: (s) => live.push(s.phase) })
+
+    expect(live).toContain('anchors')
+    expect(live).toContain('canary')
+    expect(live).toContain('bisect')
+    expect(live[live.length - 1]).toBe('done')
+    // What it streamed and what it returns are the same record.
+    expect(out.trace.map((s) => s.phase)).toEqual(live)
+  })
+
   it('cannot search a SKU with no number in it', async () => {
     const { supplier } = fakeSupplier({ catalogue: buildCatalogue(), ceiling: 300 })
     const out = await resolveProductIdForSku('BUNDLE-XL', supplier)
@@ -220,8 +274,11 @@ describe('anchorsFromFeed', () => {
       },
     } as unknown as SupplierProvider
 
-    const anchors = await anchorsFromFeed(supplier, [1, 2, 3])
-    expect(anchors.length).toBe(2)
+    const read = await anchorsFromFeed(supplier, [1, 2, 3])
+    expect(read.pairs.length).toBe(2)
+    // And it says which page refused rather than swallowing it — that message
+    // is the whole difference between debugging this and guessing at it.
+    expect(read.error).toBe('500')
   })
 })
 

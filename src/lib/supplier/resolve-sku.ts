@@ -52,6 +52,22 @@ class SearchExpired extends Error {}
  */
 class ProbeBudgetSpent extends Error {}
 
+/**
+ * One thing the search did, as it did it.
+ *
+ * Emitted rather than logged because the caller is a button on a phone: a
+ * resolve can spend a minute making throttled requests, and a screen that shows
+ * nothing for a minute is indistinguishable from one that has hung. It is also
+ * the debugging record — every step carries what it actually saw, so a failure
+ * can be read back rather than guessed at.
+ */
+export interface ResolveStep {
+  phase: 'anchors' | 'canary' | 'gallop' | 'edge' | 'bisect' | 'sweep' | 'done'
+  message: string
+  /** Requests spent by the time this step happened. */
+  probes: number
+}
+
 export interface ResolveOutcome {
   productId: number | null
   /** Throttled requests actually spent. */
@@ -61,6 +77,17 @@ export interface ResolveOutcome {
   anchors: number
   /** The bracket searched, for a log a person has to read. */
   bracket: { lo: number; hi: number } | null
+  /** Everything it did, in order. */
+  trace: ResolveStep[]
+  /**
+   * Why the feed could not be read, when that is what stopped it.
+   *
+   * `no-anchors` used to be reported as "check the supplier credentials", which
+   * is one guess among several — the feed may have thrown, been rate-limited,
+   * or answered with rows carrying no product id at all. Those need different
+   * fixes, so the real reason travels instead of being replaced by a hunch.
+   */
+  feedError?: string
 }
 
 /** Ids either side of the fit's prediction to search.
@@ -120,17 +147,35 @@ const MAX_PAGE_SEARCH = 4_096
 
 type Pair = { sku: string; productId: number }
 
-async function readPage(supplier: SupplierProvider, page: number): Promise<Pair[]> {
-  // Everything from here spends throttled requests, and both the clock and the
-  // request allowance report themselves through the catch below.
+interface PageRead {
+  pairs: Pair[]
+  /** Rows the feed returned, before any were dropped for lacking an id. */
+  rows: number
+  /** The supplier's own words, when the page could not be read at all. */
+  error?: string
+}
+
+/**
+ * Read one page of the cheap list feed.
+ *
+ * `rows` and `error` are returned rather than collapsed into an empty array,
+ * because three different situations wear the same clothes here: the feed
+ * refused, the feed ended, or the feed answered with rows carrying no
+ * `product_id`. The last is invisible without this — it looks exactly like an
+ * empty page while actually meaning their feed's shape has changed — and each
+ * needs a different fix from whoever reads the error.
+ */
+async function readPage(supplier: SupplierProvider, page: number): Promise<PageRead> {
   try {
     const feed = await supplier.getFeed({ fromPage: page, pageBudget: 1 })
-    return feed.levels
+    const pairs = feed.levels
       .map((l) => ({ sku: l.sku, productId: Number(l.productId) }))
       .filter((p) => p.sku && Number.isFinite(p.productId) && p.productId > 0)
-  } catch {
-    // One unreadable page is a worse fit, not a failed resolve.
-    return []
+    return { pairs, rows: feed.levels.length }
+  } catch (err) {
+    // One unreadable page is a worse fit, not a failed resolve — but the reason
+    // travels, so the caller can say what happened if every page fails.
+    return { pairs: [], rows: 0, error: err instanceof Error ? err.message : String(err) }
   }
 }
 
@@ -147,20 +192,21 @@ async function readPage(supplier: SupplierProvider, page: number): Promise<Pair[
  * expensive ones, and it is the honest way to treat a ceiling nobody documented:
  * measure where it is rather than assuming it has not moved.
  */
-export async function lastPopulatedPage(supplier: SupplierProvider): Promise<number> {
-  if ((await readPage(supplier, 1)).length === 0) return 0
+export async function lastPopulatedPage(supplier: SupplierProvider, firstPagePopulated?: boolean): Promise<number> {
+  const firstOk = firstPagePopulated ?? (await readPage(supplier, 1)).pairs.length > 0
+  if (!firstOk) return 0
 
   let good = 1
   let bad = 0
   for (let page = 2; page <= MAX_PAGE_SEARCH; page *= 2) {
-    if ((await readPage(supplier, page)).length > 0) good = page
+    if ((await readPage(supplier, page)).pairs.length > 0) good = page
     else { bad = page; break }
   }
   if (bad === 0) return good
 
   while (bad - good > 1) {
     const mid = Math.floor((good + bad) / 2)
-    if ((await readPage(supplier, mid)).length > 0) good = mid
+    if ((await readPage(supplier, mid)).pairs.length > 0) good = mid
     else bad = mid
   }
   return good
@@ -174,20 +220,54 @@ export async function lastPopulatedPage(supplier: SupplierProvider): Promise<num
  * come from `getProductList`, which is free of the detail call's per-product
  * cost and is the same read the nightly stock sync makes.
  */
-export async function anchorsFromFeed(supplier: SupplierProvider, pages?: number[]): Promise<Pair[]> {
-  const chosen = pages ?? (await (async () => {
-    const last = await lastPopulatedPage(supplier)
-    if (last === 0) return []
-    // Both ends plus two inside them. The ends carry the leverage; the middle
-    // two are what show the fit is a line rather than assuming it.
-    return [...new Set([1, Math.round(last / 3), Math.round((2 * last) / 3), last])].filter((p) => p >= 1)
-  })())
+export interface AnchorRead {
+  pairs: Pair[]
+  /** Pages actually asked for. */
+  pages: number[]
+  /** Rows the feed returned across those pages, before any were dropped. */
+  rows: number
+  /** The first refusal, if any page could not be read. */
+  error?: string
+}
 
+export async function anchorsFromFeed(supplier: SupplierProvider, pages?: number[]): Promise<AnchorRead> {
   const pairs = new Map<string, number>()
-  for (const page of chosen) {
-    for (const pair of await readPage(supplier, page)) pairs.set(pair.sku, pair.productId)
+  let rows = 0
+  let error: string | undefined
+  const absorb = (read: PageRead) => {
+    rows += read.rows
+    if (read.error && !error) error = read.error
+    for (const pair of read.pairs) pairs.set(pair.sku, pair.productId)
   }
-  return [...pairs].map(([sku, productId]) => ({ sku, productId }))
+  const collected = (chosen: number[]): AnchorRead => ({
+    pairs: [...pairs].map(([sku, productId]) => ({ sku, productId })),
+    pages: chosen,
+    rows,
+    error,
+  })
+
+  if (pages) {
+    for (const page of pages) absorb(await readPage(supplier, page))
+    return collected(pages)
+  }
+
+  // Page one is read first and KEPT, not just tested. Finding the feed's extent
+  // used to throw this read away, so when it came back refused or shapeless the
+  // reason vanished and the caller could only report "empty" — which is what
+  // sent someone to check working credentials.
+  const first = await readPage(supplier, 1)
+  absorb(first)
+  if (first.pairs.length === 0) return collected([1])
+
+  const last = await lastPopulatedPage(supplier, true)
+  // Both ends plus two inside them. The ends carry the leverage; the middle two
+  // are what show the fit is a line rather than assuming it.
+  const chosen = [...new Set([1, Math.round(last / 3), Math.round((2 * last) / 3), last])].filter((p) => p >= 1)
+  for (const page of chosen) {
+    if (page === 1) continue // already read, and kept
+    absorb(await readPage(supplier, page))
+  }
+  return collected(chosen)
 }
 
 /**
@@ -285,6 +365,8 @@ export interface ResolveOptions {
   margin?: number
   /** Throttled requests this may spend, whatever the clock says. */
   maxProbes?: number
+  /** Called as each step happens, so a caller can show progress live. */
+  onStep?: (step: ResolveStep) => void
   /** Supplied by tests, and by a caller that already has pairs to hand. */
   anchors?: Array<{ sku: string; productId: number }>
   now?: () => number
@@ -310,20 +392,48 @@ export async function resolveProductIdForSku(
   const budget = options.budgetMs ?? 45_000
   const expiresAt = started + budget
 
+  const trace: ResolveStep[] = []
+  let probes = 0
+  const step = (phase: ResolveStep['phase'], message: string) => {
+    const entry: ResolveStep = { phase, message, probes }
+    trace.push(entry)
+    options.onStep?.(entry)
+  }
+
   const known = productIdForSku(sku)
-  if (known !== null) return { productId: known, probes: 0, reason: 'map', anchors: 0, bracket: null }
+  if (known !== null) {
+    step('done', `Already knew ${sku} is product ${known}.`)
+    return { productId: known, probes: 0, reason: 'map', anchors: 0, bracket: null, trace }
+  }
 
   const wanted = skuNumber(sku)
   if (wanted === null) {
     // Nothing to bisect on. A SKU with no number in it cannot be compared
     // against the ones probing returns, so the search has no ordering to use.
-    return { productId: null, probes: 0, reason: 'unusable-sku', anchors: 0, bracket: null }
+    step('done', `${sku} has no number in it, so there is nothing to order the search by.`)
+    return { productId: null, probes: 0, reason: 'unusable-sku', anchors: 0, bracket: null, trace }
   }
 
-  const anchors = options.anchors ?? (await anchorsFromFeed(supplier))
+  const read = options.anchors
+    ? { pairs: options.anchors, pages: [], rows: options.anchors.length, error: undefined as string | undefined }
+    : await anchorsFromFeed(supplier)
+  const anchors = read.pairs
+
   if (anchors.length < 2) {
-    return { productId: null, probes: 0, reason: 'no-anchors', anchors: anchors.length, bracket: null }
+    // Three different situations reach here and they need different fixes, so
+    // the message says which one it was instead of picking the scariest.
+    const why = read.error
+      ? `PowerBody refused their product list: ${read.error}`
+      : read.rows > 0
+        ? `PowerBody's product list answered with ${read.rows} rows but none carried a product id, so there is nothing to search by. Their feed's shape may have changed.`
+        : 'PowerBody\'s product list came back empty.'
+    step('anchors', why)
+    return {
+      productId: null, probes: 0, reason: 'no-anchors', anchors: anchors.length,
+      bracket: null, trace, feedError: why,
+    }
   }
+  step('anchors', `Read ${anchors.length} known products from pages ${read.pages.join(', ') || 'supplied'} to work out where ${sku} sits.`)
 
   const fit = fitIdFromSku(anchors)
   const predicted = fit(sku)
@@ -347,7 +457,6 @@ export async function resolveProductIdForSku(
 
   const reach = neighbourReach(anchors)
   const { probe, firstError } = supplierProbe(supplier)
-  let probes = 0
 
   /**
    * Prove the detail call works before reading anything into its silence.
@@ -365,6 +474,7 @@ export async function resolveProductIdForSku(
    * question outright — anything after it can be trusted to mean "nothing here".
    */
   const canary = anchors[0]
+  step('canary', `Checking their detail call works, using product ${canary.productId} (${canary.sku}).`)
   probes += 1
   const canaryResult = await probe(canary.productId)
   if (canaryResult.sku === null) {
@@ -389,13 +499,10 @@ export async function resolveProductIdForSku(
 
   // The canary above already proved the detail call works, so from here a
   // failure to find is genuinely about this SKU and can be reported as such.
-  const fail = (reason: ResolveOutcome['reason']): ResolveOutcome => ({
-    productId: null,
-    probes,
-    reason,
-    anchors: anchors.length,
-    bracket: { lo, hi },
-  })
+  const fail = (reason: ResolveOutcome['reason']): ResolveOutcome => {
+    step('done', `Gave up on ${sku} after ${probes} requests: ${reason}.`)
+    return { productId: null, probes, reason, anchors: anchors.length, bracket: { lo, hi }, trace }
+  }
 
   // Everything from here spends throttled requests, and both the clock and the
   // request allowance report themselves through the catch below.
@@ -417,23 +524,28 @@ export async function resolveProductIdForSku(
    * than hoped to.
    */
   if (aboveCeiling) {
+    step('gallop', `${sku} is above every code their list feed can see (it stops at ${topSkuNumber}), so looking upward from product ${topId} for one past it.`)
     let below = topId
     let ceilingId: number | null = null
     let firstEmpty: number | null = null
-    let step = Math.max(margin, 500)
+    let stride = Math.max(margin, 500)
 
     for (let i = 0; i < 24 && remaining() > ASSUMED_PROBE_MS * 6; i++) {
-      const point = topId + step
+      const point = topId + stride
       // Reach is deliberately modest. A scan through genuinely empty ids costs
       // its full width in throttled requests and buys nothing, and near the top
       // of the real feed the median gap between products is 3.
-      const hit = await nearestReal(point, Math.min(reach, Math.ceil(step / 4)), timed)
+      const hit = await nearestReal(point, Math.min(reach, Math.ceil(stride / 4)), timed)
       if (hit) {
         const n = skuNumber(hit.sku)
         // A product PAST the target: a proven ceiling, and the best possible
         // outcome — the bisect that follows now searches a bracket known to
         // contain the answer rather than hoped to.
-        if (n !== null && n >= wanted) { ceilingId = hit.id; break }
+        if (n !== null && n >= wanted) {
+          ceilingId = hit.id
+          step('gallop', `Product ${hit.id} is ${hit.sku}, past ${sku} — so the answer is between ${below} and ${hit.id}.`)
+          break
+        }
         if (n !== null) below = Math.max(below, hit.id)
       } else {
         // Nothing here at all. Not a ceiling in the SKU sense, but a real
@@ -446,10 +558,10 @@ export async function resolveProductIdForSku(
         // each further step pays a full scan to learn that again.
         break
       }
-      step *= 2
+      stride *= 2
       // Past here the range is not sparse, it is empty: nothing lives this far
       // above the known catalogue and continuing only burns the clock.
-      if (step > 4_000_000) break
+      if (stride > 4_000_000) break
     }
 
     /**
@@ -467,6 +579,7 @@ export async function resolveProductIdForSku(
      * products, which is the shape the search needs.
      */
     if (ceilingId === null && firstEmpty !== null) {
+      step('edge', `Nothing past ${sku} anywhere — it is near the top of their catalogue. Finding where their product ids run out.`)
       let populated = below
       let empty = firstEmpty
       while (empty - populated > 200 && remaining() > ASSUMED_PROBE_MS * 8) {
@@ -483,6 +596,7 @@ export async function resolveProductIdForSku(
     if (hi <= lo) hi = lo + margin
   }
 
+    step('bisect', `Searching product ids ${lo}–${hi} for ${sku}.`)
     let search = await findProductIdForSku({ target: sku, lo, hi, probe: timed, maxProbes: budgetProbes() })
 
     // An exhausted bracket means "not in the range we looked at", which is only
@@ -492,22 +606,26 @@ export async function resolveProductIdForSku(
     if (search.productId === null && search.reason === 'exhausted' && remaining() > ASSUMED_PROBE_MS * 12) {
       const wideLo = Math.max(1, lo - margin * 3)
       const wideHi = hi + margin * 3
+      step('bisect', `Not in ${lo}–${hi}. Widening to ${wideLo}–${wideHi} before concluding anything.`)
       search = await findProductIdForSku({
         target: sku, lo: wideLo, hi: wideHi, probe: timed, maxProbes: budgetProbes(),
       })
       if (search.productId !== null) {
-        return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo: wideLo, hi: wideHi } }
+        step('done', `Found ${sku} at product ${search.productId} after ${probes} requests.`)
+        return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo: wideLo, hi: wideHi }, trace }
       }
     }
 
     if (search.productId !== null) {
-      return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi } }
+      step('done', `Found ${sku} at product ${search.productId} after ${probes} requests.`)
+      return { productId: search.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi }, trace }
     }
 
     // The bisect came back empty. Ordering is near-monotone, not monotone, so a
     // product on the wrong side of an inversion is invisible to it — and sits a
     // few ids from where the fit says. Only worth doing with clock left.
     if (predicted !== null && remaining() > ASSUMED_PROBE_MS * 10) {
+      step('sweep', `Still not found. Checking ids either side of ${predicted}, where the fit says ${sku} should sit.`)
       const swept = await sweepForSku({
         target: sku,
         centre: predicted,
@@ -515,7 +633,8 @@ export async function resolveProductIdForSku(
         probe: timed,
       })
       if (swept.productId !== null) {
-        return { productId: swept.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi } }
+        step('done', `Found ${sku} at product ${swept.productId} after ${probes} requests.`)
+        return { productId: swept.productId, probes, reason: 'found', anchors: anchors.length, bracket: { lo, hi }, trace }
       }
     }
 

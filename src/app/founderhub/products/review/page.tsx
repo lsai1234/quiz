@@ -70,6 +70,10 @@ export default function ReviewPage() {
   const [journey, setJourney] = useState(false)
   const [enriching, setEnriching] = useState(false)
   const [filling, setFilling] = useState(false)
+  /** The step the PowerBody lookup is on, shown live while it runs. */
+  const [progress, setProgress] = useState<string | null>(null)
+  /** Every step a failed lookup took, so it can be debugged from the screen. */
+  const [errorDetail, setErrorDetail] = useState<string[] | null>(null)
 
   const load = useCallback(async () => {
     setError(null)
@@ -177,30 +181,78 @@ export default function ReviewPage() {
   async function enrich(id: string) {
     setEnriching(true)
     setError(null)
+    setErrorDetail(null)
+    setProgress('Starting…')
     try {
       const res = await fetch('/api/portal/products/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, action: 'enrich' }),
+        // Streamed, because this can spend a minute making throttled requests
+        // to PowerBody and a screen that shows nothing for a minute is
+        // indistinguishable from one that has hung.
+        body: JSON.stringify({ id, action: 'enrich', stream: true }),
       })
-      const d = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        // PowerBody's own words when they gave any — the reason is the useful part.
-        setError(d.error ?? 'Could not reach PowerBody.')
+
+      const reader = res.body?.getReader()
+      if (!reader) {
+        setError('The lookup did not start.')
         return
       }
+
+      const decoder = new TextDecoder()
+      const steps: string[] = []
+      let buffer = ''
+      let result: Record<string, unknown> | null = null
+
+      // Newline-delimited JSON: one object per line, so a partial chunk is
+      // simply an unfinished line and is held over rather than dropped.
+      for (;;) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (line.trim() === '') continue
+          let parsed: Record<string, unknown>
+          try {
+            parsed = JSON.parse(line)
+          } catch {
+            continue
+          }
+          if (parsed.type === 'step') {
+            steps.push(String(parsed.message))
+            setProgress(String(parsed.message))
+          } else if (parsed.type === 'result') {
+            result = parsed
+          }
+        }
+      }
+
+      if (!result || result.ok !== true) {
+        setError(String(result?.error ?? 'Could not reach PowerBody.'))
+        // Everything it actually did, so a failure can be read rather than
+        // guessed at. This is the difference between "check the credentials"
+        // and knowing which call refused and what it said.
+        setErrorDetail(steps)
+        return
+      }
+
       const how =
-        d.via === 'search'
-          ? ` Their list feed cannot reach this code, so it was found by searching ${d.probes} of their product ids — the id is saved, so this is instant from now on.`
+        result.via === 'search'
+          ? ` Their list feed cannot reach this code, so it was found by searching ${result.probes} of their product ids — the id is saved, so this is instant from now on.`
           : ''
       setNotice(
-        (d.gotImage ? 'Picture and details pulled from PowerBody.' : 'Details pulled — they have no picture for this one.') + how,
+        (result.gotImage
+          ? 'Picture and details pulled from PowerBody.'
+          : 'Details pulled — they have no picture for this one.') + how,
       )
       await load()
     } catch {
       setError('Could not reach PowerBody.')
     } finally {
       setEnriching(false)
+      setProgress(null)
     }
   }
 
@@ -220,6 +272,7 @@ export default function ReviewPage() {
   async function aiFill(id: string) {
     setFilling(true)
     setError(null)
+    setErrorDetail(null)
     try {
       const res = await fetch('/api/portal/products/review', {
         method: 'POST',
@@ -286,9 +339,26 @@ export default function ReviewPage() {
         </p>
       )}
       {error && (
-        <p className="text-xs rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', color: 'var(--tone-critical)', border: '1px solid var(--critical-line)' }}>
-          {error}
-        </p>
+        <div className="rounded-xl px-3.5 py-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--critical-line)' }}>
+          <p className="text-xs" style={{ color: 'var(--tone-critical)' }}>{error}</p>
+          {/* What it actually did, in order. A failure that only says "check the
+              credentials" is a guess; this is the record — which call was made,
+              what it saw, and where it stopped. */}
+          {errorDetail && errorDetail.length > 0 && (
+            <details style={{ marginTop: 'var(--space-2)' }}>
+              <summary style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-2)', cursor: 'pointer' }}>
+                What it tried ({errorDetail.length} steps)
+              </summary>
+              <ol style={{ marginTop: 'var(--space-2)', paddingLeft: '1.1rem', display: 'grid', gap: 'var(--space-1)' }}>
+                {errorDetail.map((line, i) => (
+                  <li key={i} style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', lineHeight: 'var(--leading-loose)' }}>
+                    {line}
+                  </li>
+                ))}
+              </ol>
+            </details>
+          )}
+        </div>
       )}
 
       {rows.length === 0 && (
@@ -322,6 +392,7 @@ export default function ReviewPage() {
           onDiscard={() => discard(open.product.id, open.product.title)}
           onEnrich={() => enrich(open.product.id)}
           enriching={enriching}
+          progress={progress}
           onAiFill={() => aiFill(open.product.id)}
           filling={filling}
           journey={
@@ -453,6 +524,7 @@ function ProductReview({
   onDiscard,
   onEnrich,
   enriching,
+  progress,
   onAiFill,
   filling,
   journey,
@@ -466,6 +538,8 @@ function ProductReview({
   /** Fetch this one product's picture and details from PowerBody. */
   onEnrich: () => void
   enriching: boolean
+  /** The step the lookup is on right now, or null when it is not running. */
+  progress: string | null
   /** Fill every blank field from the classifier, in one press. */
   onAiFill: () => void
   filling: boolean
@@ -534,6 +608,18 @@ function ProductReview({
           <Button variant="secondary" size="sm" loading={enriching} onClick={onEnrich}>
             {enriching ? 'Looking…' : 'Pull from PowerBody'}
           </Button>
+          {/* The running commentary. A minute of throttled requests with a
+              spinner and no words is indistinguishable from a hang, and the
+              step names are also the first thing worth reading when it fails. */}
+          {progress && (
+            <p
+              className="w-full"
+              aria-live="polite"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-2)', lineHeight: 'var(--leading-loose)' }}
+            >
+              {progress}
+            </p>
+          )}
         </Card>
       )}
 
