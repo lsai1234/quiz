@@ -104,7 +104,7 @@ describe('getProductsBySku — live', () => {
       'dropshipping.getProductInfo': (args: unknown) => ({ name: `Product ${detailId(args)}` }),
     })
 
-    const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku(['PB-2'])
 
     expect(found.map((p) => p.sku)).toEqual(['PB-2'])
@@ -116,7 +116,7 @@ describe('getProductsBySku — live', () => {
     const feed = feedOf(100)
     const { client } = fakeClient(feed.handlers)
 
-    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku(['PB-90'])
 
     expect(found).toMatchObject({ sku: 'PB-90', name: 'Product 90', detailed: true })
@@ -138,7 +138,7 @@ describe('getProductsBySku — live', () => {
       },
     })
 
-    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku(['PB-7'])
 
     expect(seen).toEqual(['7', { product_id: '7' }])
@@ -158,7 +158,7 @@ describe('getProductsBySku — live', () => {
       },
     })
 
-    await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsBySku(['PB-7'])
+    await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsBySku(['PB-7'])
 
     expect(seen).toEqual(['7'])
   })
@@ -179,7 +179,7 @@ describe('getProductsBySku — live', () => {
       },
     })
 
-    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const [found] = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku(['PB-7'])
 
     expect(seen).toHaveLength(2)
@@ -196,7 +196,7 @@ describe('getProductsBySku — live', () => {
     // Naming the keys they did send is the difference between "it doesn't work"
     // and knowing why.
     await expect(
-      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsBySku(['PB-7']),
+      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsBySku(['PB-7']),
     ).rejects.toThrow(/a record with only: product_id, status/)
   })
 
@@ -229,7 +229,7 @@ describe('getProductsBySku — live', () => {
     })
 
     await expect(
-      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsBySku(['PB-7']),
+      createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsBySku(['PB-7']),
     ).rejects.toThrow(/Resource path is not callable/)
   })
 
@@ -248,7 +248,7 @@ describe('getProductsBySku — live', () => {
       },
     })
 
-    const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const found = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku(['PB-1', 'PB-2'])
 
     // One bad product in a batch must not lose the good ones.
@@ -260,7 +260,7 @@ describe('getProductsBySku — live', () => {
     // SKU → product-id mapping. The second should not re-page the feed for it.
     const feed = feedOf(100)
     const { client, calls } = fakeClient(feed.handlers)
-    const provider = () => createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const provider = () => createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
 
     await provider().getProductsBySku(['PB-90'])
     const afterFirst = calls.filter((c) => c.path === 'dropshipping.getProductList').length
@@ -286,7 +286,7 @@ describe('getProductsBySku — live', () => {
   it('omits unknown SKUs instead of erroring', async () => {
     const feed = feedOf(3)
     const { client } = fakeClient(feed.handlers)
-    const products = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const products = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku(['PB-1', 'NOPE'])
 
     expect(products.map((p) => p.sku)).toEqual(['PB-1'])
@@ -295,7 +295,7 @@ describe('getProductsBySku — live', () => {
   it('returns nothing, and calls nothing, for an empty request', async () => {
     const feed = feedOf(3)
     const { client, calls } = fakeClient(feed.handlers)
-    const products = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const products = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getProductsBySku([])
 
     expect(products).toEqual([])

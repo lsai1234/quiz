@@ -60,6 +60,7 @@ describe('live PowerBody adapter', () => {
       const { client, calls } = fakeClient(catalogueHandlers())
       const products = await createPowerBodyProvider({
         client,
+        endConfirmWaitsMs: [0, 0, 0],
         detailStore: createMemoryDetailStore(),
       }).getProductsById(['1'])
 
@@ -72,6 +73,7 @@ describe('live PowerBody adapter', () => {
       const { client } = fakeClient(catalogueHandlers())
       const [product] = await createPowerBodyProvider({
         client,
+        endConfirmWaitsMs: [0, 0, 0],
         detailStore: createMemoryDetailStore(),
       }).getProductsById(['1'])
 
@@ -89,7 +91,7 @@ describe('live PowerBody adapter', () => {
     it('says what PowerBody sent when an id resolves to nothing', async () => {
       const { client } = fakeClient({ 'dropshipping.getProductInfo': () => null })
       await expect(
-        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['nope']),
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['nope']),
       ).rejects.toThrow('no product detail in it')
     })
 
@@ -107,7 +109,7 @@ describe('live PowerBody adapter', () => {
         'dropshipping.getProductInfo': () => ({ name: 'Whey 1kg', price: '10.00', qty: '5', status: 'active' }),
       })
 
-      const [product] = await createPowerBodyProvider({ client, detailStore: store }).getProductsById(['1'])
+      const [product] = await createPowerBodyProvider({ client, detailStore: store, endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['1'])
 
       expect(calls).toHaveLength(1)
       expect(product.wholesalePrice).toBe(10)
@@ -117,7 +119,7 @@ describe('live PowerBody adapter', () => {
     it('keeps what it fetched, so a later lookup of the same product is free', async () => {
       const store = createMemoryDetailStore()
       const { client } = fakeClient(catalogueHandlers())
-      await createPowerBodyProvider({ client, detailStore: store }).getProductsById(['1'])
+      await createPowerBodyProvider({ client, detailStore: store, endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['1'])
 
       expect(await store.load()).toHaveProperty('1.info.name', 'Whey 1kg')
     })
@@ -131,6 +133,7 @@ describe('live PowerBody adapter', () => {
       })
       const products = await createPowerBodyProvider({
         client,
+        endConfirmWaitsMs: [0, 0, 0],
         detailStore: createMemoryDetailStore(),
       }).getProductsById(['bad', '1'])
 
@@ -145,7 +148,7 @@ describe('live PowerBody adapter', () => {
         },
       })
       await expect(
-        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['1']),
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['1']),
       ).rejects.toThrow('Access denied')
     })
   })
@@ -165,6 +168,7 @@ describe('live PowerBody adapter', () => {
       // which is exactly what a map hit delegates to.
       const products = await createPowerBodyProvider({
         client,
+        endConfirmWaitsMs: [0, 0, 0],
         detailStore: createMemoryDetailStore(),
       }).getProductsById(['999'])
 
@@ -184,6 +188,7 @@ describe('live PowerBody adapter', () => {
       // assertion that matters is that a feed answer still wins.
       const products = await createPowerBodyProvider({
         client,
+        endConfirmWaitsMs: [0, 0, 0],
         detailStore: createMemoryDetailStore(),
       }).getProductsBySku(['PB-1'])
 
@@ -210,7 +215,7 @@ describe('live PowerBody adapter', () => {
       })
 
       await expect(
-        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['7816']),
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['7816']),
       ).rejects.toThrow('TOO_MANY_REQUESTS')
     })
 
@@ -218,7 +223,7 @@ describe('live PowerBody adapter', () => {
       const { client } = fakeClient({ 'dropshipping.getProductInfo': () => ({ status: 'denied' }) })
 
       await expect(
-        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['1']),
+        createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['1']),
       ).rejects.toThrow('a record with only: status')
     })
   })
@@ -234,7 +239,7 @@ describe('live PowerBody adapter', () => {
      */
     it('sends the documented bare id first, not a JSON object', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())
-      await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getProductsById(['1'])
+      await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getProductsById(['1'])
 
       const detail = calls.filter((c) => c.path === 'dropshipping.getProductInfo')
       expect(detail).toHaveLength(1)
@@ -250,6 +255,7 @@ describe('live PowerBody adapter', () => {
       })
       const [product] = await createPowerBodyProvider({
         client,
+        endConfirmWaitsMs: [0, 0, 0],
         detailStore: createMemoryDetailStore(),
       }).getProductsById(['1'])
 
@@ -261,7 +267,7 @@ describe('live PowerBody adapter', () => {
   describe('getStockLevels', () => {
     it('uses only the cheap list feed — never the per-product detail call', async () => {
       const { client, calls } = fakeClient(catalogueHandlers())
-      const levels = await createPowerBodyProvider({ client }).getStockLevels()
+      const levels = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getStockLevels()
 
       expect(levels).toEqual([
         { sku: 'PB-1', productId: '1', stock: 5, inStock: true, wholesalePrice: 10, rrp: 12, updatedAt: expect.any(String) },
@@ -280,7 +286,7 @@ describe('live PowerBody adapter', () => {
      */
     it('says the feed was complete when it reached the end', async () => {
       const { client } = fakeClient(catalogueHandlers())
-      const feed = await createPowerBodyProvider({ client }).getFeed()
+      const feed = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getFeed()
 
       expect(feed.complete).toBe(true)
       expect(feed.levels.map((l) => l.sku)).toEqual(['PB-1', 'PB-2'])
@@ -301,7 +307,7 @@ describe('live PowerBody adapter', () => {
         },
       }
       const { client } = fakeClient(endless)
-      const feed = await createPowerBodyProvider({ client }).getFeed({ pageBudget: 3 })
+      const feed = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getFeed({ pageBudget: 3 })
 
       expect(feed.complete).toBe(false)
       // The rows it did read are still real and still usable.
@@ -317,7 +323,7 @@ describe('live PowerBody adapter', () => {
           return page <= 5 ? [{ product_id: String(page), sku: `PB-${page}`, price: '1.00', qty: '1' }] : []
         },
       })
-      const feed = await createPowerBodyProvider({ client }).getFeed({ fromPage: 4 })
+      const feed = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getFeed({ fromPage: 4 })
 
       expect(feed.levels.map((l) => l.sku)).toEqual(['PB-4', 'PB-5'])
       expect(feed.complete).toBe(true)
@@ -325,14 +331,15 @@ describe('live PowerBody adapter', () => {
       // It must not re-read pages 1–3 the caller already has.
       const pages = calls.map((c) => (c.args as { page: number }).page)
       expect(pages.filter((p) => p < 4)).toEqual([])
-      // 6 twice: the terminal empty page is confirmed rather than believed
-      // first time, because an empty page and a throttled one look identical.
-      expect(pages).toEqual([4, 5, 6, 6])
+      // Page 6 is empty. It is re-asked across three escalating waits, then
+      // pages 11 and 26 are checked for feed beyond it — because an empty page
+      // and a throttled one are identical until you look past them.
+      expect(pages).toEqual([4, 5, 6, 6, 6, 6, 11, 26])
     })
 
     it('reports the end of the feed rather than a resume point', async () => {
       const { client } = fakeClient(catalogueHandlers())
-      const feed = await createPowerBodyProvider({ client }).getFeed()
+      const feed = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getFeed()
 
       expect(feed.complete).toBe(true)
       expect(feed.nextPage).toBeNull()
@@ -340,7 +347,7 @@ describe('live PowerBody adapter', () => {
 
     it('narrows to the requested SKUs', async () => {
       const { client } = fakeClient(catalogueHandlers())
-      const levels = await createPowerBodyProvider({ client }).getStockLevels(['PB-2'])
+      const levels = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getStockLevels(['PB-2'])
       expect(levels.map((l) => l.sku)).toEqual(['PB-2'])
     })
 
@@ -348,7 +355,7 @@ describe('live PowerBody adapter', () => {
       // The daily stock check is the one thing that must never be served from a
       // cache: it exists to notice what moved.
       const { client, calls } = fakeClient(catalogueHandlers())
-      const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+      const provider = createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       await provider.getProductsBySku(['PB-1'])
       const before = calls.filter((c) => c.path === 'dropshipping.getProductList').length
       await provider.getStockLevels()
@@ -372,7 +379,7 @@ describe('live PowerBody adapter', () => {
         }),
       })
 
-      const result = await createPowerBodyProvider({ client }).placeOrder(order)
+      const result = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)
 
       expect(result).toEqual({ supplierOrderId: '100012345', status: 'received' })
       expect(calls[0].path).toBe('dropshipping.createOrder')
@@ -383,14 +390,14 @@ describe('live PowerBody adapter', () => {
       const { client } = fakeClient({
         'dropshipping.createOrder': () => ({ api_response: 'ALREADY_EXISTS' }),
       })
-      const result = await createPowerBodyProvider({ client }).placeOrder(order)
+      const result = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)
       // No id of theirs came back, so our own reference stays the handle.
       expect(result.supplierOrderId).toBe('ord_1')
     })
 
     it('throws on a rejection, making clear nothing shipped', async () => {
       const { client } = fakeClient({ 'dropshipping.createOrder': () => ({ api_response: 'FAIL' }) })
-      await expect(createPowerBodyProvider({ client }).placeOrder(order)).rejects.toThrow(
+      await expect(createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).placeOrder(order)).rejects.toThrow(
         /rejected order ord_1: FAIL[\s\S]*Nothing has shipped/,
       )
     })
@@ -420,24 +427,24 @@ describe('live PowerBody adapter', () => {
 
     it('finds an order by our reference', async () => {
       const { client } = fakeClient({ 'dropshipping.getOrders': () => rows })
-      const found = await createPowerBodyProvider({ client }).getOrder('ord_2')
+      const found = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getOrder('ord_2')
       expect(found).toMatchObject({ supplierOrderId: '1002', reference: 'ord_2', status: 'shipped' })
     })
 
     it('also finds it by their increment id', async () => {
       const { client } = fakeClient({ 'dropshipping.getOrders': () => rows })
-      const found = await createPowerBodyProvider({ client }).getOrder('1001')
+      const found = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getOrder('1001')
       expect(found).toMatchObject({ reference: 'ord_1', status: 'processing', trackingNumber: 'TRK1' })
     })
 
     it('returns null when the order is unknown', async () => {
       const { client } = fakeClient({ 'dropshipping.getOrders': () => [] })
-      expect(await createPowerBodyProvider({ client }).getOrder('nope')).toBeNull()
+      expect(await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getOrder('nope')).toBeNull()
     })
 
     it('tolerates a null reply rather than throwing', async () => {
       const { client } = fakeClient({ 'dropshipping.getOrders': () => null })
-      expect(await createPowerBodyProvider({ client }).listOrders()).toEqual([])
+      expect(await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).listOrders()).toEqual([])
     })
   })
 })
@@ -473,7 +480,7 @@ describe('how far the pager will actually read', () => {
   it('reads well past 200 pages when the feed keeps answering', async () => {
     const { client, deepest } = feedOf(400)
 
-    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getFeed()
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getFeed()
 
     expect(feed.complete).toBe(true)
     // Past 3,000 products, which the old guard could never have reached.
@@ -490,6 +497,43 @@ describe('how far the pager will actually read', () => {
    * catalogue and reports that the fraction is all of it, and every later "that
    * SKU is not on this account" inherits the lie.
    */
+  /**
+   * The failure this actually caught in the wild.
+   *
+   * A crawl reported "2,000 products from 24 pages, their feed ended here"
+   * against a feed the probe had measured minutes earlier at 80 pages and
+   * 7,943 products. An earlier run had stopped at 3,000. A different stop point
+   * every run is not a catalogue end — a real end is in the same place every
+   * time — it is PowerBody refusing under sustained paging and answering with
+   * an empty array rather than an error.
+   *
+   * Re-reading the same page only asks "are you still refusing?". Reading a
+   * page well beyond it asks the question that matters: is there more feed?
+   */
+  it('treats an empty page as a refusal when there is feed beyond it', async () => {
+    const throttledFrom = 23
+    const client = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => {
+        const page = (args as { page: number }).page
+        if (page > 80) return []
+        // Refuses page 23 no matter how often it is asked — but pages further
+        // on still answer, which is what gives the refusal away.
+        if (page === throttledFrom) return []
+        return [{ product_id: String(page), sku: `PB-${page}`, price: '1', price_tax: '1', qty: '1', vat_rate: '20' }]
+      },
+    }).client
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
+      .getFeed({ pageBudget: 40 })
+
+    // The crucial bit: NOT complete. Recording a fraction of the catalogue as
+    // all of it is what makes every later "that SKU is not on this account"
+    // wrong, silently and permanently.
+    expect(feed.complete).toBe(false)
+    // And resumable from the page that was refused, so nothing is skipped.
+    expect(feed.nextPage).toBe(throttledFrom)
+  }, 30_000)
+
   it('does not take one empty page as the end of the feed', async () => {
     let asked = 0
     const client = fakeClient({
@@ -504,19 +548,19 @@ describe('how far the pager will actually read', () => {
       },
     }).client
 
-    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getFeed()
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] }).getFeed()
 
     // It carried on past the blip and read the real feed to its real end.
     expect(feed.levels.map((l) => l.sku)).toEqual(['PB-1', 'PB-2', 'PB-3', 'PB-4', 'PB-5'])
     expect(feed.complete).toBe(true)
-  })
+  }, 30_000)
 
   it('still stops on a feed that never ends, and says the read was short', async () => {
     // The guard's real job. It has to exist; it just must not be small enough
     // to be mistaken for the size of a real catalogue.
     const { client } = feedOf(Number.MAX_SAFE_INTEGER)
 
-    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0, 0, 0] })
       .getFeed({ pageBudget: 12 })
 
     expect(feed.complete).toBe(false)

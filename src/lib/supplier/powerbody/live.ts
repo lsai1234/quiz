@@ -78,6 +78,26 @@ const MAX_PAGES = 4_000
 const DETAIL_CONCURRENCY = 6
 
 /**
+ * Waits before re-asking whether the feed really ended, escalating.
+ *
+ * 1.5 seconds was not enough. A crawl stopped at page 22 reporting "complete"
+ * against a feed measured minutes earlier at 80 pages: it re-read the same page
+ * 1.5s later, got another empty reply, and believed it. A throttle window
+ * outlasts a second and a half comfortably.
+ */
+const DEFAULT_END_CONFIRM_WAITS_MS = [2_000, 6_000, 15_000]
+
+/**
+ * Pages to look PAST an empty one before believing the feed ended.
+ *
+ * Re-reading the same page only ever asks "are you still throttling me?".
+ * Reading a page well beyond it asks the question that actually matters — is
+ * there more catalogue? A genuine end has nothing anywhere after it, so both of
+ * these must come back empty for the feed to be called done.
+ */
+const LOOK_AHEAD_PAGES = [5, 20]
+
+/**
  * Wall-clock budget for one SKU lookup.
  *
  * Resolving a SKU means paging the cheap feed to find its product id, then one
@@ -187,6 +207,10 @@ export interface PowerBodyProviderOptions {
   /** Extra fields for `createOrder` that only the caller knows (weight, our
    *  shipping charge, per-line prices for their invoice). */
   orderContext?: (order: SupplierOrderInput) => CreateOrderContext
+  /** Backoffs before believing an empty page means the feed ended. Injected by
+   *  tests as zeros — the real waits are what make a genuine end take half a
+   *  minute to establish, which is right in production and useless in a suite. */
+  endConfirmWaitsMs?: number[]
 }
 
 export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}): SupplierProvider {
@@ -194,6 +218,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   const detailStore = options.detailStore ?? createKvDetailStore()
   const buildDeadlineMs =
     options.buildDeadlineMs ?? envInt('POWERBODY_BUILD_DEADLINE_MS', DEFAULT_BUILD_DEADLINE_MS)
+  const endConfirmWaits = options.endConfirmWaitsMs ?? DEFAULT_END_CONFIRM_WAITS_MS
 
   interface ListFeedOptions {
     /** Epoch ms to stop paging at, returning what has been read so far. */
@@ -222,9 +247,16 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     nextPage: number | null
   }
 
-  /** How long to wait before asking a second time whether the feed really ended.
-   *  Long enough to outlast a throttle window, short enough to pay once. */
-  const END_CONFIRM_DELAY_MS = 1_500
+  /**
+   * Waits before re-asking whether the feed really ended, escalating.
+   *
+   * 1.5 seconds was not enough. A crawl that stopped at page 22 reporting
+   * "complete" — against a feed the probe had just measured at 80 pages —
+   * re-read the same page 1.5s later, got another empty reply, and believed it.
+   * A throttle window outlasts a second and a half comfortably.
+   */
+
+
 
   /**
    * Page through `getProductList` until a page comes back empty — or until the
@@ -250,18 +282,42 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const first = Math.max(1, listOptions.fromPage ?? 1)
     const budget = Math.max(1, listOptions.pageBudget ?? MAX_PAGES)
     let read = 0
-    for (let page = first; page < first + budget; page++) {
-      let rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-      read += 1
 
-      if (!Array.isArray(rows) || rows.length === 0) {
-        await new Promise((resolve) => setTimeout(resolve, END_CONFIRM_DELAY_MS))
-        rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
-        read += 1
+    const getPage = async (page: number): Promise<PbProductListItem[]> => {
+      const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
+      read += 1
+      return Array.isArray(rows) ? rows : []
+    }
+
+    for (let page = first; page < first + budget; page++) {
+      let rows = await getPage(page)
+
+      if (rows.length === 0) {
+        // Back off and ask again, giving the throttle window time to close.
+        for (const wait of endConfirmWaits) {
+          await new Promise((resolve) => setTimeout(resolve, wait))
+          rows = await getPage(page)
+          if (rows.length > 0) break
+        }
       }
 
-      // Empty twice, either side of a pause: the feed has genuinely ended.
-      if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, pages: read, nextPage: null }
+      if (rows.length === 0) {
+        // Still nothing here. Look PAST it: a throttle and an ending feed both
+        // answer empty for this page, and only one of them has nothing further
+        // on. Anything found ahead means this was a refusal, not the end — so
+        // the read is reported SHORT and resumable rather than complete, and
+        // the caller comes back for the rest instead of recording a fraction
+        // of the catalogue as all of it.
+        for (const ahead of LOOK_AHEAD_PAGES) {
+          if ((await getPage(page + ahead)).length > 0) {
+            return { items: all, complete: false, pages: read, nextPage: page }
+          }
+        }
+        // Nothing here, nothing five pages on, nothing twenty pages on, across
+        // four attempts and twenty-three seconds of waiting. The feed has ended.
+        return { items: all, complete: true, pages: read, nextPage: null }
+      }
+
       all.push(...rows)
       if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null }
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {

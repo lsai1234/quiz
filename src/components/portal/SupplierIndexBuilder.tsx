@@ -68,6 +68,9 @@ export function SupplierIndexBuilder() {
     setError(null)
     let page: number | null = 1
     let passes = 0
+    /** Consecutive passes that came back refused at the SAME page. */
+    let stalled = 0
+    let lastPage: number | null = null
     try {
       while (page !== null && passes < 200) {
         const res: Response = await fetch('/api/portal/supplier/index', {
@@ -83,10 +86,34 @@ export function SupplierIndexBuilder() {
         passes += 1
         setProgress(`${d.total} products from ${d.pagesRead} pages…`)
         setState({ products: d.total, pagesRead: d.pagesRead, complete: d.complete, updatedAt: new Date().toISOString() })
+        if (d.complete || d.nextPage === null) break
+
+        /**
+         * Refused mid-feed. Asking again straight away is asking the same
+         * question that was just refused, so it waits — longer each time it is
+         * refused at the same page, because that is the signal that the pause
+         * is not yet long enough.
+         */
+        if (d.throttled) {
+          stalled = d.nextPage === lastPage ? stalled + 1 : 1
+          if (stalled > 6) {
+            setError(
+              `PowerBody keep refusing at page ${d.nextPage}. ${d.total.toLocaleString()} products are indexed and kept — ` +
+                'press again in a few minutes to carry on from there. Nothing is lost.',
+            )
+            return
+          }
+          const wait = Math.min(60_000, 5_000 * 2 ** (stalled - 1))
+          setProgress(`PowerBody are throttling us at page ${d.nextPage}. Waiting ${Math.round(wait / 1000)}s…`)
+          await new Promise((resolve) => setTimeout(resolve, wait))
+        } else {
+          stalled = 0
+        }
+        lastPage = d.nextPage
         page = d.nextPage
       }
     } catch {
-      setError('The crawl stopped before it finished. Press again to carry on.')
+      setError('The crawl stopped before it finished. Press again to carry on — what it already read is kept.')
     } finally {
       setBusy(false)
       setProgress(null)

@@ -88,6 +88,11 @@ export async function POST(req: Request) {
     })
     const total = Object.keys(index.bySku).length
 
+    // Stopped before spending its page budget, and did not reach the end:
+    // PowerBody refused somewhere in the middle. Named so the caller can wait
+    // properly instead of asking again immediately and being refused again.
+    const throttled = !feed.complete && feed.pages < PAGES_PER_PASS
+
     return NextResponse.json({
       ok: true,
       // Rows read this pass, and how many of them were codes we had never seen.
@@ -98,6 +103,7 @@ export async function POST(req: Request) {
       // Null once the feed ended. Anything else is a pause the caller resumes.
       nextPage: feed.complete ? null : feed.nextPage,
       complete: feed.complete,
+      throttled,
     })
   } catch (err) {
     return NextResponse.json(

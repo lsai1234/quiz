@@ -429,6 +429,42 @@ placeholder products with uniform prices and stock of 10 or 100, the first coded
 account only has 3,000 products" and "we are not looking at the real account" are
 the same screen.
 
+### They DO throttle, and it looks exactly like the end of the feed
+
+A crawl reported **"2,000 products from 24 pages, their feed ended here"** —
+minutes after the probe measured that same feed at 80 pages and 7,943 products.
+An earlier run had stopped at 3,000.
+
+**A different stop point every run is not a catalogue end.** A real end is in the
+same place every time. This is PowerBody refusing under sustained paging and
+answering with an empty array rather than an error — which is indistinguishable,
+in a single reply, from the feed running out. The probe never saw it because it
+reads a dozen pages spread far apart; a crawl reads eighty back to back.
+
+That also, finally, explains the original 3,000, and it was the first thing
+suggested. It is not a documented ceiling, not our page guard, and not the
+sandbox — it is a rate limiter, and every attempt to explain the number as a
+fixed limit was looking for the wrong shape of answer.
+
+So an empty page is now interrogated rather than believed:
+
+1. **Re-read it across escalating backoffs** — 2s, 6s, 15s. The old 1.5s single
+   retry was nowhere near a throttle window.
+2. **Then look PAST it**, at pages +5 and +20. Re-reading the same page only ever
+   asks "are you still refusing me?"; reading well beyond it asks the question
+   that matters — is there more feed? A genuine end has nothing anywhere after
+   it, so both must be empty before the feed is called done.
+3. **Anything found ahead means refusal, not end.** The read comes back
+   `complete: false` with `nextPage` set to the refused page, so the crawl
+   resumes there and skips nothing.
+
+The screen then backs off between passes — 5s, 10s, 20s, doubling to a minute —
+and after six refusals at the same page it stops and says so, keeping everything
+already indexed. Nothing is ever lost; a crawl is always resumable.
+
+`endConfirmWaitsMs` is injectable so the suite does not spend half a minute
+establishing every simulated end.
+
 ### The id sweep — kept, but not needed here
 
 Written when the ceiling was believed to be real, and superseded by the
