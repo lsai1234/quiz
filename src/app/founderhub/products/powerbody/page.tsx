@@ -2,6 +2,7 @@ import { RosterImport } from '@/components/portal/RosterImport'
 import { SupplierIndexBuilder } from '@/components/portal/SupplierIndexBuilder'
 import { SupplierImport } from '@/components/portal/SupplierImport'
 import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
+import { DescriptionCleanupPanel } from '@/components/portal/DescriptionCleanupPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,11 @@ export default function SupplierPage() {
 
       {/* What moved under us since yesterday — read before adding anything new. */}
       <SupplierSyncPanel />
+
+      {/* Descriptions pulled in before the import path cleaned them. Sits with
+          the sync panel because both are about products already here, above the
+          three panels that bring new ones in. */}
+      <DescriptionCleanupPanel />
 
       {/* Crawled first, because the roster import resolves every code through
           it — see SupplierIndexBuilder. */}

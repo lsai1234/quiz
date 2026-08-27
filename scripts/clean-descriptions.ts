@@ -7,29 +7,26 @@
  *   npx tsx scripts/clean-descriptions.ts --write --ai    # …and rewrite in our voice
  *   npx tsx scripts/clean-descriptions.ts --write --ai --limit 5
  *
- * WHY A SCRIPT
- * ────────────
- * The markup strip is instant and could run anywhere. The `--ai` pass is one
- * API call per product, so a full catalogue is minutes of work and real money —
- * the same reason `backfill-product-ids.ts` is a script and not part of import.
- * Running it here means it is watched, resumable and costs nothing to abandon.
+ * The same job is in the Founders Hub, under Products → PowerBody, and both run
+ * `lib/catalogue/description-cleanup` — there is one implementation on purpose.
+ * This exists for the cases a browser tab is wrong for: a first pass over a
+ * freshly imported roster, a scripted re-run, or an `--ai` sweep long enough
+ * that you would rather watch it in a terminal than a panel.
  *
  * DRY RUN BY DEFAULT
  * ──────────────────
- * Nothing is written without `--write`. The report prints the before and after
- * for every product it would change, because a bad rewrite is much easier to
- * catch reading a diff than reading a catalogue.
+ * Nothing is written without `--write`. The report prints before and after for
+ * every product it would change, because a bad rewrite is far easier to catch
+ * reading a diff than reading a catalogue.
  *
  * SAFE TO RE-RUN
  * ──────────────
- * `cleanDescription` is idempotent and products whose description is already
- * clean are skipped, so a second run is a no-op. An interrupted `--ai` run
- * resumes: it writes after every product, so the work already paid for is kept.
+ * `cleanDescription` is idempotent and a product already holding what we would
+ * write is skipped, so a second run is a no-op. `--ai` writes per batch, so an
+ * interrupted sweep keeps the calls it has already paid for.
  */
-import { cleanDescription, looksLikeHtml } from '../src/lib/catalogue/description'
-import { rewriteDescription } from '../src/lib/catalogue/rewrite-description'
-import { getImportedProducts, addImportedProducts } from '../src/lib/portal/store'
-import type { CatalogueProduct } from '../src/lib/catalogue/types'
+import { cleanupDescriptions, scanDescriptions } from '../src/lib/catalogue/description-cleanup'
+import type { DescriptionChange } from '../src/lib/catalogue/description-cleanup'
 
 const args = process.argv.slice(2)
 const WRITE = args.includes('--write')
@@ -41,9 +38,24 @@ const LIMIT = (() => {
   return Number.isFinite(n) && n > 0 ? n : Infinity
 })()
 
+/** Written per batch so an interrupted `--ai` run keeps what it paid for. */
+const BATCH = 10
+
 function preview(text: string, width = 100): string {
-  const oneLine = text.replace(/\n/g, ' ⏎ ')
-  return oneLine.length > width ? `${oneLine.slice(0, width)}…` : oneLine
+  const line = text.replace(/\n/g, ' ⏎ ')
+  return line.length > width ? `${line.slice(0, width)}…` : line
+}
+
+function report(change: DescriptionChange, position: string): void {
+  console.log(`${position} ${change.title}`)
+  console.log(`   before: ${preview(change.before)}`)
+  console.log(`   after:  ${preview(change.after)}`)
+  if (change.source === 'cleaned' && change.reason) {
+    const detail = change.flags?.length
+      ? `${change.reason} (${change.flags.map((f) => `"${f.match}" — ${f.why}`).join(', ')})`
+      : change.reason
+    console.log(`   kept the supplier's words: ${detail}`)
+  }
 }
 
 async function main(): Promise<void> {
@@ -52,72 +64,40 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
-  const products = await getImportedProducts()
-  console.log(`${products.length} imported products.`)
+  const scan = await scanDescriptions()
+  console.log(`${scan.total} imported products, ${scan.withDescription} with a description.`)
+  console.log(`${scan.withMarkup} still carry raw markup.`)
 
-  // With --ai every product is a candidate (the voice needs fixing even where
-  // the markup does not); without it, only the ones still carrying markup.
-  const candidates = products
-    .filter((p) => (USE_AI ? Boolean(p.description?.trim()) : looksLikeHtml(p.description)))
+  // With --ai every described product is a candidate: the voice needs fixing
+  // even where the markup does not. Without it, only the ones carrying markup.
+  const ids = scan.candidates
+    .filter((c) => (USE_AI ? true : c.hasMarkup))
+    .map((c) => c.id)
     .slice(0, LIMIT === Infinity ? undefined : LIMIT)
 
-  const withMarkup = products.filter((p) => looksLikeHtml(p.description)).length
-  console.log(`${withMarkup} still carry raw markup.`)
-  console.log(`${candidates.length} to process${USE_AI ? ' (AI rewrite)' : ' (markup strip)'}.`)
+  console.log(`${ids.length} to process${USE_AI ? ' (AI rewrite)' : ' (markup strip)'}.`)
   if (!WRITE) console.log('\nDRY RUN — nothing will be saved. Re-run with --write to apply.\n')
 
-  const changed: CatalogueProduct[] = []
-  const counts = { unchanged: 0, ai: 0, fallback: 0 }
+  let changed = 0
+  let unchanged = 0
+  let aiUsed = 0
+  let fellBack = 0
 
-  for (const [i, product] of candidates.entries()) {
-    const position = `[${i + 1}/${candidates.length}]`
-
-    let next: string
-    if (USE_AI) {
-      const result = await rewriteDescription({
-        title: product.title,
-        category: product.category,
-        description: product.description,
-      })
-      next = result.text
-      if (result.source === 'ai') {
-        counts.ai += 1
-      } else {
-        counts.fallback += 1
-        const detail = result.flags?.length
-          ? `${result.reason} (${result.flags.map((f) => `"${f.match}" — ${f.why}`).join(', ')})`
-          : result.reason
-        console.log(`${position} ${product.title}\n   fell back to the plain clean: ${detail}`)
-      }
-    } else {
-      next = cleanDescription(product.description)
-    }
-
-    if (next === product.description) {
-      counts.unchanged += 1
-      continue
-    }
-
-    console.log(`${position} ${product.title}`)
-    console.log(`   before: ${preview(product.description)}`)
-    console.log(`   after:  ${preview(next)}`)
-
-    const updated = { ...product, description: next }
-    changed.push(updated)
-
-    // Written one at a time so an interrupted --ai run keeps the calls already
-    // paid for. The markup-only pass is cheap enough to batch at the end.
-    if (WRITE && USE_AI) await addImportedProducts([updated])
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const result = await cleanupDescriptions({ ids: ids.slice(i, i + BATCH), ai: USE_AI, write: WRITE })
+    result.changes.forEach((c, n) => report(c, `[${i + n + 1}/${ids.length}]`))
+    changed += result.changes.length
+    unchanged += result.unchanged
+    aiUsed += result.aiUsed
+    fellBack += result.fellBack
   }
 
-  if (WRITE && !USE_AI && changed.length > 0) await addImportedProducts(changed)
-
   console.log('\n─────────────────────────────')
-  console.log(`Changed:    ${changed.length}`)
-  console.log(`Unchanged:  ${counts.unchanged}`)
+  console.log(`Changed:    ${changed}`)
+  console.log(`Unchanged:  ${unchanged}`)
   if (USE_AI) {
-    console.log(`AI rewrite: ${counts.ai}`)
-    console.log(`Fell back:  ${counts.fallback}`)
+    console.log(`AI rewrite: ${aiUsed}`)
+    console.log(`Fell back:  ${fellBack}`)
   }
   console.log(WRITE ? 'Saved.' : 'Dry run — nothing saved.')
 }
