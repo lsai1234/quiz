@@ -118,6 +118,18 @@ export interface SupplierFeed {
   nextPage: number | null
 }
 
+/**
+ * The identity half of a product: enough to know what a product id IS, without
+ * the descriptive half that makes detail expensive to store.
+ */
+export interface SupplierProductStub {
+  productId: string
+  sku: string
+  name: string
+  wholesalePrice: number
+  stock: number
+}
+
 /** Where to start reading, and how much to read, so a long feed can be taken in
  *  passes that each fit inside one request. */
 export interface SupplierFeedOptions {
@@ -285,6 +297,27 @@ export interface SupplierProvider {
    * than because the feed ended.
    */
   getFeed(options?: SupplierFeedOptions): Promise<SupplierFeed>
+  /**
+   * What lives at these product ids — identity only, nothing descriptive.
+   *
+   * THE POINT OF IT
+   * The list feed is capped server-side (3,000 products on this account against
+   * a catalogue of 8,000+) and no parameter raises it. `getProductInfo` is NOT
+   * capped: it takes an id and answers for any product, and its reply carries
+   * the SKU. So sweeping ids reaches everything the feed refuses to hand over —
+   * it is the only route to the rest of the catalogue.
+   *
+   * WHY IT IS NOT `getProductsById`
+   * That one caches full detail, descriptions included, in a single document it
+   * loads and rewrites on every call. Sweeping thousands of ids through it
+   * would grow that document to tens of megabytes and re-save it thousands of
+   * times. This keeps only what a sweep is for — id, code, name, price, stock —
+   * and writes no cache at all.
+   *
+   * An id with nothing behind it is omitted rather than erroring: on a sweep,
+   * most ids are empty and that is the expected answer, not a failure.
+   */
+  probeProductIds?(productIds: string[]): Promise<SupplierProductStub[]>
   /**
    * The delivery services this account can ask for, if any.
    *

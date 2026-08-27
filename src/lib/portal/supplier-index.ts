@@ -41,6 +41,11 @@ export interface IndexedProduct {
   qty: number
   /** Their wholesale price at that moment, for the same reason. */
   price: number
+  /** Product name, when a sweep found it. The list feed carries no name. */
+  name?: string
+  /** True when this came from sweeping ids rather than from the list feed —
+   *  which is to say, it is one of the products the feed cannot reach. */
+  swept?: boolean
 }
 
 export interface SupplierIndex {
@@ -57,9 +62,47 @@ export interface SupplierIndex {
   complete: boolean
   /** When the last pass finished. */
   updatedAt: string | null
+  /**
+   * How far the id sweep has got.
+   *
+   * The list feed stops at a server-side ceiling; `getProductInfo` does not, so
+   * sweeping ids past that ceiling is the only route to the rest of the
+   * catalogue. It takes thousands of throttled requests, so it runs in passes
+   * and has to remember where it was — a sweep that restarted from the
+   * beginning each time would never finish.
+   */
+  sweptTo: number | null
+  /** Ids visited by the sweep, including the empty ones. The cost measure. */
+  sweptIds: number
+  /** Products the sweep found that the feed never could. */
+  sweptFound: number
+  /**
+   * Consecutive empty ids at the point the last pass handed back.
+   *
+   * Carried across passes deliberately. The sweep ends when it has seen a long
+   * enough run of nothing, and a run that resets to zero at every pass boundary
+   * can never reach the threshold — the sweep would then walk to infinity, one
+   * request every 150ms, and never conclude.
+   */
+  sweptEmptyRun: number
+  /**
+   * True once the sweep has seen enough consecutive empty ids to conclude the
+   * catalogue has ended. Reported, never assumed — the same rule as `complete`.
+   */
+  sweepComplete: boolean
 }
 
-const EMPTY: SupplierIndex = { bySku: {}, pagesRead: 0, complete: false, updatedAt: null }
+const EMPTY: SupplierIndex = {
+  bySku: {},
+  pagesRead: 0,
+  complete: false,
+  updatedAt: null,
+  sweptTo: null,
+  sweptIds: 0,
+  sweptFound: 0,
+  sweptEmptyRun: 0,
+  sweepComplete: false,
+}
 
 export async function readSupplierIndex(): Promise<SupplierIndex> {
   return readJson<SupplierIndex>(INDEX_FILE, EMPTY)
@@ -110,9 +153,68 @@ export async function mergeIntoIndex(
     bySku[level.sku] = { productId: String(level.productId), qty: level.stock, price: level.wholesalePrice }
   }
   const next: SupplierIndex = {
+    ...current,
     bySku,
     pagesRead: (meta.reset ? 0 : current.pagesRead) + meta.pagesRead,
     complete: meta.complete,
+    updatedAt: new Date().toISOString(),
+  }
+  await writeJson(INDEX_FILE, next)
+  return next
+}
+
+/**
+ * The highest product id the index holds.
+ *
+ * Where a sweep starts. Everything at or below it is already known from the
+ * feed, and the products the feed cannot reach sit above it — ids run
+ * near-monotone in SKU number, and the feed is ordered by ascending id, so its
+ * ceiling is an id ceiling as much as a count.
+ */
+export async function highestIndexedId(): Promise<number> {
+  const index = await readSupplierIndex()
+  let top = 0
+  for (const entry of Object.values(index.bySku)) {
+    const id = Number(entry.productId)
+    if (Number.isFinite(id) && id > top) top = id
+  }
+  return top
+}
+
+/**
+ * Fold one pass of the id sweep into the index.
+ *
+ * Separate from `mergeIntoIndex` because the two carry different evidence: a
+ * feed pass knows how many PAGES it read, a sweep knows how many IDS it
+ * visited, and conflating them would make "we have read 40 pages" and "we have
+ * tried 40 ids" the same sentence.
+ */
+export async function mergeSweep(
+  found: Array<{ productId: string; sku: string; name: string; wholesalePrice: number; stock: number }>,
+  meta: { sweptTo: number; idsVisited: number; sweepComplete: boolean; emptyRun: number },
+): Promise<SupplierIndex> {
+  const current = await readSupplierIndex()
+  const bySku = { ...current.bySku }
+  let added = 0
+  for (const p of found) {
+    if (!p.sku || !p.productId) continue
+    if (!bySku[p.sku]) added += 1
+    bySku[p.sku] = {
+      productId: String(p.productId),
+      qty: p.stock,
+      price: p.wholesalePrice,
+      ...(p.name ? { name: p.name } : {}),
+      swept: true,
+    }
+  }
+  const next: SupplierIndex = {
+    ...current,
+    bySku,
+    sweptTo: meta.sweptTo,
+    sweptIds: current.sweptIds + meta.idsVisited,
+    sweptFound: current.sweptFound + added,
+    sweptEmptyRun: meta.emptyRun,
+    sweepComplete: meta.sweepComplete,
     updatedAt: new Date().toISOString(),
   }
   await writeJson(INDEX_FILE, next)

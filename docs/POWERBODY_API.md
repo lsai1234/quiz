@@ -352,7 +352,40 @@ Three properties matter more than the search itself:
   the feed walked instead. A stale entry can cost a wasted call, never a wrong
   price.
 
-The full catalogue does exist outside the API, as the **CSV Dropshipping Feed**
+### Reaching the other 5,000 — the id sweep
+
+The 3,000 cap is on `getProductList`. **`getProductInfo` is not capped**: it
+takes a product id, answers for any product on the account, and its reply
+carries the SKU. So walking ids reaches everything the list refuses to hand
+over, and it is the only route through the API that does.
+
+`POST /api/portal/supplier/index/sweep` does that, starting from the highest id
+the crawl reached — the feed is ordered by ascending id, so its ceiling is an id
+ceiling as much as a count. One throttled request per id at 150ms apiece; near
+the top of this catalogue products sit about three ids apart, so the remaining
+~5,000 products are on the order of 15,000 ids, or roughly forty minutes. Once,
+ever. It runs in passes and records where it got to, so a closed tab costs a
+pass rather than the run.
+
+Two things keep it honest:
+
+- **A canary before every pass.** A sweep reads meaning into silence — "nothing
+  at this id" — which is exactly what a disabled detail call or a rate limit
+  also produces. Each pass first probes an id the feed already named; if that
+  comes back empty, the pass refuses to run rather than recording hundreds of
+  ids as empty.
+- **The empty run carries across passes.** The sweep ends after a long enough
+  stretch of nothing. A counter that reset at each pass boundary could never
+  reach the threshold, and the sweep would walk to infinity one request at a
+  time.
+
+It deliberately does NOT go through `getProductsById`, which caches full detail
+— descriptions included — in a single document it loads and rewrites on every
+call. Thousands of ids through that grows one row to tens of megabytes. The
+sweep uses `probeProductIds`, which keeps only id, code, name, price and stock,
+and writes no cache.
+
+The full catalogue also exists outside the API, as the **CSV Dropshipping Feed**
 (guide chapter 6) downloaded by hand from the Dropshipping Panel — 8,023 products
 against the API's 3,000, semicolon-delimited. It carries `sku`, manufacturer,
 name, qty, flavour, weight, image url and retail price, but **no `product_id`**

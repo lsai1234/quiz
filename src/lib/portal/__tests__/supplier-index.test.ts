@@ -1,4 +1,4 @@
-import { readSupplierIndex, mergeIntoIndex, indexedProductIds, clearSupplierIndex } from '@/lib/portal/supplier-index'
+import { readSupplierIndex, mergeIntoIndex, indexedProductIds, clearSupplierIndex, mergeSweep, highestIndexedId } from '@/lib/portal/supplier-index'
 import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 jest.mock('@/lib/portal/persist', () => {
@@ -64,5 +64,65 @@ describe('the stored feed index', () => {
     const index = await readSupplierIndex()
     expect(Object.keys(index.bySku)).toEqual(['P9'])
     expect(index.pagesRead).toBe(1)
+  })
+})
+
+describe('the id sweep', () => {
+  beforeEach(async () => { await clearSupplierIndex() })
+
+  const stub = (productId: string, sku: string, name = 'A product') =>
+    ({ productId, sku, name, wholesalePrice: 9.5, stock: 3 })
+
+  it('starts where the list feed stopped', async () => {
+    // The feed is ordered by ascending product id, so its ceiling is an id
+    // ceiling as much as a count — everything it cannot reach sits above the
+    // highest id it handed over.
+    await mergeIntoIndex([level('P1', '100'), level('P2', '4200'), level('P3', '900')], { pagesRead: 1, complete: false })
+
+    await expect(highestIndexedId()).resolves.toBe(4200)
+  })
+
+  it('marks what it finds as swept, so the two halves stay tellable apart', async () => {
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 1, complete: false })
+    await mergeSweep([stub('5000', 'P9', 'Past the ceiling')], {
+      sweptTo: 5030, idsVisited: 30, sweepComplete: false, emptyRun: 0,
+    })
+
+    const index = await readSupplierIndex()
+    expect(index.bySku.P1.swept).toBeUndefined()
+    expect(index.bySku.P9.swept).toBe(true)
+    // The list feed carries no name; the detail call does.
+    expect(index.bySku.P9.name).toBe('Past the ceiling')
+  })
+
+  it('carries the empty run across passes', async () => {
+    // A run that reset at every pass boundary could never reach the stop
+    // threshold, and the sweep would walk to infinity one request at a time.
+    await mergeSweep([], { sweptTo: 6000, idsVisited: 300, sweepComplete: false, emptyRun: 300 })
+    await mergeSweep([], { sweptTo: 6300, idsVisited: 300, sweepComplete: false, emptyRun: 600 })
+
+    const index = await readSupplierIndex()
+    expect(index.sweptEmptyRun).toBe(600)
+    expect(index.sweptIds).toBe(600)
+  })
+
+  it('counts only genuinely new products as found', async () => {
+    // A sweep re-reaching something the feed already had is not a discovery,
+    // and counting it as one overstates what the hour bought.
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 1, complete: false })
+    await mergeSweep([stub('100', 'P1'), stub('5000', 'P9')], {
+      sweptTo: 5030, idsVisited: 30, sweepComplete: false, emptyRun: 0,
+    })
+
+    const index = await readSupplierIndex()
+    expect(index.sweptFound).toBe(1)
+  })
+
+  it('does not claim completeness until the ids actually run out', async () => {
+    await mergeSweep([stub('5000', 'P9')], { sweptTo: 5030, idsVisited: 30, sweepComplete: false, emptyRun: 0 })
+    expect((await readSupplierIndex()).sweepComplete).toBe(false)
+
+    await mergeSweep([], { sweptTo: 9000, idsVisited: 1500, sweepComplete: true, emptyRun: 1500 })
+    expect((await readSupplierIndex()).sweepComplete).toBe(true)
   })
 })

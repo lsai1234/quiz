@@ -8,6 +8,10 @@ interface IndexState {
   pagesRead: number
   complete: boolean
   updatedAt: string | null
+  sweptIds?: number
+  sweptFound?: number
+  sweptTo?: number | null
+  sweepComplete?: boolean
 }
 
 /**
@@ -33,6 +37,9 @@ export function SupplierIndexBuilder() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [sweeping, setSweeping] = useState(false)
+  /** Set once the user has agreed to the sweep's cost — see the note below. */
+  const [sweepArmed, setSweepArmed] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -77,6 +84,55 @@ export function SupplierIndexBuilder() {
     }
   }
 
+  /**
+   * Sweep product ids for everything their list feed will not hand over.
+   *
+   * The list call is capped server-side; `getProductInfo` is not, and its reply
+   * carries the SKU — so walking ids is the only route to the rest of the
+   * catalogue. It costs one throttled request per id and takes the best part of
+   * an hour, which is why it is a separate, deliberate press rather than part
+   * of the crawl.
+   *
+   * Resumable by design: each pass records where it got to, so closing the tab
+   * costs the current pass and nothing more.
+   */
+  async function sweep() {
+    setSweeping(true)
+    setError(null)
+    let next: number | null | undefined = undefined
+    let passes = 0
+    try {
+      // 400 passes at ~45s each is around five hours — far more than the sweep
+      // should ever need, and a bound so a bug cannot loop forever.
+      while (passes < 400) {
+        const res: Response = await fetch('/api/portal/supplier/index/sweep', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(next === undefined ? {} : { fromId: next }),
+        })
+        const d = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          setError(d.error ?? 'PowerBody could not be reached.')
+          return
+        }
+        passes += 1
+        setProgress(
+          `Swept ${d.sweptIds.toLocaleString()} ids, found ${d.sweptFound.toLocaleString()} products the feed cannot reach. ` +
+            `At id ${d.to.toLocaleString()}…`,
+        )
+        setState((prev) => (prev ? { ...prev, products: d.total, sweptIds: d.sweptIds, sweptFound: d.sweptFound, sweepComplete: d.complete } : prev))
+        if (d.complete || d.nextId === null) break
+        next = d.nextId
+      }
+    } catch {
+      setError('The sweep stopped before it finished. Press again to carry on from where it got to.')
+    } finally {
+      setSweeping(false)
+      setProgress(null)
+      refresh()
+    }
+  }
+
   const built = state && state.products > 0
 
   return (
@@ -114,6 +170,59 @@ export function SupplierIndexBuilder() {
 
       {error && (
         <p style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-critical)' }}>{error}</p>
+      )}
+
+      {/* The second half of the catalogue.
+          Only offered once the crawl has run, because the sweep starts where
+          the feed stops and has to know where that is. */}
+      {built && (
+        <div className="pt-2.5" style={{ borderTop: '1px solid var(--edge)' }}>
+          <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
+            The products their feed will not list
+          </p>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)', lineHeight: 'var(--leading-loose)' }}>
+            PowerBody cap the product LIST at 3,000. They do not cap the product DETAIL call, and its reply carries
+            the code — so walking their product ids reaches the rest of the catalogue. It is the only route to those
+            products, and it costs one throttled request per id:{' '}
+            <strong style={{ color: 'var(--ink-2)' }}>expect it to run for the best part of an hour</strong>. It
+            resumes where it left off, so closing this tab costs a minute, not the run.
+          </p>
+
+          {(state.sweptIds ?? 0) > 0 && (
+            <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)', marginTop: 'var(--space-2)' }}>
+              {state.sweptIds?.toLocaleString()} ids swept, {state.sweptFound?.toLocaleString()} products found.
+              {state.sweepComplete ? ' Their ids ran out — this is the whole catalogue.' : ' Not finished.'}
+            </p>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap" style={{ marginTop: 'var(--space-2)' }}>
+            {state.sweepComplete ? (
+              <Button variant="ghost" size="sm" loading={sweeping} onClick={() => { setSweepArmed(true); sweep() }}>
+                Sweep again
+              </Button>
+            ) : (
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={sweeping}
+                // Two presses. An hour of requests against somebody else's
+                // rate-limited API is not something to start by mistake.
+                onClick={() => (sweepArmed ? sweep() : setSweepArmed(true))}
+              >
+                {sweepArmed
+                  ? 'Start it — this will run for a while'
+                  : (state.sweptIds ?? 0) > 0
+                    ? 'Carry on sweeping'
+                    : 'Find the rest of the catalogue'}
+              </Button>
+            )}
+            {sweepArmed && !sweeping && (
+              <Button variant="ghost" size="sm" onClick={() => setSweepArmed(false)}>
+                Not now
+              </Button>
+            )}
+          </div>
+        </div>
       )}
     </Card>
   )

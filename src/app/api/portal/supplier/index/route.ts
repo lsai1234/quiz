@@ -33,6 +33,10 @@ export async function GET() {
     pagesRead: index.pagesRead,
     complete: index.complete,
     updatedAt: index.updatedAt,
+    sweptIds: index.sweptIds,
+    sweptFound: index.sweptFound,
+    sweptTo: index.sweptTo,
+    sweepComplete: index.sweepComplete,
   })
 }
 

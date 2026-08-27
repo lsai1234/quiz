@@ -36,6 +36,7 @@ import type {
   SupplierFeedOptions,
   SupplierProvider,
   SupplierStockLevel,
+  SupplierProductStub,
 } from '../types'
 import { createSoapClient, type PowerBodySoapClient } from './soap'
 import { partitionBySkuMap } from '../product-id-map'
@@ -46,6 +47,7 @@ import {
   toStockLevel,
   toSupplierOrder,
   toSupplierProduct,
+  num,
   type CreateOrderContext,
   type PbOrder,
   type PbOrderResponse,
@@ -619,6 +621,45 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     },
 
     getFeed: readFeed,
+
+    /**
+     * Sweep product ids for whatever is behind them — identity only.
+     *
+     * Deliberately does not read or write the detail cache. A sweep visits
+     * thousands of ids, and that cache is one document holding full product
+     * records; putting a sweep through it would grow it to tens of megabytes
+     * and rewrite it thousands of times. Nothing here is descriptive enough to
+     * be worth keeping anyway — the picture and blurb are fetched properly, by
+     * id, for the handful of products actually being imported.
+     *
+     * An empty id is omitted, never thrown: on a sweep most ids are empty and
+     * that is the expected answer. A caller that needs to tell "nothing there"
+     * from "the account is broken" checks an id it already knows exists.
+     */
+    async probeProductIds(productIds: string[]): Promise<SupplierProductStub[]> {
+      const ids = [...new Set(productIds.map((id) => String(id ?? '').trim()).filter(Boolean))]
+      if (ids.length === 0) return []
+
+      const found = await mapLimit(ids, DETAIL_CONCURRENCY, async (id) => {
+        try {
+          const info = await fetchDetail(id)
+          const sku = String(info.sku ?? '').trim()
+          if (sku === '') return null
+          return {
+            productId: id,
+            sku,
+            name: String(info.name ?? '').trim(),
+            wholesalePrice: Math.round(num(info.price) * 100) / 100,
+            stock: num(info.qty),
+          }
+        } catch {
+          // Empty id, or a refusal. Both mean "no product recorded here"; the
+          // caller's canary is what separates them.
+          return null
+        }
+      })
+      return found.filter((p): p is SupplierProductStub => p !== null)
+    },
 
     /**
      * Ask what delivery services this account has.
