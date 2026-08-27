@@ -51,6 +51,7 @@ export async function GET() {
     sweptFound: index.sweptFound,
     sweptTo: index.sweptTo,
     sweepComplete: index.sweepComplete,
+    resumeFrom: index.resumeFrom ?? null,
     measured: index.measured ?? null,
   })
 }
@@ -90,7 +91,18 @@ export async function POST(req: Request) {
   await syncPortalRuntime()
 
   if (body.reset) await clearSupplierIndex()
-  const fromPage = Math.max(1, Math.floor(body.fromPage ?? 1))
+
+  /**
+   * Where to start: what the caller asked for, else where the last pass got to.
+   *
+   * Defaulting to page 1 was fatal rather than merely wasteful. Their list has
+   * a per-session row allowance of about 3,000, so a crawl that restarts at
+   * page 1 spends the whole allowance re-reading the first thirty pages, goes
+   * quiet at page 31, and can never reach page 32 however many times it is
+   * pressed. The log showed it as "1500 rows, 0 new" twice over.
+   */
+  const stored = await readSupplierIndex()
+  const fromPage = Math.max(1, Math.floor(body.fromPage ?? (body.reset ? 1 : stored.resumeFrom ?? 1)))
   const startedAt = Date.now()
 
   try {
@@ -139,7 +151,7 @@ export async function POST(req: Request) {
      * A measurement taken while the session was healthy can. If the probe saw
      * 80 pages and the crawl went quiet at 31, that is a refusal, full stop.
      */
-    const measured = (await readSupplierIndex()).measured
+    const measured = stored.measured
     if (complete && measured && lastRead < measured.lastPage) {
       complete = false
       throttled = true
@@ -152,6 +164,9 @@ export async function POST(req: Request) {
       pagesRead: feed.pages,
       complete,
       reset: body.reset && fromPage === 1,
+      // Remembered on the server, so a closed tab or a fresh press picks up
+      // here rather than starting the whole allowance over.
+      resumeFrom: nextPage,
     })
     const total = Object.keys(index.bySku).length
 
@@ -167,6 +182,7 @@ export async function POST(req: Request) {
       fromPage,
       toPage: lastRead,
       measured: index.measured ?? null,
+      resumeFrom: index.resumeFrom ?? null,
       // Null once the feed ended. Anything else is a pause the caller resumes.
       nextPage,
       complete,

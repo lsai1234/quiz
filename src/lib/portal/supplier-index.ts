@@ -63,6 +63,19 @@ export interface SupplierIndex {
   /** When the last pass finished. */
   updatedAt: string | null
   /**
+   * The page the next crawl pass should start from.
+   *
+   * Without this the crawl restarted at page 1 every time — and against a
+   * per-session row allowance of about 3,000, that is fatal rather than merely
+   * wasteful: every run spent its whole allowance re-reading the first thirty
+   * pages, went quiet at page 31, and could never reach page 32 no matter how
+   * many times it was pressed. The log said it plainly ("1500 rows, 0 new")
+   * and the restart was the reason.
+   *
+   * Null means start at the beginning — a fresh index, or one that finished.
+   */
+  resumeFrom: number | null
+  /**
    * How far the id sweep has got.
    *
    * The list feed stops at a server-side ceiling; `getProductInfo` does not, so
@@ -109,6 +122,7 @@ const EMPTY: SupplierIndex = {
   pagesRead: 0,
   complete: false,
   updatedAt: null,
+  resumeFrom: null,
   sweptTo: null,
   sweptIds: 0,
   sweptFound: 0,
@@ -156,7 +170,7 @@ export async function indexedProductIds(skus: string[]): Promise<Map<string, Ind
  */
 export async function mergeIntoIndex(
   levels: SupplierStockLevel[],
-  meta: { pagesRead: number; complete: boolean; reset?: boolean },
+  meta: { pagesRead: number; complete: boolean; reset?: boolean; resumeFrom?: number | null },
 ): Promise<SupplierIndex> {
   const current = meta.reset ? { ...EMPTY } : await readSupplierIndex()
   const bySku = { ...current.bySku }
@@ -169,6 +183,8 @@ export async function mergeIntoIndex(
     bySku,
     pagesRead: (meta.reset ? 0 : current.pagesRead) + meta.pagesRead,
     complete: meta.complete,
+    // A finished crawl has nowhere to resume to; anything else remembers.
+    resumeFrom: meta.complete ? null : (meta.resumeFrom ?? current.resumeFrom ?? null),
     updatedAt: new Date().toISOString(),
   }
   await writeJson(INDEX_FILE, next)

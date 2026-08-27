@@ -16,6 +16,7 @@ interface IndexState {
   sweptFound?: number
   sweptTo?: number | null
   sweepComplete?: boolean
+  resumeFrom?: number | null
   measured?: { pageSize: number; lastPage: number; totalProducts: number; at: string } | null
 }
 
@@ -102,23 +103,60 @@ export function SupplierIndexBuilder() {
     const say = (text: string, tone: Step['tone'] = 'plain') =>
       setSteps((prev) => [...prev, { text, tone, at: Date.now() }])
 
-    let page: number | null = 1
+    // undefined = "carry on from wherever the server got to". Sending 1 here
+    // is what made every run re-read the first thirty pages and spend the whole
+    // session allowance before reaching anything new.
+    let page: number | undefined = reset ? 1 : undefined
     let passes = 0
     /** Consecutive passes that came back refused at the SAME page. */
     let stalled = 0
     let lastPage: number | null = null
 
-    say(reset ? 'Starting over — clearing what was indexed before.' : 'Asking PowerBody for their product list.')
+    /**
+     * Measure their feed first, if it has never been measured.
+     *
+     * The backstop that stops a throttled crawl calling itself finished needs
+     * to know how long the feed really is. Without a measurement it cannot
+     * fire, and the crawl believes the silence — which is exactly what happened
+     * on the run that reported "3,000 products, their feed ended at page 34".
+     */
+    if (!state?.measured) {
+      setProgress('Measuring how long their list is, so a refusal cannot pass for the end…')
+      say('Measuring their list first — without that, a refusal looks exactly like the end of the feed.')
+      try {
+        const res = await fetch('/api/portal/supplier/page-probe', { cache: 'no-store' })
+        const d = await res.json().catch(() => ({}))
+        if (res.ok && d.lastPage) {
+          setDepth(d)
+          setState((prev) => (prev ? { ...prev, measured: d.measured ?? { pageSize: d.pageSize, lastPage: d.lastPage, totalProducts: d.totalProducts, at: new Date().toISOString() } } : prev))
+          say(`Their list measures ${d.lastPage} pages, about ${d.totalProducts.toLocaleString()} products.`, 'good')
+        }
+      } catch {
+        say('Could not measure their list — carrying on without the safety net.', 'warn')
+      }
+    }
+
+    say(
+      reset
+        ? 'Starting over — clearing what was indexed before.'
+        : state?.resumeFrom
+          ? `Carrying on from page ${state.resumeFrom} — the pages already read are kept.`
+          : 'Asking PowerBody for their product list.',
+    )
 
     try {
-      while (page !== null && passes < 200) {
-        const asking = page
-        setProgress(`Reading pages ${asking}–${asking + PAGES_PER_PASS - 1} from PowerBody…`)
+      while (passes < 200) {
+        setProgress(
+          page === undefined ? 'Picking up where the last run stopped…' : `Reading pages ${page}–${page + PAGES_PER_PASS - 1}…`,
+        )
 
         const res: Response = await fetch('/api/portal/supplier/index', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromPage: page, reset: reset && passes === 0 }),
+          body: JSON.stringify({
+            ...(page === undefined ? {} : { fromPage: page }),
+            reset: reset && passes === 0,
+          }),
         })
         const d = await res.json().catch(() => ({}))
         if (!res.ok) {
@@ -139,6 +177,7 @@ export function SupplierIndexBuilder() {
           pagesRead: d.pagesRead,
           complete: d.complete,
           measured: d.measured,
+          resumeFrom: d.resumeFrom,
           updatedAt: new Date().toISOString(),
         }))
 

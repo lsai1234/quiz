@@ -146,3 +146,40 @@ describe('the measurement', () => {
     expect(index.measured?.lastPage).toBe(80)
   })
 })
+
+describe('resuming', () => {
+  beforeEach(async () => { await clearSupplierIndex() })
+
+  it('remembers where the next pass should start', async () => {
+    // Not merely an optimisation. Their list has a per-session row allowance of
+    // about 3,000, so a crawl that restarts at page 1 spends the whole
+    // allowance re-reading the first thirty pages, goes quiet at page 31, and
+    // can NEVER reach page 32 however many times it is pressed.
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 15, complete: false, resumeFrom: 16 })
+    expect((await readSupplierIndex()).resumeFrom).toBe(16)
+
+    await mergeIntoIndex([level('P2', '200')], { pagesRead: 15, complete: false, resumeFrom: 31 })
+    expect((await readSupplierIndex()).resumeFrom).toBe(31)
+  })
+
+  it('has nowhere to resume to once the feed ended', async () => {
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 15, complete: false, resumeFrom: 16 })
+    await mergeIntoIndex([level('P2', '200')], { pagesRead: 5, complete: true, resumeFrom: 21 })
+
+    expect((await readSupplierIndex()).resumeFrom).toBeNull()
+  })
+
+  it('keeps the resume point when a pass does not name a new one', async () => {
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 15, complete: false, resumeFrom: 16 })
+    await mergeIntoIndex([level('P2', '200')], { pagesRead: 0, complete: false })
+
+    expect((await readSupplierIndex()).resumeFrom).toBe(16)
+  })
+
+  it('goes back to the beginning on a reset', async () => {
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 15, complete: false, resumeFrom: 16 })
+    await clearSupplierIndex()
+
+    expect((await readSupplierIndex()).resumeFrom).toBeNull()
+  })
+})
