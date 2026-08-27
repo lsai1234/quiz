@@ -55,9 +55,23 @@ import {
   type PbProductListItem,
 } from './wire'
 
-/** Their list feed is paged; stop when a page comes back empty. The cap is a
- *  guard against a feed that never returns an empty page, not a real limit. */
-const MAX_PAGES = 200
+/**
+ * Runaway guard for the pager — NOT a statement about how long the feed is.
+ *
+ * This was 200. Fifteen rows a page makes that exactly 3,000 products, and for
+ * a long time that number was quoted back as PowerBody's own ceiling, on the
+ * strength of an export that produced exactly 3,000 rows. It was ours. A pager
+ * that stops on its own budget and a feed that ends look identical from the
+ * outside except for one tell: a feed that ends has a SHORT last page, and ours
+ * was always full.
+ *
+ * So it is now set where a guard belongs — far past any plausible catalogue,
+ * bounding a feed that never returns an empty page rather than deciding how
+ * much of a real one gets read. Anything that must not run long passes a
+ * deadline or a page budget instead, which is the honest way to stop early
+ * because both of those report that they did.
+ */
+const MAX_PAGES = 4_000
 
 /** In-flight `getProductInfo` calls we queue up. The transport is what actually
  *  paces them (see `soap.ts`); this only bounds how many promises exist at once. */
@@ -557,6 +571,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     const { items, complete, pages, nextPage } = await fetchListItems({
       fromPage: options.fromPage,
       pageBudget: options.pageBudget,
+      ...(options.deadlineMs ? { deadline: Date.now() + options.deadlineMs } : {}),
     })
     const updatedAt = new Date().toISOString()
     return {
@@ -615,7 +630,13 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
 
     async getStockLevels(skus?: string[]): Promise<SupplierStockLevel[]> {
       // Always live — this is the call the daily check exists to make.
-      const { levels } = await readFeed()
+      //
+      // Bounded by a CLOCK, not by a page count. The page cap used to stop this
+      // at 3,000 products silently, so every product past that never had its
+      // stock or price refreshed and nothing said so. A deadline stops it just
+      // as reliably and, unlike a page cap, is obviously a time limit rather
+      // than a claim about the size of the catalogue.
+      const { levels } = await readFeed({ deadlineMs: buildDeadlineMs })
       const wanted = skus && skus.length > 0 ? new Set(skus) : null
       return wanted ? levels.filter((level) => wanted.has(level.sku)) : levels
     },

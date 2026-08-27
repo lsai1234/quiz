@@ -137,6 +137,14 @@ export interface SupplierFeedOptions {
   fromPage?: number
   /** Pages this call may read before handing back. */
   pageBudget?: number
+  /**
+   * Wall-clock milliseconds this read may spend.
+   *
+   * The honest way to stop a long read early: unlike a page cap it cannot be
+   * mistaken for a statement about how many products exist, and `complete`
+   * still says the read was short.
+   */
+  deadlineMs?: number
 }
 
 // ─── Orders ────────────────────────────────────────────────────────────────────

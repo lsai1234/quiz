@@ -352,6 +352,36 @@ Three properties matter more than the search itself:
   the feed walked instead. A stale entry can cost a wasted call, never a wrong
   price.
 
+### The 3,000 "ceiling" was ours
+
+Stated here for a long time as PowerBody's server-side cap, on the strength of
+an export that produced exactly 3,000 rows. It was `MAX_PAGES = 200` in
+`live.ts`, at their fifteen rows a page. A pager that stops on its own budget
+and a feed that has ended are indistinguishable from outside — except for one
+tell, which nobody read: **a feed that ends has a short last page, and ours was
+always full.** 200.0 pages exactly, with a full page 200, was the evidence that
+the number was ours, and it was written down as proof of the opposite.
+
+`MAX_PAGES` is now 4,000 — a runaway guard against a feed that never returns an
+empty page, which is all it was ever documented to be. Anything that must not
+run long passes a `deadlineMs` or a `pageBudget`, both of which report that the
+read was short instead of quietly shortening it.
+
+Two things were silently truncated by the old value and are not any more:
+
+- `getStockLevels()` paged with no budget, so the nightly stock and price
+  refresh only ever saw the first 3,000 products. It is now bounded by a clock,
+  which cannot be mistaken for a claim about how many products exist.
+- The `getProductsBySku` feed walk, so a SKU on page 201 was reported "not in
+  the feed" — which is the symptom that started all of this.
+
+**Settle it with data, not argument:** `GET /api/portal/supplier/page-probe`
+asks for pages 1, 100, 200, 201, 250, 400, 600, 800 and 1200 and prints the row
+count and first code of each. Three outcomes are distinguishable at a glance —
+rows past page 200 (the ceiling was ours), page 201 empty against a full 200
+(the ceiling is theirs), or every page returning the same first code (the page
+parameter is being ignored and the "3,000 products" were 200 copies of 15).
+
 ### Reaching the other 5,000 — the id sweep
 
 The 3,000 cap is on `getProductList`. **`getProductInfo` is not capped**: it

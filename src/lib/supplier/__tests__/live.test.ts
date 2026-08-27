@@ -437,3 +437,55 @@ describe('live PowerBody adapter', () => {
     })
   })
 })
+
+describe('how far the pager will actually read', () => {
+  /** A feed `pages` pages long, fifteen rows each — their real page size. */
+  function feedOf(pages: number) {
+    let deepest = 0
+    const client = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => {
+        const page = (args as { page: number }).page
+        deepest = Math.max(deepest, page)
+        if (page > pages) return []
+        return Array.from({ length: 15 }, (_, i) => ({
+          product_id: String((page - 1) * 15 + i + 1),
+          sku: `PB-${(page - 1) * 15 + i + 1}`,
+          price: '10.00', price_tax: '12.00', qty: '5', vat_rate: '20',
+        }))
+      },
+    }).client
+    return { client, deepest: () => deepest }
+  }
+
+  /**
+   * The bug this guards against was a NUMBER, not a crash.
+   *
+   * `MAX_PAGES` was 200. Fifteen rows a page is exactly 3,000 products, and
+   * that figure was then repeated as PowerBody's own ceiling on the strength of
+   * an export that produced exactly 3,000 rows. A pager stopping on its own
+   * budget and a feed that has ended look identical from outside — except that
+   * a feed which ends has a SHORT last page, and ours was always full.
+   */
+  it('reads well past 200 pages when the feed keeps answering', async () => {
+    const { client, deepest } = feedOf(400)
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getFeed()
+
+    expect(feed.complete).toBe(true)
+    // Past 3,000 products, which the old guard could never have reached.
+    expect(deepest()).toBeGreaterThan(200)
+    expect(feed.levels).toHaveLength(400 * 15)
+  })
+
+  it('still stops on a feed that never ends, and says the read was short', async () => {
+    // The guard's real job. It has to exist; it just must not be small enough
+    // to be mistaken for the size of a real catalogue.
+    const { client } = feedOf(Number.MAX_SAFE_INTEGER)
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() })
+      .getFeed({ pageBudget: 12 })
+
+    expect(feed.complete).toBe(false)
+    expect(feed.nextPage).toBe(13)
+  })
+})

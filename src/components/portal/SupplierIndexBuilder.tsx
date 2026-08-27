@@ -40,6 +40,9 @@ export function SupplierIndexBuilder() {
   const [sweeping, setSweeping] = useState(false)
   /** Set once the user has agreed to the sweep's cost — see the note below. */
   const [sweepArmed, setSweepArmed] = useState(false)
+  /** What deep pages of their list actually return — see `probeDepth`. */
+  const [depth, setDepth] = useState<{ verdict: string; pages: Array<{ page: number; rows: number; firstSku?: string | null }> } | null>(null)
+  const [probing, setProbing] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -133,6 +136,33 @@ export function SupplierIndexBuilder() {
     }
   }
 
+  /**
+   * Ask their list for specific deep pages and print what comes back.
+   *
+   * "Their feed caps at 3,000" was asserted here for a long time because an
+   * export produced exactly 3,000 rows. That number was ours — a 200-page guard
+   * at fifteen rows a page — and a pager stopping on its own budget looks
+   * exactly like a feed that ended. One request to page 201 settles it, so it
+   * is asked rather than reasoned about.
+   */
+  async function probeDepth() {
+    setProbing(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/portal/supplier/page-probe', { cache: 'no-store' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(d.error ?? 'PowerBody could not be reached.')
+        return
+      }
+      setDepth({ verdict: d.verdict, pages: d.pages })
+    } catch {
+      setError('Could not reach PowerBody.')
+    } finally {
+      setProbing(false)
+    }
+  }
+
   const built = state && state.products > 0
 
   return (
@@ -170,6 +200,44 @@ export function SupplierIndexBuilder() {
 
       {error && (
         <p style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-critical)' }}>{error}</p>
+      )}
+
+      {/* Settles how deep their list actually goes, with their own answers
+          rather than an assumption. */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant="ghost" size="sm" loading={probing} onClick={probeDepth}>
+          How deep does their list go?
+        </Button>
+      </div>
+
+      {depth && (
+        <div className="rounded-xl px-3 py-2.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}>
+          <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-1)', lineHeight: 'var(--leading-loose)' }}>
+            {depth.verdict}
+          </p>
+          <div className="overflow-x-auto" style={{ marginTop: 'var(--space-2)' }}>
+            <table style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Page</th>
+                  <th style={{ textAlign: 'left', paddingRight: '1rem' }}>Rows</th>
+                  <th style={{ textAlign: 'left' }}>First code</th>
+                </tr>
+              </thead>
+              <tbody>
+                {depth.pages.map((row) => (
+                  <tr key={row.page}>
+                    <td style={{ paddingRight: '1rem' }}>{row.page}</td>
+                    <td style={{ paddingRight: '1rem', color: row.rows > 0 ? 'var(--tone-positive)' : 'var(--ink-3)' }}>
+                      {row.rows}
+                    </td>
+                    <td>{row.firstSku ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       )}
 
       {/* The second half of the catalogue.
