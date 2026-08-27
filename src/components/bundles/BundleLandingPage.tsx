@@ -42,7 +42,10 @@ interface Props {
  * toggle the optional add-ons; the core products can't be swapped or removed.
  */
 export function BundleLandingPage({ bundle }: Props) {
-  const { products } = useCatalogueProducts()
+  // Every line on this page is a product-id lookup into `products`, so wait for
+  // the catalogue: an id that hasn't loaded looks exactly like one the shop
+  // doesn't stock, and the bundle would price itself at £0.00 in the meantime.
+  const { products, isLoading: catalogueLoading } = useCatalogueProducts()
   const [rawBlueprint, setBlueprint] = useState<StackBlueprint>(bundle.blueprint)
   const [planType, setPlanType] = useState<PlanType>('oneoff')
   const [revealedIntroDiscount, setRevealedIntroDiscount] = useState<number | null>(null)
@@ -164,6 +167,14 @@ export function BundleLandingPage({ bundle }: Props) {
   const showStickyBar = checkoutState.status !== 'needs-account'
     && checkoutState.status !== 'needs-consent'
     && checkoutState.status !== 'mock-complete'
+
+  if (catalogueLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]" style={{ background: 'var(--color-bg)' }}>
+        <p className="text-[var(--color-muted)] text-sm">Loading the bundle…</p>
+      </div>
+    )
+  }
 
   // Mock payments only — a real payment confirms on /order/confirmation.
   if (checkoutState.status === 'mock-complete') {

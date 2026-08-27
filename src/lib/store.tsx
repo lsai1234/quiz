@@ -8,7 +8,6 @@ import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import { MOCK_PRODUCTS } from './mock-products'
-import { MOCK_CATALOGUE } from '@/lib/catalogue'
 
 export type PlanType = 'oneoff' | 'subscription'
 
@@ -39,7 +38,11 @@ interface QuizStore {
   catalogueSource: 'mock' | 'real'
   stackBlueprint: StackBlueprint | null
   // CatalogueProduct[] — richer type used by the stack review page, blueprint
-  // factory, swap modal, and boosters. Fetched from /api/catalogue on mount.
+  // factory, swap modal, and boosters. Starts EMPTY and is filled only by
+  // `loadCatalogue()` (lib/catalogue/load). It must never default to sample
+  // data: the quiz picks product ids out of this list and the reveal looks
+  // them back up, so a default that isn't the shop's real catalogue produces
+  // a stack of ids the shop has never heard of.
   catalogueProducts: CatalogueProduct[]
   setCatalogueProducts: (products: CatalogueProduct[]) => void
 
@@ -126,7 +129,7 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   catalogue: MOCK_PRODUCTS,
   catalogueSource: 'mock',
   stackBlueprint: null,
-  catalogueProducts: MOCK_CATALOGUE,
+  catalogueProducts: [],
   deepDiveQuestions: null,
   deepDiveStatus: 'idle',
   deepDiveKey: null,

@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { StackReviewPage } from '../StackReviewPage'
+import { MOCK_CATALOGUE } from '@/lib/catalogue'
+import { invalidateCatalogue } from '@/lib/catalogue/load'
 
 jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
 
@@ -14,9 +16,14 @@ jest.mock('@/lib/analytics/events', () => ({ track: jest.fn() }))
  * having finished a quiz.
  */
 beforeEach(() => {
+  // The page resolves every slot's product id against the served catalogue, and
+  // `MOCK_BLUEPRINT` holds mock ids — so serve the mock catalogue, the one that
+  // pairing is true of. An empty response is a shop with nothing in it, and the
+  // page says so instead of rendering the stack.
+  invalidateCatalogue()
   global.fetch = jest.fn().mockResolvedValue({
     ok: true,
-    json: async () => ({ products: [] }),
+    json: async () => ({ products: MOCK_CATALOGUE, source: 'mock' }),
   }) as unknown as typeof fetch
 })
 

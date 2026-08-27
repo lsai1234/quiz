@@ -873,7 +873,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     try {
       const { buildStackBlueprint } = await import('@/lib/stack-blueprint')
       const { personaliseBlueprint } = await import('@/lib/stack-blueprint/personalise')
-      const catalogueProducts = useQuizStore.getState().catalogueProducts
+      const { loadCatalogue } = await import('@/lib/catalogue/load')
+      // AWAIT the catalogue — never read whatever happens to be in the store.
+      // The reveal looks every chosen product back up by id in this same
+      // catalogue, so building the stack before it has loaded produces a stack
+      // of ids the shop doesn't have: "Product unavailable" on every card, at
+      // £0.00, under an AI reason naming a product from somewhere else.
+      const { products: catalogueProducts } = await loadCatalogue()
       // Deep-dive signal tags folded into lifestyle sharpen the deterministic
       // ranking; the raw Q&A transcript rides along in dynamicAnswers for the
       // AI prompts.
