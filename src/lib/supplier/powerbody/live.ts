@@ -222,18 +222,45 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     nextPage: number | null
   }
 
-  /** Page through `getProductList` until a page comes back empty — or until the
-   *  caller has enough, or the clock runs out. */
+  /** How long to wait before asking a second time whether the feed really ended.
+   *  Long enough to outlast a throttle window, short enough to pay once. */
+  const END_CONFIRM_DELAY_MS = 1_500
+
+  /**
+   * Page through `getProductList` until a page comes back empty — or until the
+   * caller has enough, or the clock runs out.
+   *
+   * WHY AN EMPTY PAGE IS CHECKED TWICE
+   * ─────────────────────────────────
+   * An empty page is the only signal this feed gives that there is nothing
+   * after it. It is also, potentially, what a rate limiter returns — and the
+   * two are indistinguishable in a single reply. Read once, a throttled page
+   * ends the crawl AND marks it `complete`, which is the worst of both: the
+   * index silently holds a fraction of the catalogue and reports that the
+   * fraction is all of it. Every "this SKU is not on the account" after that
+   * inherits the lie.
+   *
+   * So the end is confirmed rather than assumed: pause, ask the same page
+   * again, and only stop if it is still empty. One extra call per crawl, paid
+   * once at the real end, against a failure mode that is invisible and
+   * permanent.
+   */
   async function fetchListItems(listOptions: ListFeedOptions = {}): Promise<ListFeed> {
     const all: PbProductListItem[] = listOptions.into ?? []
     const first = Math.max(1, listOptions.fromPage ?? 1)
     const budget = Math.max(1, listOptions.pageBudget ?? MAX_PAGES)
     let read = 0
     for (let page = first; page < first + budget; page++) {
-      const rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
+      let rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
       read += 1
-      // An empty page is the feed's own full stop — the only signal it gives
-      // that there is nothing after this.
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        await new Promise((resolve) => setTimeout(resolve, END_CONFIRM_DELAY_MS))
+        rows = await client.call<PbProductListItem[] | null>('dropshipping.getProductList', { page })
+        read += 1
+      }
+
+      // Empty twice, either side of a pause: the feed has genuinely ended.
       if (!Array.isArray(rows) || rows.length === 0) return { items: all, complete: true, pages: read, nextPage: null }
       all.push(...rows)
       if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null }

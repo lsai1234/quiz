@@ -323,7 +323,11 @@ describe('live PowerBody adapter', () => {
       expect(feed.complete).toBe(true)
       expect(feed.nextPage).toBeNull()
       // It must not re-read pages 1–3 the caller already has.
-      expect(calls.map((c) => (c.args as { page: number }).page)).toEqual([4, 5, 6])
+      const pages = calls.map((c) => (c.args as { page: number }).page)
+      expect(pages.filter((p) => p < 4)).toEqual([])
+      // 6 twice: the terminal empty page is confirmed rather than believed
+      // first time, because an empty page and a throttled one look identical.
+      expect(pages).toEqual([4, 5, 6, 6])
     })
 
     it('reports the end of the feed rather than a resume point', async () => {
@@ -475,6 +479,36 @@ describe('how far the pager will actually read', () => {
     // Past 3,000 products, which the old guard could never have reached.
     expect(deepest()).toBeGreaterThan(200)
     expect(feed.levels).toHaveLength(400 * 15)
+  })
+
+  /**
+   * The invisible, permanent failure.
+   *
+   * An empty page is the only "the feed ended" signal this API gives, and it is
+   * also what a rate limiter may return. Read once, a throttled page both stops
+   * the crawl and marks it complete — so the index holds a fraction of the
+   * catalogue and reports that the fraction is all of it, and every later "that
+   * SKU is not on this account" inherits the lie.
+   */
+  it('does not take one empty page as the end of the feed', async () => {
+    let asked = 0
+    const client = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => {
+        const page = (args as { page: number }).page
+        asked += 1
+        // Page 3 comes back empty the first time it is asked — a throttle, not
+        // the end — and answers properly when asked again.
+        if (page === 3 && asked === 3) return []
+        if (page > 5) return []
+        return [{ product_id: String(page), sku: `PB-${page}`, price: '1', price_tax: '1', qty: '1', vat_rate: '20' }]
+      },
+    }).client
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore() }).getFeed()
+
+    // It carried on past the blip and read the real feed to its real end.
+    expect(feed.levels.map((l) => l.sku)).toEqual(['PB-1', 'PB-2', 'PB-3', 'PB-4', 'PB-5'])
+    expect(feed.complete).toBe(true)
   })
 
   it('still stops on a feed that never ends, and says the read was short', async () => {
