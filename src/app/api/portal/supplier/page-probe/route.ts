@@ -38,7 +38,13 @@ export async function GET() {
     const supplier = await getSupplier()
     const probed: Array<{ page: number; rows: number; firstSku: string | null; lastSku: string | null }> = []
 
+    let firstRead = true
     const read = async (page: number): Promise<SupplierStockLevel[]> => {
+      // Paced like the crawl. A dozen calls at full tilt is enough to spend
+      // their allowance, which then makes the CRAWL that follows read empty
+      // pages from page one — measuring the feed must not be what breaks it.
+      if (!firstRead) await new Promise((resolve) => setTimeout(resolve, 1_500))
+      firstRead = false
       const feed = await supplier.getFeed({ fromPage: page, pageBudget: 1 })
       const rows = feed.levels
       probed.push({

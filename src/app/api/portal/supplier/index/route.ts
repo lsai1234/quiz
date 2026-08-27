@@ -22,7 +22,20 @@ export const maxDuration = 60
  * comes back for the rest. Sized so a pass finishes well inside `maxDuration`
  * even when PowerBody are slow.
  */
-const PAGES_PER_PASS = 15
+const PAGES_PER_PASS = 12
+
+/**
+ * Wait between page requests.
+ *
+ * The transport's 150ms floor is right for a handful of calls and far too fast
+ * for a catalogue: at that pace PowerBody start answering empty arrays, then
+ * HTTP 503, and every retry against a shedding server digs the hole deeper. A
+ * 195-second run once bought 400 products that way.
+ *
+ * A one-time index build has no reason to be quick. Eighty pages at two seconds
+ * is under three minutes, and it finishes — which the fast version never did.
+ */
+const PACING_MS = 2_000
 
 /**
  * Wall clock one pass may spend before handing back what it has.
@@ -36,7 +49,7 @@ const PAGES_PER_PASS = 15
  * Set well inside `maxDuration` so the pass always gets to save and report
  * where it reached.
  */
-const PASS_DEADLINE_MS = 35_000
+const PASS_DEADLINE_MS = 40_000
 
 /** GET → what the stored index currently holds. */
 export async function GET() {
@@ -129,6 +142,11 @@ export async function POST(req: Request) {
       fromPage,
       pageBudget: PAGES_PER_PASS,
       deadlineMs: PASS_DEADLINE_MS,
+      pacingMs: PACING_MS,
+      // Turns an empty page from a puzzle into a fact: below the measured last
+      // page it can only be a refusal, so the pass stops at once instead of
+      // spending four more requests proving what we already know.
+      ...(stored.measured ? { knownLastPage: stored.measured.lastPage } : {}),
     })
     const before = Object.keys((await readSupplierIndex()).bySku).length
 
@@ -138,7 +156,10 @@ export async function POST(req: Request) {
     let throttled = feed.stoppedBy === 'refused'
     let complete = feed.complete
     let nextPage = feed.complete ? null : feed.nextPage
-    const lastRead = fromPage + feed.pages - 1
+    // The highest page actually asked for. `feed.pages` counts REQUESTS —
+    // retries included — so using it as a page range labelled a pass that read
+    // pages 1, 1, 6 and 21 as "pages 1–4".
+    const lastRead = feed.reachedPage
 
     /**
      * Refuse to call it the end before the page the probe actually measured.

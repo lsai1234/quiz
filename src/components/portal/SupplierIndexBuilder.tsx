@@ -130,6 +130,14 @@ export function SupplierIndexBuilder() {
           setDepth(d)
           setState((prev) => (prev ? { ...prev, measured: d.measured ?? { pageSize: d.pageSize, lastPage: d.lastPage, totalProducts: d.totalProducts, at: new Date().toISOString() } } : prev))
           say(`Their list measures ${d.lastPage} pages, about ${d.totalProducts.toLocaleString()} products.`, 'good')
+          // Measuring costs a dozen requests, and their limit is not per
+          // session — a crawl started straight afterwards read empty pages from
+          // page one. Give it back before asking for eighty more.
+          say('Letting their limit settle for 30s before starting.')
+          for (let left = 30; left > 0; left--) {
+            setProgress(`Measured. Letting their rate limit settle — ${left}s…`)
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          }
         }
       } catch {
         say('Could not measure their list — carrying on without the safety net.', 'warn')
@@ -189,17 +197,6 @@ export function SupplierIndexBuilder() {
           break
         }
 
-        if (d.overruled) {
-          // Their list went quiet, but the probe measured it as longer. Their
-          // cut-off silences the whole session, so pages further on look just
-          // as empty — only the measurement can tell this from a real ending.
-          say(
-            `Their list went quiet at page ${d.toPage}, but it measured ${state?.measured?.lastPage ?? '80-odd'} pages ` +
-              'when it was healthy. That is a refusal, not the end — starting a fresh session and carrying on.',
-            'warn',
-          )
-        }
-
         /**
          * Refused mid-feed. Asking again straight away is asking the same
          * question that was just refused, so it waits — longer each time it is
@@ -216,10 +213,13 @@ export function SupplierIndexBuilder() {
             setError(msg)
             return
           }
-          const wait = Math.min(60_000, 5_000 * 2 ** (stalled - 1))
+          // Minutes, not seconds. Five seconds was never near their window:
+          // a run backed off eighteen times at 5s and got 400 products for its
+          // trouble, because every retry landed inside the same refusal.
+          const wait = Math.min(300_000, 45_000 * 2 ** (stalled - 1))
           say(
-            `PowerBody stopped answering at page ${d.nextPage} — that is throttling, not the end of their list. ` +
-              `Waiting ${Math.round(wait / 1000)}s before trying that page again (attempt ${stalled} of 6).`,
+            `PowerBody stopped answering at page ${d.nextPage}. Waiting ${Math.round(wait / 1000)}s for their limit to ` +
+              `clear before asking again (attempt ${stalled} of 6). ${d.total.toLocaleString()} products are safe.`,
             'warn',
           )
           // Counted down rather than waited out silently: a minute of nothing
@@ -342,9 +342,12 @@ export function SupplierIndexBuilder() {
         {/* Said before it starts, because both of these look like faults while
             they are happening and neither is. */}
         <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-2)', lineHeight: 'var(--leading-loose)' }}>
-          It reads 15 pages at a time and shows each batch as it lands. PowerBody throttle sustained paging, so it
-          will pause and retry — <strong style={{ color: 'var(--ink-2)' }}>a pause is it working, not hanging</strong>.
-          Everything read is saved as it goes, so stopping early costs nothing.
+          It reads deliberately slowly — about a page every two seconds — because PowerBody stop answering when
+          pushed harder, and a fast crawl finishes with less than a slow one. Expect{' '}
+          <strong style={{ color: 'var(--ink-2)' }}>roughly three minutes</strong>, in batches of 12. If they do
+          throttle it waits minutes, not seconds, for the limit to clear —{' '}
+          <strong style={{ color: 'var(--ink-2)' }}>a pause is it working, not hanging</strong>. Everything read is
+          saved as it goes, so stopping early costs nothing.
         </p>
       </div>
 
@@ -371,8 +374,10 @@ export function SupplierIndexBuilder() {
               {state.measured.totalProducts.toLocaleString()} their list measured at
             </span>
           )}
-          {state?.measured && state.pagesRead > 0 && (
-            <span>page {Math.min(state.pagesRead, state.measured.lastPage)} of {state.measured.lastPage}</span>
+          {/* By resume point, not by `pagesRead` — that counts every request
+              including retries, and read "page 140 of 80". */}
+          {state?.measured && state.resumeFrom && (
+            <span>page {Math.min(state.resumeFrom, state.measured.lastPage)} of {state.measured.lastPage}</span>
           )}
         </div>
       )}

@@ -614,3 +614,70 @@ describe('why the pager stopped', () => {
     expect(result.complete).toBe(false)
   })
 })
+
+describe('a measured feed needs no enquiry into an empty page', () => {
+  /**
+   * The version that cost a 195-second run and 400 products.
+   *
+   * With no measurement, every empty page was worth four requests — one retry
+   * plus two look-aheads — to work out whether it was the end. Against a server
+   * already shedding load those four requests only deepen the refusal, and the
+   * run ended on an HTTP 503.
+   *
+   * A measurement taken while the session was healthy answers the question for
+   * free. Below the measured last page, an empty reply cannot be the end.
+   */
+  it('stops at once instead of spending four more requests proving the obvious', async () => {
+    const asked: number[] = []
+    const client = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => {
+        const page = (args as { page: number }).page
+        asked.push(page)
+        return page >= 3 ? [] : [{ product_id: String(page), sku: `PB-${page}`, price: '1', price_tax: '1', qty: '1', vat_rate: '20' }]
+      },
+    }).client
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0] })
+      .getFeed({ pageBudget: 20, knownLastPage: 80 })
+
+    expect(feed.stoppedBy).toBe('refused')
+    expect(feed.nextPage).toBe(3)
+    // Pages 1, 2, 3 and nothing else — no retry of 3, no look-ahead at 8 or 23.
+    expect(asked).toEqual([1, 2, 3])
+  })
+
+  it('still investigates when there is no measurement to lean on', async () => {
+    const asked: number[] = []
+    const client = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => {
+        const page = (args as { page: number }).page
+        asked.push(page)
+        return page >= 3 ? [] : [{ product_id: String(page), sku: `PB-${page}`, price: '1', price_tax: '1', qty: '1', vat_rate: '20' }]
+      },
+    }).client
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0] })
+      .getFeed({ pageBudget: 20 })
+
+    expect(feed.stoppedBy).toBe('end')
+    expect(asked).toContain(8)
+    expect(asked).toContain(23)
+  })
+
+  it('reports the page it reached, not how many requests it made', async () => {
+    // `pages` counts retries too, so using it as a range labelled a pass that
+    // read pages 1, 1, 6 and 21 as "pages 1–4".
+    const client = fakeClient({
+      'dropshipping.getProductList': (args: unknown) => {
+        const page = (args as { page: number }).page
+        return page >= 5 ? [] : [{ product_id: String(page), sku: `PB-${page}`, price: '1', price_tax: '1', qty: '1', vat_rate: '20' }]
+      },
+    }).client
+
+    const feed = await createPowerBodyProvider({ client, detailStore: createMemoryDetailStore(), endConfirmWaitsMs: [0] })
+      .getFeed({ pageBudget: 20 })
+
+    expect(feed.reachedPage).toBe(5)
+    expect(feed.pages).toBeGreaterThan(feed.reachedPage)
+  })
+})

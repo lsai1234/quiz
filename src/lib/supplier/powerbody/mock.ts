@@ -113,7 +113,7 @@ export function createMockSupplier(): SupplierProvider {
     async getFeed() {
       // The fixtures are the whole feed by definition — there is no paging to
       // fall short of, so this is always complete and never resumes.
-      return { levels: await this.getStockLevels(), complete: true, pages: 1, nextPage: null, stoppedBy: 'end' as const }
+      return { levels: await this.getStockLevels(), complete: true, pages: 1, nextPage: null, stoppedBy: 'end' as const, reachedPage: 1 }
     },
 
     async getStockLevels(skus) {

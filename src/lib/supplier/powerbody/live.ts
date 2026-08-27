@@ -230,6 +230,10 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
   interface ListFeedOptions {
     /** Epoch ms to stop paging at, returning what has been read so far. */
     deadline?: number
+    /** Wait between page requests — see `SupplierFeedOptions.pacingMs`. */
+    pacingMs?: number
+    /** The feed's known length, so an empty page below it needs no enquiry. */
+    knownLastPage?: number
     /** Checked after each page — true means we already have what we came for. */
     enough?: (rowsSoFar: PbProductListItem[]) => boolean
     /** Rows are appended here as they arrive, so a caller that stops waiting can
@@ -253,6 +257,9 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
      *  ended. This is what turns a short read from a dead end into a pause. */
     nextPage: number | null
     stoppedBy: 'end' | 'refused' | 'deadline' | 'budget'
+    /** The highest page actually asked for — for honest labelling. `pages`
+     *  counts REQUESTS, which includes retries and is not a page range. */
+    reachedPage: number
   }
 
   /**
@@ -297,11 +304,28 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       return Array.isArray(rows) ? rows : []
     }
 
+    let reached = first
     for (let page = first; page < first + budget; page++) {
+      // Paced. Eighty pages at the transport's 150ms floor is what makes them
+      // start answering empty and then 503 — see `pacingMs`.
+      if (page > first && listOptions.pacingMs) {
+        await new Promise((resolve) => setTimeout(resolve, listOptions.pacingMs))
+      }
+      reached = page
       let rows = await getPage(page)
 
+      if (rows.length === 0 && listOptions.knownLastPage !== undefined && page <= listOptions.knownLastPage) {
+        // A measurement taken while the session was healthy says this page
+        // exists, so an empty reply is a refusal and nothing else. Stopping
+        // here immediately is the whole point: retrying and looking ahead cost
+        // four more requests against a server already shedding load, and could
+        // only ever reach the conclusion we have already been handed.
+        return { items: all, complete: false, pages: read, nextPage: page, stoppedBy: 'refused', reachedPage: reached }
+      }
+
       if (rows.length === 0) {
-        // Back off and ask again, giving the throttle window time to close.
+        // No measurement to lean on, so it has to be established the expensive
+        // way. Back off and ask again, giving a throttle window time to close.
         for (const wait of endConfirmWaits) {
           await new Promise((resolve) => setTimeout(resolve, wait))
           rows = await getPage(page)
@@ -312,29 +336,26 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       if (rows.length === 0) {
         // Still nothing here. Look PAST it: a throttle and an ending feed both
         // answer empty for this page, and only one of them has nothing further
-        // on. Anything found ahead means this was a refusal, not the end — so
-        // the read is reported SHORT and resumable rather than complete, and
-        // the caller comes back for the rest instead of recording a fraction
-        // of the catalogue as all of it.
+        // on.
         for (const ahead of LOOK_AHEAD_PAGES) {
           if ((await getPage(page + ahead)).length > 0) {
-            return { items: all, complete: false, pages: read, nextPage: page, stoppedBy: 'refused' }
+            return { items: all, complete: false, pages: read, nextPage: page, stoppedBy: 'refused', reachedPage: reached }
           }
         }
         // Nothing here, nothing five pages on, nothing twenty pages on. The
         // feed has ended.
-        return { items: all, complete: true, pages: read, nextPage: null, stoppedBy: 'end' }
+        return { items: all, complete: true, pages: read, nextPage: null, stoppedBy: 'end', reachedPage: reached }
       }
 
       all.push(...rows)
-      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null, stoppedBy: 'end' }
+      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null, stoppedBy: 'end', reachedPage: reached }
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
-        return { items: all, complete: false, pages: read, nextPage: page + 1, stoppedBy: 'deadline' }
+        return { items: all, complete: false, pages: read, nextPage: page + 1, stoppedBy: 'deadline', reachedPage: reached }
       }
     }
     // Out of budget rather than out of feed. `nextPage` is what makes that a
     // pause the caller can resume from instead of a silent ceiling.
-    return { items: all, complete: false, pages: read, nextPage: first + budget, stoppedBy: 'budget' }
+    return { items: all, complete: false, pages: read, nextPage: first + budget, stoppedBy: 'budget', reachedPage: reached }
   }
 
   /**
@@ -659,9 +680,11 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    * which is what `getStockLevels` used to do with it.
    */
   async function readFeed(options: SupplierFeedOptions = {}): Promise<SupplierFeed> {
-    const { items, complete, pages, nextPage, stoppedBy } = await fetchListItems({
+    const { items, complete, pages, nextPage, stoppedBy, reachedPage } = await fetchListItems({
       fromPage: options.fromPage,
       pageBudget: options.pageBudget,
+      pacingMs: options.pacingMs,
+      knownLastPage: options.knownLastPage,
       // `!= null`, not truthiness: a deadline of 0 means "stop at the first
       // opportunity", and falsiness silently turned that into "no deadline".
       ...(options.deadlineMs != null ? { deadline: Date.now() + options.deadlineMs } : {}),
@@ -673,6 +696,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       pages,
       nextPage,
       stoppedBy,
+      reachedPage,
     }
   }
 

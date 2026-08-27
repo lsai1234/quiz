@@ -130,6 +130,9 @@ export interface SupplierFeed {
    * the only one where the right response is to do nothing for a while.
    */
   stoppedBy: 'end' | 'refused' | 'deadline' | 'budget'
+  /** The highest page actually asked for. `pages` counts REQUESTS — retries
+   *  included — so it is not a page range and must not be labelled as one. */
+  reachedPage: number
 }
 
 /**
@@ -159,6 +162,25 @@ export interface SupplierFeedOptions {
    * still says the read was short.
    */
   deadlineMs?: number
+  /**
+   * Milliseconds to wait between page requests.
+   *
+   * The transport's 150ms floor is right for a handful of calls and far too
+   * fast for eighty in a row: PowerBody answer empty arrays, then HTTP 503, and
+   * every retry against a shedding server digs the hole deeper. A one-time
+   * index build has no reason to be quick — eighty pages at two seconds each is
+   * under three minutes, and it finishes, which the fast version never did.
+   */
+  pacingMs?: number
+  /**
+   * The last page this feed is known to have, from a healthy measurement.
+   *
+   * Turns an empty page from a puzzle into a fact. Below this page an empty
+   * reply CANNOT be the end of the feed, so there is nothing to investigate:
+   * the read stops immediately and reports a refusal, instead of spending four
+   * more requests on an already-throttled server to reach the same conclusion.
+   */
+  knownLastPage?: number
 }
 
 // ─── Orders ────────────────────────────────────────────────────────────────────
