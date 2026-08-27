@@ -110,6 +110,8 @@ export function SupplierIndexBuilder() {
     let passes = 0
     /** Consecutive passes that came back refused at the SAME page. */
     let stalled = 0
+    /** Consecutive passes that errored outright, as opposed to being refused. */
+    let failures = 0
     let lastPage: number | null = null
 
     /**
@@ -167,11 +169,36 @@ export function SupplierIndexBuilder() {
           }),
         })
         const d = await res.json().catch(() => ({}))
+
+        /**
+         * A failed pass is not a failed crawl.
+         *
+         * PowerBody's own server fails transiently under load — "SOAP-ERROR:
+         * Parsing WSDL: Couldn't load from …/api/soap/?wsdl=1" is their PHP
+         * failing to load its own service description, nothing to do with us.
+         * Ending the whole run on one of those means somebody presses Build
+         * five more times to finish a crawl that was working fine.
+         *
+         * So it waits and asks for the SAME pages again. Nothing is skipped:
+         * the resume point only moves on a pass that actually returned.
+         */
         if (!res.ok) {
-          say(d.error ?? 'PowerBody could not be reached.', 'warn')
-          setError(d.error ?? 'PowerBody could not be reached.')
-          return
+          failures += 1
+          const reason = d.error ?? 'PowerBody could not be reached.'
+          if (failures > 4) {
+            say(`${reason} Giving up for now — ${(state?.products ?? 0).toLocaleString()} products are saved. Press Build again later.`, 'warn')
+            setError(reason)
+            return
+          }
+          const wait = 20_000 * failures
+          say(`Their server errored on this batch (attempt ${failures} of 4). Waiting ${wait / 1000}s and asking for the same pages again.`, 'warn')
+          for (let left = wait / 1000; left > 0; left--) {
+            setProgress(`PowerBody's server errored. Retrying in ${left}s…`)
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          }
+          continue
         }
+        failures = 0
         passes += 1
 
         say(
