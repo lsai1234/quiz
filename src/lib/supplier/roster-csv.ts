@@ -34,7 +34,8 @@ const VALID_SWAP_GROUPS = new Set<string>([
   'protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine',
   'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3',
   'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'joint-support', 'sleep-support', 'fat-burner',
-  'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c', 'general',
+  'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c',
+  'protein-bar', 'nootropic', 'vitamin-b', 'zma', 'energy-gel', 'accessory', 'general',
 ])
 
 /**
@@ -56,6 +57,15 @@ const SWAP_GROUP_ALIASES: Record<string, SwapGroup> = {
   omega3: 'omega-3',
   'vitamin-d3': 'vitamin-d',
   probiotics: 'probiotic',
+  'protein bar': 'protein-bar',
+  bar: 'protein-bar',
+  'vitamin-b-complex': 'vitamin-b',
+  'b-complex': 'vitamin-b',
+  'vitamin b': 'vitamin-b',
+  gel: 'energy-gel',
+  nootropics: 'nootropic',
+  shaker: 'accessory',
+  accessories: 'accessory',
 }
 
 export interface RosterRow {
@@ -141,7 +151,13 @@ function safety(v: string | undefined): { flags: SafetyFlag[]; other: string[] }
 
 /** "ashwagandha 300mg, magnesium 400 mg" → the dose data dedup and caps read. */
 export function parseActives(v: string | undefined): Array<{ name: string; mg?: number }> {
-  return list(v).map((entry) => {
+  return list(v).map((raw) => {
+    // Real sheets write the dose with a basis attached — "22g/serving",
+    // "500mg per serving". The number is the useful part and the basis is
+    // already implied (everything here is per serving), so it is trimmed rather
+    // than defeating the match: without this every dose in the file parses as
+    // a nameless blob and the dedup and cap rules have nothing to compare.
+    const entry = raw.replace(/\s*(\/|\bper\b)\s*(serving|serve|dose|capsule|cap|scoop|tablet)s?\s*$/i, '').trim()
     const match = entry.match(/^(.*?)[\s,]*([\d.]+)\s*(mg|g|mcg|iu|bn|billion)?\s*$/i)
     if (!match) return { name: entry.toLowerCase() }
     const name = match[1].trim().toLowerCase()

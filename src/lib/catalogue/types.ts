@@ -73,6 +73,24 @@ export type SwapGroup =
   | 'fibre'
   | 'menopause'
   | 'vitamin-c'
+  // Added for the CHRGD roster. Each is a group the founder actually stocks
+  // more than one of, which is the bar: a swap group with one product in it
+  // buys nothing, and a product left in `general` gets no alternatives and no
+  // targeted scoring — it is invisible to the quiz's affinity pass.
+  | 'protein-bar'
+  | 'nootropic'
+  | 'vitamin-b'
+  | 'zma'
+  | 'energy-gel'
+  /**
+   * Shakers, bottles, scoops — shop stock that is not a supplement.
+   *
+   * A swap group so the shop can group and swap them, and deliberately one the
+   * quiz has no affinity for and no claims about: an accessory has no dose, no
+   * stack slot and nothing it can be said to do, so it must never be
+   * recommended as part of a stack.
+   */
+  | 'accessory'
   | 'general'
 
 // ─── Variant ──────────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import { uniqueProductId } from '@/lib/supplier/mapping'
 import { getSupplier } from '@/lib/supplier'
 import { autopopulateProduct } from '@/lib/supplier/autopopulate'
 import { resolveProductIdForSku, type ResolveStep } from '@/lib/supplier/resolve-sku'
+import { indexedProductId } from '@/lib/portal/supplier-index'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { SupplierProduct } from '@/lib/supplier/types'
@@ -192,7 +193,7 @@ export async function POST(req: Request) {
          */
         let found: SupplierProduct | undefined
         let resolvedId: string | null = null
-        let via: 'id' | 'feed' | 'search' = 'feed'
+        let via: 'id' | 'index' | 'feed' | 'search' = 'feed'
         let probes = 0
 
         if (target.supplierProductId) {
@@ -202,6 +203,20 @@ export async function POST(req: Request) {
           // has moved, and trusting it would import somebody else's product.
           if (byId?.sku === sku) { found = byId; via = 'id' }
           else note('canary', `That id no longer answers for ${sku}, so it is being resolved again.`)
+        }
+
+        // The stored feed index: a crawl already read PowerBody's product list
+        // and kept the SKU → product id mapping, so this is a lookup rather
+        // than a walk. Nothing here is trusted on its own — the id is used to
+        // fetch live detail, and the SKU on that reply is checked.
+        if (!found) {
+          const indexed = await indexedProductId(sku)
+          if (indexed) {
+            note('canary', `Found ${sku} in the stored product list — it is PowerBody product ${indexed}.`)
+            const [byId] = await supplier.getProductsById([indexed]).catch(() => [])
+            if (byId?.sku === sku) { found = byId; resolvedId = indexed; via = 'index' }
+            else note('canary', `Product ${indexed} did not answer for ${sku}, so the stored index is out of date for this code.`)
+          }
         }
 
         if (!found) {

@@ -1,3 +1,4 @@
+import fs from 'fs'
 import { parseRosterCsv, parseActives } from '@/lib/supplier/roster-csv'
 import { rosterRowToProduct } from '@/lib/supplier/roster-import'
 import type { SupplierProduct } from '@/lib/supplier/types'
@@ -207,5 +208,98 @@ describe('rosterRowToProduct', () => {
     const krill = row('P6,B,Krill,omega-3,10,20,30,79,10,capsule,,False,shellfish allergy,krill 1180mg,True,P6,x').rows[0]
     const { product } = rosterRowToProduct(krill, null)
     expect(product.contraindications).toEqual(['shellfish'])
+  })
+})
+
+describe('the CHRGD roster file', () => {
+  const csv = fs.readFileSync('docs/rosters/chrgd-roster.csv', 'utf8')
+
+  it('classifies every product — none fall through to "general"', () => {
+    // A product left in `general` gets no swap alternatives and no targeted
+    // scoring: it is invisible to the quiz's affinity pass. Seven of the
+    // founder's top-25 picks used to land there because the engine had no
+    // group for a protein bar, a nootropic, a B-complex, ZMA or an energy gel.
+    const { rows } = parseRosterCsv(csv)
+
+    expect(rows).toHaveLength(48)
+    expect(rows.filter((r) => r.swapGroup === 'general')).toEqual([])
+    expect(rows.filter((r) => r.unrecognisedSwapGroup !== null)).toEqual([])
+  })
+
+  it('reads every flavour, not just the row', () => {
+    const { rows } = parseRosterCsv(csv)
+    const total = rows.reduce((n, r) => n + r.variantSkus.length, 0)
+
+    // 48 products, 101 orderable codes between them.
+    expect(total).toBe(101)
+    expect(rows.every((r) => r.variantSkus.includes(r.sku))).toBe(true)
+  })
+
+  it('keeps the doses, despite the sheet writing them "22g/serving"', () => {
+    // The number is the useful part and the basis is implied. Without trimming
+    // it, every dose in the file parses as one nameless blob and the dedup and
+    // cap rules have nothing to compare.
+    const { rows } = parseRosterCsv(csv)
+    const whey = rows.find((r) => r.sku === 'P41624')
+
+    expect(whey?.actives).toEqual([{ name: 'whey protein', mg: 22000 }])
+  })
+
+  it('never silently drops a safety note it has no flag for', () => {
+    // "kidney disease" and "fish allergy" have no quiz question to gate on.
+    // Dropping them is the worst possible handling of a safety field, so they
+    // survive as warnings the customer still sees.
+    const { rows } = parseRosterCsv(csv)
+    const withNotes = rows.filter((r) => r.otherWarnings.length > 0)
+
+    expect(withNotes.length).toBeGreaterThan(0)
+    expect(rows.find((r) => r.sku === 'P47127')?.otherWarnings).toContain('fish allergy')
+  })
+})
+
+const BASE_ROW = row('P1,Brand,Sheet Name,protein-whey,20,40,28,1000,5,powder,,False,,whey 25g,True,P1,Reason').rows[0]
+
+describe('the top-25 rank', () => {
+  it('becomes a recommendation priority instead of being thrown away', () => {
+    // The rank IS the founder saying which products the quiz should reach for
+    // first. Importing every one at a flat 5 discards that judgement entirely,
+    // and the ranking then exists only in the spreadsheet.
+    const row = { ...BASE_ROW, top25Rank: 1, recommendationPriority: null }
+    const top = rosterRowToProduct(row, null).product
+    const mid = rosterRowToProduct({ ...row, top25Rank: 25 }, null).product
+    const unranked = rosterRowToProduct({ ...row, top25Rank: null }, null).product
+
+    expect(top.recommendationPriority).toBe(10)
+    expect(mid.recommendationPriority).toBeGreaterThan(unranked.recommendationPriority)
+    expect(unranked.recommendationPriority).toBe(5)
+  })
+
+  it('lets an explicit priority win over the rank', () => {
+    const row = { ...BASE_ROW, top25Rank: 1, recommendationPriority: 3 }
+    expect(rosterRowToProduct(row, null).product.recommendationPriority).toBe(3)
+  })
+})
+
+describe('per-flavour stock', () => {
+  it('marks a sold-out flavour unavailable without touching the others', () => {
+    // Each flavour is its own SKU at PowerBody with its own stock. Inheriting
+    // the parent's availability is how a customer picks Chocolate, we take the
+    // order, and there is none.
+    const row = { ...BASE_ROW, sku: 'P1', variantSkus: ['P1', 'P2', 'P3'] }
+    const facts = new Map([['P1', { qty: 9 }], ['P2', { qty: 0 }], ['P3', { qty: 4 }]])
+
+    const { product } = rosterRowToProduct(row, null, facts)
+
+    expect(product.variants.map((v) => v.available)).toEqual([true, false, true])
+    expect(product.variants.map((v) => v.inventory)).toEqual([9, 0, 4])
+  })
+
+  it('says which flavours it could not check rather than calling them sold out', () => {
+    // An unknown flavour showing as out of stock hides a product we can
+    // probably sell, which is the worse of the two mistakes at import time.
+    const row = { ...BASE_ROW, sku: 'P1', variantSkus: ['P1', 'P2'] }
+    const { notes } = rosterRowToProduct(row, null, new Map([['P1', { qty: 9 }]]))
+
+    expect(notes.some((n) => n.includes('1 of 2 flavours are not in the crawled product list'))).toBe(true)
   })
 })

@@ -11,7 +11,11 @@ import type { Goal } from '@/lib/types'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 
 const VALID_GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
-const VALID_SWAP: SwapGroup[] = ['protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine', 'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3', 'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'sleep-support', 'fat-burner', 'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c', 'general']
+// Every group the engine knows. A model answer outside this list is discarded
+// and the heuristic's group used instead — so a group missing from here is a
+// group the model can never successfully assign, however right it is.
+// `joint-support` was missing for exactly that reason.
+const VALID_SWAP: SwapGroup[] = ['protein-whey', 'protein-plant', 'protein-mass', 'protein-clear', 'creatine', 'pre-workout-stim', 'pre-workout-stim-free', 'aminos', 'electrolytes', 'omega-3', 'magnesium', 'vitamin-d', 'multivitamin', 'collagen', 'joint-support', 'sleep-support', 'fat-burner', 'adaptogen', 'probiotic', 'greens', 'fibre', 'menopause', 'vitamin-c', 'protein-bar', 'nootropic', 'vitamin-b', 'zma', 'energy-gel', 'accessory', 'general']
 const PER_WORKOUT_SLOTS: StackSlot[] = ['energy', 'hydration']
 
 function getClient(): OpenAI | null {

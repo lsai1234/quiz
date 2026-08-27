@@ -49,12 +49,23 @@ export const WELLBEING_GOAL_SLOTS: Array<{ goal: Goal; slotType: SlotType; title
 // their goals earns both). Conditional refinements (e.g. sleep-better→magnesium
 // only when no sleep follow-up was answered) stay in the engine.
 export const GOAL_AFFINITY: Partial<Record<Goal, Partial<Record<SwapGroup, number>>>> = {
+  // NB: vitamin-c is deliberately absent, even though its approved claim is
+  // literally "contributes to the normal function of the immune system".
+  // Adding it changes which products existing personas are recommended, which
+  // is a product decision rather than a classification one — see the bundle
+  // snapshot it moves.
   immune:            { 'vitamin-d': 18, multivitamin: 10 },
-  focus:             { 'omega-3': 18, multivitamin: 8 },
+  // Nootropics outrank omega-3 here because that is what they are FOR, and a
+  // group with no affinity at all is a group the quiz will never choose on
+  // purpose — it can only arrive by slot fallback.
+  focus:             { nootropic: 22, 'omega-3': 18, multivitamin: 8 },
   'skin-hair-nails': { collagen: 25 },
-  'less-stress':     { 'sleep-support': 18, magnesium: 10 },
-  recovery:          { aminos: 15, collagen: 8 },
+  'less-stress':     { 'sleep-support': 18, magnesium: 10, nootropic: 8 },
+  recovery:          { aminos: 15, collagen: 8, zma: 10 },
   health:            { multivitamin: 15, 'omega-3': 10 },
   'gut-health':      { probiotic: 20, greens: 12, fibre: 12 },
   menopause:         { menopause: 22, adaptogen: 10 },
+  energy:            { 'vitamin-b': 15, 'energy-gel': 10 },
+  'sleep-better':    { zma: 12 },
+  muscle:            { 'protein-bar': 6 },
 }

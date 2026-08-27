@@ -6,6 +6,7 @@ import { rosterRowToProduct } from '@/lib/supplier/roster-import'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { asPendingReview, sourcesForImport } from '@/lib/catalogue/review'
 import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
+import { indexedProductIds } from '@/lib/portal/supplier-index'
 
 export const dynamic = 'force-dynamic'
 
@@ -70,17 +71,54 @@ export async function POST(req: Request) {
     await syncPortalRuntime()
     const supplier = await getSupplier()
 
-    // One lookup for the whole slice. `getProductsBySku` checks the committed
-    // id map first, so a SKU past the feed's ceiling still resolves when its id
-    // has been backfilled — and simply comes back unenriched when it has not.
+    /**
+     * Resolve this slice against the crawled feed index FIRST.
+     *
+     * The index is a stored copy of PowerBody's own product list, so a SKU it
+     * holds needs no paging and no searching — just one `getProductInfo` by id,
+     * which is the call that cannot time out. Without it every row re-walks
+     * their feed to rediscover a mapping that never changes, and any row past
+     * the feed's ceiling cannot be resolved at all.
+     *
+     * Every FLAVOUR is looked up too, not just the row's main SKU: each is its
+     * own product at PowerBody with its own stock, and that is what makes the
+     * difference between offering four flavours and offering four flavours we
+     * can actually ship.
+     */
+    const mainSkus = slice.map((r) => r.sku)
+    const everySku = [...new Set(slice.flatMap((r) => [r.sku, ...r.variantSkus]))]
+    const indexed = await indexedProductIds(everySku)
+
+    const variantFacts = new Map<string, { qty: number }>()
+    for (const [sku, hit] of indexed) variantFacts.set(sku, { qty: hit.qty })
+
     let found: Awaited<ReturnType<typeof supplier.getProductsBySku>> = []
     let lookupError: string | null = null
-    try {
-      found = await supplier.getProductsBySku(slice.map((r) => r.sku))
-    } catch (err) {
-      // A supplier that will not answer must not stop the import: the rows still
-      // carry everything the quiz reads. It costs the pictures, and it is said.
-      lookupError = err instanceof Error ? err.message : 'PowerBody could not be reached.'
+
+    // Detail for the main SKUs we have ids for — no paging, no deadline.
+    const mainIds = mainSkus.map((sku) => indexed.get(sku)?.productId).filter((id): id is string => Boolean(id))
+    if (mainIds.length > 0) {
+      try {
+        const byId = await supplier.getProductsById(mainIds)
+        // Verified, not assumed: an index entry that now answers for a
+        // different SKU has moved, and trusting it imports another brand's
+        // product under our code.
+        found = byId.filter((p) => mainSkus.includes(p.sku))
+      } catch (err) {
+        lookupError = err instanceof Error ? err.message : 'PowerBody could not be reached.'
+      }
+    }
+
+    // Only what the index could not answer for pays for the feed walk.
+    const stillMissing = mainSkus.filter((sku) => !found.some((p) => p.sku === sku))
+    if (stillMissing.length > 0) {
+      try {
+        found = [...found, ...(await supplier.getProductsBySku(stillMissing))]
+      } catch (err) {
+        // A supplier that will not answer must not stop the import: the rows still
+        // carry everything the quiz reads. It costs the pictures, and it is said.
+        lookupError = err instanceof Error ? err.message : 'PowerBody could not be reached.'
+      }
     }
     const bySku = new Map(found.map((p) => [p.sku, p]))
 
@@ -89,12 +127,15 @@ export async function POST(req: Request) {
     const results = []
 
     for (const row of slice) {
-      const { product, enriched, notes } = rosterRowToProduct(row, bySku.get(row.sku) ?? null)
+      const { product, enriched, notes } = rosterRowToProduct(row, bySku.get(row.sku) ?? null, indexed.size > 0 ? variantFacts : undefined)
       const id = uniqueProductId(product, taken)
       // Provenance is recorded honestly: the descriptive half came from the
       // supplier when it did, and from a spreadsheet when it did not.
+      // The product id travels with the product. It is the expensive half of
+      // every later call, and it never changes.
+      const supplierProductId = bySku.get(row.sku)?.productId ?? indexed.get(row.sku)?.productId ?? null
       const stored = asPendingReview(
-        { ...product, id, handle: id },
+        { ...product, id, handle: id, ...(supplierProductId ? { supplierProductId: String(supplierProductId) } : {}) },
         sourcesForImport(enriched ? [] : ['imageUrl', 'description', 'category'], false),
       )
       taken.push(stored)
@@ -112,6 +153,7 @@ export async function POST(req: Request) {
       imported: pending.length,
       nextOffset,
       enriched: results.filter((r) => r.enriched).length,
+      fromIndex: mainIds.length,
       results,
       // Parse warnings belong to the whole file, so they are sent once with the
       // first slice rather than repeated on every batch.

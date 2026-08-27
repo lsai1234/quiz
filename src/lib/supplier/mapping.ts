@@ -37,6 +37,10 @@ const RULES: Rule[] = [
   { test: (t) => /clear whey|clear protein/.test(t), result: { stackSlots: ['protein'], swapGroup: 'protein-clear', goals: ['muscle', 'recovery'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /(vegan|plant).*protein|protein.*(vegan|plant)/.test(t), result: { stackSlots: ['protein', 'vegan-support'], swapGroup: 'protein-plant', goals: ['muscle', 'recovery'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /diet whey|diet protein/.test(t), result: { stackSlots: ['protein'], swapGroup: 'protein-whey', goals: ['muscle', 'cutting'], hasStimulants: false, cadence: 'daily' } },
+  // A bar is a protein product you eat, not a shake. It has to be tested BEFORE
+  // the generic protein rule or every bar in the roster classifies as whey and
+  // is offered as a swap for one.
+  { test: (t) => /protein bar|\bbar\b|flapjack|brownie|cookie/.test(t), result: { stackSlots: ['protein'], swapGroup: 'protein-bar', goals: ['muscle', 'recovery'], hasStimulants: false, cadence: 'as-needed' } },
   { test: (t) => /isolate|whey|protein shake|casein|protein/.test(t), result: { stackSlots: ['protein'], swapGroup: 'protein-whey', goals: ['muscle', 'recovery'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /creatine/.test(t), result: { stackSlots: ['performance'], swapGroup: 'creatine', goals: ['performance', 'muscle'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /beta-?alanine/.test(t), result: { stackSlots: ['performance'], swapGroup: 'aminos', goals: ['performance'], hasStimulants: false, cadence: 'per-workout' } },
@@ -47,6 +51,18 @@ const RULES: Rule[] = [
   { test: (t) => /electrolyte|hydro|hydrate/.test(t), result: { stackSlots: ['hydration'], swapGroup: 'electrolytes', goals: ['hydration'], hasStimulants: false, cadence: 'per-workout' } },
   // Before collagen on purpose: "Joints & Flex with collagen" is a joint
   // formula, not a collagen product, and first-match-wins would file it wrong.
+  { test: (t) => /\bzma\b/.test(t), result: { stackSlots: ['sleep', 'recovery'], swapGroup: 'zma', goals: ['recovery', 'sleep-better'], hasStimulants: false, cadence: 'daily' } },
+  { test: (t) => /energy gel|isotonic gel|\bgel\b/.test(t), result: { stackSlots: ['energy'], swapGroup: 'energy-gel', goals: ['energy', 'performance'], hasStimulants: false, cadence: 'as-needed' } },
+  // `health`, not a slot of its own. There is no `focus` stack slot, and adding
+  // one changes how every stack is composed — a much bigger decision than
+  // classifying two products. The `focus` GOAL does exist, so the quiz can
+  // still steer someone here without the slot model moving.
+  { test: (t) => /nootropic|neuro|theanine|cognitive|focus|brain/.test(t), result: { stackSlots: ['health'], swapGroup: 'nootropic', goals: ['focus', 'less-stress'], hasStimulants: false, cadence: 'daily' } },
+  { test: (t) => /vitamin b|b-complex|b complex|b-right|methylcobalamin/.test(t), result: { stackSlots: ['health'], swapGroup: 'vitamin-b', goals: ['energy', 'health'], hasStimulants: false, cadence: 'daily' } },
+  // Not a supplement. Matched so it is never mistaken for one — a shaker that
+  // keyword-matches "protein" would otherwise land in the protein slot and be
+  // recommended as one.
+  { test: (t) => /shaker|bottle|scoop|towel|belt|strap|sleeve|tub\b/.test(t), result: { stackSlots: [], swapGroup: 'accessory', goals: [], hasStimulants: false, cadence: 'as-needed' } },
   { test: (t) => /glucosamine|chondroitin|\bmsm\b|turmeric|curcumin|joint/.test(t), result: { stackSlots: ['recovery'], swapGroup: 'joint-support', goals: ['recovery', 'health'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /collagen/.test(t), result: { stackSlots: ['recovery'], swapGroup: 'collagen', goals: ['recovery', 'skin-hair-nails'], hasStimulants: false, cadence: 'daily' } },
   { test: (t) => /omega|fish oil/.test(t), result: { stackSlots: ['health'], swapGroup: 'omega-3', goals: ['health'], hasStimulants: false, cadence: 'daily' } },
@@ -80,10 +96,13 @@ const ANCHOR_BY_SWAP: Partial<Record<SwapGroup, PourAnchor>> = {
   collagen: 'evening', 'joint-support': 'morning', magnesium: 'wind-down', 'sleep-support': 'wind-down',
   'pre-workout-stim': 'pre-workout', 'pre-workout-stim-free': 'pre-workout', aminos: 'pre-workout',
   electrolytes: 'hot-days', creatine: 'morning',
+  'vitamin-b': 'morning', nootropic: 'morning', zma: 'wind-down',
+  'protein-bar': 'midday', 'energy-gel': 'pre-workout',
   'protein-whey': 'post-workout', 'protein-plant': 'post-workout', 'protein-clear': 'post-workout', 'protein-mass': 'post-workout',
 }
 const AS_NEEDED_BY_SWAP: Partial<Record<SwapGroup, AsNeededTrigger>> = {
   electrolytes: 'sweat', 'sleep-support': 'sleep', magnesium: 'sleep', 'vitamin-c': 'immunity',
+  zma: 'sleep',
 }
 const MOST_DAYS_SWAP = new Set<SwapGroup>(['greens', 'probiotic'])
 

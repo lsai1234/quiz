@@ -102,6 +102,39 @@ export const APPROVED_CLAIMS: Record<SwapGroup, string[]> = {
     'contributes to the normal function of the immune system',
     'contributes to the reduction of tiredness and fatigue',
   ],
+  'protein-bar': [
+    'contributes to the growth and maintenance of muscle mass',
+    'a portable protein source for hitting daily protein targets away from home',
+  ],
+  nootropic: [
+    'supports normal cognitive function',
+    'a formula aimed at focus and mental clarity',
+  ],
+  // EFSA-authorised wording. The B vitamins carry some of the few claims that
+  // are actually permitted verbatim, so they are used verbatim.
+  'vitamin-b': [
+    'contributes to normal energy-yielding metabolism',
+    'contributes to the reduction of tiredness and fatigue',
+    'contributes to the normal function of the nervous system',
+  ],
+  zma: [
+    'zinc contributes to the maintenance of normal testosterone levels in the blood',
+    'magnesium contributes to normal muscle function and the reduction of tiredness and fatigue',
+  ],
+  'energy-gel': [
+    'provides fast-releasing carbohydrate during endurance exercise',
+    'carbohydrate-electrolyte solutions contribute to the maintenance of endurance performance',
+  ],
+  /**
+   * Deliberately empty.
+   *
+   * A shaker does nothing to a body, so there is no structure/function claim to
+   * ground copy in — and an empty list is what the claim gate needs to refuse
+   * every generated sentence about it rather than accept a plausible one. If
+   * this ever gets a phrase in it, the copywriter can say a bottle supports
+   * something, which is exactly the failure this file exists to prevent.
+   */
+  accessory: [],
   general: [
     'formulated to support your everyday health routine',
   ],

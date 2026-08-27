@@ -1,4 +1,5 @@
 import { RosterImport } from '@/components/portal/RosterImport'
+import { SupplierIndexBuilder } from '@/components/portal/SupplierIndexBuilder'
 import { SupplierImport } from '@/components/portal/SupplierImport'
 import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
 
@@ -17,6 +18,10 @@ export default function SupplierPage() {
 
       {/* What moved under us since yesterday — read before adding anything new. */}
       <SupplierSyncPanel />
+
+      {/* Crawled first, because the roster import resolves every code through
+          it — see SupplierIndexBuilder. */}
+      <SupplierIndexBuilder />
 
       {/* A whole roster at once, enriched per row — see RosterImport. */}
       <RosterImport />

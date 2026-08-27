@@ -46,7 +46,22 @@ export interface RosterImportResult {
  * roster's fields, not theirs. What it lacks is a picture and a description,
  * which is a review-screen problem rather than a blocker.
  */
-export function rosterRowToProduct(row: RosterRow, supplier: SupplierProduct | null): RosterImportResult {
+export interface VariantFacts {
+  /** Units PowerBody held for this exact SKU when the index was crawled. */
+  qty: number
+}
+
+/**
+ * @param variantFacts per-SKU stock, keyed by SKU, from the crawled feed index.
+ *   Without it every flavour inherits the parent's availability, which is wrong
+ *   in the way that matters: a customer picks Chocolate, we take the order, and
+ *   PowerBody have none. Each flavour is its own SKU with its own stock.
+ */
+export function rosterRowToProduct(
+  row: RosterRow,
+  supplier: SupplierProduct | null,
+  variantFacts?: Map<string, VariantFacts>,
+): RosterImportResult {
   const notes: string[] = []
   const id = slugify(row.name || row.sku) || slugify(row.sku)
 
@@ -107,17 +122,34 @@ export function rosterRowToProduct(row: RosterRow, supplier: SupplierProduct | n
   // orderable. Prices are shared because a flavour of one tub costs one price;
   // a different SIZE is a different product and must not be listed here.
   const variantSkus = row.variantSkus.length > 0 ? row.variantSkus : [row.sku]
-  const variants: CatalogueVariant[] = variantSkus.map((sku, index) => ({
-    id: variantSkus.length === 1 ? id : `${id}-${slugify(sku)}`,
-    title: index === 0 ? row.name : sku,
-    flavour: null,
-    size: null,
-    price: sellPrice,
-    compareAtPrice: rrp,
-    available: stock > 0,
-    inventory: index === 0 ? stock : null,
-    sku,
-  }))
+  const variants: CatalogueVariant[] = variantSkus.map((sku, index) => {
+    // Per-SKU stock when the crawl reached this flavour; the parent's otherwise.
+    // Falling back rather than defaulting to zero is deliberate: an unknown
+    // flavour showing as out of stock hides a product we can probably sell,
+    // which is the worse of the two mistakes at import time. The nightly sync
+    // corrects it either way.
+    const facts = variantFacts?.get(sku)
+    const units = facts ? facts.qty : stock
+    return {
+      id: variantSkus.length === 1 ? id : `${id}-${slugify(sku)}`,
+      title: index === 0 ? row.name : sku,
+      flavour: null,
+      size: null,
+      price: sellPrice,
+      compareAtPrice: rrp,
+      available: units > 0,
+      inventory: facts ? facts.qty : index === 0 ? stock : null,
+      sku,
+    }
+  })
+  const unknownVariants = variantSkus.filter((sku) => variantFacts && !variantFacts.has(sku))
+  if (variantFacts && unknownVariants.length > 0) {
+    notes.push(
+      `${unknownVariants.length} of ${variantSkus.length} flavours are not in the crawled product list ` +
+        `(${unknownVariants.slice(0, 4).join(', ')}${unknownVariants.length > 4 ? '…' : ''}) — ` +
+        'their stock is assumed from the main SKU until the next sync.',
+    )
+  }
   if (variantSkus.length > 1) {
     notes.push(
       `${variantSkus.length} flavours merged into one product. Confirm they are flavours of the same size — ` +
@@ -158,7 +190,14 @@ export function rosterRowToProduct(row: RosterRow, supplier: SupplierProduct | n
       ...(rhythm.anchor ? { anchor: rhythm.anchor } : {}),
     },
     swapGroup: row.swapGroup,
-    recommendationPriority: row.recommendationPriority ?? 5,
+    // A top-25 rank IS a recommendation priority — it is the founder saying
+    // which products the quiz should reach for first, and importing it as a
+    // flat 5 throws that judgement away. Rank 1 becomes 10, rank 25 becomes 6,
+    // and everything unranked stays at the neutral 5, so a ranked product
+    // always outranks an unranked one without swamping the goal scoring.
+    recommendationPriority:
+      row.recommendationPriority ??
+      (row.top25Rank && row.top25Rank > 0 ? Math.max(6, 10 - Math.floor((row.top25Rank - 1) / 6)) : 5),
     marginPriority: 5,
     isCoreEligible: classified.stackSlots.length > 0,
     isBoosterEligible: false,

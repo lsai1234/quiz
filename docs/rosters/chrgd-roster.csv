@@ -1,0 +1,49 @@
+sku,brand,name,swapGroup,matrixCell,top25,top25Rank,servings,subscriptionEligible,consumption,occPerMonth,formats,dietaryTags,hasStimulants,contraindications,actives,weightGrams,flavourVariants,variantSkus
+P41624,SciTec,100% Whey Protein Professional,protein-whey,default-whey,TRUE,1,16,TRUE,daily,30,powder,gluten-free,FALSE,milk allergy,whey protein 22g/serving,530,7,"P41624,P43287,P41625,P42869,P43344,P47043,P46513"
+P6243,Olimp Nutrition,Creatine Monohydrate Powder - 250g,creatine,default-creatine,TRUE,2,50,TRUE,daily,30,powder,vegan,FALSE,,creatine monohydrate 5g/serving,305,1,P6243
+P4614,NOW Foods,ZMA - Sports Recovery - 90 vcaps,zma,default-zma,TRUE,3,30,TRUE,daily,30,capsule,vegan,FALSE,"zinc-copper interaction, pregnancy","zinc 30mg, magnesium 450mg, B6 10.5mg",140,1,P4614
+P47499,Osavi,Super Strong Omega 3,omega-3,default-omega3,TRUE,4,60,TRUE,daily,30,capsule,,FALSE,blood thinners,"EPA 500mg, DHA 250mg per serving",116,1,P47499
+P51016,OstroVit,Vitamin D3 + K2 - 90 softgels,vitamin-d,default-vitd,TRUE,5,90,TRUE,daily,30,capsule,,FALSE,blood thinners (warfarin),"vitamin D3 4000IU, K2 150mcg",60,1,P51016
+P48633,Applied Nutrition,Hydration+,electrolytes,default-electrolytes,TRUE,6,20,TRUE,per-workout,15,powder,,FALSE,,"sodium 500mg, potassium 200mg per serving",330,4,"P48633,P48636,P48637,P48638"
+P46673,Applied Nutrition,Endurance Breathe Isotonic Energy Gel,energy-gel,default-gel,TRUE,7,20,TRUE,per-workout,8,gel,vegan,FALSE,,carbohydrate 22g/serving,1230,8,"P46673,P42987,P45757,P46672,P45913,P50744,P50781,P45251"
+P34137,NOW Foods,Probiotic-10 & Bifido Boost - 90 vcaps,probiotic,default-probiotic,TRUE,8,50,TRUE,daily,30,capsule,vegetarian,FALSE,immunocompromised - consult doctor,"10 probiotic strains, 25 billion CFU",110,1,P34137
+P37828,BioTechUSA,Vegan Protein,protein-plant,default-plant,TRUE,9,16,TRUE,daily,30,powder,vegan,FALSE,,pea + rice protein blend 20g/serving,525,6,"P37828,P36120,P36122,P37829,P43290,P36124"
+P44491,BioTechUSA,Vegan Multivitamin - 60 tablets,multivitamin,default-multi,TRUE,10,30,TRUE,daily,30,capsule,vegan,FALSE,pregnancy - consult doctor for dosing,full-spectrum vitamins & minerals,125,1,P44491
+P43725,Osavi,Collagen Hydrolysed Type I & III,collagen,default-collagen,TRUE,11,30,TRUE,daily,30,powder,,FALSE,fish/shellfish allergy,hydrolysed collagen peptides 10g/serving,383,1,P43725
+P44238,Osavi,Collagen Peptides - Joints & Bones - 153g,joint-support,format-joints,TRUE,12,15,TRUE,daily,30,powder,,FALSE,fish/shellfish allergy,collagen peptides + vitamin C,206,1,P44238
+P44716,Osavi,Liposomal Vitamin C,vitamin-c,default-vitc,TRUE,13,60,TRUE,daily,30,capsule,vegan,FALSE,,liposomal vitamin C 1000mg,144,2,"P44716,P47762"
+P27327,NOW Foods,Glycine,aminos,swap,TRUE,14,100,TRUE,daily,30,capsule,vegan,FALSE,,glycine 1000mg,165,2,"P27327,P3944"
+P30468,Jarrow Formulas,Neuro Optimizer - 120 caps,nootropic,default-nootropic,TRUE,15,120,TRUE,daily,30,capsule,,FALSE,MAOI medication,"citicoline, phosphatidylserine, acetyl-L-carnitine",145,1,P30468
+P25440,Jarrow Formulas,B-Right - 100 vcaps,vitamin-b,default-bcomplex,TRUE,16,100,TRUE,daily,30,capsule,vegetarian,FALSE,,full B-complex,110,1,P25440
+P24068,Grenade,Protein Bars,protein-bar,default-bar,TRUE,17,12,FALSE,occasional,10,bar,,FALSE,,protein 20g/bar,840,13,"P24068,P51981,P51958,P26955,P51983,P51978,P31582,P51965,P51959,P51964,P28915,P28262,P53164"
+P51340,Skill Nutrition,Magtein,magnesium,premium,TRUE,18,30,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium L-threonate,112,2,"P51340,P51342"
+P44880,Osavi Accessories,Osavi Shaker,accessory,default-shaker,TRUE,19,1,FALSE,one-off,0,accessory,,FALSE,,n/a,160,1,P44880
+P51387,EFX Sports,Kre-Alkalyn EFX (Clear Caps) - 120 caps,creatine,format-buffered,TRUE,20,40,TRUE,daily,30,capsule,,FALSE,,buffered creatine (Kre-Alkalyn) 750mg/cap,155,2,"P51387,P51385"
+P4578,NOW Foods,Ultra Omega-3 - 90 softgels,omega-3,swap,TRUE,21,90,TRUE,daily,30,capsule,,FALSE,blood thinners,"EPA 500mg, DHA 250mg",185,1,P4578
+P52488,BioTechUSA,Chunky Protein Bar,protein-bar,format-vegan,TRUE,22,20,FALSE,occasional,10,bar,,FALSE,,protein blend,1100,4,"P52488,P52490,P52489,P52491"
+P3545,NOW Foods,L-Glutamine,aminos,format-capsule,TRUE,23,100,TRUE,per-workout,15,capsule,vegan,FALSE,,L-glutamine 1000mg,190,3,"P3545,P27369,P3544"
+P47972,Nordic Naturals,Ultimate Omega + CoQ10,omega-3,premium,TRUE,24,120,TRUE,daily,30,capsule,,FALSE,blood thinners,EPA/DHA 1280mg per serving,257,1,P47972
+P33779,Reflex Nutrition,Magnesium Bisglycinate - 90 caps,magnesium,budget,TRUE,25,90,TRUE,daily,30,capsule,,FALSE,kidney disease,magnesium bisglycinate,120,1,P33779
+P47300,Skill Nutrition Accessories,Skill Nutrition Shaker,accessory,swap,FALSE,0,1,FALSE,one-off,0,accessory,,FALSE,,n/a,112,1,P47300
+P48410,Applied Nutrition,BCAA Amino-Hydrate,aminos,default-aminos,FALSE,0,25,TRUE,per-workout,15,powder,,FALSE,,BCAA + electrolytes blend,560,1,P48410
+P53873,SciTec,Beta Alanine,aminos,swap,FALSE,0,90,TRUE,per-workout,15,powder,vegan,FALSE,tingling/paraesthesia (harmless),beta-alanine 3.2g/serving,515,1,P53873
+P444,NOW Foods,Taurine,aminos,swap,FALSE,0,100,TRUE,daily,30,capsule,vegetarian,FALSE,,taurine 500mg,105,1,P444
+P3686,Xtend,Xtend,aminos,swap,FALSE,0,37,TRUE,per-workout,15,powder,,FALSE,,BCAA 7g/serving,540,1,P3686
+P51002,Allnutrition,Collagen Fish,collagen,budget,FALSE,0,25,TRUE,daily,30,powder,,FALSE,fish/shellfish allergy,collagen peptides,560,1,P51002
+P51193,Osavi,Collagen Peptides (Hair Skin & Nails),collagen,swap,FALSE,0,15,TRUE,daily,30,powder,,FALSE,fish/shellfish allergy,collagen peptides + biotin,214,5,"P51193,P51185,P51201,P51189,P51197"
+P47127,Osavi,Marine Collagen Wild Cod,collagen,swap,FALSE,0,30,TRUE,daily,30,powder,,FALSE,fish allergy,marine collagen peptides 10g/serving,440,1,P47127
+P52392,SciTec,100% Creatine Monohydrate,creatine,budget,FALSE,0,60,TRUE,daily,30,powder,vegan,FALSE,,creatine monohydrate 5g/serving,400,1,P52392
+P47260,Kaged Muscle,Creatine HCl,creatine,format-hcl,FALSE,0,,TRUE,daily,30,powder,,FALSE,,creatine HCl 1.5g/serving,95,4,"P47260,P46749,P46748,P46747"
+P52747,Skill Nutrition,Micronised Creatine Monohydrate Flavoured,creatine,swap,FALSE,0,60,TRUE,daily,30,powder,vegan,FALSE,,creatine monohydrate 5g/serving,377,4,"P52747,P52745,P52746,P49124"
+P52543,Doctor's Best,High Absorption Magnesium Powder,magnesium,swap,FALSE,0,120,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium glycinate/lysinate 100mg,500,1,P52543
+P53878,SciTec,Magnesium Bisglycinate - 90 caps,magnesium,swap,FALSE,0,90,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium bisglycinate,100,1,P53878
+P44774,NOW Foods,Magnesium Glycinate - 180 tabs,magnesium,default-magnesium,FALSE,0,90,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium glycinate 200mg,255,1,P44774
+P44069,NOW Foods,Magnesium Malate Caps - 180 vcaps,magnesium,swap,FALSE,0,90,TRUE,daily,30,capsule,vegan,FALSE,kidney disease,magnesium malate 1000mg,235,2,"P44069,P2894"
+P53879,SciTec,Zinc Bisglycinate - 100 tabs,magnesium,swap,FALSE,0,100,TRUE,daily,30,capsule,vegan,FALSE,copper deficiency risk long-term,zinc bisglycinate 15mg,115,1,P53879
+P24551,NOW Foods,Double Strength L-Theanine,nootropic,swap,FALSE,0,60,TRUE,daily,30,capsule,vegan,FALSE,,L-theanine 200mg,80,1,P24551
+P21649,Nordic Naturals,Omega-3,omega-3,premium,FALSE,0,40,TRUE,daily,30,liquid,,FALSE,blood thinners,EPA/DHA 1560mg per serving,395,1,P21649
+P5097,NOW Foods,Omega-3 Fish Oil,omega-3,budget,FALSE,0,100,TRUE,daily,30,capsule,,FALSE,blood thinners,EPA/DHA fish oil,190,1,P5097
+P53772,Nutrend,Denuts Crunchy Bar,protein-bar,swap,FALSE,0,24,FALSE,occasional,10,bar,,FALSE,nut allergy,protein + nuts,1840,1,P53772
+P48455,Applied Nutrition,Diet Protein Bar,protein-bar,swap,FALSE,0,12,FALSE,occasional,10,bar,low-sugar,FALSE,,protein 12g/bar,610,1,P48455
+P51295,Allnutrition,Fitking Protein Bar,protein-bar,budget,FALSE,0,15,FALSE,occasional,10,bar,,FALSE,,whey/soy protein blend,950,1,P51295
+P47998,NOW Foods,Vitamin D-3,vitamin-d,swap,FALSE,0,120,TRUE,daily,30,capsule,vegetarian,FALSE,blood thinners,vitamin D3 3000IU,30,1,P47998
