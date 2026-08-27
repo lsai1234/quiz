@@ -4,7 +4,6 @@
 import type { QuizAnswers, Goal } from '@/lib/types'
 import { PERFORMANCE_GOALS } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { lqdOnly, inStockOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
@@ -493,8 +492,12 @@ export function buildStackBlueprint(
   // the quiz, the reveal and the price. A slot with no in-stock candidate falls
   // away through the same graceful omission as every other empty slot.
   const minLinePrice = getPricingConfig().minQuizProductPrice
+  // An empty catalogue really does mean an empty stack. Falling back to the
+  // mock catalogue here used to hide a missing load behind a plausible-looking
+  // stack of products the shop cannot sell — every card then read "Product
+  // unavailable" on the reveal, because the ids came from sample data.
   const effectiveCatalogue = lqdOnly(
-    inStockOnly(catalogue.length > 0 ? catalogue : MOCK_CATALOGUE).filter(
+    inStockOnly(catalogue).filter(
       (p) => !p.isSubscriptionOnly && (minLinePrice <= 0 || p.basePrice >= minLinePrice),
     ),
     answers.drinksMode,

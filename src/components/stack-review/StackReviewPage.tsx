@@ -151,13 +151,23 @@ export function StackReviewPage() {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation).
-  // The factory guarantees at least one slot, so a real blueprint — however
-  // small — is always shown as-is rather than replaced with the mock stack.
+  // MOCK_BLUEPRINT only when no blueprint exists at all (direct navigation, or
+  // a refresh — the blueprint isn't persisted). The factory guarantees at least
+  // one slot, so a real blueprint — however small — is always shown as-is
+  // rather than replaced with the mock stack.
+  //
+  // It is a MOCK-catalogue stack, though: its slots hold sample product ids.
+  // Shown against the real shop, every one of them fails to resolve and the
+  // page reads "Product unavailable" at £0.00 — so on the real catalogue we
+  // send the customer back to the quiz instead (see the gate below).
   const rawBlueprint = stackBlueprint ?? MOCK_BLUEPRINT
   // useCatalogueProducts triggers the /api/catalogue fetch (once per session)
   // and returns the properly-typed CatalogueProduct[] from the Zustand store.
-  const { products } = useCatalogueProducts()
+  // Every slot on this page is a product-id lookup into `products`, so nothing
+  // may render until the catalogue is actually here — an id that hasn't loaded
+  // yet is indistinguishable from one the shop doesn't stock, and both would
+  // read "Product unavailable" at £0.00.
+  const { products, isLoading: catalogueLoading, isLive, error: catalogueError } = useCatalogueProducts()
 
   // Default any slot without a selected variant to the product's first available
   // variant so the selector and price always agree.
@@ -441,10 +451,39 @@ export function StackReviewPage() {
       ].filter((p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx)
     : []
 
-  if (!blueprint) {
+  if (!blueprint || catalogueLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-[var(--color-muted)] text-sm">Building your stack…</p>
+      </div>
+    )
+  }
+
+  // No catalogue at all — say so, rather than rendering a page of empty cards.
+  if (products.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 min-h-[60vh] px-8 text-center">
+        <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          We couldn’t load the shop
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          {catalogueError ?? 'The catalogue came back empty, so there’s nothing to build your stack from yet.'}
+        </p>
+      </div>
+    )
+  }
+
+  // A mock sample stack has no meaning against the real shop — its product ids
+  // don't exist there. Ask for the quiz rather than render unresolvable cards.
+  if (!stackBlueprint && isLive) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 min-h-[60vh] px-8 text-center">
+        <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          Your stack isn’t here yet
+        </p>
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          Take the quiz and we’ll build one from the products we actually stock.
+        </p>
       </div>
     )
   }
