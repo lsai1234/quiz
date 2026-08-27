@@ -78,14 +78,21 @@ const MAX_PAGES = 4_000
 const DETAIL_CONCURRENCY = 6
 
 /**
- * Waits before re-asking whether the feed really ended, escalating.
+ * Waits before re-asking whether the feed really ended.
  *
- * 1.5 seconds was not enough. A crawl stopped at page 22 reporting "complete"
- * against a feed measured minutes earlier at 80 pages: it re-read the same page
- * 1.5s later, got another empty reply, and believed it. A throttle window
- * outlasts a second and a half comfortably.
+ * Deliberately SHORT, and deliberately only one of them. An earlier version
+ * escalated 2s → 6s → 15s inside the request, which is the wrong place to wait:
+ * a serverless call has a hard ceiling (60s here), and 23 seconds of sleeping
+ * plus a slow throttled feed blew straight through it. The whole pass was then
+ * lost — including every page it had already read, because nothing is saved
+ * until the route returns.
+ *
+ * A throttle genuinely does need tens of seconds to clear. That waiting belongs
+ * in the caller's loop between requests, where there is no ceiling: this only
+ * has to shrug off a momentary blip, and anything longer is reported as a
+ * refusal so the caller can wait properly.
  */
-const DEFAULT_END_CONFIRM_WAITS_MS = [2_000, 6_000, 15_000]
+const DEFAULT_END_CONFIRM_WAITS_MS = [1_000]
 
 /**
  * Pages to look PAST an empty one before believing the feed ended.
@@ -245,6 +252,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     /** The page to resume from when `complete` is false; null when the feed
      *  ended. This is what turns a short read from a dead end into a pause. */
     nextPage: number | null
+    stoppedBy: 'end' | 'refused' | 'deadline' | 'budget'
   }
 
   /**
@@ -310,23 +318,23 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
         // of the catalogue as all of it.
         for (const ahead of LOOK_AHEAD_PAGES) {
           if ((await getPage(page + ahead)).length > 0) {
-            return { items: all, complete: false, pages: read, nextPage: page }
+            return { items: all, complete: false, pages: read, nextPage: page, stoppedBy: 'refused' }
           }
         }
-        // Nothing here, nothing five pages on, nothing twenty pages on, across
-        // four attempts and twenty-three seconds of waiting. The feed has ended.
-        return { items: all, complete: true, pages: read, nextPage: null }
+        // Nothing here, nothing five pages on, nothing twenty pages on. The
+        // feed has ended.
+        return { items: all, complete: true, pages: read, nextPage: null, stoppedBy: 'end' }
       }
 
       all.push(...rows)
-      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null }
+      if (listOptions.enough?.(all)) return { items: all, complete: true, pages: read, nextPage: null, stoppedBy: 'end' }
       if (listOptions.deadline !== undefined && Date.now() >= listOptions.deadline) {
-        return { items: all, complete: false, pages: read, nextPage: page + 1 }
+        return { items: all, complete: false, pages: read, nextPage: page + 1, stoppedBy: 'deadline' }
       }
     }
     // Out of budget rather than out of feed. `nextPage` is what makes that a
     // pause the caller can resume from instead of a silent ceiling.
-    return { items: all, complete: false, pages: read, nextPage: first + budget }
+    return { items: all, complete: false, pages: read, nextPage: first + budget, stoppedBy: 'budget' }
   }
 
   /**
@@ -651,10 +659,12 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
    * which is what `getStockLevels` used to do with it.
    */
   async function readFeed(options: SupplierFeedOptions = {}): Promise<SupplierFeed> {
-    const { items, complete, pages, nextPage } = await fetchListItems({
+    const { items, complete, pages, nextPage, stoppedBy } = await fetchListItems({
       fromPage: options.fromPage,
       pageBudget: options.pageBudget,
-      ...(options.deadlineMs ? { deadline: Date.now() + options.deadlineMs } : {}),
+      // `!= null`, not truthiness: a deadline of 0 means "stop at the first
+      // opportunity", and falsiness silently turned that into "no deadline".
+      ...(options.deadlineMs != null ? { deadline: Date.now() + options.deadlineMs } : {}),
     })
     const updatedAt = new Date().toISOString()
     return {
@@ -662,6 +672,7 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       complete,
       pages,
       nextPage,
+      stoppedBy,
     }
   }
 

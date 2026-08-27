@@ -567,3 +567,50 @@ describe('how far the pager will actually read', () => {
     expect(feed.nextPage).toBe(13)
   })
 })
+
+describe('why the pager stopped', () => {
+  /**
+   * The caller's only real decision is whether to WAIT before resuming, and
+   * only one of the four reasons calls for it. Inferring "refused" from "read
+   * fewer pages than the budget" gets it wrong in both directions: our own
+   * deadline also reads short (so a healthy crawl would sleep a minute between
+   * every pass), and a refusal on the last page of a budget would not.
+   */
+  const feed = (handler: (page: number) => unknown[]) =>
+    createPowerBodyProvider({
+      client: fakeClient({ 'dropshipping.getProductList': (a) => handler((a as { page: number }).page) }).client,
+      detailStore: createMemoryDetailStore(),
+      endConfirmWaitsMs: [0],
+    })
+
+  const row = (page: number) => ({
+    product_id: String(page), sku: `PB-${page}`, price: '1', price_tax: '1', qty: '1', vat_rate: '20',
+  })
+
+  it('says "end" only when there is nothing anywhere beyond', async () => {
+    const result = await feed((page) => (page > 4 ? [] : [row(page)])).getFeed()
+    expect(result.stoppedBy).toBe('end')
+    expect(result.complete).toBe(true)
+  })
+
+  it('says "refused" when a page is empty but the feed continues past it', async () => {
+    const result = await feed((page) => (page === 3 || page > 40 ? [] : [row(page)])).getFeed({ pageBudget: 20 })
+    expect(result.stoppedBy).toBe('refused')
+    expect(result.complete).toBe(false)
+    expect(result.nextPage).toBe(3)
+  })
+
+  it('says "budget" when it ran out of our pages, not theirs', async () => {
+    const result = await feed((page) => (page > 100 ? [] : [row(page)])).getFeed({ pageBudget: 5 })
+    expect(result.stoppedBy).toBe('budget')
+    expect(result.nextPage).toBe(6)
+  })
+
+  it('says "deadline" when it ran out of our clock', async () => {
+    // A pass held open past the platform's ceiling is killed, losing every page
+    // it read — the index is only written when the route returns.
+    const result = await feed((page) => (page > 100 ? [] : [row(page)])).getFeed({ pageBudget: 500, deadlineMs: 0 })
+    expect(result.stoppedBy).toBe('deadline')
+    expect(result.complete).toBe(false)
+  })
+})

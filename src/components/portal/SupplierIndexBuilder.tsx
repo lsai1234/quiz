@@ -5,7 +5,7 @@ import { Button, Card } from '@/components/system'
 
 /** Mirrors PAGES_PER_PASS in the crawl route — only used to name the range
  *  being read, so a drift here costs a slightly wrong label, nothing more. */
-const PAGES_PER_PASS = 40
+const PAGES_PER_PASS = 15
 
 interface IndexState {
   products: number
@@ -156,6 +156,11 @@ export function SupplierIndexBuilder() {
          * refused at the same page, because that is the signal that the pause
          * is not yet long enough.
          */
+        if (!d.throttled) {
+          // Our own deadline or page budget, not their refusal. Straight on.
+          say(`Pausing at page ${d.nextPage} (${d.stoppedBy === 'deadline' ? 'batch time limit' : 'batch size'}) — carrying on.`)
+        }
+
         if (d.throttled) {
           stalled = d.nextPage === lastPage ? stalled + 1 : 1
           if (stalled > 6) {
@@ -286,7 +291,7 @@ export function SupplierIndexBuilder() {
         {/* Said before it starts, because both of these look like faults while
             they are happening and neither is. */}
         <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-2)', lineHeight: 'var(--leading-loose)' }}>
-          It reads 40 pages at a time and shows each batch as it lands. PowerBody throttle sustained paging, so it
+          It reads 15 pages at a time and shows each batch as it lands. PowerBody throttle sustained paging, so it
           will pause and retry — <strong style={{ color: 'var(--ink-2)' }}>a pause is it working, not hanging</strong>.
           Everything read is saved as it goes, so stopping early costs nothing.
         </p>

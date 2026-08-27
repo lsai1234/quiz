@@ -116,6 +116,20 @@ export interface SupplierFeed {
    * it got to, and let the caller come back for the rest.
    */
   nextPage: number | null
+  /**
+   * Why the read stopped, rather than leaving the caller to infer it.
+   *
+   * `end` — the feed genuinely ran out (nothing here, nothing 5 pages on,
+   *   nothing 20 pages on). Absence now means something.
+   * `refused` — a page came back empty but there is feed beyond it, so this is
+   *   PowerBody throttling. The caller must WAIT before resuming; asking again
+   *   immediately asks the question that was just refused.
+   * `deadline` / `budget` — our own limits, not theirs. Resume straight away.
+   *
+   * The distinction that matters is `refused` against the other three: it is
+   * the only one where the right response is to do nothing for a while.
+   */
+  stoppedBy: 'end' | 'refused' | 'deadline' | 'budget'
 }
 
 /**

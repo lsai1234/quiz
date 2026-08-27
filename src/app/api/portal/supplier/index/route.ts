@@ -22,7 +22,21 @@ export const maxDuration = 60
  * comes back for the rest. Sized so a pass finishes well inside `maxDuration`
  * even when PowerBody are slow.
  */
-const PAGES_PER_PASS = 40
+const PAGES_PER_PASS = 15
+
+/**
+ * Wall clock one pass may spend before handing back what it has.
+ *
+ * The page budget alone is not a bound: PowerBody's replies slow right down
+ * while they are throttling, so 40 pages that normally take six seconds can
+ * take a minute. Without a clock the pass ran past the platform's 60s ceiling
+ * and was killed — losing every page it had read, because the index is only
+ * written when the route returns.
+ *
+ * Set well inside `maxDuration` so the pass always gets to save and report
+ * where it reached.
+ */
+const PASS_DEADLINE_MS = 35_000
 
 /** GET → what the stored index currently holds. */
 export async function GET() {
@@ -77,10 +91,15 @@ export async function POST(req: Request) {
 
   if (body.reset) await clearSupplierIndex()
   const fromPage = Math.max(1, Math.floor(body.fromPage ?? 1))
+  const startedAt = Date.now()
 
   try {
     const supplier = await getSupplier()
-    const feed = await supplier.getFeed({ fromPage, pageBudget: PAGES_PER_PASS })
+    const feed = await supplier.getFeed({
+      fromPage,
+      pageBudget: PAGES_PER_PASS,
+      deadlineMs: PASS_DEADLINE_MS,
+    })
     const before = Object.keys((await readSupplierIndex()).bySku).length
     const index = await mergeIntoIndex(feed.levels, {
       pagesRead: feed.pages,
@@ -89,10 +108,10 @@ export async function POST(req: Request) {
     })
     const total = Object.keys(index.bySku).length
 
-    // Stopped before spending its page budget, and did not reach the end:
-    // PowerBody refused somewhere in the middle. Named so the caller can wait
-    // properly instead of asking again immediately and being refused again.
-    const throttled = !feed.complete && feed.pages < PAGES_PER_PASS
+    // Asked rather than inferred. Our own deadline and page budget also stop a
+    // pass short, and resuming from those should be immediate — waiting on them
+    // would add a minute of nothing to every single pass of a healthy crawl.
+    const throttled = feed.stoppedBy === 'refused'
 
     return NextResponse.json({
       ok: true,
@@ -110,10 +129,20 @@ export async function POST(req: Request) {
       nextPage: feed.complete ? null : feed.nextPage,
       complete: feed.complete,
       throttled,
+      stoppedBy: feed.stoppedBy,
     })
   } catch (err) {
+    // Name the stage and the elapsed time. "Could not be reached" after 59
+    // seconds is a timeout wearing a network error's clothes, and the two need
+    // completely different responses from whoever reads it.
+    const seconds = Math.round((Date.now() - startedAt) / 1000)
+    const reason = err instanceof Error ? err.message : 'PowerBody could not be reached.'
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'PowerBody could not be reached.' },
+      {
+        error:
+          `Reading pages ${fromPage}–${fromPage + PAGES_PER_PASS - 1} failed after ${seconds}s: ${reason}` +
+          (seconds >= 30 ? ' That is long enough to be a timeout rather than a refusal — press Build again to carry on from here.' : ''),
+      },
       { status: 502 },
     )
   }
