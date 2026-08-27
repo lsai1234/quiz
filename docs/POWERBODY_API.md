@@ -465,6 +465,45 @@ already indexed. Nothing is ever lost; a crawl is always resumable.
 `endConfirmWaitsMs` is injectable so the suite does not spend half a minute
 establishing every simulated end.
 
+### The cut-off is per SESSION, at about 3,000 rows
+
+The log made it plain:
+
+```
+Pages 1–15:  1500 rows, 1500 new.  1,500 indexed.
+Pages 16–30: 1500 rows, 1500 new.  3,000 indexed.
+Pages 31–34:    0 rows,    0 new.  3,000 indexed.
+Their feed ended at page 34.
+```
+
+Thirty pages at a hundred rows, then silence — while a probe an hour earlier
+read pages 32, 64 and 80 of that same feed without trouble. The difference is
+not which pages: it is that the probe made about fourteen calls spread out and
+the crawl made thirty back to back.
+
+So the cut-off **silences the whole session**, not a page. That is why looking
+ahead five and twenty pages could not save us: those reads are inside the same
+dead window and come back just as empty. There is no reply, anywhere, that
+distinguishes "throttled" from "ended" once the session is spent.
+
+Two things follow, and both are now done:
+
+- **A fresh session per pass.** `resetSession()` drops the cached login before
+  every crawl pass. A pass is 15 pages — 1,500 rows — which keeps each one well
+  inside the allowance instead of trying to read 8,000 products through a single
+  login. Plus a three-second breather between batches, because the cheapest way
+  to avoid a limit that responds to pressure is not to apply it.
+- **The measurement overrules the pager.** If the probe measured 80 pages while
+  the session was healthy and the crawl goes quiet at 31, that is a refusal —
+  full stop, no inference required. `complete` is forced false and the crawl
+  resumes. This is the backstop the look-ahead could never be, and it is why the
+  measurement survives "Start over": it describes THEIR feed, not our crawl of
+  it, and discarding it would disarm the one check that catches this failure.
+
+That also, at last, explains the original 3,000 exactly. Not a documented
+ceiling, not our page guard, not the sandbox, and not a per-request rate limit —
+a per-session row allowance, reported as an empty array.
+
 ### The id sweep — kept, but not needed here
 
 Written when the ceiling was believed to be real, and superseded by the

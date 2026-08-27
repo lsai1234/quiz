@@ -738,6 +738,17 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
     getFeed: readFeed,
 
     /**
+     * Drop the session so the next call logs in fresh.
+     *
+     * See the interface note: their list call goes quiet after about 3,000 rows
+     * in one session, and the quiet is an empty array rather than an error. A
+     * new session restores it.
+     */
+    async resetSession(): Promise<void> {
+      await client.endSession()
+    },
+
+    /**
      * Sweep product ids for whatever is behind them — identity only.
      *
      * Deliberately does not read or write the detail cache. A sweep visits

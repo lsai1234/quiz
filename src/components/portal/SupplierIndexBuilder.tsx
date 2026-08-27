@@ -150,17 +150,23 @@ export function SupplierIndexBuilder() {
           break
         }
 
+        if (d.overruled) {
+          // Their list went quiet, but the probe measured it as longer. Their
+          // cut-off silences the whole session, so pages further on look just
+          // as empty — only the measurement can tell this from a real ending.
+          say(
+            `Their list went quiet at page ${d.toPage}, but it measured ${state?.measured?.lastPage ?? '80-odd'} pages ` +
+              'when it was healthy. That is a refusal, not the end — starting a fresh session and carrying on.',
+            'warn',
+          )
+        }
+
         /**
          * Refused mid-feed. Asking again straight away is asking the same
          * question that was just refused, so it waits — longer each time it is
          * refused at the same page, because that is the signal that the pause
          * is not yet long enough.
          */
-        if (!d.throttled) {
-          // Our own deadline or page budget, not their refusal. Straight on.
-          say(`Pausing at page ${d.nextPage} (${d.stoppedBy === 'deadline' ? 'batch time limit' : 'batch size'}) — carrying on.`)
-        }
-
         if (d.throttled) {
           stalled = d.nextPage === lastPage ? stalled + 1 : 1
           if (stalled > 6) {
@@ -185,6 +191,12 @@ export function SupplierIndexBuilder() {
           }
         } else {
           stalled = 0
+          // A short breather between healthy batches. Their cut-off is a
+          // function of how hard the session is pushed, so the cheapest way to
+          // avoid it is to not push — three seconds a batch costs under a
+          // minute across the whole catalogue.
+          setProgress(`Pausing 3s before pages ${d.nextPage}–${d.nextPage + PAGES_PER_PASS - 1}…`)
+          await new Promise((resolve) => setTimeout(resolve, 3000))
         }
         lastPage = d.nextPage
         page = d.nextPage

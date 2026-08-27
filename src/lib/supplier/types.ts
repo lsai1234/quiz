@@ -354,6 +354,18 @@ export interface SupplierProvider {
    * the order path needs.
    */
   shippingMethods?(): Promise<SupplierShippingMethod[]>
+  /**
+   * Drop the cached API session so the next call logs in fresh.
+   *
+   * Not housekeeping — a remedy. PowerBody stop answering `getProductList`
+   * after roughly 3,000 rows read in one session: page 31 and everything after
+   * it comes back as an empty array, which is indistinguishable from the end of
+   * the feed. A fresh login appears to reset that allowance, so a long crawl
+   * takes it in sessions rather than trying to read 8,000 products through one.
+   *
+   * Optional because only a session-based transport has anything to reset.
+   */
+  resetSession?(): Promise<void>
   /** Place a dropship order (Phase 3 wires this to the orders domain). */
   placeOrder(order: SupplierOrderInput): Promise<SupplierOrderResult>
   getOrder(supplierOrderId: string): Promise<SupplierOrder | null>

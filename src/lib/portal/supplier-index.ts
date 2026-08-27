@@ -244,5 +244,10 @@ export async function saveMeasurement(measured: {
 }
 
 export async function clearSupplierIndex(): Promise<void> {
-  await writeJson(INDEX_FILE, EMPTY)
+  // The measurement survives. It describes THEIR feed, not our crawl of it, and
+  // it is the backstop that stops a throttled crawl calling itself complete —
+  // so throwing it away with the rows would disarm the one check that catches
+  // the failure a restart is usually being done because of.
+  const { measured } = await readSupplierIndex()
+  await writeJson(INDEX_FILE, { ...EMPTY, ...(measured ? { measured } : {}) })
 }

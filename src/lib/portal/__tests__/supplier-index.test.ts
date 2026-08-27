@@ -1,4 +1,4 @@
-import { readSupplierIndex, mergeIntoIndex, indexedProductIds, clearSupplierIndex, mergeSweep, highestIndexedId } from '@/lib/portal/supplier-index'
+import { readSupplierIndex, mergeIntoIndex, indexedProductIds, clearSupplierIndex, mergeSweep, highestIndexedId, saveMeasurement } from '@/lib/portal/supplier-index'
 import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 jest.mock('@/lib/portal/persist', () => {
@@ -124,5 +124,25 @@ describe('the id sweep', () => {
 
     await mergeSweep([], { sweptTo: 9000, idsVisited: 1500, sweepComplete: true, emptyRun: 1500 })
     expect((await readSupplierIndex()).sweepComplete).toBe(true)
+  })
+})
+
+describe('the measurement', () => {
+  beforeEach(async () => { await clearSupplierIndex() })
+
+  it('survives starting the crawl over', async () => {
+    // It describes THEIR feed, not our crawl of it, and it is the backstop that
+    // stops a throttled crawl calling itself complete. Throwing it away with
+    // the rows would disarm the one check that catches the failure a restart is
+    // usually being done because of.
+    await saveMeasurement({ pageSize: 100, lastPage: 80, totalProducts: 7943 })
+    await mergeIntoIndex([level('P1', '100')], { pagesRead: 30, complete: true })
+
+    await clearSupplierIndex()
+
+    const index = await readSupplierIndex()
+    expect(index.bySku).toEqual({})
+    expect(index.pagesRead).toBe(0)
+    expect(index.measured?.lastPage).toBe(80)
   })
 })

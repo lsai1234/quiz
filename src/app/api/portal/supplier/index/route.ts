@@ -95,23 +95,65 @@ export async function POST(req: Request) {
 
   try {
     const supplier = await getSupplier()
+    /**
+     * A fresh session for every pass.
+     *
+     * PowerBody stop answering `getProductList` after roughly 3,000 rows read
+     * in one session — page 31 and everything after it returns an empty array,
+     * which is indistinguishable from the end of the feed. That is exactly what
+     * made a crawl report "3,000 products, their feed ended here" against a
+     * feed measured at 7,943.
+     *
+     * A pass is 15 pages (1,500 rows), so starting each one on a new session
+     * keeps every pass comfortably inside the allowance instead of trying to
+     * read eight thousand products through a single login.
+     */
+    await supplier.resetSession?.().catch(() => {
+      // Best effort. A session we could not close expires on its own, and
+      // failing to close it must not fail the read that follows.
+    })
+
     const feed = await supplier.getFeed({
       fromPage,
       pageBudget: PAGES_PER_PASS,
       deadlineMs: PASS_DEADLINE_MS,
     })
     const before = Object.keys((await readSupplierIndex()).bySku).length
-    const index = await mergeIntoIndex(feed.levels, {
-      pagesRead: feed.pages,
-      complete: feed.complete,
-      reset: body.reset && fromPage === 1,
-    })
-    const total = Object.keys(index.bySku).length
 
     // Asked rather than inferred. Our own deadline and page budget also stop a
     // pass short, and resuming from those should be immediate — waiting on them
     // would add a minute of nothing to every single pass of a healthy crawl.
-    const throttled = feed.stoppedBy === 'refused'
+    let throttled = feed.stoppedBy === 'refused'
+    let complete = feed.complete
+    let nextPage = feed.complete ? null : feed.nextPage
+    const lastRead = fromPage + feed.pages - 1
+
+    /**
+     * Refuse to call it the end before the page the probe actually measured.
+     *
+     * This is the backstop that the look-ahead cannot be. Their cut-off is not
+     * per page — it silences the WHOLE session — so a page five or twenty on
+     * comes back just as empty, and no amount of looking ahead within the dead
+     * window can tell a refusal from the end of the feed.
+     *
+     * A measurement taken while the session was healthy can. If the probe saw
+     * 80 pages and the crawl went quiet at 31, that is a refusal, full stop.
+     */
+    const measured = (await readSupplierIndex()).measured
+    if (complete && measured && lastRead < measured.lastPage) {
+      complete = false
+      throttled = true
+      nextPage = lastRead + 1
+    }
+
+    // Written only once the honest completeness is known: `complete` is what
+    // later tells a caller whether a missing code proves anything.
+    const index = await mergeIntoIndex(feed.levels, {
+      pagesRead: feed.pages,
+      complete,
+      reset: body.reset && fromPage === 1,
+    })
+    const total = Object.keys(index.bySku).length
 
     return NextResponse.json({
       ok: true,
@@ -123,13 +165,15 @@ export async function POST(req: Request) {
       // The page range this pass actually covered, so the screen can say where
       // it is rather than only how much it has.
       fromPage,
-      toPage: fromPage + feed.pages - 1,
+      toPage: lastRead,
       measured: index.measured ?? null,
       // Null once the feed ended. Anything else is a pause the caller resumes.
-      nextPage: feed.complete ? null : feed.nextPage,
-      complete: feed.complete,
+      nextPage,
+      complete,
       throttled,
       stoppedBy: feed.stoppedBy,
+      // True when the pager said "end" and the measurement overruled it.
+      overruled: feed.complete && !complete,
     })
   } catch (err) {
     // Name the stage and the elapsed time. "Could not be reached" after 59
