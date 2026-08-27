@@ -376,11 +376,28 @@ Two things were silently truncated by the old value and are not any more:
   the feed" — which is the symptom that started all of this.
 
 **Settle it with data, not argument:** `GET /api/portal/supplier/page-probe`
-asks for pages 1, 100, 200, 201, 250, 400, 600, 800 and 1200 and prints the row
-count and first code of each. Three outcomes are distinguishable at a glance —
-rows past page 200 (the ceiling was ours), page 201 empty against a full 200
-(the ceiling is theirs), or every page returning the same first code (the page
-parameter is being ignored and the "3,000 products" were 200 copies of 15).
+measures rather than guesses. It reads page one for the real page size, doubles
+until a page comes back empty, then bisects for the exact last populated page —
+a dozen cheap calls for the actual number.
+
+It measures because the first version did not, and got it wrong twice in one
+screen. It asked a fixed list of pages (1, 100, 200, 201, 250, 400) and, when
+page 1 answered and page 100 did not, reported "nothing came back past page 1".
+Pages 2 to 99 were never asked about, so that answer was equally consistent with
+the feed ending at page 2 or at page 99. It also assumed 15 rows a page while
+page one was returning **100**, so the product count it printed was out by
+nearly seven times. Measure the page size; never assume it.
+
+**The page size is 100.** That matters for reading the history above: 200 pages
+× 100 rows is 20,000, not 3,000, so the old `MAX_PAGES` guard was probably never
+what stopped the export at 3,000 either. Whatever produced that number, it was
+not simple arithmetic on the page cap.
+
+The probe also flags PowerBody's **DEMO sandbox**, which their guide describes as
+placeholder products with uniform prices and stock of 10 or 100, the first coded
+`P64`. Worth flagging loudly: a sandbox answers every call successfully, so "this
+account only has 3,000 products" and "we are not looking at the real account" are
+the same screen.
 
 ### Reaching the other 5,000 — the id sweep
 

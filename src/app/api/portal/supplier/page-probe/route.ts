@@ -2,86 +2,125 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { syncPortalRuntime } from '@/lib/portal/store'
+import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-/** Pages to look at when nobody names any. Spread either side of page 200 —
- *  which is where our own former page guard stopped, and therefore where a
- *  supposed 3,000-product ceiling would appear if it were real. */
-const DEFAULT_PAGES = [1, 100, 200, 201, 250, 400, 600, 800, 1200]
+/** Where to stop doubling. 8,192 pages is far past any real catalogue. */
+const MAX_PAGE = 8_192
 
 /**
- * GET — ask PowerBody for specific pages of the product list and report exactly
- * what came back.
+ * GET — find out how deep PowerBody's product list actually goes, and what the
+ * rows in it look like.
  *
- * WHY THIS EXISTS
- * ───────────────
- * "Their feed caps at 3,000 products" was asserted here for a long time on the
- * strength of an export that produced exactly 3,000 rows. That number was ours:
- * `MAX_PAGES` was 200, fifteen rows a page, and a pager that stops on its own
- * budget looks identical to a feed that ended — the last page is FULL either
- * way, which is the tell nobody read.
+ * WHY IT IS A SEARCH AND NOT A LIST OF GUESSES
+ * ────────────────────────────────────────────
+ * The first version of this asked a fixed list of pages — 1, 100, 200, 201,
+ * 250, 400 — and reported "nothing came back past page 1" when page 1 answered
+ * and page 100 did not. Every page between them was never asked about, so the
+ * answer was consistent with the feed ending at page 2 or at page 99, and it
+ * confidently printed neither. It also assumed fifteen rows a page while page
+ * one was returning a hundred, so the product count it quoted was wrong by
+ * nearly seven times.
  *
- * A cap that is really theirs and a cap that is really ours need completely
- * different fixes, and the difference is one request to page 201. So rather
- * than reasoning about it, this asks — and prints the answer.
- *
- * Each page reports its row count and the first and last code and id on it, so
- * three things are distinguishable at a glance:
- *   - rows keep coming past page 200 → the ceiling was ours, and is now gone;
- *   - page 201 is empty while page 200 is full → the ceiling is theirs;
- *   - every page returns the SAME codes → paging is being ignored, and the
- *     "3,000 products" were 200 copies of the same 15.
+ * So it measures instead: read page one for the real page size, double until a
+ * page comes back empty, then bisect for the exact edge. A dozen cheap calls,
+ * and the answer is the actual number rather than the nearest number that was
+ * guessed at.
  */
-export async function GET(req: Request) {
+export async function GET() {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await syncPortalRuntime()
 
-  const asked = new URL(req.url).searchParams.get('pages')
-  const pages = (
-    asked
-      ? asked.split(',').map((p) => Number(p.trim())).filter((p) => Number.isFinite(p) && p >= 1)
-      : DEFAULT_PAGES
-  ).slice(0, 24)
-
   try {
     const supplier = await getSupplier()
-    const results = []
+    const probed: Array<{ page: number; rows: number; firstSku: string | null; lastSku: string | null }> = []
 
-    for (const page of pages) {
-      try {
-        const feed = await supplier.getFeed({ fromPage: page, pageBudget: 1 })
-        const rows = feed.levels
-        results.push({
-          page,
-          rows: rows.length,
-          firstSku: rows[0]?.sku ?? null,
-          lastSku: rows[rows.length - 1]?.sku ?? null,
-          firstId: rows[0]?.productId ?? null,
-          lastId: rows[rows.length - 1]?.productId ?? null,
-        })
-      } catch (err) {
-        results.push({ page, rows: 0, error: err instanceof Error ? err.message : String(err) })
+    const read = async (page: number): Promise<SupplierStockLevel[]> => {
+      const feed = await supplier.getFeed({ fromPage: page, pageBudget: 1 })
+      const rows = feed.levels
+      probed.push({
+        page,
+        rows: rows.length,
+        firstSku: rows[0]?.sku ?? null,
+        lastSku: rows[rows.length - 1]?.sku ?? null,
+      })
+      return rows
+    }
+
+    const first = await read(1)
+    if (first.length === 0) {
+      return NextResponse.json({
+        ok: true, pageSize: 0, lastPage: 0, totalProducts: 0, probed,
+        verdict: 'Their product list returned nothing at all, even on page one. That is an access or rate-limit problem, not a ceiling.',
+      })
+    }
+
+    const pageSize = first.length
+
+    // Double until a page is empty, so the search brackets the edge instead of
+    // assuming where it is.
+    let populated = 1
+    let empty = 0
+    for (let page = 2; page <= MAX_PAGE; page *= 2) {
+      if ((await read(page)).length > 0) populated = page
+      else { empty = page; break }
+    }
+
+    // Bisect for the exact last page that still returns rows.
+    if (empty > 0) {
+      while (empty - populated > 1) {
+        const mid = Math.floor((populated + empty) / 2)
+        if ((await read(mid)).length > 0) populated = mid
+        else empty = mid
       }
     }
 
-    // The reading, done here rather than left to the eye. Each of these is a
-    // different conclusion with a different fix, and saying which one the data
-    // supports is the whole point of the probe.
-    const withRows = results.filter((r) => r.rows > 0)
-    const deepest = withRows.length > 0 ? Math.max(...withRows.map((r) => r.page)) : 0
-    const distinctFirsts = new Set(withRows.map((r) => r.firstSku)).size
-    const verdict =
-      withRows.length === 0
-        ? 'Their product list returned nothing at all — this is an access or rate-limit problem, not a ceiling.'
-        : distinctFirsts === 1 && withRows.length > 1
-          ? 'Every page came back with the SAME first code, so the page parameter is being ignored. Any "total" read from paging this is one page repeated.'
-          : deepest > 200
-            ? `Rows are still coming at page ${deepest} — that is past 3,000 products, so there is no 3,000 ceiling. The old limit was ours.`
-            : `Nothing came back past page ${deepest}. On this evidence their list really does stop there (${deepest * 15} products).`
+    // The last page is usually short — that is what makes it the last page.
+    const lastRows = probed.find((p) => p.page === populated)?.rows ?? pageSize
+    const total = (populated - 1) * pageSize + lastRows
 
-    return NextResponse.json({ ok: true, pages: results, deepestPageWithRows: deepest, verdict })
+    /**
+     * Does this look like their DEMO sandbox rather than the real catalogue?
+     *
+     * Their guide describes it as placeholder products with uniform prices and
+     * stock of 10 or 100. Worth flagging loudly: a sandbox answers every call
+     * successfully and looks exactly like a small catalogue, so "we only have
+     * 3,000 products" and "we are not looking at the real account" are the same
+     * screen. Reported as a suspicion with its reasons, never as a fact.
+     */
+    const prices = new Set(first.map((r) => r.wholesalePrice))
+    const stocks = new Set(first.map((r) => r.stock))
+    const sandboxSigns: string[] = []
+    if (prices.size <= 2) sandboxSigns.push(`every product on page one has one of ${prices.size} price(s)`)
+    if (stocks.size <= 2 && [...stocks].every((q) => q === 10 || q === 100)) {
+      sandboxSigns.push('stock is only ever 10 or 100')
+    }
+    if (first[0]?.sku === 'P64') sandboxSigns.push('the first code is P64, the placeholder their guide names')
+
+    const verdict =
+      `Their list is ${pageSize} rows a page and ends at page ${populated} — about ${total.toLocaleString()} products.` +
+      (total > 3_000
+        ? ' That is past 3,000, so there was never a 3,000-product ceiling.'
+        : ' So the catalogue reachable on this account really is about that size.')
+
+    return NextResponse.json({
+      ok: true,
+      pageSize,
+      lastPage: populated,
+      totalProducts: total,
+      probed: probed.sort((a, b) => a.page - b.page),
+      verdict,
+      ...(sandboxSigns.length >= 2
+        ? {
+            warning:
+              'This looks like PowerBody\'s DEMO sandbox rather than the real catalogue — ' +
+              `${sandboxSigns.join(', ')}. A sandbox answers every call successfully, so a small catalogue and the ` +
+              'wrong account look identical. Worth checking with your account manager that API access is enabled on the live account.',
+          }
+        : {}),
+    })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'PowerBody could not be reached.' },

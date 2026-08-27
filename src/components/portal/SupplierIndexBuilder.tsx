@@ -41,7 +41,14 @@ export function SupplierIndexBuilder() {
   /** Set once the user has agreed to the sweep's cost — see the note below. */
   const [sweepArmed, setSweepArmed] = useState(false)
   /** What deep pages of their list actually return — see `probeDepth`. */
-  const [depth, setDepth] = useState<{ verdict: string; pages: Array<{ page: number; rows: number; firstSku?: string | null }> } | null>(null)
+  const [depth, setDepth] = useState<{
+    verdict: string
+    warning?: string
+    pageSize: number
+    lastPage: number
+    totalProducts: number
+    probed: Array<{ page: number; rows: number; firstSku?: string | null }>
+  } | null>(null)
   const [probing, setProbing] = useState(false)
 
   const refresh = useCallback(async () => {
@@ -155,7 +162,7 @@ export function SupplierIndexBuilder() {
         setError(d.error ?? 'PowerBody could not be reached.')
         return
       }
-      setDepth({ verdict: d.verdict, pages: d.pages })
+      setDepth(d)
     } catch {
       setError('Could not reach PowerBody.')
     } finally {
@@ -215,6 +222,13 @@ export function SupplierIndexBuilder() {
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-1)', lineHeight: 'var(--leading-loose)' }}>
             {depth.verdict}
           </p>
+          {/* A sandbox answers every call successfully, so "small catalogue"
+              and "wrong account" look identical without saying it out loud. */}
+          {depth.warning && (
+            <p style={{ fontSize: 'var(--text-meta)', color: 'var(--tone-attention)', marginTop: 'var(--space-2)', lineHeight: 'var(--leading-loose)' }}>
+              {depth.warning}
+            </p>
+          )}
           <div className="overflow-x-auto" style={{ marginTop: 'var(--space-2)' }}>
             <table style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', borderCollapse: 'collapse' }}>
               <thead>
@@ -225,7 +239,7 @@ export function SupplierIndexBuilder() {
                 </tr>
               </thead>
               <tbody>
-                {depth.pages.map((row) => (
+                {depth.probed.map((row) => (
                   <tr key={row.page}>
                     <td style={{ paddingRight: '1rem' }}>{row.page}</td>
                     <td style={{ paddingRight: '1rem', color: row.rows > 0 ? 'var(--tone-positive)' : 'var(--ink-3)' }}>
