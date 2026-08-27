@@ -90,6 +90,18 @@ export interface SupplierIndex {
    * catalogue has ended. Reported, never assumed — the same rule as `complete`.
    */
   sweepComplete: boolean
+  /**
+   * What the page probe last measured about their feed.
+   *
+   * Kept so the crawl can say "4,000 of about 7,900" instead of "4,000". A
+   * number with no denominator tells you nothing about whether to keep waiting,
+   * which is the only question anybody watching a crawl actually has.
+   *
+   * A measurement, not a promise: it is what the feed reported at one moment,
+   * and the crawl still stops when the feed stops rather than when this figure
+   * is reached.
+   */
+  measured?: { pageSize: number; lastPage: number; totalProducts: number; at: string }
 }
 
 const EMPTY: SupplierIndex = {
@@ -219,6 +231,16 @@ export async function mergeSweep(
   }
   await writeJson(INDEX_FILE, next)
   return next
+}
+
+/** Record what the page probe found, for the crawl to show progress against. */
+export async function saveMeasurement(measured: {
+  pageSize: number
+  lastPage: number
+  totalProducts: number
+}): Promise<void> {
+  const current = await readSupplierIndex()
+  await writeJson(INDEX_FILE, { ...current, measured: { ...measured, at: new Date().toISOString() } })
 }
 
 export async function clearSupplierIndex(): Promise<void> {

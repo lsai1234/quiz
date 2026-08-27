@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { syncPortalRuntime } from '@/lib/portal/store'
+import { saveMeasurement } from '@/lib/portal/supplier-index'
 import type { SupplierStockLevel } from '@/lib/supplier/types'
 
 export const dynamic = 'force-dynamic'
@@ -104,6 +105,10 @@ export async function GET() {
       (total > 3_000
         ? ' That is past 3,000, so there was never a 3,000-product ceiling.'
         : ' So the catalogue reachable on this account really is about that size.')
+
+    // Kept so the crawl can show progress against a real target rather than
+    // counting upward into the dark.
+    await saveMeasurement({ pageSize, lastPage: populated, totalProducts: total })
 
     return NextResponse.json({
       ok: true,

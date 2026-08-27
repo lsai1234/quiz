@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card } from '@/components/system'
 
+/** Mirrors PAGES_PER_PASS in the crawl route — only used to name the range
+ *  being read, so a drift here costs a slightly wrong label, nothing more. */
+const PAGES_PER_PASS = 40
+
 interface IndexState {
   products: number
   pagesRead: number
@@ -12,6 +16,14 @@ interface IndexState {
   sweptFound?: number
   sweptTo?: number | null
   sweepComplete?: boolean
+  measured?: { pageSize: number; lastPage: number; totalProducts: number; at: string } | null
+}
+
+/** One thing the crawl did, kept in order so the run can be read back. */
+interface Step {
+  text: string
+  tone: 'plain' | 'good' | 'warn'
+  at: number
 }
 
 /**
@@ -36,6 +48,17 @@ export function SupplierIndexBuilder() {
   const [state, setState] = useState<IndexState | null>(null)
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
+  /**
+   * Everything the crawl has done this run, in order.
+   *
+   * A single replaced status line tells you what is happening THIS second and
+   * nothing about how it got there — so a crawl that quietly started being
+   * throttled ten passes ago looks the same as one that never was. The log is
+   * what makes a slow run diagnosable while it is still running.
+   */
+  const [steps, setSteps] = useState<Step[]>([])
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [now, setNow] = useState(Date.now())
   const [error, setError] = useState<string | null>(null)
   const [sweeping, setSweeping] = useState(false)
   /** Set once the user has agreed to the sweep's cost — see the note below. */
@@ -63,16 +86,35 @@ export function SupplierIndexBuilder() {
 
   useEffect(() => { refresh() }, [refresh])
 
+  // Only ticks while something is running: a crawl can sit in a sixty-second
+  // backoff, and a frozen elapsed time is indistinguishable from a hung page.
+  useEffect(() => {
+    if (!busy && !sweeping) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [busy, sweeping])
+
   async function crawl(reset: boolean) {
     setBusy(true)
     setError(null)
+    setSteps([])
+    setStartedAt(Date.now())
+    const say = (text: string, tone: Step['tone'] = 'plain') =>
+      setSteps((prev) => [...prev, { text, tone, at: Date.now() }])
+
     let page: number | null = 1
     let passes = 0
     /** Consecutive passes that came back refused at the SAME page. */
     let stalled = 0
     let lastPage: number | null = null
+
+    say(reset ? 'Starting over — clearing what was indexed before.' : 'Asking PowerBody for their product list.')
+
     try {
       while (page !== null && passes < 200) {
+        const asking = page
+        setProgress(`Reading pages ${asking}–${asking + PAGES_PER_PASS - 1} from PowerBody…`)
+
         const res: Response = await fetch('/api/portal/supplier/index', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -80,13 +122,33 @@ export function SupplierIndexBuilder() {
         })
         const d = await res.json().catch(() => ({}))
         if (!res.ok) {
+          say(d.error ?? 'PowerBody could not be reached.', 'warn')
           setError(d.error ?? 'PowerBody could not be reached.')
           return
         }
         passes += 1
-        setProgress(`${d.total} products from ${d.pagesRead} pages…`)
-        setState({ products: d.total, pagesRead: d.pagesRead, complete: d.complete, updatedAt: new Date().toISOString() })
-        if (d.complete || d.nextPage === null) break
+
+        say(
+          `Pages ${d.fromPage}–${d.toPage}: ${d.read} rows, ${d.added} new. ` +
+            `${d.total.toLocaleString()} products indexed.`,
+          d.added > 0 ? 'good' : 'plain',
+        )
+        setState((prev) => ({
+          ...(prev ?? { updatedAt: null }),
+          products: d.total,
+          pagesRead: d.pagesRead,
+          complete: d.complete,
+          measured: d.measured,
+          updatedAt: new Date().toISOString(),
+        }))
+
+        if (d.complete || d.nextPage === null) {
+          say(
+            `Their feed ended at page ${d.toPage}. ${d.total.toLocaleString()} products indexed.`,
+            'good',
+          )
+          break
+        }
 
         /**
          * Refused mid-feed. Asking again straight away is asking the same
@@ -97,15 +159,25 @@ export function SupplierIndexBuilder() {
         if (d.throttled) {
           stalled = d.nextPage === lastPage ? stalled + 1 : 1
           if (stalled > 6) {
-            setError(
-              `PowerBody keep refusing at page ${d.nextPage}. ${d.total.toLocaleString()} products are indexed and kept — ` +
-                'press again in a few minutes to carry on from there. Nothing is lost.',
-            )
+            const msg =
+              `PowerBody kept refusing at page ${d.nextPage}. ${d.total.toLocaleString()} products are indexed and kept — ` +
+              'press Build again in a few minutes to carry on from there. Nothing is lost.'
+            say(msg, 'warn')
+            setError(msg)
             return
           }
           const wait = Math.min(60_000, 5_000 * 2 ** (stalled - 1))
-          setProgress(`PowerBody are throttling us at page ${d.nextPage}. Waiting ${Math.round(wait / 1000)}s…`)
-          await new Promise((resolve) => setTimeout(resolve, wait))
+          say(
+            `PowerBody stopped answering at page ${d.nextPage} — that is throttling, not the end of their list. ` +
+              `Waiting ${Math.round(wait / 1000)}s before trying that page again (attempt ${stalled} of 6).`,
+            'warn',
+          )
+          // Counted down rather than waited out silently: a minute of nothing
+          // is how a working pause gets mistaken for a hang and cancelled.
+          for (let left = Math.round(wait / 1000); left > 0; left--) {
+            setProgress(`Throttled at page ${d.nextPage}. Waiting ${left}s…`)
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+          }
         } else {
           stalled = 0
         }
@@ -113,7 +185,9 @@ export function SupplierIndexBuilder() {
         page = d.nextPage
       }
     } catch {
-      setError('The crawl stopped before it finished. Press again to carry on — what it already read is kept.')
+      const msg = 'The crawl stopped before it finished. Press Build again to carry on — what it already read is kept.'
+      say(msg, 'warn')
+      setError(msg)
     } finally {
       setBusy(false)
       setProgress(null)
@@ -209,9 +283,17 @@ export function SupplierIndexBuilder() {
           Reads their whole product list once and keeps the SKU → product id mapping. Do this before importing a
           roster: every code it reaches then imports without paging or searching for it.
         </p>
+        {/* Said before it starts, because both of these look like faults while
+            they are happening and neither is. */}
+        <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', marginTop: 'var(--space-2)', lineHeight: 'var(--leading-loose)' }}>
+          It reads 40 pages at a time and shows each batch as it lands. PowerBody throttle sustained paging, so it
+          will pause and retry — <strong style={{ color: 'var(--ink-2)' }}>a pause is it working, not hanging</strong>.
+          Everything read is saved as it goes, so stopping early costs nothing.
+        </p>
       </div>
 
-      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)' }}>
+      {/* Live line while it runs; the standing state when it is not. */}
+      <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)', lineHeight: 'var(--leading-loose)' }} aria-live="polite">
         {progress ??
           (built
             ? `${state.products.toLocaleString()} products from ${state.pagesRead} pages.` +
@@ -221,9 +303,72 @@ export function SupplierIndexBuilder() {
             : 'Nothing crawled yet.')}
       </p>
 
+      {/* How far through, and how long it has been going.
+          A count with no denominator answers nothing about whether to keep
+          waiting, which is the only question anybody watching a crawl has. */}
+      {(busy || steps.length > 0) && (
+        <div className="flex items-center gap-3 flex-wrap" style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+          {startedAt && <span>{Math.round((now - startedAt) / 1000)}s elapsed</span>}
+          {state?.measured && state.products > 0 && (
+            <span>
+              {Math.min(100, Math.round((state.products / state.measured.totalProducts) * 100))}% of the{' '}
+              {state.measured.totalProducts.toLocaleString()} their list measured at
+            </span>
+          )}
+          {state?.measured && state.pagesRead > 0 && (
+            <span>page {Math.min(state.pagesRead, state.measured.lastPage)} of {state.measured.lastPage}</span>
+          )}
+        </div>
+      )}
+
+      {state?.measured && state.products > 0 && (
+        <div style={{ height: '4px', borderRadius: 'var(--radius-pill, 999px)', background: 'var(--surface-2)', overflow: 'hidden' }}>
+          <div
+            style={{
+              height: '100%',
+              width: `${Math.min(100, Math.round((state.products / state.measured.totalProducts) * 100))}%`,
+              background: state.complete ? 'var(--tone-positive)' : 'var(--tone-accent, var(--ink-2))',
+              transition: 'width 400ms ease',
+            }}
+          />
+        </div>
+      )}
+
+      {/* The run, in order.
+          A single replaced status line says what is happening this second and
+          nothing about how it got here — so a crawl being throttled since pass
+          three looks identical to one that never was. */}
+      {steps.length > 0 && (
+        <ol
+          className="overflow-y-auto"
+          style={{
+            maxHeight: '11rem', display: 'grid', gap: 'var(--space-1)',
+            paddingLeft: '1.1rem', margin: 0,
+          }}
+        >
+          {steps.map((step, i) => (
+            <li
+              key={i}
+              style={{
+                fontSize: 'var(--text-micro)',
+                lineHeight: 'var(--leading-loose)',
+                color:
+                  step.tone === 'warn'
+                    ? 'var(--tone-attention)'
+                    : step.tone === 'good'
+                      ? 'var(--ink-2)'
+                      : 'var(--ink-3)',
+              }}
+            >
+              {step.text}
+            </li>
+          ))}
+        </ol>
+      )}
+
       <div className="flex items-center gap-2 flex-wrap">
         <Button variant={built ? 'secondary' : 'primary'} loading={busy} onClick={() => crawl(false)}>
-          {built ? 'Refresh the index' : 'Build the index'}
+          {busy ? 'Reading their list…' : built ? 'Refresh the index' : 'Build the index'}
         </Button>
         {built && (
           <Button variant="ghost" size="sm" loading={busy} onClick={() => crawl(true)}>

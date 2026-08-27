@@ -37,6 +37,7 @@ export async function GET() {
     sweptFound: index.sweptFound,
     sweptTo: index.sweptTo,
     sweepComplete: index.sweepComplete,
+    measured: index.measured ?? null,
   })
 }
 
@@ -100,6 +101,11 @@ export async function POST(req: Request) {
       added: total - before,
       total,
       pagesRead: index.pagesRead,
+      // The page range this pass actually covered, so the screen can say where
+      // it is rather than only how much it has.
+      fromPage,
+      toPage: fromPage + feed.pages - 1,
+      measured: index.measured ?? null,
       // Null once the feed ended. Anything else is a pause the caller resumes.
       nextPage: feed.complete ? null : feed.nextPage,
       complete: feed.complete,
