@@ -254,10 +254,21 @@ export function SupplierIndexBuilder() {
         </div>
       )}
 
-      {/* The second half of the catalogue.
-          Only offered once the crawl has run, because the sweep starts where
-          the feed stops and has to know where that is. */}
-      {built && (
+      {/*
+        The sweep exists for a feed that will not hand its catalogue over. When
+        the crawl reports `complete`, the feed ENDED — everything it has is
+        everything there is — and sweeping ids would spend the best part of an
+        hour rediscovering products the index already holds.
+        So a finished crawl retires the offer rather than leaving an expensive
+        button sitting there looking like the next step.
+      */}
+      {built && state.complete && (state.sweptIds ?? 0) === 0 && (
+        <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', lineHeight: 'var(--leading-loose)' }}>
+          Their feed ended on its own, so this index holds their whole catalogue. There is nothing left to search for.
+        </p>
+      )}
+
+      {built && !state.complete && (
         <div className="pt-2.5" style={{ borderTop: '1px solid var(--edge)' }}>
           <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
             The products their feed will not list

@@ -388,10 +388,40 @@ the feed ending at page 2 or at page 99. It also assumed 15 rows a page while
 page one was returning **100**, so the product count it printed was out by
 nearly seven times. Measure the page size; never assume it.
 
-**The page size is 100.** That matters for reading the history above: 200 pages
-× 100 rows is 20,000, not 3,000, so the old `MAX_PAGES` guard was probably never
-what stopped the export at 3,000 either. Whatever produced that number, it was
-not simple arithmetic on the page cap.
+### Measured, on the live account
+
+```
+page    1   100 rows   P64          page   81   0 rows
+page    2   100 rows   P6420        page   82   0 rows
+page    4   100 rows   P5496        page   84   0 rows
+page    8   100 rows   P26590       page   88   0 rows
+page   16   100 rows   P32801       page   96   0 rows
+page   32   100 rows   P44059       page  128   0 rows
+page   64   100 rows   P51762
+page   80    43 rows   P53867
+```
+
+**100 rows a page, ending at page 80: 7,943 products.** Page 80 is SHORT — 43
+rows — which is what the end of a real feed looks like, and the tell that was
+missing from every "3,000 products" reading before it.
+
+So **there is no ceiling, and there never was one on this account.** The whole
+catalogue is reachable through `getProductList` alone. `P44338` — the SKU that
+started all of this by reporting "not found" — sits between pages 32 and 64 and
+was reachable the entire time.
+
+That also disposes of the previous section's theory. At 100 rows a page the old
+`MAX_PAGES = 200` guard would have allowed 20,000 products, and the feed only
+has 80 pages, so **the guard was never binding**: raising it fixed nothing, and
+the claim that it was silently truncating `getStockLevels` and the SKU feed walk
+was wrong too. (The clock on `getStockLevels` is still a better bound than a page
+count, and 80 pages is 12 seconds, so it stays.)
+
+What produced the original 3,000 is not established. The most plausible reading
+is that the earlier observations came from the DEMO sandbox — 15 rows a page,
+placeholder products, `getProductInfo` refusing — and the account has since been
+enabled for live API access. That is a hypothesis, not a finding: it is not
+worth another round of archaeology now the real number is measured.
 
 The probe also flags PowerBody's **DEMO sandbox**, which their guide describes as
 placeholder products with uniform prices and stock of 10 or 100, the first coded
@@ -399,7 +429,16 @@ placeholder products with uniform prices and stock of 10 or 100, the first coded
 account only has 3,000 products" and "we are not looking at the real account" are
 the same screen.
 
-### Reaching the other 5,000 — the id sweep
+### The id sweep — kept, but not needed here
+
+Written when the ceiling was believed to be real, and superseded by the
+measurement above: the feed reaches all 7,943 products, so there is nothing for
+a sweep to find. The screen retires the offer once a crawl reports `complete`,
+rather than leaving an hour-long button looking like the next step.
+
+It stays in the codebase because the capability is real and the reasoning behind
+it holds for any account that IS capped — `getProductInfo` genuinely has no page
+ceiling, and sweeping ids genuinely reaches what a capped list will not.
 
 The 3,000 cap is on `getProductList`. **`getProductInfo` is not capped**: it
 takes a product id, answers for any product on the account, and its reply
