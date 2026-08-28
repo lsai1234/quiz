@@ -12,7 +12,6 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
 import { IconButton } from '@/components/ui/IconButton'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
-import { shortNameOf } from '@/lib/catalogue/short-name'
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -111,7 +110,7 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                   <ProductTile imageUrl={l.product.imageUrl} slot={l.product.stackSlots[0]} title={l.product.title} size={56} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{shortNameOf(l.product)}</p>
+                      <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{l.product.title}</p>
                       <IconButton icon="x" label={`Remove ${l.product.title}`} size="sm" onClick={() => remove(l.product.id, l.variant.id)} className="-mr-1 -mt-1" />
                     </div>
                     <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{variantLabel(l.variant)}</p>

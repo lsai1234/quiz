@@ -13,7 +13,6 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StatBars } from '@/components/stack-review/StatBars'
 import { StarRating } from './StarRating'
 import { StockChip } from './StockChip'
-import { shortNameOf } from '@/lib/catalogue/short-name'
 
 interface Props {
   product: CatalogueProduct
@@ -105,7 +104,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
               )}
             </div>
             <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-              {shortNameOf(product)}
+              {product.title}
             </p>
             {hasRating(product.rating) && <StarRating rating={product.rating} size={11} className="mt-1.5" />}
           </div>

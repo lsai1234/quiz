@@ -212,10 +212,18 @@ export interface CatalogueProduct {
    * `shortNameOf()` derives one from the title, so a missing short name is never
    * a missing name. See `lib/catalogue/short-name.ts`.
    *
-   * Deliberately NOT used on receipts, order confirmations or emails. Those are
-   * records of what somebody bought, and "Whey Isolate" is not enough to
-   * identify a tub in a dispute. Anything with a settled price beside it keeps
-   * the full `title`.
+   * Used only where the layout has a HARD constraint the title cannot meet: the
+   * poster's fixed-width spec column, and single-line rows that truncate. It is
+   * deliberately absent from three kinds of surface, and the rule is worth
+   * stating because it is easy to spread this field everywhere and lose it:
+   *
+   *   · Records — receipts, order confirmations, emails. "Whey Isolate" is not
+   *     enough to identify a tub in a dispute.
+   *   · Anything with a settled price on the line — the plan receipt, the
+   *     subscription journey, the basket. Same reason, one step earlier.
+   *   · Where the customer is deciding WHICH product this is — the shop card,
+   *     the product sheets, the swap modal. Identification beats brevity, and
+   *     these have the room.
    */
   shortName?: string | null
   /** Short, one-sentence description shown on cards */
