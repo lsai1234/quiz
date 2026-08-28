@@ -11,16 +11,33 @@
  * tier names meant nothing across two members, and the top two could land on
  * the same price.
  *
- * Three properties hold, and the tests lock all three:
+ * Four properties hold, and the tests lock all four:
  *
  *  1. **Nested.** Each depth contains everything the depth below it has, and is
  *     built by adding to it — so "the next one up" is always literally more.
- *  2. **Banded.** A tier's monthly total sits inside its band whenever the
- *     catalogue allows. It can only exceed the ceiling when the products that
- *     must be there (see anchors) already cost more than the band, or when the
- *     tier would otherwise be identical to the one below it.
- *  3. **Distinct.** While products remain, no depth is the same size as the
+ *  2. **Floored.** No depth is below `TIER_SIZE_BANDS[level].min`. A
+ *     one-product "Essentials" priced perfectly inside its band is not a cheap
+ *     stack, it is not a stack, and the fill used to produce them whenever the
+ *     top-ranked pick was dear enough to leave no room under the ceiling.
+ *  3. **Banded.** A tier's monthly total sits inside its band whenever the
+ *     catalogue allows, and aims at the band's `target` rather than merely
+ *     staying under its ceiling — which is what makes a band a price rather
+ *     than a range.
+ *  4. **Distinct.** While products remain, no depth is the same size as the
  *     depth below — three options are always three options.
+ *
+ * ── Precedence ──────────────────────────────────────────────────────────────
+ * The four pull against each other on a thin catalogue, so the order is fixed
+ * here once rather than re-decided per bug report:
+ *
+ *     size.min  >  price.max  >  size.max  >  price.target
+ *
+ * A depth reaches its product floor even when that costs more than its ceiling;
+ * it respects its ceiling before its count cap; and the target is an aim, not a
+ * rule. The one nuance is that "the floor outranks the ceiling" is a licence to
+ * break the band, not a reason to ignore it — the floor is filled inside the
+ * band by rank wherever it can be, and only then by the cheapest product left,
+ * so an overshoot is always as small as the catalogue allows.
  *
  * Prices come from `calculatePricing` with the tier's own level, which is what
  * the reveal and the checkout both charge through, so what the selector shows
@@ -30,7 +47,7 @@ import type { QuizAnswers, StackLevel } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculatePricing, getPricingConfig, type SubscriptionPlanOptions } from './pricing'
-import { TIER_ORDER, TIER_PRICE_BANDS, TIER_MAX_SIZES, TIER_MIN_STEP } from '@/lib/quiz-core'
+import { TIER_ORDER, TIER_PRICE_BANDS, TIER_SIZE_BANDS, TIER_MIN_STEP } from '@/lib/quiz-core'
 
 export interface TierPlan {
   level: StackLevel
@@ -71,7 +88,7 @@ export function planTiers(
   config = getPricingConfig(),
   opts: SubscriptionPlanOptions = {},
   bands = TIER_PRICE_BANDS,
-  maxSizes = TIER_MAX_SIZES,
+  sizes = TIER_SIZE_BANDS,
   minStep = TIER_MIN_STEP,
 ): TierPlan[] {
   const ranked = [...blueprint.slots].sort(byDisplayOrder)
@@ -84,7 +101,7 @@ export function planTiers(
 
   for (const level of TIER_ORDER) {
     const band = bands[level]
-    const maxSize = maxSizes[level]
+    const size = sizes[level]
     const picked = [...chosen]
     const has = (slot: StackSlotEntry) => picked.some((p) => p.slotId === slot.slotId)
 
@@ -94,21 +111,69 @@ export function planTiers(
       if (!has(slot) && (isAnchor(slot) || picked.length === 0)) picked.push(slot)
     }
 
-    // 2. Fill by rank while the band's ceiling holds. A product that doesn't fit
-    //    is skipped rather than ending the fill: a £30 protein sitting second
-    //    shouldn't cost the member the three cheaper things ranked below it.
+    // 2. The floor. A one-product "Essentials" priced perfectly inside its band
+    //    is not a cheap stack, it is not a stack — so the count is reached
+    //    before the money is spent, and it is the one place the price band is
+    //    allowed to lose.
+    //
+    //    In two phases, because "the floor outranks the ceiling" is a licence
+    //    to break the band, not a reason to ignore it. Almost always the floor
+    //    can be reached inside the band, and doing that by rank keeps the
+    //    cheapest depth leading with the picks the engine is most sure of.
     for (const slot of ranked) {
-      if (has(slot) || picked.length >= maxSize) continue
-      const candidate = [...picked, slot]
-      if (band.max != null && priceOf(candidate, level).subscriptionTotal > band.max) continue
+      if (picked.length >= size.min) break
+      if (has(slot)) continue
+      if (band.max != null && priceOf([...picked, slot], level).subscriptionTotal > band.max) continue
       picked.push(slot)
     }
 
-    // 3. Three options must be three options. If the band left this depth with
+    //    Only when that fails does the band give way — and then by the CHEAPEST
+    //    product left rather than the next-ranked one, so the overshoot is as
+    //    small as the catalogue allows. Filling this phase by rank instead put
+    //    a £60 Balanced inside a £55 band on stacks that had a perfectly good
+    //    £48 option one place further down.
+    while (picked.length < size.min) {
+      const rest = ranked.filter((slot) => !has(slot))
+      if (rest.length === 0) break
+      const cheapest = rest.reduce((best, slot) => {
+        const cost = priceOf([...picked, slot], level).subscriptionTotal
+        return best && best.cost <= cost ? best : { slot, cost }
+      }, null as { slot: StackSlotEntry; cost: number } | null)
+      if (!cheapest) break
+      picked.push(cheapest.slot)
+    }
+
+    // 3. Fill by rank TOWARDS the target, not merely under the ceiling.
+    //
+    //    Filling to the ceiling made a band a range: Essentials came out at
+    //    £24 for one member and £43 for the next, which is a great deal better
+    //    than the £26-vs-£68 the bands replaced but is still not one price.
+    //    Stopping at the target clusters them — the depth is the price it is
+    //    sold as, and the products are what fit it.
+    //
+    //    Rank still decides WHICH product, so the target can only ever end the
+    //    fill early; it never reaches past a more relevant product for a
+    //    cheaper one that happens to land nearer the number. And a product that
+    //    doesn't fit is skipped rather than ending the fill: a £30 protein
+    //    sitting second shouldn't cost the member the three cheaper things
+    //    ranked below it.
+    for (const slot of ranked) {
+      if (has(slot) || picked.length >= size.max) continue
+      if (picked.length >= size.min && priceOf(picked, level).subscriptionTotal >= band.target) break
+      if (band.max != null && priceOf([...picked, slot], level).subscriptionTotal > band.max) continue
+      picked.push(slot)
+    }
+
+    // 4. Three options must be three options. If the band left this depth with
     //    exactly what the one below has, add the cheapest product still on the
-    //    table and let it overshoot — an option that costs more and contains
-    //    more is worth more than a duplicate row.
-    if (picked.length === chosen.length && picked.length < ranked.length) {
+    //    table and let it overshoot the PRICE — an option that costs more and
+    //    contains more is worth more than a duplicate row.
+    //
+    //    The COUNT cap is not overshot, though, which is the change from the
+    //    first version of this step. A depth that cannot be distinct without
+    //    breaking its own shape should not be shown, and the fold below is a
+    //    better answer than a Balanced holding six products.
+    if (picked.length === chosen.length && picked.length < ranked.length && picked.length < size.max) {
       const rest = ranked.filter((slot) => !has(slot))
       const cheapest = rest.reduce((best, slot) => {
         const cost = priceOf([...picked, slot], level).subscriptionTotal

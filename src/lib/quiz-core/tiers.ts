@@ -27,24 +27,40 @@ export const TIER_ORDER: StackLevel[] = ['essentials', 'performance', 'complete'
  * Read against the one-off column at your peril: these are the subscribed
  * monthly totals, which is the plan the tiers are sold on.
  */
-export const TIER_PRICE_BANDS: Record<StackLevel, { min: number; max: number | null }> = {
-  essentials: { min: 0, max: 35 },
-  performance: { min: 35, max: 55 },
+export const TIER_PRICE_BANDS: Record<StackLevel, { min: number; target: number; max: number | null }> = {
+  essentials: { min: 0, target: 30, max: 35 },
+  performance: { min: 35, target: 45, max: 55 },
   // Capped rather than open-ended: "every angle covered" that lands at £120 for
   // one quiz and £55 for another is the same inconsistency the bands exist to
   // remove. Anything that doesn't fit stays on the results page as an upgrade,
   // so the member chooses to go above the band rather than being shown it.
-  complete: { min: 55, max: 80 },
+  complete: { min: 55, target: 68, max: 80 },
 }
 
 /**
- * The most products a depth may hold, whatever the band allows.
+ * How many products a depth holds.
  *
- * A backstop on shape, not the sizing control: it stops a stack of cheap
+ * `max` is the backstop `TIER_MAX_SIZES` always was: it stops a stack of cheap
  * vitamins from packing eight products into Essentials just because they fit
- * under £35, and keeps the three options visibly stepped.
+ * under the ceiling, and keeps the three options visibly stepped.
+ *
+ * `min` is the part that was missing, and its absence was a real fault. The
+ * fill seeded Essentials with "the anchors, or the top-ranked product if there
+ * are none", so a member whose top pick happened to be a £30 product was
+ * offered a ONE-PRODUCT Essentials — priced correctly inside its band, and
+ * reading as a mistake. `general health` did exactly this on the mock
+ * catalogue.
+ *
+ * **The floor outranks the price ceiling.** A depth below its floor is not a
+ * cheaper stack, it is a stack that isn't one, so the fill reaches the minimum
+ * count even when that costs more than the band allows. See the precedence note
+ * on `planTiers`.
  */
-export const TIER_MAX_SIZES: Record<StackLevel, number> = { essentials: 4, performance: 6, complete: 8 }
+export const TIER_SIZE_BANDS: Record<StackLevel, { min: number; max: number }> = {
+  essentials: { min: 2, max: 3 },
+  performance: { min: 3, max: 4 },
+  complete: { min: 4, max: 6 },
+}
 
 /**
  * The smallest monthly gap (£) between two depths worth showing as two options.

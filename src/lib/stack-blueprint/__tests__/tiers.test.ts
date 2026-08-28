@@ -12,8 +12,9 @@ import { planTiers, tierPlanFor } from '../tier-plan'
 import { calculatePricing, PRICING_CONFIG } from '../pricing'
 import { addBoosterSlot } from '../helpers'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
-import { TIER_ORDER, TIER_PRICE_BANDS, TIER_MAX_SIZES, TIER_MIN_STEP } from '@/lib/quiz-core'
+import { TIER_ORDER, TIER_PRICE_BANDS, TIER_SIZE_BANDS, TIER_MIN_STEP } from '@/lib/quiz-core'
 import type { QuizAnswers, StackLevel } from '@/lib/types'
+import type { StackSlotEntry } from '../types'
 
 function answers(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
@@ -114,15 +115,25 @@ describe('the bands hold across every quiz', () => {
 
     for (const plan of plans) {
       const band = TIER_PRICE_BANDS[plan.level]
-      expect(plan.slots.length).toBeGreaterThan(0)
-      expect(plan.slots.length).toBeLessThanOrEqual(TIER_MAX_SIZES[plan.level])
+      const size = TIER_SIZE_BANDS[plan.level]
+      expect(plan.slots.length).toBeGreaterThanOrEqual(size.min)
+      expect(plan.slots.length).toBeLessThanOrEqual(size.max)
       if (band.max == null) continue
-      // The one licensed overshoot: the products that MUST be in the stack —
-      // a bulking member's mass builder is £37/month before anything else is
-      // added — already cost more than the band. Everything else fits.
+      // TWO licensed overshoots, and no others. Both are the precedence rule
+      // showing up in a price:
+      //
+      //  · Anchors — the products that MUST be in the stack. A bulking
+      //    member's mass builder is £37/month before anything else is added.
+      //  · The floor — a depth at its minimum count has spent the band getting
+      //    there, and `size.min` outranks `band.max` by design. A £36
+      //    two-product Essentials is the right answer; a £32 one-product
+      //    Essentials is not.
+      //
+      // A plan ABOVE its floor has no excuse and must be inside the band.
       const anchorsOnly = plan.slots.filter((s) => s.required)
-      const forced = anchorsOnly.length === plan.slots.length && anchorsOnly.length > 0
-      if (!forced) expect(plan.monthly).toBeLessThanOrEqual(band.max)
+      const allAnchors = anchorsOnly.length === plan.slots.length && anchorsOnly.length > 0
+      const atFloor = plan.slots.length <= size.min
+      if (!allAnchors && !atFloor) expect(plan.monthly).toBeLessThanOrEqual(band.max)
     }
 
     // Deeper always means more products AND more money — a depth that costs
@@ -150,9 +161,10 @@ describe('the bands hold across every quiz', () => {
   it('no depth is ever priced above the top band', () => {
     for (const [, profile] of PROFILES) {
       for (const plan of plansFor(profile).plans) {
-        // Required-only stacks are the licensed exception (see above); nothing
-        // else may go over the ceiling of the deepest band.
-        const forced = plan.slots.every((s) => s.required)
+        // Same two exceptions as above; nothing else may go over the ceiling
+        // of the deepest band.
+        const forced =
+          plan.slots.every((s) => s.required) || plan.slots.length <= TIER_SIZE_BANDS[plan.level].min
         if (!forced) expect(plan.monthly).toBeLessThanOrEqual(TIER_PRICE_BANDS.complete.max!)
       }
     }
@@ -197,6 +209,127 @@ describe('tierPlanFor', () => {
       // Never resolves DOWN — a member who asked for more never silently gets less.
       if (!plans.some((p) => p.level === level) && TIER_ORDER.indexOf(plan.level) < TIER_ORDER.indexOf(level)) {
         expect(plan).toBe(plans[plans.length - 1])
+      }
+    }
+  })
+})
+
+/**
+ * The slots the fill has no choice about, mirroring steps 1 and 2 of
+ * `planTiers`: the anchors (`isAnchor` — required, or added by the member), plus
+ * the top-ranked slot, which step 1 pins into the cheapest depth so it leads
+ * with the pick the engine is most sure of. Nesting carries it into the rest.
+ */
+function undroppable(plan: { slots: StackSlotEntry[] }, ranked: StackSlotEntry[]): Set<string> {
+  const ids = new Set(plan.slots.filter((s) => s.required || s.addedByUser === true).map((s) => s.slotId))
+  if (ranked[0]) ids.add(ranked[0].slotId)
+  return ids
+}
+
+describe('the floors', () => {
+  it('no depth is ever below its minimum product count', () => {
+    // The assertion whose ABSENCE was the bug. Before the floors, the fill
+    // seeded Essentials with "the anchors, or the top-ranked product if there
+    // are none", so a member whose top pick happened to be a £30 product was
+    // offered a one-product Essentials — inside its band, and reading as a
+    // mistake. `general health` did exactly that on this catalogue.
+    for (const [, profile] of PROFILES) {
+      for (const plan of plansFor(profile).plans) {
+        expect(plan.slots.length).toBeGreaterThanOrEqual(TIER_SIZE_BANDS[plan.level].min)
+      }
+    }
+  })
+
+  it('a depth reaches its floor even when the band cannot pay for it', () => {
+    // The precedence, on the profile that actually exercises it: a
+    // two-product Essentials over £35 beats a one-product Essentials under it.
+    const plans = plansFor({ track: 'wellbeing', trainingFrequency: null, trainingType: [], goals: ['health'] }).plans
+    const essentials = plans.find((p) => p.level === 'essentials')
+    expect(essentials).toBeDefined()
+    expect(essentials!.slots.length).toBe(TIER_SIZE_BANDS.essentials.min)
+  })
+
+  it('when the band has to give way, it gives way as little as it can', () => {
+    // The floor is filled by rank while anything fits the ceiling, and only
+    // then by the CHEAPEST product left. Filling that second phase by rank
+    // instead put a £60 Balanced inside a £55 band on stacks that had a
+    // perfectly good £48 option one place further down — so an overshoot must
+    // never be beatable by another product of the same count.
+    for (const [, profile] of PROFILES) {
+      const { a, plans } = plansFor(profile)
+      const full = buildStackBlueprint(a, MOCK_CATALOGUE)
+      const ranked = full.slots.slice().sort((x, y) => x.displayOrder - y.displayOrder)
+      for (const plan of plans) {
+        const band = TIER_PRICE_BANDS[plan.level]
+        if (band.max == null || plan.monthly <= band.max) continue
+        if (plan.slots.length > TIER_SIZE_BANDS[plan.level].min) continue
+        const ids = new Set(plan.slots.map((s) => s.slotId))
+        const unused = full.slots.filter((s) => !ids.has(s.slotId))
+        // Only the slots the fill was FREE to choose. Anchors are in the stack
+        // whatever they cost, and `plan.slots` is display-ordered rather than
+        // pick-ordered, so "the last one" is not necessarily the one phase two
+        // added — swapping it out would test a stack the fill was never
+        // allowed to build.
+        const pinned = undroppable(plan, ranked)
+        const removable = plan.slots.filter((s) => !pinned.has(s.slotId))
+        for (const drop of removable) {
+          for (const candidate of unused) {
+            const swapped = [...plan.slots.filter((s) => s.slotId !== drop.slotId), candidate]
+            const price = calculatePricing(
+              { ...full, slots: swapped, level: plan.level },
+              MOCK_CATALOGUE, a, undefined, { level: plan.level },
+            ).subscriptionTotal
+            expect(price).toBeGreaterThanOrEqual(plan.monthly - 0.01)
+          }
+        }
+      }
+    }
+  })
+})
+
+describe('the targets', () => {
+  it('Essentials clusters near its target instead of anywhere under the ceiling', () => {
+    // What turns a band into a price. Filling to the ceiling gave Essentials a
+    // £24–£43 spread across these profiles; aiming at the target narrows it.
+    // The assertion is on the SPREAD, not on any single number, because what a
+    // member notices is that their friend paid something else.
+    const prices = PROFILES.map(([, profile]) => plansFor(profile).plans)
+      .map((plans) => plans.find((p) => p.level === 'essentials')?.monthly)
+      .filter((p): p is number => p != null)
+
+    expect(prices.length).toBeGreaterThan(PROFILES.length / 2)
+    const spread = Math.max(...prices) - Math.min(...prices)
+    expect(spread).toBeLessThanOrEqual(25)
+  })
+
+  it('the target never reaches past a more relevant product for a cheaper one', () => {
+    // Rank decides WHICH product; the target can only end the fill early. So
+    // every depth is a rank-ordered prefix of the ranked stack, minus anything
+    // that did not fit the ceiling — never a re-sort by price.
+    for (const [, profile] of PROFILES) {
+      const { a, plans } = plansFor(profile)
+      const order = buildStackBlueprint(a, MOCK_CATALOGUE)
+        .slots.slice().sort((x, y) => x.displayOrder - y.displayOrder)
+        .map((s) => s.slotId)
+      for (const plan of plans) {
+        const positions = plan.slots.map((s) => order.indexOf(s.slotId))
+        expect(positions).toEqual([...positions].sort((x, y) => x - y))
+      }
+    }
+  })
+})
+
+describe('folding never produces a depth that breaks its own shape', () => {
+  it('every shown depth is inside its own size band', () => {
+    // `TIER_MIN_STEP` folding replaces a shallower plan with a deeper one when
+    // the two are within a few pounds. The survivor keeps its own level, so it
+    // must satisfy THAT level's floor and cap — a fold that left a "Balanced"
+    // holding six products would be the shape rule failing silently.
+    for (const [, profile] of PROFILES) {
+      for (const plan of plansFor(profile).plans) {
+        const size = TIER_SIZE_BANDS[plan.level]
+        expect(plan.slots.length).toBeGreaterThanOrEqual(size.min)
+        expect(plan.slots.length).toBeLessThanOrEqual(size.max)
       }
     }
   })
