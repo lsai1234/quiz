@@ -3,6 +3,7 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StatAxis } from '@/lib/stack-stats'
 import { ProductTile } from './ProductTile'
+import { shortNameOf } from '@/lib/catalogue/short-name'
 
 const ACCENT = '#00D4FF'
 
@@ -72,7 +73,7 @@ export function UpgradesCard({ boosters, axes, onAdd }: Props) {
                 <ProductTile imageUrl={product.imageUrl} slot={product.stackSlots[0]} title={product.title} size={40} />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-bold leading-snug truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                    {product.title}
+                    {shortNameOf(product)}
                   </p>
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     {tags.map((t) => (

@@ -204,6 +204,20 @@ export interface CatalogueProduct {
   id: string
   title: string
   handle: string
+  /**
+   * The name for tight spaces — the poster's spec table, a card, a list row.
+   *
+   * Two or three words: no brand, no pack size, no flavour. Absent means nobody
+   * has written one, which is the normal state for a freshly imported product —
+   * `shortNameOf()` derives one from the title, so a missing short name is never
+   * a missing name. See `lib/catalogue/short-name.ts`.
+   *
+   * Deliberately NOT used on receipts, order confirmations or emails. Those are
+   * records of what somebody bought, and "Whey Isolate" is not enough to
+   * identify a tub in a dispute. Anything with a settled price beside it keeps
+   * the full `title`.
+   */
+  shortName?: string | null
   /** Short, one-sentence description shown on cards */
   description: string
   imageUrl: string | null

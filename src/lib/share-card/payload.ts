@@ -4,6 +4,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackIdentity } from '@/lib/types'
 import { selectStatAxes, stackStatScore, MAX_STAT } from '@/lib/stack-stats'
 import { focusAreaGlyph } from '@/lib/identity-visuals'
+import { shortNameOf } from '@/lib/catalogue/short-name'
 import { pickArtKey } from './art'
 import { SHARE_PAYLOAD_VERSION, type ShareCardPayload, type ShareLineupEntry } from './types'
 
@@ -235,10 +236,14 @@ export function buildSharePayload(
     .filter((e): e is { slot: (typeof e)['slot']; product: CatalogueProduct } => !!e.product)
     .map(({ slot, product }) => ({
       slot: slot.title,
-      // "CHRGD Whey Protein" on a CHRGD card spends five characters saying what
-      // the footer already says, and it is what pushed half the list onto a
-      // second line. The brand is the card; the product is the name.
-      product: product.title.replace(/^CHRGD\s+/i, ''),
+      // The spec table is a fixed-width column, and a wrapped row costs the
+      // card a product. This used to strip a literal "CHRGD " prefix, which
+      // worked only because every mock product carries one — a real supplier
+      // title ("Collagen Peptides - Joints & Bones - 153g") ran off the edge.
+      // `shortNameOf` is the founder-written name where there is one and a
+      // derivation of the title where there is not, so the card never has to
+      // wait for the catalogue to be curated.
+      product: shortNameOf(product),
       // The engine's reason, unless removing the address leaves nothing behind
       // — "Chosen for Sam" with no clause after it reduces to "Chosen for",
       // which renders as a row with a broken sentence under it. The catalogue's

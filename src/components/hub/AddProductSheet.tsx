@@ -12,6 +12,7 @@ import { computeAddImpact, projectedEconomics } from '@/lib/recharge/mock'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
 import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import { shortNameOf } from '@/lib/catalogue/short-name'
 
 /** One addable product, with what it does to the monthly. */
 function ProductCard({
@@ -37,7 +38,7 @@ function ProductCard({
           <ProductTile imageUrl={p.imageUrl} slot={p.stackSlots[0]} title={p.title} size={52} />
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
-              <p className="text-sm font-medium text-[var(--ink-1)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{p.title}</p>
+              <p className="text-sm font-medium text-[var(--ink-1)] leading-snug" style={{ fontFamily: 'var(--font-display)' }}>{shortNameOf(p)}</p>
               <span className="text-xs font-black shrink-0" style={{ color: 'var(--accent)', fontFamily: 'var(--font-display)' }}>+{formatGBP(impact.monthlyDelta)}/mo</span>
             </div>
             <p className="text-xs text-[var(--ink-2)] mt-1 leading-relaxed line-clamp-2">{p.shortReason || p.description}</p>
