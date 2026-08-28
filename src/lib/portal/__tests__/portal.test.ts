@@ -121,6 +121,24 @@ describe('AI auto-sort (heuristic fallback)', () => {
     expect(patch.swapGroup).toBeUndefined()        // already set → untouched
     expect(patch.cost).toBeUndefined()             // already set → untouched
   })
+
+  it('gapPatch fills a short name only when there is not one already', () => {
+    const blank = makeProduct({ shortName: null })
+    expect(gapPatch(blank, { shortName: 'Whey Isolate' }).shortName).toBe('Whey Isolate')
+    // Whitespace is not a name — a product whose field holds only spaces is
+    // still unnamed, and `shortNameOf` treats it that way too.
+    expect(gapPatch(makeProduct({ shortName: '  ' }), { shortName: 'Whey Isolate' }).shortName).toBe('Whey Isolate')
+    // A founder's own name is never overwritten by a re-run.
+    expect(gapPatch(makeProduct({ shortName: 'Mine' }), { shortName: 'Whey Isolate' }).shortName).toBeUndefined()
+  })
+
+  it('the heuristic deliberately leaves the short name blank', () => {
+    // It could derive one — but that is what `shortNameOf` already does for a
+    // blank field, so storing it would change nothing anyone sees while making
+    // the product look named, hiding it from the one pass that can do better.
+    const s = heuristicClassify(makeProduct({ title: 'CHRGD Creatine Monohydrate', shortName: null }))
+    expect(s.shortName).toBeUndefined()
+  })
 })
 
 import { catalogueCoverage } from '../coverage'

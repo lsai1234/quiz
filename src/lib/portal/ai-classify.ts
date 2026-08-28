@@ -9,6 +9,7 @@ import { STACK_SLOTS, type StackSlot, type SwapGroup, type DietaryTag } from '@/
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { Goal } from '@/lib/types'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
+import { validateShortName, SHORT_NAME_RULES } from '@/lib/catalogue/short-name'
 
 const VALID_GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 // Every group the engine knows. A model answer outside this list is discarded
@@ -45,6 +46,19 @@ const KEYWORDS: { match: RegExp; slots: StackSlot[]; goals: Goal[]; swap: SwapGr
   { match: /menopause|perimenopause|hormonal/i, slots: ['menopause', 'health'], goals: ['menopause', 'health'], swap: 'menopause' },
 ]
 
+/**
+ * NOTE: this deliberately does not set `shortName`.
+ *
+ * The heuristic could trivially call `deriveShortName` — but that is exactly
+ * what `shortNameOf` already computes on the fly for a product with no stored
+ * name, so storing it adds nothing to what anyone sees. What it would change is
+ * that the product then counts as NAMED: the founders' short-name panel would
+ * stop listing it, and the one pass that can actually improve on the derivation
+ * would never be offered for it.
+ *
+ * So a blank short name is the honest state for a product no model has looked
+ * at, and only the AI branch below fills it in.
+ */
 export function heuristicClassify(p: CatalogueProduct): Partial<CatalogueProduct> {
   const text = `${p.title} ${p.description} ${p.category}`
   const hit = KEYWORDS.find((k) => k.match.test(text))
@@ -68,7 +82,10 @@ export function heuristicClassify(p: CatalogueProduct): Partial<CatalogueProduct
 // ─── AI classification ───────────────────────────────────────────────────────
 
 const SYSTEM = `You are a supplements catalogue expert. Given a product, classify it for a UK supplement store. Reply ONLY with JSON:
-{"stackSlots":[],"goals":[],"dietaryTags":[],"swapGroup":"","hasStimulants":false,"subscriptionEligible":true,"servings":30,"cadence":"daily|per-workout","recommendationBasis":"objective|subjective"}
+{"shortName":"","stackSlots":[],"goals":[],"dietaryTags":[],"swapGroup":"","hasStimulants":false,"subscriptionEligible":true,"servings":30,"cadence":"daily|per-workout","recommendationBasis":"objective|subjective"}
+- shortName: what this product is called where there is no room for its full
+  title — a card, and the share poster. Rules:
+${SHORT_NAME_RULES}
 - stackSlots from: ${STACK_SLOTS.join(', ')}
 - goals from: ${VALID_GOALS.join(', ')}
 - dietaryTags from: vegan, vegetarian, gluten-free, dairy-free, nut-free, halal, keto-friendly
@@ -104,9 +121,16 @@ export async function aiClassifyProduct(p: CatalogueProduct): Promise<{ patch: P
     const cadence = raw.cadence === 'per-workout' ? 'per-workout' : 'daily'
     const basis = raw.recommendationBasis === 'subjective' ? 'subjective' : 'objective'
     const servingsVal = Number.isFinite(raw.servings) && raw.servings > 0 ? Math.round(raw.servings) : 30
+    // Through the SAME gate the founders' short-name pass uses — claim lint,
+    // grounding, length — rather than trusted because it arrived inside a
+    // classification. A refused name is simply left off the patch: `shortNameOf`
+    // then derives one from the title, so the product still has a usable name
+    // and the founders' panel still lists it as one the AI could improve.
+    const named = typeof raw.shortName === 'string' ? validateShortName(raw.shortName, p) : null
     return {
       source: 'ai',
       patch: {
+        ...(named?.ok ? { shortName: named.shortName } : {}),
         stackSlots: slots.length ? slots : heuristic.stackSlots,
         goals: goals.length ? goals : heuristic.goals,
         dietaryTags: dietary,
@@ -135,5 +159,6 @@ export function gapPatch(p: CatalogueProduct, suggestion: Partial<CatalogueProdu
   if (p.cost == null && suggestion.cost != null) patch.cost = suggestion.cost
   if (!p.recommendationBasis && suggestion.recommendationBasis) patch.recommendationBasis = suggestion.recommendationBasis
   if (!p.consumption && suggestion.consumption) patch.consumption = suggestion.consumption
+  if (!p.shortName?.trim() && suggestion.shortName) patch.shortName = suggestion.shortName
   return patch
 }

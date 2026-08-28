@@ -173,7 +173,14 @@ export function sourcesForImport(
   for (const key of SUPPLIER_FIELDS) sources[key] = 'supplier'
   for (const key of RULE_FIELDS) sources[key] = 'rule'
   for (const key of CLASSIFIED_FIELDS) sources[key] = 'heuristic'
-  // Whatever autopopulate actually wrote wins over the defaults above.
+  // A derived field nobody wrote is not a keyword rule's guess — it is one of
+  // our own functions computing a value from another field, which is what
+  // `rule` means. Labelling a blank short name `heuristic` would tell a
+  // reviewer a classifier had an opinion about it when none did.
+  for (const key of DERIVED_FIELDS) sources[key] = 'rule'
+  // Whatever autopopulate actually wrote wins over the defaults above — so a
+  // short name the model wrote AND that passed the checks is labelled `ai`, and
+  // reads as the unreviewed model output it is.
   for (const key of aiFields) {
     sources[key as keyof CatalogueProduct] = aiUsed ? 'ai' : 'heuristic'
   }

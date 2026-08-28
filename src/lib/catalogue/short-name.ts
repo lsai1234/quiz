@@ -209,12 +209,11 @@ export interface ShortNameResult {
   invented?: string[]
 }
 
-const SYSTEM = `You shorten UK supplement product names for a small card and a poster.
-
-Reply with ONLY the shortened name. No quotes, no punctuation around it, no explanation.
-
-RULES
-- At most ${SHORT_NAME_MAX} characters. Two or three words is ideal.
+/**
+ * The prompt rules, shared with the import classifier so the two cannot ask for
+ * different things and then apply the same checks.
+ */
+export const SHORT_NAME_RULES = `- At most ${SHORT_NAME_MAX} characters. Two or three words is ideal.
 - Use ONLY words that already appear in the product name given to you. You may
   drop words. You may NOT add, translate, or invent any word.
 - Keep the word that says which version it is: Isolate, Hydrolysed, Monohydrate,
@@ -223,6 +222,13 @@ RULES
   Professional, Ultimate, Premium.
 - Never describe what the product does. Not a benefit, not an effect, not a
   claim. It is a label, not a slogan.`
+
+const SYSTEM = `You shorten UK supplement product names for a small card and a poster.
+
+Reply with ONLY the shortened name. No quotes, no punctuation around it, no explanation.
+
+RULES
+${SHORT_NAME_RULES}`
 
 /**
  * Words that carry no identity, so they are not checked for grounding.
@@ -246,6 +252,44 @@ const tokens = (s: string) =>
 function inventedWords(answer: string, product: Pick<CatalogueProduct, 'title' | 'description' | 'category'>): string[] {
   const source = new Set(tokens(`${product.title} ${product.description ?? ''} ${product.category ?? ''}`))
   return tokens(answer).filter((w) => !source.has(w))
+}
+
+/**
+ * Whether a candidate short name — from anywhere — may be stored.
+ *
+ * Exported and shared, because a short name now arrives by two routes: the
+ * founders' dedicated pass, and the classifier that runs over every product on
+ * import. Both must apply the same rules, and the way that stays true is for
+ * there to be one function rather than two lists of checks that drift.
+ *
+ * Returns the cleaned name, or the reason it was refused. Never throws, never
+ * "fixes" a bad answer into a passing one: a name that has to be trimmed to be
+ * safe is a name the model got wrong, and the derivation is a better fallback
+ * than a truncated claim.
+ */
+export type ShortNameCheck =
+  | { ok: true; shortName: string }
+  | { ok: false; reason: 'empty-answer' | 'too-long' | 'claim-flagged' | 'ungrounded'; flags?: ClaimFlag[]; invented?: string[] }
+
+export function validateShortName(
+  candidate: string,
+  product: Pick<CatalogueProduct, 'title' | 'description' | 'category'>,
+): ShortNameCheck {
+  // Models like to wrap a one-line answer in quotes however firmly they are
+  // asked not to. Stripping them is not a rule being relaxed — every rule below
+  // still runs on what is left.
+  const name = tidy(String(candidate ?? '').replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').split('\n')[0])
+
+  if (!name) return { ok: false, reason: 'empty-answer' }
+  if (name.length > SHORT_NAME_MAX) return { ok: false, reason: 'too-long' }
+
+  const flags = claimFlags(name)
+  if (flags.length > 0) return { ok: false, reason: 'claim-flagged', flags }
+
+  const invented = inventedWords(name, product)
+  if (invented.length > 0) return { ok: false, reason: 'ungrounded', invented }
+
+  return { ok: true, shortName: name }
 }
 
 export async function aiShortName(
@@ -274,19 +318,11 @@ export async function aiShortName(
     return { shortName: derived, source: 'derived', reason: 'api-error' }
   }
 
-  // Models like to wrap a one-line answer in quotes however firmly they are
-  // asked not to. Stripping them is not a rule being relaxed — the rules below
-  // all still run on what is left.
-  const name = tidy(answer.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').split('\n')[0])
-
-  if (!name) return { shortName: derived, source: 'derived', reason: 'empty-answer' }
-  if (name.length > SHORT_NAME_MAX) return { shortName: derived, source: 'derived', reason: 'too-long' }
-
-  const flags = claimFlags(name)
-  if (flags.length > 0) return { shortName: derived, source: 'derived', reason: 'claim-flagged', flags }
-
-  const invented = inventedWords(name, product)
-  if (invented.length > 0) return { shortName: derived, source: 'derived', reason: 'ungrounded', invented }
-
-  return { shortName: name, source: 'ai' }
+  const checked = validateShortName(answer, product)
+  if (!checked.ok) {
+    return { shortName: derived, source: 'derived', reason: checked.reason, flags: checked.flags, invented: checked.invented }
+  }
+  return { shortName: checked.shortName, source: 'ai' }
 }
+
+
