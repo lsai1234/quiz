@@ -286,6 +286,20 @@ concept, one home.
 A tier reaches its product floor even if that costs more than its ceiling; it
 respects its ceiling before its count cap; and the target is an aim, not a rule.
 
+**What it did to the twelve profiles.** The one-product Essentials is gone;
+every depth sits inside its size band; no depth exceeds its ceiling except at
+its floor; and the Essentials spread narrows from its old £24.07–£43.20.
+Two profiles (`sleep + stress`, `menopause`) now show two options rather than
+three, folded by the existing `TIER_MIN_STEP` rule — two real choices rather
+than two prices a few pounds apart.
+
+One trade worth naming: capping Essentials at three products takes `light
+training` from four products at £24.07 to three at £18.85, which is below
+`minSubscriptionMonthly` (£25) and so cannot be bought on the plan the tiers are
+sold on. It was already near that line. Forcing a depth up to the subscription
+floor is a separate decision — it means adding a product the member does not
+need in order to make a plan sellable — and is deliberately not taken here.
+
 ### C.3 "Complete is 3+ but more premium" — DECIDED
 
 Read literally, this collided with an invariant the tests lock:
@@ -317,14 +331,28 @@ contents can be looked at.
 
 ### C.4 Founder control
 
-The bands are compile-time constants today, and `planTiers` already accepts
-`bands`/`maxSizes`/`minStep` as parameters — the seam is cut, nothing flows
-through it. Move them into `PRICING_CONFIG` (so they inherit the existing
-`setPricingOverrides` / `getPricingOverrides` persistence in
-`portal/store.ts`), and add a **Tiers** panel to `/founderhub/pricing` alongside
-`CustomerRates` and `LadderPanel`: three rows of *min products / target price /
-max price*, with live validation — overlapping bands, a target outside its own
-band, a floor above its own cap.
+The bands were compile-time constants, and `planTiers` already accepted
+`bands`/`sizes`/`minStep` as parameters — the seam was cut and nothing flowed
+through it, because the defaults were the constants themselves. They now default
+to `getPricingConfig()`, which is where an override lands, and the bands live in
+`PRICING_CONFIG` so they inherit the existing `setPricingOverrides` persistence.
+
+The **three depths** panel on `/founderhub/pricing` puts all three on one grid —
+products from/to, the price it aims for, the price it never exceeds — because
+every number is only meaningful beside the two next to it. A floor of four
+products inside a £35 ceiling is an instruction to break the ceiling, and that is
+only legible when the two sit on one line.
+
+Validation **warns rather than blocks**, which is the refinement worth recording:
+every state it names is one the precedence above already handles, so refusing the
+save would be the panel overruling the engine. What it catches is a founder
+setting a number and being quietly overruled by another they set last month — a
+target above its own ceiling, a floor above its own cap, or a depth that can
+never hold more than the one below it and will therefore be folded away, leaving
+members one option fewer than was configured.
+
+Bands merge **per level**, not per field: a ceiling overridden while its target
+was not is not a band, it is two settings from different eras in one object.
 
 ### C.5 Tests
 
