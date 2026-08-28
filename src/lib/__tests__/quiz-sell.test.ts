@@ -19,9 +19,11 @@ describe('quizFactFor', () => {
   it('drinks mode leans into drinks & convenience; normal mode into the stack', () => {
     // LQD's ships-monthly fact lives on trainingTime.
     expect(quizFactFor('trainingTime', true)?.text).toMatch(/box|month|pause|skip/i)
-    // Budget is gone; the subscribe-&-save fact moved to the formats step (stack mode only).
-    expect(quizFactFor('formats', false)?.text).toMatch(/subscribe|bundle|rate/i)
-    expect(quizFactFor('formats', true)).toBeNull()
+    // Budget and formats are both gone as steps; `supps` now carries the
+    // subscribe-&-save line as well as its own, in stack mode only.
+    expect(quizFactFor('supps', false)?.text).toMatch(/subscribe|bundle|rate/i)
+    expect(quizFactFor('supps', false)?.text).toMatch(/already take|gaps/i)
+    expect(quizFactFor('supps', true)).toBeNull()
   })
 
   it('the LQD daily-drinks step gets the one-box-in-the-fridge tidbit', () => {

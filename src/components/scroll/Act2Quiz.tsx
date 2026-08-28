@@ -300,13 +300,6 @@ const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }
   { id: 'pre-workout', label: 'Yes — add a pre-workout drink', sub: 'A hit of energy & focus before you train' },
 ]
 
-const FORMAT_DATA = [
-  { id: 'powder',   label: 'Powders',        sub: 'Shakes, pre-workout, creatine',  icon: 'shaker' },
-  { id: 'capsules', label: 'Capsules / Tabs', sub: 'Easy to take anywhere',          icon: 'capsule' },
-  { id: 'bars',     label: 'Bars & Snacks',   sub: 'On-the-go protein hits',         icon: 'bar' },
-  { id: 'any',      label: 'No preference',   sub: 'Best product regardless of form', icon: 'grid' },
-]
-
 // ─── Label lookups (for the review summary) ───────────────────────────────────
 
 const GOAL_LABELS: Record<string, string> = {
@@ -909,7 +902,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     switch (id) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
-      case 'safety': case 'lifestyle': case 'deepDive': case 'supps': case 'formats': case 'review': return true
+      case 'safety': case 'lifestyle': case 'deepDive': case 'supps': case 'review': return true
       // Workout add-ons are optional — always allowed to continue (with or without picks).
       case 'workoutAddOns': return true
       case 'type': return answers.trainingType.length > 0
@@ -979,7 +972,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       .map((x) => SUPP_LABEL_BY_ID[x] ?? x)
     if (trying.length) rows.push({ label: 'Trying ours', value: trying.join(', '), edit: 'supps' })
     if (answers.caffeineLevel) rows.push({ label: 'Caffeine', value: labelOf(CAFFEINE_DATA, answers.caffeineLevel), edit: 'caffeine' })
-    if (answers.preferredFormats.length) rows.push({ label: 'Formats', value: answers.preferredFormats.includes('any') ? 'No preference' : labelsOf(FORMAT_DATA, answers.preferredFormats).join(', '), edit: 'formats' })
     return rows
   }
 
@@ -1613,22 +1605,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             <div className="flex flex-col gap-2.5">
               {TRAINING_TIME_DATA.map(({ id: tid, label, sub }) => (
                 <AnswerOption key={`tt-${tid}`} label={label} sub={sub} selected={answers.trainingTime === tid} onClick={() => handleSingle('trainingTime', tid)} />
-              ))}
-            </div>
-          )}
-
-          {/* ── Formats ── */}
-          {id === 'formats' && (
-            <div className="flex flex-col gap-2.5">
-              {FORMAT_DATA.map(({ id: fid, label, sub, icon }) => (
-                <AnswerOption key={`fmt-${fid}`} icon={icon} label={label} sub={sub} multi
-                  selected={fid === 'any' ? answers.preferredFormats.includes('any') : answers.preferredFormats.includes(fid) && !answers.preferredFormats.includes('any')}
-                  onClick={() => {
-                    if (fid === 'any') { setAnswer('preferredFormats', answers.preferredFormats.includes('any') ? [] : ['any']); return }
-                    const c = answers.preferredFormats.filter(x => x !== 'any')
-                    setAnswer('preferredFormats', c.includes(fid) ? c.filter(x => x !== fid) : [...c, fid])
-                  }}
-                />
               ))}
             </div>
           )}

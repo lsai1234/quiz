@@ -161,7 +161,6 @@ export interface QuizAnswers {
   diet: DietLevel | null
   currentSupplements: string[]
   currentVitamins: string[]
-  preferredFormats: string[]
   /** Answers to wellbeing follow-up questions, keyed by question id
    *  (sleepQuality, stressPattern, immuneBaseline, collagenOk) */
   wellbeingAnswers: Record<string, string>

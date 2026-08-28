@@ -48,7 +48,6 @@ export async function POST(req: NextRequest) {
     const firstName = answers.name?.split(' ')[0]?.trim() || null
     const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? null)
     const gender = answers.gender && answers.gender !== 'not-specified' ? answers.gender : null
-    const formats = answers.preferredFormats?.length > 0 ? answers.preferredFormats.join(', ') : 'no preference'
 
     const isWellbeingOnly = answers.goals.length > 0 && !answers.goals.some(g => PERFORMANCE_GOAL_IDS.includes(g))
 
@@ -71,7 +70,6 @@ ${answers.trainingFrequency ? `- Training: ${freq} per week, ${type}-focused ses
 - Caffeine preference: ${caffeine}
 - Budget: £${budget}/month
 - Stack preference: ${pref}
-- Preferred product formats: ${formats}
 ${deepDive.length ? `\nDeeper context from their tailored follow-up answers:\n${deepDive.join('\n')}\n` : ''}
 Return ONLY a JSON object (no markdown, no explanation, no asterisks in any field) with exactly these fields:
 {

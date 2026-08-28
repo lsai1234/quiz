@@ -30,10 +30,13 @@ const LQD_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {
 
 const STACK_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {
   diet: { icon: 'leaf', text: 'Most diets miss the basics — that’s exactly what the everyday essentials cover.' },
-  supps: { icon: 'grid', text: 'We skip anything you already take, so you only pay for the gaps.' },
-  // The budget step is gone (you choose a depth on the results screen instead);
-  // the subscribe-&-save tidbit now lives on the formats step.
-  formats: { icon: 'bundle3', text: 'Subscribe & save — the bigger the bundle, the better the rate.' },
+  // The budget and formats steps are both gone — you choose a depth on the
+  // results screen, and format is a thing you change there rather than guess at
+  // here. `supps` is the last step before review, so it carries two facts: the
+  // one that was always its own, and the subscribe-&-save line the formats step
+  // used to hold. `quizFactFor` returns one per step, so the pair is joined
+  // rather than stacked — a step showing two tidbits reads as a leaflet.
+  supps: { icon: 'grid', text: 'We skip anything you already take, so you only pay for the gaps — and subscribe & save means the bigger the bundle, the better the rate.' },
 }
 
 /**

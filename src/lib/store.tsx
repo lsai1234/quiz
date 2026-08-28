@@ -101,7 +101,6 @@ export const defaultAnswers: QuizAnswers = {
   currentSupplements: [],
   currentVitamins: [],
   tryOurs: [],
-  preferredFormats: [],
   wellbeingAnswers: {},
   dynamicAnswers: {},
   caffeineLevel: null,

@@ -275,17 +275,6 @@ export function scoreProduct(
   if (answers.diet === 'poor' && product.swapGroup === 'omega-3') score += SCORING.diet.poorOmega
   if (answers.diet === 'inconsistent' && product.swapGroup === 'multivitamin') score += SCORING.diet.inconsistentMultivitamin
 
-  // ── Format preference → filter by product format ──────────────────────────
-  // If the user has a preference and hasn't said "any", penalise products in
-  // formats they didn't pick. A preference for capsules should push capsule
-  // products up, not hard-exclude powders (some slots only exist as powders).
-  const formats = answers.preferredFormats ?? []
-  if (formats.length > 0 && !formats.includes('any')) {
-    const productFormats = product.formats ?? []
-    const formatMatch = productFormats.some(f => formats.includes(f))
-    if (!formatMatch) score += SCORING.formatMismatch
-  }
-
   // ── Training focus (strength sub-question) → creatine + protein priority ─
   if (answers.trainingFocus === 'hypertrophy') {
     if (slotType === 'performance') score += SCORING.focus.hypertrophyPerformance  // creatine is most evidence-based for hypertrophy

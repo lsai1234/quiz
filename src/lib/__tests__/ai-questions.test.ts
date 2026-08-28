@@ -24,7 +24,6 @@ function makeAnswers(overrides: Partial<QuizAnswers> = {}): QuizAnswers {
     diet: 'mostly-good',
     currentSupplements: [],
     currentVitamins: [],
-    preferredFormats: [],
     wellbeingAnswers: {},
     dynamicAnswers: {},
     caffeineLevel: 'medium',

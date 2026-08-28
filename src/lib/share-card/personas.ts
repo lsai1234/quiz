@@ -27,7 +27,7 @@ function answers(o: Partial<QuizAnswers> = {}): QuizAnswers {
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male',
     safetyFlags: [], weightBand: null, goals: ['health'],
     trainingFrequency: '3-4x', trainingType: [], lifestyle: [], diet: 'mostly-good',
-    currentSupplements: [], currentVitamins: [], tryOurs: [], preferredFormats: [],
+    currentSupplements: [], currentVitamins: [], tryOurs: [],
     wellbeingAnswers: {}, dynamicAnswers: {}, caffeineLevel: 'medium', budget: '50-80',
     stackPreference: 'balanced', trainingExperience: 'intermediate', trainingFocus: null,
     stimPreference: 'yes', trainingTime: null, ...o,

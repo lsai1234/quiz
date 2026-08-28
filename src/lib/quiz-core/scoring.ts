@@ -83,9 +83,6 @@ export const SCORING = {
     inconsistentMultivitamin: 6,
   },
 
-  /** Format preference mismatch. */
-  formatMismatch: -18,
-
   /** Training focus (strength sub-question) + sport type. */
   focus: {
     hypertrophyPerformance: 20,

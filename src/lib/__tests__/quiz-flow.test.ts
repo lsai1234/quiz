@@ -29,7 +29,6 @@ describe('step guidance metadata', () => {
   it('the key multi/optional steps are labelled so users know they can pick several', () => {
     const mode = (id: string) => QUIZ_STEPS.find((s) => s.id === id)!.select
     expect(mode('goals')).toBe('multi')
-    expect(mode('formats')).toBe('multi')
     expect(mode('lifestyle')).toBe('optional')
     expect(mode('supps')).toBe('optional')
     // Main training style is single-select now (the old multi-select was inert).
@@ -50,11 +49,15 @@ describe('activeSteps', () => {
     expect(well).not.toContain('type')
   })
 
-  it('LQD drops the formats and budget steps on either track', () => {
+  it('neither budget nor formats is a step any more, in either mode', () => {
+    // Budget went when depth moved to the results screen; formats went because
+    // the answer was a guess and the swap modal already changes any product.
     for (const track of ['performance', 'wellbeing'] as const) {
-      const ids = activeSteps(track, true).map((s) => s.id)
-      expect(ids).not.toContain('formats')
-      expect(ids).not.toContain('budget') // pace sizes the package instead
+      for (const drinks of [false, true]) {
+        const ids = activeSteps(track, drinks).map((s) => s.id)
+        expect(ids).not.toContain('budget')
+        expect(ids).not.toContain('formats')
+      }
     }
   })
 
@@ -82,9 +85,11 @@ describe('activeSteps', () => {
     const count = (track: 'performance' | 'wellbeing', drinks: boolean) =>
       activeSteps(track, drinks, { track }).filter((s) => s.id !== 'review' && s.id !== 'deepDive').length
     // Post-Phase-3 counts (budget removed; safety screen added; weight folded
-    // into the personal step, so no extra step for it).
-    expect(count('wellbeing', false)).toBe(7)    // goals, safety, personal, lifestyle, diet, supps, formats
-    expect(count('performance', false)).toBe(11) // + frequency, type, caffeine, trainingTime
+    // into the personal step, so no extra step for it), less the formats step.
+    // Drinks mode is now the LONGER path on both tracks, which it was not
+    // before: it adds steps and no longer removes one.
+    expect(count('wellbeing', false)).toBe(6)    // goals, safety, personal, lifestyle, diet, supps
+    expect(count('performance', false)).toBe(10) // + frequency, type, caffeine, trainingTime
     expect(count('wellbeing', true)).toBe(7)     // goals, safety, dailyDrinks, personal, lifestyle, diet, supps
     expect(count('performance', true)).toBe(12)  // + workoutAddOns, frequency, type, caffeine, trainingTime
   })

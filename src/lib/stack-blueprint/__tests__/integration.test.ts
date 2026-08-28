@@ -42,7 +42,6 @@ const BASE_ANSWERS: QuizAnswers = {
   stimPreference: 'yes',
   exactAge: null,
   currentVitamins: [],
-  preferredFormats: [],
   wellbeingAnswers: {},
   trainingTime: null,
 }

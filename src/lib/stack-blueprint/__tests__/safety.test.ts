@@ -17,7 +17,7 @@ function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
     asNeeded: {}, ageBracket: '35-44', exactAge: null, gender: 'female',
     safetyFlags: [], weightBand: null, goals: ['less-stress', 'sleep-better'],
     trainingFrequency: null, trainingType: [], lifestyle: [], diet: 'mostly-good',
-    currentSupplements: [], currentVitamins: [], tryOurs: [], preferredFormats: [],
+    currentSupplements: [], currentVitamins: [], tryOurs: [],
     wellbeingAnswers: {}, dynamicAnswers: {}, caffeineLevel: 'medium', budget: null,
     stackPreference: null, trainingExperience: null, trainingFocus: null,
     stimPreference: 'yes', trainingTime: null, ...o,

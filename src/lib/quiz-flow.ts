@@ -25,7 +25,6 @@ export type StepId =
   | 'supps'
   | 'caffeine'
   | 'trainingTime'
-  | 'formats'
   | 'review'
 
 /**
@@ -95,8 +94,6 @@ export const QUIZ_STEPS: QuizStepDef[] = [
   // enter it — i.e. the performance track. Skipped for the pure wellbeing track.
   { id: 'caffeine', section: 'ENERGY', q: 'How do you handle caffeine?', hint: 'Shapes your pre-workout recommendation.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
   { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'Caffeine timing matters — tells us whether to include stimulants.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
-  // LQD implies the format — every pick is a drink — so the step is skipped.
-  { id: 'formats', section: 'YOUR STYLE', q: 'What formats do you prefer?', hint: "We'll match your stack to products you'll actually use.", select: 'multi', skipInDrinksMode: true, advance: 'manual' },
   // No budget question: we build the full stack and let the customer choose a
   // depth (Essentials / Balanced / Complete) on the results screen, where they
   // can see the value before the price (value-first — see StackReviewPage tiers).

@@ -93,7 +93,6 @@ describe('products the quiz will not pick', () => {
     diet: 'mostly-good',
     currentSupplements: [],
     currentVitamins: [],
-    preferredFormats: [],
     wellbeingAnswers: {},
     caffeineLevel: 'high',
     budget: '80-plus',

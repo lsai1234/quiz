@@ -86,20 +86,18 @@ describe('LQD blueprint (pre-made drinks only)', () => {
 })
 
 describe('LQD quiz flow', () => {
-  it('swaps formats for the foundation + workout-addon steps and drops the bundle step in drinks mode', () => {
+  it('adds the foundation + workout-addon steps in drinks mode and changes nothing else', () => {
     const normal = activeSteps('performance').map((s) => s.id)
     const lqd = activeSteps('performance', true).map((s) => s.id)
-    // Formats is dropped (implied); the LQD-only steps are added.
-    expect(normal).toContain('formats')
     expect(normal).not.toContain('dailyDrinks')
-    expect(lqd).not.toContain('formats')
     expect(lqd).toContain('dailyDrinks')
     expect(lqd).toContain('workoutAddOns')
-    // Budget is no longer a step in either mode (depth is chosen on the results
-    // screen) — nothing else moves; the foundation steps follow the goal question.
-    expect(lqd.filter((id) => !['dailyDrinks', 'workoutAddOns'].includes(id))).toEqual(
-      normal.filter((id) => id !== 'formats'),
-    )
+    // Drinks mode is now PURELY additive. Budget and formats are no longer
+    // steps in either mode — depth is chosen on the results screen, and format
+    // is not asked at all — so the two sequences differ by the LQD-only steps
+    // and nothing else. That is a stronger property than the old
+    // "same minus formats, plus these" and is the one worth locking.
+    expect(lqd.filter((id) => !['dailyDrinks', 'workoutAddOns'].includes(id))).toEqual(normal)
     // Safety follows the goal, then the LQD foundation steps.
     expect(lqd[lqd.indexOf('dailyDrinks') - 1]).toBe('safety')
   })

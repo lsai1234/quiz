@@ -22,7 +22,7 @@ function answers(o: Partial<QuizAnswers> = {}): QuizAnswers {
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male',
     goals: ['muscle', 'energy'], trainingFrequency: '5-6x', trainingType: ['strength'],
     lifestyle: [], diet: 'mostly-good', currentSupplements: [], currentVitamins: [],
-    tryOurs: [], preferredFormats: [], wellbeingAnswers: {}, dynamicAnswers: {},
+    tryOurs: [], wellbeingAnswers: {}, dynamicAnswers: {},
     caffeineLevel: 'high', budget: null, stackPreference: null,
     trainingExperience: 'experienced', trainingFocus: 'hypertrophy', stimPreference: 'yes',
     trainingTime: 'morning', ...o,

@@ -26,7 +26,6 @@ const ANSWERS: Record<string, string[]> = {
   'Already using any of these?': [],           // deliberately none — "Starting fresh"
   'How do you handle caffeine?': ['Daily coffee'],
   'When do you usually train?': ['Evening'],
-  'What formats do you prefer?': ['Powder'],
 }
 
 /** The name typed on the "A little about you" step, asserted later in the hub. */
