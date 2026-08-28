@@ -1,6 +1,7 @@
 import type { StackBlueprint } from './types'
 import type { CatalogueProduct, ConsumptionCadence } from '@/lib/catalogue/types'
 import type { QuizAnswers, Budget, StackLevel, StackPreference } from '@/lib/types'
+import { TIER_PRICE_BANDS, TIER_SIZE_BANDS } from '@/lib/quiz-core/tiers'
 
 const DAYS_PER_MONTH = 30
 
@@ -92,6 +93,19 @@ export const PRICING_CONFIG = {
   } as Record<StackLevel, number>,
   /** Label shown on the subscription saving line. */
   subscriptionPlanLabel: 'CHRGD Monthly Stack Plan',
+
+  /**
+   * What each depth is built to — the price it aims for and the number of
+   * products it holds. The defaults, and the meaning of every field, live in
+   * `@/lib/quiz-core` (`TIER_PRICE_BANDS`, `TIER_SIZE_BANDS`); this is the same
+   * numbers made editable, so a founder can move them from the pricing page
+   * without a deploy.
+   *
+   * `planTiers` already took bands and sizes as parameters — the seam was cut
+   * and nothing flowed through it. This is what flows through it.
+   */
+  tierBands: TIER_PRICE_BANDS as Record<StackLevel, { min: number; target: number; max: number | null }>,
+  tierSizes: TIER_SIZE_BANDS as Record<StackLevel, { min: number; max: number }>,
 
   /**
    * One-off bundle discount tiers (best-qualifying wins).
@@ -897,6 +911,12 @@ function recomputeConfig() {
       ...PRICING_CONFIG.levelSubscriptionDiscount,
       ...(_overrides.levelSubscriptionDiscount ?? {}),
     },
+    // Per LEVEL, not per field. A band whose ceiling was overridden and whose
+    // target was not is not a band, it is two settings from different eras
+    // sitting in one object — and `min > target > max` is the invariant the
+    // fill relies on.
+    tierBands: { ...PRICING_CONFIG.tierBands, ...(_overrides.tierBands ?? {}) },
+    tierSizes: { ...PRICING_CONFIG.tierSizes, ...(_overrides.tierSizes ?? {}) },
   }
 }
 

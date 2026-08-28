@@ -9,7 +9,13 @@
  */
 import { buildStackBlueprint } from '../factory'
 import { planTiers, tierPlanFor } from '../tier-plan'
-import { calculatePricing, PRICING_CONFIG } from '../pricing'
+import {
+  calculatePricing,
+  PRICING_CONFIG,
+  getPricingConfig,
+  setPricingOverrides,
+  resetPricingOverrides,
+} from '../pricing'
 import { addBoosterSlot } from '../helpers'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { TIER_ORDER, TIER_PRICE_BANDS, TIER_SIZE_BANDS, TIER_MIN_STEP } from '@/lib/quiz-core'
@@ -332,5 +338,50 @@ describe('folding never produces a depth that breaks its own shape', () => {
         expect(plan.slots.length).toBeLessThanOrEqual(size.max)
       }
     }
+  })
+})
+
+describe('the founder can move the bands without a deploy', () => {
+  afterEach(() => resetPricingOverrides())
+
+  it('an override changes what the depths actually contain', () => {
+    // The seam existed before this and nothing flowed through it: `planTiers`
+    // took bands and sizes as parameters but defaulted to the constants, so the
+    // pricing page could not reach them. They now default to the CONFIG, which
+    // is where a founder's override lands.
+    const a = answers()
+    const full = buildStackBlueprint(a, MOCK_CATALOGUE)
+
+    const before = planTiers(full, MOCK_CATALOGUE, a)
+    const essentialsBefore = before.find((p) => p.level === 'essentials')!
+
+    setPricingOverrides({
+      tierSizes: { ...PRICING_CONFIG.tierSizes, essentials: { min: 3, max: 4 } },
+    })
+    const after = planTiers(full, MOCK_CATALOGUE, a, getPricingConfig())
+    const essentialsAfter = after.find((p) => p.level === 'essentials')!
+
+    expect(essentialsBefore.slots.length).toBe(2)
+    expect(essentialsAfter.slots.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('a raised target buys more product for the same depth', () => {
+    const a = answers({ goals: ['hydration', 'focus'] })
+    const full = buildStackBlueprint(a, MOCK_CATALOGUE)
+
+    setPricingOverrides({
+      tierBands: { ...PRICING_CONFIG.tierBands, essentials: { min: 0, target: 5, max: 35 } },
+      tierSizes: { ...PRICING_CONFIG.tierSizes, essentials: { min: 1, max: 3 } },
+    })
+    const mean = planTiers(full, MOCK_CATALOGUE, a, getPricingConfig())
+      .find((p) => p.level === 'essentials')!
+
+    resetPricingOverrides()
+    const generous = planTiers(full, MOCK_CATALOGUE, a, getPricingConfig())
+      .find((p) => p.level === 'essentials')!
+
+    // A target of £5 stops the fill at the floor; the real target keeps going.
+    expect(generous.slots.length).toBeGreaterThan(mean.slots.length)
+    expect(generous.monthly).toBeGreaterThan(mean.monthly)
   })
 })

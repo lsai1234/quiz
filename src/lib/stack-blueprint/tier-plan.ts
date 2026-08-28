@@ -47,7 +47,7 @@ import type { QuizAnswers, StackLevel } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculatePricing, getPricingConfig, type SubscriptionPlanOptions } from './pricing'
-import { TIER_ORDER, TIER_PRICE_BANDS, TIER_SIZE_BANDS, TIER_MIN_STEP } from '@/lib/quiz-core'
+import { TIER_ORDER, TIER_MIN_STEP } from '@/lib/quiz-core'
 
 export interface TierPlan {
   level: StackLevel
@@ -87,8 +87,11 @@ export function planTiers(
   answers?: QuizAnswers | null,
   config = getPricingConfig(),
   opts: SubscriptionPlanOptions = {},
-  bands = TIER_PRICE_BANDS,
-  sizes = TIER_SIZE_BANDS,
+  // From the CONFIG, not the constants: `config` already carries any founder
+  // override merged over the defaults, so the pricing page moves the bands
+  // without a deploy and without a second source of truth.
+  bands = config.tierBands,
+  sizes = config.tierSizes,
   minStep = TIER_MIN_STEP,
 ): TierPlan[] {
   const ranked = [...blueprint.slots].sort(byDisplayOrder)

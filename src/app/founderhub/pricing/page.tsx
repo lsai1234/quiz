@@ -8,6 +8,7 @@ import { pricingThresholds } from '@/lib/pricing/thresholds'
 import { checkLadder } from '@/lib/pricing/ladder'
 import { CutOffs } from '@/components/portal/pricing/CutOffs'
 import { LadderPanel } from '@/components/portal/pricing/LadderPanel'
+import { TierBands } from '@/components/portal/pricing/TierBands'
 import { RateCard } from '@/components/portal/pricing/RateCard'
 import { CustomerRates } from '@/components/portal/pricing/CustomerRates'
 import { deriveFreeDeliveryThreshold } from '@/lib/pricing/delivery'
@@ -226,6 +227,18 @@ export default function PricingPage() {
               <Num label="Assumed weight when unset" value={draft.delivery.defaultProductGrams} suffix="g" onChange={(n) => setNested('delivery', { defaultProductGrams: n })} help="PowerBody's order call needs a weight even though they don't price on it." />
               <Num label="Longest gap between deliveries" value={draft.maxDeliveryMonths} suffix="mo" onChange={(n) => set({ maxDeliveryMonths: n })} help="However big the tub." />
             </div>
+          </Section>
+
+          <Section
+            title="The three depths"
+            desc="What Essentials, Balanced and Complete are built to hold and to cost. The fill aims at the target rather than merely staying under the ceiling — that is what makes a depth one price instead of a range. Where a thin stack can't satisfy both, the product floor wins: a two-product Essentials slightly over its ceiling beats a one-product Essentials under it."
+          >
+            <TierBands
+              bands={draft.tierBands}
+              sizes={draft.tierSizes}
+              onBandChange={(lvl, patch) => set({ tierBands: { ...draft.tierBands, [lvl]: { ...draft.tierBands[lvl], ...patch } } })}
+              onSizeChange={(lvl, patch) => set({ tierSizes: { ...draft.tierSizes, [lvl]: { ...draft.tierSizes[lvl], ...patch } } })}
+            />
           </Section>
 
           <Section title="Subscription offer" desc="What members get for committing. The one thing to protect: subscribing must always beat buying once.">
