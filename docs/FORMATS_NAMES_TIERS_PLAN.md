@@ -6,7 +6,7 @@ one of them uncovers a latent fault the other two would inherit.
 
 | # | Change | Why now |
 |---|---|---|
-| **A** | **Format stops being a quiz question and becomes a control on the results page.** | Nobody knows they prefer capsules until they see the powder they'd be sent. Asking it blind costs a question and buys a guess. |
+| **A** | **The format question is deleted.** No replacement control. | Nobody knows they prefer capsules until they see the powder they'd be sent, so the answer was a shrug or a habit. It fed one soft scoring rule and nothing else. Deleting it is one fewer question and less code than keeping it. |
 | **B** | **Every product gets a short name**, with an AI pass that writes one for the whole catalogue in a single button press. | The poster and the cards print `product.title`, and a supplier title is 60+ characters of brand, size and flavour. |
 | **C** | **Depth tiers get product-count bands and a target price**, on top of the price bands they already have. | "Essentials" currently has no floor — a member can be shown a one-product Essentials. And a band is a range, so two members still see two prices for the same tier. |
 
@@ -15,191 +15,86 @@ Everything below is written against the code as it stands on
 
 ---
 
-## 0. The fault that has to be fixed first
+## 0. A dormant fault, deliberately left alone
 
-**The catalogue has no format vocabulary.** Four sources write the `formats`
-field and three of them disagree:
+Worth recording, because it was very nearly this plan's first pull request.
 
-| Source | Emits |
-|---|---|
-| `lib/catalogue/mock-catalogue.ts` | `powder`, `capsules`, `rtd`, `drink`, `can`, `shot`, `effervescent` |
-| `lib/supplier/mapping.ts` (`formatsFor`) | `powder`, `capsule`, `liquid` |
-| `lib/supplier/roster-import.ts` | `powder`, `liquid`, plus whatever the CSV column says |
-| The quiz's `FORMAT_DATA` (`Act2Quiz.tsx:303`) | `powder`, `capsules`, `bars`, `any` |
+**The catalogue has no format vocabulary.** Four code paths write the `formats`
+field and three of them disagree: `mock-catalogue.ts` says `capsules`,
+`supplier/mapping.ts` says `capsule`, `roster-import.ts` says whatever the CSV
+column said, and the quiz offered `bars`, which no writer has ever emitted. So a
+member who picked **Capsules** had no preference applied to any
+PowerBody-imported product, and **Bars** matched nothing in the catalogue at all.
 
-So today, a member who picks **Capsules** in the quiz gets no preference applied
-to any PowerBody-imported product, because the catalogue calls them `capsule`
-and the answer says `capsules`. And **Bars** matches literally nothing in the
-catalogue — no writer ever emits `bars`.
+This was invisible because format preference was only a soft ± score in
+`scoreProduct` — a preference matching nothing simply applied no penalty, and the
+stack still looked reasonable. An earlier draft of this plan therefore opened
+with a normalisation pass, because a *visible* format filter would have turned
+the mismatch into the feature's first bug report.
 
-This is currently invisible because format preference is a soft ±score in
-`scoreProduct` (`factory.ts:281-289`): a preference that matches nothing simply
-applies no penalty, and the stack still looks reasonable. **Change A turns it
-into a visible filter**, at which point "Capsules" returns an empty list and the
-fault becomes the feature's first bug report.
+**§A deletes the preference instead, which deletes the only broken consumer.**
+So the normalisation is no longer needed and is not being done. What remains is
+cosmetic: `product-facts.ts` renders `formats[0]` capitalised, so a card can read
+"Capsule" or "Capsules" depending on where the product came from.
 
-### Fix: one canonical format taxonomy
+> **If a format filter is ever added to the shop, normalise the vocabulary
+> first.** `filters.ts` is unaffected either way — its `RTD_FORMATS` list already
+> accepts every synonym, which is why LQD has never suffered from this.
 
-New `src/lib/catalogue/formats.ts`:
-
-```ts
-/** What a product physically is. The only values `CatalogueProduct.formats`
- *  may hold — everything else is a synonym normalised on the way in. */
-export type ProductFormat = 'powder' | 'capsule' | 'tablet' | 'liquid' | 'bar' | 'gel' | 'other'
-
-/** The four buckets a customer chooses between. A display grouping, not a
- *  storage type: 'tablet' and 'capsule' are one choice to a person holding a
- *  pill, and every ready-made drink is one choice to a person who wants one. */
-export type FormatChoice = 'powder' | 'capsule' | 'drink' | 'bar'
-
-export function normaliseFormat(raw: string): ProductFormat
-export function formatChoicesOf(product: CatalogueProduct): FormatChoice[]
-export function matchesFormat(product: CatalogueProduct, choice: FormatChoice): boolean
-```
-
-- `normaliseFormat` folds the synonyms: `capsules|softgel|caps → capsule`,
-  `tabs|tablets → tablet`, `rtd|drink|shot|can|bottle|ready-to-drink → liquid`,
-  `bars|snack → bar`, `effervescent → powder` (it is mixed into water).
-- Applied at **both catalogue boundaries** — `supplier/mapping.ts`,
-  `supplier/roster-import.ts`, `catalogue/adapter.ts` — and in
-  `portal/store.ts` when a founder edits the field, so nothing un-normalised can
-  be stored.
-- `mock-catalogue.ts` is rewritten to the canonical values (mechanical
-  `capsules → capsule`, `rtd/drink/can/shot → liquid`).
-- **`filters.ts` keeps its own vocabulary.** `RTD_FORMATS` and
-  `DRINKABLE_FORMATS` decide LQD eligibility, and LQD's promise is *no mixing* —
-  a distinction the customer-facing `drink` bucket deliberately does not make
-  (`effervescent` is a `powder` for the picker and never RTD). Both lists get
-  narrowed to canonical values but the two concepts stay separate, with a
-  comment saying why.
-
-A migration test asserts every product in the resolved catalogue carries only
-canonical formats, so an import path that forgets to normalise fails CI rather
-than silently producing an empty filter.
-
-**Order matters: §0 ships before §A.** It is a pure refactor with no user-visible
-change, and it is the difference between the format picker working and the
-format picker looking broken for every supplier-imported product.
-
----
-
-## A. Format moves from the quiz to the results page
+## A. The format question is deleted
 
 ### A.1 The concept
 
-Format is not a *goal*, it is a *delivery preference* — and it is the one
-question a person cannot answer honestly in the abstract. Asked cold on question
-eleven, "what formats do you prefer?" gets a shrug or a habit. Asked on the
-results page, next to a picture of the 900g tub we are proposing to send them
-every month, it gets a real answer, and it is reversible in one tap.
+Format is not a goal, it is a delivery preference — and it is the one question a
+person cannot answer honestly in the abstract. Asked cold on question eleven,
+"what formats do you prefer?" gets a shrug or a habit.
 
-So:
+An earlier draft moved it to the results page as a live control that re-picked
+products inside their swap groups. That is a genuinely better place to ask the
+question, and it is still more machinery than the answer is worth: a new
+blueprint helper, a pinning flag on every slot so a hand-picked product isn't
+overwritten, honest copy for the slots that can't be honoured, format chips in
+the swap modal. All of it to serve a preference the member can already act on
+directly — **the swap modal has always let anyone change any product in their
+stack, and it shows the format on every option.**
 
-- **The quiz stops asking.** One fewer question, and the one with the weakest
-  claim on a member's attention.
-- **The engine builds format-neutral.** The best product for the job, whatever
-  shape it comes in.
-- **The results page carries a Format control** that re-picks products within
-  their existing swap groups.
+So the question goes, and nothing replaces it. One fewer question, one fewer
+field, one fewer scoring rule, and a member who wants capsules changes the line
+they care about in the place they were already going to change it.
 
-The important property: **changing format never changes what the stack is
-*for*.** It swaps *which product fills a slot*, never which slots exist. A
-member who prefers capsules gets the same protein/creatine/omega-3 stack, in
-capsules where a capsule exists, and told plainly where one does not.
+### A.2 What that means in code
 
-### A.2 What the control looks like
-
-A chip row above the stack deck on `StackReviewPage`:
-
-> **Prefer** ⟨ No preference ⟩ ⟨ Powders ⟩ ⟨ Capsules & tablets ⟩ ⟨ Drinks ⟩ ⟨ Bars ⟩
-
-Multi-select, default **No preference**. Under it, one honest line when a slot
-could not be honoured:
-
-> *Protein and Creatine are only made as powders — those two stay as they are.*
-
-And per-slot, inside `ProductSwapModal`, the same chips filter the alternatives
-list, so a member who wants capsules for *one* line can have that without
-changing the whole stack.
-
-Hidden entirely in **LQD drinks mode** — the package promise is that everything
-arrives ready-made, so a format picker there is a control that can only make the
-package worse.
-
-### A.3 The mechanism
-
-New in `lib/stack-blueprint/helpers.ts`:
-
-```ts
-/**
- * Re-pick every slot's product to honour a format preference, without
- * changing which slots the stack has.
- *
- * Non-destructive by construction: a slot the member has swapped by hand is
- * pinned and never re-picked, and a slot with no in-stock candidate in a
- * preferred format keeps exactly what it had. Both are reported back rather
- * than silently applied — the results page has to be able to say which lines
- * it could not honour.
- */
-export function applyFormatPreference(
-  blueprint: StackBlueprint,
-  catalogue: CatalogueProduct[],
-  choices: FormatChoice[],
-): { blueprint: StackBlueprint; unhonoured: StackSlotEntry[] }
-```
-
-Per slot, in order:
-
-1. **Pinned?** (`slot.pinnedByUser`) → leave it. A hand-picked product is a
-   decision, and a global control must not overwrite one.
-2. Candidates = `getSwappableProductsForSlot(slot, inStockOnly(catalogue))`
-   plus the current product, filtered by `matchesFormat`.
-3. Empty → leave it, and add the slot to `unhonoured`.
-4. Otherwise pick the highest `recommendationPriority`, ties broken by
-   `marginPriority` then price — the same ordering the swap modal already
-   presents alternatives in, so the control picks what a member scrolling that
-   list would have picked.
-5. Reset `selectedVariantId` to the new product's first available variant
-   (exactly what `handleSelectSwap` already does).
-
-`StackSlotEntry` gains `pinnedByUser?: boolean`, set in `handleSelectSwap`
-(a manual swap pins) and in `addBoosterSlot` (`addedByUser` already implies it).
-
-**Re-pricing is free**: `planTiers` and `calculatePricing` both read the
-blueprint's current `selectedProductId`, so a format change reprices through the
-existing path and the tier selector updates itself. Nothing new to wire.
-
-### A.4 Files touched
+Pure deletion. `preferredFormats` has exactly five non-test readers:
 
 | File | Change |
 |---|---|
-| `lib/quiz-flow.ts` | Delete the `formats` step def. Keep `StepId` narrowed — it is a union, so the compiler finds every reader. |
-| `components/scroll/Act2Quiz.tsx` | Delete the `formats` render branch (`:1621`) and the review-summary row (`:982`). Move `FORMAT_DATA` to `lib/catalogue/formats.ts` as `FORMAT_CHOICES` (label + sub + icon), now shared with the results page. |
-| `lib/quiz-sell.ts` | `STACK_FACTS.formats` — the subscribe-&-save tidbit — rehomes to `supps`, the last step before review. |
-| `lib/types.ts` | `preferredFormats: string[]` → `preferredFormats: FormatChoice[]`. Same field, set post-quiz instead of mid-quiz. |
-| `lib/stack-blueprint/factory.ts` | Keep the soft `formatMismatch` score — it now only ever fires on a *rebuild* (personalise, hub re-recommend) with a preference already set. Rewrite the match to use `matchesFormat`. |
-| `lib/stack-blueprint/helpers.ts` | `applyFormatPreference` (above). |
-| `components/stack-review/StackReviewPage.tsx` | `FormatPreferenceRow` + state + the unhonoured note. |
-| `components/stack-review/ProductSwapModal.tsx` | Format chips over the alternatives list. |
-| `app/api/generate-identity/route.ts` | `:51` reads `preferredFormats` for the prompt. It runs *before* the results page now, so it always reads `[]`. Drop the line rather than send "no preference" to the model as if it were an answer. |
-| `e2e/support/quiz.ts` | Drop `'What formats do you prefer?'`. |
-| `lib/__tests__/quiz-flow.test.ts`, `quiz-sell.test.ts`, `lqd.test.ts` | Step counts drop by one on both tracks (`7 → 6` wellbeing); the LQD assertions that `formats` is dropped in drinks mode become moot and are deleted. |
+| `lib/quiz-flow.ts` | Delete the `formats` step from `QUIZ_STEPS` and from `StepId`. It is a union, so the compiler finds every reader. |
+| `components/scroll/Act2Quiz.tsx` | Delete `FORMAT_DATA`, the `formats` render branch, and the review-summary row. |
+| `lib/quiz-sell.ts` | `STACK_FACTS.formats` holds the subscribe-&-save tidbit. Rehomes to `supps`, the last step before review — so the fact survives the step that carried it. |
+| `lib/types.ts` + `lib/store.tsx` | Delete `preferredFormats` from `QuizAnswers` and its initial value. |
+| `lib/stack-blueprint/factory.ts` | Delete the format-preference block and `SCORING.formatMismatch` with it. Every product is now judged on what it does, not what shape it comes in. |
+| `app/api/generate-identity/route.ts` | Drop the `formats` prompt line rather than send "no preference" to the model as though it were an answer. |
 
-### A.5 What could go wrong
+Plus `share-card/personas.ts` and roughly fifteen test fixtures that list the
+field — mechanical, and the compiler names every one.
 
-- **A format change that empties the stack.** It cannot: step 3 keeps the
-  current product rather than removing the slot. Test: for every profile in the
-  `PROFILES` fixture × every format choice, slot count is unchanged.
-- **A format change that breaks a tier's price band.** It can — swapping to
-  capsules can be dearer. This is correct behaviour (the member chose it), and
-  the tier selector reprices live. The bands are a *build-time* target, not a
-  cage the member is kept in.
-- **Losing a preference on a rebuild.** `preferredFormats` lives in the same
-  quiz store as everything else, so it survives the reveal and reaches checkout.
-  The hub's re-recommend path should read it too — filed as follow-on, not in
-  this change.
+### A.3 Test impact
 
----
+- `quiz-flow.test.ts` — the mode assertion for `formats` goes; the wellbeing step
+  count drops from 7 to 6, performance likewise by one.
+- `quiz-sell.test.ts` — the two assertions keyed on `formats` move to `supps`.
+- `lqd.test.ts` — the assertions that drinks mode *drops* the formats step become
+  moot; drinks mode and stack mode now differ by the LQD-only steps alone, which
+  is a simpler thing to state and to test.
+- `e2e/support/quiz.ts` — drop the `'What formats do you prefer?'` answer.
+
+### A.4 What is lost, honestly
+
+A member who genuinely prefers capsules no longer nudges the engine toward them.
+In practice that nudge was `-18` on a mismatch and — per §0 — it never fired at
+all for any supplier-imported product, which is most of the real catalogue. What
+replaces it is the swap modal, which was always the stronger tool: it changes one
+line for certain, rather than tilting a score and hoping.
 
 ## B. Short names, and a button that writes them all
 
@@ -391,39 +286,34 @@ concept, one home.
 A tier reaches its product floor even if that costs more than its ceiling; it
 respects its ceiling before its count cap; and the target is an aim, not a rule.
 
-### C.3 "Complete is 3+ but more premium" — the open question
+### C.3 "Complete is 3+ but more premium" — DECIDED
 
-Read literally, this collides with an invariant the tests lock:
+Read literally, this collided with an invariant the tests lock:
 
 > **Nested.** Each depth contains everything the depth below it has.
 
-If Complete can hold the *same count* as Balanced but be "more premium", then
-Complete is not Balanced-plus-more, it is Balanced-with-substitutions. Two ways
-to give the founder what they asked for:
+If Complete could hold the same count as Balanced but be "more premium", then
+Complete is not Balanced-plus-more, it is Balanced-with-substitutions — a member
+tapping up a tier would watch a product vanish and a different one appear.
 
-**Design A — premium by depth and by rate (recommended first).**
-Complete is 4–6 products against Balanced's 3–4, and its extra premium is (i) the
-deeper subscribe-&-save rate it already carries (20% vs 15% vs 13%, from
-`PRICING_CONFIG.levelSubscriptionDiscount`) and (ii) a fill that prefers high
-`recommendationPriority` products once past the floor. Nesting is untouched, the
-existing test suite holds, and it is roughly 40 lines in `tier-plan.ts`.
+**Decision: premium by depth and by rate.** Complete is 4–6 products against
+Balanced's 3–4, and its extra premium is (i) the deeper subscribe-&-save rate it
+already carries — 20% against 15% and 13%, from
+`PRICING_CONFIG.levelSubscriptionDiscount` — and (ii) a fill that prefers
+high-`recommendationPriority` products once past the floor.
 
-**Design B — premium by substitution (second phase, behind a flag).**
-Complete gets an upgrade pass: for each slot it shares with Balanced, if the swap
-group holds a higher-priority product and the budget allows, take it. Complete
-then covers the same *jobs* with better *products*, which is what "more premium"
-most naturally means.
+**Nesting is preserved exactly as it stands**, which means the existing invariant
+tests keep passing unchanged and the tier selector needs no new copy. Moving up a
+tier can only ever add.
 
-The cost is real and worth stating: the nesting invariant weakens from
-**"contains every slotId below"** to **"covers every slotType below"**, and
-`tiers.test.ts` changes with it. A member comparing Balanced and Complete would
-see a product *change*, not just products *added* — which needs a line of UI copy
-("Complete upgrades your protein to …") or it reads as a bug.
-
-**Recommendation: ship A, then evaluate B against a real catalogue.** A is the
-part the founder unambiguously asked for and the part that cannot regress
-anything. B is a genuine product decision that wants a look at real numbers, and
-it is much easier to judge once A has fixed the floors.
+The rejected alternative, recorded because it will be proposed again: a premium
+*substitution* pass, where Complete takes the higher-priority product in each
+shared swap group. It is the most literal reading of "more premium" and it is a
+real option — but it weakens the invariant from *contains every slotId below* to
+*covers every slotType below*, rewrites `tiers.test.ts`, and needs a line of
+on-screen copy ("Complete upgrades your protein to …") or it reads as a bug. Not
+ruled out forever; ruled out until the count floors are in and Complete's real
+contents can be looked at.
 
 ### C.4 Founder control
 
@@ -455,21 +345,20 @@ through the bands. It gains:
 
 ## Sequencing
 
-Six pull requests, each independently shippable and independently revertible.
+Four pull requests, each independently shippable and independently revertible.
+The format-normalisation PR an earlier draft opened with is gone — §A deletes the
+only consumer that needed it.
 
 | PR | Contents | Risk |
 |---|---|---|
-| **1** | §0 — canonical formats, normalisation at every import boundary, mock catalogue rewritten, migration test. No user-visible change. | Low. Pure refactor, guarded by a test that fails if any path forgets. |
-| **2** | §B.2–B.3 — `shortName` field, `short-name.ts`, `shortNameOf`, poster + card consumers. No AI yet, derivation only. | Low. Every surface has a working fallback from the first commit. |
-| **3** | §B.4 — the API route, `ShortNamePanel`, `ProductEditor` + `REVIEW_FIELDS`. The AI button. | Low. Founder-only, gated behind portal auth, degrades without a key. |
-| **4** | §C.2 + §C.5 — size bands, target-seeking fill, precedence, tests. Design A only. | **Medium — the one that moves money.** Every member sees different tier contents and prices. Wants a before/after run of the twelve profiles in the PR body. |
-| **5** | §A — remove the quiz step, `applyFormatPreference`, the results-page control, e2e and step-count test updates. | Medium. Touches the funnel; the e2e quiz spec is the safety net. |
-| **6** | §C.4 — tier bands into `PRICING_CONFIG`, Tiers panel on `/founderhub/pricing`. | Low. Exposes existing numbers; changes no default. |
+| **1** | §A — delete the quiz step, the `preferredFormats` field, the scoring rule and the identity-prompt line. Rehome the subscribe-&-save fact. Update step counts and the e2e answer map. | Low. Deletion only, and the compiler names every reader. |
+| **2** | §B.2–B.3 — the `shortName` field, `short-name.ts`, `shortNameOf`, poster and card consumers. Derivation only, no AI. | Low. Every surface has a working fallback from the first commit. |
+| **3** | §B.4 — the portal route, `ShortNamePanel`, `ProductEditor` + `REVIEW_FIELDS`. The AI button. | Low. Founder-only, behind portal auth, degrades without a key. |
+| **4** | §C — size bands, target-seeking fill, precedence, tests, and the Tiers panel on `/founderhub/pricing`. | **Medium — the one that moves money.** Every member sees different tier contents and prices. |
 
-**PR 1 before PR 5** is the only hard ordering constraint — the format control is
-the thing that turns the taxonomy fault into a visible bug. PR 4 before PR 5 is
-worth having too: both change what the results page shows, and debugging them
-separately is much cheaper than debugging them together.
+No hard ordering constraint remains between them. PR 4 is worth landing on its
+own rather than alongside anything else, because it is the only one whose effect
+is invisible in a diff and visible in a price.
 
 ## Verification, per PR
 
@@ -477,8 +366,8 @@ separately is much cheaper than debugging them together.
   `tokens-only.test.ts` are enforcement, not convention. Any new component in
   `components/portal` or `components/stack-review` builds from
   `@/components/system` and uses tokens for every value.
-- `npm run e2e` — PR 5 changes the quiz's step count, which the quiz spec walks.
-- `/styleguide` for PR 3 and PR 6, per `AGENTS.md`.
+- `npm run e2e` — PR 1 changes the quiz's step count, which the quiz spec walks.
+- `/styleguide` for PR 3 and PR 4, per `AGENTS.md`.
 - PR 4 additionally: the twelve `PROFILES` before and after, as a table in the
   PR body. A pricing change nobody can see the shape of is a pricing change
   nobody can review.
