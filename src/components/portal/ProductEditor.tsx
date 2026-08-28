@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Button, Card, Input, Modal, ModalBody, ModalFooter, ModalHeader, Select } from '@/components/system'
 import { STACK_SLOTS, SLOT_LABELS, type StackSlot } from '@/lib/catalogue/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { deriveShortName, SHORT_NAME_MAX } from '@/lib/catalogue/short-name'
 
 const GOALS = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
@@ -82,6 +83,24 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
     <Modal onClose={onClose} size="lg">
       <ModalHeader title={d.title} subtitle={d.category} />
       <ModalBody>
+          {/* Name */}
+          <Group title="Name" desc="The full title is what a receipt says. The short name is what a card and the share poster say.">
+            <Row
+              label="Short name"
+              help={`Two or three words, no brand or size. Leave it blank and one is worked out from the title: “${deriveShortName(d)}”.`}
+            >
+              <Input
+                label="Short name"
+                compact
+                className="w-40"
+                maxLength={SHORT_NAME_MAX}
+                value={d.shortName ?? ''}
+                placeholder={deriveShortName(d)}
+                onChange={(e) => set({ shortName: e.target.value || null })}
+              />
+            </Row>
+          </Group>
+
           {/* Tags */}
           <Group title="Tags" desc="These decide when the quiz recommends this product.">
             <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 'var(--space-2)' }}>

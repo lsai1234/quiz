@@ -175,4 +175,12 @@ describe('blankFillableFields', () => {
 
     expect(blankFillableFields(full)).toEqual([])
   })
+
+  it('a blank short name is not a gap — one is derived from the title', () => {
+    // Every surface calls `shortNameOf`, which falls back to the title, so an
+    // empty `shortName` is a product that works. Offering it as something to
+    // fill would mark the whole catalogue incomplete the day the field landed.
+    const keys = blankFillableFields({ ...PRODUCT, shortName: null } as unknown as CatalogueProduct).map((f) => f.key)
+    expect(keys).not.toContain('shortName')
+  })
 })

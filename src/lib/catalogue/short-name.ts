@@ -21,6 +21,8 @@
  * the AI pass that fills it, are both improvements on this floor — never
  * prerequisites for it.
  */
+import OpenAI from 'openai'
+import { claimFlags, type ClaimFlag } from '@/lib/shop/claim-safety'
 import type { CatalogueProduct } from './types'
 
 /**
@@ -174,4 +176,117 @@ export function shortNameNeedsWork(product: Pick<CatalogueProduct, 'title' | 'sh
   const stored = product.shortName?.trim()
   if (!stored) return true
   return stored.length > SHORT_NAME_MAX || stored === collapse(product.title ?? '')
+}
+
+// ─── The AI pass ──────────────────────────────────────────────────────────────
+
+/**
+ * A short name written by a model, and then proved safe.
+ *
+ * Same shape as `rewrite-description.ts`, for the same reason: a prompt is a
+ * request, and the checks below are the rule. Three of them matter.
+ *
+ *  1. **Claim safety is a gate.** "Sleep Fixer" is a health claim in two words,
+ *     and a model told to be punchy reaches for exactly that. The answer goes
+ *     through the same lint the rest of the shop copy uses.
+ *  2. **Grounded, never invented.** Every word must already appear in the
+ *     product's own text. A model that renames "Marine Collagen Peptides" to
+ *     "Glow Complex" has invented a product name — and it would then be the
+ *     name printed on a public poster. This is the check that makes the feature
+ *     safe to run over three hundred products at once.
+ *  3. **It always degrades to the derivation.** No key, a timeout, a refusal, an
+ *     empty answer, a flagged claim — every path returns a usable name.
+ */
+export interface ShortNameResult {
+  shortName: string
+  /** `ai` when the model's answer was used, `derived` when we fell back. */
+  source: 'ai' | 'derived'
+  /** Why we fell back, when we did — shown to the founder. */
+  reason?: 'no-api-key' | 'api-error' | 'empty-answer' | 'too-long' | 'claim-flagged' | 'ungrounded'
+  /** Claim-lint hits on the model's answer. Only with `reason: 'claim-flagged'`. */
+  flags?: ClaimFlag[]
+  /** The words that were not in the product's own text. Only with `ungrounded`. */
+  invented?: string[]
+}
+
+const SYSTEM = `You shorten UK supplement product names for a small card and a poster.
+
+Reply with ONLY the shortened name. No quotes, no punctuation around it, no explanation.
+
+RULES
+- At most ${SHORT_NAME_MAX} characters. Two or three words is ideal.
+- Use ONLY words that already appear in the product name given to you. You may
+  drop words. You may NOT add, translate, or invent any word.
+- Keep the word that says which version it is: Isolate, Hydrolysed, Monohydrate,
+  Vegan, Stim-Free. Two products that shorten to the same thing is a failure.
+- Drop the brand, the pack size, the flavour, and marketing words like
+  Professional, Ultimate, Premium.
+- Never describe what the product does. Not a benefit, not an effect, not a
+  claim. It is a label, not a slogan.`
+
+/**
+ * Words that carry no identity, so they are not checked for grounding.
+ *
+ * Without this, a model that correctly writes "Vitamin D3 and K2" from "Vitamin
+ * D3 + K2" is rejected for inventing the word "and", which is not the kind of
+ * invention this check exists to catch.
+ */
+const STOPWORDS = new Set(['and', 'the', 'of', 'for', 'with', 'a', 'an', 'plus', '&', '+'])
+
+const tokens = (s: string) =>
+  s.toLowerCase().split(/[^a-z0-9]+/i).filter((w) => w && !STOPWORDS.has(w))
+
+/**
+ * Words in the answer that are not in the product's own text.
+ *
+ * A numeral is grounded by any appearance in the source, so "Omega 3" from
+ * "Super Strong Omega 3" passes. Anything else must match a whole source token,
+ * so "Glow" from "Marine Collagen Peptides" does not.
+ */
+function inventedWords(answer: string, product: Pick<CatalogueProduct, 'title' | 'description' | 'category'>): string[] {
+  const source = new Set(tokens(`${product.title} ${product.description ?? ''} ${product.category ?? ''}`))
+  return tokens(answer).filter((w) => !source.has(w))
+}
+
+export async function aiShortName(
+  product: Pick<CatalogueProduct, 'title' | 'description' | 'category' | 'shortName'>,
+): Promise<ShortNameResult> {
+  const derived = deriveShortName(product)
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) return { shortName: derived, source: 'derived', reason: 'no-api-key' }
+
+  let answer: string
+  try {
+    const completion = await new OpenAI({ apiKey }).chat.completions.create(
+      {
+        model: 'gpt-4.1-mini',
+        messages: [
+          { role: 'system', content: SYSTEM },
+          { role: 'user', content: `Product name: ${product.title}\nCategory: ${product.category ?? ''}` },
+        ],
+        max_tokens: 24,
+        temperature: 0.2,
+      },
+      { timeout: 20000 },
+    )
+    answer = (completion.choices[0]?.message?.content ?? '').trim()
+  } catch {
+    return { shortName: derived, source: 'derived', reason: 'api-error' }
+  }
+
+  // Models like to wrap a one-line answer in quotes however firmly they are
+  // asked not to. Stripping them is not a rule being relaxed — the rules below
+  // all still run on what is left.
+  const name = tidy(answer.replace(/^["'“”‘’]+|["'“”‘’]+$/g, '').split('\n')[0])
+
+  if (!name) return { shortName: derived, source: 'derived', reason: 'empty-answer' }
+  if (name.length > SHORT_NAME_MAX) return { shortName: derived, source: 'derived', reason: 'too-long' }
+
+  const flags = claimFlags(name)
+  if (flags.length > 0) return { shortName: derived, source: 'derived', reason: 'claim-flagged', flags }
+
+  const invented = inventedWords(name, product)
+  if (invented.length > 0) return { shortName: derived, source: 'derived', reason: 'ungrounded', invented }
+
+  return { shortName: name, source: 'ai' }
 }

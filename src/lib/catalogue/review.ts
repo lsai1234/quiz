@@ -51,6 +51,7 @@ const RULE_FIELDS = ['basePrice', 'handle', 'id', 'defaultVariantId'] as const
  * the ones most worth a second pair of eyes.
  */
 const CLASSIFIED_FIELDS = [
+  'shortName',
   'stackSlots',
   'goals',
   'dietaryTags',
@@ -76,7 +77,8 @@ export interface ReviewField {
 
 export const REVIEW_FIELDS: ReviewField[] = [
   { key: 'imageUrl', label: 'Image', kind: 'image', note: 'From PowerBody. Blank means they sent none.' },
-  { key: 'title', label: 'Title', kind: 'text', note: 'What the shop and quiz call it.' },
+  { key: 'title', label: 'Title', kind: 'text', note: 'What the shop and quiz call it — and the only name on a receipt.' },
+  { key: 'shortName', label: 'Short name', kind: 'text', note: 'What a card and the share poster call it. Blank means it is worked out from the title.' },
   { key: 'description', label: 'Description', kind: 'longtext' },
   { key: 'category', label: 'Category', kind: 'text' },
   { key: 'cost', label: 'What we pay', kind: 'money', note: 'PowerBody’s wholesale price.' },
@@ -123,15 +125,33 @@ export function isBlankValue(key: string, value: unknown): boolean {
 }
 
 /**
+ * Fields that fall back to something computed, so blank is a valid resting
+ * state rather than a gap.
+ *
+ * `shortName` is the case this exists for. Every surface that shows one calls
+ * `shortNameOf`, which derives a name from the title when the field is empty —
+ * so an empty short name is a product that works, not a product missing
+ * something. Counting it as a gap would mark the entire catalogue incomplete on
+ * the day the field was added, and put a permanent "needs attention" on three
+ * hundred products that need nothing.
+ *
+ * The field is still in `REVIEW_FIELDS`: a founder reviewing an import should
+ * see it and be able to write one. It just isn't something a machine is asked
+ * to close.
+ */
+const DERIVED_FIELDS = ['shortName'] as const
+
+/**
  * The review fields that are empty AND that a machine is allowed to fill.
  *
  * Supplier- and rule-owned fields are excluded for the same reason
  * `withoutSupplierOwned` excludes them: a blank cost is PowerBody's silence, not
- * an invitation to guess a wholesale price. What is left is the judgement —
- * slots, goals, group, copy — which is exactly what the classifier is for.
+ * an invitation to guess a wholesale price. Derived fields are excluded because
+ * blank is a working state for them. What is left is the judgement — slots,
+ * goals, group, copy — which is exactly what the classifier is for.
  */
 export function blankFillableFields(product: CatalogueProduct): ReviewField[] {
-  const owned = new Set<string>([...SUPPLIER_FIELDS, ...RULE_FIELDS])
+  const owned = new Set<string>([...SUPPLIER_FIELDS, ...RULE_FIELDS, ...DERIVED_FIELDS])
   return REVIEW_FIELDS.filter(
     (field) => !owned.has(field.key as string) && isBlankValue(field.key as string, product[field.key]),
   )

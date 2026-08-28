@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ProductEditor } from '@/components/portal/ProductEditor'
 import { AiSuggestPanel } from '@/components/portal/AiSuggestPanel'
+import { ShortNamePanel } from '@/components/portal/ShortNamePanel'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
 import { Badge, Button, Card, Input } from '@/components/system'
@@ -51,6 +52,12 @@ export default function ProductsPage() {
         >
           {`Suggest tags${notReady ? ` (${notReady})` : ''}`}
         </Button>
+      </div>
+
+      {/* Above the search, not below the list: it is a job to do to the whole
+          catalogue, and a founder who scrolls past it will never scroll back. */}
+      <div className="mb-4">
+        <ShortNamePanel />
       </div>
 
       <div className="mb-2">
