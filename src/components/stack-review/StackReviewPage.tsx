@@ -61,10 +61,6 @@ const GOAL_LABEL: Partial<Record<Goal, string>> = {
  * too few products to fill three bands offers two options, or one — `planTiers`
  * folds the rest rather than showing the same stack twice.
  */
-/** A threshold, not a price: "£25", never "£25.00". The pence on a round
- *  figure read as a real charge rather than the floor it is. */
-const wholePounds = (n: number) => formatGBP(n).replace(/\.00$/, '')
-
 function StackTierSelector({
   tiers, current, minMonthly, onChange,
 }: {
@@ -145,22 +141,27 @@ function StackTierSelector({
               ) : (
                 <>
                   {/*
-                    No subscription at this depth, so there is nothing to lead
-                    with. A monthly plan needs to clear the order minimum, and
-                    the shallowest tier routinely does not — headlining a /mo
-                    figure the customer cannot actually buy would be the worst
-                    version of this change.
+                    No subscription at this depth — a monthly plan has to clear
+                    the order minimum and the shallowest tier routinely does not.
+                    So this slot says so, in words, instead of a number.
+
+                    It used to put the ONE-OFF price here at full size, and the
+                    row read £49.97 / £31.57 / £38.78 — the cheapest, shallowest
+                    depth showing the largest figure, because it was the only
+                    one quoting a whole box against two monthly instalments.
+                    Three numbers in a row invite comparison whether or not they
+                    are comparable, and these were not. The one-off price still
+                    appears, on the line where every card keeps its one-off, at
+                    the size every card keeps it.
                   */}
-                  <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                    {formatGBP(oneOff)}
+                  <div
+                    className="text-[11px] font-bold uppercase tracking-wide mt-1.5 leading-tight"
+                    style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+                  >
+                    Monthly unavailable
                   </div>
-                  <div className="text-[9px] font-bold uppercase tracking-wide leading-tight mt-0.5" style={{ color: 'var(--color-muted)' }}>
-                    One-off
-                  </div>
-                  <div className="text-[9px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)', opacity: 0.75 }}>
-                    {/* Says why there is no monthly price rather than implying
-                        one is coming, and points at the depth that has one. */}
-                    Monthly from {wholePounds(minMonthly)}
+                  <div className="text-[10px] mt-1 leading-tight" style={{ color: 'var(--color-text)' }}>
+                    {formatGBP(oneOff)} one-off
                   </div>
                 </>
               )}
