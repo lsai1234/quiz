@@ -358,10 +358,11 @@ question, because there is nothing to load. A test asserts this (§2.8).
 also the kill switch, and the split percentage is the throttle.
 
 **Privacy.** The steer payload carries goals, drivers and question ids —
-**no name, no age, no free text**. Worth noting the existing deep-dive prompt
-does send the user's first name (`ai-questions.ts:buildQuestionsPrompt`); it
-buys nothing for question selection, and V2 will not carry it. Recommend
-dropping it from V1's prompt too, as a one-line change.
+**no name, no age, no free text**. The v1 deep-dive prompt and the stack
+personaliser both used to send the customer's first name and neither read it;
+both have since been stripped, and a test keeps them that way.
+`generate-identity` is the one prompt that still sends it, because it greets the
+customer by name on the reveal.
 
 ### 2.5 Assignment: how the 50/50 actually works
 
@@ -560,4 +561,8 @@ already a toggle by then.
    of ten questions is either delightful or feels like it gave up. Worth an
    A/B of its own later; for now, show it.
 4. **Drinks mode.** Confirm it stays on V1 through Phase 6.
-5. **The name in the V1 deep-dive prompt** — drop it? (§2.4)
+5. ~~**The name in the V1 deep-dive prompt** — drop it?~~ **Done.** Dropped from
+   the deep-dive prompt and from the stack personaliser; both sent it and
+   neither read it. `generate-identity` still sends it deliberately — that one
+   greets the customer by name on the reveal, so there the name is the output.
+   Pinned by a test in `ai-questions.test.ts`.

@@ -89,8 +89,16 @@ Rules:
 - Tone: warm, premium, direct, UK English. Questions under 12 words where possible; labels under 8 words; hints one short sentence explaining why you're asking. Plain text, no markdown, no emoji.
 - ids: short kebab-case, unique across the response.`
 
+/**
+ * The person, as the model needs to see them.
+ *
+ * Deliberately no name. It was here and it bought nothing: this prompt picks
+ * follow-up questions, and a question is no better for knowing the asker is
+ * called Sam. Sending a customer's name to a third party needs a better reason
+ * than that it was to hand. `generate-identity` still sends it, because that
+ * one greets them by name and the name IS the output there.
+ */
 export function buildQuestionsPrompt(answers: QuizAnswers): string {
-  const firstName = answers.name?.split(' ')[0]?.trim() || null
   const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || 'general wellbeing'
   const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? 'unknown')
   const lifestyle = answers.lifestyle.length ? answers.lifestyle.join(', ') : 'none noted'
@@ -104,7 +112,6 @@ export function buildQuestionsPrompt(answers: QuizAnswers): string {
   return `Write the follow-up questions for this person.
 
 PROFILE SO FAR
-${firstName ? `- Name: ${firstName}` : ''}
 - Age: ${age}
 - Track: ${answers.track ?? 'performance'}
 - Goals: ${goalText}

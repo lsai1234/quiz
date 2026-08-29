@@ -199,3 +199,34 @@ describe('buildBlueprintPrompt deep-dive transcript', () => {
     expect(prompt).not.toContain('DEEPER CONTEXT')
   })
 })
+
+describe('what leaves the building', () => {
+  /**
+   * The name used to sit in both of these prompts and was read by neither.
+   * It is the only piece of a customer's identity the quiz holds, and a third
+   * party does not need it to rank follow-up questions or pick products.
+   *
+   * `generate-identity` is the deliberate exception and is NOT asserted here:
+   * that prompt greets the customer by name on the reveal, so there the name is
+   * the output rather than a passenger.
+   */
+  const named = makeAnswers({ name: 'Persephone Wintergreen' })
+
+  it('keeps the name out of the deep-dive question prompt', () => {
+    const prompt = buildQuestionsPrompt(named)
+    expect(prompt).not.toMatch(/Persephone|Wintergreen/i)
+    expect(prompt).not.toMatch(/- Name:/)
+  })
+
+  it('keeps the name out of the stack personalisation prompt', () => {
+    const prompt = buildBlueprintPrompt(named, [])
+    expect(prompt).not.toMatch(/Persephone|Wintergreen/i)
+    expect(prompt).not.toMatch(/- Name:/)
+  })
+
+  it('still sends what the questions are actually chosen from', () => {
+    const prompt = buildQuestionsPrompt(makeAnswers({ goals: ['energy'], ageBracket: '35-44' }))
+    expect(prompt).toMatch(/boost energy/)
+    expect(prompt).toMatch(/35-44/)
+  })
+})

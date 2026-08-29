@@ -73,7 +73,6 @@ The stack has fixed slots (each a job like Protein or Sleep). For each slot you 
 - Respond with a single JSON object only, no prose: {"choices":{"slotId":"productId", ...},"reasons":{"slotId":"reason", ...}}`
 
 export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]): string {
-  const firstName = answers.name?.split(' ')[0]?.trim() || null
   const goalText = answers.goals.map(g => GOAL_LABELS[g] ?? g).join(', ') || 'general wellbeing'
   const budget = BUDGET_LABELS[answers.budget ?? ''] ?? '£50–80/month'
   const age = answers.exactAge ? `${answers.exactAge}` : (answers.ageBracket ?? 'unknown')
@@ -97,7 +96,6 @@ export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]):
   return `Personalise this person's stack.
 
 PERSON
-${firstName ? `- Name: ${firstName}` : ''}
 - Age: ${age}
 - Goals: ${goalText}
 - Training: ${answers.trainingFrequency ?? 'unknown'} per week, ${answers.trainingType?.length ? answers.trainingType.join(' & ') : 'mixed'}-focused
