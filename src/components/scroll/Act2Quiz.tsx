@@ -471,6 +471,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const [animKey, setAnimKey] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'back'>('forward')
   const [subQuestion, setSubQuestion] = useState<SubQuestion | null>(null)
+  /** Set when the review screen sent us back to a step; answering returns there. */
+  const [returnToReview, setReturnToReview] = useState(false)
   const [subAnswerId, setSubAnswerId] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -665,6 +667,13 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if (id === 'review' || id === 'deepDive') { handleFinish(); return }
     setDirection('forward')
     setAnimKey((k) => k + 1)
+    // Answering a question the review screen sent us to goes back to it.
+    const reviewAt = seq.findIndex((s) => s.id === 'review')
+    if (returnToReview && reviewAt >= 0) {
+      setReturnToReview(false)
+      setStep(reviewAt)
+      return
+    }
     setStep(Math.min(index + 1, seq.length - 1))
   }
 
@@ -681,6 +690,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
   function goBack() {
     clearPending()
+    setReturnToReview(false)
     funnel.stepBack({ from: id, to: seq[Math.max(index - 1, 0)]?.id, via: 'back' })
     setSubQuestion(null)
     setSubAnswerId(null)
@@ -689,6 +699,16 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     setStep(Math.max(index - 1, 0))
   }
 
+  /**
+   * Edit one answer from the review screen, then come straight back to it.
+   *
+   * Without the return flag this dropped the reader at the edited step and made
+   * them walk forward through every question after it again to reach a screen
+   * they had already been on. Changing one answer should cost one answer.
+   *
+   * Cleared if they navigate away with Back instead of answering, so the flag
+   * can never strand someone on the review screen mid-interview.
+   */
   function jumpTo(target: StepId) {
     clearPending()
     const i = seq.findIndex((s) => s.id === target)
@@ -696,6 +716,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     funnel.stepBack({ from: id, to: target, via: 'edit' })
     setSubQuestion(null)
     setSubAnswerId(null)
+    if (id === 'review') setReturnToReview(true)
     setDirection('back')
     setAnimKey((k) => k + 1)
     setStep(i)
@@ -1585,6 +1606,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
               style={{ fontFamily: 'var(--font-display)' }}
             >
               {continueNeeds ? continueNeeds
+                : returnToReview ? 'Save and go back'
                 : id === 'review' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
                 : id === 'deepDive' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`

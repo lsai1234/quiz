@@ -1,5 +1,5 @@
 import { emptyInterview } from '../types'
-import { answerQuestion, previousQuestionId, rewindTo, setForm, setGoals, setTrack } from '../interview'
+import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setTrack } from '../interview'
 import { questionById } from '../bank'
 import { CONFIRMED, NOTED, addDriver, rankedDrivers } from '../drivers'
 
@@ -125,5 +125,66 @@ describe('which drivers count', () => {
   it('ranks strongest first', () => {
     const ranked = rankedDrivers({ 'sleep-debt': 0.4, 'stress-load': 0.9, 'joint-load': 0.6 })
     expect(ranked.map((d) => d.id)).toEqual(['stress-load', 'joint-load', 'sleep-debt'])
+  })
+})
+
+describe('editing one answer from the review screen', () => {
+  /**
+   * `reviseAnswer` is the middle ground between the two obvious wrong answers.
+   * Dropping everything after the edit (what `rewindTo` does, and what the
+   * review screen used to do) makes changing the second answer cost the other
+   * six. Keeping everything leaves answers to questions this person would never
+   * have been asked.
+   */
+  function energyRun() {
+    let s = seeded()
+    s = answerQuestion(s, Q('energy-when'), ['mornings'])
+    s = answerQuestion(s, Q('energy-mornings'), ['cant-switch-off'])
+    s = answerQuestion(s, Q('day-shape'), ['desk'])
+    return s
+  }
+
+  it('keeps everything asked before the edited question', () => {
+    const revised = reviseAnswer(energyRun(), Q('energy-mornings'), ['wake-through'])
+    expect(revised.asked.slice(0, 4)).toEqual(['goals', 'safety', 'personal', 'energy-when'])
+    expect(revised.picked['energy-when']).toEqual(['mornings'])
+  })
+
+  it('applies the new answer in the same position', () => {
+    const revised = reviseAnswer(energyRun(), Q('energy-mornings'), ['wake-through'])
+    expect(revised.picked['energy-mornings']).toEqual(['wake-through'])
+    expect(revised.drivers['sleep-maintenance']).toBeGreaterThan(0)
+    expect(revised.drivers['sleep-onset']).toBeUndefined()
+  })
+
+  it('keeps later answers that are still legitimate', () => {
+    // `day-shape` does not depend on the sleep answer, so it survives.
+    const revised = reviseAnswer(energyRun(), Q('energy-mornings'), ['wake-through'])
+    expect(revised.asked).toContain('day-shape')
+    expect(revised.picked['day-shape']).toEqual(['desk'])
+  })
+
+  it('drops a later answer the edit has invalidated', () => {
+    // Switching the dip from mornings to the afternoon means the person would
+    // never have been asked about their nights — so that answer goes with it.
+    const revised = reviseAnswer(energyRun(), Q('energy-when'), ['afternoon'])
+    expect(revised.picked['energy-when']).toEqual(['afternoon'])
+    expect(revised.asked).not.toContain('energy-mornings')
+    expect(revised.picked['energy-mornings']).toBeUndefined()
+    // …and the sleep evidence it contributed goes with it.
+    expect(revised.drivers['sleep-onset']).toBeUndefined()
+  })
+
+  it('is a plain answer when the question was never asked', () => {
+    const s = seeded()
+    expect(reviseAnswer(s, Q('energy-when'), ['mornings']).asked).toContain('energy-when')
+  })
+
+  it('changes nothing at all when the same answer is re-picked', () => {
+    const before = energyRun()
+    const after = reviseAnswer(before, Q('energy-mornings'), ['cant-switch-off'])
+    expect(after.asked).toEqual(before.asked)
+    expect(after.picked).toEqual(before.picked)
+    expect(after.drivers).toEqual(before.drivers)
   })
 })

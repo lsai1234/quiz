@@ -10,7 +10,7 @@ import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { Reflection } from '@/components/quiz/v2/Reflection'
 import { funnel } from '@/lib/analytics/quiz'
 import { emptyInterview, type BankQuestion, type InterviewState } from '@/lib/quiz-v2/types'
-import { answerQuestion, previousQuestionId, rewindTo, setForm, setGoals, setTrack } from '@/lib/quiz-v2/interview'
+import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setTrack } from '@/lib/quiz-v2/interview'
 import { endedEarly, planNext } from '@/lib/quiz-v2/planner'
 import { projectAnswers } from '@/lib/quiz-v2/project'
 import { questionById } from '@/lib/quiz-v2/bank'
@@ -78,7 +78,27 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   const { prefer, reflection, prefetch } = useSteer(state, aiSteer)
 
   const planned = useMemo(() => planNext(state, undefined, prefer), [state, prefer])
-  const current = planned.question
+
+  /**
+   * Which single question the review screen sent us back to, if any.
+   *
+   * Editing is its own mode rather than a rewind. Tapping Edit shows exactly
+   * the question tapped — not whatever the planner would pick next from a
+   * truncated state — and answering it returns straight to the review. That is
+   * what "go back, change that one answer, come back" means, and the planner
+   * cannot express it because the planner's whole job is choosing what to ask
+   * next.
+   */
+  const [editingId, setEditingId] = useState<string | null>(null)
+  /** Once the interview has finished, the review is home. */
+  const [reviewed, setReviewed] = useState(false)
+  useEffect(() => {
+    if (planned.question === null) setReviewed(true)
+  }, [planned.question])
+
+  const current = editingId
+    ? questionById(editingId) ?? null
+    : reviewed ? null : planned.question
   const onReview = current === null
 
   const [multiPicks, setMultiPicks] = useState<string[]>([])
@@ -162,8 +182,18 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
   const answerCurrent = useCallback((optionIds: string[]) => {
     if (!current) return
+    if (editingId) {
+      // One answer changed, later answers that no longer apply dropped, and
+      // straight back to the review — no re-walking the interview.
+      clearPending()
+      setDirection('back')
+      setAnimKey((k) => k + 1)
+      update(reviseAnswer(state, current, optionIds))
+      setEditingId(null)
+      return
+    }
     commit(answerQuestion(state, current, optionIds))
-  }, [current, state, commit])
+  }, [current, state, commit, editingId, update])
 
   /** Single-choice: register the tap, then move on a beat later. */
   const pickSingle = (optionId: string) => {
@@ -192,6 +222,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   }
 
   const goBack = () => {
+    if (editingId) { cancelEdit(); return }
     clearPending()
     const prev = previousQuestionId(state, currentId)
     if (!prev) return
@@ -201,20 +232,21 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     update(rewindTo(state, prev))
   }
 
-  /**
-   * Jump back from the review screen.
-   *
-   * Discards everything after the edited answer, because everything after it
-   * was chosen *because* of it — the interview asked about sleep only because
-   * the user said their mornings were slow. Keeping the downstream answers
-   * would leave the recommendation built on a path the user has just told us
-   * they are not on. The review screen says so before they tap.
-   */
+  /** Jump to one question from the review screen. Answering it comes back. */
   const editFrom = (questionId: string) => {
+    clearPending()
     funnel.stepBack({ from: 'review', to: questionId, via: 'edit' })
     setDirection('back')
     setAnimKey((k) => k + 1)
-    update(rewindTo(state, questionId))
+    setEditingId(questionId)
+  }
+
+  /** Leave an edit without changing it. */
+  const cancelEdit = () => {
+    clearPending()
+    setDirection('back')
+    setAnimKey((k) => k + 1)
+    setEditingId(null)
   }
 
   const commitPersonal = () => {
@@ -225,6 +257,14 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
       gender: (localGender || null) as Gender | null,
       weightBand: (localWeight || null) as WeightBand | null,
     })
+    if (editingId) {
+      clearPending()
+      setDirection('back')
+      setAnimKey((k) => k + 1)
+      update(reviseAnswer(withForm, current, []))
+      setEditingId(null)
+      return
+    }
     commit(answerQuestion(withForm, current, []))
   }
 
@@ -326,7 +366,18 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   const onContinue = () => {
     if (onReview) { finish(); return }
     if (isForm) { commitPersonal(); return }
-    if (isGoals) { commit(answerQuestion(state, current!, [])); return }
+    if (isGoals) {
+      if (editingId) {
+        clearPending()
+        setDirection('back')
+        setAnimKey((k) => k + 1)
+        update(reviseAnswer(state, current!, []))
+        setEditingId(null)
+        return
+      }
+      commit(answerQuestion(state, current!, []))
+      return
+    }
     answerCurrent(multiPicks)
   }
 
@@ -359,10 +410,16 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
         </div>
       )}
 
+      {/* What the last answer told us. Floats clear of the layout — it lands a
+          beat after the question and must never move it. See Reflection. */}
+      {!onReview && !editingId && index > 0 && !isGenerating && (
+        <Reflection text={reflection} reducedMotion={reducedMotion} />
+      )}
+
       {/* Brand + progress */}
       <div className="relative z-20 shrink-0 flex items-center justify-between pl-5 pr-[42px] pt-5 pb-1">
         <div className="flex items-center gap-2.5">
-          {index > 0 && (
+          {(index > 0 || !!editingId) && (
             <button
               onClick={goBack}
               className="-ml-1 w-7 h-7 flex items-center justify-center rounded-full text-white/40 hover:text-white/80 transition-colors"
@@ -379,7 +436,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
           </span>
         </div>
         <span className="text-[10px] font-medium tracking-[0.12em] text-white/25 tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>
-          {onReview ? 'FINAL STEP' : `${index + 1} / ${total}`}
+          {editingId ? 'EDITING' : onReview ? 'FINAL STEP' : `${index + 1} / ${total}`}
         </span>
       </div>
 
@@ -398,10 +455,6 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
             {headerCopy.prompt}
           </h2>
           <p className="text-sm text-white/40 mt-2.5 leading-snug">{headerCopy.hint}</p>
-
-          {/* What the last answer told us. Only ever rendered if it arrived in
-              time — it is never waited for, and never shows a placeholder. */}
-          {!onReview && index > 0 && <Reflection text={reflection} reducedMotion={reducedMotion} />}
 
           {index === 0 && (
             <p className="text-[11px] text-white/25 mt-2">
@@ -506,6 +559,21 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
       </div>
 
       {/* CTA */}
+      {editingId && !needsContinue && (
+        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-7 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
+          <div className="max-w-lg mx-auto">
+            {/* A single-choice edit saves on tap, so there is nothing to
+                confirm — but leaving it alone has to be possible too. */}
+            <button
+              onClick={cancelEdit}
+              className="w-full py-4 rounded-xl text-sm font-semibold tracking-wide border border-white/15 text-white/70 transition-all duration-200 active:scale-[0.99]"
+              style={{ fontFamily: 'var(--font-display)' }}
+            >
+              Leave it as it was
+            </button>
+          </div>
+        </div>
+      )}
       {needsContinue && (
         <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-7 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
           <div className="max-w-lg mx-auto">
@@ -520,6 +588,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
               style={{ fontFamily: 'var(--font-display)' }}
             >
               {continueNeeds ? continueNeeds
+                : editingId ? 'Save and go back'
                 : onReview ? 'Build my stack'
                 : isGoals ? `Continue with ${state.goals.length} goal${state.goals.length > 1 ? 's' : ''}`
                 : isForm && localName.trim() ? `Continue, ${localName.trim()}`

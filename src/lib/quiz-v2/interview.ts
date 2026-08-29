@@ -100,6 +100,53 @@ export function rewindTo(state: InterviewState, questionId: string): InterviewSt
   return rebuilt
 }
 
+/**
+ * Change one answer without restarting the run.
+ *
+ * The review screen's Edit needs to do exactly what it says: change that
+ * answer, and put the person back on the review screen. `rewindTo` cannot do
+ * that — it throws away everything after the edited question, so a change to
+ * the second answer emptied the other six and made the reader re-walk the whole
+ * interview to get back to a screen they were already on.
+ *
+ * But keeping everything is wrong too. Some later answers only exist BECAUSE of
+ * the old answer: change "slow mornings" to "afternoon wall" and the two sleep
+ * questions that followed are answers to questions this person would never have
+ * been asked. So the rule is neither keep-all nor drop-all — it is keep
+ * whatever is still legitimate.
+ *
+ * Rebuilt in order, applying the new answer in place and re-testing every LATER
+ * question's own `requires` against the state as it stands by then. A question
+ * that would still have been asked keeps its answer; one that would not is
+ * dropped along with it. Everything before the edit is untouched, because
+ * nothing before it can have depended on it.
+ */
+export function reviseAnswer(
+  state: InterviewState,
+  question: BankQuestion,
+  optionIds: string[],
+): InterviewState {
+  const at = state.asked.indexOf(question.id)
+  if (at < 0) return answerQuestion(state, question, optionIds)
+
+  let rebuilt: InterviewState = { ...state, picked: {}, drivers: {}, cleared: [], asked: [] }
+
+  state.asked.forEach((id, i) => {
+    const q = questionById(id)
+    if (!q) return
+    if (i === at) {
+      rebuilt = answerQuestion(rebuilt, q, optionIds)
+      return
+    }
+    // Everything before the edit stands. Everything after has to re-earn its
+    // place against the answers as they now are.
+    if (i > at && q.requires && !q.requires(rebuilt)) return
+    rebuilt = answerQuestion(rebuilt, q, state.picked[id] ?? [])
+  })
+
+  return rebuilt
+}
+
 /** The question before this one, for the Back button. */
 export function previousQuestionId(state: InterviewState, currentId: string): string | null {
   const i = state.asked.indexOf(currentId)

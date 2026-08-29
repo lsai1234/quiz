@@ -219,3 +219,45 @@ test.describe('the experiment switch', () => {
     await expect(heading(page)).toHaveText(/Anything we should factor in/)
   })
 })
+
+test.describe('editing an answer from the review screen', () => {
+  /** The row's own label, so the assertion names what was tapped. */
+  async function tapEdit(page: Page, index: number) {
+    const rows = page.locator('.overflow-y-auto button').filter({ hasText: 'Edit' })
+    const label = (await rows.nth(index).innerText()).split('\n')[0]
+    await rows.nth(index).click()
+    return label
+  }
+
+  test('goes to the question that was tapped, and comes straight back', async ({ page }) => {
+    await startV2(page)
+    await answerOne(page)
+    await answerOne(page)
+    await answerOne(page, 'Slow mornings')
+    await toReview(page)
+
+    // The energy row — the third, after goals and the about-you details.
+    await tapEdit(page, 2)
+    await expect(heading(page)).toHaveText(/When does your energy dip/)
+
+    // Answering returns to the review rather than re-walking the interview.
+    await page.getByRole('button', { name: 'Mid-afternoon wall' }).click()
+    await expect(heading(page)).toHaveText(/Here is what we heard/, { timeout: 10_000 })
+    await expect(page.getByText('Mid-afternoon wall')).toBeVisible()
+  })
+
+  test('leaves an edit alone when the reader backs out', async ({ page }) => {
+    await startV2(page)
+    await answerOne(page)
+    await answerOne(page)
+    await answerOne(page, 'Slow mornings')
+    await toReview(page)
+
+    await tapEdit(page, 2)
+    await expect(heading(page)).toHaveText(/When does your energy dip/)
+    await page.getByRole('button', { name: 'Back' }).click()
+
+    await expect(heading(page)).toHaveText(/Here is what we heard/)
+    await expect(page.getByText('Slow mornings')).toBeVisible()
+  })
+})
