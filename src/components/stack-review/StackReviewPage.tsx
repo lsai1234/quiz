@@ -12,7 +12,7 @@ import {
   addBoosterSlot,
   removeOptionalSlot,
 } from '@/lib/stack-blueprint/helpers'
-import { calculatePricing, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
+import { calculatePricing, buildSubscriptionPlan, formatGBP, getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { planTiers, tierPlanFor, type TierPlan } from '@/lib/stack-blueprint/tier-plan'
 import { selectStatAxes } from '@/lib/stack-stats'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
@@ -61,12 +61,17 @@ const GOAL_LABEL: Partial<Record<Goal, string>> = {
  * too few products to fill three bands offers two options, or one — `planTiers`
  * folds the rest rather than showing the same stack twice.
  */
+/** A threshold, not a price: "£25", never "£25.00". The pence on a round
+ *  figure read as a real charge rather than the floor it is. */
+const wholePounds = (n: number) => formatGBP(n).replace(/\.00$/, '')
+
 function StackTierSelector({
-  tiers, current, isSub, onChange,
+  tiers, current, minMonthly, onChange,
 }: {
   tiers: TierPlan[]
   current: StackLevel
-  isSub: boolean
+  /** The monthly floor a subscription has to clear to be offerable at all. */
+  minMonthly: number
   onChange: (level: StackLevel) => void
 }) {
   return (
@@ -79,6 +84,9 @@ function StackTierSelector({
           const size = slots.length
           const meta = TIER_META[level]
           const active = current === level
+          // A subscription this small cannot be placed, so this depth has no
+          // monthly price to advertise. Same floor the plan tab enforces.
+          const canSub = monthly > 0 && monthly >= minMonthly
           return (
             <button
               key={level}
@@ -104,21 +112,56 @@ function StackTierSelector({
               <div className="text-[10px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
                 {size} product{size === 1 ? '' : 's'}
               </div>
-              {/* Both prices: whichever plan is active is emphasised, the other
-                  shown small — so the value is clear before the plan is chosen. */}
-              {isSub && monthly > 0 ? (
+              {/*
+                Both prices, always, in a fixed order: the monthly subscription
+                leads and the one-off sits under it.
+
+                Deliberately NOT driven by which plan is currently selected. The
+                card's job is choosing a DEPTH, and a headline that jumped
+                between two numbers every time the plan tab moved made the three
+                depths hard to compare — which is the one thing this row exists
+                for. So the position is stable and both numbers are labelled,
+                and the plan tab below decides what is actually charged.
+
+                Leading with the subscription price is a pricing decision, not a
+                layout one: it is the lower number and the one the business
+                wants chosen, and it is the anchor the depths should be compared
+                at. It is labelled `subscription` precisely because it is NOT
+                what a customer pays by default — one-off is still the selected
+                plan until they flip it.
+              */}
+              {canSub ? (
                 <>
                   <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                     {formatGBP(monthly)}<span className="text-[9px] font-semibold" style={{ color: 'var(--color-muted)' }}>/mo</span>
                   </div>
-                  <div className="text-[9px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{formatGBP(oneOff)} one-off</div>
+                  <div className="text-[9px] font-bold uppercase tracking-wide leading-tight mt-0.5" style={{ color: 'var(--color-accent)' }}>
+                    Subscription
+                  </div>
+                  <div className="text-[9px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)' }}>
+                    or {formatGBP(oneOff)} one-off
+                  </div>
                 </>
               ) : (
                 <>
+                  {/*
+                    No subscription at this depth, so there is nothing to lead
+                    with. A monthly plan needs to clear the order minimum, and
+                    the shallowest tier routinely does not — headlining a /mo
+                    figure the customer cannot actually buy would be the worst
+                    version of this change.
+                  */}
                   <div className="text-sm font-black mt-1.5 leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                     {formatGBP(oneOff)}
                   </div>
-                  {monthly > 0 && <div className="text-[9px] mt-0.5" style={{ color: 'var(--color-accent)' }}>{formatGBP(monthly)}/mo subscribed</div>}
+                  <div className="text-[9px] font-bold uppercase tracking-wide leading-tight mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    One-off
+                  </div>
+                  <div className="text-[9px] mt-0.5 leading-tight" style={{ color: 'var(--color-muted)', opacity: 0.75 }}>
+                    {/* Says why there is no monthly price rather than implying
+                        one is coming, and points at the depth that has one. */}
+                    Monthly from {wholePounds(minMonthly)}
+                  </div>
                 </>
               )}
             </button>
@@ -549,7 +592,7 @@ export function StackReviewPage() {
             <StackTierSelector
               tiers={tierPlans}
               current={activeLevel}
-              isSub={planType === 'subscription'}
+              minMonthly={getPricingConfig().minSubscriptionMonthly}
               onChange={setStackLevel}
             />
           </div>
