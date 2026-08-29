@@ -62,11 +62,17 @@ export function AnswerOption({
         ].join(' ')}
       >
         {icon && <QuizIcon name={icon} size={17} className={`shrink-0 transition-colors duration-200 ${iconColor}`} />}
-        <span
-          className={`text-[13px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/70'}`}
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {label}
+        {/* The compact card used to render the label only, so a `sub` passed to
+            a multi option was silently thrown away — "Young children · Nursery
+            or primary school" arrived as "Young children". It shows now. */}
+        <span className="min-w-0">
+          <span
+            className={`block text-[13px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/70'}`}
+            style={{ fontFamily: 'var(--font-display)' }}
+          >
+            {label}
+          </span>
+          {sub && <span className="block text-[11px] mt-0.5 text-white/35 leading-snug">{sub}</span>}
         </span>
         <div className="absolute top-1/2 right-3 -translate-y-1/2">
           <CheckMark selected={selected} multi />

@@ -84,6 +84,9 @@ export async function GET() {
     // The three conditions, so the share flow can confirm them in the founder's
     // own words rather than in a second copy that drifts from the card's.
     entrySteps: campaign.entrySteps.filter(Boolean),
+    // The handle to tag. Already printed on the card; the share sheet needs it
+    // too, because the tag is the difference between an entry and a post.
+    instagramHandle: campaign.instagramHandle,
     closesAt: campaign.closesAt,
     termsUrl: campaign.termsUrl,
     freeEntryRoute: campaign.freeEntryRoute,

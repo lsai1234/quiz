@@ -1,5 +1,5 @@
 import type { BankQuestion } from '../types'
-import { asked, hasGoal, suspected, trains } from './predicates'
+import { asked, hasGoal, live, suspected, trains } from './predicates'
 
 /**
  * Nutrition — the questions that decide whether a gap is real.
@@ -61,12 +61,12 @@ export const NUTRITION_QUESTIONS: BankQuestion[] = [
     id: 'protein-reality',
     topic: 'nutrition',
     section: 'NUTRITION',
-    prompt: 'Protein at every meal?',
+    prompt: 'Do you get protein at every meal?',
     hint: 'The single biggest lever if you are training.',
     select: 'single',
     summary: 'Actual protein habit, for anyone whose blocker might be protein.',
     discriminates: ['low-protein'],
-    requires: (s) => suspected(s, 'low-protein') || (trains(s) && hasGoal(s, 'muscle', 'bulking')),
+    requires: (s) => live(s, 'low-protein') || (trains(s) && hasGoal(s, 'muscle', 'bulking')),
     options: [
       {
         id: 'every-meal',
@@ -95,8 +95,8 @@ export const NUTRITION_QUESTIONS: BankQuestion[] = [
     id: 'tried-before',
     topic: 'supps',
     section: 'WHAT YOU HAVE TRIED',
-    prompt: 'Anything you have tried and given up on?',
-    hint: "Tell us what did not work and we will not send it again.",
+    prompt: 'How have supplements gone for you before?',
+    hint: 'Tell us what did not work and we will not send it again.',
     select: 'single',
     // The audit's gap #9. Nothing in v1 captures "tried creatine, felt nothing"
     // or "protein wrecked my stomach", and both are high-signal — the second

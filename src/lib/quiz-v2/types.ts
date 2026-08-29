@@ -51,6 +51,16 @@ export interface BankOption {
    * here, so the two quizzes hand the factory the same shape.
    */
   answers?: Partial<QuizAnswers>
+  /**
+   * "None of these" / "Starting fresh" — picking it clears every other choice,
+   * and picking anything else clears it.
+   *
+   * It also shows as selected while nothing is picked, so a multi-select screen
+   * always has a visible answer rather than a blank grid the reader has to work
+   * out is a valid state. Same behaviour as v1's safety step, which is where the
+   * pattern comes from.
+   */
+  exclusive?: boolean
 }
 
 export type SelectKind = 'single' | 'multi' | 'form'
@@ -90,6 +100,11 @@ export interface BankQuestion {
   minPicks?: number
   /** For `form`. */
   fields?: FormField[]
+  /**
+   * A line under the options. For the one screen that needs to say what it will
+   * and will not do with the answer before the reader commits to it.
+   */
+  reassurance?: string
   /** One-line summary for the AI steer's candidate list. Never shown to a user. */
   summary: string
 }

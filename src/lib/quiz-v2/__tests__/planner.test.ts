@@ -206,3 +206,50 @@ describe('the AI steer', () => {
     expect(planNext(s, undefined, [first.id]).question!.id).not.toBe(first.id)
   })
 })
+
+describe('follow-ups still fire on the strongest answer', () => {
+  /**
+   * The hole `live()` exists to close.
+   *
+   * A follow-up gated on `suspected()` stops being eligible the moment its
+   * driver passes `CONFIRMED` — so the person who picked the STRONGEST answer
+   * was the one who never got asked why. "Constantly, I catch everything" put
+   * illness-frequency at 0.8 and the exposure question vanished.
+   */
+  function answerPath(goals: InterviewState['goals'], steps: Array<[string, string]>) {
+    let s = run(goals)
+    s = setTrack(s, goals.includes('muscle') ? 'performance' : 'wellbeing')
+    for (const id of ['goals', 'safety', 'personal']) s = answerQuestion(s, questionById(id)!, [])
+    for (const [q, opt] of steps) s = answerQuestion(s, questionById(q)!, [opt])
+    return s
+  }
+
+  it('asks about exposure even when they catch everything', () => {
+    const strongest = answerPath(['immune'], [['immune-often', 'constantly']])
+    const milder = answerPath(['immune'], [['immune-often', 'winter']])
+    for (const s of [strongest, milder]) {
+      expect(rankCandidates(s).map((c) => c.question.id)).toContain('immune-exposure')
+    }
+  })
+
+  it('asks about fibre even when digestion is clearly the problem', () => {
+    const s = answerPath(['gut-health'], [['gut-when', 'since-change']])
+    expect(rankCandidates(s).map((c) => c.question.id)).toContain('gut-fibre')
+  })
+
+  it('asks about protein habits while protein is still an open question', () => {
+    const s = answerPath(['muscle'], [['how-meals-happen', 'poor']])
+    expect(rankCandidates(s).map((c) => c.question.id)).toContain('protein-reality')
+  })
+
+  it('drops the protein follow-up once protein is settled — and is right to', () => {
+    // The counterpart to the three above, and the line between them. Exposure
+    // and fibre discriminate OTHER drivers, so they stay worth asking after
+    // their headline driver is confirmed. `protein-reality` discriminates
+    // low-protein and nothing else, so once someone has said protein is the
+    // blocker there is nothing left for it to find, and spending a tap on it
+    // would be the padding the budget exists to prevent.
+    const s = answerPath(['muscle'], [['training-blocker', 'protein']])
+    expect(rankCandidates(s).map((c) => c.question.id)).not.toContain('protein-reality')
+  })
+})

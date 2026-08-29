@@ -1,3 +1,4 @@
+import { readFileSync } from 'fs'
 import { emptyInterview } from '../types'
 import { answerQuestion, setForm, setGoals, setTrack } from '../interview'
 import { projectAnswers } from '../project'
@@ -94,7 +95,7 @@ describe('the projection', () => {
 
   it('is recomputed from scratch, so a back-step leaves nothing behind', () => {
     let s = seeded()
-    s = answerQuestion(s, Q('caffeine'), ['late'])
+    s = answerQuestion(s, Q('caffeine'), ['daily-late'])
     expect(projectAnswers(s).caffeineLevel).toBe('high')
 
     // Re-answer the same question the other way — the old value must not survive.
@@ -198,5 +199,97 @@ describe('end to end, into the real engine', () => {
       const product = MOCK_CATALOGUE.find((p) => p.id === slot.selectedProductId)
       expect(product?.contraindications ?? []).not.toContain('pregnancy')
     }
+  })
+})
+
+describe('the bank references itself correctly', () => {
+  /**
+   * A `requires` naming an option id that no longer exists is the quietest bug
+   * this bank can have: the predicate simply never returns true, the question
+   * never fires, and nothing anywhere goes red. Renaming one caffeine option
+   * during the copy pass was enough to prove the risk is real, so the
+   * cross-references are checked against the bank rather than eyeballed.
+   */
+  const SOURCES = [
+    'src/lib/quiz-v2/bank/energy.ts',
+    'src/lib/quiz-v2/bank/training.ts',
+    'src/lib/quiz-v2/bank/wellbeing.ts',
+    'src/lib/quiz-v2/bank/nutrition.ts',
+  ]
+
+  it('every chose()/choseAny() names a real question and a real option', () => {
+    const refs: Array<{ file: string; question: string; option: string }> = []
+    for (const file of SOURCES) {
+      const src = readFileSync(file, 'utf8')
+      const re = /\bchose(?:Any)?\(\s*s\s*,\s*'([^']+)'\s*,\s*((?:'[^']+'\s*,?\s*)+)\)/g
+      for (const m of src.matchAll(re)) {
+        for (const opt of m[2].matchAll(/'([^']+)'/g)) {
+          refs.push({ file, question: m[1], option: opt[1] })
+        }
+      }
+    }
+
+    // If this drops to zero the regex has stopped matching and the test is
+    // silently passing on nothing.
+    expect(refs.length).toBeGreaterThan(3)
+
+    const broken = refs.filter(({ question, option }) => {
+      const q = questionById(question)
+      return !q || !q.options.some((o) => o.id === option)
+    })
+    expect(broken).toEqual([])
+  })
+})
+
+describe('the questions read on their own', () => {
+  /**
+   * The section label above a question is 10px of 35%-white. It is decoration.
+   * Several prompts were leaning on it — "YOUR HEAD" over "When is it worst?",
+   * "YOUR NIGHTS" over "How are your nights?" — and only made sense if you
+   * noticed and read both. The rule now is that the big text carries the whole
+   * question.
+   *
+   * Semantics are not testable, so this covers the mechanical half and the
+   * snapshot below covers the rest: every wording change becomes a diff a human
+   * has to look at and accept.
+   */
+  const adaptive = BANK.filter((q) => !q.fixed)
+
+  it.each(adaptive.map((q) => [q.id, q.prompt] as const))(
+    '%s asks a whole question',
+    (_id, prompt) => {
+      expect(prompt.endsWith('?')).toBe(true)
+      // "Two days after a hard session?" was 30 characters of fragment; the
+      // floor is here to catch the next one, not to reward padding.
+      expect(prompt.length).toBeGreaterThanOrEqual(20)
+      // A prompt whose object is a bare pronoun is one leaning on the eyebrow.
+      expect(prompt).not.toMatch(/\b(it|them|this|that)\s*\?$/i)
+    },
+  )
+
+  it('never asks two questions with the same words', () => {
+    const prompts = adaptive.map((q) => q.prompt.toLowerCase())
+    expect(new Set(prompts).size).toBe(prompts.length)
+  })
+
+  it('offers a way through every multi-select screen', () => {
+    // Either an explicit "none of these", or a minimum that says one is needed.
+    for (const q of BANK.filter((x) => x.select === 'multi')) {
+      const hasNone = q.options.some((o) => o.exclusive)
+      expect(hasNone || (q.minPicks ?? 0) > 0).toBe(true)
+    }
+  })
+
+  it('reads the same tomorrow as it does today', () => {
+    expect(
+      BANK.map((q) => ({
+        id: q.id,
+        section: q.section,
+        prompt: q.prompt,
+        hint: q.hint,
+        select: q.select,
+        options: q.options.map((o) => [o.id, o.label, o.sub ?? null]),
+      })),
+    ).toMatchSnapshot()
   })
 })

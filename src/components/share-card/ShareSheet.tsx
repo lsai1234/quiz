@@ -111,6 +111,25 @@ const ACTION: Record<ShareCapability, { label: string; icon: 'share' | 'download
   },
 }
 
+/**
+ * The same instruction, with the one condition that decides whether it counts.
+ *
+ * The entry steps on the card say "tagging us", but the person reading them is
+ * looking at a picture — by the time they are in this sheet, about to post, the
+ * card is behind them and the only words on screen were "pick Instagram, then
+ * Story". A story posted without the tag is invisible to us: the winner is
+ * drawn from the accounts that mentioned us, so an untagged post is not a late
+ * entry, it is no entry at all, and the entrant has no way of knowing.
+ *
+ * Only shown while a draw is actually open. Telling someone to tag us when
+ * there is nothing to win is a brand asking for a favour.
+ */
+function actionNote(base: string, comp: Live | null): string {
+  const handle = comp?.instagramHandle?.trim()
+  if (!comp || comp.state !== 'open' || !handle) return base
+  return `${base} Tag ${handle} in the story — without the tag your entry won’t count.`
+}
+
 type Step =
   | { kind: 'compose' }
   /** Every rung failed. The image is shown full-bleed to be saved by hand. */
@@ -118,7 +137,7 @@ type Step =
   /** It went. What happens next depends on whether a draw is running. */
   | { kind: 'shared'; message: string }
 
-interface Live { state: string; prize: string; test: boolean; entrySteps?: string[] }
+interface Live { state: string; prize: string; test: boolean; entrySteps?: string[]; instagramHandle?: string }
 
 export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; onClose: () => void }) {
   const [format, setFormat] = useState<ShareFormat>('story')
@@ -406,7 +425,7 @@ export function ShareSheet({ payload, onClose }: { payload: ShareCardPayload; on
           className="text-[11px] leading-relaxed text-center w-full"
           style={{ color: 'var(--color-muted)' }}
         >
-          {action.note}
+          {actionNote(action.note, comp)}
         </p>
 
         <button

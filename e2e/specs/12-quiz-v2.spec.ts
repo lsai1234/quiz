@@ -95,7 +95,7 @@ test('follows the answer it was just given rather than working down a list', asy
   await startV2(page)
   await answerOne(page)                       // safety
   await answerOne(page)                       // about you
-  await expect(heading(page)).toHaveText(/When does it hit you/)
+  await expect(heading(page)).toHaveText(/When does your energy dip/)
 
   const next = await answerOne(page, 'Slow mornings')
   expect(next).toMatch(/sleep|nights/i)
@@ -109,7 +109,7 @@ test('stops asking about sleep once the user says nights are fine', async ({ pag
   // Note it takes two questions to get here, not one: after "slow mornings" the
   // interview asks how LONG they sleep first, and "more than 8 hours" only
   // rules out short nights — unrefreshing sleep is still live, which is exactly
-  // why "how are your nights?" is the right next question rather than a
+  // why the sleep-shape question is the right next one rather than a
   // repetition.
   await startV2(page)
   await answerOne(page)
@@ -117,10 +117,10 @@ test('stops asking about sleep once the user says nights are fine', async ({ pag
   await answerOne(page, 'Slow mornings')
 
   for (let i = 0; i < 4; i++) {
-    if (/How are your nights/i.test(await heading(page).innerText())) break
+    if (/How is your sleep/i.test(await heading(page).innerText())) break
     await answerOne(page, 'More than 8')
   }
-  await expect(heading(page)).toHaveText(/How are your nights/)
+  await expect(heading(page)).toHaveText(/How is your sleep/)
   await answerOne(page, 'Nights are fine, actually')
 
   const seen: string[] = []

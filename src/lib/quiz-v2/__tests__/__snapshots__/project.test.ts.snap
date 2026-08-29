@@ -1,0 +1,893 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`the questions read on their own reads the same tomorrow as it does today 1`] = `
+[
+  {
+    "hint": "Pick everything that applies — the first one you tap is the one we'll lead with.",
+    "id": "goals",
+    "options": [],
+    "prompt": "What's the main goal?",
+    "section": "YOUR GOAL",
+    "select": "multi",
+  },
+  {
+    "hint": "So we only ever suggest things that are right for you.",
+    "id": "safety",
+    "options": [
+      [
+        "pregnancy",
+        "Pregnant or breastfeeding",
+        null,
+      ],
+      [
+        "medication",
+        "On prescription medication",
+        null,
+      ],
+      [
+        "shellfish",
+        "Shellfish allergy",
+        null,
+      ],
+      [
+        "vegan",
+        "Plant-based only",
+        "No animal products at all",
+      ],
+      [
+        "none",
+        "None of these",
+        null,
+      ],
+    ],
+    "prompt": "Anything we should factor in?",
+    "section": "ABOUT YOU",
+    "select": "multi",
+  },
+  {
+    "hint": "Age and weight scale the doses — the rest is so we can talk to you properly.",
+    "id": "personal",
+    "options": [],
+    "prompt": "A little about you.",
+    "section": "ABOUT YOU",
+    "select": "form",
+  },
+  {
+    "hint": "We'll leave out anything you've already got covered.",
+    "id": "supps",
+    "options": [
+      [
+        "protein",
+        "Protein",
+        null,
+      ],
+      [
+        "creatine",
+        "Creatine",
+        null,
+      ],
+      [
+        "pre-workout",
+        "Pre-workout",
+        null,
+      ],
+      [
+        "multivitamin",
+        "Multivitamin",
+        null,
+      ],
+      [
+        "vitamin-d",
+        "Vitamin D",
+        null,
+      ],
+      [
+        "omega-3",
+        "Omega-3 / Fish oil",
+        null,
+      ],
+      [
+        "magnesium",
+        "Magnesium",
+        null,
+      ],
+      [
+        "collagen",
+        "Collagen",
+        null,
+      ],
+      [
+        "none",
+        "Starting fresh",
+        null,
+      ],
+    ],
+    "prompt": "Already taking any of these?",
+    "section": "WHAT YOU HAVE",
+    "select": "multi",
+  },
+  {
+    "hint": "The pattern says more than the tiredness does.",
+    "id": "energy-when",
+    "options": [
+      [
+        "mornings",
+        "Slow mornings",
+        "It takes hours to get going",
+      ],
+      [
+        "afternoon",
+        "Mid-afternoon wall",
+        "Fine until about three",
+      ],
+      [
+        "evening",
+        "Nothing left by evening",
+        "Runs out before the day does",
+      ],
+      [
+        "all-day",
+        "Flat the whole way through",
+        "No real peak at all",
+      ],
+    ],
+    "prompt": "When does your energy dip?",
+    "section": "YOUR ENERGY",
+    "select": "single",
+  },
+  {
+    "hint": "Slow mornings usually start the night before.",
+    "id": "energy-mornings",
+    "options": [
+      [
+        "cant-switch-off",
+        "Can't switch off",
+        "Lie there with the day still running",
+      ],
+      [
+        "wake-through",
+        "Wake through the night",
+        "Get off fine, then surface",
+      ],
+      [
+        "wake-tired",
+        "Sleep enough, still wake tired",
+        "The hours are there, the rest is not",
+      ],
+      [
+        "nights-fine",
+        "Nights are fine, actually",
+        "Sleep is not the problem",
+      ],
+    ],
+    "prompt": "How is your sleep at the moment?",
+    "section": "SLEEP",
+    "select": "single",
+  },
+  {
+    "hint": "An afternoon wall is usually built earlier in the day.",
+    "id": "energy-afternoon",
+    "options": [
+      [
+        "coffee-only",
+        "Coffee, and not much else",
+        "Breakfast rarely happens",
+      ],
+      [
+        "big-lunch",
+        "A big lunch, then gone",
+        "Straight down after eating",
+      ],
+      [
+        "too-busy",
+        "Too busy to eat properly",
+        "Whatever is nearest, if anything",
+      ],
+      [
+        "steady-meals",
+        "Three proper meals",
+        "Eating is not the issue",
+      ],
+    ],
+    "prompt": "What do you usually eat before the afternoon?",
+    "section": "FOOD",
+    "select": "single",
+  },
+  {
+    "hint": "Not time in bed — time actually asleep.",
+    "id": "sleep-hours",
+    "options": [
+      [
+        "under-6",
+        "Under 6 hours",
+        null,
+      ],
+      [
+        "6-7",
+        "6 to 7 hours",
+        null,
+      ],
+      [
+        "7-8",
+        "7 to 8 hours",
+        null,
+      ],
+      [
+        "over-8",
+        "More than 8",
+        null,
+      ],
+    ],
+    "prompt": "On a normal night, how long do you sleep?",
+    "section": "SLEEP",
+    "select": "single",
+  },
+  {
+    "hint": "Decides whether a stimulant belongs in your stack at all.",
+    "id": "caffeine",
+    "options": [
+      [
+        "none",
+        "I avoid it entirely",
+        "Stim-free, always",
+      ],
+      [
+        "occasional",
+        "The odd coffee",
+        "Not every day",
+      ],
+      [
+        "daily-early",
+        "Every day, nothing after lunch",
+        "One or two in the morning",
+      ],
+      [
+        "daily-late",
+        "Every day, including late afternoon",
+        "Coffee or an energy drink to get through",
+      ],
+    ],
+    "prompt": "How much caffeine, and how late?",
+    "section": "CAFFEINE",
+    "select": "single",
+  },
+  {
+    "hint": "Different demands need different support.",
+    "id": "energy-evening",
+    "options": [
+      [
+        "training",
+        "Training, mostly",
+        null,
+      ],
+      [
+        "work-pressure",
+        "Work — it never really stops",
+        null,
+      ],
+      [
+        "on-feet",
+        "On my feet all day",
+        null,
+      ],
+      [
+        "nothing-obvious",
+        "Nothing obvious, and that is the odd part",
+        null,
+      ],
+    ],
+    "prompt": "What drains you most during the day?",
+    "section": "YOUR DAY",
+    "select": "single",
+  },
+  {
+    "hint": "A recent change and a long-running one point different ways.",
+    "id": "energy-flat",
+    "options": [
+      [
+        "weeks",
+        "A few weeks",
+        "Something changed recently",
+      ],
+      [
+        "winter",
+        "It comes back every winter",
+        "And lifts when the light does",
+      ],
+      [
+        "months",
+        "Months, honestly",
+        null,
+      ],
+      [
+        "always",
+        "As long as I can remember",
+        null,
+      ],
+    ],
+    "prompt": "How long have you felt this flat?",
+    "section": "YOUR ENERGY",
+    "select": "single",
+  },
+  {
+    "hint": "Where you spend it changes what your body runs short of.",
+    "id": "day-shape",
+    "options": [
+      [
+        "desk",
+        "At a desk, mostly indoors",
+        null,
+      ],
+      [
+        "moving",
+        "On my feet and moving",
+        null,
+      ],
+      [
+        "shifts",
+        "Shifts or irregular hours",
+        null,
+      ],
+      [
+        "varies",
+        "It changes day to day",
+        null,
+      ],
+    ],
+    "prompt": "Where do you spend most of your day?",
+    "section": "YOUR DAY",
+    "select": "single",
+  },
+  {
+    "hint": "Be honest — this is the one that changes the most.",
+    "id": "training-blocker",
+    "options": [
+      [
+        "recovery",
+        "Recovery between sessions",
+        "Still feeling the last one",
+      ],
+      [
+        "protein",
+        "Getting the protein in",
+        "Never quite hitting it",
+      ],
+      [
+        "plateau",
+        "Progress has stalled",
+        "Same numbers for months",
+      ],
+      [
+        "appetite",
+        "Appetite — I struggle to eat enough",
+        null,
+      ],
+    ],
+    "prompt": "What's actually holding you back?",
+    "section": "YOUR TRAINING",
+    "select": "single",
+  },
+  {
+    "hint": "Tells us whether to spend the budget on recovery or on output.",
+    "id": "recovery-feel",
+    "options": [
+      [
+        "sore",
+        "Still sore",
+        "Muscles have not let go",
+      ],
+      [
+        "joints",
+        "Aches and niggles that linger",
+        "More joints than muscle",
+      ],
+      [
+        "flat",
+        "Not sore — just flat",
+        "The energy has not come back",
+      ],
+      [
+        "fine",
+        "Ready to go again",
+        null,
+      ],
+    ],
+    "prompt": "How do you feel two days after a hard session?",
+    "section": "RECOVERY",
+    "select": "single",
+  },
+  {
+    "hint": "Frequency and style together shape the whole stack.",
+    "id": "training-shape",
+    "options": [
+      [
+        "lift-often",
+        "Weights, 4+ times a week",
+        "Serious lifting volume",
+      ],
+      [
+        "lift-few",
+        "Weights, 2–3 times a week",
+        "Regular, not extreme",
+      ],
+      [
+        "mixed",
+        "A mix of weights and cardio",
+        "Neither one dominates",
+      ],
+      [
+        "cardio",
+        "Mostly running, cycling or swimming",
+        "Endurance work",
+      ],
+      [
+        "hiit-sport",
+        "Classes, HIIT or a sport",
+        "Hard, varied sessions",
+      ],
+      [
+        "light",
+        "A couple of light sessions a week",
+        null,
+      ],
+    ],
+    "prompt": "How often do you train, and what kind?",
+    "section": "YOUR TRAINING",
+    "select": "single",
+  },
+  {
+    "hint": "Electrolytes only earn their place if you actually lose them.",
+    "id": "sweat",
+    "options": [
+      [
+        "soaked",
+        "Soaked through, every time",
+        null,
+      ],
+      [
+        "moderate",
+        "A decent amount",
+        null,
+      ],
+      [
+        "little",
+        "Barely break a sweat",
+        null,
+      ],
+    ],
+    "prompt": "How much do you sweat in a session?",
+    "section": "YOUR TRAINING",
+    "select": "single",
+  },
+  {
+    "hint": "Strength and size stall for different reasons.",
+    "id": "plateau-what",
+    "options": [
+      [
+        "strength",
+        "The numbers on the bar",
+        null,
+      ],
+      [
+        "size",
+        "Size — I look the same",
+        null,
+      ],
+      [
+        "both",
+        "Both, and I feel run down with it",
+        null,
+      ],
+    ],
+    "prompt": "What exactly has stalled?",
+    "section": "YOUR TRAINING",
+    "select": "single",
+  },
+  {
+    "hint": "Falling asleep and staying asleep want completely different things.",
+    "id": "sleep-shape",
+    "options": [
+      [
+        "getting-off",
+        "Getting to sleep",
+        "Lie there for ages",
+      ],
+      [
+        "staying-asleep",
+        "Staying asleep",
+        "Awake at 3am, most nights",
+      ],
+      [
+        "not-restorative",
+        "It does not seem to count",
+        "Eight hours and still wrecked",
+      ],
+      [
+        "not-enough",
+        "There is just not enough of it",
+        "Life gets in the way",
+      ],
+    ],
+    "prompt": "What's the problem with your sleep?",
+    "section": "SLEEP",
+    "select": "single",
+  },
+  {
+    "hint": "The wind-down decides a lot of what happens after it.",
+    "id": "evening-shape",
+    "options": [
+      [
+        "screens",
+        "Phone or telly, right up to it",
+        null,
+      ],
+      [
+        "working",
+        "Still working, or thinking about it",
+        null,
+      ],
+      [
+        "training-late",
+        "Training or out late",
+        null,
+      ],
+      [
+        "calm",
+        "Genuinely winding down",
+        null,
+      ],
+    ],
+    "prompt": "What does the hour before bed look like?",
+    "section": "EVENINGS",
+    "select": "single",
+  },
+  {
+    "hint": "The timing points at completely different support.",
+    "id": "stress-when",
+    "options": [
+      [
+        "morning-fog",
+        "Mornings are a fog",
+        null,
+      ],
+      [
+        "afternoon",
+        "Afternoon — I lose the thread",
+        null,
+      ],
+      [
+        "evening",
+        "Evening — wired, can't settle",
+        null,
+      ],
+      [
+        "constant",
+        "Honestly, all day",
+        null,
+      ],
+    ],
+    "prompt": "When do you feel most stressed or foggy?",
+    "section": "STRESS & FOCUS",
+    "select": "single",
+  },
+  {
+    "hint": "Sustained screen work has its own cost.",
+    "id": "screen-hours",
+    "options": [
+      [
+        "most",
+        "Nearly all of it",
+        null,
+      ],
+      [
+        "half",
+        "About half",
+        null,
+      ],
+      [
+        "little",
+        "Not much",
+        null,
+      ],
+    ],
+    "prompt": "How much of your day is spent on a screen?",
+    "section": "SCREENS",
+    "select": "single",
+  },
+  {
+    "hint": "Frequency tells us whether this is maintenance or catch-up.",
+    "id": "immune-often",
+    "options": [
+      [
+        "constantly",
+        "Constantly — I catch everything",
+        null,
+      ],
+      [
+        "every-few-weeks",
+        "Every few weeks",
+        null,
+      ],
+      [
+        "winter",
+        "A couple of times a winter",
+        null,
+      ],
+      [
+        "rarely",
+        "Rarely — just keeping it that way",
+        null,
+      ],
+    ],
+    "prompt": "How often do you get run down?",
+    "section": "IMMUNITY",
+    "select": "single",
+  },
+  {
+    "hint": "Tick everything that applies — exposure is half of it.",
+    "id": "immune-exposure",
+    "options": [
+      [
+        "kids",
+        "Young children",
+        "Nursery or primary school",
+      ],
+      [
+        "commute",
+        "A packed commute",
+        null,
+      ],
+      [
+        "office",
+        "A busy office or classroom",
+        null,
+      ],
+      [
+        "travel",
+        "Regular travel or flights",
+        null,
+      ],
+      [
+        "shared",
+        "Gyms or shared changing rooms",
+        null,
+      ],
+      [
+        "home",
+        "None of these — mostly at home",
+        null,
+      ],
+    ],
+    "prompt": "Which of these are part of your week?",
+    "section": "IMMUNITY",
+    "select": "multi",
+  },
+  {
+    "hint": "Habits and timing, not symptoms — we are not a clinic.",
+    "id": "gut-when",
+    "options": [
+      [
+        "after-meals",
+        "After most meals",
+        null,
+      ],
+      [
+        "stress",
+        "When things get stressful",
+        null,
+      ],
+      [
+        "since-change",
+        "Since something changed",
+        "Travel, antibiotics, a new routine",
+      ],
+      [
+        "general",
+        "Nothing specific — just want it working better",
+        null,
+      ],
+    ],
+    "prompt": "When does your digestion give you trouble?",
+    "section": "DIGESTION",
+    "select": "single",
+  },
+  {
+    "hint": "Fibre first; a probiotic works better on top of it than instead of it.",
+    "id": "gut-fibre",
+    "options": [
+      [
+        "plenty",
+        "Plenty, most days",
+        null,
+      ],
+      [
+        "some",
+        "Some, not consistently",
+        null,
+      ],
+      [
+        "barely",
+        "Barely any, if I am honest",
+        null,
+      ],
+    ],
+    "prompt": "How much fruit, veg and wholegrain do you eat?",
+    "section": "DIGESTION",
+    "select": "single",
+  },
+  {
+    "hint": "A recent change and a long-standing wish need different things.",
+    "id": "skin-change",
+    "options": [
+      [
+        "recent",
+        "Changed in the last few months",
+        null,
+      ],
+      [
+        "with-age",
+        "Gradually, with age",
+        null,
+      ],
+      [
+        "stress-linked",
+        "It tracks how stressed I am",
+        null,
+      ],
+      [
+        "maintenance",
+        "Nothing wrong — keeping it that way",
+        null,
+      ],
+    ],
+    "prompt": "What's going on with your skin, hair or nails?",
+    "section": "SKIN, HAIR & NAILS",
+    "select": "single",
+  },
+  {
+    "hint": "Wherever this is landing hardest is where we start.",
+    "id": "hormonal-day",
+    "options": [
+      [
+        "nights",
+        "My nights",
+        null,
+      ],
+      [
+        "mood",
+        "How I feel day to day",
+        null,
+      ],
+      [
+        "energy",
+        "My energy",
+        null,
+      ],
+      [
+        "all",
+        "All of it, frankly",
+        null,
+      ],
+    ],
+    "prompt": "What would you most like help with?",
+    "section": "DAY TO DAY",
+    "select": "single",
+  },
+  {
+    "hint": "The UK makes this the most common gap there is.",
+    "id": "daylight",
+    "options": [
+      [
+        "barely",
+        "Hardly any",
+        "Indoors from morning to evening",
+      ],
+      [
+        "twenty",
+        "Twenty minutes or so",
+        "A short walk, the commute",
+      ],
+      [
+        "hour",
+        "An hour or more",
+        null,
+      ],
+      [
+        "outdoors",
+        "I'm outdoors most of the day",
+        null,
+      ],
+    ],
+    "prompt": "How much daylight do you get on a normal day?",
+    "section": "DAYLIGHT",
+    "select": "single",
+  },
+  {
+    "hint": "No judgement — it just points us at the right gaps.",
+    "id": "how-meals-happen",
+    "options": [
+      [
+        "clean",
+        "Cooked from scratch",
+        "Mostly home-cooked and planned",
+      ],
+      [
+        "mostly-good",
+        "Decent but rushed",
+        "Healthy-ish, not much time",
+      ],
+      [
+        "inconsistent",
+        "Grab whatever's easy",
+        "Convenience-led — good days and bad",
+      ],
+      [
+        "poor",
+        "All over the place",
+        "No real routine right now",
+      ],
+    ],
+    "prompt": "How do most of your meals happen?",
+    "section": "NUTRITION",
+    "select": "single",
+  },
+  {
+    "hint": "The single biggest lever if you are training.",
+    "id": "protein-reality",
+    "options": [
+      [
+        "every-meal",
+        "Every meal, without thinking about it",
+        null,
+      ],
+      [
+        "most",
+        "Most of them",
+        null,
+      ],
+      [
+        "dinner-only",
+        "Really only at dinner",
+        null,
+      ],
+      [
+        "no-idea",
+        "I honestly have no idea",
+        null,
+      ],
+    ],
+    "prompt": "Do you get protein at every meal?",
+    "section": "NUTRITION",
+    "select": "single",
+  },
+  {
+    "hint": "Tell us what did not work and we will not send it again.",
+    "id": "tried-before",
+    "options": [
+      [
+        "upset-stomach",
+        "Protein shakes — they upset my stomach",
+        null,
+      ],
+      [
+        "felt-nothing",
+        "Bits and pieces — never felt anything",
+        "Nothing stuck",
+      ],
+      [
+        "too-much-faff",
+        "Gave up on the routine, not the products",
+        "Too many things to remember",
+      ],
+      [
+        "nothing",
+        "Nothing — this is new to me",
+        null,
+      ],
+    ],
+    "prompt": "How have supplements gone for you before?",
+    "section": "WHAT YOU HAVE TRIED",
+    "select": "single",
+  },
+]
+`;

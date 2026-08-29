@@ -1,5 +1,5 @@
 import type { BankQuestion } from '../types'
-import { chose, hasGoal, olderThan45, suspected } from './predicates'
+import { chose, hasGoal, live, olderThan45, suspected } from './predicates'
 
 /**
  * The everyday-wellness ladders: sleep, stress and focus, immunity, gut, skin,
@@ -21,8 +21,8 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
   {
     id: 'sleep-shape',
     topic: 'sleep',
-    section: 'YOUR SLEEP',
-    prompt: "What's the problem with it?",
+    section: 'SLEEP',
+    prompt: "What's the problem with your sleep?",
     hint: 'Falling asleep and staying asleep want completely different things.',
     select: 'single',
     summary: 'Which of the four sleep problems this is. The highest-value single question on the wellbeing track.',
@@ -66,7 +66,7 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
   {
     id: 'evening-shape',
     topic: 'sleep',
-    section: 'YOUR EVENINGS',
+    section: 'EVENINGS',
     prompt: 'What does the hour before bed look like?',
     hint: 'The wind-down decides a lot of what happens after it.',
     select: 'single',
@@ -104,8 +104,8 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
   {
     id: 'stress-when',
     topic: 'stress',
-    section: 'YOUR HEAD',
-    prompt: 'When is it worst?',
+    section: 'STRESS & FOCUS',
+    prompt: 'When do you feel most stressed or foggy?',
     hint: 'The timing points at completely different support.',
     select: 'single',
     summary: 'When stress or brain fog peaks — morning, afternoon, evening or constant.',
@@ -144,13 +144,13 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
   {
     id: 'screen-hours',
     topic: 'daily',
-    section: 'YOUR DAY',
-    prompt: 'How much of the day is on a screen?',
+    section: 'SCREENS',
+    prompt: 'How much of your day is spent on a screen?',
     hint: 'Sustained screen work has its own cost.',
     select: 'single',
     summary: 'Screen load, for the focus track.',
     discriminates: ['screen-fatigue', 'sedentary-slump', 'sun-exposure-low'],
-    requires: (s) => hasGoal(s, 'focus') && suspected(s, 'screen-fatigue'),
+    requires: (s) => hasGoal(s, 'focus') && live(s, 'screen-fatigue'),
     options: [
       {
         id: 'most',
@@ -200,28 +200,51 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
     id: 'immune-exposure',
     topic: 'immunity',
     section: 'IMMUNITY',
-    prompt: "What's around you most days?",
-    hint: 'Exposure is half of it.',
-    select: 'single',
-    summary: 'Exposure load — kids, commuting, travel.',
+    prompt: 'Which of these are part of your week?',
+    hint: 'Tick everything that applies — exposure is half of it.',
+    // Multi-select, because these are not alternatives. A parent with a nursery
+    // child who also commutes into an office has two exposures, and being made
+    // to pick one threw away the other — on the question whose entire job is
+    // measuring how much of it there is.
+    select: 'multi',
+    summary: 'Exposure load — kids, commuting, travel, shared spaces. Multi-select.',
     discriminates: ['illness-frequency', 'sun-exposure-low', 'sleep-debt'],
-    requires: (s) => suspected(s, 'illness-frequency'),
+    requires: (s) => live(s, 'illness-frequency'),
     options: [
       {
         id: 'kids',
         label: 'Young children',
         sub: 'Nursery or primary school',
-        drivers: { 'illness-frequency': 0.5, 'sleep-debt': 0.4 },
+        drivers: { 'illness-frequency': 0.45, 'sleep-debt': 0.4 },
         signals: ['run-down'],
       },
       {
         id: 'commute',
-        label: 'A busy commute or office',
-        drivers: { 'illness-frequency': 0.4, 'sun-exposure-low': 0.35 },
+        label: 'A packed commute',
+        drivers: { 'illness-frequency': 0.35 },
+      },
+      {
+        id: 'office',
+        label: 'A busy office or classroom',
+        drivers: { 'illness-frequency': 0.35, 'sun-exposure-low': 0.3 },
         signals: ['desk-job'],
       },
-      { id: 'travel', label: 'A lot of travel', drivers: { 'illness-frequency': 0.4 } },
-      { id: 'home', label: 'Mostly at home', drivers: { 'sun-exposure-low': 0.3 } },
+      {
+        id: 'travel',
+        label: 'Regular travel or flights',
+        drivers: { 'illness-frequency': 0.4 },
+      },
+      {
+        id: 'shared',
+        label: 'Gyms or shared changing rooms',
+        drivers: { 'illness-frequency': 0.3 },
+      },
+      {
+        id: 'home',
+        label: 'None of these — mostly at home',
+        exclusive: true,
+        drivers: { 'sun-exposure-low': 0.3 },
+      },
     ],
   },
 
@@ -266,12 +289,12 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
     id: 'gut-fibre',
     topic: 'nutrition',
     section: 'DIGESTION',
-    prompt: 'Fruit, veg and wholegrains — realistically?',
+    prompt: 'How much fruit, veg and wholegrain do you eat?',
     hint: 'Fibre first; a probiotic works better on top of it than instead of it.',
     select: 'single',
     summary: 'Fibre intake, so a probiotic is not recommended over the obvious fix.',
     discriminates: ['gut-disruption', 'micronutrient-gap'],
-    requires: (s) => suspected(s, 'gut-disruption'),
+    requires: (s) => live(s, 'gut-disruption'),
     options: [
       {
         id: 'plenty',
@@ -292,7 +315,7 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
     id: 'skin-change',
     topic: 'skin',
     section: 'SKIN, HAIR & NAILS',
-    prompt: 'Has something changed, or is this maintenance?',
+    prompt: "What's going on with your skin, hair or nails?",
     hint: 'A recent change and a long-standing wish need different things.',
     select: 'single',
     summary: 'Whether the skin goal is a recent change or general upkeep.',
@@ -323,9 +346,9 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
   {
     id: 'hormonal-day',
     topic: 'hormonal',
-    section: 'YOUR DAY',
-    prompt: 'What is it affecting most?',
-    hint: 'Whichever part of the day this touches is where we start.',
+    section: 'DAY TO DAY',
+    prompt: 'What would you most like help with?',
+    hint: 'Wherever this is landing hardest is where we start.',
     select: 'single',
     // One question, deliberately shallow, and about the day rather than the
     // body. The goal the person selected already tells us what this is; asking
@@ -363,22 +386,44 @@ export const WELLBEING_QUESTIONS: BankQuestion[] = [
   {
     id: 'daylight',
     topic: 'daily',
-    section: 'YOUR DAY',
-    prompt: 'How much daylight do you actually get?',
+    section: 'DAYLIGHT',
+    prompt: 'How much daylight do you get on a normal day?',
     hint: 'The UK makes this the most common gap there is.',
     select: 'single',
     summary: 'Daylight exposure. Cheap, broadly applicable, drives vitamin D.',
     discriminates: ['sun-exposure-low'],
     requires: (s) => suspected(s, 'sun-exposure-low') || hasGoal(s, 'health', 'immune', 'energy'),
+    // A measured ladder, because the first cut was not one. It offered "a walk
+    // at lunch, most days" as the middle rung — which is an EXAMPLE of an
+    // amount rather than an amount, and it sat between "dark when I leave,
+    // dark when I get back" and "I'm outside a lot" with a gap either side.
+    // Someone who gets ten minutes on the school run, and someone who gets two
+    // hours, both had to guess. Now the rungs are quantities and they cover the
+    // range end to end.
     options: [
       {
         id: 'barely',
-        label: 'Dark when I leave, dark when I get back',
-        drivers: { 'sun-exposure-low': 0.8 },
+        label: 'Hardly any',
+        sub: 'Indoors from morning to evening',
+        drivers: { 'sun-exposure-low': 0.85 },
         signals: ['desk-job'],
       },
-      { id: 'lunch', label: 'A walk at lunch, most days', drivers: { 'sun-exposure-low': 0.3 } },
-      { id: 'plenty', label: 'I am outside a lot', clears: ['sun-exposure-low'] },
+      {
+        id: 'twenty',
+        label: 'Twenty minutes or so',
+        sub: 'A short walk, the commute',
+        drivers: { 'sun-exposure-low': 0.5 },
+      },
+      {
+        id: 'hour',
+        label: 'An hour or more',
+        drivers: { 'sun-exposure-low': 0.2 },
+      },
+      {
+        id: 'outdoors',
+        label: "I'm outdoors most of the day",
+        clears: ['sun-exposure-low'],
+      },
     ],
   },
 ]

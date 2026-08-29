@@ -32,9 +32,25 @@ export const asked = (s: InterviewState, questionId: string): boolean =>
 /** Evidence for a driver, 0 when never suggested. */
 export const weight = (s: InterviewState, d: DriverId): number => s.drivers[d] ?? 0
 
-/** Suspected but not settled — the state a follow-up exists to resolve. */
+/** Suspected but not settled — the state a follow-up exists to RESOLVE. */
 export const suspected = (s: InterviewState, ...ds: DriverId[]): boolean =>
   ds.some((d) => !s.cleared.includes(d) && weight(s, d) > 0 && weight(s, d) < CONFIRMED)
+
+/**
+ * On the table at all: suspected OR already confirmed, just not ruled out.
+ *
+ * The distinction matters more than it looks. `suspected` deliberately stops
+ * being true once a driver is settled, which is right for a question that only
+ * confirms — but wrong for a follow-up that asks something NEW about a driver
+ * we are already sure of.
+ *
+ * Gating those on `suspected` produced a silent hole: answer "constantly — I
+ * catch everything" and illness-frequency lands at 0.8, past `CONFIRMED`, so
+ * the follow-up asking WHY never fired. The person most obviously in need of
+ * the question was the only one who never saw it.
+ */
+export const live = (s: InterviewState, ...ds: DriverId[]): boolean =>
+  ds.some((d) => !s.cleared.includes(d) && weight(s, d) > 0)
 
 /** Ruled out, explicitly. */
 export const cleared = (s: InterviewState, d: DriverId): boolean => s.cleared.includes(d)

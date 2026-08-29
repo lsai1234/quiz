@@ -23,7 +23,9 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     id: 'energy-when',
     topic: 'energy',
     section: 'YOUR ENERGY',
-    prompt: 'When does it hit you?',
+    // "When does it hit you?" needed the eyebrow to make sense, and the eyebrow
+    // is 10px of 35%-white. Every prompt in the bank now stands on its own.
+    prompt: 'When does your energy dip?',
     hint: 'The pattern says more than the tiredness does.',
     select: 'single',
     summary: 'When their energy dips — the fork the rest of the energy ladder hangs off.',
@@ -63,8 +65,8 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
   {
     id: 'energy-mornings',
     topic: 'sleep',
-    section: 'YOUR NIGHTS',
-    prompt: 'How are your nights?',
+    section: 'SLEEP',
+    prompt: 'How is your sleep at the moment?',
     hint: 'Slow mornings usually start the night before.',
     select: 'single',
     summary: 'Which kind of sleep problem is behind slow mornings — or rules sleep out.',
@@ -113,9 +115,9 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
   {
     id: 'energy-afternoon',
     topic: 'nutrition',
-    section: 'YOUR DAY',
-    prompt: 'What happens before it?',
-    hint: 'An afternoon wall is usually built in the morning.',
+    section: 'FOOD',
+    prompt: 'What do you usually eat before the afternoon?',
+    hint: 'An afternoon wall is usually built earlier in the day.',
     select: 'single',
     summary: 'What causes the afternoon crash — fuelling, caffeine, or neither.',
     discriminates: ['under-fuelled', 'caffeine-crash', 'glycaemic-dip', 'micronutrient-gap'],
@@ -153,9 +155,9 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
   {
     id: 'sleep-hours',
     topic: 'sleep',
-    section: 'YOUR NIGHTS',
-    prompt: 'How long do you actually sleep?',
-    hint: 'Not time in bed — time asleep.',
+    section: 'SLEEP',
+    prompt: 'On a normal night, how long do you sleep?',
+    hint: 'Not time in bed — time actually asleep.',
     select: 'single',
     summary: 'Grades sleep debt from suspected to measured.',
     discriminates: ['sleep-debt'],
@@ -188,30 +190,34 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     discriminates: ['caffeine-crash', 'wired-evening', 'sleep-onset'],
     requires: (s) =>
       trains(s) || suspected(s, 'caffeine-crash') || hasGoal(s, 'energy', 'sleep-better'),
+    // One axis, four rungs, no overlap. The first cut had "three or more a day"
+    // sitting next to "something after 4pm" — most people who do one do the
+    // other, so the answer told us nothing about which. It also had no rung for
+    // someone who has the occasional coffee, who had to choose between "I avoid
+    // it" and "a coffee or two daily", neither of which was true.
     options: [
       {
         id: 'none',
-        label: 'I avoid it',
-        sub: 'Prefer stim-free, always',
+        label: 'I avoid it entirely',
+        sub: 'Stim-free, always',
         clears: ['caffeine-crash'],
         answers: { caffeineLevel: 'none', stimPreference: 'no' },
       },
       {
-        id: 'morning-only',
-        label: 'A coffee or two, mornings only',
-        sub: 'Nothing after lunch',
+        id: 'occasional',
+        label: 'The odd coffee',
+        sub: 'Not every day',
+        answers: { caffeineLevel: 'low' },
+      },
+      {
+        id: 'daily-early',
+        label: 'Every day, nothing after lunch',
+        sub: 'One or two in the morning',
         answers: { caffeineLevel: 'medium', trainingTime: 'morning' },
       },
       {
-        id: 'all-day',
-        label: 'Three or more, through the day',
-        sub: 'Including the afternoon',
-        drivers: { 'caffeine-crash': 0.6 },
-        answers: { caffeineLevel: 'high' },
-      },
-      {
-        id: 'late',
-        label: 'Often something after 4pm',
+        id: 'daily-late',
+        label: 'Every day, including late afternoon',
         sub: 'Coffee or an energy drink to get through',
         drivers: { 'caffeine-crash': 0.65, 'wired-evening': 0.55, 'sleep-onset': 0.4 },
         answers: { caffeineLevel: 'high', trainingTime: 'evening' },
@@ -223,7 +229,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     id: 'energy-evening',
     topic: 'daily',
     section: 'YOUR DAY',
-    prompt: 'What takes it out of you?',
+    prompt: 'What drains you most during the day?',
     hint: 'Different demands need different support.',
     select: 'single',
     summary: 'What the evening flat-out is actually costing them.',
@@ -257,8 +263,8 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
   {
     id: 'energy-flat',
     topic: 'daily',
-    section: 'YOUR DAY',
-    prompt: 'How long has it been like that?',
+    section: 'YOUR ENERGY',
+    prompt: 'How long have you felt this flat?',
     hint: 'A recent change and a long-running one point different ways.',
     select: 'single',
     summary: 'Duration of an all-day flatness — recent vs long-running.',
@@ -273,8 +279,8 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
       },
       {
         id: 'winter',
-        label: 'Worse over the winter',
-        sub: 'It lifts when the light comes back',
+        label: 'It comes back every winter',
+        sub: 'And lifts when the light does',
         drivers: { 'sun-exposure-low': 0.7, 'micronutrient-gap': 0.4 },
       },
       {
@@ -294,12 +300,17 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     id: 'day-shape',
     topic: 'daily',
     section: 'YOUR DAY',
-    prompt: 'What does a normal day look like?',
+    prompt: 'Where do you spend most of your day?',
     hint: 'Where you spend it changes what your body runs short of.',
     select: 'single',
     summary: 'Sedentary vs active vs shift work. Broad, cheap, useful on every path.',
-    discriminates: ['sedentary-slump', 'screen-fatigue', 'sun-exposure-low', 'stress-load'],
+    discriminates: ['sedentary-slump', 'screen-fatigue', 'sun-exposure-low', 'sleep-debt'],
     requires: (s) => !choseAny(s, 'energy-evening', 'on-feet'),
+    // Deliberately one axis. There used to be a "full-on, rarely a quiet
+    // moment" option in here, which is an answer about pressure rather than
+    // about where the day is spent — and it overlapped every other option,
+    // since a desk day can be full-on too. Pressure is asked properly by
+    // `stress-when` and `energy-evening`.
     options: [
       {
         id: 'desk',
@@ -309,7 +320,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
       },
       {
         id: 'moving',
-        label: 'Up and about all day',
+        label: 'On my feet and moving',
         drivers: { 'hydration-deficit': 0.25 },
       },
       {
@@ -319,10 +330,9 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
         signals: ['shift-work'],
       },
       {
-        id: 'full-on',
-        label: 'Full-on — rarely a quiet moment',
-        drivers: { 'stress-load': 0.5 },
-        signals: ['high-stress'],
+        id: 'varies',
+        label: 'It changes day to day',
+        drivers: { 'sleep-debt': 0.2 },
       },
     ],
   },

@@ -43,6 +43,12 @@ export const FIXED_QUESTIONS: BankQuestion[] = [
     fixed: true,
     discriminates: [],
     summary: 'Safety flags that hard-exclude products.',
+    // v1's reassurance, verbatim. This screen asks the most personal question in
+    // the quiz and it is the one people are most likely to skip warily, so it
+    // says what the answer does — removes products, never adds — before they
+    // answer rather than after.
+    reassurance:
+      'Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.',
     options: [
       {
         id: 'pregnancy',
@@ -65,12 +71,14 @@ export const FIXED_QUESTIONS: BankQuestion[] = [
       {
         id: 'vegan',
         label: 'Plant-based only',
-        sub: 'A hard filter, not a preference',
+        sub: 'No animal products at all',
         // `vegan` lives in `lifestyle` and is the one tag that is a hard
-        // exclusion gate rather than a scoring nudge. It is asked explicitly
-        // here and is never inferred from anything.
+        // exclusion gate rather than a scoring nudge. v1 asks it on its
+        // lifestyle step, which v2 does not have — so it is asked here, with
+        // the other hard filters, and is never inferred from anything.
         answers: { lifestyle: ['vegan'] },
       },
+      { id: 'none', label: 'None of these', exclusive: true },
     ],
   },
 
@@ -144,7 +152,7 @@ export const FIXED_QUESTIONS: BankQuestion[] = [
       { id: 'omega-3', label: 'Omega-3 / Fish oil', icon: 'droplet', answers: { currentVitamins: ['omega-3'] } },
       { id: 'magnesium', label: 'Magnesium', icon: 'hexagon', answers: { currentVitamins: ['magnesium'] } },
       { id: 'collagen', label: 'Collagen', icon: 'sparkle', answers: { currentVitamins: ['collagen'] } },
-      { id: 'none', label: 'Starting fresh', icon: 'sparkle' },
+      { id: 'none', label: 'Starting fresh', icon: 'sparkle', exclusive: true },
     ],
   },
 ]

@@ -173,10 +173,22 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     pendingRef.current = setTimeout(() => answerCurrent([optionId]), 300)
   }
 
+  /**
+   * Multi-select, with the "None of these" rule.
+   *
+   * Picking the exclusive option clears everything else; picking anything else
+   * clears it. Without that the grid happily accepts "Pregnant or
+   * breastfeeding" AND "None of these" at the same time, which is not an answer.
+   */
   const toggleMulti = (optionId: string) => {
-    setMultiPicks((picks) =>
-      picks.includes(optionId) ? picks.filter((p) => p !== optionId) : [...picks, optionId],
-    )
+    const exclusiveId = current?.options.find((o) => o.exclusive)?.id
+    setMultiPicks((picks) => {
+      if (optionId === exclusiveId) return picks.includes(optionId) ? [] : [optionId]
+      const without = picks.filter((p) => p !== exclusiveId)
+      return without.includes(optionId)
+        ? without.filter((p) => p !== optionId)
+        : [...without, optionId]
+    })
   }
 
   const goBack = () => {
@@ -453,15 +465,28 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
             )}
 
             {!isGoals && current && current.select === 'multi' && (
-              <div className="grid grid-cols-2 gap-2.5">
-                {current.options.map((o) => (
-                  <AnswerOption
-                    key={`${current.id}-${o.id}`}
-                    label={o.label} sub={o.sub} icon={o.icon} multi
-                    selected={multiPicks.includes(o.id)}
-                    onClick={() => toggleMulti(o.id)}
-                  />
-                ))}
+              <div>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {current.options.map((o) => (
+                    <AnswerOption
+                      key={`${current.id}-${o.id}`}
+                      label={o.label} sub={o.sub} icon={o.icon} multi
+                      // An exclusive option reads as chosen while nothing is —
+                      // so the screen always shows an answer rather than a blank
+                      // grid the reader has to work out is a valid state.
+                      selected={
+                        multiPicks.includes(o.id) ||
+                        (!!o.exclusive && multiPicks.length === 0)
+                      }
+                      onClick={() => toggleMulti(o.id)}
+                    />
+                  ))}
+                </div>
+                {current.reassurance && (
+                  <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
+                    {current.reassurance}
+                  </p>
+                )}
               </div>
             )}
 
@@ -471,6 +496,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
                 age={localAge} onAge={setLocalAge}
                 gender={localGender} onGender={setLocalGender}
                 weight={localWeight} onWeight={setLocalWeight}
+                onSubmit={() => { if (canContinue) onContinue() }}
               />
             )}
 
@@ -558,6 +584,13 @@ const AGE_CHOICES: Array<[AgeBracket, string]> = [
   ['45+', '45+'],
 ]
 
+const GENDER_CHOICES: Array<[Gender, string]> = [
+  ['male', 'Male'],
+  ['female', 'Female'],
+  ['nonbinary', 'Non-binary'],
+  ['not-specified', 'Prefer not to say'],
+]
+
 const WEIGHT_CHOICES: Array<[WeightBand, string]> = [
   ['under-60', 'Under 60kg'],
   ['60-75', '60\u201375kg'],
@@ -566,66 +599,89 @@ const WEIGHT_CHOICES: Array<[WeightBand, string]> = [
   ['105-plus', '105kg+'],
 ]
 
+/**
+ * The "a little about you" screen.
+ *
+ * v1's, field for field: the same labels, the same optional markers, the same
+ * helper lines saying what each answer buys, and the same answer control in a
+ * grid. It looked different in v2 for no reason other than that it was written
+ * separately, and a visual difference between the arms on a screen that asks
+ * the identical question is a difference the experiment would have to explain.
+ */
 function PersonalFields({
-  name, onName, age, onAge, gender, onGender, weight, onWeight,
+  name, onName, age, onAge, gender, onGender, weight, onWeight, onSubmit,
 }: {
   name: string; onName: (v: string) => void
   age: AgeBracket | ''; onAge: (v: AgeBracket) => void
-  gender: Gender | ''; onGender: (v: Gender) => void
-  weight: WeightBand | ''; onWeight: (v: WeightBand) => void
+  gender: Gender | ''; onGender: (v: Gender | '') => void
+  weight: WeightBand | ''; onWeight: (v: WeightBand | '') => void
+  /** Enter in the name field continues, once an age is chosen. */
+  onSubmit: () => void
 }) {
-  const Label = ({ children }: { children: string }) => (
-    <p className="text-[10px] font-bold tracking-[0.22em] uppercase text-white/35 mb-2.5" style={{ fontFamily: 'var(--font-display)' }}>
+  const Label = ({ children, optional }: { children: string; optional?: boolean }) => (
+    <label
+      className="text-xs font-bold tracking-widest uppercase text-white/30 mb-2 block"
+      style={{ fontFamily: 'var(--font-display)' }}
+    >
       {children}
-    </p>
+      {optional && (
+        <span className="normal-case font-normal tracking-normal text-white/15"> · optional</span>
+      )}
+    </label>
   )
-  const chip = (on: boolean) =>
-    `px-3.5 py-2.5 rounded-lg border text-[13px] font-medium transition-all duration-200 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40 ${
-      on ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07] text-white' : 'border-white/[0.08] bg-white/[0.015] text-white/70 hover:border-white/20'
-    }`
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Label>First name</Label>
+        <Label optional>First name</Label>
         <input
+          type="text"
           value={name}
           onChange={(e) => onName(e.target.value)}
-          placeholder="Optional"
+          placeholder="Your first name"
+          autoFocus
           autoComplete="given-name"
-          className="w-full px-4 py-3.5 rounded-xl border border-white/[0.08] bg-white/[0.015] text-[15px] text-white placeholder:text-white/25 outline-none focus:border-[#00D4FF]/50 transition-colors"
+          onKeyDown={(e) => { if (e.key === 'Enter' && age) onSubmit() }}
+          className="w-full px-5 py-4 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-sm font-medium placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors"
           style={{ fontFamily: 'var(--font-display)' }}
         />
+        <p className="text-[11px] text-white/20 mt-2">Personalises your results</p>
       </div>
+
       <div>
         <Label>Age</Label>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-2 gap-2.5">
           {AGE_CHOICES.map(([id, label]) => (
-            <button key={id} onClick={() => onAge(id)} className={chip(age === id)} style={{ fontFamily: 'var(--font-display)' }}>
-              {label}
-            </button>
+            <AnswerOption key={`age-${id}`} label={label} multi selected={age === id} onClick={() => onAge(id)} />
           ))}
         </div>
       </div>
+
       <div>
-        <Label>Sex</Label>
-        <div className="flex flex-wrap gap-2">
-          {([['male', 'Male'], ['female', 'Female'], ['nonbinary', 'Non-binary'], ['not-specified', 'Rather not say']] as Array<[Gender, string]>).map(([id, label]) => (
-            <button key={id} onClick={() => onGender(id)} className={chip(gender === id)} style={{ fontFamily: 'var(--font-display)' }}>
-              {label}
-            </button>
+        <Label optional>Gender</Label>
+        <div className="grid grid-cols-2 gap-2.5">
+          {GENDER_CHOICES.map(([id, label]) => (
+            <AnswerOption
+              key={`gender-${id}`} label={label} multi
+              selected={gender === id}
+              onClick={() => onGender(gender === id ? '' : id)}
+            />
           ))}
         </div>
       </div>
+
       <div>
-        <Label>Weight — scales your doses</Label>
-        <div className="flex flex-wrap gap-2">
+        <Label optional>Weight</Label>
+        <div className="grid grid-cols-3 gap-2.5">
           {WEIGHT_CHOICES.map(([id, label]) => (
-            <button key={id} onClick={() => onWeight(id)} className={chip(weight === id)} style={{ fontFamily: 'var(--font-display)' }}>
-              {label}
-            </button>
+            <AnswerOption
+              key={`weight-${id}`} label={label} multi
+              selected={weight === id}
+              onClick={() => onWeight(weight === id ? '' : id)}
+            />
           ))}
         </div>
+        <p className="text-[11px] text-white/20 mt-2">Makes your protein &amp; creatine doses accurate</p>
       </div>
     </div>
   )

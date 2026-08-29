@@ -56,7 +56,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
     id: 'recovery-feel',
     topic: 'recovery',
     section: 'RECOVERY',
-    prompt: 'Two days after a hard session?',
+    prompt: 'How do you feel two days after a hard session?',
     hint: 'Tells us whether to spend the budget on recovery or on output.',
     select: 'single',
     summary: 'Whether the recovery complaint is soreness, fatigue or joints.',
@@ -94,7 +94,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
     id: 'training-shape',
     topic: 'training',
     section: 'YOUR TRAINING',
-    prompt: 'How often, and what kind?',
+    prompt: 'How often do you train, and what kind?',
     hint: 'Frequency and style together shape the whole stack.',
     select: 'single',
     summary: 'Frequency and dominant style in one screen. Writes trainingFrequency and trainingType.',
@@ -125,8 +125,21 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
         },
       },
       {
+        id: 'mixed',
+        // The gap in the first cut. "Weights and cardio, both" is one of the
+        // most common training patterns there is, and it had to be squeezed
+        // into either a pure-lifting or a pure-endurance answer.
+        label: 'A mix of weights and cardio',
+        sub: 'Neither one dominates',
+        drivers: { 'training-load': 0.4, 'hydration-deficit': 0.3 },
+        answers: {
+          trainingFrequency: '3-4x', trainingType: ['mixed'],
+          trainingExperience: 'intermediate',
+        },
+      },
+      {
         id: 'cardio',
-        label: 'Mostly running or cycling',
+        label: 'Mostly running, cycling or swimming',
         sub: 'Endurance work',
         drivers: { 'hydration-deficit': 0.5, 'training-load': 0.4 },
         answers: {
@@ -146,7 +159,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
       },
       {
         id: 'light',
-        label: 'A couple of sessions, nothing heavy',
+        label: 'A couple of light sessions a week',
         answers: {
           trainingFrequency: '1-2x', trainingType: ['mixed'],
           trainingExperience: 'new',
@@ -172,7 +185,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
         drivers: { 'hydration-deficit': 0.8 },
       },
       { id: 'moderate', label: 'A decent amount', drivers: { 'hydration-deficit': 0.4 } },
-      { id: 'little', label: 'Barely break one', clears: ['hydration-deficit'] },
+      { id: 'little', label: 'Barely break a sweat', clears: ['hydration-deficit'] },
     ],
   },
 
@@ -180,7 +193,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
     id: 'plateau-what',
     topic: 'training',
     section: 'YOUR TRAINING',
-    prompt: 'What has stalled, exactly?',
+    prompt: 'What exactly has stalled?',
     hint: 'Strength and size stall for different reasons.',
     select: 'single',
     summary: 'Whether the plateau is strength, size or conditioning.',
