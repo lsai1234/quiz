@@ -31,6 +31,13 @@ describe('funnel', () => {
     expect(mockTrack).toHaveBeenCalledWith('quiz_step_complete', { stepId: 'diet', index: 3, msOnStep: 1200 })
   })
 
+  it('aiSteer records a discarded steer as well as a used one', () => {
+    funnel.aiSteer({ used: false, latencyMs: 2500, reason: 'timeout' })
+    expect(mockTrack).toHaveBeenCalledWith('quiz_ai_steer', {
+      used: false, latencyMs: 2500, reason: 'timeout', applied: undefined,
+    })
+  })
+
   it('stepBack distinguishes back vs edit-jump', () => {
     funnel.stepBack({ from: 'review', to: 'goals', via: 'edit' })
     expect(mockTrack).toHaveBeenCalledWith('quiz_step_back', { from: 'review', to: 'goals', via: 'edit' })
@@ -71,6 +78,9 @@ describe('funnel', () => {
     funnel.stackAdd({ productId: 'p' })
     funnel.stackRemove({ slotId: 's' })
     funnel.checkoutStart({ plan: 'oneoff', total: 40 })
+    funnel.aiSteer({ used: true, latencyMs: 900, reason: 'ok', applied: 'both' })
+    funnel.driverResolved({ driverId: 'sleep-debt', confidence: 0.8 })
+    funnel.earlyExit({ askedCount: 7, budget: 10 })
 
     const emitted = new Set(mockTrack.mock.calls.map((c) => c[0] as string))
     // All emitted names are registered (guards typos + missing route registration).

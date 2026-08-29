@@ -2,6 +2,8 @@
 
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { defaultAnswers } from './quiz-answers'
+import type { InterviewState } from './quiz-v2/types'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
 import type { DynamicQuestion } from '@/lib/ai-questions'
 import type { StackBlueprint } from '@/lib/stack-blueprint'
@@ -63,6 +65,14 @@ interface QuizStore {
   prevStep: () => void
   setGoals: (goals: QuizAnswers['goals']) => void
   setAnswer: <K extends keyof QuizAnswers>(key: K, value: QuizAnswers[K]) => void
+  /** Replace the whole answer set at once. The v2 interview projects its state
+   *  into a complete `QuizAnswers` and hands it over in one go, rather than
+   *  writing twenty fields one at a time and re-rendering after each. */
+  setAnswers: (answers: QuizAnswers) => void
+  /** The v2 adaptive interview's run, or null on the v1 arm. Persisted so a
+   *  refresh mid-interview resumes instead of starting over. */
+  interview: InterviewState | null
+  setInterview: (state: InterviewState | null) => void
   setIdentity: (identity: StackIdentity) => void
   setStackLevel: (level: StackLevel) => void
   setSelectedProducts: (products: Product[]) => void
@@ -78,39 +88,8 @@ interface QuizStore {
   reset: () => void
 }
 
-export const defaultAnswers: QuizAnswers = {
-  name: '',
-  track: null,
-  drinksMode: false,
-  drinksPerDay: null,
-  dailyDrinks: null,
-  drinkVariety: null,
-  workoutAddOns: [],
-  primaryGoal: null,
-  asNeeded: {},
-  ageBracket: null,
-  exactAge: null,
-  gender: null,
-  safetyFlags: [],
-  weightBand: null,
-  goals: [],
-  trainingFrequency: null,
-  trainingType: [],
-  lifestyle: [],
-  diet: null,
-  currentSupplements: [],
-  currentVitamins: [],
-  tryOurs: [],
-  wellbeingAnswers: {},
-  dynamicAnswers: {},
-  caffeineLevel: null,
-  budget: null,
-  stackPreference: null,
-  trainingExperience: null,
-  trainingFocus: null,
-  stimPreference: null,
-  trainingTime: null,
-}
+
+export { defaultAnswers } from './quiz-answers'
 
 export const useQuizStore = create<QuizStore>()(persist((set) => ({
   step: 0,
@@ -132,6 +111,7 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   deepDiveQuestions: null,
   deepDiveStatus: 'idle',
   deepDiveKey: null,
+  interview: null,
 
   setDeepDive: (s) =>
     set((prev) => ({
@@ -152,6 +132,9 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
 
   setAnswer: (key, value) =>
     set((s) => ({ answers: { ...s.answers, [key]: value } })),
+
+  setAnswers: (answers) => set({ answers }),
+  setInterview: (interview) => set({ interview }),
 
   setIdentity: (identity) => set({ identity }),
   setStackLevel: (level) => set({ stackLevel: level }),
@@ -176,14 +159,14 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
+  reset: () => set({ step: 0, interview: null, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
 }), {
   // Persist just the in-progress answers + step so a refresh no longer wipes the
   // quiz (audit §5.3 / drop-off risk #3). Heavy/transient state (catalogue,
   // blueprint, identity) is deliberately excluded via `partialize`.
   name: 'chrgd-quiz',
   version: 1,
-  partialize: (s) => ({ answers: s.answers, step: s.step }),
+  partialize: (s) => ({ answers: s.answers, step: s.step, interview: s.interview }),
   // Rehydrate manually after mount (ScrollExperience) so server and client both
   // start from defaults — no hydration mismatch from persisted answers.
   skipHydration: true,

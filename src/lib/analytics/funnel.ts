@@ -17,6 +17,7 @@
  * without a database and reusable by anything that has events.
  */
 import type { StoredEvent } from './repo'
+import type { QuizArm } from '@/lib/experiments/assignment'
 
 export interface FunnelStep {
   stepId: string
@@ -70,7 +71,39 @@ function sessionsWith(events: StoredEvent[], name: string): Set<string> {
   return out
 }
 
-export function buildQuizFunnel(events: StoredEvent[]): QuizFunnel {
+/**
+ * The arm each session was in.
+ *
+ * Every event carries an `arm` prop (stamped in `track`), but a session's very
+ * first event can fire before `/api/config` has answered, and the unresolved
+ * default is `v1`. So the rule is: a session is v2 if ANY of its events says
+ * v2. `v1` is what you get when nothing was decided; `v2` is only ever set
+ * deliberately, so it is the trustworthy half of the pair.
+ */
+export function sessionArms(events: StoredEvent[]): Map<string, QuizArm> {
+  const arms = new Map<string, QuizArm>()
+  for (const e of events) {
+    if (!e.sessionId) continue
+    const arm = e.props.arm
+    if (arm === 'v2') arms.set(e.sessionId, 'v2')
+    else if (arm === 'v1' && !arms.has(e.sessionId)) arms.set(e.sessionId, 'v1')
+  }
+  return arms
+}
+
+/** Only the events belonging to sessions in `arm`. Sessions with no arm at all
+ *  (events recorded before the experiment shipped) count as v1. */
+export function filterByArm(events: StoredEvent[], arm: QuizArm): StoredEvent[] {
+  const arms = sessionArms(events)
+  return events.filter((e) => e.sessionId != null && (arms.get(e.sessionId) ?? 'v1') === arm)
+}
+
+/**
+ * @param arm Restrict to one arm of the quiz experiment. Omit for everyone,
+ *            which is what the main dashboard shows.
+ */
+export function buildQuizFunnel(events: StoredEvent[], arm?: QuizArm): QuizFunnel {
+  if (arm) events = filterByArm(events, arm)
   const started = sessionsWith(events, 'quiz_start')
   const completed = sessionsWith(events, 'quiz_complete')
   const reveal = sessionsWith(events, 'stack_reveal_view')

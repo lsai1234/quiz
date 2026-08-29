@@ -11,6 +11,8 @@
  * Point /api/analytics at a real provider when you have one (see that route).
  */
 
+import { getQuizArm } from '@/lib/experiments/client'
+
 export const SHOP_EVENTS = [
   'shop_view',
   'shop_filter_toggle',
@@ -59,6 +61,16 @@ export const QUIZ_EVENTS = [
   'stack_swap',
   'stack_add',
   'stack_remove',
+  /**
+   * The adaptive quiz (v2). `quiz_step_view` / `_complete` / `_back` are reused
+   * as-is, carrying the bank question id as `stepId` — the funnel derives its
+   * step ladder from the events themselves rather than a fixed list, so v2's
+   * dynamic ids produce a correct funnel with no changes to the funnel code.
+   * These three are the things v1 has no equivalent of.
+   */
+  'quiz_ai_steer',
+  'quiz_driver_resolved',
+  'quiz_early_exit',
 ] as const
 
 export type QuizEvent = (typeof QUIZ_EVENTS)[number]
@@ -130,14 +142,23 @@ export function privacyOptedOut(): boolean {
   return nav.doNotTrack === '1' || nav.msDoNotTrack === '1' || nav.globalPrivacyControl === true
 }
 
-/** Record a funnel event. No-ops on the server, or when the visitor opts out. */
+/**
+ * Record a funnel event. No-ops on the server, or when the visitor opts out.
+ *
+ * Every event is stamped with the visitor's quiz arm. Doing it here rather than
+ * at each call site means it cannot be forgotten on one event and silently
+ * ruin a comparison — and it reaches `purchase`, which is a shop event fired
+ * from the confirmation screen and is the only place quiz→conversion can
+ * actually be measured. Shop-only visitors carry an arm too; that costs
+ * nothing and gives a baseline that the experiment should not move.
+ */
 export function track(event: AnalyticsEvent, props: EventProps = {}): void {
   if (typeof window === 'undefined') return
   try {
     if (privacyOptedOut()) return
     const body = JSON.stringify({
       event,
-      props,
+      props: { arm: getQuizArm(), ...props },
       session: getSessionId(),
       path: window.location.pathname,
       ts: Date.now(),

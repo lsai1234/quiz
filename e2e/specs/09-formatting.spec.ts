@@ -56,6 +56,7 @@ const FOUNDER_ROUTES: Array<{ path: string; name: string }> = [
   { path: '/founderhub/settings/payments', name: 'Settings → Payments' },
   { path: '/founderhub/settings/competition', name: 'Settings → Competition' },
   { path: '/founderhub/settings/share-cards', name: 'Settings → Share cards' },
+  { path: '/founderhub/settings/quiz', name: 'Settings → The quiz' },
 ]
 
 /**

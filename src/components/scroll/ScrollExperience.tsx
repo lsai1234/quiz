@@ -2,8 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { useQuizStore, hasQuizProgress } from '@/lib/store'
+import { useQuizArmState } from '@/lib/experiments/client'
 import { Act1Hero } from './Act1Hero'
 import { Act2Quiz } from './Act2Quiz'
+import { QuizV2 } from '@/components/quiz/v2/QuizV2'
 import { Act3Analysis } from './Act3Analysis'
 import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
@@ -29,6 +31,14 @@ export function ScrollExperience() {
   // and the prompt is dismissed once the user chooses either way.
   const [hydrated, setHydrated] = useState(false)
   const [resumeDismissed, setResumeDismissed] = useState(false)
+  /**
+   * Which quiz this visitor gets.
+   *
+   * Resolved by `/api/config` during Act 1 — the hero, which the visitor looks
+   * at for seconds before tapping Start — so it is always settled before Act 2
+   * mounts. Until it resolves, and forever if it never does, the answer is v1.
+   */
+  const { arm } = useQuizArmState()
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -79,7 +89,9 @@ export function ScrollExperience() {
       )}
       <div key={animKey} className={TRANSITIONS[act]}>
         {act === 1 && <Act1Hero onEnterQuiz={() => goTo(2)} reducedMotion={reducedMotion} />}
-        {act === 2 && <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />}
+        {act === 2 && (arm === 'v2'
+          ? <QuizV2 onComplete={() => goTo(3)} reducedMotion={reducedMotion} />
+          : <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />)}
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
         {act === 4 && <Act4Reveal reducedMotion={reducedMotion} />}
         {act === 5 && <Act5Bundle reducedMotion={reducedMotion} />}

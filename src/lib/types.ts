@@ -1,4 +1,5 @@
 import type { AsNeededTrigger, SafetyFlag } from '@/lib/catalogue/types'
+import type { DriverWeights } from '@/lib/quiz-v2/drivers'
 export type { SafetyFlag } from '@/lib/catalogue/types'
 
 /**
@@ -167,6 +168,15 @@ export interface QuizAnswers {
   /** Answers to the AI-generated deep-dive follow-ups, keyed by question id.
    *  Optional — older sessions and API payloads may not carry it. */
   dynamicAnswers?: Record<string, DynamicAnswer>
+  /**
+   * Root causes the v2 adaptive interview settled on, with confidence 0–1.
+   *
+   * Optional and absent everywhere else: v1 answers, API payloads and anything
+   * saved before v2 existed have no drivers, and `DRIVER_AFFINITY` contributes
+   * exactly zero without them. That is deliberate — it is what lets both quizzes
+   * run against one engine with byte-identical output for v1.
+   */
+  drivers?: DriverWeights
   caffeineLevel: CaffeineLevel | null
   budget: Budget | null
   stackPreference: StackPreference | null

@@ -3,6 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import gsap from 'gsap'
 import { useQuizStore } from '@/lib/store'
+import { HeardYou } from '@/components/quiz/v2/HeardYou'
 
 interface Props {
   onComplete: () => void
@@ -400,6 +401,10 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         <p className="text-[10px] tracking-[0.22em] uppercase text-white/25 flex items-center gap-2 mt-3" style={{ fontFamily: 'var(--font-display)' }}>
           <span className="inline-block w-1 h-1 rounded-full bg-[#00D4FF]" /> Powered by your charge
         </p>
+
+        {/* The v2 recap. Renders nothing at all when there are no drivers —
+            which is every v1 run — so this screen is unchanged on that arm. */}
+        <HeardYou reducedMotion={reducedMotion} />
       </div>
     </div>
   )

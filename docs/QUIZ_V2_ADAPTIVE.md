@@ -4,7 +4,12 @@ A second quiz, run against the current one as a 50/50 split, that stops asking
 people what they want and starts asking them **why**. Switchable from the
 Founders Hub; off means everyone sees today's quiz, unchanged.
 
-Status: **proposal**. Nothing here is built yet.
+Status: **built**, and off by default. Every phase below is implemented; the
+switch in the Founders Hub is set to `off`, so customers see today's quiz until
+a founder says otherwise. Review it at **`/quizv2`**, or add `?quizArm=v2` to
+any page.
+
+Where the build differed from the proposal, the section says so.
 
 ---
 
@@ -276,6 +281,20 @@ worth saying so on screen when it happens.
 
 ### 2.4 The planner and the AI steer
 
+**Two things the build changed.** Both were found by running the thing, and
+both are pinned by tests now:
+
+1. *Confirming beats exploring.* The first scoring pass valued a suspected
+   driver only slightly above an unknown one, and a question touching four
+   fresh-but-relevant drivers out-scored the one that would settle the
+   hypothesis just formed. After "slow mornings" the interview asked about the
+   working day. Suspicion now scores above anything a fresh driver can reach,
+   and scales with how strong the hunch is.
+2. *A follow-up is not a repeat.* The topic-repeat damping, which exists to
+   stop four sleep questions in a row, was also damping the second rung of the
+   sleep ladder — so "how are your nights?" arrived six screens after it should
+   have. Damping now applies only once a topic has no live suspicion left in it.
+
 **Planner** (`planner.ts`, pure, no I/O):
 
 ```
@@ -312,17 +331,24 @@ same state, same order, every time.
   can reorder and reword. It cannot invent a question, add an option, change an
   option's meaning, or touch the safety screen.
 
-**Prefetch discipline — this is the whole latency story.** The call for
-question *n+1* fires the instant question *n−1* is answered, i.e. one full
-question ahead. The round trip overlaps the time the user spends reading and
-answering. Concretely:
+**Prefetch discipline — this is the whole latency story.** The request fires
+the instant an answer is committed, against the state that answer produced. The
+planner renders the next question from the same state without waiting, so the
+reply — arriving while the user reads — is in hand for the decision *after*
+that. Concretely:
 
 ```
-tap answer(n-1) ──┬─→ render question n           (0 ms, planner)
-                  └─→ POST next-questions for n+1 (≤2.5 s, background)
-tap answer(n)   ──┬─→ render question n+1         (0 ms — steer applied if it landed)
-                  └─→ POST next-questions for n+2
+tap answer(n) ──┬─→ render question n+1           (0 ms, planner)
+                └─→ POST next-questions           (≤2.5 s, background)
+tap answer(n+1) ─┬─→ render question n+2          (0 ms — steer applied if it landed)
+                 └─→ POST next-questions
 ```
+
+A late reply is not discarded. A preference list is advisory and the planner
+matches it against what is eligible *now*, so a list one answer old degrades to
+"the model's next choice" rather than to a wrong question. The reflection line
+is different — it names the last answer, so it is wrong rather than stale once
+another lands, and that one is gated on the exact position it was written for.
 
 The renderer **never awaits** the steer promise. There is no loading state on a
 question, because there is nothing to load. A test asserts this (§2.8).
@@ -410,8 +436,11 @@ suppress stimulants), reusing the existing `SCORING.trainingTime` /
 
 ### 2.8 Instrumentation
 
-- **`arm` on every quiz event.** One addition to each helper in
-  `analytics/quiz.ts`. Both arms then flow through the funnel machinery
+- **`arm` on every event.** Built one level lower than proposed: `track()`
+  itself stamps it, rather than each helper in `analytics/quiz.ts`. That costs
+  one line instead of fifteen, cannot be forgotten on a new event, and reaches
+  `purchase` — a *shop* event fired from the confirmation screen, and the only
+  place quiz→conversion can actually be measured. Both arms then flow through the funnel machinery
   unchanged — and because `funnel.ts` already derives its step ladder from the
   events themselves rather than a hard-coded list (a deliberate choice, and it
   pays off here), V2's dynamic question ids produce a correct funnel with no
@@ -434,7 +463,7 @@ suppress stimulants), reusing the existing `SCORING.trainingTime` /
 | Unit | `driver-map.ts` — every `DriverId` is reachable from ≥1 bank option and maps to ≥1 swap group (a driver nothing can produce or consume is dead config) |
 | Snapshot | **V1 personas unchanged** — the guard on §2.7 |
 | Snapshot | New V2 persona set: the same 14 personas run through V2 paths, bundles reviewed by hand once, then frozen |
-| E2E | Complete V2 end-to-end with `?quizArm=v2` |
+| E2E | `e2e/specs/12-quiz-v2.spec.ts` — complete V2 end to end |
 | E2E | Complete V2 with the steer route stubbed to 500, and to a 10 s hang — flow completes, no visible delay |
 | E2E | Flag off → V2 unreachable even with the cookie set |
 | Perf | Assert the renderer holds no pending promise at paint (B4, mechanically) |
@@ -449,10 +478,13 @@ Design tests apply to the settings page and any chrome outside the quiz flow
 Six phases. Each one ships to `master` behind the flag and changes nothing for
 customers until Phase 5 flips the switch.
 
-### Phase 0 — Plumbing, shipped dark
-*Nothing user-visible. Split stays at 0%.*
+### Phase 0 — Plumbing, shipped dark — **done**
+*Nothing user-visible. Mode stays `off`.*
 
-1. `middleware.ts`: mint `chrgd_bucket`; honour `?quizArm=`.
+1. `proxy.ts`: mint `chrgd_bucket`; honour `?quizArm=`. (Built as `proxy.ts`,
+   not `middleware.ts` — the middleware file convention is deprecated in
+   Next 16 and renamed to Proxy. The file had to be edited for the bucket
+   anyway, and `AGENTS.md` says to heed deprecation notices.)
 2. `lib/experiments/assignment.ts` + tests.
 3. `lib/portal/store.ts`: `getQuizExperiment()` / `setQuizExperiment()` in
    `PersistedSettings`.
@@ -463,7 +495,7 @@ customers until Phase 5 flips the switch.
 **Exit:** V1 traffic carries `arm: 'v1'`; the hub funnel still reads correctly;
 zero behaviour change. Verified in production before Phase 1 lands.
 
-### Phase 1 — The bank and the planner, no AI
+### Phase 1 — The bank and the planner, no AI — **done**
 7. `drivers.ts`, `bank/` (author the energy, sleep and training ladders first —
    they cover the majority of goal selections), `planner.ts`, `project.ts`,
    all pure, all tested.
@@ -477,14 +509,14 @@ with no AI and no engine change yet. Reviewable as a product before any of the
 clever bits exist — deliberately, because this is the phase where the *content*
 gets judged.
 
-### Phase 2 — Drivers reach the recommendation
+### Phase 2 — Drivers reach the recommendation — **done**
 10. `quiz-core/driver-map.ts`; additive read in `scoreProduct`.
 11. V1 persona snapshots re-run — must be identical.
 12. V2 persona snapshots authored and reviewed by hand.
 
 **Exit:** V2 answers demonstrably change the box, in ways a human has checked.
 
-### Phase 3 — The AI steer
+### Phase 3 — The AI steer — **done**
 13. `ai.ts` (prompt, schema, validator) + `/api/quiz/next-questions`.
 14. `steer.ts` — one-question-ahead prefetch, hard timeout, silent fallback.
 15. `Reflection.tsx` — the acknowledgement line, rendered only if it arrived.
@@ -493,7 +525,7 @@ gets judged.
 **Exit:** the steer measurably fires, and the hang/500 E2E tests prove the flow
 is indifferent to it.
 
-### Phase 4 — "What we heard"
+### Phase 4 — "What we heard" — **done**
 17. `HeardYou.tsx` in Act 3, filling the analysis wait that already exists —
     the drivers we found, in plain language, each next to what it changed.
 18. Per-driver reasons threaded into the existing `aiReasons` on the reveal.
@@ -501,13 +533,13 @@ is indifferent to it.
 **Exit:** B2 is actually delivered. This is the phase most likely to move the
 conversion number, and it costs no latency because Act 3 is already waiting.
 
-### Phase 5 — Turn it on
+### Phase 5 — Turn it on — **ready, not done**
 19. Split to 10% for 48 hours. Watch error rates, p75 time-per-question, steer
     latency, completion.
 20. Split to 50%. Leave it alone.
 21. Read completion and swap rate at ~2k/arm; read conversion at ~5.4k/arm.
 
-### Phase 6 — Decide
+### Phase 6 — Decide — **not yet**
 Ship to 100%, kill it, or run the third arm (V2 with AI steering off) to find
 out whether the AI or the ladders did the work. That third arm is the cheapest
 experiment in the whole plan and the one most likely to save money — it is

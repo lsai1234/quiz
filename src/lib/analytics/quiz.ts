@@ -12,6 +12,17 @@ import { track } from './events'
 import type { StepId } from '@/lib/quiz-flow'
 import type { QuizTrack, Goal, Budget } from '@/lib/types'
 
+/**
+ * A step's id in an event.
+ *
+ * v1's steps come from a fixed union; v2's are bank question ids, which are
+ * open by design — the bank grows without the analytics contract changing. The
+ * funnel already derives its ladder from the ids the events report rather than
+ * from a fixed list, so widening here costs nothing and is what lets one funnel
+ * serve both arms.
+ */
+export type StepRef = StepId | (string & {})
+
 /** Drop null/undefined so it never serialises as a literal "null". */
 const s = (v: string | null | undefined): string | undefined => (v == null ? undefined : v)
 
@@ -22,25 +33,25 @@ export const funnel = {
   },
 
   /** A step became active. `total` = advertised question count (seq − review/deepDive). */
-  stepView(p: { stepId: StepId; index: number; total: number; track: QuizTrack | null; drinksMode: boolean }) {
+  stepView(p: { stepId: StepRef; index: number; total: number; track: QuizTrack | null; drinksMode: boolean }) {
     track('quiz_step_view', { stepId: p.stepId, index: p.index, total: p.total, track: s(p.track), drinksMode: p.drinksMode })
   },
 
   /** A step was advanced past — carries time-on-question. */
-  stepComplete(p: { stepId: StepId; index: number; msOnStep: number }) {
+  stepComplete(p: { stepId: StepRef; index: number; msOnStep: number }) {
     track('quiz_step_complete', { stepId: p.stepId, index: p.index, msOnStep: p.msOnStep })
   },
 
   /** Backwards navigation — `via` distinguishes the Back button from a review edit-jump. */
-  stepBack(p: { from: StepId; to?: StepId; via: 'back' | 'edit' }) {
+  stepBack(p: { from: StepRef; to?: StepRef; via: 'back' | 'edit' }) {
     track('quiz_step_back', { from: p.from, to: s(p.to), via: p.via })
   },
 
-  subView(p: { subId: string; parentStepId: StepId }) {
+  subView(p: { subId: string; parentStepId: StepRef }) {
     track('quiz_subquestion_view', { subId: p.subId, parentStepId: p.parentStepId })
   },
 
-  subAnswer(p: { subId: string; parentStepId: StepId; optionId: string }) {
+  subAnswer(p: { subId: string; parentStepId: StepRef; optionId: string }) {
     track('quiz_subquestion_answer', { subId: p.subId, parentStepId: p.parentStepId, optionId: p.optionId })
   },
 
@@ -72,7 +83,7 @@ export const funnel = {
   },
 
   /** Left the quiz without completing (tab close / navigation). */
-  abandon(p: { lastStepId: StepId; index: number; msTotal: number }) {
+  abandon(p: { lastStepId: StepRef; index: number; msTotal: number }) {
     track('quiz_abandon', { lastStepId: p.lastStepId, index: p.index, msTotal: p.msTotal })
   },
 
@@ -91,6 +102,42 @@ export const funnel = {
 
   stackRemove(p: { slotId: string }) {
     track('stack_remove', { slotId: p.slotId })
+  },
+
+  // ── The adaptive quiz (v2) ──
+  //
+  // v2 reuses stepView/stepComplete/stepBack verbatim, passing the bank
+  // question id as `stepId`. These three have no v1 equivalent.
+
+  /**
+   * One AI-steer attempt. The point of this event is to answer "is the AI doing
+   * anything, and what is it costing us?" — `used: false` with a `timeout`
+   * reason on most sessions means the prefetch budget is wrong; `used: false`
+   * with `nokey` means it was never on. `latencyMs` is measured even on the
+   * paths that were discarded, because a steer that lands at 4s is a steer that
+   * would have been visible if anything waited for it.
+   */
+  aiSteer(p: {
+    used: boolean
+    latencyMs: number
+    reason: 'ok' | 'timeout' | 'invalid' | 'nokey' | 'off' | 'error'
+    applied?: 'order' | 'copy' | 'both' | 'none'
+  }) {
+    track('quiz_ai_steer', {
+      used: p.used, latencyMs: p.latencyMs, reason: p.reason, applied: s(p.applied),
+    })
+  },
+
+  /** A root cause the interview settled on, with how sure it ended up. In
+   *  aggregate this says which problems the customer base actually has — a
+   *  marketing read-out, not just a debug line. */
+  driverResolved(p: { driverId: string; confidence: number }) {
+    track('quiz_driver_resolved', { driverId: p.driverId, confidence: p.confidence })
+  },
+
+  /** The planner ran out of questions worth asking before it ran out of budget. */
+  earlyExit(p: { askedCount: number; budget: number }) {
+    track('quiz_early_exit', { askedCount: p.askedCount, budget: p.budget })
   },
 
   // ── Checkout (reuses the shop events, tagged as quiz-sourced) ──

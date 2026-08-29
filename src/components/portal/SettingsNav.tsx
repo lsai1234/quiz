@@ -74,6 +74,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         blurb: 'Why a screen took as long as it did — measured on the server that served it.',
         icon: 'activity',
       },
+      {
+        slug: 'quiz',
+        title: 'The quiz',
+        blurb:
+          'Whether customers get the current quiz or the new adaptive one, and how the two compare.',
+        icon: 'sparkle',
+      },
     ],
   },
   {

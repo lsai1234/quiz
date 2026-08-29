@@ -11,7 +11,9 @@ import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } fro
 import {
   SLOT_ORDER, GOAL_SLOT_RELEVANCE, WELLBEING_GOAL_SLOTS, GOAL_AFFINITY,
   SCORING, FOUNDATIONAL_SWAP_GROUPS, applyBundleRules, type SlotType,
+  DRIVER_AFFINITY, DRIVER_STIM_PENALTY,
 } from '@/lib/quiz-core'
+import type { DriverId } from '@/lib/quiz-v2/drivers'
 
 export type { SlotType } from '@/lib/quiz-core'
 
@@ -251,6 +253,25 @@ export function scoreProduct(
   // sleep-better → magnesium is primary, but only when no sleep follow-up steered
   // us elsewhere (kept in code as it's conditional on the follow-up answer).
   if (answers.goals.includes('sleep-better') && product.swapGroup === 'magnesium' && !wb.sleepQuality) score += SCORING.sleepBetterMagnesium
+
+  // Root-cause affinity, from the v2 adaptive interview (see DRIVER_AFFINITY).
+  // Read exactly like GOAL_AFFINITY above, and scaled by how confident the
+  // interview ended up: a passing hint nudges, a confirmed finding moves.
+  //
+  // `answers.drivers` is absent on every v1 answer and on anything saved before
+  // v2 existed, so this whole block contributes exactly zero there and v1's
+  // output is unchanged. That invariant is asserted in driver-map.test.ts.
+  for (const [driver, confidence] of Object.entries(answers.drivers ?? {})) {
+    const affinity = DRIVER_AFFINITY[driver as DriverId]?.[product.swapGroup]
+    if (affinity) score += affinity * confidence
+    // A stimulant is the wrong answer for someone whose energy problem IS
+    // caffeine, or who is already wired at bedtime. The goal label could never
+    // have told us that.
+    if (product.hasStimulants) {
+      const penalty = DRIVER_STIM_PENALTY[driver as DriverId]
+      if (penalty) score += penalty * confidence
+    }
+  }
 
   // Deprioritise performance (creatine) and protein slots when the user's
   // goals don't call for them — prevents creatine appearing for energy/health users

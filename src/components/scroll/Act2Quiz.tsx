@@ -9,6 +9,8 @@ import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from 
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import { AnswerOption, CheckMark } from '@/components/quiz/AnswerOption'
+import { GOALS_DATA, WELLBEING_DATA, GOAL_LABELS } from '@/lib/quiz-goals'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import { funnel } from '@/lib/analytics/quiz'
 import type {
@@ -85,27 +87,6 @@ const VITAMIN_OPTIONS = [
   { id: 'magnesium',    label: 'Magnesium',        icon: 'hexagon' },
   { id: 'zinc',         label: 'Zinc',             icon: 'diamond' },
   { id: 'other',        label: 'Other / unsure',   icon: 'sparkle' },
-]
-
-const GOALS_DATA: Array<{ id: Goal; label: string; icon: string }> = [
-  { id: 'muscle',      label: 'Build muscle',     icon: 'dumbbell' },
-  { id: 'cutting',     label: 'Get lean',         icon: 'flame' },
-  { id: 'energy',      label: 'More energy',      icon: 'bolt' },
-  { id: 'performance', label: 'Peak performance', icon: 'peak' },
-  { id: 'recovery',    label: 'Recover faster',   icon: 'refresh' },
-  { id: 'health',      label: 'Feel healthier',   icon: 'heart' },
-  { id: 'bulking',     label: 'Gain mass',        icon: 'trending-up' },
-  { id: 'hydration',   label: 'Stay hydrated',    icon: 'droplet' },
-]
-
-const WELLBEING_DATA: Array<{ id: Goal; label: string; icon: string }> = [
-  { id: 'sleep-better',    label: 'Sleep better',        icon: 'moon' },
-  { id: 'less-stress',     label: 'Less stress',         icon: 'wave' },
-  { id: 'focus',           label: 'Focus & brain fog',   icon: 'crosshair' },
-  { id: 'immune',          label: 'Immune support',      icon: 'shield' },
-  { id: 'skin-hair-nails', label: 'Skin, hair & nails',  icon: 'sparkle' },
-  { id: 'gut-health',      label: 'Gut health',          icon: 'spiral' },
-  { id: 'menopause',       label: 'Menopause support',   icon: 'thermometer' },
 ]
 
 // ─── Wellbeing follow-up question bank ────────────────────────────────────────
@@ -302,103 +283,10 @@ const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }
 
 // ─── Label lookups (for the review summary) ───────────────────────────────────
 
-const GOAL_LABELS: Record<string, string> = {
-  ...Object.fromEntries([...GOALS_DATA, ...WELLBEING_DATA].map(g => [g.id, g.label] as const)),
-  health: 'General health',
-}
 const labelOf = (data: Array<{ id: string; label: string }>, id: string | null) => data.find(d => d.id === id)?.label ?? ''
 const labelsOf = (data: Array<{ id: string; label: string }>, ids: string[]) => ids.map(id => labelOf(data, id)).filter(Boolean)
 
 // ─── Single option component ──────────────────────────────────────────────────
-
-// Editorial-minimal selection mark — a small precise check, accent on select.
-function CheckMark({ selected, reduced, multi }: { selected: boolean; reduced?: boolean; multi?: boolean }) {
-  return (
-    <div
-      className={[
-        // Square (checkbox) for multi-select, circle (radio) for single — a
-        // second, at-a-glance cue for "add more" vs "pick one".
-        'shrink-0 w-[18px] h-[18px] flex items-center justify-center border transition-all duration-200',
-        multi ? 'rounded-[6px]' : 'rounded-full',
-        selected ? 'border-[#00D4FF] bg-[#00D4FF]' : 'border-white/15 bg-transparent',
-      ].join(' ')}
-      style={selected && !reduced ? { animation: 'check-pop 0.22s cubic-bezier(0.34,1.56,0.64,1) both' } : undefined}
-    >
-      {selected && (
-        <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
-          <path d="M1 4L3.5 6.5L9 1" stroke="#0A0A0A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      )}
-    </div>
-  )
-}
-
-// One refined option card. A leading monoline icon (muted, accent on select)
-// gives back at-a-glance scannability without the emoji look; confident type, a
-// hairline border, and a crisp accent-selected state with a small check. `multi`
-// lays out a compact grid card; otherwise a full-width row with optional sub.
-function AnswerOption({
-  label, sub, icon, selected, multi, onClick,
-}: {
-  label: string; sub?: string; icon?: string; selected: boolean
-  multi?: boolean; onClick: () => void
-}) {
-  const base = selected
-    ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]'
-    : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]'
-  const iconColor = selected ? 'text-[#00D4FF]' : 'text-white/40'
-
-  if (multi) {
-    return (
-      <button
-        onClick={onClick}
-        aria-pressed={selected}
-        className={[
-          'relative w-full flex items-center gap-2 text-left rounded-xl border px-3 py-3 pr-8',
-          'transition-all duration-200 active:scale-[0.98]',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
-          base,
-        ].join(' ')}
-      >
-        {icon && <QuizIcon name={icon} size={17} className={`shrink-0 transition-colors duration-200 ${iconColor}`} />}
-        <span
-          className={`text-[13px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/70'}`}
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {label}
-        </span>
-        <div className="absolute top-1/2 right-3 -translate-y-1/2">
-          <CheckMark selected={selected} multi />
-        </div>
-      </button>
-    )
-  }
-
-  return (
-    <button
-      onClick={onClick}
-      aria-pressed={selected}
-      className={[
-        'w-full flex items-center gap-3.5 px-5 py-4 rounded-xl border text-left',
-        'transition-all duration-200 active:scale-[0.99]',
-        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
-        base,
-      ].join(' ')}
-    >
-      {icon && <QuizIcon name={icon} size={20} className={`shrink-0 transition-colors duration-200 ${iconColor}`} />}
-      <div className="flex-1 min-w-0">
-        <div
-          className={`text-[15px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/80'}`}
-          style={{ fontFamily: 'var(--font-display)' }}
-        >
-          {label}
-        </div>
-        {sub && <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>}
-      </div>
-      <CheckMark selected={selected} />
-    </button>
-  )
-}
 
 // A little liquid glass for the LQD pace step: fills to `level` (0–1) with a
 // drifting meniscus wave. Selected → accent fill; otherwise a calm ghost.

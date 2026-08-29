@@ -24,6 +24,11 @@ import { getOrderingMode, setOrderingOverride } from '@/lib/supplier/ordering'
 import type { PaymentMode } from '@/lib/payments'
 import { getPaymentMode, setPaymentOverride } from '@/lib/payments'
 import {
+  normaliseExperiment,
+  DEFAULT_QUIZ_EXPERIMENT,
+  type QuizExperimentConfig,
+} from '@/lib/experiments/assignment'
+import {
   setPricingOverrides,
   getPricingOverrides,
   resetPricingOverrides,
@@ -53,6 +58,9 @@ interface PersistedSettings {
   orderingMode?: OrderingMode
   paymentMode?: PaymentMode
   pricingOverrides?: Partial<PricingConfig>
+  /** Which quiz customers get, and how the adaptive one behaves. See
+   *  `lib/experiments/assignment.ts`. Absent = off, everyone gets v1. */
+  quizExperiment?: QuizExperimentConfig
 }
 
 const EMPTY_PRODUCTS: PersistedProducts = { overrides: {}, removedIds: [], imported: [], topProductIds: [] }
@@ -108,6 +116,22 @@ export async function setDataSourceSetting(mode: DataSourceMode): Promise<void> 
   await saveSettings({ dataSourceMode: mode })
   setDataSourceOverride(mode)
   lastSyncedAt = Date.now()
+}
+
+// ── Quiz experiment ──
+// Which quiz customers get (v1, the questionnaire that ships today, or v2, the
+// adaptive interview) and how v2 behaves. Read on every `/api/config` call, so
+// it goes through the same short-lived persist cache as everything else here.
+//
+// `normaliseExperiment` is applied on the way OUT as well as in: a settings row
+// written by an older build, or half-written by a failed request, must not be
+// able to switch an experiment on or hand the quiz a nonsense budget.
+export async function getQuizExperiment(): Promise<QuizExperimentConfig> {
+  const settings = await loadSettings()
+  return normaliseExperiment(settings.quizExperiment ?? DEFAULT_QUIZ_EXPERIMENT)
+}
+export async function setQuizExperiment(config: QuizExperimentConfig): Promise<void> {
+  await saveSettings({ quizExperiment: normaliseExperiment(config) })
 }
 
 // ── Supplier (PowerBody) ──
