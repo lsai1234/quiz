@@ -1,7 +1,7 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, type PersistStorage, type StorageValue } from 'zustand/middleware'
 import { defaultAnswers } from './quiz-answers'
 import type { InterviewState } from './quiz-v2/types'
 import type { QuizAnswers, StackIdentity, Product, StackLevel } from './types'
@@ -166,11 +166,78 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   // blueprint, identity) is deliberately excluded via `partialize`.
   name: 'chrgd-quiz',
   version: 1,
-  partialize: (s) => ({ answers: s.answers, step: s.step, interview: s.interview }),
+  partialize: (s) => ({ answers: s.answers, step: s.step, interview: s.interview, savedAt: Date.now() }),
+  storage: expiringQuizStorage(),
   // Rehydrate manually after mount (ScrollExperience) so server and client both
   // start from defaults — no hydration mismatch from persisted answers.
   skipHydration: true,
 }))
+
+/** How long a half-finished quiz survives in the browser. */
+export const QUIZ_STATE_TTL_MS = 7 * 24 * 60 * 60 * 1000
+
+/**
+ * `localStorage`, with an expiry.
+ *
+ * Resuming a quiz across a refresh is worth keeping. Keeping it forever is not:
+ * what sits in this key is the full answer set, and once the safety screen has
+ * been answered that includes whether someone is pregnant, on medication or
+ * allergic to shellfish. On a shared laptop or a family tablet that is somebody
+ * else's health information sitting in a browser indefinitely, long after the
+ * quiz it belonged to was abandoned.
+ *
+ * A week is well past "I'll come back to this after dinner" and well short of
+ * indefinite. Anything older is dropped on read and the visitor starts fresh,
+ * which is the same thing that happens to a first-time visitor and needs no
+ * separate handling anywhere else.
+ *
+ * Every access is wrapped: Safari in private mode throws on `localStorage`
+ * rather than returning null, and a quiz that cannot start because storage is
+ * unavailable would be a far worse bug than one that cannot resume.
+ */
+function expiringQuizStorage(): PersistStorage<PersistedQuiz> | undefined {
+  if (typeof window === 'undefined') return undefined
+
+  return {
+    getItem: (name) => {
+      try {
+        const raw = window.localStorage.getItem(name)
+        if (!raw) return null
+        const parsed = JSON.parse(raw) as StorageValue<PersistedQuiz>
+        const savedAt = parsed?.state?.savedAt
+        if (typeof savedAt !== 'number' || Date.now() - savedAt > QUIZ_STATE_TTL_MS) {
+          window.localStorage.removeItem(name)
+          return null
+        }
+        return parsed
+      } catch {
+        return null
+      }
+    },
+    setItem: (name, value) => {
+      try {
+        window.localStorage.setItem(name, JSON.stringify(value))
+      } catch {
+        /* storage full or unavailable — the quiz still works, it just won't resume */
+      }
+    },
+    removeItem: (name) => {
+      try {
+        window.localStorage.removeItem(name)
+      } catch {
+        /* nothing to do */
+      }
+    },
+  }
+}
+
+interface PersistedQuiz {
+  answers: QuizAnswers
+  step: number
+  interview: InterviewState | null
+  /** Stamped on every write; read back to decide whether this is still fresh. */
+  savedAt: number
+}
 
 /**
  * Whether there's a resumable in-progress quiz in the persisted store — the user
