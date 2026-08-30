@@ -23,6 +23,12 @@
  *    exactly what you want from evidence.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import {
+  DISCLAIMER_VERSION,
+  HEALTH_DATA_VERSION,
+  PRIVACY_VERSION,
+  TERMS_VERSION,
+} from './versions'
 
 // ─── Who we are ───────────────────────────────────────────────────────────────
 
@@ -89,41 +95,18 @@ export interface LegalDocument {
 
 export type LegalDocumentId = 'terms' | 'disclaimer' | 'privacy' | 'health-data'
 
-/** Bump on a material change. Triggers the in-hub re-consent notice. */
-export const TERMS_VERSION = '2026-08-12'
-export const DISCLAIMER_VERSION = '2026-07-29'
-export const PRIVACY_VERSION = '2026-08-30'
-
 /**
- * The Article 9 consent notice, shown at the safety screen.
- *
- * Versioned separately from the privacy notice on purpose: this is the one a
- * member actively agrees to, so a bump here means asking them again. Editorial
- * changes to the privacy notice that do not change what is being consented to
- * should not drag everyone through a fresh consent.
+ * Versions live in their own leaf module so a client component needing one does
+ * not pull this file — and with it the pricing config — into its bundle.
+ * Re-exported here so every existing import keeps working.
  */
-export const HEALTH_DATA_VERSION = '2026-08-30'
-
-/**
- * The first terms version that discloses the cancel settlement — the balance a
- * member settles on goods already sent them when they cancel early.
- *
- * This is a GATE, not a note. A member who agreed to the previous terms was told
- * they could cancel "with no fee", and we do not get to charge them a balance
- * they were never shown; they cancel free until they accept these terms. Consent
- * records are keyed by version (see `lib/legal/consent.ts`), so this is
- * enforceable per member rather than by deploy date.
- *
- * Moved to 2026-08-12. Most of that revision is more generous — the balance is
- * capped at what the member has paid, anything under £5 is waived, and a
- * first-month discount is no longer clawed back — but one part is a CORRECTION
- * rather than a concession: the previous wording said the balance "reaches zero
- * as soon as [payments catch up]" and stopped there, which is only half true.
- * It is a sawtooth, and it rises again each time a multi-month item ships. A
- * member who agreed to the old sentence was not told that, so the gate moves
- * with it and they re-consent before anything is charged.
- */
-export const SETTLEMENT_TERMS_VERSION = '2026-08-12'
+export {
+  TERMS_VERSION,
+  DISCLAIMER_VERSION,
+  PRIVACY_VERSION,
+  HEALTH_DATA_VERSION,
+  SETTLEMENT_TERMS_VERSION,
+} from './versions'
 
 // ─── Shared sentences (one definition, used everywhere) ───────────────────────
 

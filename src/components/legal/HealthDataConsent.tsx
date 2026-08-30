@@ -1,6 +1,6 @@
 'use client'
 
-import { HEALTH_DATA_VERSION } from '@/lib/legal/content'
+import { HEALTH_DATA_VERSION } from '@/lib/legal/versions'
 import type { HealthDataConsent as HealthDataConsentRecord } from '@/lib/types'
 
 const ACCENT = '#00D4FF'
