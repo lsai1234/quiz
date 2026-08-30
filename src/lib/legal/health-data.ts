@@ -50,3 +50,63 @@ export function sanitiseHealthData<T extends Partial<QuizAnswers>>(answers: T): 
 export function healthDataDocument(): ConsentedDocument {
   return consentedDocument(getHealthDataDocument())
 }
+
+/**
+ * Withdraw the Article 9 consent, and deal with the consequences.
+ *
+ * Lives here rather than in the route so the behaviour is testable directly and
+ * the handler stays thin — the interesting part of a withdrawal is not the HTTP.
+ *
+ * Three things happen, and the second is the one that matters:
+ *
+ *  1. The answers are deleted, not just the permission. Consent is what makes
+ *     holding them lawful; without it there is no basis to keep them.
+ *  2. Automatic substitution is switched off for every line. These answers are
+ *     what the substitution safety check runs on, so continuing to swap without
+ *     them is exactly the failure the safety snapshot exists to prevent. Falling
+ *     back to `remove` is the documented safe option: the line comes off and the
+ *     monthly drops, rather than something unverified being sent.
+ *  3. The withdrawal is recorded like any other consent event. An append-only
+ *     history that only ever records "yes" is not a history.
+ */
+export async function withdrawHealthConsent(
+  userId: string,
+  meta: { ip?: string | null; userAgent?: string | null } = {},
+): Promise<{ substitutionsPaused: boolean }> {
+  const { getQuiz, saveQuiz, getSubscription, saveSubscription } = await import('@/lib/db/hub-data')
+  const { recordConsent } = await import('./consent')
+
+  const quiz = await getQuiz<{ answers?: QuizAnswers }>(userId)
+  if (quiz?.answers) {
+    await saveQuiz(userId, {
+      ...quiz,
+      answers: { ...quiz.answers, safetyFlags: [], healthDataConsent: null },
+    })
+  }
+
+  // `saveQuiz` upserts a subscriptions row with an empty `{}` document when
+  // there is no plan yet, so "a row exists" is not "a plan exists" — someone who
+  // took the quiz and never subscribed has one, with no `lines` on it at all.
+  const subscription = await getSubscription(userId)
+  const hasPlan = !!subscription?.id
+  if (subscription) {
+    await saveSubscription(userId, {
+      ...subscription,
+      defaultChangePolicy: 'remove',
+      lines: (subscription.lines ?? []).map((line) => ({ ...line, changePolicy: 'remove' as const })),
+      safetyConstraints: subscription.safetyConstraints
+        ? { ...subscription.safetyConstraints, safetyFlags: [] }
+        : subscription.safetyConstraints,
+    })
+  }
+
+  await recordConsent({
+    userId,
+    context: 'health-data-withdrawn',
+    documents: [healthDataDocument()],
+    ip: meta.ip ?? null,
+    userAgent: meta.userAgent ?? null,
+  })
+
+  return { substitutionsPaused: hasPlan }
+}

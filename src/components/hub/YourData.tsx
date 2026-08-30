@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Button, Input, Note, buttonSurface } from '@/components/system'
 
 /**
@@ -83,6 +83,8 @@ export function YourData() {
         </a>
       </div>
 
+      <HealthConsentControl />
+
       <div className="flex flex-col gap-3 pt-4" style={{ borderTop: '1px solid var(--edge)' }}>
         <p className="text-sm leading-relaxed text-[var(--ink-2)]">
           Deleting removes your quiz answers, your plan, your check-ins and your shared cards. We
@@ -125,5 +127,85 @@ export function YourData() {
         )}
       </div>
     </section>
+  )
+}
+
+/**
+ * Withdrawing the health-data consent.
+ *
+ * Article 7(3) says withdrawing has to be as easy as giving, and both the
+ * privacy notice and the consent document promise it can be done here — a
+ * promise in a legal document that the code does not keep is worse than not
+ * having made it.
+ *
+ * Renders nothing for someone who never gave it, rather than offering to
+ * withdraw a consent that was never given.
+ *
+ * The consequence is stated before the button, not after. Withdrawing switches
+ * every line to "take it off my plan" when a product goes, because the answers
+ * being withdrawn are what the substitution safety check runs on — carrying on
+ * swapping without them is exactly the failure this whole area exists to
+ * prevent. Someone is entitled to withdraw; they are also entitled to know that
+ * is what happens.
+ */
+function HealthConsentControl() {
+  const [given, setGiven] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [withdrawn, setWithdrawn] = useState(false)
+
+  useEffect(() => {
+    // Wrapped rather than relying on `.catch`: where `fetch` is absent entirely
+    // the call throws synchronously, which `.catch` never sees and which would
+    // take the whole hub down with it. This control is an addition to the page,
+    // and it must not be able to break the page it was added to.
+    try {
+      void fetch('/api/hub/health-consent')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => d && setGiven(!!d.given))
+        .catch(() => {})
+    } catch {
+      /* leave the control hidden */
+    }
+  }, [])
+
+  if (withdrawn) {
+    return (
+      <Note tone="positive" live="polite">
+        Withdrawn. We’ve deleted those answers, and if a product on your plan becomes
+        unavailable we’ll take it off and lower your monthly rather than swapping in something
+        we can no longer check is right for you.
+      </Note>
+    )
+  }
+
+  if (!given) return null
+
+  async function withdraw() {
+    setBusy(true)
+    try {
+      const res = await fetch('/api/hub/health-consent', { method: 'POST' })
+      if (res.ok) setWithdrawn(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 pt-4" style={{ borderTop: '1px solid var(--edge)' }}>
+      <p className="text-sm leading-relaxed text-[var(--ink-2)]">
+        You told us about pregnancy, medication or allergies so we could leave out products that
+        aren’t right for you. You can take that back — we’ll delete those answers.
+      </p>
+      <p className="text-sm leading-relaxed text-[var(--ink-2)]">
+        If you do, we’ll stop swapping products automatically: when something becomes
+        unavailable we’ll remove it and lower your monthly instead, because we’d no longer be
+        able to check a replacement suits you.
+      </p>
+      <div>
+        <Button variant="secondary" onClick={withdraw} loading={busy}>
+          Withdraw my health answers
+        </Button>
+      </div>
+    </div>
   )
 }
