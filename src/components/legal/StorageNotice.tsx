@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { privacyOptedOut, setAnalyticsOptOut } from '@/lib/analytics/events'
 
 const ACCENT = '#00D4FF'
@@ -26,9 +27,25 @@ const SEEN_KEY = 'chrgd_storage_notice_seen'
  * It renders for nobody whose browser already says no. Asking someone who has
  * set Do Not Track or Global Privacy Control to make the same decision again is
  * ignoring the answer they already gave.
+ *
+ * ── Why it stays off the quiz ───────────────────────────────────────────────
+ * The quiz is a fixed, full-viewport layout whose primary action sits flush
+ * against the bottom of the screen on a phone. Anything else anchored there
+ * covers the button the whole page exists to have pressed — a compliance strip
+ * that stops people answering the quiz is a worse outcome than the gap it
+ * closes, for them and for us.
+ *
+ * The quiz is not left silent, though: it carries the privacy notice twice, in
+ * places that are harder to miss than a strip — on the consent gate at the
+ * safety screen, and under the analysis screen where the AI's role is
+ * explained. This notice is for the surfaces that scroll normally.
  */
+const QUIZ_ROUTES = ['/', '/quizv2']
+
 export function StorageNotice() {
   const [visible, setVisible] = useState(false)
+  const pathname = usePathname()
+  const onQuiz = QUIZ_ROUTES.includes(pathname)
 
   useEffect(() => {
     try {
@@ -41,7 +58,7 @@ export function StorageNotice() {
     }
   }, [])
 
-  if (!visible) return null
+  if (!visible || onQuiz) return null
 
   function close() {
     try {
