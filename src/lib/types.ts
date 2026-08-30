@@ -99,6 +99,22 @@ export interface DynamicAnswer {
   signals: string[]
 }
 
+/**
+ * A member's explicit agreement to the health-data notice, as the browser
+ * captured it.
+ *
+ * The version is echoed so the server can re-render and hash the exact document
+ * that was displayed, the same way `lib/legal/consent.ts` handles the checkout
+ * documents — the client says "yes, and this is what I was shown", never "yes,
+ * to these terms which I will now describe".
+ */
+export interface HealthDataConsent {
+  accepted: true
+  version: string
+  /** ISO timestamp of the tick, so the record reflects when it actually happened. */
+  at: string
+}
+
 export interface QuizAnswers {
   name: string
   /** Which quiz track the user chose on the goal step */
@@ -143,8 +159,24 @@ export interface QuizAnswers {
    * Safety-screen flags the user ticked (pregnancy/breastfeeding, medication).
    * Products contraindicated against any ticked flag are hard-removed from the
    * recommendation. Optional so answers saved before the screen existed stay valid.
+   *
+   * These are special category data under Article 9. They are only ever
+   * collected once `healthDataConsent` has been given — the safety screen does
+   * not render its options until then.
    */
   safetyFlags?: SafetyFlag[]
+  /**
+   * Explicit consent to process the safety-screen answers, captured on that
+   * screen before a single flag is offered.
+   *
+   * Its own record rather than a bit on the checkout tick, because Article
+   * 9(2)(a) consent must be specific and separable: bundled into a subscription
+   * agreement, someone who wants the plan has no way to refuse the health
+   * processing. Null or absent means no consent, which means `safetyFlags` must
+   * be empty — `sanitiseHealthData` enforces that server-side rather than
+   * trusting the client to have done it.
+   */
+  healthDataConsent?: HealthDataConsent | null
   /** Bodyweight band for weight-sensitive dosing (protein). Optional. */
   weightBand?: WeightBand | null
   goals: Goal[]

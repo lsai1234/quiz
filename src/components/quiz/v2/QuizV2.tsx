@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuizStore } from '@/lib/store'
+import { HealthDataConsent, healthDataConsentRecord } from '@/components/legal/HealthDataConsent'
 import { levelForStackPreference } from '@/lib/stack-blueprint/pricing'
 import { GOALS_DATA, GOAL_LABELS, TRACK_CARDS, WELLBEING_DATA } from '@/lib/quiz-goals'
 import { AnswerOption } from '@/components/quiz/AnswerOption'
@@ -298,6 +299,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
   const isGoals = currentId === 'goals'
   const isForm = current?.select === 'form'
+  const isSafety = currentId === 'safety'
   const isMulti = current?.select === 'multi'
   const needsContinue = onReview || isGoals || isForm || isMulti
 
@@ -466,26 +468,48 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
             {!isGoals && current && current.select === 'multi' && (
               <div>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {current.options.map((o) => (
-                    <AnswerOption
-                      key={`${current.id}-${o.id}`}
-                      label={o.label} sub={o.sub} icon={o.icon} multi
-                      // An exclusive option reads as chosen while nothing is —
-                      // so the screen always shows an answer rather than a blank
-                      // grid the reader has to work out is a valid state.
-                      selected={
-                        multiPicks.includes(o.id) ||
-                        (!!o.exclusive && multiPicks.length === 0)
-                      }
-                      onClick={() => toggleMulti(o.id)}
-                    />
-                  ))}
-                </div>
-                {current.reassurance && (
-                  <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
-                    {current.reassurance}
-                  </p>
+                {/* The safety screen collects Article 9 data, so its options do
+                    not exist until consent is given. Every other multi-select
+                    screen renders straight through. */}
+                {isSafety && (
+                  <HealthDataConsent
+                    consent={state.healthDataConsent}
+                    onAccept={(version) =>
+                      update({ ...state, healthDataConsent: healthDataConsentRecord(version) })
+                    }
+                    onDecline={() => {
+                      // Clear the picks too — leaving them would carry health
+                      // answers forward that the member just declined.
+                      setMultiPicks([])
+                      update({ ...state, healthDataConsent: null })
+                    }}
+                  />
+                )}
+
+                {(!isSafety || state.healthDataConsent?.accepted) && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {current.options.map((o) => (
+                        <AnswerOption
+                          key={`${current.id}-${o.id}`}
+                          label={o.label} sub={o.sub} icon={o.icon} multi
+                          // An exclusive option reads as chosen while nothing is —
+                          // so the screen always shows an answer rather than a blank
+                          // grid the reader has to work out is a valid state.
+                          selected={
+                            multiPicks.includes(o.id) ||
+                            (!!o.exclusive && multiPicks.length === 0)
+                          }
+                          onClick={() => toggleMulti(o.id)}
+                        />
+                      ))}
+                    </div>
+                    {current.reassurance && (
+                      <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
+                        {current.reassurance}
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             )}

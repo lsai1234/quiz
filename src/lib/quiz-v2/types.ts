@@ -1,4 +1,4 @@
-import type { QuizAnswers, QuizTrack, Goal, AgeBracket, Gender, WeightBand } from '@/lib/types'
+import type { QuizAnswers, QuizTrack, Goal, AgeBracket, Gender, WeightBand, HealthDataConsent } from '@/lib/types'
 import type { DriverId, DriverWeights } from './drivers'
 
 /**
@@ -132,6 +132,14 @@ export interface InterviewState {
   }
   /** Total questions this run is allowed, including the fixed ones. */
   budget: number
+  /**
+   * Explicit consent to process the safety-screen answers, given on that screen.
+   *
+   * Held on the interview rather than derived from `picked`, because it is not
+   * an answer to a question — it is the permission that lets the question be
+   * asked at all. Absent until given, and cleared if withdrawn.
+   */
+  healthDataConsent?: HealthDataConsent | null
 }
 
 export function emptyInterview(budget: number): InterviewState {
@@ -142,6 +150,7 @@ export function emptyInterview(budget: number): InterviewState {
     picked: {},
     drivers: {},
     cleared: [],
+    healthDataConsent: null,
     asked: [],
     form: { name: '', ageBracket: null, gender: null, weightBand: null },
     budget,

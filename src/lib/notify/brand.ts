@@ -179,6 +179,7 @@ function footerBand(links: EmailLinks): string {
     { label: 'Your hub', href: `${links.base}/myhub` },
     { label: 'Terms', href: `${links.base}/legal/terms` },
     { label: 'Health disclaimer', href: `${links.base}/legal/disclaimer` },
+    { label: 'Privacy', href: `${links.base}/legal/privacy` },
   ]
     .map(
       (item) =>
