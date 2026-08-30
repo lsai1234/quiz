@@ -3,7 +3,6 @@ import { Space_Grotesk, Inter } from 'next/font/google'
 import './globals.css'
 import { PortalSync } from '@/components/portal/PortalSync'
 import { ErrorReporter } from '@/components/monitoring/ErrorReporter'
-import { StorageNotice } from '@/components/legal/StorageNotice'
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
@@ -33,7 +32,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`h-full ${spaceGrotesk.variable} ${inter.variable}`}>
-      <body className="min-h-full antialiased"><PortalSync /><ErrorReporter />{children}<StorageNotice /></body>
+      <body className="min-h-full antialiased"><PortalSync /><ErrorReporter />{children}</body>
     </html>
   )
 }

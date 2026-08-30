@@ -429,6 +429,7 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
           'When you subscribe: your email address, your delivery address and phone number, and your payment details. Payment card details go straight to Stripe and never reach our systems.',
           'While you are a member: your plan and how you change it, your order history, the emails we have sent you, and any check-ins you write.',
           'Automatically: anonymous usage events so we can see where people get stuck in the quiz. These carry a random per-visit id that is discarded when you close the tab. No cookie, no third-party tracker, and we honour Do Not Track and Global Privacy Control.',
+          'You can switch that off for this device at the bottom of this page, and it stops straight away.',
         ],
       },
       {
