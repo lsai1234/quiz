@@ -1,4 +1,4 @@
-import { verifyFounder, founderForToken, isAuthed, listFounders, founderAuthMode } from '../auth'
+import { verifyFounder, founderForToken, isAuthed, listFounders, founderAuthMode, PORTAL_SESSION_TTL_MS } from '../auth'
 
 describe('founder auth', () => {
   const original = { ...process.env }
@@ -108,5 +108,98 @@ describe('founder auth', () => {
       expect(verifyFounder('admin@chrgd.dev', 'legacy-pass')).not.toBeNull()
       expect(founderAuthMode()).toBe('configured')
     })
+  })
+})
+
+/**
+ * Session tokens.
+ *
+ * These replaced a deterministic sha256(email:password), which was a
+ * password-equivalent that never rotated and could not be revoked without
+ * changing the password. The console they guard reads every member's plan, so
+ * the properties below are the point of the change, not incidental.
+ */
+describe('session tokens', () => {
+  const creds = ['ada@chrgd.dev', 'secret-1'] as const
+  const original = { ...process.env }
+
+  beforeEach(() => {
+    process.env.FOUNDER_1_EMAIL = 'Ada@chrgd.dev'
+    process.env.FOUNDER_1_PASSWORD = 'secret-1'
+    process.env.FOUNDER_1_NAME = 'Ada'
+    process.env.FOUNDER_2_EMAIL = 'grace@chrgd.dev'
+    process.env.FOUNDER_2_PASSWORD = 'secret-2'
+    delete process.env.ADMIN_PASSWORD
+  })
+
+  afterEach(() => {
+    process.env = { ...original }
+  })
+
+  it('issues a different token on every sign-in', () => {
+    const a = verifyFounder(...creds)!.token
+    const b = verifyFounder(...creds)!.token
+    expect(a).not.toBe(b)
+    // …and both still work: rotation must not mean the previous device is
+    // logged out every time someone signs in on another one.
+    expect(founderForToken(a)).not.toBeNull()
+    expect(founderForToken(b)).not.toBeNull()
+  })
+
+  it('round-trips an email containing dots', () => {
+    // `.` separates the token's fields and every address here ends in one, so
+    // an unencoded email splits the token into more fields than it has.
+    expect(founderForToken(verifyFounder(...creds)!.token)).toEqual({
+      email: 'ada@chrgd.dev',
+      name: 'Ada',
+    })
+  })
+
+  it('does not contain the password', () => {
+    expect(verifyFounder(...creds)!.token).not.toContain('secret-1')
+  })
+
+  it('refuses a token whose body has been edited', () => {
+    const token = verifyFounder(...creds)!.token
+    const [email, issuedAt, nonce, sig] = token.split('.')
+    // Re-dating a token to keep it alive is the obvious forgery to try.
+    const future = (Date.now() + 60_000).toString(36)
+    expect(founderForToken(`${email}.${future}.${nonce}.${sig}`)).toBeNull()
+  })
+
+  it('refuses a token signed for a different founder', () => {
+    const ada = verifyFounder('ada@chrgd.dev', 'secret-1')!.token
+    const grace = verifyFounder('grace@chrgd.dev', 'secret-2')!.token
+    const adaEmail = ada.split('.')[0]
+    const [, issuedAt, nonce, sig] = grace.split('.')
+    expect(founderForToken(`${adaEmail}.${issuedAt}.${nonce}.${sig}`)).toBeNull()
+  })
+
+  it('refuses a token past its lifetime', () => {
+    const token = verifyFounder(...creds)!.token
+    const realNow = Date.now
+    Date.now = () => realNow() + PORTAL_SESSION_TTL_MS + 1000
+    try {
+      expect(founderForToken(token)).toBeNull()
+    } finally {
+      Date.now = realNow
+    }
+  })
+
+  it('stops honouring tokens once the password changes', () => {
+    // Revocation with no session table to clear: the signing key is derived
+    // from the password, so changing it invalidates everything issued before.
+    const token = verifyFounder(...creds)!.token
+    expect(founderForToken(token)).not.toBeNull()
+    process.env.FOUNDER_1_PASSWORD = 'rotated'
+    expect(founderForToken(token)).toBeNull()
+    process.env.FOUNDER_1_PASSWORD = 'secret-1'
+  })
+
+  it('refuses malformed tokens rather than throwing', () => {
+    for (const bad of ['', 'garbage', 'a.b.c', 'a.b.c.d.e', '!!!.1.2.3']) {
+      expect(() => founderForToken(bad)).not.toThrow()
+      expect(founderForToken(bad)).toBeNull()
+    }
   })
 })
