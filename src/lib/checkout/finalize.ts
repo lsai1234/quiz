@@ -31,6 +31,7 @@ import {
   type ConsentVersions,
 } from '@/lib/legal/consent'
 import { safetyConstraintsFrom } from '@/lib/changes/safety'
+import { healthConsentIsCurrent, healthDataDocument, sanitiseHealthData } from '@/lib/legal/health-data'
 
 export const PENDING_COOKIE = 'pending_checkout'
 export const PENDING_KEY_PREFIX = 'pending:'
@@ -187,6 +188,15 @@ export async function finalizeCheckout(
   //    that no longer works does not fail the checkout — it takes nothing off
   //    and attributes nothing, which is the honest outcome for someone who is
   //    mid-purchase.
+  // Health flags are dropped here unless a current consent came with them. The
+  // safety screen already refuses to collect them without one, but a browser is
+  // not where a lawful basis is decided — an old client, a replayed request or a
+  // direct POST all arrive at this same line.
+  const quiz = payload.quiz
+    ? { ...payload.quiz, answers: sanitiseHealthData(payload.quiz.answers) }
+    : payload.quiz
+  const quizAnswers = quiz?.answers
+
   const redemption = payload.partnerCode
     ? await redeemPartnerCode(payload.partnerCode, {
         subtotal: payload.subscription.flatMonthly,
@@ -209,13 +219,13 @@ export async function finalizeCheckout(
       // months from now is judged against what they told us at the point of sale
       // rather than whatever their answers happen to say later.
       safetyConstraints:
-        payload.subscription.safetyConstraints ?? safetyConstraintsFrom(payload.quiz?.answers),
+        payload.subscription.safetyConstraints ?? safetyConstraintsFrom(quizAnswers),
     },
     getPricingConfig(),
     redemption?.ok ? redemption.discountPct : 0,
   )
   await saveSubscription(userId, subscription)
-  if (payload.quiz) await saveQuiz(userId, payload.quiz)
+  if (quiz) await saveQuiz(userId, quiz)
 
   // Evidence of what they agreed to. Written after the subscription exists but
   // before payment starts, so a stored plan always has a matching consent row.
@@ -226,6 +236,23 @@ export async function finalizeCheckout(
     ip: opts.ip,
     userAgent: opts.userAgent,
   })
+
+  // The health-data consent is its own record, with its own context and its own
+  // timestamp — the moment they ticked it on the safety screen, not the moment
+  // they reached checkout. Separate because Article 9(2)(a) consent has to be
+  // separable: rolled into the row above, there would be no way to show it was
+  // given freely rather than as the price of subscribing, and no way to withdraw
+  // it without unpicking the subscription agreement too.
+  if (healthConsentIsCurrent(quizAnswers?.healthDataConsent)) {
+    await recordConsent({
+      userId,
+      context: 'health-data',
+      documents: [healthDataDocument()],
+      acceptedAt: quizAnswers!.healthDataConsent!.at,
+      ip: opts.ip,
+      userAgent: opts.userAgent,
+    })
+  }
 
   // Bank the granted rate against the allocation ledger. This is the only place
   // the giveaway budget is spent — cards revealed by people who never got here

@@ -91,6 +91,12 @@ export async function answerStep(page: Page): Promise<boolean> {
     return true
   }
 
+  // The safety screen asks for health-data consent before it shows a single
+  // option, so the walk has to answer that first or there is nothing to click.
+  // The default path consents — it is what most people do and it is the only
+  // one that exercises the exclusions. The decline path has its own spec.
+  await acceptHealthDataConsent(page)
+
   const wanted = ANSWERS[question]
   if (wanted && wanted.length) {
     for (const label of wanted) {
@@ -216,4 +222,29 @@ export async function subscribeFromQuiz(
 
   await submit.click()
   await expect(page.getByText(/You’re subscribed|You're subscribed/)).toBeVisible({ timeout: 45_000 })
+}
+
+/**
+ * Agree to the health-data notice, if it is on screen.
+ *
+ * A no-op on every step but the safety screen, so callers can invoke it
+ * unconditionally rather than tracking which step they are on.
+ *
+ * Waits for the options to actually appear rather than returning on the click:
+ * the grid renders on a state change, and a walker that carries straight on
+ * looks for "None of these" a frame before it exists.
+ */
+export async function acceptHealthDataConsent(page: Page): Promise<void> {
+  const agree = page.getByRole('button', { name: /^Yes — use my answers/ })
+  if (!(await agree.count())) return
+  await agree.first().click()
+  await expect(page.getByRole('button', { name: 'None of these', exact: false }).first())
+    .toBeVisible({ timeout: 10_000 })
+}
+
+/** Decline it instead — the path where no health data is collected at all. */
+export async function declineHealthDataConsent(page: Page): Promise<void> {
+  const skip = page.getByRole('button', { name: 'Skip this', exact: true })
+  await expect(skip).toBeVisible()
+  await skip.click()
 }

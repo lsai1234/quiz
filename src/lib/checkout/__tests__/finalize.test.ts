@@ -8,8 +8,8 @@ import { finalizeCheckout, claimIntroDiscount, CheckoutRejected, PaymentStartFai
 import type { CheckoutPayload } from '../types'
 import { createUser } from '@/lib/db/users'
 import { getSubscription, getQuiz } from '@/lib/db/hub-data'
-import { latestConsent } from '@/lib/legal/consent'
-import { TERMS_VERSION, DISCLAIMER_VERSION } from '@/lib/legal/content'
+import { latestConsent, listConsents } from '@/lib/legal/consent'
+import { TERMS_VERSION, DISCLAIMER_VERSION, HEALTH_DATA_VERSION } from '@/lib/legal/content'
 import { readIntroLedger, ledgerTotals } from '@/lib/stack-blueprint/intro-allocation'
 import type { MemberSubscription } from '@/lib/recharge/types'
 import type { QuizAnswers } from '@/lib/types'
@@ -290,7 +290,93 @@ describe('consent is a precondition of checkout', () => {
     })
 
     const stored = await getSubscription(user.id)
-    expect(stored?.safetyConstraints).toEqual({ dietaryTags: ['vegan'], noStimulants: true })
+    expect(stored?.safetyConstraints).toEqual({
+      dietaryTags: ['vegan'],
+      noStimulants: true,
+      safetyFlags: [],
+    })
+  })
+
+  it('snapshots the safety-screen flags too, so a later swap still respects them', async () => {
+    // Without these on the snapshot, a substitution months from now is judged on
+    // diet and stimulants alone and can send a contraindicated product.
+    const user = await createUser({ email: 'expecting@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      quiz: {
+        answers: {
+          safetyFlags: ['pregnancy'],
+          healthDataConsent: { accepted: true, version: HEALTH_DATA_VERSION, at: '2026-08-30T10:00:00.000Z' },
+        } as unknown as QuizAnswers,
+      },
+      consent,
+    })
+
+    const stored = await getSubscription(user.id)
+    expect(stored?.safetyConstraints?.safetyFlags).toEqual(['pregnancy'])
+  })
+
+  it('records the health-data consent separately, stamped when they actually ticked it', async () => {
+    // Its own row with its own context: Article 9 consent has to be separable
+    // from the subscription agreement, and the timestamp is the moment on the
+    // safety screen, not the moment they reached checkout.
+    const user = await createUser({ email: 'separate@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      quiz: {
+        answers: {
+          safetyFlags: ['pregnancy'],
+          healthDataConsent: { accepted: true, version: HEALTH_DATA_VERSION, at: '2026-08-30T10:00:00.000Z' },
+        } as unknown as QuizAnswers,
+      },
+      consent,
+    })
+
+    const records = await listConsents(user.id)
+    const health = records.find((r) => r.context === 'health-data')
+    expect(health).toBeDefined()
+    expect(health!.acceptedAt).toBe('2026-08-30T10:00:00.000Z')
+    expect(health!.documents.map((d) => d.id)).toEqual(['health-data'])
+    // …and the checkout row is still its own, unchanged.
+    expect(records.some((r) => r.context === 'checkout')).toBe(true)
+  })
+
+  it('drops safety flags that arrive without a consent to match', async () => {
+    // The safety screen will not collect them without consent, but a browser is
+    // not where the lawful basis is decided — an old client or a direct POST
+    // reaches this same path.
+    const user = await createUser({ email: 'noconsent@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      quiz: { answers: { safetyFlags: ['pregnancy'] } as unknown as QuizAnswers },
+      consent,
+    })
+
+    const stored = await getSubscription(user.id)
+    expect(stored?.safetyConstraints?.safetyFlags).toEqual([])
+    expect(await getQuiz<{ answers: QuizAnswers }>(user.id)).toMatchObject({
+      answers: { safetyFlags: [] },
+    })
+    expect((await listConsents(user.id)).some((r) => r.context === 'health-data')).toBe(false)
+  })
+
+  it('drops safety flags consented under a superseded version of the notice', async () => {
+    // Consent to an earlier notice is not consent to this one; accepting it
+    // would let a change in what we do with the data ride in on an old tick.
+    const user = await createUser({ email: 'stale-consent@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      quiz: {
+        answers: {
+          safetyFlags: ['pregnancy'],
+          healthDataConsent: { accepted: true, version: '2019-01-01', at: '2019-01-01T00:00:00.000Z' },
+        } as unknown as QuizAnswers,
+      },
+      consent,
+    })
+
+    const stored = await getSubscription(user.id)
+    expect(stored?.safetyConstraints?.safetyFlags).toEqual([])
   })
 })
 

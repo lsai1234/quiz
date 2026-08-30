@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { isPortalAuthed } from '@/lib/portal/guard'
+import { getFounder } from '@/lib/portal/guard'
+import { logMemberAccess } from '@/lib/portal/access-log'
 import { getSubscription } from '@/lib/db/hub-data'
 import { getUserById } from '@/lib/db/users'
 import { listChanges } from '@/lib/changes/repo'
@@ -19,11 +20,24 @@ export const dynamic = 'force-dynamic'
  * console.
  */
 export async function GET(_req: Request, ctx: { params: Promise<{ userId: string }> }) {
-  if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // The founder rather than a bare boolean: opening a member's whole record is
+  // exactly the access that has to be attributable to a person.
+  const founder = await getFounder()
+  if (!founder) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { userId } = await ctx.params
   const subscription = await getSubscription(userId)
   if (!subscription) return NextResponse.json({ error: 'No subscription for that member' }, { status: 404 })
+
+  // Awaited so a record cannot be served without the access being written —
+  // an audit log that loses entries under load is not one. It never throws; see
+  // the module.
+  await logMemberAccess({
+    founderEmail: founder.email,
+    userId,
+    kind: 'member-record',
+    path: `/api/portal/subscriptions/${userId}`,
+  })
 
   const [user, changes, notifications, consents] = await Promise.all([
     getUserById(userId),

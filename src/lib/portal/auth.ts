@@ -26,7 +26,30 @@ export interface FounderAccount {
 }
 
 interface RawAccount extends FounderAccount {
+  /**
+   * The password as supplied, or a `sha256:<hex>` digest of it.
+   *
+   * `FOUNDER_n_PASSWORD_HASH` is preferred and takes precedence: it keeps the
+   * plaintext out of the deployment's environment variables, out of the Vercel
+   * dashboard, and out of anywhere those get copied. `FOUNDER_n_PASSWORD` still
+   * works so nothing breaks on deploy — this is an upgrade path, not a
+   * migration you have to run today.
+   *
+   * Generate one with:
+   *   node -e "console.log('sha256:'+require('crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" 'your-password'
+   */
   password: string
+}
+
+const HASH_PREFIX = 'sha256:'
+
+/** The stored secret for an account, in whichever form it was configured. */
+function secretMatches(stored: string, supplied: string): boolean {
+  if (stored.startsWith(HASH_PREFIX)) {
+    const digest = crypto.createHash('sha256').update(supplied).digest('hex')
+    return sameSecret(stored.slice(HASH_PREFIX.length), digest)
+  }
+  return sameSecret(stored, supplied)
 }
 
 /** The out-of-the-box accounts. Their passwords are printed on the sign-in screen. */
@@ -55,7 +78,10 @@ function configuredAccounts(): RawAccount[] {
 
   for (let i = 1; i <= MAX_ACCOUNTS; i++) {
     const email = process.env[`FOUNDER_${i}_EMAIL`]
-    const password = process.env[`FOUNDER_${i}_PASSWORD`]
+    // The hash wins where both are set — otherwise adding one would leave the
+    // plaintext quietly still in use and the upgrade would be a no-op.
+    const hash = process.env[`FOUNDER_${i}_PASSWORD_HASH`]
+    const password = hash ? `${HASH_PREFIX}${hash.trim()}` : process.env[`FOUNDER_${i}_PASSWORD`]
     if (email && password) {
       accounts.push({
         email: email.trim().toLowerCase(),
@@ -96,12 +122,65 @@ export function founderAuthMode(): FounderAuthMode {
   return demoAccountsAllowed() ? 'demo' : 'unconfigured'
 }
 
-/** Opaque session token derived from the credentials (cookie isn't the password). */
-function tokenFor(account: { email: string; password: string }): string {
-  return crypto
-    .createHash('sha256')
-    .update(`chrgd-founder:${account.email}:${account.password}`)
-    .digest('hex')
+/** How long a founder's session lasts before they sign in again. */
+export const PORTAL_SESSION_TTL_MS = 12 * 60 * 60 * 1000
+
+/**
+ * The signing key for a founder's session token.
+ *
+ * Derived from the account's own password plus a server secret, which gives
+ * revocation for free: changing `FOUNDER_n_PASSWORD` changes the key and every
+ * token issued under the old one stops verifying, with no session table to
+ * clear.
+ *
+ * `PORTAL_TOKEN_SECRET` is optional. Without it the key still depends on the
+ * password, which is not public — but setting it means a token cannot be forged
+ * by someone who has only learned a password, and it should be set in
+ * production.
+ */
+function signingKey(account: { email: string; password: string }): Buffer {
+  return crypto.createHash('sha256')
+    .update(`chrgd-founder-v2:${process.env.PORTAL_TOKEN_SECRET ?? ''}:${account.email}:${account.password}`)
+    .digest()
+}
+
+/**
+ * A fresh session token: `email.issuedAt.nonce.signature`.
+ *
+ * This replaces a deterministic `sha256(email:password)`, which was a
+ * password-equivalent that never changed. It could not be revoked without
+ * changing the password, it was identical across every device and every login,
+ * and anything that had ever logged it — a proxy, a crash report, a shared
+ * screen — held a credential valid indefinitely. The console this guards can
+ * read every member's health data, so that was the weakest authentication in
+ * the app protecting the most sensitive thing in it.
+ *
+ * A nonce makes each login distinct, the timestamp makes it expire, and the
+ * signature is what stops any of it being edited by the holder.
+ */
+function issueToken(account: { email: string; password: string }): string {
+  const issuedAt = Date.now().toString(36)
+  const nonce = crypto.randomBytes(16).toString('hex')
+  // base64url, not the raw address: `.` is the field separator and every email
+  // here ends in one (`ada@chrgd.dev`), so an unencoded address silently splits
+  // the token into more fields than it has.
+  const body = `${Buffer.from(account.email, 'utf8').toString('base64url')}.${issuedAt}.${nonce}`
+  return `${body}.${sign(body, signingKey(account))}`
+}
+
+function sign(body: string, key: Buffer): string {
+  return crypto.createHmac('sha256', key).update(body).digest('hex')
+}
+
+/** Compare two strings without leaking their difference through timing. */
+function sameSecret(a: string, b: string): boolean {
+  const ab = Buffer.from(a, 'utf8')
+  const bb = Buffer.from(b, 'utf8')
+  // timingSafeEqual throws on a length mismatch, which would itself be an
+  // oracle — hash first so both sides are always 32 bytes.
+  const ah = crypto.createHash('sha256').update(ab).digest()
+  const bh = crypto.createHash('sha256').update(bb).digest()
+  return crypto.timingSafeEqual(ah, bh)
 }
 
 /** The list of accounts that may sign in, without their passwords. */
@@ -119,16 +198,51 @@ export function verifyFounder(
 ): { founder: FounderAccount; token: string } | null {
   if (typeof email !== 'string' || typeof password !== 'string') return null
   const e = email.trim().toLowerCase()
-  const match = rawAccounts().find((a) => a.email === e && a.password === password)
-  if (!match) return null
-  return { founder: { email: match.email, name: match.name }, token: tokenFor(match) }
+
+  // The email is matched normally — it is not a secret, and which addresses can
+  // sign in is already on the login screen. The PASSWORD comparison is the one
+  // that must not leak how much of a guess was right, so it is constant-time
+  // and runs even when no account matched, so a wrong email and a wrong
+  // password take the same time to refuse.
+  const match = rawAccounts().find((a) => a.email === e)
+  const expected = match?.password ?? crypto.randomBytes(32).toString('hex')
+  const ok = secretMatches(expected, password)
+  if (!match || !ok) return null
+
+  return { founder: { email: match.email, name: match.name }, token: issueToken(match) }
 }
 
-/** Resolve a session token back to the founder it belongs to, or null. */
+/**
+ * Resolve a session token back to the founder it belongs to, or null.
+ *
+ * Verifies the signature against the named account's key and checks the age.
+ * A token whose account has gone, whose password has changed, or which is past
+ * its TTL resolves to nobody.
+ */
 export function founderForToken(token: string | undefined | null): FounderAccount | null {
   if (!token) return null
-  const match = rawAccounts().find((a) => tokenFor(a) === token)
-  return match ? { email: match.email, name: match.name } : null
+
+  const parts = token.split('.')
+  if (parts.length !== 4) return null
+  const [rawEmail, issuedAt, nonce, signature] = parts
+
+  let email: string
+  try {
+    email = Buffer.from(rawEmail, 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+
+  const account = rawAccounts().find((a) => a.email === email)
+  if (!account) return null
+
+  const body = `${rawEmail}.${issuedAt}.${nonce}`
+  if (!sameSecret(sign(body, signingKey(account)), signature)) return null
+
+  const issued = parseInt(issuedAt, 36)
+  if (!Number.isFinite(issued) || Date.now() - issued > PORTAL_SESSION_TTL_MS) return null
+
+  return { email: account.email, name: account.name }
 }
 
 /** True when the token belongs to a valid account. */

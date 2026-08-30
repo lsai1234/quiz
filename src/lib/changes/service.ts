@@ -22,6 +22,7 @@
  */
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import type { QuizAnswers } from '@/lib/types'
 import { getSubscription, listActiveSubscriptions, saveSubscription } from '@/lib/db/hub-data'
 import { getSupplier } from '@/lib/supplier'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
@@ -45,7 +46,12 @@ export interface RunOptions {
   /** Injected in tests; otherwise read from the supplier and the database. */
   feed?: FeedEntry[]
   previousSnapshots?: SupplierSnapshot[]
-  subscriptions?: { userId: string; subscription: MemberSubscription }[]
+  subscriptions?: {
+    userId: string
+    subscription: MemberSubscription
+    /** Optional; used only to top up a pre-`safetyFlags` constraints snapshot. */
+    quizAnswers?: QuizAnswers | null
+  }[]
   catalogue?: CatalogueProduct[]
   now?: Date
   config?: PricingConfig
@@ -111,13 +117,19 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
   const available = inStockCatalogue(catalogue, unavailable)
   const affected = findAffectedLines(diff, subscriptions, catalogue)
 
+  // Saved answers by member, so a constraints snapshot written before it carried
+  // safety flags can be topped up rather than falling back to the blunt check.
+  const answersByUser = new Map<string, QuizAnswers | null>(
+    subscriptions.map((s) => [s.userId, s.quizAnswers ?? null]),
+  )
+
   for (const { userId, subscription, line, sku, kind } of affected) {
     const id = changeEventId(userId, line.id, kind)
     const existing = await getChange(id)
     // A founder-resolved event stays resolved; re-raising it would undo their call.
     if (existing && !OPEN_STATUSES.includes(existing.status)) continue
 
-    const constraints = constraintsFor(subscription)
+    const constraints = constraintsFor(subscription, answersByUser.get(userId))
     const replacement = findReplacement({ candidates: available, line, constraints, config })
     // Distinguish "the category is empty" from "nothing here is safe for you" —
     // they read very differently to someone whose plan just shrank.
@@ -135,6 +147,7 @@ export async function runChangeDetection(opts: RunOptions = {}): Promise<ChangeD
       now,
       config,
       createdAt: existing?.createdAt,
+      constraints,
     })
     // Keep the original deadline: a founder's review window shouldn't restart
     // every time the daily job confirms the product is still gone.

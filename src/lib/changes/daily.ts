@@ -47,6 +47,20 @@ export interface DailyRunResult {
   commissionsConfirmed?: number
   /** Snoozed plans whose return date arrived and are now active again. */
   snoozesResumed?: number
+  /**
+   * Storage-limitation sweeps (Article 5(1)(e)) — see `lib/legal/retention.ts`.
+   * `retentionFailed` naming a sweep means retention is falling behind, which
+   * is a compliance problem rather than an operational one and is worth looking
+   * at even though the job itself carried on.
+   */
+  retention?: {
+    quizAnswers: number
+    emailBodies: number
+    consentMetadata: number
+    analyticsEvents: number
+    abandonedAccounts: number
+  }
+  retentionFailed?: string[]
   note?: string
 }
 
@@ -154,6 +168,31 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     console.error('[daily] share card sweep failed:', err)
   }
 
+  // Retention. Deliberately last: it deletes things, and running it after the
+  // sweeps that might still need those rows means a failure earlier in the job
+  // never leaves data deleted that something else had not finished with.
+  // Each sweep already fails independently — see `runRetentionSweeps`.
+  let retention
+  let retentionFailed: string[] = []
+  try {
+    const { runRetentionSweeps } = await import('@/lib/legal/retention')
+    const result = await runRetentionSweeps()
+    retentionFailed = result.failed
+    retention = {
+      quizAnswers: result.quizAnswers,
+      emailBodies: result.emailBodies,
+      consentMetadata: result.consentMetadata,
+      analyticsEvents: result.analyticsEvents,
+      abandonedAccounts: result.abandonedAccounts,
+    }
+    if (result.failed.length > 0) {
+      console.error(`[daily] retention sweeps failed: ${result.failed.join(', ')}`)
+    }
+  } catch (err) {
+    console.error('[daily] retention failed:', err)
+    retentionFailed = ['all']
+  }
+
   return {
     dryRun: false,
     baselineOnly: detection.baselineOnly,
@@ -174,6 +213,8 @@ export async function runDailyJob(dryRun = false): Promise<DailyRunResult> {
     productsMissing: productSync.missing.length,
     commissionsConfirmed,
     snoozesResumed,
+    retention,
+    retentionFailed,
   }
 }
 

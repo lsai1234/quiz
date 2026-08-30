@@ -10,6 +10,7 @@
 import crypto from 'crypto'
 import { currentStripeWorld } from '@/lib/payments'
 import type { MemberSubscription } from '@/lib/recharge/types'
+import type { QuizAnswers } from '@/lib/types'
 import type { FeedbackCheckIn } from '@/lib/feedback'
 import { getEngine, now } from './engine'
 
@@ -88,19 +89,48 @@ export async function listFeedback(userId: string): Promise<FeedbackCheckIn[]> {
 }
 
 /** Every active subscription across all accounts — for the daily stock check. */
-export async function listActiveSubscriptions(): Promise<{ userId: string; subscription: MemberSubscription }[]> {
+export async function listActiveSubscriptions(): Promise<ActiveSubscriptionRow[]> {
   const db = await getEngine()
-  const rows = await db.all<{ user_id: string; data: string }>('SELECT user_id, data FROM subscriptions')
-  const out: { userId: string; subscription: MemberSubscription }[] = []
+  const rows = await db.all<{ user_id: string; data: string; quiz: string | null }>(
+    'SELECT user_id, data, quiz FROM subscriptions',
+  )
+  const out: ActiveSubscriptionRow[] = []
   for (const row of rows) {
     try {
       const sub = JSON.parse(row.data) as MemberSubscription
-      if (sub.status === 'active') out.push({ userId: row.user_id, subscription: sub })
+      if (sub.status !== 'active') continue
+      out.push({ userId: row.user_id, subscription: sub, quizAnswers: parseQuizAnswers(row.quiz) })
     } catch {
       /* skip an unreadable row */
     }
   }
   return out
+}
+
+export interface ActiveSubscriptionRow {
+  userId: string
+  subscription: MemberSubscription
+  /**
+   * The member's saved quiz answers, read from the same row.
+   *
+   * Carried so the daily change job can top up a `safetyConstraints` snapshot
+   * written before it recorded safety flags (see `changes/safety.ts`). Without
+   * this the legacy rows fall back to the blunt check, which refuses every
+   * contraindicated product rather than only the ones that actually conflict.
+   * Null when the member has no saved answers.
+   */
+  quizAnswers: QuizAnswers | null
+}
+
+/** The `quiz` column holds `{ answers, level }`; anything else reads as absent. */
+function parseQuizAnswers(raw: string | null): QuizAnswers | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { answers?: QuizAnswers } | null
+    return parsed?.answers ?? null
+  } catch {
+    return null
+  }
 }
 
 /**

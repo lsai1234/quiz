@@ -31,7 +31,7 @@ export interface ConsentedDocument {
   hash: string
 }
 
-export type ConsentContext = 'checkout' | 're-consent'
+export type ConsentContext = 'checkout' | 're-consent' | 'health-data' | 'health-data-withdrawn'
 
 export interface ConsentRecord {
   id: string
@@ -140,6 +140,15 @@ export interface RecordConsentInput {
   userId: string
   context: ConsentContext
   documents: ConsentedDocument[]
+  /**
+   * When the member actually agreed, if that is not now.
+   *
+   * The health-data consent is given on the safety screen and only reaches the
+   * server when they check out, which can be several minutes and a change of
+   * mind later. Recording the moment of the tick rather than the moment of the
+   * write is the difference between evidence and an approximation.
+   */
+  acceptedAt?: string
   ip?: string | null
   userAgent?: string | null
 }
@@ -150,7 +159,7 @@ export async function recordConsent(input: RecordConsentInput): Promise<ConsentR
     userId: input.userId,
     context: input.context,
     documents: input.documents,
-    acceptedAt: now(),
+    acceptedAt: input.acceptedAt ?? now(),
     ip: input.ip ?? null,
     userAgent: input.userAgent ?? null,
   }

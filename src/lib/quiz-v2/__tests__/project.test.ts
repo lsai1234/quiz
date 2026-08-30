@@ -293,3 +293,41 @@ describe('the questions read on their own', () => {
     ).toMatchSnapshot()
   })
 })
+
+/**
+ * The Article 9 consent and the answers it covers.
+ *
+ * `projectAnswers` reads `state.picked`, so what the screen is showing is not
+ * what the engine gets — the interview state is. These pin that the two agree.
+ */
+describe('health-data consent', () => {
+  const consent = { accepted: true as const, version: '2026-08-30', at: '2026-08-30T10:00:00.000Z' }
+
+  it('carries the consent through to the answers', () => {
+    const s = { ...seeded(), healthDataConsent: consent }
+    expect(projectAnswers(s).healthDataConsent).toEqual(consent)
+  })
+
+  it('is null when it was never given', () => {
+    expect(projectAnswers(seeded()).healthDataConsent ?? null).toBeNull()
+  })
+
+  it('projects the flags a consenting member ticked', () => {
+    let s = seeded()
+    s = answerQuestion(s, Q('safety'), ['pregnancy'])
+    s = { ...s, healthDataConsent: consent }
+    expect(projectAnswers(s).safetyFlags).toEqual(['pregnancy'])
+  })
+
+  it('projects no flags once the picks are cleared on withdrawal', () => {
+    // Declining after answering has to reach `picked`, not just the checkboxes
+    // on screen — otherwise the flags survive to the reveal and the checkout.
+    let s = seeded()
+    s = answerQuestion(s, Q('safety'), ['pregnancy'])
+    expect(projectAnswers(s).safetyFlags).toEqual(['pregnancy'])
+
+    const { safety: _dropped, ...picked } = s.picked
+    s = { ...s, picked, healthDataConsent: null }
+    expect(projectAnswers(s).safetyFlags).toEqual([])
+  })
+})

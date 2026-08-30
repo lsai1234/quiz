@@ -35,7 +35,11 @@ Works out of the box — no API keys needed. All 8 builder stages run with reali
 
 Copy `.env.example` to `.env.local` and add:
 - `OPENAI_API_KEY` — enables live idea generation
-- `NEXT_PUBLIC_OPENAI_API_KEY` — same value, used client-side
+
+Server-side only. Every OpenAI call goes through a route handler, so the key
+never reaches the browser — don't add a `NEXT_PUBLIC_` copy of it. The
+`NEXT_PUBLIC_` prefix inlines a value into the JavaScript bundle served to every
+visitor, which for an API key means publishing it.
 
 ## Add Google Sheets export
 
@@ -133,10 +137,30 @@ Setting `NOTIFY_DOMAIN` puts each kind on its own address —
 replies going to the real contact inbox. The setup guide for both routes is
 `docs/EMAILS.md`.
 
+## Data protection
+
+The quiz collects special category health data (pregnancy, medication, allergies)
+under Article 9, so the handling of it is deliberate rather than incidental:
+
+- **Consent is taken on the safety screen**, before any option is shown, on its
+  own control — not folded into the checkout tick. Decline and the questions are
+  never asked. `src/components/legal/HealthDataConsent.tsx`, enforced server-side
+  in `src/lib/legal/health-data.ts`.
+- **The flags never leave.** They are in no AI prompt, go to no processor, and
+  are kept out of the strings the Founders Hub renders.
+- **Retention runs nightly** from `/api/cron/daily`. Windows live in `RETENTION`
+  (`src/lib/legal/content.ts`) and are read by both the privacy notice and the
+  job, so the notice cannot promise a period the code does not enforce.
+- **Members can export and delete** from My Hub — `src/lib/db/erasure.ts`.
+
+The paperwork is `docs/DPIA.md` and `docs/PROCESSORS.md` (Article 30 record,
+processor register and transfer position). Both carry 🔲 markers for the
+decisions and facts still needed before go-live.
+
 ## Testing
 
 ```bash
-npm test     # 2,841 unit tests
+npm test     # 3,530 unit tests
 npm run e2e  # the browser suite — every product, every journey, no keys needed
 ```
 

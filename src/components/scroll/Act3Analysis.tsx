@@ -404,6 +404,18 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
         <p className="text-[10px] tracking-[0.22em] uppercase text-white/25 flex items-center gap-2 mt-3" style={{ fontFamily: 'var(--font-display)' }}>
           <span className="inline-block w-1 h-1 rounded-full bg-[#00D4FF]" /> Powered by your charge
         </p>
+        {/* Article 13(2)(f): where a model is involved in what someone is shown,
+            say so at the moment it happens rather than only in a notice they
+            would have to go looking for. Deliberately says what it cannot do —
+            "chooses between options we have already picked" is the honest
+            description and also the reassuring one. */}
+        <p className="text-[10px] leading-relaxed text-white/30 text-center mt-6 max-w-[300px]">
+          AI helps order your questions and choose between products we’ve already shortlisted for
+          you. It can’t add anything or overrule your safety answers.{' '}
+          <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="underline">
+            How we use your data
+          </a>
+        </p>
 
         {/* The v2 recap. Renders nothing at all when there are no drivers —
             which is every v1 run — so this screen is unchanged on that arm. */}

@@ -10,7 +10,19 @@ const ACCENT = '#00D4FF'
  * contents list at the top. Terms people can't read are terms that don't inform
  * anyone, whatever they say.
  */
-export function LegalDocumentView({ doc, warning }: { doc: LegalDocument; warning?: string | null }) {
+export function LegalDocumentView({
+  doc,
+  warning,
+  children,
+}: {
+  doc: LegalDocument
+  warning?: string | null
+  /** Anything interactive the document needs beside it — the analytics switch
+   *  on the privacy notice, for instance. Rendered after the last section so a
+   *  server-rendered document can carry a client control without this component
+   *  having to know what it is. */
+  children?: React.ReactNode
+}) {
   return (
     <article className="max-w-2xl mx-auto px-5 py-10">
       <header className="mb-8">
@@ -78,6 +90,8 @@ export function LegalDocumentView({ doc, warning }: { doc: LegalDocument; warnin
           </section>
         ))}
       </div>
+
+      {children && <div className="mt-10">{children}</div>}
     </article>
   )
 }

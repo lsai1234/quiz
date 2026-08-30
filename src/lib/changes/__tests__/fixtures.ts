@@ -3,7 +3,7 @@
  * rather than derived from the blueprint engine, so a pricing tweak elsewhere
  * can't silently change what these tests are asserting.
  */
-import type { CatalogueProduct, DietaryTag, SwapGroup } from '@/lib/catalogue/types'
+import type { CatalogueProduct, DietaryTag, SafetyFlag, SwapGroup } from '@/lib/catalogue/types'
 import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
 import { flatMonthlyOf } from '@/lib/recharge/mock'
 
@@ -14,6 +14,7 @@ export function product(over: {
   cost?: number | null
   dietaryTags?: DietaryTag[]
   hasStimulants?: boolean
+  contraindications?: SafetyFlag[]
   isSubscriptionOnly?: boolean
   subscriptionEligible?: boolean
   title?: string
@@ -45,6 +46,7 @@ export function product(over: {
     goals: ['muscle'],
     dietaryTags: over.dietaryTags ?? [],
     hasStimulants: over.hasStimulants ?? false,
+    ...(over.contraindications ? { contraindications: over.contraindications } : {}),
     formats: ['powder'],
     servings: 30,
     isCoreEligible: true,

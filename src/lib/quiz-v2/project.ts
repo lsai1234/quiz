@@ -91,6 +91,7 @@ export function projectAnswers(state: InterviewState): QuizAnswers {
     ageBracket: state.form.ageBracket,
     gender: state.form.gender,
     weightBand: state.form.weightBand,
+    healthDataConsent: state.healthDataConsent ?? null,
     // Fresh arrays and records — `defaultAnswers` is a module constant and
     // must never be mutated by a merge.
     lifestyle: [],

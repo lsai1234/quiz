@@ -23,6 +23,15 @@ async function answerOne(page: Page, prefer?: string): Promise<string> {
     await page.getByRole('button', { name: '75–90kg' }).click()
     await page.getByRole('button', { name: /^Continue/ }).click()
   } else {
+    // The safety screen holds its options back until the health-data notice is
+    // accepted. Without this the walk clicks straight past on Continue and the
+    // arm silently never exercises the exclusions at all.
+    const agree = page.getByRole('button', { name: /^Yes — use my answers/ })
+    if (await agree.count()) {
+      await agree.first().click()
+      await expect(page.getByRole('button', { name: 'None of these' })).toBeVisible({ timeout: 10_000 })
+    }
+
     const options = page.locator('.overflow-y-auto button[aria-pressed]')
     const target = prefer ? page.getByRole('button', { name: prefer }) : options.first()
     const cont = page.getByRole('button', { name: /^(Continue|Pick at least one)/ })

@@ -13,6 +13,7 @@ import { AnswerOption, CheckMark } from '@/components/quiz/AnswerOption'
 import { GOALS_DATA, WELLBEING_DATA, GOAL_LABELS } from '@/lib/quiz-goals'
 import { quizFactFor, type QuizFact } from '@/lib/quiz-sell'
 import { funnel } from '@/lib/analytics/quiz'
+import { HealthDataConsent, healthDataConsentRecord } from '@/components/legal/HealthDataConsent'
 import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel,
@@ -1159,29 +1160,47 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             </div>
           ))}
 
-          {/* ── Safety screen — private, remove-only filter ── */}
+          {/* ── Safety screen — private, remove-only filter ──
+                The options render only once health-data consent is given: these
+                are Article 9 answers, and "optional" has to mean not collected
+                rather than collected-and-ignorable. See HealthDataConsent. */}
           {id === 'safety' && (
             <div>
-              <div className="grid grid-cols-2 gap-2.5">
-                {SAFETY_DATA.map(({ id: sid, label }) => (
-                  <AnswerOption
-                    key={`safety-${sid}`} label={label} multi
-                    selected={(answers.safetyFlags ?? []).includes(sid)}
-                    onClick={() => {
-                      const c = answers.safetyFlags ?? []
-                      setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
-                    }}
-                  />
-                ))}
-                <AnswerOption
-                  key="safety-none" label="None of these" multi
-                  selected={(answers.safetyFlags ?? []).length === 0}
-                  onClick={() => setAnswer('safetyFlags', [])}
-                />
-              </div>
-              <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
-                Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.
-              </p>
+              <HealthDataConsent
+                consent={answers.healthDataConsent}
+                onAccept={(version) => setAnswer('healthDataConsent', healthDataConsentRecord(version))}
+                onDecline={() => {
+                  // Withdrawing drops anything already ticked — leaving it behind
+                  // would keep processing data the member just declined.
+                  setAnswer('healthDataConsent', null)
+                  setAnswer('safetyFlags', [])
+                }}
+              />
+
+              {answers.healthDataConsent?.accepted && (
+                <>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {SAFETY_DATA.map(({ id: sid, label }) => (
+                      <AnswerOption
+                        key={`safety-${sid}`} label={label} multi
+                        selected={(answers.safetyFlags ?? []).includes(sid)}
+                        onClick={() => {
+                          const c = answers.safetyFlags ?? []
+                          setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
+                        }}
+                      />
+                    ))}
+                    <AnswerOption
+                      key="safety-none" label="None of these" multi
+                      selected={(answers.safetyFlags ?? []).length === 0}
+                      onClick={() => setAnswer('safetyFlags', [])}
+                    />
+                  </div>
+                  <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
+                    Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.
+                  </p>
+                </>
+              )}
             </div>
           )}
 

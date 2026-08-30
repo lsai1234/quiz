@@ -23,6 +23,12 @@
  *    exactly what you want from evidence.
  */
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
+import {
+  DISCLAIMER_VERSION,
+  HEALTH_DATA_VERSION,
+  PRIVACY_VERSION,
+  TERMS_VERSION,
+} from './versions'
 
 // ─── Who we are ───────────────────────────────────────────────────────────────
 
@@ -87,32 +93,20 @@ export interface LegalDocument {
   sections: LegalSection[]
 }
 
-export type LegalDocumentId = 'terms' | 'disclaimer'
-
-/** Bump on a material change. Triggers the in-hub re-consent notice. */
-export const TERMS_VERSION = '2026-08-12'
-export const DISCLAIMER_VERSION = '2026-07-29'
+export type LegalDocumentId = 'terms' | 'disclaimer' | 'privacy' | 'health-data'
 
 /**
- * The first terms version that discloses the cancel settlement — the balance a
- * member settles on goods already sent them when they cancel early.
- *
- * This is a GATE, not a note. A member who agreed to the previous terms was told
- * they could cancel "with no fee", and we do not get to charge them a balance
- * they were never shown; they cancel free until they accept these terms. Consent
- * records are keyed by version (see `lib/legal/consent.ts`), so this is
- * enforceable per member rather than by deploy date.
- *
- * Moved to 2026-08-12. Most of that revision is more generous — the balance is
- * capped at what the member has paid, anything under £5 is waived, and a
- * first-month discount is no longer clawed back — but one part is a CORRECTION
- * rather than a concession: the previous wording said the balance "reaches zero
- * as soon as [payments catch up]" and stopped there, which is only half true.
- * It is a sawtooth, and it rises again each time a multi-month item ships. A
- * member who agreed to the old sentence was not told that, so the gate moves
- * with it and they re-consent before anything is charged.
+ * Versions live in their own leaf module so a client component needing one does
+ * not pull this file — and with it the pricing config — into its bundle.
+ * Re-exported here so every existing import keeps working.
  */
-export const SETTLEMENT_TERMS_VERSION = '2026-08-12'
+export {
+  TERMS_VERSION,
+  DISCLAIMER_VERSION,
+  PRIVACY_VERSION,
+  HEALTH_DATA_VERSION,
+  SETTLEMENT_TERMS_VERSION,
+} from './versions'
 
 // ─── Shared sentences (one definition, used everywhere) ───────────────────────
 
@@ -362,6 +356,199 @@ export function getDisclaimerDocument(entity = LEGAL_ENTITY): LegalDocument {
         id: 'liability',
         heading: 'What we’re responsible for',
         body: LIABILITY_BODY(entity),
+      },
+    ],
+  }
+}
+
+// ─── Privacy notice ───────────────────────────────────────────────────────────
+
+/**
+ * How long we keep each kind of record. Single source of truth: the retention
+ * job reads these same constants, so the notice cannot promise a window the
+ * code does not enforce. See `lib/legal/retention.ts`.
+ */
+export const RETENTION = {
+  /** Quiz answers and the plan, after a subscription ends. */
+  quizAfterEndDays: 365,
+  /** Orders — set by tax law, not by us. HMRC requires six years. */
+  ordersYears: 6,
+  /** The rendered body of a sent email. The row itself is kept as an audit trail. */
+  emailBodyDays: 90,
+  /** Consent records, after the account closes. Evidence of what was agreed. */
+  consentAfterCloseYears: 6,
+  /** IP and user agent on a consent record. */
+  consentMetadataDays: 365,
+  /** Funnel analytics. */
+  analyticsDays: 400,
+  /** An account that never completed a purchase and has gone quiet. */
+  abandonedAccountDays: 90,
+} as const
+
+export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
+  return {
+    id: 'privacy',
+    title: 'Privacy notice',
+    version: PRIVACY_VERSION,
+    effectiveFrom: '2026-08-30',
+    summary:
+      'What we collect, why, who else sees it, how long we keep it, and how to get it back or have it deleted.',
+    sections: [
+      {
+        id: 'who-we-are',
+        heading: 'Who we are',
+        body: [
+          `${entity.tradingName} is a trading name of ${entity.legalName} (company number ${entity.companyNumber}), registered at ${entity.registeredAddress}. We are the data controller for the information described here.`,
+          `For anything about your data — a copy of it, a correction, or deletion — email ${entity.contactEmail}.`,
+          'If you are not happy with how we have handled your information you can complain to the Information Commissioner’s Office at ico.org.uk, or by calling 0303 123 1113. We would rather you came to us first so we can put it right.',
+        ],
+      },
+      {
+        id: 'what-we-collect',
+        heading: 'What we collect',
+        body: [
+          'From the quiz: your goals, your training and diet, your daily routine, your age band, sex and weight band, your first name if you give it, and what supplements you already take. Answering is how the plan gets built.',
+          'From the safety screen: whether you are pregnant or breastfeeding, whether you take prescription medication, and whether you have a shellfish allergy. This is health information and we treat it differently from everything else — see the next section.',
+          'When you subscribe: your email address, your delivery address and phone number, and your payment details. Payment card details go straight to Stripe and never reach our systems.',
+          'While you are a member: your plan and how you change it, your order history, the emails we have sent you, and any check-ins you write.',
+          'Automatically: anonymous usage events so we can see where people get stuck in the quiz. These carry a random per-visit id that is discarded when you close the tab. No cookie, no third-party tracker, and we honour Do Not Track and Global Privacy Control.',
+          'You can switch that off for this device at the bottom of this page, and it stops straight away.',
+        ],
+      },
+      {
+        id: 'health-information',
+        heading: 'Your health information, specifically',
+        body: [
+          'Pregnancy, breastfeeding, prescription medication and allergies are special category data under the UK GDPR. We only ever process them because you have explicitly agreed on the safety screen, and you can decline — the quiz works without them, it simply cannot rule out products for you.',
+          'We use them for exactly one thing: removing products that are not suitable for you, both when your plan is first built and whenever we would otherwise substitute something into it.',
+          'They are never sent to any third party. They are not used for marketing, they are not used to profile you, and they are not included in anything our AI is asked to write. Our staff can see your plan, but the flags themselves are not displayed in the tools they use day to day.',
+          'You can withdraw your agreement at any time from your account. Because these answers are what our product exclusions run on, withdrawing them means we can no longer promise a plan is suitable for you — so we will pause automatic substitutions and ask you what you would like to do rather than carry on without them.',
+        ],
+      },
+      {
+        id: 'why-we-can',
+        heading: 'Why we are allowed to use it',
+        body: [
+          'To provide the plan you asked for, take payment and deliver your order, we rely on our contract with you.',
+          'For your health information, we rely on your explicit consent, which you give on the safety screen and can withdraw at any time.',
+          'To keep records of orders and tax, we rely on our legal obligations.',
+          'To keep the site working, spot faults and prevent fraud, we rely on our legitimate interests in running the business safely. You can object to this and we will look at it properly.',
+          'For marketing email, we rely on your consent or, where you have bought from us, the soft opt-in — and every message carries a one-click unsubscribe.',
+        ],
+      },
+      {
+        id: 'ai',
+        heading: 'Where AI is involved',
+        body: [
+          'We use OpenAI to help order the quiz questions, to pick between products we have already shortlisted, and to write the description of your stack.',
+          'What is sent: your goals, age band, sex, diet, lifestyle answers and any free-text follow-ups. What is never sent: your name, your email, your address, and your safety-screen answers.',
+          'The model can only choose from options our own engine has already decided are suitable and safe for you. It cannot add a product, invent a question, or change what an option means, and nothing it writes is a medical claim.',
+          'No decision here has a legal or similarly significant effect on you — you can change, swap or ignore anything we suggest — so this is not the kind of automated decision-making you have a specific right to object to. If you would rather a person looked at your plan, email us and we will.',
+          'OpenAI processes this in the United States. That transfer is covered by the UK Addendum to the European Commission’s standard contractual clauses.',
+        ],
+      },
+      {
+        id: 'who-else',
+        heading: 'Who else sees it',
+        body: [
+          'Stripe, for payments. PowerBody, our supplier, who receive your name, delivery address, phone and email so they can send your order — and nothing about your health. Our email provider, to deliver receipts and notices. Vercel, who host the site. OpenAI, as described above.',
+          'Each of them acts on our instructions under a contract and cannot use your information for their own purposes. We do not sell your data, and we never share it with advertisers.',
+        ],
+      },
+      {
+        id: 'how-long',
+        heading: 'How long we keep it',
+        body: [
+          `Your quiz answers and your plan: while you are a member, and for ${RETENTION.quizAfterEndDays} days after your subscription ends, so you can come back without starting over.`,
+          `Orders and invoices: ${RETENTION.ordersYears} years, because tax law requires it.`,
+          `The text of emails we sent you: ${RETENTION.emailBodyDays} days. We keep a record that the email was sent for longer, without its contents.`,
+          `Consent records: ${RETENTION.consentAfterCloseYears} years after your account closes, because they are the evidence of what you agreed to. The IP address and browser recorded alongside are deleted after ${RETENTION.consentMetadataDays} days.`,
+          `Anonymous usage events: ${RETENTION.analyticsDays} days.`,
+          `If you start an account but never complete a purchase, we delete everything after ${RETENTION.abandonedAccountDays} days.`,
+          'When you ask us to delete your account we do it straight away, keeping only what the law requires us to keep.',
+        ],
+      },
+      {
+        id: 'your-rights',
+        heading: 'Your rights',
+        body: [
+          'You can get a copy of everything we hold about you, and you can download it yourself from your account at any time — you do not have to ask.',
+          'You can delete your account from your account settings. That removes your quiz answers, your plan, your check-ins and your saved cards. We keep order records where tax law requires it, and the consent records that show what you agreed to.',
+          'You can correct anything that is wrong, ask us to restrict how we use your information, object to processing we do on legitimate interests, and withdraw any consent you have given.',
+          'We answer within one month and we do not charge for it.',
+        ],
+      },
+      {
+        id: 'security',
+        heading: 'How we protect it',
+        body: [
+          'Passwords are hashed, never stored. Session tokens are stored hashed too, so a copy of our database does not let anyone sign in as you. Everything travels over HTTPS.',
+          'Access to member data is limited to the people who run the business, and your safety-screen answers are kept out of the day-to-day tools entirely.',
+          'If something does go wrong and it puts you at risk, we will tell you and the ICO within 72 hours of finding out.',
+        ],
+      },
+      {
+        id: 'children',
+        heading: 'Children',
+        body: [
+          'CHRGD is not for under-18s. We do not knowingly collect information about children, and if we find we have, we delete it. If you believe a child has given us their details, email us and we will remove them.',
+        ],
+      },
+      {
+        id: 'changes',
+        heading: 'Changes to this notice',
+        body: [
+          'If we change how we use your information in a way that affects you, we will tell you rather than quietly updating this page. Where the change involves your health information we will ask you to agree again.',
+          'The version you are reading is shown at the top of this page.',
+        ],
+      },
+    ],
+  }
+}
+
+// ─── Health data consent (Article 9) ──────────────────────────────────────────
+
+/**
+ * The explicit consent taken at the safety screen, before a single health
+ * answer is collected.
+ *
+ * Its own document rather than a paragraph in the terms, because Article 9(2)(a)
+ * consent has to be specific and separable — bundled into a subscription
+ * agreement it is neither, and a member who wants the plan would have no way to
+ * refuse the health processing. It is short on purpose: this is read in the
+ * middle of a quiz, on a phone.
+ */
+export function getHealthDataDocument(entity = LEGAL_ENTITY): LegalDocument {
+  return {
+    id: 'health-data',
+    title: 'Using your health answers',
+    version: HEALTH_DATA_VERSION,
+    effectiveFrom: '2026-08-30',
+    summary: 'What the next question does with your answer, and how to take it back.',
+    sections: [
+      {
+        id: 'what',
+        heading: 'What you are agreeing to',
+        body: [
+          'The next screen asks whether you are pregnant or breastfeeding, take prescription medication, or have a shellfish allergy. That is health information, and the law says we need your clear permission before we can use it.',
+          'We use it for one thing only: leaving out products that are not right for you. It never adds anything to your plan.',
+          'It is not sent to anyone else, it is not used for marketing, and it is not included in anything our AI writes.',
+        ],
+      },
+      {
+        id: 'optional',
+        heading: 'You do not have to',
+        body: [
+          'Skip it and the quiz still works — you will still get a plan. We simply will not be able to rule products out for you, so you will need to check the label yourself before taking anything.',
+          `You can change your mind whenever you like from your account, or by emailing ${entity.contactEmail}. Withdrawing stops us using these answers and deletes them.`,
+        ],
+      },
+      {
+        id: 'more',
+        heading: 'The detail',
+        body: [
+          'How long we keep this, who can see it, and every other right you have is set out in our privacy notice.',
+        ],
       },
     ],
   }

@@ -136,10 +136,53 @@ export function getSessionId(): string {
   return sessionId
 }
 
-/** Honour DNT / GPC. Exported so error reporting can respect it too. */
+/** Where an explicit "no thanks" from the storage notice is remembered. */
+export const OPT_OUT_KEY = 'chrgd_analytics_off'
+
+/**
+ * Whether this visitor has said no here, on this device.
+ *
+ * `localStorage` rather than `sessionStorage`, unlike the funnel's own id: a
+ * choice to opt out has to outlive the tab it was made in, or it is not a
+ * choice. It is the one thing we keep about someone who has asked us to keep
+ * nothing, which is why it is a single boolean and nothing else.
+ */
+export function analyticsOptedOutHere(): boolean {
+  try {
+    return window.localStorage.getItem(OPT_OUT_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+/** Remember the choice, and stop immediately. */
+export function setAnalyticsOptOut(off: boolean): void {
+  try {
+    if (off) {
+      window.localStorage.setItem(OPT_OUT_KEY, '1')
+      // Drop the id we already minted, rather than leaving it to expire with
+      // the tab — opting out should take effect now, not at the next visit.
+      window.sessionStorage.removeItem(SESSION_KEY)
+      sessionId = null
+    } else {
+      window.localStorage.removeItem(OPT_OUT_KEY)
+    }
+  } catch {
+    /* storage unavailable — nothing is being recorded anyway */
+  }
+}
+
+/**
+ * Honour DNT / GPC, and an explicit opt-out here.
+ *
+ * Exported so error reporting can respect it too. A browser signal is a
+ * standing instruction and is honoured without asking; the local flag is the
+ * answer to the storage notice, for visitors whose browser sends neither.
+ */
 export function privacyOptedOut(): boolean {
   const nav = navigator as Navigator & { globalPrivacyControl?: boolean; msDoNotTrack?: string }
-  return nav.doNotTrack === '1' || nav.msDoNotTrack === '1' || nav.globalPrivacyControl === true
+  if (nav.doNotTrack === '1' || nav.msDoNotTrack === '1' || nav.globalPrivacyControl === true) return true
+  return analyticsOptedOutHere()
 }
 
 /**

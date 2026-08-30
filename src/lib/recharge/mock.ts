@@ -236,7 +236,16 @@ export function snoozeSubscription(sub: MemberSubscription, months: number): Mem
  */
 export function cancelSubscription(sub: MemberSubscription, reason?: string): MemberSubscription {
   if (sub.status === 'cancelled') return sub
-  return { ...sub, status: 'cancelled', cancelReason: reason ?? sub.cancelReason }
+  return {
+    ...sub,
+    status: 'cancelled',
+    cancelReason: reason ?? sub.cancelReason,
+    // Stamped here so the retention window can be measured from the ending
+    // rather than from the row's `updated_at`, which any later write — a
+    // founder opening the exit queue, say — would push forward and quietly
+    // extend how long the health answers are kept.
+    cancelledAt: new Date().toISOString(),
+  }
 }
 
 /** Swap a line's product (within its swap group) and re-price it + the flat monthly. */

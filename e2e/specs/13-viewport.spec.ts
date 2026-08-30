@@ -24,6 +24,27 @@ async function assertCtaInFrame(page: Page, where: string) {
   const cta = page.getByRole('button', { name: /^(Continue|Pick at least)/ }).last()
   await expect(cta, where).toBeVisible()
 
+  /* `--app-height` is written by a resize listener, so it lands a tick after the
+     window actually changes — `setViewportSize` resolves before the page has
+     run its handler. Asserting on the first read made this a race that either
+     arm could lose depending on which happened to hydrate slower that run.
+
+     Polling costs the test nothing it was actually checking: if the fix is
+     undone, the value never reaches the window height and this times out with
+     the same message it used to fail with. What it stops doing is failing when
+     the value is merely late. */
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(() => {
+          const app = getComputedStyle(document.documentElement)
+            .getPropertyValue('--app-height').trim()
+          return app === `${window.innerHeight}px`
+        }),
+      { message: `${where}: --app-height tracks the window`, timeout: 5_000 },
+    )
+    .toBe(true)
+
   const measured = await page.evaluate(() => ({
     inner: window.innerHeight,
     appHeight: getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim(),

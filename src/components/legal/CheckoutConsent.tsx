@@ -83,6 +83,19 @@ export function CheckoutConsent({
         </span>
       </label>
 
+      {/* Deliberately outside the label, and not a second tick. Article 13 wants
+          the privacy notice available at the point of collection; it is not
+          something a member agrees to, and putting it inside the consent
+          sentence would bundle a notice with an agreement. */}
+      <p className="text-[10.5px] leading-relaxed text-[var(--color-text-3)] mt-3 px-1">
+        How we handle your information — including your health answers, and how to get a copy or
+        have it deleted — is in our{' '}
+        <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: ACCENT }}>
+          privacy notice
+        </a>
+        .
+      </p>
+
       {error && (
         <p id="consent-error" role="alert" className="text-xs font-semibold mt-2 px-1" style={{ color: '#ff6b6b' }}>
           {error}
