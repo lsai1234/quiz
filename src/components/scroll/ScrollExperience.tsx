@@ -62,7 +62,10 @@ export function ScrollExperience() {
   const canResume = hydrated && !resumeDismissed && act === 1 && hasQuizProgress()
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
+    /* The measured window height, not `min-h-screen` (`100vh`, the LARGE
+       viewport): in the browsers ViewportHeight exists for, `100vh` overshoots
+       the window and leaves a strip of empty page to scroll past the hero. */
+    <div className="overflow-x-hidden" style={{ minHeight: 'var(--app-height, 100dvh)' }}>
       {canResume && (
         <div className="fixed inset-x-0 top-0 z-50 flex justify-center px-4 pt-3">
           <div

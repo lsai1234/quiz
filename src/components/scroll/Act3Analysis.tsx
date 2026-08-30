@@ -193,7 +193,10 @@ export function Act3Analysis({ onComplete, reducedMotion }: Props) {
   }, [onComplete, reducedMotion])
 
   return (
-    <div className="w-full min-h-[100dvh] bg-[#0A0A0A] flex flex-col items-center justify-center px-6 overflow-hidden">
+    <div
+      className="w-full bg-[#0A0A0A] flex flex-col items-center justify-center px-6 overflow-hidden"
+      style={{ minHeight: 'var(--app-height, 100dvh)' }}
+    >
 
       {/* Ambient room glow — the scene brightens as charge transfers into the
           machine (opacity driven from the same source as the battery fill). */}

@@ -70,7 +70,7 @@ export function ChargeRail({ charge, surgeKey = 0, reducedMotion }: Props) {
       role="progressbar"
       aria-valuenow={pct}
       className="fixed right-0 top-0 z-30 pointer-events-none select-none flex items-center justify-center"
-      style={{ height: '100dvh', width: 42 }}
+      style={{ height: 'var(--app-height, 100dvh)', width: 42 }}
     >
       <div className="flex flex-col items-center" style={{ height: 'min(56vh, 420px)' }}>
         {/* terminal cap */}

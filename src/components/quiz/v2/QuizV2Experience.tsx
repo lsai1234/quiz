@@ -54,10 +54,17 @@ export function QuizV2Experience() {
     window.scrollTo(0, 0)
   }
 
-  if (!ready) return <div className="min-h-screen bg-[#0A0A0A]" />
+  // `min-h-screen` is `100vh` — the LARGE viewport, which in the browsers this
+  // whole measurement exists for is taller than the window. That would leave the
+  // page scrollable behind a shell that is exactly window-height, and scrolling
+  // it would carry the Continue button off the bottom. Same measured value as
+  // the shell, so there is nothing to scroll.
+  const fill = { minHeight: 'var(--app-height, 100dvh)' }
+
+  if (!ready) return <div className="bg-[#0A0A0A]" style={fill} />
 
   return (
-    <div className="min-h-screen overflow-x-hidden">
+    <div className="overflow-x-hidden" style={fill}>
       <div key={animKey} className={act === 3 ? '' : 'animate-[fade-in_0.4s_ease_both]'}>
         {act === 2 && <QuizV2 onComplete={() => goTo(3)} reducedMotion={reducedMotion} />}
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
