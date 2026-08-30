@@ -11,6 +11,10 @@ any page.
 
 Where the build differed from the proposal, the section says so.
 
+**Proposed addition:** `docs/QUIZ_V2_PROTEIN.md` — a protein-intake module that
+replaces the `protein-reality` question with a target, an estimate and a gap in
+grams. Budget-neutral by design; not built.
+
 ---
 
 ## Part 1 — Business requirements
