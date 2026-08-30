@@ -478,10 +478,16 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
                       update({ ...state, healthDataConsent: healthDataConsentRecord(version) })
                     }
                     onDecline={() => {
-                      // Clear the picks too — leaving them would carry health
-                      // answers forward that the member just declined.
+                      // Clear the COMMITTED picks as well as the local ones.
+                      // `projectAnswers` reads `state.picked`, so a member who
+                      // answered the screen, moved on, came back and declined
+                      // would otherwise carry those flags all the way to the
+                      // reveal — the withdrawal has to reach the state the
+                      // answers are actually built from, not just the checkboxes
+                      // on screen.
                       setMultiPicks([])
-                      update({ ...state, healthDataConsent: null })
+                      const { safety: _dropped, ...picked } = state.picked
+                      update({ ...state, picked, healthDataConsent: null })
                     }}
                   />
                 )}
