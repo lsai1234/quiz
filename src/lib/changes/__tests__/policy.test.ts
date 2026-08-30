@@ -114,6 +114,18 @@ describe('findReplacement', () => {
     expect(anyCategoryCandidate({ candidates, line: current })).toBe(true)
   })
 
+  it('never returns a product contraindicated against a safety-screen flag', () => {
+    // The whole reason safetyFlags reached the constraints snapshot: a pregnant
+    // member must not be auto-swapped ashwagandha because the original went out
+    // of stock. The line comes off instead.
+    const candidates = [
+      product({ id: 'ashwa', swapGroup: 'protein-whey', price: 31, contraindications: ['pregnancy'] }),
+    ]
+    const constraints = { dietaryTags: [], noStimulants: false, safetyFlags: ['pregnancy' as const] }
+    expect(findReplacement({ candidates, line: current, constraints })).toBeNull()
+    expect(anyCategoryCandidate({ candidates, line: current })).toBe(true)
+  })
+
   it('skips the current product, subscription-only refills and non-eligible items', () => {
     const found = findReplacement({
       candidates: [

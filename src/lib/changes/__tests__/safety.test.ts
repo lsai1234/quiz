@@ -1,6 +1,7 @@
 import {
   NO_CONSTRAINTS,
   constraintsFor,
+  describeConstraints,
   failedConstraints,
   hasConstraints,
   meetsSafetyConstraints,
@@ -10,7 +11,9 @@ import type { QuizAnswers } from '@/lib/types'
 import { product } from './fixtures'
 
 function answers(over: Partial<QuizAnswers> = {}): QuizAnswers {
-  return { lifestyle: [], wellbeingAnswers: {}, stimPreference: null, caffeineLevel: null, ...over } as QuizAnswers
+  return {
+    lifestyle: [], wellbeingAnswers: {}, stimPreference: null, caffeineLevel: null, safetyFlags: [], ...over,
+  } as QuizAnswers
 }
 
 describe('deriving constraints from quiz answers', () => {
@@ -78,11 +81,85 @@ describe('constraintsFor', () => {
   it('prefers the snapshot taken at checkout over re-deriving from answers', () => {
     // Their answers may have been edited since; what they agreed to at checkout
     // is what the swap must respect.
-    const snapshot = { dietaryTags: ['vegan' as const], noStimulants: false }
-    expect(constraintsFor({ safetyConstraints: snapshot }, answers())).toBe(snapshot)
+    const snapshot = { dietaryTags: ['vegan' as const], noStimulants: false, safetyFlags: [] }
+    expect(constraintsFor({ safetyConstraints: snapshot }, answers({ lifestyle: [] }))).toEqual(snapshot)
   })
 
   it('falls back to the answers for subscriptions stored before the snapshot existed', () => {
     expect(constraintsFor({}, answers({ lifestyle: ['vegan'] })).dietaryTags).toEqual(['vegan'])
+  })
+
+  it('tops a pre-safetyFlags snapshot up from the answers', () => {
+    // The snapshot predates the field, so it cannot say whether this member is
+    // pregnant. The answers can, and topping up gets them the precise check
+    // rather than the blunt one.
+    const snapshot = { dietaryTags: ['vegan' as const], noStimulants: false }
+    const merged = constraintsFor({ safetyConstraints: snapshot }, answers({ safetyFlags: ['pregnancy'] }))
+    expect(merged).toEqual({ dietaryTags: ['vegan'], noStimulants: false, safetyFlags: ['pregnancy'] })
+  })
+
+  it('leaves safetyFlags undefined when there are no answers to top up from', () => {
+    // Undefined is the signal that keeps the blunt check in force. Defaulting it
+    // to [] here would silently hand the member full eligibility again.
+    const snapshot = { dietaryTags: [], noStimulants: false }
+    expect(constraintsFor({ safetyConstraints: snapshot }).safetyFlags).toBeUndefined()
+  })
+})
+
+describe('safety-screen flags gate substitutions', () => {
+  // The bug this covers: safetyFlags were applied when the stack was first built
+  // but never carried into the snapshot a swap is judged against, so a pregnant
+  // member could be auto-sent ashwagandha months later.
+  const ashwagandha = product({ id: 'ashwa', contraindications: ['pregnancy'] })
+  const plain = product({ id: 'plain' })
+
+  it('refuses a product contraindicated against a flag the member ticked', () => {
+    const constraints = { dietaryTags: [], noStimulants: false, safetyFlags: ['pregnancy' as const] }
+    expect(meetsSafetyConstraints(ashwagandha, constraints)).toBe(false)
+    expect(meetsSafetyConstraints(plain, constraints)).toBe(true)
+  })
+
+  it('allows it for a member who ticked nothing', () => {
+    const constraints = { dietaryTags: [], noStimulants: false, safetyFlags: [] }
+    expect(meetsSafetyConstraints(ashwagandha, constraints)).toBe(true)
+  })
+
+  it('ignores a flag the product is not contraindicated against', () => {
+    const constraints = { dietaryTags: [], noStimulants: false, safetyFlags: ['shellfish' as const] }
+    expect(meetsSafetyConstraints(ashwagandha, constraints)).toBe(true)
+  })
+
+  it('refuses anything contraindicated when the snapshot predates the field', () => {
+    // Unknown flags must not read as "no flags" — that is the failure mode the
+    // whole fix exists to close.
+    const legacy = { dietaryTags: [], noStimulants: false }
+    expect(meetsSafetyConstraints(ashwagandha, legacy)).toBe(false)
+    expect(meetsSafetyConstraints(plain, legacy)).toBe(true)
+  })
+
+  it('carries the flags through from quiz answers', () => {
+    expect(safetyConstraintsFrom(answers({ safetyFlags: ['pregnancy', 'shellfish'] })).safetyFlags)
+      .toEqual(['pregnancy', 'shellfish'])
+  })
+
+  it('counts as a constraint, so the swap-risk copy fires', () => {
+    expect(hasConstraints({ dietaryTags: [], noStimulants: false, safetyFlags: ['pregnancy'] })).toBe(true)
+  })
+
+  it('explains the block without naming the flag', () => {
+    // A founder needs to know the product is ineligible, not which condition the
+    // member declared — this string renders in the Founders Hub action queue.
+    const failures = failedConstraints(ashwagandha, {
+      dietaryTags: [],
+      noStimulants: false,
+      safetyFlags: ['pregnancy'],
+    })
+    expect(failures).toEqual(['not suitable for this member on safety grounds'])
+    expect(failures.join(' ')).not.toMatch(/pregnan/i)
+  })
+
+  it('keeps the flag out of the member-facing description', () => {
+    expect(describeConstraints({ dietaryTags: ['vegan'], noStimulants: false, safetyFlags: ['pregnancy'] }))
+      .toBe('vegan')
   })
 })

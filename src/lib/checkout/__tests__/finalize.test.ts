@@ -290,7 +290,25 @@ describe('consent is a precondition of checkout', () => {
     })
 
     const stored = await getSubscription(user.id)
-    expect(stored?.safetyConstraints).toEqual({ dietaryTags: ['vegan'], noStimulants: true })
+    expect(stored?.safetyConstraints).toEqual({
+      dietaryTags: ['vegan'],
+      noStimulants: true,
+      safetyFlags: [],
+    })
+  })
+
+  it('snapshots the safety-screen flags too, so a later swap still respects them', async () => {
+    // Without these on the snapshot, a substitution months from now is judged on
+    // diet and stimulants alone and can send a contraindicated product.
+    const user = await createUser({ email: 'expecting@example.com', passwordHash: 'h' })
+    await finalizeCheckout(user.id, user.email, {
+      subscription,
+      quiz: { answers: { safetyFlags: ['pregnancy'] } as unknown as QuizAnswers },
+      consent,
+    })
+
+    const stored = await getSubscription(user.id)
+    expect(stored?.safetyConstraints?.safetyFlags).toEqual(['pregnancy'])
   })
 })
 

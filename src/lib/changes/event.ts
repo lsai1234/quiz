@@ -7,7 +7,7 @@
  * file stays pure decision logic.
  */
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { MemberSubscription, MemberSubscriptionLine } from '@/lib/recharge/types'
+import type { MemberSubscription, MemberSubscriptionLine, SafetyConstraints } from '@/lib/recharge/types'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { effectiveNextDispatch } from '@/lib/recharge/mock'
 import { autoApplyAt, policyForLine, resolveIntendedAction } from './policy'
@@ -50,6 +50,15 @@ export interface CreateChangeEventInput {
   config?: PricingConfig
   /** Carried over from an existing open event so the queue keeps its ordering. */
   createdAt?: string
+  /**
+   * The constraints the replacement was actually judged against.
+   *
+   * Passed in rather than re-derived so the record cannot disagree with the
+   * decision: the caller may have topped the snapshot up from saved quiz answers
+   * (see `constraintsFor`), and recomputing here from the subscription alone
+   * would store a weaker set than the one that ran.
+   */
+  constraints?: SafetyConstraints
 }
 
 /**
@@ -127,7 +136,7 @@ export function createChangeEvent(input: CreateChangeEventInput): ChangeEvent {
     swapGroup: line.swapGroup,
 
     policy,
-    constraints: constraintsFor(sub),
+    constraints: input.constraints ?? constraintsFor(sub),
     intendedAction: action,
     autoApplyAt: autoApplyAt(action, now, config),
 

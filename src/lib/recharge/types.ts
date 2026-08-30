@@ -1,4 +1,4 @@
-import type { SwapGroup, StackSlot, DietaryTag } from '@/lib/catalogue/types'
+import type { SwapGroup, StackSlot, DietaryTag, SafetyFlag } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import type { SupplierAddress } from '@/lib/supplier/types'
 
@@ -29,10 +29,10 @@ export type SubscriptionStatus = 'active' | 'paused' | 'cancelled'
 export type ChangePolicy = 'auto-swap' | 'remove'
 
 /**
- * The member's hard dietary/stimulant exclusions, snapshotted from their quiz
- * answers at checkout. Held on the subscription so a replacement product can be
- * safety-checked against the SAME rules that picked the original — without
- * needing their quiz answers to still be readable or unchanged.
+ * The member's hard exclusions, snapshotted from their quiz answers at checkout.
+ * Held on the subscription so a replacement product can be safety-checked
+ * against the SAME rules that picked the original — without needing their quiz
+ * answers to still be readable or unchanged.
  *
  * Optional: subscriptions stored before this existed fall back to deriving the
  * constraints from saved quiz answers (see `lib/changes/safety.ts`).
@@ -42,6 +42,23 @@ export interface SafetyConstraints {
   dietaryTags: DietaryTag[]
   /** True when the member excluded stimulants (caffeine). */
   noStimulants: boolean
+  /**
+   * Safety-screen flags the member ticked — pregnancy/breastfeeding, prescription
+   * medication, shellfish allergy. A product listing any of these in its
+   * `contraindications` can never be sent to them.
+   *
+   * These are the exclusions `scoreProduct` applies when the stack is first
+   * built. They were missing from this snapshot until they were added here,
+   * which meant an auto-swap months later was judged on diet and stimulants
+   * alone and could substitute a product the quiz would have refused —
+   * ashwagandha or a hormone-active blend to someone pregnant, for instance.
+   *
+   * `undefined` means "snapshot taken before this field existed", which is NOT
+   * the same as "no flags" and must never be read as an empty list. See
+   * `meetsSafetyConstraints`, which treats it as unknown and refuses anything
+   * carrying a contraindication at all.
+   */
+  safetyFlags?: SafetyFlag[]
 }
 
 /**
