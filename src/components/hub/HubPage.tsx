@@ -7,6 +7,7 @@ import { HubShell } from './HubShell'
 import { HubSkeleton } from './HubSkeleton'
 import { NoSubscription } from './NoSubscription'
 import { SubscriptionDashboard } from './SubscriptionDashboard'
+import { YourData } from './YourData'
 
 export function HubPage() {
   const session = useHubStore((s) => s.session)
@@ -57,10 +58,18 @@ export function HubPage() {
    * longer does that where real money is involved, so the state is now real and
    * needs a screen of its own.
    */
+  // `YourData` sits on BOTH signed-in branches rather than inside the dashboard.
+  // The right to a copy of your data and to have it deleted does not depend on
+  // holding a live subscription — a member who never subscribed, or who
+  // cancelled last year, still has answers on file and still has the right to
+  // take them away.
   if (!subscription) {
     return (
       <HubShell onSignOut={logout}>
         <NoSubscription name={session.name} email={session.email} onSignOut={logout} />
+        <div className="mt-10">
+          <YourData />
+        </div>
       </HubShell>
     )
   }
@@ -68,6 +77,9 @@ export function HubPage() {
   return (
     <HubShell onSignOut={logout}>
       <SubscriptionDashboard />
+      <div className="mt-10">
+        <YourData />
+      </div>
     </HubShell>
   )
 }
