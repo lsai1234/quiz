@@ -514,6 +514,42 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE subscriptions ADD COLUMN mode TEXT;
   UPDATE subscriptions SET mode = 'sandbox' WHERE mode IS NULL;
   `,
+
+  // v16 — `member_access_log`: which founder opened whose record.
+  //
+  // The Founders Hub can open any member's full record — their plan, their
+  // billing history, their consents, what we have emailed them — and that left
+  // no trace at all. "Was this member's record accessed, and by whom?" had no
+  // answer, and neither did the version of that question asked after a breach.
+  // Article 5(2) is about being able to DEMONSTRATE compliance rather than
+  // assert it, and this is the smallest thing that makes that possible here.
+  //
+  // Its own table rather than a row in `error_events`, which was the tempting
+  // reuse: that table is pruned at 30 days, which is far too short for an
+  // access log, and an audit entry is not a fault — mixing them makes the
+  // monitoring view useless for both jobs.
+  //
+  // Deliberately records WHO, WHOSE and WHEN, and nothing about what was on
+  // screen. Logging the contents would make the audit log a second copy of the
+  // data it exists to protect, which is how an access log becomes the largest
+  // liability in the system.
+  //
+  // `user_id` is a plain column, not a foreign key: the log has to survive the
+  // member's erasure, because "who looked at this record" is exactly the
+  // question that gets asked after an account is gone.
+  `
+  CREATE TABLE member_access_log (
+    id         TEXT PRIMARY KEY,
+    founder    TEXT NOT NULL,
+    user_id    TEXT NOT NULL,
+    kind       TEXT NOT NULL,
+    path       TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX member_access_log_user ON member_access_log(user_id);
+  CREATE INDEX member_access_log_founder ON member_access_log(founder);
+  CREATE INDEX member_access_log_created ON member_access_log(created_at);
+  `,
 ]
 
 /**

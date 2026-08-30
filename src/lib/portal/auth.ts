@@ -26,7 +26,30 @@ export interface FounderAccount {
 }
 
 interface RawAccount extends FounderAccount {
+  /**
+   * The password as supplied, or a `sha256:<hex>` digest of it.
+   *
+   * `FOUNDER_n_PASSWORD_HASH` is preferred and takes precedence: it keeps the
+   * plaintext out of the deployment's environment variables, out of the Vercel
+   * dashboard, and out of anywhere those get copied. `FOUNDER_n_PASSWORD` still
+   * works so nothing breaks on deploy — this is an upgrade path, not a
+   * migration you have to run today.
+   *
+   * Generate one with:
+   *   node -e "console.log('sha256:'+require('crypto').createHash('sha256').update(process.argv[1]).digest('hex'))" 'your-password'
+   */
   password: string
+}
+
+const HASH_PREFIX = 'sha256:'
+
+/** The stored secret for an account, in whichever form it was configured. */
+function secretMatches(stored: string, supplied: string): boolean {
+  if (stored.startsWith(HASH_PREFIX)) {
+    const digest = crypto.createHash('sha256').update(supplied).digest('hex')
+    return sameSecret(stored.slice(HASH_PREFIX.length), digest)
+  }
+  return sameSecret(stored, supplied)
 }
 
 /** The out-of-the-box accounts. Their passwords are printed on the sign-in screen. */
@@ -55,7 +78,10 @@ function configuredAccounts(): RawAccount[] {
 
   for (let i = 1; i <= MAX_ACCOUNTS; i++) {
     const email = process.env[`FOUNDER_${i}_EMAIL`]
-    const password = process.env[`FOUNDER_${i}_PASSWORD`]
+    // The hash wins where both are set — otherwise adding one would leave the
+    // plaintext quietly still in use and the upgrade would be a no-op.
+    const hash = process.env[`FOUNDER_${i}_PASSWORD_HASH`]
+    const password = hash ? `${HASH_PREFIX}${hash.trim()}` : process.env[`FOUNDER_${i}_PASSWORD`]
     if (email && password) {
       accounts.push({
         email: email.trim().toLowerCase(),
@@ -180,7 +206,7 @@ export function verifyFounder(
   // password take the same time to refuse.
   const match = rawAccounts().find((a) => a.email === e)
   const expected = match?.password ?? crypto.randomBytes(32).toString('hex')
-  const ok = sameSecret(expected, password)
+  const ok = secretMatches(expected, password)
   if (!match || !ok) return null
 
   return { founder: { email: match.email, name: match.name }, token: issueToken(match) }

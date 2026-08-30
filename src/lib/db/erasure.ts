@@ -27,6 +27,7 @@
  */
 import { getEngine, now } from './engine'
 import { PLACEHOLDER_EMAIL_DOMAIN } from './migrations'
+import { accessesForMember } from '@/lib/portal/access-log'
 import type { SqlEngine } from './engine'
 
 /** What a member gets when they ask for their data. */
@@ -41,6 +42,14 @@ export interface AccountExport {
   shareCards: unknown[]
   emails: unknown[]
   identities: unknown[]
+  /**
+   * Who at CHRGD has opened this member's record, and when.
+   *
+   * Included because "who has looked at my data" is a question a subject access
+   * request is entitled to an answer to, and answering it out of a log the
+   * member cannot see is not much of an answer.
+   */
+  staffAccess: unknown[]
 }
 
 /** Parse a JSON column, keeping the raw text when it will not parse. */
@@ -72,7 +81,7 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
   }>('SELECT id, email, name, picture, created_at FROM users WHERE id = ?', [userId])
   if (!user) return null
 
-  const [sub, orders, consents, feedback, cards, emails, identities] = await Promise.all([
+  const [sub, orders, consents, feedback, cards, emails, identities, accesses] = await Promise.all([
     db.get<{ data: string; quiz: string | null; updated_at: string }>(
       'SELECT data, quiz, updated_at FROM subscriptions WHERE user_id = ?', [userId],
     ),
@@ -97,6 +106,10 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
     db.all<{ provider: string; created_at: string }>(
       'SELECT provider, created_at FROM identities WHERE user_id = ? ORDER BY created_at', [userId],
     ),
+    // Which member of staff, by name, is deliberately not included: it answers
+    // the member's question ("has anyone looked?") without publishing an
+    // employee's activity to a customer. The named log is kept internally.
+    accessesForMember(userId),
   ])
 
   return {
@@ -120,6 +133,7 @@ export async function exportAccount(userId: string): Promise<AccountExport | nul
     })),
     emails: emails.map((e) => ({ template: e.template, queuedAt: e.created_at, sentAt: e.sent_at })),
     identities: identities.map((i) => ({ provider: i.provider, linkedAt: i.created_at })),
+    staffAccess: accesses.map((a) => ({ at: a.at, what: a.kind })),
   }
 }
 

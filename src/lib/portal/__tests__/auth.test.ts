@@ -203,3 +203,57 @@ describe('session tokens', () => {
     }
   })
 })
+
+describe('hashed passwords', () => {
+  const original = { ...process.env }
+  const digest = (s: string) =>
+    require('crypto').createHash('sha256').update(s).digest('hex')
+
+  beforeEach(() => {
+    for (let i = 1; i <= 5; i++) {
+      delete process.env[`FOUNDER_${i}_EMAIL`]
+      delete process.env[`FOUNDER_${i}_PASSWORD`]
+      delete process.env[`FOUNDER_${i}_PASSWORD_HASH`]
+    }
+    delete process.env.ADMIN_PASSWORD
+    process.env.FOUNDER_1_EMAIL = 'ada@chrgd.dev'
+    process.env.FOUNDER_1_NAME = 'Ada'
+  })
+
+  afterEach(() => {
+    process.env = { ...original }
+  })
+
+  it('accepts the right password against a stored hash', () => {
+    process.env.FOUNDER_1_PASSWORD_HASH = digest('correct-horse')
+    expect(verifyFounder('ada@chrgd.dev', 'correct-horse')).not.toBeNull()
+  })
+
+  it('refuses the wrong one', () => {
+    process.env.FOUNDER_1_PASSWORD_HASH = digest('correct-horse')
+    expect(verifyFounder('ada@chrgd.dev', 'wrong')).toBeNull()
+  })
+
+  it('never accepts the hash itself as the password', () => {
+    // The obvious attack once a hash leaks from an env dump.
+    const h = digest('correct-horse')
+    process.env.FOUNDER_1_PASSWORD_HASH = h
+    expect(verifyFounder('ada@chrgd.dev', h)).toBeNull()
+    expect(verifyFounder('ada@chrgd.dev', `sha256:${h}`)).toBeNull()
+  })
+
+  it('prefers the hash when both are configured', () => {
+    // Otherwise adding a hash would leave the plaintext quietly still in use
+    // and the upgrade would do nothing.
+    process.env.FOUNDER_1_PASSWORD = 'old-plaintext'
+    process.env.FOUNDER_1_PASSWORD_HASH = digest('new-secret')
+    expect(verifyFounder('ada@chrgd.dev', 'old-plaintext')).toBeNull()
+    expect(verifyFounder('ada@chrgd.dev', 'new-secret')).not.toBeNull()
+  })
+
+  it('still accepts a plaintext-only account', () => {
+    // This is an upgrade path, not a migration anyone has to run today.
+    process.env.FOUNDER_1_PASSWORD = 'plain'
+    expect(verifyFounder('ada@chrgd.dev', 'plain')).not.toBeNull()
+  })
+})
