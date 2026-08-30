@@ -28,8 +28,11 @@ async function toSafetyScreen(page: import('@playwright/test').Page) {
 test('asks permission before it asks anything about health', async ({ page }) => {
   await toSafetyScreen(page)
 
+  // Case-insensitive: the eyebrow is uppercased in CSS, so `innerText` returns
+  // it transformed rather than as it is written in the source.
   const body = await page.locator('body').innerText()
-  expect(body).toContain('Before we ask')
+  expect(body).toMatch(/before we ask/i)
+  expect(body).toMatch(/we need your say-so before we use it/i)
 
   // The questions themselves are not on screen yet — this is the whole point.
   await expect(page.getByRole('button', { name: 'Pregnant or breastfeeding' })).toHaveCount(0)
