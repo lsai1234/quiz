@@ -82,6 +82,45 @@ describe('quiz answers', () => {
   })
 })
 
+describe('when the retention clock starts', () => {
+  const stale = RETENTION.quizAfterEndDays + 10
+
+  it('measures from the cancellation, not the last write', async () => {
+    // A founder opening the exit queue months later writes the row and would
+    // otherwise push the deletion date forward without anybody intending it.
+    const user = await createUser({ email: 'clock@example.com' })
+    await saveSubscription(user.id, {
+      id: 'sub', status: 'cancelled', lines: [], cancelledAt: daysAgo(stale),
+    } as unknown as MemberSubscription)
+    await saveQuiz(user.id, { answers: { safetyFlags: ['pregnancy'] } })
+    // `updated_at` is now — the row was just touched.
+
+    expect(await __sweeps.sweepQuizAnswers()).toBe(1)
+    expect(await getQuiz(user.id)).toBeNull()
+  })
+
+  it('does not delete early when the cancellation is recent but the row is old', async () => {
+    const user = await createUser({ email: 'recent-cancel@example.com' })
+    await saveSubscription(user.id, {
+      id: 'sub', status: 'cancelled', lines: [], cancelledAt: daysAgo(5),
+    } as unknown as MemberSubscription)
+    await saveQuiz(user.id, { answers: { safetyFlags: ['pregnancy'] } })
+    await backdateSubscription(user.id, daysAgo(stale))
+
+    expect(await __sweeps.sweepQuizAnswers()).toBe(0)
+    expect(await getQuiz(user.id)).not.toBeNull()
+  })
+
+  it('falls back to the row date for plans cancelled before the stamp existed', async () => {
+    const user = await createUser({ email: 'legacy-cancel@example.com' })
+    await saveSubscription(user.id, plan('cancelled'))
+    await saveQuiz(user.id, { answers: { safetyFlags: ['pregnancy'] } })
+    await backdateSubscription(user.id, daysAgo(stale))
+
+    expect(await __sweeps.sweepQuizAnswers()).toBe(1)
+  })
+})
+
 describe('email bodies', () => {
   async function queueEmail(id: string, sentAt: string | null, body = 'Dear Sam, 12 High St') {
     const db = await getEngine()

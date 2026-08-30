@@ -213,6 +213,16 @@ export interface MemberSubscription {
   snoozeUntil?: string
   /** Total months snoozed — defers the minimum term so a snooze never sidesteps it. */
   snoozedMonths?: number
+  /**
+   * When the plan ended, ISO.
+   *
+   * The clock the quiz answers' retention window runs on. Measuring from the
+   * row's `updated_at` instead would let any later write — a founder opening
+   * the exit queue months afterwards — push the deletion date forward without
+   * anybody intending it. Absent on plans cancelled before this existed, where
+   * the sweep falls back to `updated_at`.
+   */
+  cancelledAt?: string
   /** Reason captured if the member cancelled (for retention insight). */
   cancelReason?: string
   /**

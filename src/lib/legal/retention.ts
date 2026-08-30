@@ -76,16 +76,21 @@ async function sweepQuizAnswers(): Promise<number> {
 
   let cleared = 0
   for (const row of rows) {
-    if (row.updated_at >= before) continue
-    let status: string | undefined
+    let plan: { status?: string; cancelledAt?: string } = {}
     try {
-      status = (JSON.parse(row.data) as { status?: string }).status
+      plan = JSON.parse(row.data)
     } catch {
       // An unreadable plan document is not evidence the member is still active,
       // and the answers beside it are still health data past their window.
-      status = undefined
     }
-    if (status === 'active' || status === 'paused') continue
+    if (plan.status === 'active' || plan.status === 'paused') continue
+
+    // Measured from the ending where we have it. `updated_at` is only a
+    // fallback for plans cancelled before `cancelledAt` existed: any later
+    // write — a founder opening the exit queue months afterwards — pushes it
+    // forward and would silently extend how long the answers are kept.
+    const endedAt = plan.cancelledAt ?? row.updated_at
+    if (endedAt >= before) continue
 
     await db.run('UPDATE subscriptions SET quiz = NULL WHERE user_id = ?', [row.user_id])
     cleared++
