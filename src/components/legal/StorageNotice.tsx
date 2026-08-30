@@ -28,24 +28,40 @@ const SEEN_KEY = 'chrgd_storage_notice_seen'
  * set Do Not Track or Global Privacy Control to make the same decision again is
  * ignoring the answer they already gave.
  *
- * ── Why it stays off the quiz ───────────────────────────────────────────────
- * The quiz is a fixed, full-viewport layout whose primary action sits flush
- * against the bottom of the screen on a phone. Anything else anchored there
- * covers the button the whole page exists to have pressed — a compliance strip
- * that stops people answering the quiz is a worse outcome than the gap it
- * closes, for them and for us.
+ * ── Where it appears ────────────────────────────────────────────────────────
+ * An allowlist rather than a list of exclusions, so a page added later has to
+ * opt in rather than inherit a bottom-anchored bar nobody checked it against.
+ * Two kinds of route are deliberately off it:
  *
- * The quiz is not left silent, though: it carries the privacy notice twice, in
- * places that are harder to miss than a strip — on the consent gate at the
- * safety screen, and under the analysis screen where the AI's role is
- * explained. This notice is for the surfaces that scroll normally.
+ *   • The quiz. It is a fixed, full-viewport layout whose primary action sits
+ *     flush against the bottom of the screen on a phone, so anything else
+ *     anchored there covers the button the whole page exists to have pressed.
+ *     A compliance strip that stops people answering the quiz is a worse
+ *     outcome than the gap it closes. It is not left silent: it carries the
+ *     privacy notice on the consent gate and again under the analysis screen,
+ *     both harder to miss than a strip.
+ *
+ *   • The staff consoles — the Founders Hub, the Partners Hub. No funnel event
+ *     fires there, so there is nothing to disclose, and a public-facing notice
+ *     on a colleague's sign-in screen is noise pretending to be compliance.
+ *
+ * What is left is exactly where `track()` actually runs and the layout can take
+ * it: the storefront, the bundle pages, the order confirmation and a shared
+ * card.
  */
-const QUIZ_ROUTES = ['/', '/quizv2']
+function showsNotice(pathname: string): boolean {
+  return (
+    pathname === '/shop' ||
+    pathname.startsWith('/bundles/') ||
+    pathname.startsWith('/order/') ||
+    pathname.startsWith('/s/')
+  )
+}
 
 export function StorageNotice() {
   const [visible, setVisible] = useState(false)
   const pathname = usePathname()
-  const onQuiz = QUIZ_ROUTES.includes(pathname)
+  const allowed = showsNotice(pathname)
 
   useEffect(() => {
     try {
@@ -58,7 +74,7 @@ export function StorageNotice() {
     }
   }, [])
 
-  if (!visible || onQuiz) return null
+  if (!visible || !allowed) return null
 
   function close() {
     try {
