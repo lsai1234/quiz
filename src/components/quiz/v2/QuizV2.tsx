@@ -386,7 +386,13 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     : { section: current!.section, prompt: current!.prompt, hint: current!.hint }
 
   return (
-    <div className="relative flex flex-col h-[100dvh] bg-[#0A0A0A] overflow-hidden">
+    <div
+      className="relative flex flex-col bg-[#0A0A0A] overflow-hidden"
+      // Measured, not `100dvh` — several in-app browsers resolve dvh against
+      // the large viewport and put the Continue button under their own toolbar.
+      // See ViewportHeight.
+      style={{ height: 'var(--app-height, 100dvh)' }}
+    >
       <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
 
       <div
@@ -560,7 +566,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
       {/* CTA */}
       {editingId && !needsContinue && (
-        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-7 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
+        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
           <div className="max-w-lg mx-auto">
             {/* A single-choice edit saves on tap, so there is nothing to
                 confirm — but leaving it alone has to be possible too. */}
@@ -575,7 +581,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
         </div>
       )}
       {needsContinue && (
-        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-7 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
+        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
           <div className="max-w-lg mx-auto">
             <button
               onClick={onContinue}

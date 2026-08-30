@@ -75,7 +75,10 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
   }
 
   return (
-    <section className="relative min-h-[100dvh] bg-[#0A0A0A] text-white overflow-hidden flex flex-col">
+    <section
+      className="relative bg-[#0A0A0A] text-white overflow-hidden flex flex-col"
+      style={{ minHeight: 'var(--app-height, 100dvh)' }}
+    >
       {/* Ambient glow */}
       <div
         className="absolute inset-0 pointer-events-none"

@@ -887,7 +887,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="fixed top-0 left-0 right-0 h-[100dvh] bg-[#0A0A0A] text-white flex flex-col overflow-hidden">
+    <div
+      className="fixed top-0 left-0 right-0 bg-[#0A0A0A] text-white flex flex-col overflow-hidden"
+      // Measured, not `100dvh` — see ViewportHeight.
+      style={{ height: 'var(--app-height, 100dvh)' }}
+    >
 
       {/* The signature rail — a filling liquid tube in LQD, the charge rail
           otherwise. Always in frame, climbing as you answer. */}
@@ -1593,7 +1597,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
 
       {/* CTA footer — an in-flow zone (no page scroll), shown on manual steps */}
       {current.advance === 'manual' && (
-        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-7 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
+        <div className="relative z-20 shrink-0 pl-5 pr-[42px] pt-3 pb-[max(1.75rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A] to-transparent">
           <div className="max-w-lg mx-auto">
             <button
               onClick={advance}
