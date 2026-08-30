@@ -35,7 +35,11 @@ Works out of the box — no API keys needed. All 8 builder stages run with reali
 
 Copy `.env.example` to `.env.local` and add:
 - `OPENAI_API_KEY` — enables live idea generation
-- `NEXT_PUBLIC_OPENAI_API_KEY` — same value, used client-side
+
+Server-side only. Every OpenAI call goes through a route handler, so the key
+never reaches the browser — don't add a `NEXT_PUBLIC_` copy of it. The
+`NEXT_PUBLIC_` prefix inlines a value into the JavaScript bundle served to every
+visitor, which for an API key means publishing it.
 
 ## Add Google Sheets export
 

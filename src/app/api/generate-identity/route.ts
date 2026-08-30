@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import type { QuizAnswers, StackIdentity } from '@/lib/types'
+import { nameInstruction, personalise } from '@/lib/ai-identity'
 
 // Constructed lazily inside the handler — the OpenAI SDK throws at construction
 // when no key is set, which would break the build/page-data collection.
@@ -60,7 +61,6 @@ export async function POST(req: NextRequest) {
     const prompt = `You are a specialist nutrition advisor for CHRGD, a premium UK supplement brand.
 
 Create a personalised supplement stack identity for ${isWellbeingOnly ? 'someone focused on everyday wellbeing (not a gym-focused athlete — avoid training/athlete language)' : 'an athlete'} with this profile:
-${firstName ? `- Name: ${firstName}` : ''}
 ${age ? `- Age group: ${age}` : ''}
 ${gender ? `- Gender: ${gender}` : ''}
 - Goals: ${goalText}
@@ -75,7 +75,7 @@ Return ONLY a JSON object (no markdown, no explanation, no asterisks in any fiel
 {
   "name": "A punchy 2-3 word stack name (e.g. 'Iron Foundations', 'Peak Protocol', 'Lean Machine'). Plain text only — no asterisks or markdown.",
   "archetype": "A 2-4 word athlete archetype label (e.g. 'The Strength Builder', 'The Endurance Athlete', 'The Weekend Warrior')",
-  "description": "${firstName ? `Start by addressing ${firstName} directly. ` : ''}A 2-sentence description of this person's training identity and why this stack suits them. Use 'your' not 'the user's'. Do NOT make medical claims. Say 'may support' not 'will improve'.",
+  "description": "${nameInstruction(firstName)}A 2-sentence description of this person's training identity and why this stack suits them. Use 'your' not 'the user's'. Do NOT make medical claims. Say 'may support' not 'will improve'.",
   "focusAreas": ["3 short focus area labels, e.g. 'Strength Output', 'Faster Recovery', 'Daily Energy'"],
   "routineFitScore": <integer 72-96, how well this stack fits their specific routine>
 }
@@ -96,7 +96,7 @@ Rules: No medical claims. No guaranteed outcomes. Use 'selected based on your go
     const stripMd = (s: string) => s.replace(/\*+/g, '').replace(/_{2,}/g, '').trim()
     identity.name = stripMd(identity.name)
     identity.archetype = stripMd(identity.archetype)
-    identity.description = stripMd(identity.description)
+    identity.description = personalise(stripMd(identity.description), firstName)
 
     return NextResponse.json(identity)
   } catch (err) {
