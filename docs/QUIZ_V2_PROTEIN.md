@@ -182,8 +182,12 @@ protein line item, so the product that is there has a number next to it.
 The module has to handle all four honestly, and the last is the one worth
 designing on purpose:
 
-1. **A big gap (>30g).** Lead with protein. `low-protein` confirmed.
-2. **A small gap (10–30g).** Worth a mention, not worth leading with. Noted.
+1. **A big gap (more than one shake, 25g).** Lead with protein. `low-protein`
+   confirmed. The threshold is a scoop on purpose: the question it answers is
+   *"is this worth a product at all?"*, and that is exactly where the line is.
+2. **A small gap (13–25g).** Worth a mention, not worth leading with. Noted.
+   The floor is the estimate's own accuracy (§1.4) — below it we are not
+   measuring a gap, we are reading our own noise, and reading it in our favour.
 3. **On target.** Say so. `low-protein` cleared. This is a *good* outcome to
    deliver — the quiz just told someone they are doing something right, having
    had every commercial reason not to.
@@ -396,10 +400,11 @@ out rather than left to the build:
 
 | Verdict | On-screen | Why this tone |
 |---|---|---|
-| Big gap (>30g) | `≈85g a day · target 120–140g`<br>*About 40g short — roughly one shake.* | Plain arithmetic. No adjective does more work than the number. |
-| Small gap (10–30g) | `≈115g a day · target 120–140g`<br>*Close. A little short on the days you train.* | Proportionate. Overselling a 15g gap is how you lose the reader who can do sums. |
-| On target | `≈130g a day · target 120–140g`<br>*That's on the money — nothing to fix here.* | Say it warmly and move on. We just told someone they are doing something right, having had every reason not to. |
-| Over | `≈175g a day · target 120–140g`<br>*That's plenty. We'll leave protein out of your box.* | The most trust-building sentence in the quiz. It must be pleased, not grudging. |
+| Big gap | `≈90g a day · target 130–180g`<br>*About 40g short of the range — about a shake and a bit.* | Plain arithmetic. The shake count rounds to the nearest **half**, because "two shakes" for a 40g gap overstates it by a quarter — and overstating the gap is overstating what we are selling. |
+| Very big gap | `≈50g a day · target 130–180g`<br>*About 80g short — enough that it wants spreading across meals, not added in one go.* | Past ~2.5 shakes the honest answer stops being a product, and the sentence says so rather than quoting more tubs. |
+| Small gap | `≈117g a day · target 130–180g`<br>*About 15g short — close. Easiest to close on the days you train.* | Proportionate. The second half varies by basis: "on the days you train" is useful to a lifter and slightly silly to someone who told us they don't. |
+| On target | `≈130g a day · target 130–180g`<br>*That's on the money — nothing to fix here.* | Say it warmly and move on. We just told someone they are doing something right, having had every reason not to. |
+| Over | `≈200g a day · target 130–180g`<br>*That's plenty. We'll leave protein out of your box.* | The most trust-building sentence in the quiz. It must be pleased, not grudging. |
 
 The last row is the design decision the whole module should be judged on. A
 calculator that only ever concludes *buy the thing* is not a calculator, and one
@@ -443,25 +448,55 @@ or one coarse id. `reviseAnswer` then works on it for free.
 
 ### 3.2 New files
 
-**`src/lib/quiz-v2/protein.ts`** — the whole of the maths, pure and free of
-React:
+**`src/lib/quiz-v2/protein.ts`** — the whole of the maths and all of the
+copy, pure and free of React. **Built (Phase 1).** As shipped:
 
 ```ts
-export interface ProteinTarget { lowG: number; highG: number; basis: TargetBasis }
 export type TargetBasis = 'sedentary' | 'active' | 'lifting' | 'deficit'
-export type Verdict = 'over' | 'on-target' | 'small-gap' | 'big-gap' | 'unknown'
+export type Verdict = 'big-gap' | 'small-gap' | 'on-target' | 'over'
 
-/** Null when weight is unknown — the caller shows Door A rather than a guess. */
-export function proteinTarget(state: InterviewState): ProteinTarget | null
+/** A narrow struct, not `InterviewState` — see the note below. */
+export interface ProteinProfile {
+  weightBand: WeightBand | null
+  ageBracket: AgeBracket | null
+  basis: TargetBasis
+}
 
-/** Sum of the grams behind the picked options. Null for the coarse door. */
-export function proteinIntake(question: BankQuestion, picked: string[]): number | null
+/** Null when weight is unknown. Never falls back to an average person. */
+export function proteinTarget(p: ProteinProfile): ProteinTarget | null
 
-export function proteinVerdict(target: ProteinTarget, intakeG: number): Verdict
+/** Sum of the grams behind the picks. Null when nothing carries a number. */
+export function proteinIntake(
+  picked: readonly string[],
+  gramsFor: (optionId: string) => number | undefined,
+): number | null
 
-/** Pre-written, goal-keyed. Never generated. */
-export function proteinWhy(state: InterviewState): string
+export function proteinVerdict(t: ProteinTarget, intakeG: number): Verdict
+export function proteinGap(t: ProteinTarget, intakeG: number): number
+/** 0 when on-target or over, so the caller clears the driver. */
+export function proteinDriverWeight(t: ProteinTarget, intakeG: number): number
+
+/** Pre-written. Never generated. */
+export const BASIS_LINE: Record<TargetBasis, string>
+export function verdictCopy(t: ProteinTarget, intakeG: number): VerdictCopy
+export const runningTotal: (intakeG: number) => string
+
+/** The adapter. Type-only import of the interview, so it compiles away. */
+export function proteinBasis(state: InterviewState): TargetBasis
+export function proteinProfile(state: InterviewState): ProteinProfile
 ```
+
+Two deliberate departures from the sketch this replaces:
+
+**It takes a profile, not an `InterviewState`.** The maths reaches for four
+values; taking the whole interview would make a standalone `/protein` page
+(open question 2) a refactor rather than an import. The adapter that reads one
+out of the other sits at the bottom of the file behind a type-only import, so
+lifting the module out later is a deletion.
+
+**`proteinIntake` takes a lookup, not a question.** The grams live on bank
+options, and passing `gramsFor` keeps the bank as the single place option ids
+are declared while letting the arithmetic be tested without one.
 
 **`src/components/quiz/v2/ProteinCheck.tsx`** — the screen. Sibling of
 `PersonalFields`, which is the closest existing analogue: a compound screen with
@@ -576,7 +611,7 @@ because there is nothing to wait for.
 Five phases. Each lands on `master` behind the existing arm flag and changes
 nothing for customers, because V2 is still off.
 
-### Phase 1 — The maths and the words
+### Phase 1 — The maths and the words — **done**
 1. `quiz-v2/protein.ts`: target, intake, verdict — plus the two sets of
    pre-written strings the design turns out to need, `basisLine` (§2.2) and
    `verdictCopy` (§2.6). They live here rather than in the component because
