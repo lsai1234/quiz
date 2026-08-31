@@ -237,19 +237,42 @@ describe('follow-ups still fire on the strongest answer', () => {
     expect(rankCandidates(s).map((c) => c.question.id)).toContain('gut-fibre')
   })
 
-  it('asks about protein habits while protein is still an open question', () => {
-    const s = answerPath(['muscle'], [['how-meals-happen', 'poor']])
-    expect(rankCandidates(s).map((c) => c.question.id)).toContain('protein-reality')
+  /** With the Article 9 consent given, which is what the safety screen takes. */
+  const consented = (s: InterviewState): InterviewState => ({
+    ...s,
+    healthDataConsent: { accepted: true, version: 'test', at: new Date(0).toISOString() },
   })
 
-  it('drops the protein follow-up once protein is settled — and is right to', () => {
-    // The counterpart to the three above, and the line between them. Exposure
-    // and fibre discriminate OTHER drivers, so they stay worth asking after
-    // their headline driver is confirmed. `protein-reality` discriminates
-    // low-protein and nothing else, so once someone has said protein is the
-    // blocker there is nothing left for it to find, and spending a tap on it
-    // would be the padding the budget exists to prevent.
-    const s = answerPath(['muscle'], [['training-blocker', 'protein']])
-    expect(rankCandidates(s).map((c) => c.question.id)).not.toContain('protein-reality')
+  it('asks about protein while protein is still an open question', () => {
+    const s = consented(answerPath(['muscle'], [['how-meals-happen', 'poor']]))
+    expect(rankCandidates(s).map((c) => c.question.id)).toContain('protein-check')
+  })
+
+  it('never asks it without consent to read the safety answers', () => {
+    // Not a smaller set of answers — no answers, because the safety options do
+    // not render until consent is given. So a guard written as "pregnancy is
+    // not ticked" would be true for everyone who declined, including the person
+    // it exists for. The absence has to suppress the module, not pass it.
+    const s = answerPath(['muscle'], [['how-meals-happen', 'poor']])
+    expect(s.healthDataConsent ?? null).toBeNull()
+    expect(rankCandidates(s).map((c) => c.question.id)).not.toContain('protein-check')
+  })
+
+  it('never asks it of someone who is pregnant or breastfeeding', () => {
+    // Needs differ, and this is not the place.
+    let s = consented(answerPath(['muscle'], [['how-meals-happen', 'poor']]))
+    s = { ...s, picked: { ...s.picked, safety: ['pregnancy'] } }
+    expect(rankCandidates(s).map((c) => c.question.id)).not.toContain('protein-check')
+  })
+
+  it('still asks it once protein is the confirmed blocker — it has a number to add', () => {
+    // The counterpart to the three above, and the line moved when the coarse
+    // question became a calculator. "Do you get protein at every meal?"
+    // discriminated low-protein and nothing else, so once someone had named
+    // protein as the blocker there was nothing left for it to find. A screen
+    // that returns a figure in grams is not asking the same question again —
+    // it is the one that turns a confirmed hunch into an amount.
+    const s = consented(answerPath(['muscle'], [['training-blocker', 'protein']]))
+    expect(rankCandidates(s).map((c) => c.question.id)).toContain('protein-check')
   })
 })

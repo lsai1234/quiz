@@ -9,6 +9,10 @@ import { AnswerOption } from '@/components/quiz/AnswerOption'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { Reflection } from '@/components/quiz/v2/Reflection'
+import { ProteinCheck, ProteinVerdict } from '@/components/quiz/v2/ProteinCheck'
+import {
+  BASIS_LINE, proteinBasis, proteinComplete, proteinIntakeFrom, proteinProfile, proteinTarget,
+} from '@/lib/quiz-v2/protein'
 import { funnel } from '@/lib/analytics/quiz'
 import { emptyInterview, type BankQuestion, type InterviewState } from '@/lib/quiz-v2/types'
 import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setTrack } from '@/lib/quiz-v2/interview'
@@ -341,12 +345,17 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   const isForm = current?.select === 'form'
   const isSafety = currentId === 'safety'
   const isMulti = current?.select === 'multi'
-  const needsContinue = onReview || isGoals || isForm || isMulti
+  const isProtein = current?.select === 'protein'
+  // The protein screen needs Continue for a reason the others do not: the
+  // verdict lands the instant they answer, and auto-advancing would carry the
+  // reader straight past the one number the whole screen exists to show them.
+  const needsContinue = onReview || isGoals || isForm || isMulti || isProtein
 
   const canContinue = (() => {
     if (onReview) return true
     if (isGoals) return !!state.track && state.goals.length > 0
     if (isForm) return !!localAge
+    if (isProtein) return proteinComplete(current!.options, multiPicks)
     if (isMulti) return multiPicks.length >= (current?.minPicks ?? 0)
     return false
   })()
@@ -355,6 +364,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     if (canContinue) return null
     if (isGoals) return state.track ? 'Pick at least one goal' : 'Choose where to start'
     if (isForm) return 'Add your age to continue'
+    if (isProtein) return multiPicks.length ? 'Finish the day' : 'Pick the closest'
     if (isMulti) return 'Pick at least one'
     return null
   })()
@@ -385,7 +395,14 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
   const headerCopy = onReview
     ? { section: 'REVIEW', prompt: 'Here is what we heard.', hint: 'Tap anything to change it.' }
-    : { section: current!.section, prompt: current!.prompt, hint: current!.hint }
+    : {
+        section: current!.section,
+        prompt: current!.prompt,
+        // The protein screen's hint is the *basis* — what we already know about
+        // their week — and deliberately not the target. A number shown before
+        // the estimate anchors the estimate. See ProteinCheck.
+        hint: isProtein ? BASIS_LINE[proteinBasis(state)] : current!.hint,
+      }
 
   return (
     <div
@@ -579,6 +596,16 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
               </div>
             )}
 
+            {isProtein && current && (
+              <ProteinCheck
+                question={current}
+                state={state}
+                picks={multiPicks}
+                onPicks={setMultiPicks}
+                onWeight={(band) => update(setForm(state, { weightBand: band }))}
+              />
+            )}
+
             {isForm && (
               <PersonalFields
                 name={localName} onName={setLocalName}
@@ -593,6 +620,18 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
           </div>
         </div>
       </div>
+
+      {/* The verdict, in flow above the CTA at a height reserved from first
+          paint — ProteinVerdict says why this reserves space where Reflection
+          deliberately refuses to. */}
+      {isProtein && current && (
+        <ProteinVerdict
+          question={current}
+          state={state}
+          picks={multiPicks}
+          reducedMotion={reducedMotion}
+        />
+      )}
 
       {/* CTA */}
       {editingId && !needsContinue && (
@@ -822,6 +861,22 @@ function ReviewRows({ state, onEdit }: { state: InterviewState; onEdit: (id: str
         return { id, label: 'You', value: bits.filter(Boolean).join(' \u00b7 ') || '\u2014' }
       }
       const picked = state.picked[id] ?? []
+      if (q.select === 'protein') {
+        // The number, not four food labels — and never the raw ids, which have
+        // reached this screen twice already ("35-44", "75-90").
+        const intake = proteinIntakeFrom(q.options, picked)
+        if (intake === null) {
+          const said = q.options.find((o) => picked.includes(o.id))?.label
+          return said ? { id, label: q.section, value: said } : null
+        }
+        const target = proteinTarget(proteinProfile(state))
+        return {
+          id, label: q.section,
+          value: target
+            ? `\u2248${intake}g a day \u00b7 target ${target.lowG}\u2013${target.highG}g`
+            : `\u2248${intake}g a day`,
+        }
+      }
       const labels = q.options.filter((o) => picked.includes(o.id)).map((o) => o.label)
       if (labels.length === 0) return null
       return { id, label: q.section, value: labels.join(', ') }

@@ -1,5 +1,6 @@
 import type { QuizAnswers, QuizTrack, Goal, AgeBracket, Gender, WeightBand, HealthDataConsent } from '@/lib/types'
 import type { DriverId, DriverWeights } from './drivers'
+import type { Meal } from './protein'
 
 /**
  * The shapes the adaptive interview is built from.
@@ -61,9 +62,26 @@ export interface BankOption {
    * pattern comes from.
    */
   exclusive?: boolean
+  /**
+   * Grams of protein this answer is worth, for the protein check.
+   *
+   * Coarse and rounded on purpose — the estimate is ±12g and a food database
+   * would take longer than the rest of the quiz put together. Absent means the
+   * option contributes no number, which is how "I honestly have no idea" stays
+   * an answer rather than a zero.
+   */
+  grams?: number
+  /**
+   * Which beat of the counted day this option belongs to.
+   *
+   * Its presence is also what separates the two paths: options with a `meal`
+   * are the step-through, options without are the one-tap presets. One list,
+   * one `picked` array, and the door taken is derivable rather than stored.
+   */
+  meal?: Meal
 }
 
-export type SelectKind = 'single' | 'multi' | 'form'
+export type SelectKind = 'single' | 'multi' | 'form' | 'protein'
 
 /** One field on the compound "about you" screen. */
 export type FormField =

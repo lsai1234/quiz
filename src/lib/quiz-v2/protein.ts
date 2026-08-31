@@ -237,6 +237,12 @@ export const BASIS_LINE: Record<TargetBasis, string> = {
 export interface VerdictCopy {
   /** The comparison line, already assembled. Always carries `≈`. */
   headline: string
+  /**
+   * The target on its own, so a caller animating the intake figure can compose
+   * the line rather than slicing `headline` apart — which is how the screen
+   * first shipped "≈78gg a day".
+   */
+  targetLabel: string
   /** The translation. A gram figure on its own means nothing to most readers. */
   detail: string
   /** Whether the accent (an opportunity) or the neutral (nothing to fix) tone. */
@@ -254,7 +260,8 @@ export interface VerdictCopy {
  *    and it is the only reason the other three are worth believing.
  */
 export function verdictCopy(target: ProteinTarget, intakeG: number): VerdictCopy {
-  const headline = `≈${intakeG}g a day · target ${target.lowG}–${target.highG}g`
+  const targetLabel = `${target.lowG}–${target.highG}g`
+  const headline = `≈${intakeG}g a day · target ${targetLabel}`
   const verdict = proteinVerdict(target, intakeG)
   const gap = proteinGap(target, intakeG)
 
@@ -276,14 +283,14 @@ export function verdictCopy(target: ProteinTarget, intakeG: number): VerdictCopy
         : shakes < 2.5 ? 'about two shakes'
         : 'enough that it wants spreading across meals, not added in one go'
       return {
-        headline,
+        headline, targetLabel,
         detail: `About ${round5(gap)}g short of the range — ${inShakes}.`,
         tone: 'opportunity',
       }
     }
     case 'small-gap':
       return {
-        headline,
+        headline, targetLabel,
         // Where the easy fix is depends on the week they described. "On the
         // days you train" is a useful sentence to someone lifting and a
         // slightly silly one to someone who told us they do not.
@@ -296,13 +303,13 @@ export function verdictCopy(target: ProteinTarget, intakeG: number): VerdictCopy
       }
     case 'on-target':
       return {
-        headline,
+        headline, targetLabel,
         detail: 'That’s on the money — nothing to fix here.',
         tone: 'settled',
       }
     case 'over':
       return {
-        headline,
+        headline, targetLabel,
         detail: 'That’s plenty. We’ll leave protein out of your box.',
         tone: 'settled',
       }
@@ -350,3 +357,61 @@ export const proteinProfile = (state: InterviewState): ProteinProfile => ({
   ageBracket: state.form.ageBracket,
   basis: proteinBasis(state),
 })
+
+// ─── Reading an answer off the question ──────────────────────────────────────
+
+/*
+ * The bank is the single place option ids and their grams are declared, so
+ * everything below takes the question and derives rather than duplicating a
+ * table. Which door was taken is derived too — one `picked` array, no extra
+ * state, and so `rewindTo` and `reviseAnswer` keep working untouched.
+ */
+
+/** Which door an answer came through. */
+export type ProteinDoor = 'none' | 'preset' | 'counted' | 'no-idea'
+
+interface OptionLike {
+  id: string
+  grams?: number
+  meal?: Meal
+}
+
+const byId = (options: readonly OptionLike[], id: string) => options.find((o) => o.id === id)
+
+export function proteinDoor(options: readonly OptionLike[], picked: readonly string[]): ProteinDoor {
+  if (picked.length === 0) return 'none'
+  if (picked.some((id) => byId(options, id)?.meal)) return 'counted'
+  if (picked.some((id) => typeof byId(options, id)?.grams === 'number')) return 'preset'
+  return 'no-idea'
+}
+
+/** The beats already answered, in the canonical order. */
+export const mealsAnswered = (
+  options: readonly OptionLike[],
+  picked: readonly string[],
+): Meal[] => MEALS.filter((m) => picked.some((id) => byId(options, id)?.meal === m))
+
+/** The next beat to put, or null once the day is done. */
+export const nextMeal = (
+  options: readonly OptionLike[],
+  picked: readonly string[],
+): Meal | null => MEALS.find((m) => !mealsAnswered(options, picked).includes(m)) ?? null
+
+/** Enough of an answer to continue on. */
+export function proteinComplete(
+  options: readonly OptionLike[],
+  picked: readonly string[],
+): boolean {
+  const door = proteinDoor(options, picked)
+  if (door === 'preset' || door === 'no-idea') return true
+  if (door === 'counted') return dayComplete(mealsAnswered(options, picked))
+  return false
+}
+
+/** The estimate behind an answer. Null for "no idea", and for a part-built day. */
+export function proteinIntakeFrom(
+  options: readonly OptionLike[],
+  picked: readonly string[],
+): number | null {
+  return proteinIntake(picked, (id) => byId(options, id)?.grams)
+}

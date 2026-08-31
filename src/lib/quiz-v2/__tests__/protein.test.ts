@@ -1,9 +1,11 @@
 import type { AgeBracket, WeightBand } from '@/lib/types'
 import { emptyInterview } from '../types'
 import { setGoals, setTrack } from '../interview'
+import { questionById } from '../bank'
 import {
-  BASIS_LINE, MEALS, dayComplete, proteinBasis, proteinDriverWeight, proteinGap,
-  proteinIntake, proteinProfile, proteinTarget, proteinVerdict, runningTotal,
+  BASIS_LINE, MEALS, dayComplete, mealsAnswered, nextMeal, proteinBasis,
+  proteinComplete, proteinDoor, proteinDriverWeight, proteinGap, proteinIntake,
+  proteinIntakeFrom, proteinProfile, proteinTarget, proteinVerdict, runningTotal,
   verdictCopy, type ProteinTarget, type TargetBasis,
 } from '../protein'
 
@@ -235,6 +237,14 @@ describe('the words', () => {
     expect(verdictCopy(lifter, 100).headline).toBe('≈100g a day · target 130–180g')
   })
 
+  it('hands out the target on its own, so nobody has to slice the headline', () => {
+    // The screen animates the intake figure and composes the rest. Doing that
+    // by cutting `headline` apart is how it first shipped "≈78gg a day".
+    const copy = verdictCopy(lifter, 100)
+    expect(copy.targetLabel).toBe('130–180g')
+    expect(`≈100g a day · target ${copy.targetLabel}`).toBe(copy.headline)
+  })
+
   it('never states a deficiency', () => {
     // §1.7. This module compares someone to a guideline; it does not find
     // anything, and one careless adjective is the difference.
@@ -350,5 +360,68 @@ describe('reading it off the interview', () => {
 
   it('has no target for someone who skipped the weight question', () => {
     expect(proteinTarget(proteinProfile(withShape('lift-often')))).toBeNull()
+  })
+})
+
+describe('the screen\u2019s answer, read off the bank', () => {
+  const q = questionById('protein-check')!
+  const opts = q.options
+  const day = ['b-protein', 'l-protein', 'd-big', 's-one']
+
+  it('knows which door an answer came through', () => {
+    expect(proteinDoor(opts, [])).toBe('none')
+    expect(proteinDoor(opts, ['day-normal'])).toBe('preset')
+    expect(proteinDoor(opts, ['no-idea'])).toBe('no-idea')
+    expect(proteinDoor(opts, ['b-protein'])).toBe('counted')
+  })
+
+  it('needs the whole day before a counted answer is finished', () => {
+    // The presets are one tap; counting is four, and the target must not appear
+    // until the fourth.
+    expect(proteinComplete(opts, ['day-normal'])).toBe(true)
+    expect(proteinComplete(opts, ['no-idea'])).toBe(true)
+    expect(proteinComplete(opts, [])).toBe(false)
+    expect(proteinComplete(opts, day.slice(0, 3))).toBe(false)
+    expect(proteinComplete(opts, day)).toBe(true)
+  })
+
+  it('steps the beats in order, whatever order they were answered in', () => {
+    expect(nextMeal(opts, [])).toBe('breakfast')
+    expect(nextMeal(opts, ['b-protein'])).toBe('lunch')
+    // A beat reopened from the summary is answered out of order; the walk must
+    // still know the day is done.
+    expect(nextMeal(opts, ['s-one', 'b-protein', 'd-big', 'l-protein'])).toBeNull()
+    expect(mealsAnswered(opts, ['s-one', 'b-protein'])).toEqual(['breakfast', 'snacks'])
+  })
+
+  it('adds the day up', () => {
+    expect(proteinIntakeFrom(opts, day)).toBe(25 + 35 + 55 + 22)
+    expect(proteinIntakeFrom(opts, ['day-normal'])).toBe(75)
+  })
+
+  it('gives "no idea" no number to compare against anything', () => {
+    expect(proteinIntakeFrom(opts, ['no-idea'])).toBeNull()
+  })
+
+  it('keeps the two doors telling the same story', () => {
+    // The presets are the sums the counted path produces for the same
+    // description. If they drifted apart, the same reader would get two
+    // different numbers depending on which door they took.
+    const quick = proteinIntakeFrom(opts, ['day-normal'])!
+    const counted = proteinIntakeFrom(opts, ['b-carbs', 'l-light', 'd-protein', 's-light'])!
+    expect(Math.abs(quick - counted)).toBeLessThanOrEqual(10)
+  })
+
+  it('has grams on every option that is not the honest shrug', () => {
+    for (const o of opts) {
+      if (o.id === 'no-idea') { expect(o.grams).toBeUndefined(); continue }
+      expect(typeof o.grams).toBe('number')
+    }
+  })
+
+  it('offers exactly four choices for each beat', () => {
+    for (const m of MEALS) {
+      expect(opts.filter((o) => o.meal === m)).toHaveLength(4)
+    }
   })
 })

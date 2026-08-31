@@ -62,3 +62,23 @@ export const trains = (s: InterviewState): boolean =>
 
 /** 45 or over. Age gates a couple of questions that would otherwise be odd. */
 export const olderThan45 = (s: InterviewState): boolean => s.form.ageBracket === '45+'
+
+/** A flag ticked on the safety screen. Only ever readable with consent given. */
+export const hasSafetyFlag = (s: InterviewState, flag: string): boolean =>
+  (s.picked['safety'] ?? []).includes(flag)
+
+/**
+ * Whether the protein check may run at all.
+ *
+ * Three states, not two, and the third is the one that would have been missed.
+ * The Article 9 gate on the safety screen means declining consent does not
+ * produce an empty answer — it produces no answer, because the options never
+ * render. So a guard written as "pregnancy is not ticked" is true for everyone
+ * who declined, including the person the guard exists for, and an absence reads
+ * exactly like a negative.
+ *
+ * Same shape of hole as the `suspected`/`live` one above: silent, and only for
+ * the people it most matters for.
+ */
+export const proteinModuleAllowed = (s: InterviewState): boolean =>
+  !!s.healthDataConsent?.accepted && !hasSafetyFlag(s, 'pregnancy')
