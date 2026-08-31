@@ -68,11 +68,12 @@ person who taps once, not only for the person who does the whole thing.
                           the sell lands in Act 3
 ```
 
-Note what Door A is. **It is not a skip — it is the question we ask today.**
-The four options of `protein-reality`, kept word for word, sitting behind a
-*"Rather not count? Just tell us roughly"* link. So the module does not add a
+Note what Door A is. **It is not a skip — it is the answer we already get
+most.** *"I honestly have no idea"* is the most-picked option on the question
+this replaces, so it sits in the list as an ordinary fifth choice rather than
+behind an escape hatch (§2.1 argues that out). The module does not add a
 question to the quiz; it *replaces* one, and the worst case for a reader who
-wants nothing to do with it is the experience they would have had anyway.
+wants nothing to do with it is one tap, exactly as today.
 
 That is what makes the whole thing budget-neutral, which is requirement **B3**
 of the V2 spec and the constraint most likely to kill a good idea in this quiz.
@@ -91,10 +92,11 @@ happy accident that makes the module cheap:
 | Plant-based | `safety` | changes the copy, not the number |
 | Pregnancy | `safety` | **suppresses the module entirely** |
 
-So the target can be shown **before** the reader estimates anything — in the
-hint line, as the reason the question is being asked. *"Most people your size
-training four times a week land around 120–140g."* That reframes the screen from
-an interrogation into a comparison, which is a much easier thing to answer.
+So the target could be shown **before** the reader estimates anything. It
+should not be — a number shown first anchors the self-report it is about to be
+compared against, and §2.2 makes that case. What the hint states instead is the
+*basis* ("you train four times a week"), which does the listening work without
+handing over anything to aim at.
 
 The ranges, and what they are:
 
@@ -130,11 +132,11 @@ Two honesty constraints on how these are used, and both are non-negotiable:
 Deliberately written as **days, not diets**. Nobody knows what "moderate protein
 intake" means about themselves; everybody knows whether they had toast.
 
-**Door C — the count.** Four rows on one screen — breakfast, lunch, dinner,
-snacks and drinks — each a row of chips anchored to recognisable food, each
-carrying grams behind it:
+**Door C — the count.** Four meals, asked one at a time inside the same screen
+(§2.3 is why stepped rather than a four-row form), each option anchored to
+recognisable food and carrying grams behind it:
 
-| Row | Chips | g |
+| Beat | Options | g |
 |---|---|---|
 | Breakfast | Nothing / Toast or cereal / Eggs or yoghurt / A shake | 0 / 8 / 25 / 25 |
 | Lunch | Skipped / Sandwich or salad / Chicken, fish or similar / Big portion | 0 / 15 / 35 / 50 |
@@ -215,9 +217,219 @@ could turn this module from an asset into a liability.
 
 ---
 
-## Part 2 — How it integrates
+## Part 2 — The screen, designed
 
-### 2.1 The one structural rule to respect
+Part 1 says what the module knows. This part says what it feels like, because on
+this particular screen those are not separable: a protein calculator that feels
+like homework is a protein calculator nobody finishes, and an unfinished one is
+worse than the coarse question it replaced.
+
+Everything here is designed against one sentence from the V2 brief — *"I still
+want the user to fly through the quiz"* — and one from the reader's head:
+**"am I being told off?"**
+
+### 2.1 The three doors are not a menu
+
+The obvious build is a screen that offers three ways to answer. It is also
+wrong, and worth saying why at length, because it is the version most people
+would ship.
+
+Every other screen in this quiz is *read one line, tap one thing, move*. A
+screen that first asks **how** you would like to answer breaks that rhythm
+before a single question has been asked. It converts a quiz into a settings
+panel. And it does the damage to everybody, including the 70% who were always
+going to tap the first plausible option and move on.
+
+So the doors are not offered. **Door B is simply the screen**, and the other two
+hang off it:
+
+```
+┌─────────────────────────────────────────────────┐
+│  A NORMAL DAY                                   │   ← eyebrow, as every screen
+│  What does a normal day of eating look like?    │   ← h2, as every screen
+│  You train four times a week — that moves this  │   ← hint: the basis, not
+│  number more than most people expect.           │      the target (§2.2)
+├─────────────────────────────────────────────────┤
+│  ○ Toast or cereal, sandwich, proper dinner     │
+│  ○ Skip breakfast, something quick, big dinner  │   five full-width options,
+│  ○ Eggs or yoghurt, decent lunch, meat at night │   the same control as every
+│  ○ Protein at every meal, and I snack on it     │   other single-select screen
+│  ○ I honestly have no idea                      │   ← Door A, in plain sight
+│                                                 │
+│  Rather work it out properly? →                 │   ← Door C, one quiet link
+└─────────────────────────────────────────────────┘
+```
+
+To a reader who does the normal thing, **this is an ordinary question.** Same
+control, same tap, same speed, no evidence that a "module" exists. That is the
+whole design goal for the majority path.
+
+Two decisions inside that are worth defending:
+
+**Door A is the fifth option, not a link.** *"I honestly have no idea"* is
+already the most-picked answer to the question this replaces, and hiding the
+honest answer behind an escape hatch punishes honesty. In the list it costs one
+tap like everything else, commits the coarse `low-protein` signal, and produces
+no number — and the reader never feels they opted out of something.
+
+**Door C is a link, not an option.** It is not an answer to the question; it is
+a change of instrument. Rendering it as a sixth radio row would put "count it
+properly" in the same visual grammar as "I eat eggs", which is a category error
+the eye notices before the brain does.
+
+### 2.2 Do not show the target first
+
+The tempting move is to open with the number: *"people your size training four
+times a week need 120–140g."* It flatters the quiz, proves we were listening,
+and motivates the answer.
+
+It also **corrupts the answer.** Shown a target first, people pick the option
+nearer it — not from dishonesty but because a stated number reframes the
+question from *what do you eat* to *how close am I*. We would be anchoring the
+one input the entire module depends on, and then selling a gap computed from
+it.
+
+So the hint states the **basis** and withholds the number:
+
+> *"You train four times a week — that moves this number more than most people
+> expect."*
+
+This does the listening work (**B2**) without giving anything to aim at, and it
+buys the target a much better moment: arriving *with* the comparison, where it
+is information rather than an instruction. Better design and cleaner data, which
+is the rare case where the honest choice is also the effective one.
+
+The basis line is pre-written per situation — lifting, active, sedentary,
+deficit — like every other string in this quiz.
+
+### 2.3 Door C: one meal at a time, not a form
+
+Four meal rows on one screen is the obvious layout and it does not survive
+contact with a phone. Four rows of four chips is ~440px of content in a scroll
+area that is ~250px on a short window: cramped chips, a scrollbar, and tap
+targets smaller than everything else in the quiz. It looks like a form because
+it is one.
+
+**So Door C steps.** One meal per beat, inside the same screen:
+
+```
+┌─────────────────────────────────────────────────┐
+│  A NORMAL DAY            ● ● ○ ○                │   ← 4 dots: the end is
+│  What does dinner usually look like?            │      visible from the start
+├─────────────────────────────────────────────────┤
+│  ○ Light or snacky                              │
+│  ○ A normal portion                             │   full-size options, same
+│  ○ Meat or fish, decent size                    │   ergonomics as any question
+│  ○ A big portion                                │
+├─────────────────────────────────────────────────┤
+│  ≈60g so far                          [ ● ● ○ ○ ]│   ← the running total,
+└─────────────────────────────────────────────────┘      pinned above the CTA
+```
+
+Four taps, four full-size targets, no scrolling, no chips, no typing. It reads
+as *one question with four beats*, not four questions — and the proof is
+sitting in the header the whole time: **the quiz's own `3 / 10` counter does not
+move.** A reader who glances up gets told, by the most trusted number on the
+screen, that they have not been sent down a side quest.
+
+The back arrow steps back through the meals before it leaves the screen, so a
+misfire costs one tap rather than the whole path. Tapping the Door C link again
+returns to the presets with nothing lost.
+
+### 2.4 The number builds
+
+This is the part that makes the long path worth taking, and it is one rule:
+
+**While incomplete, show the running total and nothing else. Only when every
+meal is answered does the target appear.**
+
+> after breakfast → `≈25g so far`
+> after lunch → `≈60g so far`
+> after dinner → `≈100g so far`
+> after snacks → `≈110g a day · target 120–140g`
+
+Showing the target against a partial total would be actively dishonest —
+*"25g against 130g"* reads as catastrophe to someone who has simply not got to
+lunch yet — and dishonest in the direction of our own commercial interest, which
+is the worst available direction. Withholding it costs nothing and removes the
+one moment on this screen where a reader could feel ambushed.
+
+The total **counts up** to each new value over ~250ms in tabular figures rather
+than snapping. Small, and it does real work: a number that ticks reads as
+*measured*, a number that appears reads as *looked up*. Suppressed under reduced
+motion, which the quiz already threads everywhere.
+
+### 2.5 The verdict strip, and the lesson it inherits
+
+The verdict is pinned **above the CTA**, in flow, at a **height reserved from
+first paint**.
+
+`Reflection.tsx` documents the opposite decision — it floats out of the layout
+precisely so nothing can move — and the two are not in conflict, they are the
+same principle applied to different facts. The reflection *may never arrive*
+(with no API key it never does), so reserving space for it would trade a jump
+for a permanent empty gap that most readers only ever see empty. The verdict
+**always** arrives, the instant the reader taps, and never leaves. Reserved
+space for a thing that always fills; no space at all for a thing that usually
+does not.
+
+Getting this wrong here would be worse than it was there, because this line
+appears while the thumb is already travelling toward Continue. A footer that
+moves under a moving thumb is not a cosmetic bug; it is a mis-tap.
+
+Everything else about the strip:
+
+- **`aria-live="polite"`.** The number changes with no navigation, so without it
+  a screen-reader user gets silence. Polite, not assertive: it must not
+  interrupt the confirmation of the option they just pressed.
+- **Never red.** Accent cyan for a gap — it is an opportunity, not a fault.
+  Neutral warm for on-target and over. Nothing on this screen is an alarm.
+- **`≈` always.** The estimate is labelled as an estimate everywhere it is
+  rendered, including here, including when it is flattering.
+- **Two lines maximum**, and the second is where the translation lives ("about
+  one shake"), because the gram figure alone means nothing to most readers.
+
+### 2.6 Four endings, and the tone of each
+
+The verdict copy is where this module earns or loses trust, so it is written
+out rather than left to the build:
+
+| Verdict | On-screen | Why this tone |
+|---|---|---|
+| Big gap (>30g) | `≈85g a day · target 120–140g`<br>*About 40g short — roughly one shake.* | Plain arithmetic. No adjective does more work than the number. |
+| Small gap (10–30g) | `≈115g a day · target 120–140g`<br>*Close. A little short on the days you train.* | Proportionate. Overselling a 15g gap is how you lose the reader who can do sums. |
+| On target | `≈130g a day · target 120–140g`<br>*That's on the money — nothing to fix here.* | Say it warmly and move on. We just told someone they are doing something right, having had every reason not to. |
+| Over | `≈175g a day · target 120–140g`<br>*That's plenty. We'll leave protein out of your box.* | The most trust-building sentence in the quiz. It must be pleased, not grudging. |
+
+The last row is the design decision the whole module should be judged on. A
+calculator that only ever concludes *buy the thing* is not a calculator, and one
+that says so out loud in the one case where it costs us a line item is the only
+version whose other three rows can be believed.
+
+### 2.7 The details that will otherwise get lost
+
+- **The review row** reads `≈85g a day · target 120–140g`, never a list of
+  option ids. Raw ids have reached this screen twice already in V2 (`35-44`,
+  `75-90`), both times found by looking rather than by a test.
+- **Editing from review returns to the door they used**, in the state they left
+  it — Door C reopens on the summary of four answered meals, not back at
+  breakfast.
+- **The inline weight row.** Weight is optional on the personal screen. If it is
+  unset, the module asks for it *inside* the screen — one row of five, the same
+  labels — with `Skip` demoting to the coarse answer. It never blocks, and it
+  never invents a weight.
+- **First paint has no verdict**, only the reserved space and the CTA in its
+  disabled state, so nothing shifts between paint and first tap.
+- **Reduced motion** removes the count-up and the door transitions; the numbers
+  and the copy are identical.
+- **The dots are not a progress bar.** Four discrete dots, because four is
+  countable at a glance and a bar implies a duration.
+
+---
+
+## Part 3 — How it integrates
+
+### 3.1 The one structural rule to respect
 
 Everything the interview knows must be **derivable from `picked`**. That is what
 makes `rewindTo`, `reviseAnswer` and the review screen work without any of them
@@ -229,7 +441,7 @@ So: the protein module stores **option ids like every other question**, and the
 grams are a pure function of those ids. One pick per meal row, or one preset id,
 or one coarse id. `reviseAnswer` then works on it for free.
 
-### 2.2 New files
+### 3.2 New files
 
 **`src/lib/quiz-v2/protein.ts`** — the whole of the maths, pure and free of
 React:
@@ -255,7 +467,7 @@ export function proteinWhy(state: InterviewState): string
 `PersonalFields`, which is the closest existing analogue: a compound screen with
 local state, committed on Continue.
 
-### 2.3 Changed files
+### 3.3 Changed files
 
 | File | Change |
 |---|---|
@@ -276,7 +488,7 @@ output, and the persona snapshots stay green — the same property that made the
 `drivers` field safe to add in Phase 2, and the one that must be re-verified
 rather than assumed.
 
-### 2.4 The gate — when it fires
+### 3.4 The gate — when it fires
 
 ```ts
 requires: (s) =>
@@ -284,7 +496,7 @@ requires: (s) =>
   (live(s, 'low-protein') || (trains(s) && hasGoal(s, 'muscle', 'bulking', 'cutting', 'recovery')))
 ```
 
-`proteinModuleAllowed` is new, and §2.5 is why it is a named helper rather than
+`proteinModuleAllowed` is new, and §3.5 is why it is a named helper rather than
 one clause of the gate. `predicates.ts` has no safety helper today because
 nothing has needed to read the safety screen back until now.
 
@@ -299,7 +511,7 @@ who has just told us their problem is broken sleep does not need a protein
 calculator, and forcing one on them is exactly the "working through a list"
 behaviour V2 exists to stop.
 
-### 2.5 The consent gate, and the hole underneath it
+### 3.5 The consent gate, and the hole underneath it
 
 The Article 9 consent gate landed on the safety screen while this was being
 written, and it changes the pregnancy guard in a way that is easy to get wrong.
@@ -340,10 +552,10 @@ Two consequences worth stating plainly:
 - **Consent can be withdrawn** — the component has an Undo. Withdrawal must
   re-run the gate and drop the module's answer, exactly as `reviseAnswer` drops
   a later answer an edit invalidated. Since the module's state lives in `picked`
-  (§2.1), this is the machinery that already exists rather than new code, but it
+  (§3.1), this is the machinery that already exists rather than new code, but it
   needs a test rather than an assumption.
 
-### 2.6 What it costs in time and latency
+### 3.6 What it costs in time and latency
 
 | | |
 |---|---|
@@ -359,20 +571,28 @@ because there is nothing to wait for.
 
 ---
 
-## Part 3 — Implementation plan
+## Part 4 — Implementation plan
 
 Five phases. Each lands on `master` behind the existing arm flag and changes
 nothing for customers, because V2 is still off.
 
-### Phase 1 — The maths
-1. `quiz-v2/protein.ts`: target, intake, verdict, the goal-keyed why-copy.
+### Phase 1 — The maths and the words
+1. `quiz-v2/protein.ts`: target, intake, verdict — plus the two sets of
+   pre-written strings the design turns out to need, `basisLine` (§2.2) and
+   `verdictCopy` (§2.6). They live here rather than in the component because
+   they are the part a person needs to read and argue with, and a string that
+   only exists inside JSX never gets reviewed.
 2. Unit tests: every weight band × every basis; the 45+ nudge; the deficit case;
-   null weight; all four verdicts at their boundaries; midpoint arithmetic.
-3. A table test that pins the full band × basis grid, so a copy change to the
-   ranges is visible in a diff rather than buried in a helper.
+   null weight; all four verdicts at their boundaries; midpoint arithmetic; the
+   running-total sum for a partial day.
+3. A table test that pins the full band × basis grid, so a change to the ranges
+   is visible in a diff rather than buried in a helper.
+4. A test that no verdict string states a deficiency, and that every rendered
+   intake carries the `≈` (§1.7).
 
-**Exit:** the numbers are right and reviewable as a table, with no UI to argue
-about yet. This is the phase where the *ranges* get a second opinion.
+**Exit:** the numbers are right and reviewable as a table, and the sentences a
+reader will actually see are readable in one file, with no UI to argue about
+yet. This is the phase where the *ranges* and the *tone* get a second opinion.
 
 ### Phase 2 — The screen
 4. `types.ts`: the `'protein'` select kind, `grams`, `mealRow`.
@@ -380,16 +600,20 @@ about yet. This is the phase where the *ranges* get a second opinion.
    options, and the coarse door carrying `protein-reality`'s four options
    verbatim. Retire the standalone question.
 5b. `predicates.ts`: `hasSafetyFlag` and `proteinModuleAllowed`, with the
-   declined-consent case tested explicitly (§2.5).
-6. `ProteinCheck.tsx`: the three doors, the inline weight row when weight is
-   unset, the **fixed-height** verdict slot.
+   declined-consent case tested explicitly (§3.5).
+6. `ProteinCheck.tsx`: the preset list with Door A in it and Door C on a link
+   (§2.1); the stepped meal beats and their four dots (§2.3); the
+   build-then-compare rule for the running total (§2.4); the reserved,
+   `aria-live` verdict strip (§2.5); the inline weight row when weight is
+   unset.
 7. `QuizV2.tsx`: render it; include it in `needsContinue` and `canContinue`.
 8. Review-row rendering: `≈85g a day` rather than a list of option ids — the
    same class of bug as the raw `35-44` that shipped to the review screen twice.
 
 **Exit:** all three doors complete the quiz; an edit from the review screen
-returns to the right door with the right rows still selected; and a reader who
-declined consent never sees anything but Door A.
+returns to the right door in the state it was left; a reader who declined
+consent never sees anything but the preset list; and nothing on the screen moves
+between first paint and the first tap.
 
 ### Phase 3 — It reaches the recommendation
 9. `project.ts`: write `proteinTargetG` / `proteinIntakeG`; derive the
@@ -442,7 +666,7 @@ conversion mechanism, and Phase 5 is what measures whether it works.
    than weight alone, even though it is a nutrition comparison rather than a
    condition. **Recommendation:** do not decide this in the build — it wants the
    same review the consent gate got. The safe default in the meantime is the one
-   §2.5 already specifies, because gating the module on health-data consent
+   §3.5 already specifies, because gating the module on health-data consent
    covers it either way.
 
 4. **Should V1 get it too?** No — that would contaminate the experiment, which
