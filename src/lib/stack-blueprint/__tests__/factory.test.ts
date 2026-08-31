@@ -525,3 +525,66 @@ describe('buildStackBlueprint — already-taking with tryOurs override', () => {
     expect(groups).not.toContain('multivitamin') // multivitamin still skipped
   })
 })
+
+describe('the protein check\u2019s verdict', () => {
+  /**
+   * The one place the recommendation deliberately loses a line item.
+   *
+   * The screen that produces these numbers tells the reader in as many words
+   * that we will leave protein out of their box. A promise the engine only
+   * half-keeps is worse than one never made, so this asserts the box, not the
+   * copy.
+   */
+  const lifter = (over: Partial<QuizAnswers> = {}) =>
+    makeAnswers({ goals: ['muscle'], trainingFrequency: '5-6x', weightBand: '75-90', ...over })
+
+  it('leaves protein out of the box when the reader is already over', () => {
+    const before = buildStackBlueprint(lifter(), MOCK_CATALOGUE)
+    const after = buildStackBlueprint(
+      lifter({ proteinTargetG: 130, proteinTargetHighG: 180, proteinIntakeG: 200 }),
+      MOCK_CATALOGUE,
+    )
+    expect(before.slots.some((s) => s.slotType === 'protein')).toBe(true)
+    expect(after.slots.some((s) => s.slotType === 'protein')).toBe(false)
+  })
+
+  it('keeps it for someone at the bottom of their range', () => {
+    // 135g against 130\u2013180g is "on the money", and pulling protein would
+    // contradict the sentence the screen had just shown them. Measured against
+    // the ceiling, not the floor.
+    const on = buildStackBlueprint(
+      lifter({ proteinTargetG: 130, proteinTargetHighG: 180, proteinIntakeG: 135 }),
+      MOCK_CATALOGUE,
+    )
+    expect(on.slots.some((s) => s.slotType === 'protein')).toBe(true)
+  })
+
+  it('keeps it for a real gap', () => {
+    const short = buildStackBlueprint(
+      lifter({ proteinTargetG: 130, proteinTargetHighG: 180, proteinIntakeG: 80 }),
+      MOCK_CATALOGUE,
+    )
+    expect(short.slots.some((s) => s.slotType === 'protein')).toBe(true)
+  })
+
+  it('changes nothing at all when the module never ran', () => {
+    // v1 answers, and everything saved before the module existed, carry none of
+    // these fields. The same invariant `drivers` has to hold.
+    const plain = buildStackBlueprint(lifter(), MOCK_CATALOGUE)
+    const explicitlyAbsent = buildStackBlueprint(
+      lifter({ proteinTargetG: null, proteinTargetHighG: null, proteinIntakeG: null }),
+      MOCK_CATALOGUE,
+    )
+    expect(explicitlyAbsent.slots.map((s) => s.selectedProductId))
+      .toEqual(plain.slots.map((s) => s.selectedProductId))
+  })
+
+  it('still offers protein as a swap rather than hiding it', () => {
+    // Refusing to sell someone protein is right. Refusing to show it to them
+    // would be patronising, which is why the penalty is finite rather than the
+    // hard `-Infinity` gate used for a genuine contraindication.
+    const answers = lifter({ proteinTargetG: 130, proteinTargetHighG: 180, proteinIntakeG: 200 })
+    const whey = MOCK_CATALOGUE.find((p) => p.stackSlots.includes('protein'))!
+    expect(scoreProduct(whey, 'protein', answers)).toBeGreaterThan(-Infinity)
+  })
+})

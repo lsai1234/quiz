@@ -288,6 +288,29 @@ export function scoreProduct(
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > SCORING.budgetThresholdPrice) score += SCORING.budgetOverThreshold
 
+  /*
+   * ── The protein check said they are already over ─────────────────────────
+   *
+   * The one place the recommendation deliberately loses a line item. The screen
+   * that produced these two numbers says "that's plenty — we'll leave protein
+   * out of your box", and this is what makes that true rather than a nice
+   * sentence next to a tub in the box.
+   *
+   * Absent on every v1 answer and everything saved before the module existed,
+   * so it contributes nothing there — same invariant as `drivers`.
+   */
+  if (
+    slotType === 'protein' &&
+    typeof answers.proteinIntakeG === 'number' &&
+    typeof answers.proteinTargetHighG === 'number' &&
+    // The CEILING, not the floor. Someone at the bottom of a 130–180g range is
+    // on the money, and pulling protein out of their box would contradict the
+    // sentence the screen had just shown them.
+    answers.proteinIntakeG > answers.proteinTargetHighG
+  ) {
+    score += SCORING.protein.overTarget
+  }
+
   // ── Diet quality → protein and micronutrient necessity ────────────────────
   // A clean, high-protein diet already covers protein needs — the powder adds
   // less marginal value. A poor diet means a multivitamin is more critical.

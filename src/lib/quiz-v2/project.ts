@@ -2,7 +2,10 @@ import type { QuizAnswers } from '@/lib/types'
 import { defaultAnswers } from '@/lib/quiz-answers'
 import type { BankOption, InterviewState } from './types'
 import { questionById } from './bank'
-import { rankedDrivers } from './drivers'
+import { rankedDrivers, type DriverWeights } from './drivers'
+import {
+  proteinComplete, proteinDriverWeight, proteinIntakeFrom, proteinProfile, proteinTarget,
+} from './protein'
 
 /**
  * The interview, as the recommendation engine has always seen it.
@@ -111,12 +114,72 @@ export function projectAnswers(state: InterviewState): QuizAnswers {
     }
   }
 
+  // The protein check, when it produced a number, replaces the guess with the
+  // subtraction — including the case where the subtraction says zero.
+  const protein = proteinReading(state)
+  if (protein) {
+    answers.proteinTargetG = protein.targetG
+    answers.proteinTargetHighG = protein.targetHighG
+    answers.proteinIntakeG = protein.intakeG
+  }
+
   // Only settled drivers reach the engine. A driver at 0.1 is a hint from one
   // half-answer, and scoring it would let a passing remark move the box.
-  const drivers = rankedDrivers(state.drivers)
+  const drivers = rankedDrivers(protein ? protein.weights : state.drivers)
   if (drivers.length > 0) {
     answers.drivers = Object.fromEntries(drivers.map((d) => [d.id, d.weight]))
   }
 
   return answers
+}
+
+/**
+ * What the protein check measured, if it ran and produced a number.
+ *
+ * ── Why the driver is overridden rather than accumulated ────────────────────
+ * The bank options carry an approximate `low-protein` weight so the PLANNER has
+ * something to work with mid-interview. Once there is a target and an estimate,
+ * that guess is strictly worse than the subtraction, and leaving both in place
+ * would mean the engine scoring a hunch alongside a measurement.
+ *
+ * The zero case is the one that matters. Someone on target or over gets a
+ * weight of 0, which drops below `NOTED` and out of the ranking entirely — so
+ * "we'll leave protein out of your box" reaches the recommendation rather than
+ * only the copy. Without this the option's own 0.45 would still be sitting
+ * there, quietly selling a tub to somebody the same page had just congratulated.
+ */
+function proteinReading(
+  state: InterviewState,
+): { targetG: number; targetHighG: number; intakeG: number; weights: DriverWeights } | null {
+  const question = questionById('protein-check')
+  if (!question) return null
+  const picked = state.picked[question.id]
+  if (!picked?.length) return null
+
+  /*
+   * A day that was only partly answered sums to a real figure — three meals of
+   * a four-meal day — and comparing that against a full-day target would
+   * manufacture a gap out of the question not being finished. The screen will
+   * not let anyone Continue from there, but `reviseAnswer` can drop a later
+   * answer and leave one behind, and this is the last place that could be
+   * caught before it reached the engine as a number.
+   */
+  if (!proteinComplete(question.options, picked)) return null
+
+  const intakeG = proteinIntakeFrom(question.options, picked)
+  // "I honestly have no idea" — the coarse driver from the option stands, and
+  // no number is claimed.
+  if (intakeG === null) return null
+
+  const target = proteinTarget(proteinProfile(state))
+  // No weight band, so no target — the estimate is real but there is nothing
+  // honest to compare it against.
+  if (!target) return null
+
+  return {
+    targetG: target.lowG,
+    targetHighG: target.highG,
+    intakeG,
+    weights: { ...state.drivers, 'low-protein': proteinDriverWeight(target, intakeG) },
+  }
 }

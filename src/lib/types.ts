@@ -179,6 +179,26 @@ export interface QuizAnswers {
   healthDataConsent?: HealthDataConsent | null
   /** Bodyweight band for weight-sensitive dosing (protein). Optional. */
   weightBand?: WeightBand | null
+  /**
+   * The protein check (quiz v2 only) — daily target and estimated intake, in
+   * grams. See `docs/QUIZ_V2_PROTEIN.md`.
+   *
+   * Both optional, and absent for every v1 answer and everything saved before
+   * the module existed. Absence is what keeps v1's output byte-identical, the
+   * same property that made `drivers` safe to add.
+   *
+   * Both ends of the target are stored, and the distinction is load-bearing:
+   * a gap is measured from the FLOOR (someone at the bottom of a 130–180g range
+   * is not short), and "already over" is measured from the CEILING. Keying both
+   * off one figure would have the engine removing protein from the box of
+   * someone the same screen had just told was on the money.
+   *
+   * Storing the range rather than a profile also means the recap and the reveal
+   * can show the same numbers the quiz showed, from `answers` alone.
+   */
+  proteinTargetG?: number | null
+  proteinTargetHighG?: number | null
+  proteinIntakeG?: number | null
   goals: Goal[]
   /**
    * "Already taking" items the user still wants in the stack — the follow-up

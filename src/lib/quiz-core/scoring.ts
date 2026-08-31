@@ -75,6 +75,19 @@ export const SCORING = {
   budgetOverThreshold: -15,
   budgetThresholdPrice: 30,
 
+  /**
+   * The protein check's measured verdict (quiz v2).
+   *
+   * `overTarget` is large and finite on purpose. Large, because the screen told
+   * the reader in as many words that we would leave protein out of their box,
+   * and a promise the engine only half-keeps is worse than one never made —
+   * `pickBest` drops a slot whose best score is below zero, which is exactly
+   * the behaviour wanted. Finite rather than `-Infinity`, because the hard
+   * gates above remove a product from the swap list too, and refusing to *sell*
+   * someone protein is right where refusing to *show* it would be patronising.
+   */
+  protein: { overTarget: -200 },
+
   /** Diet quality. */
   diet: {
     cleanProtein: -20,
