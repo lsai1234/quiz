@@ -280,16 +280,15 @@ rather than assumed.
 
 ```ts
 requires: (s) =>
-  !hasSafetyFlag(s, 'pregnancy') &&
+  proteinModuleAllowed(s) &&
   (live(s, 'low-protein') || (trains(s) && hasGoal(s, 'muscle', 'bulking', 'cutting', 'recovery')))
 ```
 
-`hasSafetyFlag` is new — `predicates.ts` has no safety helper today, because
-nothing has needed to read the safety screen back until now. It is three lines
-and belongs there with the rest.
+`proteinModuleAllowed` is new, and §2.5 is why it is a named helper rather than
+one clause of the gate. `predicates.ts` has no safety helper today because
+nothing has needed to read the safety screen back until now.
 
-Otherwise this is `protein-reality`'s existing gate plus the pregnancy guard and
-the cutting goal. `live` rather than `suspected` on purpose — that distinction is
+The rest is `protein-reality`'s existing gate plus the cutting goal. `live` rather than `suspected` on purpose — that distinction is
 the bug documented in `predicates.ts`, where the person with the *strongest*
 evidence for a driver was the only one who never got the follow-up.
 
@@ -300,7 +299,51 @@ who has just told us their problem is broken sleep does not need a protein
 calculator, and forcing one on them is exactly the "working through a list"
 behaviour V2 exists to stop.
 
-### 2.5 What it costs in time and latency
+### 2.5 The consent gate, and the hole underneath it
+
+The Article 9 consent gate landed on the safety screen while this was being
+written, and it changes the pregnancy guard in a way that is easy to get wrong.
+
+**Declining consent does not produce an empty answer — it produces no answer.**
+`HealthDataConsent` is explicit about this: the safety options do not exist
+until consent is given, because "a smaller set of answers" is not a meaningful
+version of optional. So a reader who declines has no `safetyFlags` at all.
+
+A gate written as *"pregnancy is not ticked"* therefore fires for **everyone who
+declined**, including the person it exists to protect. That is the whole guard
+inverted by an absence, and it would never show up in a test written against the
+happy path.
+
+So the condition is three states, not two:
+
+| Consent | Pregnancy | Module |
+|---|---|---|
+| Given | ticked | **suppressed** — falls back to Door A |
+| Given | not ticked | runs |
+| **Declined or not yet given** | unknowable | **suppressed** — falls back to Door A |
+
+```ts
+export const proteinModuleAllowed = (s: InterviewState): boolean =>
+  !!s.healthDataConsent?.accepted && !hasSafetyFlag(s, 'pregnancy')
+```
+
+Named, in `predicates.ts`, with its own test for the declined case
+specifically — the same treatment `live` got after the `suspected` hole, and for
+the same reason: the failure is silent and only affects the people it most
+matters for.
+
+Two consequences worth stating plainly:
+
+- **The module is off for anyone who declined**, which is a real cost in reach.
+  It is the right cost. Door A still runs, so those readers get today's
+  question and a stack, just not a number.
+- **Consent can be withdrawn** — the component has an Undo. Withdrawal must
+  re-run the gate and drop the module's answer, exactly as `reviseAnswer` drops
+  a later answer an edit invalidated. Since the module's state lives in `picked`
+  (§2.1), this is the machinery that already exists rather than new code, but it
+  needs a test rather than an assumption.
+
+### 2.6 What it costs in time and latency
 
 | | |
 |---|---|
@@ -336,14 +379,17 @@ about yet. This is the phase where the *ranges* get a second opinion.
 5. `bank/nutrition.ts`: author `protein-check` — preset options, meal-row
    options, and the coarse door carrying `protein-reality`'s four options
    verbatim. Retire the standalone question.
+5b. `predicates.ts`: `hasSafetyFlag` and `proteinModuleAllowed`, with the
+   declined-consent case tested explicitly (§2.5).
 6. `ProteinCheck.tsx`: the three doors, the inline weight row when weight is
    unset, the **fixed-height** verdict slot.
 7. `QuizV2.tsx`: render it; include it in `needsContinue` and `canContinue`.
 8. Review-row rendering: `≈85g a day` rather than a list of option ids — the
    same class of bug as the raw `35-44` that shipped to the review screen twice.
 
-**Exit:** all three doors complete the quiz, and an edit from the review screen
-returns to the right door with the right rows still selected.
+**Exit:** all three doors complete the quiz; an edit from the review screen
+returns to the right door with the right rows still selected; and a reader who
+declined consent never sees anything but Door A.
 
 ### Phase 3 — It reaches the recommendation
 9. `project.ts`: write `proteinTargetG` / `proteinIntakeG`; derive the
@@ -365,8 +411,10 @@ screen, in the analysis, and next to the product. That repetition is the
 conversion mechanism, and Phase 5 is what measures whether it works.
 
 ### Phase 5 — Measure
-16. E2E: all three doors to a stack; pregnancy suppresses the module; the
-    over-target path removes protein from the box.
+16. E2E: all three doors to a stack; pregnancy suppresses the module;
+    **declining health-data consent** suppresses it too; withdrawing consent
+    after answering drops the module's answer; the over-target path removes
+    protein from the box.
 17. Read `quiz_protein` against completion and conversion by door. The
     interesting comparison is **Door C against Door B** — if the readers who
     count convert materially better, the module earns a more prominent invitation
@@ -388,10 +436,19 @@ conversion mechanism, and Phase 5 is what measures whether it works.
    `protein.ts` should be written as if it will happen — pure, React-free, no
    dependency on `InterviewState` beyond a narrow input type.
 
-3. **Should V1 get it too?** No — that would contaminate the experiment, which
+3. **Is the estimate itself special category data?** Weight band and age sit
+   outside the Article 9 gate today, described as dosing inputs. A dietary
+   self-report plus a target derived from it is a step closer to health data
+   than weight alone, even though it is a nutrition comparison rather than a
+   condition. **Recommendation:** do not decide this in the build — it wants the
+   same review the consent gate got. The safe default in the meantime is the one
+   §2.5 already specifies, because gating the module on health-data consent
+   covers it either way.
+
+4. **Should V1 get it too?** No — that would contaminate the experiment, which
    is the whole reason V2 exists as a separate arm. If it wins, it ships with V2.
 
-4. **The 45+ nudge.** Our top age band is `45+`, and the evidence for raising
+5. **The 45+ nudge.** Our top age band is `45+`, and the evidence for raising
    protein targets is really about 60+. Applying a nudge at 45 is defensible but
    imprecise. **Recommendation:** keep the nudge small (+0.2 g/kg on the floor
    only) and do not mention age in the copy, so we are not making a claim we
