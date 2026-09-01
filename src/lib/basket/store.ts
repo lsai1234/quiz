@@ -3,7 +3,8 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { BasketLine } from './types'
-import { addLine, setLineQty, removeLine } from './helpers'
+import { addLine, setLineQty, removeLine, pruneBasket } from './helpers'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 interface BasketStore {
   lines: BasketLine[]
@@ -11,6 +12,14 @@ interface BasketStore {
   setQty: (productId: string, variantId: string, qty: number) => void
   remove: (productId: string, variantId: string) => void
   clear: () => void
+  /**
+   * Drop lines whose product or variant has left the catalogue.
+   *
+   * ONLY safe to call with a catalogue that has actually loaded — an empty
+   * `products` means "not here yet", and pruning against it would empty a
+   * perfectly good basket. The caller owns that check.
+   */
+  prune: (products: CatalogueProduct[]) => void
 }
 
 /**
@@ -30,6 +39,13 @@ export const useBasket = create<BasketStore>()(
       remove: (productId, variantId) =>
         set((s) => ({ lines: removeLine(s.lines, productId, variantId) })),
       clear: () => set({ lines: [] }),
+      prune: (products) =>
+        set((s) => {
+          const lines = pruneBasket(s.lines, products)
+          // Identity, not length: an unchanged array means no write, which is
+          // what keeps this from looping against the persisted store.
+          return lines === s.lines ? s : { lines }
+        }),
     }),
     {
       name: 'chrgd-basket',

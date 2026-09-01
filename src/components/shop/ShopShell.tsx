@@ -7,7 +7,7 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
-import { resolveBasket, basketSubtotal, basketItemCount, priceBasket } from '@/lib/basket/helpers'
+import { resolveBasket, basketSubtotal, priceBasket, resolvedItemCount } from '@/lib/basket/helpers'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
@@ -180,6 +180,21 @@ export function ShopShell() {
   const noResults = !isLoading && navCategories.length === 0
 
   const resolved = useMemo(() => resolveBasket(lines, products), [lines, products])
+
+  /*
+   * Heal the STORE, not just the render.
+   *
+   * `resolveBasket` hides a dead line on every read, so the page looks right
+   * while the basket quietly keeps carrying it — forever, and back into view if
+   * the catalogue ever changes underneath it again. Gated on the catalogue
+   * actually having arrived: an empty `products` means "still loading", and
+   * pruning against that would empty a perfectly good basket.
+   */
+  const prune = useBasket((s) => s.prune)
+  useEffect(() => {
+    if (isLoading || products.length === 0) return
+    prune(products)
+  }, [isLoading, products, prune])
   const subtotal = basketSubtotal(resolved)
   /**
    * What they'll actually be charged — the same computation /api/cart bills
@@ -193,7 +208,10 @@ export function ShopShell() {
    * checkout then took back.
    */
   const pricedBasket = priceBasket(resolved)
-  const count = basketItemCount(lines)
+  // Counted from the RESOLVED lines, like every price on this page. Counting
+  // raw persisted lines showed "2 · £0.00" for a basket of products that had
+  // left the catalogue. See `resolvedItemCount`.
+  const count = resolvedItemCount(resolved)
 
   // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
   const viewed = useRef(false)

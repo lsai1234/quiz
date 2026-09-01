@@ -187,7 +187,10 @@ export async function choosePlan(page: Page, plan: 'oneoff' | 'subscription'): P
 
 /** Press whatever the receipt's buy button currently is, and wait for an answer. */
 export async function checkoutFromStack(page: Page): Promise<void> {
-  const cta = page.getByRole('button', { name: /Continue to checkout|Start subscription/i })
+  // The receipt's own button, by attribute rather than by label: the sticky bar
+  // carries the same words, so matching on text finds two and matching on case
+  // only worked while the two happened to be capitalised differently.
+  const cta = page.locator('[data-checkout-cta]')
   await cta.scrollIntoViewIfNeeded()
   await cta.click()
 }

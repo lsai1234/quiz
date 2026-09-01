@@ -1,5 +1,7 @@
 'use client'
 
+import { Fragment } from 'react'
+
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { StackPricing, SubscriptionLine } from '@/lib/stack-blueprint/pricing'
 import { cadenceLine, formatGBP, getPricingConfig, planComparison, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
@@ -35,6 +37,14 @@ interface Props {
   isLoading?: boolean
   /** The applied partner code, so its line can be named rather than anonymous. */
   partnerCode?: string | null
+  /**
+   * Handed the checkout button as it mounts, so the page can watch whether it
+   * is on screen and retire the sticky bar that would otherwise sit on top of
+   * it. A callback ref rather than a `querySelector`: the receipt does not
+   * exist on the page's first commit, and a one-shot lookup found nothing and
+   * never looked again.
+   */
+  onCtaRef?: (el: HTMLButtonElement | null) => void
 }
 
 /** Months, said the way a person would say them. */
@@ -42,73 +52,83 @@ function months(n: number): string {
   if (n < 1.25) return 'about a month'
   if (n < 1.75) return 'about six weeks'
   const whole = Math.round(n)
-  return `about ${whole === 2 ? 'two' : whole === 3 ? 'three' : whole === 4 ? 'four' : whole === 5 ? 'five' : whole === 6 ? 'six' : whole} months`
+  const word = ['', '', 'two', 'three', 'four', 'five', 'six'][whole] ?? String(whole)
+  return `about ${word} months`
 }
 
 /**
  * What the two columns actually mean, on a unit you can compare.
  *
  * ── Why this is here at all ────────────────────────────────────────────────
- * The chooser showed "£65.28" and "£31.57/mo" side by side and left the reader
- * to subtract them, which says subscribing costs £34 more. It is cheaper — at
- * every rung, enforced in `lib/pricing/ladder.ts` — but the one-off column had
- * no duration on it, so the two numbers were never comparable and the reader's
+ * The chooser showed "£68.05" and "£57.63/mo" side by side and left the reader
+ * to subtract them, which says subscribing costs more. It is cheaper — at every
+ * rung, enforced in `lib/pricing/ladder.ts` — but the one-off column had no
+ * duration on it, so the two numbers were never comparable and the reader's
  * arithmetic was the only one on offer.
  *
- * Three sentences fix it, in this order:
- *  1. what the one-off basket really is (a box that runs out, and when)
- *  2. what today costs either way — the strongest true thing on the page
- *  3. what a month costs either way, once you are buying the same quantity
+ * ── Why it is a table and not a sentence ───────────────────────────────────
+ * It was three sentences first, and they tied themselves in knots: the case
+ * where month one sends MORE product produced "sends more today, not less for
+ * £10.42 less", which is three comparisons in nine words and parses as none of
+ * them. Prose has to carry the direction of every comparison in words; two
+ * columns of numbers carry it by position, and the reader does the comparing
+ * they were going to do anyway — correctly this time, because both rows are
+ * finally the same unit.
  *
- * Every figure comes from `planComparison`, because the honest sentence differs
- * per stack: month one is usually the same box for less, and sometimes a bigger
- * box (two tubs of protein where the one-off bought one). Claiming the first
- * when the second is true is a lie the reader can check by counting the tubs.
+ * So the numbers do the work, and the words are left with the one job numbers
+ * cannot do: saying what "just this once" actually buys, and when it runs out.
  */
-function PlanCompare({ c, isSub }: { c: ReturnType<typeof planComparison> & object; isSub: boolean }) {
-  const cheaperToday = c.firstDeliverySaving > 0.5
-  const cheaperMonthly = c.perMonthSaving > 0.5
+function PlanCompare({ c }: { c: NonNullable<ReturnType<typeof planComparison>> }) {
+  const rows = [
+    { label: 'Today', once: c.oneOffToday, sub: c.subscriptionToday },
+    { label: 'A month’s supply', once: c.oneOffPerMonth, sub: c.subscriptionPerMonth },
+  ]
 
   return (
     <div
-      className="-mt-2 mb-4 rounded-xl px-3.5 py-3 space-y-1.5"
+      className="-mt-2 mb-4 rounded-xl px-3.5 py-3"
       style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
     >
-      <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-        <span className="font-bold" style={{ color: 'var(--color-text)' }}>Just this once</span>{' '}
-        is one pack of each. Your {c.firstToRunOut} runs out in {months(c.runsOutMonths)}
+      <div className="grid grid-cols-[1fr_auto_auto] gap-x-3.5 gap-y-1.5 items-baseline">
+        <span />
+        <span className="text-[10px] font-bold tracking-wide uppercase text-right" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
+          Just once
+        </span>
+        <span className="text-[10px] font-bold tracking-wide uppercase text-right" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+          Subscribed
+        </span>
+
+        {rows.map((r) => {
+          // Only claim a saving when there is one. The ladder makes that the
+          // normal case, and a "cheaper" label on an equal or higher number
+          // would be the same lie in the other direction.
+          const cheaper = r.once - r.sub > 0.5
+          return (
+            <Fragment key={r.label}>
+              <span className="text-[11.5px]" style={{ color: 'var(--color-text-2)' }}>{r.label}</span>
+              <span className="text-[13px] font-bold tabular-nums text-right" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                {formatGBP(r.once)}
+              </span>
+              <span
+                className="text-[13px] font-black tabular-nums text-right"
+                style={{ color: cheaper ? 'var(--color-accent)' : 'var(--color-text)', fontFamily: 'var(--font-display)' }}
+              >
+                {formatGBP(r.sub)}
+              </span>
+            </Fragment>
+          )
+        })}
+      </div>
+
+      <p className="text-[11px] leading-relaxed mt-2.5 pt-2.5" style={{ color: 'var(--color-muted)', borderTop: '1px solid var(--color-border)' }}>
+        Just once is one pack of each — your {c.firstToRunOut} runs out in{' '}
+        {months(c.runsOutMonths)}
         {c.longestLasting && c.lastsMonths > c.runsOutMonths + 0.5
-          ? `; the ${c.longestLasting} lasts ${months(c.lastsMonths)}.`
-          : '.'}
+          ? `, the ${c.longestLasting} in ${months(c.lastsMonths)}`
+          : ''}
+        . Subscribed, each one is topped up as it runs out
+        {c.firstDeliveryIdentical ? '' : ', and today’s box has more in it'}.
       </p>
-
-      {cheaperToday && (
-        <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
-          <span className="font-bold" style={{ color: 'var(--color-text)' }}>Keep me stocked</span>{' '}
-          {c.firstDeliveryIdentical
-            ? 'sends the identical box today'
-            : 'sends more today, not less'}{' '}
-          for{' '}
-          <span className="font-bold" style={{ color: 'var(--color-accent)' }}>
-            {formatGBP(c.firstDeliverySaving)} less
-          </span>
-          , then tops each one up as it runs out.
-        </p>
-      )}
-
-      {cheaperMonthly && (
-        <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          Buying the same amount yourself works out at {formatGBP(c.oneOffPerMonth)} a month.
-          Subscribed it is {formatGBP(c.subscriptionPerMonth)} — {formatGBP(c.perMonthSaving)} a month less.
-        </p>
-      )}
-
-      {!isSub && cheaperToday && (
-        <p className="text-[11px] leading-snug pt-0.5" style={{ color: 'var(--color-muted)' }}>
-          Nothing is locked in on the first box — the delivery detail below shows exactly what
-          lands and when.
-        </p>
-      )}
     </div>
   )
 }
@@ -148,7 +168,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null,
+  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, onCtaRef,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -242,7 +262,7 @@ export function PlanReceipt({
           <PlanTab label="Keep me stocked" sub={subTabLabel} active={isSub} disabled={!canSubscribe} onClick={() => onPlanChange('subscription')} />
         </div>
 
-        {comparison && <PlanCompare c={comparison} isSub={isSub} />}
+        {comparison && <PlanCompare c={comparison} />}
 
         {!canSubscribe && (
           <div className="-mt-2 mb-4 rounded-xl px-3 py-2.5 text-[11px] leading-snug text-[var(--color-muted)]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -409,6 +429,7 @@ export function PlanReceipt({
               so the sticky bar can get out of its way — the bar used to sit
               directly on top of it. See `ctaOnScreen` in StackReviewPage. */}
           <button
+            ref={onCtaRef}
             data-checkout-cta
             onClick={onCheckout}
             disabled={isLoading}

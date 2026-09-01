@@ -426,21 +426,22 @@ export function StackReviewPage() {
    * receipt keeps the button that carries the loading state, and the bar keeps
    * every position where there is no button to press.
    */
+  const [ctaEl, setCtaEl] = useState<HTMLButtonElement | null>(null)
   const [ctaOnScreen, setCtaOnScreen] = useState(false)
   useEffect(() => {
-    if (typeof IntersectionObserver === 'undefined') return
-    const cta = document.querySelector('[data-checkout-cta]')
-    if (!cta) { setCtaOnScreen(false); return }
+    if (!ctaEl || typeof IntersectionObserver === 'undefined') {
+      setCtaOnScreen(false)
+      return
+    }
     const io = new IntersectionObserver(
       ([entry]) => setCtaOnScreen(entry.isIntersecting),
       // A slice off the bottom, so the bar clears before the button reaches it
       // rather than at the moment they overlap.
       { rootMargin: '0px 0px -96px 0px' },
     )
-    io.observe(cta)
+    io.observe(ctaEl)
     return () => io.disconnect()
-    // Re-run when the receipt's own visibility conditions change.
-  }, [planType, answers.drinksMode, checkoutState.status])
+  }, [ctaEl])
 
   const showStickyBar = !swapSlot && !journeyOpen && !shareOpen && !ctaOnScreen
     && checkoutState.status !== 'needs-account'
@@ -728,6 +729,7 @@ export function StackReviewPage() {
           partnerCode={partnerCode?.code ?? null}
             onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             isLoading={checkoutState.status === 'loading'}
+            onCtaRef={setCtaEl}
           />
 
           {/* Delivery detail — tucked behind a disclosure so the plan stays high-level */}

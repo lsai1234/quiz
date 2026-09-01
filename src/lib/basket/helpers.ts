@@ -45,6 +45,42 @@ export function basketItemCount(lines: BasketLine[]): number {
 }
 
 /**
+ * How many items the basket is actually going to charge for.
+ *
+ * ── Why this is not `basketItemCount` ───────────────────────────────────────
+ * The badge counted raw persisted lines while every price on the page came from
+ * the RESOLVED ones, and `resolveBasket` drops a line whose product or variant
+ * has left the catalogue. A basket carrying two products that no longer exist —
+ * a stale localStorage entry, or the catalogue switched between mock and live —
+ * showed "2" next to "£0.00", and a shop that says you have two things and owe
+ * nothing has lost the customer's trust before they have added anything.
+ *
+ * Checkout was never affected: it prices `resolveBasket` too. It was the count
+ * alone that was reading from a different set of lines to everything else.
+ */
+export const resolvedItemCount = (resolved: ResolvedBasketLine[]): number =>
+  resolved.reduce((n, l) => n + l.quantity, 0)
+
+/**
+ * The lines worth keeping — those that still join to a real product+variant.
+ *
+ * `resolveBasket` heals the DISPLAY on every read; this heals the STORE, so a
+ * dead line stops being carried around forever and cannot come back to life if
+ * the catalogue changes again underneath it.
+ *
+ * Returns the original array when nothing needs dropping, so a caller can skip
+ * the write by comparing identity — which is what stops this looping against a
+ * persisted store.
+ */
+export function pruneBasket(lines: BasketLine[], products: CatalogueProduct[]): BasketLine[] {
+  const kept = lines.filter((line) => {
+    const product = products.find((p) => p.id === line.productId)
+    return !!product?.variants.some((v) => v.id === line.variantId)
+  })
+  return kept.length === lines.length ? lines : kept
+}
+
+/**
  * Join basket lines against the catalogue. Lines whose product or variant no
  * longer exists are dropped, so a stale persisted basket self-heals.
  */
