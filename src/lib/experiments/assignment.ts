@@ -80,6 +80,26 @@ export function armFor(
   return bucket < clampSplit(config.split) ? 'v2' : 'v1'
 }
 
+/**
+ * The arm this visitor's RUN can actually use.
+ *
+ * `armFor` answers "which arm is this person in"; this answers "which quiz can
+ * serve the journey they have started", and they are not the same question.
+ *
+ * CHRGD LQD is the case. The drinks route has its own two questions, its own
+ * copy and a catalogue filtered to drinks, and v2 has none of it — worse, v2
+ * finishes by handing the engine a freshly projected `QuizAnswers`, which
+ * OVERWROTE the `drinksMode` the hero had set. A visitor assigned to v2 who
+ * tapped the LQD card was quietly given a stack of tubs and capsules instead of
+ * the drinks they asked for. Nothing failed, so nothing said so.
+ *
+ * Falling back to v1 is right rather than expedient: the experiment is about
+ * the adaptive question set, and a drinks visitor is not in it.
+ */
+export function armForRun(arm: QuizArm, run: { drinksMode?: boolean | null }): QuizArm {
+  return run.drinksMode ? 'v1' : arm
+}
+
 const clampSplit = (n: number): number => Math.max(0, Math.min(100, Math.round(n)))
 
 const clampBudget = (n: unknown, fallback: number): number => {

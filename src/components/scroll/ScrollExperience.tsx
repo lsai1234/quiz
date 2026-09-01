@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useQuizStore, hasQuizProgress } from '@/lib/store'
 import { useQuizArmState } from '@/lib/experiments/client'
+import { armForRun } from '@/lib/experiments/assignment'
 import { Act1Hero } from './Act1Hero'
 import { Act2Quiz } from './Act2Quiz'
 import { QuizV2 } from '@/components/quiz/v2/QuizV2'
@@ -39,6 +40,10 @@ export function ScrollExperience() {
    * mounts. Until it resolves, and forever if it never does, the answer is v1.
    */
   const { arm } = useQuizArmState()
+
+  // CHRGD LQD always runs on v1, whatever the experiment says — see `armForRun`.
+  const drinksMode = useQuizStore((s) => s.answers.drinksMode)
+  const useV2 = armForRun(arm, { drinksMode }) === 'v2'
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -92,7 +97,7 @@ export function ScrollExperience() {
       )}
       <div key={animKey} className={TRANSITIONS[act]}>
         {act === 1 && <Act1Hero onEnterQuiz={() => goTo(2)} reducedMotion={reducedMotion} />}
-        {act === 2 && (arm === 'v2'
+        {act === 2 && (useV2
           ? <QuizV2 onComplete={() => goTo(3)} reducedMotion={reducedMotion} />
           : <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />)}
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
