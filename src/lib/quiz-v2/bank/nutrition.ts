@@ -138,7 +138,16 @@ export const NUTRITION_QUESTIONS: BankQuestion[] = [
         drivers: { 'low-protein': 0.5 },
       },
 
-      /* ── The counted day. Four beats, one screen. ──────────────────────── */
+      /*
+       * ── The counted day. Four beats, one screen. ─────────────────────────
+       *
+       * The top of each row has to describe a genuinely large portion, not a
+       * slightly bigger normal one. Scaled down, the four beats summed to 170g
+       * at their maximum — under the ceiling of an 82kg lifter's range, so the
+       * "you're already over, we'll leave protein out" verdict was unreachable
+       * for anyone that size, and a large person eating well would have been
+       * told they were short. A quarter-kilo chicken breast is 65g on its own.
+       */
       { id: 'b-none', meal: 'breakfast', label: 'Nothing', grams: 0 },
       { id: 'b-carbs', meal: 'breakfast', label: 'Toast, cereal or fruit', grams: 8 },
       { id: 'b-protein', meal: 'breakfast', label: 'Eggs, yoghurt or similar', grams: 25 },
@@ -147,17 +156,17 @@ export const NUTRITION_QUESTIONS: BankQuestion[] = [
       { id: 'l-none', meal: 'lunch', label: 'I skip it', grams: 0 },
       { id: 'l-light', meal: 'lunch', label: 'Sandwich, wrap or salad', grams: 20 },
       { id: 'l-protein', meal: 'lunch', label: 'Chicken, fish or similar', grams: 35 },
-      { id: 'l-big', meal: 'lunch', label: 'A big portion', grams: 50 },
+      { id: 'l-big', meal: 'lunch', label: 'A big portion', grams: 55 },
 
       { id: 'd-light', meal: 'dinner', label: 'Light or snacky', grams: 10 },
       { id: 'd-normal', meal: 'dinner', label: 'A normal portion', grams: 25 },
       { id: 'd-protein', meal: 'dinner', label: 'Meat or fish, decent size', grams: 40 },
-      { id: 'd-big', meal: 'dinner', label: 'A big portion', grams: 55 },
+      { id: 'd-big', meal: 'dinner', label: 'A big portion', grams: 65 },
 
       { id: 's-none', meal: 'snacks', label: 'None to speak of', grams: 0 },
       { id: 's-light', meal: 'snacks', label: 'Nuts, cheese or yoghurt', grams: 10 },
       { id: 's-one', meal: 'snacks', label: 'A shake or a protein bar', grams: 22 },
-      { id: 's-many', meal: 'snacks', label: 'Two or more of those', grams: 40 },
+      { id: 's-many', meal: 'snacks', label: 'Two or more of those', grams: 50 },
     ],
   },
 

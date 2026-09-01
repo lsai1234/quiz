@@ -417,10 +417,21 @@ function buildPersonalisedReason(
   const suffixes: string[] = []
 
   if (slotType === 'protein') {
-    if (archetype === 'muscle') suffixes.push('— essential for the muscle-building phase you\'re targeting')
+    /*
+     * When the protein check produced a figure, it leads — a gap the reader
+     * worked out themselves is a stronger reason than anything we can assert
+     * about their goal, and it is the only sentence on the reveal that is
+     * arithmetic rather than a claim.
+     */
+    const gapG = typeof answers.proteinIntakeG === 'number' && typeof answers.proteinTargetG === 'number'
+      ? answers.proteinTargetG - answers.proteinIntakeG
+      : 0
+    if (gapG > 0) {
+      suffixes.push(`— you came out around ${Math.round(gapG / 5) * 5}g a day under the range for your size, and a scoop is about 25g of that`)
+    } else if (archetype === 'muscle') suffixes.push('— essential for the muscle-building phase you\'re targeting')
     else if (archetype === 'fat-loss') suffixes.push('— keeps you full and preserves muscle while in a deficit')
     else if (goalOverlap.includes('recovery')) suffixes.push('— speeds up repair between your sessions')
-    if (freq === '5-6x' || freq === 'daily') suffixes.push('at high training frequency your protein needs are elevated')
+    if (gapG <= 0 && (freq === '5-6x' || freq === 'daily')) suffixes.push('at high training frequency your protein needs are elevated')
   } else if (slotType === 'performance') {
     if (archetype === 'muscle') suffixes.push('— creatine is the most-studied strength supplement available')
     else if (goalOverlap.includes('performance')) suffixes.push('— directly supports the performance gains you\'re after')

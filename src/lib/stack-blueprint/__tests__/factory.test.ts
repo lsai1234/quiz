@@ -579,12 +579,31 @@ describe('the protein check\u2019s verdict', () => {
       .toEqual(plain.slots.map((s) => s.selectedProductId))
   })
 
+  it('leads the protein reason with the number when there is one', () => {
+    // A gap the reader worked out themselves is a stronger reason than anything
+    // we can assert about their goal — and it is the only sentence on the
+    // reveal that is arithmetic rather than a claim.
+    const b = buildStackBlueprint(
+      lifter({ proteinTargetG: 130, proteinTargetHighG: 180, proteinIntakeG: 90 }),
+      MOCK_CATALOGUE,
+    )
+    const protein = b.slots.find((s) => s.slotType === 'protein')!
+    expect(protein.reason).toMatch(/40g a day under the range/)
+    expect(protein.reason).toMatch(/scoop is about 25g/)
+  })
+
+  it('keeps the generic reason when the check never ran', () => {
+    const b = buildStackBlueprint(lifter(), MOCK_CATALOGUE)
+    const protein = b.slots.find((s) => s.slotType === 'protein')!
+    expect(protein.reason).not.toMatch(/under the range/)
+  })
+
   it('still offers protein as a swap rather than hiding it', () => {
     // Refusing to sell someone protein is right. Refusing to show it to them
     // would be patronising, which is why the penalty is finite rather than the
     // hard `-Infinity` gate used for a genuine contraindication.
     const answers = lifter({ proteinTargetG: 130, proteinTargetHighG: 180, proteinIntakeG: 200 })
     const whey = MOCK_CATALOGUE.find((p) => p.stackSlots.includes('protein'))!
-    expect(scoreProduct(whey, 'protein', answers)).toBeGreaterThan(-Infinity)
+    expect(scoreProduct(whey, 'protein', answers, 'muscle')).toBeGreaterThan(-Infinity)
   })
 })

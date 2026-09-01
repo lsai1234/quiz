@@ -316,6 +316,23 @@ export function verdictCopy(target: ProteinTarget, intakeG: number): VerdictCopy
   }
 }
 
+/**
+ * The recap line — the left half of a "what you told us" row.
+ *
+ * Written to complete the same sentence `DRIVERS.heard` does, so it drops
+ * straight into the existing recap in place of the generic "getting enough
+ * protein in is the hard part". Same rule as every other string here: an
+ * observation about someone's week, never a finding about their health.
+ *
+ * Null when there is no gap worth naming — the recap only ever lists drivers
+ * that survived, so this is belt and braces rather than a live path.
+ */
+export function proteinHeard(intakeG: number, target: ProteinTarget): string | null {
+  const gap = proteinGap(target, intakeG)
+  if (gap <= 0) return null
+  return `you are eating around ${intakeG}g of protein a day, about ${round5(gap)}g under the range for your size`
+}
+
 /** The running total, before the day is complete. Never compared to anything. */
 export const runningTotal = (intakeG: number): string => `≈${intakeG}g so far`
 

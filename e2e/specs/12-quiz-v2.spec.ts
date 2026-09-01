@@ -71,6 +71,12 @@ async function startV2(page: Page, goal = 'More energy') {
   await expect(heading(page)).toHaveText(/Anything we should factor in/)
 }
 
+/** Agree to the health-data notice, so the safety options render at all. */
+async function giveConsent(page: Page) {
+  const yes = page.locator('.overflow-y-auto button').filter({ hasText: /^Yes —/ }).first()
+  if (await yes.count()) await yes.click()
+}
+
 /** Walk to the review screen. */
 async function toReview(page: Page) {
   for (let i = 0; i < 20; i++) {
@@ -268,5 +274,178 @@ test.describe('editing an answer from the review screen', () => {
 
     await expect(heading(page)).toHaveText(/Here is what we heard/)
     await expect(page.getByText('Slow mornings')).toBeVisible()
+  })
+})
+
+test.describe('the protein check', () => {
+  /**
+   * The screen that replaces "Do you get protein at every meal?" with a number.
+   * `docs/QUIZ_V2_PROTEIN.md` is the design; these are the properties that
+   * would be expensive to get wrong and cheap to break.
+   */
+
+  /** Walk a muscle-goal run to the protein screen. */
+  async function toProtein(page: Page) {
+    await startV2(page, 'Build muscle')
+    await giveConsent(page)
+    await page.getByRole('button', { name: 'None of these' }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+
+    await expect(page.locator('input[autocomplete="given-name"]')).toBeVisible()
+    await page.locator('input[autocomplete="given-name"]').fill('Alex')
+    await page.getByRole('button', { name: '35–44' }).click()
+    await page.getByRole('button', { name: '75–90kg' }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+
+    for (let i = 0; i < 14; i++) {
+      const h = await heading(page).innerText()
+      if (/normal day of eating/i.test(h)) return
+      if (/Here is what we heard/i.test(h)) break
+      await answerOne(page)
+    }
+    throw new Error('never reached the protein screen')
+  }
+
+  const strip = (page: Page) => page.locator('[aria-live="polite"]')
+
+  test('reads as an ordinary question, and one tap answers it', async ({ page }) => {
+    // The design goal for the majority path: no evidence a module exists.
+    await toProtein(page)
+    await expect(page.getByRole('button', { name: /I honestly have no idea/ })).toBeVisible()
+    // Nothing has moved and nothing is claimed before the first tap.
+    await expect(strip(page)).toHaveText('')
+
+    await page.getByRole('button', { name: 'Three normal meals' }).click()
+    await expect(strip(page)).toContainText('≈75g a day')
+    await expect(strip(page)).toContainText('target 130–180g')
+  })
+
+  test('never shows the target before the estimate', async ({ page }) => {
+    // Showing a number first anchors the self-report it is about to be compared
+    // against, and we would then be selling a gap computed from an answer we
+    // biased. The hint says what we know, not what it adds up to.
+    await toProtein(page)
+    const hint = await page.locator('h2 ~ p').first().innerText()
+    expect(hint).not.toMatch(/\d+\s*g\b/)
+    expect(hint).toMatch(/lift|active|eating less|training/i)
+  })
+
+  test('the counted day builds, and only compares once it is finished', async ({ page }) => {
+    await toProtein(page)
+    await page.getByRole('button', { name: /Rather work it out properly/ }).click()
+
+    await page.getByRole('button', { name: 'Toast, cereal or fruit' }).click()
+    await expect(strip(page)).toHaveText(/≈8g so far/)
+    // A part-built total must never be held up against a full day: "25g against
+    // 130g" reads as catastrophe to someone who has not got to lunch yet.
+    await expect(strip(page)).not.toContainText('target')
+
+    await page.getByRole('button', { name: 'Sandwich, wrap or salad' }).click()
+    await expect(strip(page)).toHaveText(/≈28g so far/)
+    await page.getByRole('button', { name: 'Meat or fish, decent size' }).click()
+    await page.getByRole('button', { name: 'Nuts, cheese or yoghurt' }).click()
+
+    await expect(strip(page)).toContainText('≈78g a day')
+    await expect(strip(page)).toContainText('target 130–180g')
+  })
+
+  test('any meal is one tap from being changed once the day is done', async ({ page }) => {
+    // Without the summary, changing lunch means pressing "back a meal" three
+    // times — which is exactly what an edit from the review screen asks for.
+    await toProtein(page)
+    await page.getByRole('button', { name: /Rather work it out properly/ }).click()
+    for (const pick of ['Eggs, yoghurt or similar', 'Chicken, fish or similar', 'A big portion', 'A shake or a protein bar']) {
+      await page.getByRole('button', { name: pick }).click()
+    }
+    await expect(strip(page)).toContainText('≈147g a day')
+
+    await page.locator('.overflow-y-auto button').filter({ hasText: 'Lunch' }).first().click()
+    await expect(page.getByText('And lunch?')).toBeVisible()
+    await page.getByRole('button', { name: 'I skip it' }).click()
+    await expect(strip(page)).toContainText('≈112g a day')
+  })
+
+  test('says so, warmly, when there is nothing to sell', async ({ page }) => {
+    // The one verdict that costs us a line item, and the reason the other three
+    // are worth believing.
+    await toProtein(page)
+    await page.getByRole('button', { name: /Rather work it out properly/ }).click()
+    for (const pick of ['A shake', 'A big portion', 'A big portion', 'Two or more of those']) {
+      await page.getByRole('button', { name: pick }).click()
+    }
+    await expect(strip(page)).toContainText('≈195g a day')
+    await expect(strip(page)).toContainText(/plenty/i)
+    await expect(strip(page)).toContainText(/leave protein out of your box/i)
+  })
+
+  test('shows the number back on the review screen, not the food', async ({ page }) => {
+    await toProtein(page)
+    await page.getByRole('button', { name: 'Not much until dinner' }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+    await toReview(page)
+
+    const review = await page.locator('body').innerText()
+    expect(review).toContain('≈55g a day · target 130–180g')
+    expect(review).not.toContain('Not much until dinner')
+  })
+
+  test('an edit reopens the door they used, in the state they left it', async ({ page }) => {
+    await toProtein(page)
+    await page.getByRole('button', { name: /Rather work it out properly/ }).click()
+    for (const pick of ['Eggs, yoghurt or similar', 'Chicken, fish or similar', 'A big portion', 'A shake or a protein bar']) {
+      await page.getByRole('button', { name: pick }).click()
+    }
+    await page.getByRole('button', { name: /^Continue/ }).click()
+    await toReview(page)
+
+    const row = page.locator('.overflow-y-auto button').filter({ hasText: 'A NORMAL DAY' }).first()
+    await row.click()
+    // The summary of four answered meals — not back at breakfast, and not the
+    // presets. The picks arrive a render late here, which is what used to break it.
+    await expect(page.getByText('Your day')).toBeVisible()
+    await expect(page.getByText('Chicken, fish or similar')).toBeVisible()
+    await expect(strip(page)).toContainText('≈147g a day')
+  })
+
+  test('is never put to someone who declined the health-data notice', async ({ page }) => {
+    // Declining produces no safety answer at all, not an empty one — so a guard
+    // written as "pregnancy is not ticked" would be true for everyone who
+    // declined, including the person it exists for.
+    await startV2(page, 'Build muscle')
+    await page.getByRole('button', { name: /^Skip this/ }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+
+    await page.locator('input[autocomplete="given-name"]').fill('Alex')
+    await page.getByRole('button', { name: '35–44' }).click()
+    await page.getByRole('button', { name: '75–90kg' }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+
+    for (let i = 0; i < 20; i++) {
+      const h = await heading(page).innerText()
+      if (/Here is what we heard/i.test(h)) break
+      expect(h).not.toMatch(/normal day of eating/i)
+      await answerOne(page)
+    }
+    await expect(heading(page)).toHaveText(/Here is what we heard/)
+  })
+
+  test('is never put to someone who is pregnant or breastfeeding', async ({ page }) => {
+    await startV2(page, 'Build muscle')
+    await giveConsent(page)
+    await page.getByRole('button', { name: 'Pregnant or breastfeeding' }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+
+    await page.locator('input[autocomplete="given-name"]').fill('Alex')
+    await page.getByRole('button', { name: '35–44' }).click()
+    await page.getByRole('button', { name: '75–90kg' }).click()
+    await page.getByRole('button', { name: /^Continue/ }).click()
+
+    for (let i = 0; i < 20; i++) {
+      const h = await heading(page).innerText()
+      if (/Here is what we heard/i.test(h)) break
+      expect(h).not.toMatch(/normal day of eating/i)
+      await answerOne(page)
+    }
+    await expect(heading(page)).toHaveText(/Here is what we heard/)
   })
 })

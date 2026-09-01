@@ -11,7 +11,8 @@ import { ChargeRail } from '@/components/quiz/ChargeRail'
 import { Reflection } from '@/components/quiz/v2/Reflection'
 import { ProteinCheck, ProteinVerdict } from '@/components/quiz/v2/ProteinCheck'
 import {
-  BASIS_LINE, proteinBasis, proteinComplete, proteinIntakeFrom, proteinProfile, proteinTarget,
+  BASIS_LINE, proteinBasis, proteinComplete, proteinDoor, proteinGap, proteinIntakeFrom,
+  proteinProfile, proteinTarget, proteinVerdict,
 } from '@/lib/quiz-v2/protein'
 import { funnel } from '@/lib/analytics/quiz'
 import { emptyInterview, type BankQuestion, type InterviewState } from '@/lib/quiz-v2/types'
@@ -375,8 +376,38 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
       ? 'animate-[slide-from-right_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
       : 'animate-[slide-from-left_0.32s_cubic-bezier(0.22,1,0.36,1)_both]'
 
+  /**
+   * The protein check, reported once, as the reader leaves it.
+   *
+   * The comparison this exists for is the counted door against the presets: if
+   * twenty seconds of counting converts better than three seconds of picking,
+   * the invitation to count deserves to be louder.
+   *
+   * The gap goes out in bands rather than in grams. A per-person protein figure
+   * is a health-adjacent number and analytics is not where it belongs.
+   */
+  const reportProtein = () => {
+    if (!current) return
+    const door = proteinDoor(current.options, multiPicks)
+    if (door === 'none') return
+    const intake = proteinIntakeFrom(current.options, multiPicks)
+    const target = proteinTarget(proteinProfile(state))
+    const gap = intake !== null && target ? proteinGap(target, intake) : null
+    funnel.proteinCheck({
+      door: door === 'no-idea' ? 'no-idea' : door,
+      verdict: intake !== null && target ? proteinVerdict(target, intake) : 'unknown',
+      gapBand: gap === null ? 'unknown'
+        : gap === 0 ? 'none'
+        : gap < 25 ? 'under-25'
+        : gap <= 50 ? '25-50'
+        : 'over-50',
+      msOnStep: Math.round(performance.now() - stepEnterRef.current),
+    })
+  }
+
   const onContinue = () => {
     if (onReview) { finish(); return }
+    if (isProtein) reportProtein()
     if (isForm) { commitPersonal(); return }
     if (isGoals) {
       if (editingId) {

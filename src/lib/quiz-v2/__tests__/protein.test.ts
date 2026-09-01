@@ -6,7 +6,7 @@ import {
   BASIS_LINE, MEALS, dayComplete, mealsAnswered, nextMeal, proteinBasis,
   proteinComplete, proteinDoor, proteinDriverWeight, proteinGap, proteinIntake,
   proteinIntakeFrom, proteinProfile, proteinTarget, proteinVerdict, runningTotal,
-  verdictCopy, type ProteinTarget, type TargetBasis,
+  proteinHeard, verdictCopy, type ProteinTarget, type TargetBasis,
 } from '../protein'
 
 const BANDS: WeightBand[] = ['under-60', '60-75', '75-90', '90-105', '105-plus']
@@ -300,6 +300,22 @@ describe('the words', () => {
     expect(verdictCopy(lifter, 130).tone).toBe('settled')
   })
 
+  it('says the gap back in the recap, in the user\u2019s own terms', () => {
+    // Completes the same sentence `DRIVERS.heard` does, so it drops into the
+    // existing recap in place of the generic "getting enough protein in is the
+    // hard part" — which is a description of someone, where this is a fact.
+    const line = proteinHeard(90, lifter)!
+    expect(line).toContain('90g')
+    expect(line).toContain('40g')
+    expect(line).toMatch(/under the range for your size/)
+    expect(line).not.toMatch(/deficien|too low|should/i)
+  })
+
+  it('has nothing to say in the recap when there is no gap', () => {
+    expect(proteinHeard(150, lifter)).toBeNull()
+    expect(proteinHeard(200, lifter)).toBeNull()
+  })
+
   it('has a basis line for every situation, and none of them give the number away', () => {
     for (const basis of BASES) {
       const line = BASIS_LINE[basis]
@@ -395,7 +411,7 @@ describe('the screen\u2019s answer, read off the bank', () => {
   })
 
   it('adds the day up', () => {
-    expect(proteinIntakeFrom(opts, day)).toBe(25 + 35 + 55 + 22)
+    expect(proteinIntakeFrom(opts, day)).toBe(25 + 35 + 65 + 22)
     expect(proteinIntakeFrom(opts, ['day-normal'])).toBe(75)
   })
 
@@ -417,6 +433,26 @@ describe('the screen\u2019s answer, read off the bank', () => {
       if (o.id === 'no-idea') { expect(o.grams).toBeUndefined(); continue }
       expect(typeof o.grams).toBe('number')
     }
+  })
+
+  it('can reach every verdict — including the one that costs us the sale', () => {
+    /*
+     * The scale has to span the target, or a verdict is unreachable and nobody
+     * finds out. It first shipped topping out at 170g: under the ceiling of an
+     * 82kg lifter's 130–180g range, so "you're already over, we'll leave
+     * protein out of your box" could not happen for anyone that size, and a
+     * large person eating well would have been told they were short.
+     */
+    const min = MEALS.reduce((sum, m) =>
+      sum + Math.min(...opts.filter((o) => o.meal === m).map((o) => o.grams ?? 0)), 0)
+    const max = MEALS.reduce((sum, m) =>
+      sum + Math.max(...opts.filter((o) => o.meal === m).map((o) => o.grams ?? 0)), 0)
+
+    const lifter = proteinTarget({ weightBand: '75-90', ageBracket: '35-44', basis: 'lifting' })!
+    expect(min).toBeLessThan(lifter.lowG)
+    expect(max).toBeGreaterThan(lifter.highG)
+    expect(proteinVerdict(lifter, min)).toBe('big-gap')
+    expect(proteinVerdict(lifter, max)).toBe('over')
   })
 
   it('offers exactly four choices for each beat', () => {

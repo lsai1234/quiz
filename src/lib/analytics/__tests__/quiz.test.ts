@@ -81,6 +81,7 @@ describe('funnel', () => {
     funnel.aiSteer({ used: true, latencyMs: 900, reason: 'ok', applied: 'both' })
     funnel.driverResolved({ driverId: 'sleep-debt', confidence: 0.8 })
     funnel.earlyExit({ askedCount: 7, budget: 10 })
+    funnel.proteinCheck({ door: 'counted', verdict: 'big-gap', gapBand: '25-50', msOnStep: 18_000 })
 
     const emitted = new Set(mockTrack.mock.calls.map((c) => c[0] as string))
     // All emitted names are registered (guards typos + missing route registration).

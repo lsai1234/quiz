@@ -53,8 +53,8 @@ describe('the numbers reaching the engine', () => {
   })
 
   it('clears it when they are over, too', () => {
-    const a = run(['b-shake', 'l-big', 'd-big', 's-many']) // 25+50+55+40 = 170
-    expect(a.proteinIntakeG).toBe(170)
+    const a = run(['b-shake', 'l-big', 'd-big', 's-many']) // 25+55+65+50 = 195
+    expect(a.proteinIntakeG).toBe(195)
     expect(a.drivers?.['low-protein']).toBeUndefined()
   })
 

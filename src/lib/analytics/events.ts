@@ -66,11 +66,12 @@ export const QUIZ_EVENTS = [
    * as-is, carrying the bank question id as `stepId` — the funnel derives its
    * step ladder from the events themselves rather than a fixed list, so v2's
    * dynamic ids produce a correct funnel with no changes to the funnel code.
-   * These three are the things v1 has no equivalent of.
+   * These are the things v1 has no equivalent of.
    */
   'quiz_ai_steer',
   'quiz_driver_resolved',
   'quiz_early_exit',
+  'quiz_protein_check',
 ] as const
 
 export type QuizEvent = (typeof QUIZ_EVENTS)[number]

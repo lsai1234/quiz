@@ -2,6 +2,7 @@
 
 import { useQuizStore } from '@/lib/store'
 import { DRIVERS, rankedDrivers } from '@/lib/quiz-v2/drivers'
+import { proteinHeard } from '@/lib/quiz-v2/protein'
 import { DRIVER_CHANGED } from '@/lib/quiz-core/driver-map'
 
 /**
@@ -33,7 +34,24 @@ const MAX_LINES = 3
 
 export function HeardYou({ reducedMotion }: { reducedMotion: boolean }) {
   const drivers = useQuizStore((s) => s.answers.drivers)
+  const intakeG = useQuizStore((s) => s.answers.proteinIntakeG)
+  const targetG = useQuizStore((s) => s.answers.proteinTargetG)
+  const targetHighG = useQuizStore((s) => s.answers.proteinTargetHighG)
   const lines = rankedDrivers(drivers ?? {}).slice(0, MAX_LINES)
+
+  /*
+   * The protein line is the only one in this recap that can carry a number, and
+   * a number is a much stronger thing to be shown than a description of
+   * yourself. When the check ran and found a gap, it says the gap; otherwise it
+   * falls back to the same generic line every other driver uses.
+   */
+  const measured = typeof intakeG === 'number' && typeof targetG === 'number'
+    ? proteinHeard(intakeG, {
+        lowG: targetG,
+        highG: typeof targetHighG === 'number' ? targetHighG : targetG,
+        basis: 'lifting',
+      })
+    : null
 
   // v1 answers carry no drivers, and a v2 run that settled nothing has nothing
   // honest to say. Both render nothing rather than a hedge.
@@ -67,7 +85,9 @@ export function HeardYou({ reducedMotion }: { reducedMotion: boolean }) {
               aria-hidden="true"
             />
             <span>
-              <span className="text-white/85">{DRIVERS[d.id].heard}</span>
+              <span className="text-white/85">
+                {d.id === 'low-protein' && measured ? measured : DRIVERS[d.id].heard}
+              </span>
               {' — '}
               {DRIVER_CHANGED[d.id]}
             </span>

@@ -3,7 +3,9 @@
 A module inside the V2 adaptive interview that turns *"do you get enough
 protein?"* from a question people guess at into a number we work out with them.
 
-Status: **proposed**. Nothing here is built. It is scoped to V2 only
+Status: **built**. Every phase below is implemented and the module is live on
+the v2 arm; v2 itself is still off by default, so nobody sees it until a founder
+says otherwise. Where the build differed from the proposal, the section says so. It is scoped to V2 only
 (`docs/QUIZ_V2_ADAPTIVE.md`); V1 is untouched, which keeps the experiment
 readable.
 
@@ -138,10 +140,18 @@ recognisable food and carrying grams behind it:
 
 | Beat | Options | g |
 |---|---|---|
-| Breakfast | Nothing / Toast or cereal / Eggs or yoghurt / A shake | 0 / 8 / 25 / 25 |
-| Lunch | Skipped / Sandwich or salad / Chicken, fish or similar / Big portion | 0 / 15 / 35 / 50 |
-| Dinner | Light or snacky / Normal portion / Meat or fish, decent size / Big portion | 10 / 25 / 40 / 55 |
-| Snacks & drinks | None / Nuts, cheese, yoghurt / A shake or bar / Two or more | 0 / 10 / 22 / 40 |
+| Breakfast | Nothing / Toast, cereal or fruit / Eggs, yoghurt or similar / A shake | 0 / 8 / 25 / 25 |
+| Lunch | I skip it / Sandwich, wrap or salad / Chicken, fish or similar / A big portion | 0 / 20 / 35 / 55 |
+| Dinner | Light or snacky / A normal portion / Meat or fish, decent size / A big portion | 10 / 25 / 40 / 65 |
+| Snacks & drinks | None to speak of / Nuts, cheese or yoghurt / A shake or a protein bar / Two or more | 0 / 10 / 22 / 50 |
+
+**The top of each row has to describe a genuinely large portion**, and the first
+build got that wrong: scaled down, the four beats summed to 170g at their
+maximum, which is under the ceiling of an 82kg lifter's 130–180g range. The
+"already over" verdict was unreachable for anyone that size, and a large person
+eating well would have been told they were short — the one error direction this
+whole module is written to avoid. A test now pins that the scale spans the
+target at both ends.
 
 Four taps, no typing, no food search, no calorie database, no network. The
 numbers are deliberately coarse and deliberately rounded — the point is a good
@@ -629,7 +639,7 @@ nothing for customers, because V2 is still off.
 reader will actually see are readable in one file, with no UI to argue about
 yet. This is the phase where the *ranges* and the *tone* get a second opinion.
 
-### Phase 2 — The screen
+### Phase 2 — The screen — **done**
 4. `types.ts`: the `'protein'` select kind, `grams`, `mealRow`.
 5. `bank/nutrition.ts`: author `protein-check` — preset options, meal-row
    options, and the coarse door carrying `protein-reality`'s four options
@@ -650,9 +660,13 @@ returns to the right door in the state it was left; a reader who declined
 consent never sees anything but the preset list; and nothing on the screen moves
 between first paint and the first tap.
 
-### Phase 3 — It reaches the recommendation
-9. `project.ts`: write `proteinTargetG` / `proteinIntakeG`; derive the
-   `low-protein` weight from the *gap* rather than from a coarse option.
+### Phase 3 — It reaches the recommendation — **done**
+9. `project.ts`: write `proteinTargetG` / `proteinTargetHighG` /
+   `proteinIntakeG`; derive the `low-protein` weight from the *gap* rather than
+   from a coarse option. **Both ends of the target, not one** — a gap is
+   measured from the floor and "already over" from the ceiling, and keying both
+   off one figure had the engine pulling protein out of the box of someone the
+   screen had just told was on the money.
 10. Suppress protein products on the "comfortably over" verdict.
 11. Re-run the V1 persona snapshots — must be byte-identical.
 12. Author V2 personas for the four verdicts and review the boxes by hand.
@@ -660,7 +674,7 @@ between first paint and the first tap.
 **Exit:** the number demonstrably changes the box, including the case where it
 correctly removes a product we would otherwise have sold.
 
-### Phase 4 — The payoff
+### Phase 4 — The payoff — **done**
 13. `HeardYou.tsx`: the protein line, with the gap in grams.
 14. The reveal's protein line item gets the number as its reason.
 15. `quiz_protein` telemetry: door taken, verdict bucket, time on screen.
@@ -669,7 +683,7 @@ correctly removes a product we would otherwise have sold.
 screen, in the analysis, and next to the product. That repetition is the
 conversion mechanism, and Phase 5 is what measures whether it works.
 
-### Phase 5 — Measure
+### Phase 5 — Measure — **instrumented; the reading is still to come**
 16. E2E: all three doors to a stack; pregnancy suppresses the module;
     **declining health-data consent** suppresses it too; withdrawing consent
     after answering drops the module's answer; the over-target path removes

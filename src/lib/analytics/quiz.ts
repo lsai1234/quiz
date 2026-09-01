@@ -135,6 +135,29 @@ export const funnel = {
     track('quiz_driver_resolved', { driverId: p.driverId, confidence: p.confidence })
   },
 
+  /**
+   * The protein check, once per run that saw it.
+   *
+   * The comparison worth having is `door: 'counted'` against `door: 'preset'` —
+   * whether the readers who spend twenty seconds counting convert better than
+   * the ones who spend three. If they do, the invitation to count deserves to
+   * be louder and the module probably deserves an entry point of its own; if
+   * they do not, the long path is decoration and can go.
+   *
+   * `gapG` is bucketed rather than exact: a per-person protein figure is a
+   * health-adjacent number and analytics is not where it belongs.
+   */
+  proteinCheck(p: {
+    door: 'preset' | 'counted' | 'no-idea'
+    verdict: 'big-gap' | 'small-gap' | 'on-target' | 'over' | 'unknown'
+    gapBand: 'none' | 'under-25' | '25-50' | 'over-50' | 'unknown'
+    msOnStep: number
+  }) {
+    track('quiz_protein_check', {
+      door: p.door, verdict: p.verdict, gapBand: p.gapBand, msOnStep: p.msOnStep,
+    })
+  },
+
   /** The planner ran out of questions worth asking before it ran out of budget. */
   earlyExit(p: { askedCount: number; budget: number }) {
     track('quiz_early_exit', { askedCount: p.askedCount, budget: p.budget })
