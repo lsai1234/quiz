@@ -41,16 +41,16 @@ interface SubQuestion { id: string; question: string; hint: string; options: Sub
 function getSubQuestion(stepId: StepId, value: string): SubQuestion | null {
   if (stepId === 'frequency' && (value === '5-6x' || value === 'daily')) return {
     id: 'experience', question: 'How long at this training level?',
-    hint: 'Shapes product selection and dosage approach',
+    hint: 'Doses go up with the years, not just the sessions',
     options: [
-      { id: 'new',          label: 'Just getting started', sub: 'Under 6 months' },
-      { id: 'intermediate', label: 'Building consistency', sub: '6 months – 2 years' },
-      { id: 'experienced',  label: 'Established athlete',  sub: '2+ years' },
+      { id: 'new',          label: 'Under 6 months', sub: 'Still finding the routine' },
+      { id: 'intermediate', label: '6 months to 2 years', sub: 'It has stuck' },
+      { id: 'experienced',  label: 'More than 2 years', sub: 'Training is just part of the week now' },
     ],
   }
   if (stepId === 'type' && value === 'strength') return {
     id: 'strengthFocus', question: 'Primary goal with weights?',
-    hint: 'Directs the products we prioritise',
+    hint: 'Size and strength want different things from a stack',
     options: [
       { id: 'hypertrophy',  label: 'Build size',       sub: 'Hypertrophy / bodybuilding' },
       { id: 'powerlifting', label: 'Raw strength',     sub: 'Powerlifting / compound focus' },
@@ -59,7 +59,7 @@ function getSubQuestion(stepId: StepId, value: string): SubQuestion | null {
   }
   if (stepId === 'type' && value === 'sport') return {
     id: 'sportType', question: 'Which sport?',
-    hint: 'Different sports have different demand profiles',
+    hint: 'A 90-minute match and a 90-second sprint ask for different things',
     options: [
       { id: 'football',   label: 'Football / Soccer' },
       { id: 'rugby',      label: 'Rugby' },
@@ -69,10 +69,10 @@ function getSubQuestion(stepId: StepId, value: string): SubQuestion | null {
   }
   if (stepId === 'caffeine' && value === 'high') return {
     id: 'stim', question: 'Want stim pre-workout in your stack?',
-    hint: 'Some athletes prefer to control caffeine separately',
+    hint: 'You already get plenty — this is only about whether we add more',
     options: [
-      { id: 'yes', label: 'Yes — bring the kick' },
-      { id: 'no',  label: 'No — stim-free please' },
+      { id: 'yes', label: 'Yes, include one' },
+      { id: 'no',  label: 'No, keep it stim-free' },
     ],
   }
   return null
@@ -107,7 +107,7 @@ const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
     triggers: ['sleep-better', 'less-stress'],
     serves: ['sleep-better', 'less-stress', 'recovery'],
     question: "How's your sleep at the moment?",
-    hint: 'Shapes which sleep support we recommend',
+    hint: 'Getting off and staying asleep need different things',
     options: [
       { id: 'switch-off', label: 'Hard to switch off at night' },
       { id: 'wake-night', label: 'Wake up during the night' },
@@ -120,7 +120,7 @@ const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
     triggers: ['less-stress', 'focus'],
     serves: ['less-stress', 'focus', 'energy'],
     question: 'When does it hit you hardest?',
-    hint: 'Helps us target the right support',
+    hint: 'When it lands tells us more than how bad it is',
     options: [
       { id: 'morning-fog',     label: 'Morning fog — slow to get going' },
       { id: 'afternoon-crash', label: 'Afternoon crash' },
@@ -133,7 +133,7 @@ const WELLBEING_QUESTIONS: WellbeingQuestion[] = [
     triggers: ['skin-hair-nails'],
     serves: ['skin-hair-nails'],
     question: 'Our skin & hair support uses bovine collagen — any restrictions?',
-    hint: "We'll only recommend products you can actually take",
+    hint: 'There is a plant-based version, so this is not a dead end',
     options: [
       { id: 'ok',     label: 'No restrictions' },
       { id: 'veggie', label: 'Vegetarian / vegan' },
@@ -193,10 +193,10 @@ const WEIGHT_DATA: Array<{ id: WeightBand; label: string }> = [
 ]
 
 const FREQ_DATA: Array<{ id: TrainingFrequency; label: string; sub: string }> = [
-  { id: '1-2x',  label: '1–2× a week',  sub: 'Casual — just getting started' },
-  { id: '3-4x',  label: '3–4× a week',  sub: 'Regular training' },
-  { id: '5-6x',  label: '5–6× a week',  sub: 'Serious athlete' },
-  { id: 'daily', label: 'Every day',    sub: 'Elite / professional level' },
+  { id: '1-2x',  label: '1–2× a week',  sub: 'When it fits' },
+  { id: '3-4x',  label: '3–4× a week',  sub: 'Most weeks, most of the time' },
+  { id: '5-6x',  label: '5–6× a week',  sub: 'Training is planned around, not fitted in' },
+  { id: 'daily', label: 'Every day',    sub: 'Something most days, rest days aside' },
 ]
 const TYPE_DATA: Array<{ id: TrainingType; label: string; sub: string }> = [
   { id: 'strength', label: 'Weights / Lifting',  sub: 'Gym, powerlifting, bodybuilding' },
@@ -222,7 +222,7 @@ const WELLBEING_LIFESTYLE_DATA = [
 const DIET_DATA: Array<{ id: DietLevel; label: string; sub: string }> = [
   { id: 'clean',        label: 'Cooked from scratch',   sub: 'Mostly home-cooked and planned' },
   { id: 'mostly-good',  label: 'Decent but rushed',     sub: 'Healthy-ish, not much time' },
-  { id: 'inconsistent', label: "Grab whatever's easy",  sub: 'Convenience-led — good and bad days' },
+  { id: 'inconsistent', label: "Grab whatever's easy",  sub: 'Some good days, some not' },
   { id: 'poor',         label: 'All over the place',    sub: 'No real routine right now' },
 ]
 const SUPPS_DATA = [
@@ -260,7 +260,7 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
   { id: 'none',   label: 'I avoid it',      sub: 'Prefer stim-free always' },
   { id: 'low',    label: 'Occasionally',    sub: 'One coffee here and there' },
   { id: 'medium', label: 'Daily coffee',    sub: '1–2 cups a day' },
-  { id: 'high',   label: 'I run on it',     sub: '3+ coffees, used to pre-workout' },
+  { id: 'high',   label: 'I run on it',     sub: 'Three or more, and pre-workout doesn’t touch me' },
 ]
 // Budget is no longer asked in the quiz — the full stack is built and the
 // customer chooses a depth (Essentials / Balanced / Complete) on the results
@@ -270,8 +270,8 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
 // "your box lasts ~X days" story, never the amounts. `fills` drives the little
 // liquid-level graphic on each option.
 const DAILY_DRINKS_DATA: Array<{ id: DailyDrinks; label: string; sub: string; fills: number }> = [
-  { id: 1, label: 'One a day',  sub: 'A single go-to drink — easy does it',      fills: 1 },
-  { id: 2, label: 'A couple',   sub: 'Morning and later — the sweet spot',       fills: 2 },
+  { id: 1, label: 'One a day',  sub: 'One go-to drink, same time most days',     fills: 1 },
+  { id: 2, label: 'A couple',   sub: 'One in the morning, one later',            fills: 2 },
   { id: 3, label: 'Three+',     sub: 'A drink with most meals',                  fills: 3 },
 ]
 
@@ -279,7 +279,7 @@ const DAILY_DRINKS_DATA: Array<{ id: DailyDrinks; label: string; sub: string; fi
 // only). The protein/recovery options were inert (the daily base already covers
 // those slots), so it's now one toggle that adds/keeps the pre-workout line.
 const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }> = [
-  { id: 'pre-workout', label: 'Yes — add a pre-workout drink', sub: 'A hit of energy & focus before you train' },
+  { id: 'pre-workout', label: 'Yes — add a pre-workout drink', sub: 'One before you train, on training days only' },
 ]
 
 // ─── Label lookups (for the review summary) ───────────────────────────────────
@@ -1291,7 +1291,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   className="w-full px-5 py-4 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-sm font-medium placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors"
                   style={{ fontFamily: 'var(--font-display)' }}
                 />
-                <p className="text-[11px] text-white/20 mt-2">Personalises your results</p>
+                <p className="text-[11px] text-white/20 mt-2">Optional — it just puts your name on the results</p>
               </div>
 
               <div>
@@ -1328,7 +1328,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                     <AnswerOption key={`weight-${wid}`} label={label} multi selected={localWeight === wid} onClick={() => setLocalWeight(prev => prev === wid ? '' : wid)} />
                   ))}
                 </div>
-                <p className="text-[11px] text-white/20 mt-2">Makes your protein &amp; creatine doses accurate</p>
+                <p className="text-[11px] text-white/20 mt-2">Optional — protein and creatine are dosed by bodyweight</p>
               </div>
             </div>
           )}
@@ -1556,8 +1556,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   <QuizIcon name="sparkle" size={20} className="shrink-0 text-[#00D4FF]" />
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] font-semibold tracking-[0.18em] uppercase text-[#00D4FF]/80" style={{ fontFamily: 'var(--font-display)' }}>Optional · 30 seconds</p>
-                    <p className="text-sm font-semibold text-white mt-1" style={{ fontFamily: 'var(--font-display)' }}>Go deeper for sharper picks</p>
-                    <p className="text-[12px] text-white/40 mt-0.5 leading-snug">A couple of extra questions, written for you — we&apos;ll fine-tune every choice in your stack.</p>
+                    <p className="text-sm font-semibold text-white mt-1" style={{ fontFamily: 'var(--font-display)' }}>Answer a couple more?</p>
+                    <p className="text-[12px] text-white/40 mt-0.5 leading-snug">Written from what you have just told us. They narrow down the picks we are still deciding between.</p>
                   </div>
                   <svg width="14" height="14" viewBox="0 0 20 20" fill="none" className="shrink-0 text-[#00D4FF]/70 transition-transform duration-200 group-hover:translate-x-0.5">
                     <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
