@@ -76,31 +76,31 @@ export function selectHint(mode: SelectMode): string | null {
 }
 
 export const QUIZ_STEPS: QuizStepDef[] = [
-  { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies — we'll prioritise by what you choose most.", select: 'multi', lqd: { hint: 'Pick everything that applies — we’ll cover it all with ready-made drinks.' }, advance: 'manual' },
+  { id: 'goals', section: 'YOUR GOAL', q: "What's the main goal?", hint: "Pick everything that applies. The first one you tap is the one we lead with.", select: 'multi', lqd: { hint: 'Pick everything that applies — we’ll cover the lot with ready-made drinks.' }, advance: 'manual' },
   // Safety screen — front-loaded so it filters everything downstream. Ticking a
   // flag removes contraindicated products from the recommendation entirely.
-  { id: 'safety', section: 'ABOUT YOU', q: 'Anything we should factor in?', hint: 'So we only ever suggest things that are right for you.', select: 'optional', advance: 'manual' },
+  { id: 'safety', section: 'ABOUT YOU', q: 'Anything we should factor in?', hint: 'This only ever takes products out of your box — it never adds any.', select: 'optional', advance: 'manual' },
   // LQD FOUNDATION — the everyday base, shown to everyone in drinks mode.
-  { id: 'dailyDrinks', section: 'YOUR DAILY DRINKS', q: 'How many drinks on a normal day?', hint: "Your everyday base — it just helps us size the box.", select: 'one', onlyInDrinksMode: true, advance: 'auto' },
+  { id: 'dailyDrinks', section: 'YOUR DAILY DRINKS', q: 'How many drinks on a normal day?', hint: "Just so we send the right number. It doesn’t change what’s in them.", select: 'one', onlyInDrinksMode: true, advance: 'auto' },
   // LQD WORKOUT ADD-ONS — training route only; a single opt-in pre-workout toggle.
   { id: 'workoutAddOns', section: 'WORKOUT DRINKS', q: 'Add a pre-workout drink?', hint: 'Optional — a training-day drink on top of your everyday base.', select: 'optional', tracks: ['performance'], onlyInDrinksMode: true, advance: 'manual' },
-  { id: 'personal', section: 'ABOUT YOU', q: 'A little about you.', hint: 'Helps us tailor the doses and picks to you.', select: 'form', advance: 'manual' },
-  { id: 'frequency', section: 'TRAINING', q: 'How often do you train?', hint: 'Your frequency shapes the whole stack.', select: 'one', tracks: ['performance'], lqd: { hint: 'Your frequency shapes the whole package.' }, advance: 'auto' },
-  { id: 'type', section: 'TRAINING', q: "What's your main training style?", hint: "Pick the one that fits best — we'll tune around it.", select: 'one', tracks: ['performance'], advance: 'manual' },
-  { id: 'lifestyle', section: 'LIFESTYLE', q: 'Tell us about yourself', hint: 'Select anything that applies — helps us fine-tune.', select: 'optional', wellbeing: { q: 'Tell us about your day-to-day', hint: 'Select anything that applies — context changes what we recommend.' }, advance: 'manual' },
+  { id: 'personal', section: 'ABOUT YOU', q: 'A little about you.', hint: 'Age and weight set the doses. The name is just so we can talk to you properly.', select: 'form', advance: 'manual' },
+  { id: 'frequency', section: 'TRAINING', q: 'How often do you train?', hint: 'This changes the size of the box more than anything else you’ll tell us.', select: 'one', tracks: ['performance'], lqd: { hint: 'This changes how much we send more than anything else you’ll tell us.' }, advance: 'auto' },
+  { id: 'type', section: 'TRAINING', q: "What's your main training style?", hint: "Pick the closest one — we build around it.", select: 'one', tracks: ['performance'], advance: 'manual' },
+  { id: 'lifestyle', section: 'LIFESTYLE', q: 'Anything else going on?', hint: 'Tick anything that applies. Skip it if none of them do.', select: 'optional', wellbeing: { q: 'Anything else going on day to day?', hint: 'Tick anything that applies — each one changes what we’d send.' }, advance: 'manual' },
   { id: 'diet', section: 'NUTRITION', q: 'How do most of your meals happen?', hint: 'No judgement — it just points us to the right gaps.', select: 'one', advance: 'auto' },
   { id: 'supps', section: 'WHAT YOU HAVE', q: 'Already using any of these?', hint: "We'll skip what you've got — or tell us to include ours so you can try it.", select: 'optional', wellbeing: { q: 'Already taking any of these?', hint: "We'll skip what you've got covered — or tell us to include ours so you can try it." }, advance: 'manual' },
   // Caffeine + training-time only change the bundle when a stimulant product can
   // enter it — i.e. the performance track. Skipped for the pure wellbeing track.
-  { id: 'caffeine', section: 'ENERGY', q: 'How do you handle caffeine?', hint: 'Shapes your pre-workout recommendation.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
-  { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'Caffeine timing matters — tells us whether to include stimulants.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
+  { id: 'caffeine', section: 'ENERGY', q: 'How do you handle caffeine?', hint: 'This decides whether a stimulant belongs in your box at all.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
+  { id: 'trainingTime', section: 'TRAINING', q: 'When do you usually train?', hint: 'A stimulant at 7pm becomes a sleep problem, so we need to know.', select: 'one', showWhen: (a) => a.track === 'performance', advance: 'auto' },
   // No budget question: we build the full stack and let the customer choose a
   // depth (Essentials / Balanced / Complete) on the results screen, where they
   // can see the value before the price (value-first — see StackReviewPage tiers).
   { id: 'review', section: 'REVIEW', q: 'Quick check before we build.', hint: 'Tap anything to change it.', select: 'form', lqd: { q: 'Quick check before we pour.', hint: 'Tap anything to change it.' }, advance: 'manual' },
   // Optional bonus step, offered from the review screen — never part of the
   // advertised question count or the linear flow.
-  { id: 'deepDive', section: 'GO DEEPER', q: 'Let’s fine-tune your stack.', hint: 'Optional — every answer here sharpens the final picks.', select: 'form', lqd: { q: 'Let’s fine-tune your drinks.', hint: 'Optional — every answer here sharpens the final picks.' }, advance: 'manual' },
+  { id: 'deepDive', section: 'GO DEEPER', q: 'Let’s fine-tune your stack.', hint: 'Optional — a few more questions, and we can be more specific.', select: 'form', lqd: { q: 'Let’s fine-tune your drinks.', hint: 'Optional — a few more questions, and we can be more specific.' }, advance: 'manual' },
 ]
 
 /** The steps shown for a track. Null (track not yet chosen) defaults to the

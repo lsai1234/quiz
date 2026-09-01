@@ -35,7 +35,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
       {
         id: 'protein',
         label: 'Getting the protein in',
-        sub: 'Never quite hitting it',
+        sub: 'Never quite hit it',
         drivers: { 'low-protein': 0.7 },
       },
       {
@@ -57,7 +57,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
     topic: 'recovery',
     section: 'RECOVERY',
     prompt: 'How do you feel two days after a hard session?',
-    hint: 'Tells us whether to spend the budget on recovery or on output.',
+    hint: 'This decides whether your box leans on recovery or on output.',
     select: 'single',
     summary: 'Whether the recovery complaint is soreness, fatigue or joints.',
     discriminates: ['recovery-debt', 'joint-load', 'sleep-debt', 'low-protein'],
@@ -66,7 +66,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
       {
         id: 'sore',
         label: 'Still sore',
-        sub: 'Muscles have not let go',
+        sub: 'The muscles still haven’t let go',
         drivers: { 'recovery-debt': 0.7, 'low-protein': 0.35 },
       },
       {
@@ -79,7 +79,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
       {
         id: 'flat',
         label: 'Not sore — just flat',
-        sub: 'The energy has not come back',
+        sub: 'The energy hasn’t come back',
         drivers: { 'sleep-debt': 0.45, 'recovery-debt': 0.4 },
       },
       {
@@ -108,7 +108,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
       {
         id: 'lift-often',
         label: 'Weights, 4+ times a week',
-        sub: 'Serious lifting volume',
+        sub: 'Most days of the week',
         drivers: { 'training-load': 0.6, 'low-protein': 0.3 },
         answers: {
           trainingFrequency: '5-6x', trainingType: ['strength'],
@@ -173,7 +173,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
     topic: 'training',
     section: 'YOUR TRAINING',
     prompt: 'How much do you sweat in a session?',
-    hint: 'Electrolytes only earn their place if you actually lose them.',
+    hint: 'Electrolytes are only worth the money if you are actually losing them.',
     select: 'single',
     summary: 'Whether hydration/electrolytes belong in the stack at all.',
     discriminates: ['hydration-deficit'],
@@ -194,7 +194,7 @@ export const TRAINING_QUESTIONS: BankQuestion[] = [
     topic: 'training',
     section: 'YOUR TRAINING',
     prompt: 'What exactly has stalled?',
-    hint: 'Strength and size stall for different reasons.',
+    hint: 'A stuck bench and a stuck mirror have different causes.',
     select: 'single',
     summary: 'Whether the plateau is strength, size or conditioning.',
     discriminates: ['plateau', 'low-protein', 'recovery-debt'],

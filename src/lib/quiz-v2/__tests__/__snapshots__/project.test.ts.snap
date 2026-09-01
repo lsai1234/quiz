@@ -107,7 +107,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "multi",
   },
   {
-    "hint": "The pattern says more than the tiredness does.",
+    "hint": "When it hits tells us more than how bad it is.",
     "id": "energy-when",
     "options": [
       [
@@ -152,12 +152,12 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       [
         "wake-tired",
         "Sleep enough, still wake tired",
-        "The hours are there, the rest is not",
+        "The hours are there, the rest isn’t",
       ],
       [
         "nights-fine",
         "Nights are fine, actually",
-        "Sleep is not the problem",
+        "Sleep isn’t the problem",
       ],
     ],
     "prompt": "How is your sleep at the moment?",
@@ -165,7 +165,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "An afternoon wall is usually built earlier in the day.",
+    "hint": "An afternoon crash is usually built at breakfast.",
     "id": "energy-afternoon",
     "options": [
       [
@@ -181,12 +181,12 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       [
         "too-busy",
         "Too busy to eat properly",
-        "Whatever is nearest, if anything",
+        "Whatever’s nearest, if anything",
       ],
       [
         "steady-meals",
         "Three proper meals",
-        "Eating is not the issue",
+        "Eating isn’t the issue",
       ],
     ],
     "prompt": "What do you usually eat before the afternoon?",
@@ -252,7 +252,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Different demands need different support.",
+    "hint": "We are after what actually empties the tank, not how full it started.",
     "id": "energy-evening",
     "options": [
       [
@@ -272,7 +272,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       ],
       [
         "nothing-obvious",
-        "Nothing obvious, and that is the odd part",
+        "Nothing obvious, which is the annoying part",
         null,
       ],
     ],
@@ -281,7 +281,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "A recent change and a long-running one point different ways.",
+    "hint": "Something that started in March is a different problem to something that always has been.",
     "id": "energy-flat",
     "options": [
       [
@@ -310,7 +310,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Where you spend it changes what your body runs short of.",
+    "hint": "Daylight, movement and hours are the three this decides.",
     "id": "day-shape",
     "options": [
       [
@@ -350,7 +350,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       [
         "protein",
         "Getting the protein in",
-        "Never quite hitting it",
+        "Never quite hit it",
       ],
       [
         "plateau",
@@ -368,13 +368,13 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Tells us whether to spend the budget on recovery or on output.",
+    "hint": "This decides whether your box leans on recovery or on output.",
     "id": "recovery-feel",
     "options": [
       [
         "sore",
         "Still sore",
-        "Muscles have not let go",
+        "The muscles still haven’t let go",
       ],
       [
         "joints",
@@ -384,7 +384,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       [
         "flat",
         "Not sore — just flat",
-        "The energy has not come back",
+        "The energy hasn’t come back",
       ],
       [
         "fine",
@@ -403,7 +403,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       [
         "lift-often",
         "Weights, 4+ times a week",
-        "Serious lifting volume",
+        "Most days of the week",
       ],
       [
         "lift-few",
@@ -436,7 +436,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Electrolytes only earn their place if you actually lose them.",
+    "hint": "Electrolytes are only worth the money if you are actually losing them.",
     "id": "sweat",
     "options": [
       [
@@ -460,7 +460,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Strength and size stall for different reasons.",
+    "hint": "A stuck bench and a stuck mirror have different causes.",
     "id": "plateau-what",
     "options": [
       [
@@ -484,7 +484,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Falling asleep and staying asleep want completely different things.",
+    "hint": "Getting off and staying off are two different problems.",
     "id": "sleep-shape",
     "options": [
       [
@@ -499,12 +499,12 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       ],
       [
         "not-restorative",
-        "It does not seem to count",
+        "It doesn’t seem to count",
         "Eight hours and still wrecked",
       ],
       [
         "not-enough",
-        "There is just not enough of it",
+        "There just isn’t enough of it",
         "Life gets in the way",
       ],
     ],
@@ -513,7 +513,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "The wind-down decides a lot of what happens after it.",
+    "hint": "What you do in that hour usually decides the night.",
     "id": "evening-shape",
     "options": [
       [
@@ -542,7 +542,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "The timing points at completely different support.",
+    "hint": "The hour it lands is the useful bit.",
     "id": "stress-when",
     "options": [
       [
@@ -571,7 +571,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Sustained screen work has its own cost.",
+    "hint": "Hours of screen is its own kind of tired.",
     "id": "screen-hours",
     "options": [
       [
@@ -595,7 +595,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Frequency tells us whether this is maintenance or catch-up.",
+    "hint": "Twice a winter and every other month are not the same ask.",
     "id": "immune-often",
     "options": [
       [
@@ -624,7 +624,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Tick everything that applies — exposure is half of it.",
+    "hint": "Tick everything that applies — most of this is who you are around.",
     "id": "immune-exposure",
     "options": [
       [
@@ -663,7 +663,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "multi",
   },
   {
-    "hint": "Habits and timing, not symptoms — we are not a clinic.",
+    "hint": "Habits and timing, not symptoms — we’re not a clinic.",
     "id": "gut-when",
     "options": [
       [
@@ -692,7 +692,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Fibre first; a probiotic works better on top of it than instead of it.",
+    "hint": "A probiotic works better on top of decent fibre than in place of it.",
     "id": "gut-fibre",
     "options": [
       [
@@ -707,7 +707,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
       ],
       [
         "barely",
-        "Barely any, if I am honest",
+        "Barely any, if I’m honest",
         null,
       ],
     ],
@@ -716,7 +716,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "A recent change and a long-standing wish need different things.",
+    "hint": "Something that changed recently is worth treating differently.",
     "id": "skin-change",
     "options": [
       [
@@ -745,7 +745,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "Wherever this is landing hardest is where we start.",
+    "hint": "Whichever you pick is what we build the box around first.",
     "id": "hormonal-day",
     "options": [
       [
@@ -774,7 +774,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "single",
   },
   {
-    "hint": "The UK makes this the most common gap there is.",
+    "hint": "Between October and March the UK doesn’t make enough of it to matter.",
     "id": "daylight",
     "options": [
       [
@@ -946,7 +946,7 @@ exports[`the questions read on their own reads the same tomorrow as it does toda
     "select": "protein",
   },
   {
-    "hint": "Tell us what did not work and we will not send it again.",
+    "hint": "Tell us what didn’t work and we won’t send it again.",
     "id": "tried-before",
     "options": [
       [

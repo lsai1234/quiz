@@ -175,7 +175,7 @@ export const NUTRITION_QUESTIONS: BankQuestion[] = [
     topic: 'supps',
     section: 'WHAT YOU HAVE TRIED',
     prompt: 'How have supplements gone for you before?',
-    hint: 'Tell us what did not work and we will not send it again.',
+    hint: 'Tell us what didn’t work and we won’t send it again.',
     select: 'single',
     // The audit's gap #9. Nothing in v1 captures "tried creatine, felt nothing"
     // or "protein wrecked my stomach", and both are high-signal — the second

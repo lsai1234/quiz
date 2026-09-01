@@ -26,7 +26,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     // "When does it hit you?" needed the eyebrow to make sense, and the eyebrow
     // is 10px of 35%-white. Every prompt in the bank now stands on its own.
     prompt: 'When does your energy dip?',
-    hint: 'The pattern says more than the tiredness does.',
+    hint: 'When it hits tells us more than how bad it is.',
     select: 'single',
     summary: 'When their energy dips — the fork the rest of the energy ladder hangs off.',
     discriminates: [
@@ -94,7 +94,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
       {
         id: 'wake-tired',
         label: 'Sleep enough, still wake tired',
-        sub: 'The hours are there, the rest is not',
+        sub: 'The hours are there, the rest isn’t',
         drivers: { 'unrefreshing-sleep': 0.65, 'micronutrient-gap': 0.3 },
         signals: ['poor-sleep'],
         answers: { wellbeingAnswers: { sleepQuality: 'wake-tired' } },
@@ -102,7 +102,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
       {
         id: 'nights-fine',
         label: 'Nights are fine, actually',
-        sub: 'Sleep is not the problem',
+        sub: 'Sleep isn’t the problem',
         // Ruling sleep out is as useful as ruling it in — and without this the
         // planner would keep spending questions on it.
         clears: ['sleep-onset', 'sleep-maintenance', 'unrefreshing-sleep', 'sleep-debt'],
@@ -117,7 +117,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     topic: 'nutrition',
     section: 'FOOD',
     prompt: 'What do you usually eat before the afternoon?',
-    hint: 'An afternoon wall is usually built earlier in the day.',
+    hint: 'An afternoon crash is usually built at breakfast.',
     select: 'single',
     summary: 'What causes the afternoon crash — fuelling, caffeine, or neither.',
     discriminates: ['under-fuelled', 'caffeine-crash', 'glycaemic-dip', 'micronutrient-gap'],
@@ -138,14 +138,14 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
       {
         id: 'too-busy',
         label: 'Too busy to eat properly',
-        sub: 'Whatever is nearest, if anything',
+        sub: 'Whatever’s nearest, if anything',
         drivers: { 'under-fuelled': 0.6, 'micronutrient-gap': 0.35 },
         signals: ['high-stress'],
       },
       {
         id: 'steady-meals',
         label: 'Three proper meals',
-        sub: 'Eating is not the issue',
+        sub: 'Eating isn’t the issue',
         clears: ['under-fuelled', 'glycaemic-dip'],
         drivers: { 'micronutrient-gap': 0.3 },
       },
@@ -230,7 +230,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     topic: 'daily',
     section: 'YOUR DAY',
     prompt: 'What drains you most during the day?',
-    hint: 'Different demands need different support.',
+    hint: 'We are after what actually empties the tank, not how full it started.',
     select: 'single',
     summary: 'What the evening flat-out is actually costing them.',
     discriminates: ['training-load', 'stress-load', 'sedentary-slump', 'under-fuelled'],
@@ -254,7 +254,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
       },
       {
         id: 'nothing-obvious',
-        label: 'Nothing obvious, and that is the odd part',
+        label: 'Nothing obvious, which is the annoying part',
         drivers: { 'micronutrient-gap': 0.5 },
       },
     ],
@@ -265,7 +265,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     topic: 'daily',
     section: 'YOUR ENERGY',
     prompt: 'How long have you felt this flat?',
-    hint: 'A recent change and a long-running one point different ways.',
+    hint: 'Something that started in March is a different problem to something that always has been.',
     select: 'single',
     summary: 'Duration of an all-day flatness — recent vs long-running.',
     discriminates: ['micronutrient-gap', 'stress-load', 'illness-frequency', 'sun-exposure-low'],
@@ -301,7 +301,7 @@ export const ENERGY_QUESTIONS: BankQuestion[] = [
     topic: 'daily',
     section: 'YOUR DAY',
     prompt: 'Where do you spend most of your day?',
-    hint: 'Where you spend it changes what your body runs short of.',
+    hint: 'Daylight, movement and hours are the three this decides.',
     select: 'single',
     summary: 'Sedentary vs active vs shift work. Broad, cheap, useful on every path.',
     discriminates: ['sedentary-slump', 'screen-fatigue', 'sun-exposure-low', 'sleep-debt'],
