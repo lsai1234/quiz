@@ -183,6 +183,23 @@ export interface Order {
    */
   partnerDiscountPct?: number | null
   /**
+   * The founder code this order was bought on, if any — `FH-FREE-…`,
+   * `FH-COST-…` or `FH-MIN-…`.
+   *
+   * A free or cost-price order looks exactly like an underpriced one in the
+   * financials, and the difference between "we sold this at cost deliberately"
+   * and "something is wrong with the pricing" is this field. It is also the
+   * audit trail: the code row records which order spent it, and this records
+   * which code the order was spent on, so the pair can be reconciled from
+   * either end.
+   *
+   * Never a partner code, and never counted as one — no commission accrues on
+   * an order bought by us.
+   */
+  founderCode?: string | null
+  /** Which kind it was, so a screen can say so without a second lookup. */
+  founderCodeKind?: 'free' | 'cost' | 'unlock' | null
+  /**
    * What the member was actually charged for the billing cycle this order
    * belongs to (£). Subscription orders only.
    *
@@ -233,6 +250,9 @@ export interface CreateOrderInput {
   /** Attribution, when the buyer used a partner's code. Already validated. */
   partnerCode?: string | null
   partnerDiscountPct?: number | null
+  /** The founder code this order was bought on — see `Order.founderCode`. */
+  founderCode?: string | null
+  founderCodeKind?: 'free' | 'cost' | 'unlock' | null
   /** What the cycle was billed at — see `Order.billedAmount`. */
   billedAmount?: number | null
   /** The plan behind this delivery — see `Order.subscription`. */

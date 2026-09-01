@@ -550,6 +550,44 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX member_access_log_founder ON member_access_log(founder);
   CREATE INDEX member_access_log_created ON member_access_log(created_at);
   `,
+
+  // v17 — `founder_codes`: the three codes a founder can issue to themselves.
+  //
+  // Its own table rather than a row in `partner_codes`, which was the tempting
+  // reuse. A partner code is a commercial instrument owned by a counterparty,
+  // it earns commission, and it is never allowed under the margin floor. These
+  // are the opposite on all three counts — they belong to us, earn nobody
+  // anything, and set prices outright rather than discounting within the floor.
+  // Sharing the table would have meant the commission accrual, the first-order
+  // rule and the floor each carrying an "unless it's a founder" branch.
+  //
+  // `claim_token` is the single-use lock, and it is a claim rather than a
+  // counter because `SqlEngine.run` reports no row count on either engine, so
+  // "increment if under the cap" cannot be checked. Two concurrent checkouts
+  // both write `WHERE claim_token IS NULL`; only one lands, and reading the
+  // column back tells each of them which it was. A checkout that claims and
+  // then fails clears it, so a released code is live again.
+  //
+  // `used_at` and `order_id` are what turn a claim into a redemption. They are
+  // also the whole audit trail: which founder issued a code that made an order
+  // free, and which order spent it — the question nobody wants to answer by
+  // reading a Stripe dashboard.
+  `
+  CREATE TABLE founder_codes (
+    code        TEXT PRIMARY KEY,
+    kind        TEXT NOT NULL,
+    note        TEXT,
+    created_by  TEXT,
+    created_at  TEXT NOT NULL,
+    expires_at  TEXT NOT NULL,
+    claim_token TEXT,
+    claimed_at  TEXT,
+    used_at     TEXT,
+    order_id    TEXT,
+    revoked_at  TEXT
+  );
+  CREATE INDEX founder_codes_created ON founder_codes(created_at);
+  `,
 ]
 
 /**

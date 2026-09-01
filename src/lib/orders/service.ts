@@ -101,11 +101,19 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     trackingNumber: null,
     partnerCode: input.partnerCode ?? null,
     partnerDiscountPct: input.partnerDiscountPct ?? null,
+    founderCode: input.founderCode ?? null,
+    founderCodeKind: input.founderCodeKind ?? null,
     billedAmount: input.billedAmount ?? null,
     subscription: input.subscription ?? null,
     events: [
       event('created', `channel=${input.channel}`),
       ...(input.partnerCode ? [event('attributed', `partner code ${input.partnerCode}`)] : []),
+      // On the audit trail rather than only in a column: a £0.00 order needs to
+      // say, in the same place every other transition is recorded, why it was
+      // free.
+      ...(input.founderCode
+        ? [event('founder-code', `${input.founderCodeKind ?? 'founder'} code ${input.founderCode}`)]
+        : []),
       ...(status === 'paid' ? [event('paid')] : []),
     ],
     createdAt: now(),

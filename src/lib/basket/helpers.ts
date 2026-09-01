@@ -1,4 +1,6 @@
 import { getPricingConfig, priceOneOffLines, unitCostOf, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
+import { priceAtFounderTerms } from '@/lib/founder-codes/codes'
+import type { FounderCodeKind } from '@/lib/founder-codes/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { CheckoutLineItem } from '@/lib/stack-blueprint/checkout'
 import type { BasketLine, ResolvedBasketLine } from './types'
@@ -113,15 +115,36 @@ export function basketSubtotal(resolved: ResolvedBasketLine[]): number {
 export function priceBasket(
   resolved: ResolvedBasketLine[],
   config = getPricingConfig(),
+  /**
+   * A founder code applied to this basket, when one is.
+   *
+   * The drawer prices it CLIENT-side through the same function `/api/cart`
+   * prices it server-side, for the same reason the tiers are: a basket showing
+   * £0.00 that bills £48 at Stripe is the failure this whole helper exists to
+   * prevent, and a founder code changes prices more than any tier does.
+   */
+  founderKind: FounderCodeKind | null = null,
 ): OneOffPricing {
-  return priceOneOffLines(
-    resolved.map(({ product, variant, quantity }) => ({
-      price: variant.price,
-      cost: unitCostOf(product, variant.price, config),
-      quantity,
-    })),
-    config,
+  const lines = resolved.map(({ product, variant, quantity }) => ({
+    price: variant.price,
+    cost: unitCostOf(product, variant.price, config),
+    quantity,
+  }))
+  return founderKind
+    ? priceAtFounderTerms(founderKind, lines, config)
+    : priceOneOffLines(lines, config)
+}
+
+/** What we pay PowerBody for a basket, ex VAT — what their delivery bands read. */
+export function basketSupplierValue(
+  resolved: ResolvedBasketLine[],
+  config = getPricingConfig(),
+): number {
+  const total = resolved.reduce(
+    (sum, { product, variant, quantity }) => sum + unitCostOf(product, variant.price, config) * quantity,
+    0,
   )
+  return Math.round(total * 100) / 100
 }
 
 /**

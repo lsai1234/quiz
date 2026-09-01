@@ -15,7 +15,17 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PartnerCodeBox } from '../PartnerCodeBox'
 
-const JOHN20 = { code: 'JOHN20', discountPct: 0.2, partnerName: 'John Smith' }
+// The exact object the box now emits. The three founder fields are null on a
+// partner code and present rather than absent, so one `AppliedCode` shape
+// describes both kinds and no caller has to test for `undefined`.
+const JOHN20 = {
+  code: 'JOHN20',
+  discountPct: 0.2,
+  partnerName: 'John Smith',
+  founderKind: null,
+  founderLabel: null,
+  founderNote: null,
+}
 
 const setCookie = (value: string) => {
   document.cookie = `partner_ref=${value}; path=/`

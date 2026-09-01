@@ -50,6 +50,16 @@ export function useShopCheckout() {
   const checkout = useCallback(async (
     resolved: ResolvedBasketLine[],
     source: 'basket' | 'buy_now' = 'basket',
+    /**
+     * A code typed into the basket, passed straight through.
+     *
+     * The server decides what it is worth — and, for a founder code, whether it
+     * lets this basket past the minimum order at all. Nothing here interprets
+     * it; the name is `partnerCode` on the wire because that is the field
+     * `/api/cart` has always read, and one field taking one code is better than
+     * two fields the browser has to choose between.
+     */
+    code: string | null = null,
   ) => {
     if (resolved.length === 0) {
       setState({ status: 'error', message: 'Your basket is empty.' })
@@ -80,7 +90,7 @@ export function useShopCheckout() {
       const res = await fetch('/api/cart', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lines }),
+        body: JSON.stringify({ lines, ...(code ? { partnerCode: code } : {}) }),
       })
       const data: { checkoutUrl?: string; mock?: boolean; orderId?: string; error?: string } = await res.json()
       if (!res.ok || !data.checkoutUrl) {
@@ -91,9 +101,13 @@ export function useShopCheckout() {
         return
       }
 
-      // Mock payments: no Stripe to go to, and the demo order is already paid.
-      // Send them to the real confirmation route so mock mode exercises the same
-      // screen live traffic will — otherwise it only ever gets tested in
+      // No Stripe to go to, and the order is already paid. Two ways to get
+      // here: mock payments (`#mock-checkout`), and a founder "everything free"
+      // code (`#founder-code`), where the order genuinely cost £0.00 and there
+      // was nothing for Stripe to take.
+      //
+      // Both go to the REAL confirmation route, so mock mode exercises the same
+      // screen live traffic will rather than it only ever being tested in
       // production. This is a route change AFTER completion, which is fine;
       // OC-F-004 prohibits one DURING initiation.
       if (data.checkoutUrl.startsWith('#')) {

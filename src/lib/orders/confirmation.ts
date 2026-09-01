@@ -341,6 +341,27 @@ export async function resolveConfirmation(input: ResolveInput): Promise<Confirma
     return buildFromOrder(order, input.origin)
   }
 
+  /**
+   * A founder-code order that cost nothing, in Stripe mode.
+   *
+   * An order at £0.00 total has no Checkout Session behind it — there is
+   * nothing for Stripe to take — so it arrives here with `?order=` and no
+   * `session_id`, exactly like a mock one. It is admitted on the ORDER's own
+   * evidence, not on the URL's: it must carry a founder code, be paid, and have
+   * never touched Stripe. All three, so this cannot become a way to read an
+   * ordinary order by id.
+   *
+   * The id itself is 18 random hex characters, which is what stops it being an
+   * enumeration route (OC-E-007) — the same protection the mock branch above
+   * relies on.
+   */
+  if (!input.sessionId && input.mockOrderId) {
+    const order = await getOrder(input.mockOrderId)
+    if (!order) return RECOVERY
+    if (!order.founderCode || order.status !== 'paid' || order.stripeSessionId) return RECOVERY
+    return buildFromOrder(order, input.origin)
+  }
+
   if (!input.sessionId) return RECOVERY
 
   let session: Stripe.Checkout.Session

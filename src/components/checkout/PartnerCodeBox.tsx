@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { RedeemChannel } from '@/lib/partners/redeem'
+import type { FounderCodeKind } from '@/lib/founder-codes/types'
 
 const GREEN = '#34d399'
 const ACCENT = '#00D4FF'
@@ -14,6 +15,19 @@ export interface AppliedCode {
   code: string
   discountPct: number
   partnerName: string
+  /**
+   * Set when the code is one of ours rather than a partner's.
+   *
+   * The two are the same object to whoever is typing — a code — so they share
+   * one box and one endpoint. They are not the same thing on the receipt: a
+   * founder code rewrites the prices rather than taking a percentage off them,
+   * which is why `discountPct` is 0 on one and why the applied state below
+   * reads differently.
+   */
+  founderKind?: FounderCodeKind | null
+  /** What the founder code does, in the server's words. */
+  founderLabel?: string | null
+  founderNote?: string | null
 }
 
 interface Props {
@@ -93,7 +107,14 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
         })
         const d = await res.json().catch(() => ({}))
         if (d.ok) {
-          onChange({ code: d.code, discountPct: d.discountPct, partnerName: d.partnerName })
+          onChange({
+            code: d.code,
+            discountPct: d.discountPct,
+            partnerName: d.partnerName,
+            founderKind: d.founderKind ?? null,
+            founderLabel: d.label ?? null,
+            founderNote: d.note ?? null,
+          })
           setFromLink(silent)
           setInput('')
           setError(null)
@@ -119,6 +140,35 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
     const ref = cookieValue(REFERRAL_COOKIE)
     if (ref) void check(ref, true)
   }, [triedReferral, applied, check])
+
+  if (applied?.founderKind) {
+    // A founder code, applied. Deliberately says what it DOES rather than what
+    // it takes off: "100% off" would be a discount line the receipt does not
+    // have, and on a cost-price order the delivery goes UP, which no percentage
+    // could ever convey.
+    return (
+      <div
+        className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5"
+        style={{ background: `color-mix(in srgb, ${ACCENT} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 25%, transparent)` }}
+      >
+        <div className="min-w-0">
+          <p className="text-[11px] font-bold" style={{ color: ACCENT }}>
+            {applied.code} · {applied.founderLabel ?? 'Founder code'}
+          </p>
+          {applied.founderNote && (
+            <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{applied.founderNote}</p>
+          )}
+        </div>
+        <button
+          onClick={() => { onChange(null); setError(null) }}
+          className="text-[10px] font-semibold underline flex-shrink-0"
+          style={{ color: 'var(--color-muted)' }}
+        >
+          Remove
+        </button>
+      </div>
+    )
+  }
 
   if (applied) {
     return (

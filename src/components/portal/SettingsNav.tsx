@@ -57,6 +57,13 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         icon: 'credit-card',
       },
       {
+        slug: 'codes',
+        title: 'Founder codes',
+        blurb:
+          'One-off codes for buying from our own shop — free, at cost price, or just to get under the minimum order.',
+        icon: 'lock',
+      },
+      {
         slug: 'go-live',
         title: 'Going live',
         blurb:

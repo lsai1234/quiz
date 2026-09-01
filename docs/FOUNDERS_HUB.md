@@ -41,7 +41,7 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 | **Pricing** | `/founderhub/pricing` | Every pricing rule, in one place (see §2). |
 | **Requires action** | `/founderhub/actions` | Product changes on live subscriptions. |
 | **Emails** | `/founderhub/emails` | The outbox. |
-| **Settings** | `/founderhub/settings` | Mock vs live data, supplier, payments. |
+| **Settings** | `/founderhub/settings` | Mock vs live data, supplier, payments, founder codes. |
 
 ### Routes that moved
 
@@ -355,3 +355,110 @@ it was.
 Being on the roster is a promise that the product's data is maintained, so the
 screen shows that promise kept or broken: readiness, cost, and margin against
 the Good-price model, per entry.
+
+---
+
+## 6. Founder codes — buying from our own shop
+
+`/founderhub/settings/codes` issues three kinds of code, for the three things we
+actually want to do with our own storefront. All of them are **single-use** and
+**expire 24 hours** after they are made.
+
+| Kind | Prefix | Goods | Delivery | Minimum order |
+| --- | --- | --- | --- | --- |
+| Everything free | `FH-FREE-…` | £0.00 | £0.00 | waived |
+| Cost price | `FH-COST-…` | what PowerBody charge us | what PowerBody charge us | waived |
+| Below the minimum | `FH-MIN-…` | normal | normal | waived |
+
+### Why cost price moves delivery *upwards*
+
+The two halves move in opposite directions, and that is the point. Goods drop
+from the shelf price to `unitCostOf` — and then **up again by the VAT we cannot
+reclaim**, because while `vat.registered` is false PowerBody's VAT is money that
+genuinely leaves the account (`costFromSupplierPrice`). A "cost price" that
+ignored it would still lose us a fifth of the goods.
+
+Delivery goes the other way. Our customer ladder is free over £100 and
+subsidised below it; PowerBody charge us £3.25–£5.17 a parcel with **no
+dropshipper free-shipping band at all**. Selling the goods at cost and shipping
+them on our own promotional postage would put the loss straight back in the line
+below, so a cost-price order ships at `quoteDelivery(...).supplierCost` — for
+both zones, because Stripe fixes shipping options before a postcode exists.
+
+A product with no recorded `cost` falls back to `defaultCostRatio`, so on those
+lines "cost price" is the model's estimate rather than the invoice. The hub says
+so where the code is issued.
+
+### Why they are not partner codes
+
+They live in their own domain (`lib/founder-codes`, migration v17) rather than
+as a fourth `PartnerCode`. A partner code belongs to a counterparty, earns
+commission, is redeemable on a first order only, and is never allowed under the
+margin floor. These belong to us, earn nobody anything, and **set** prices
+rather than discounting them — the floor is bypassed entirely, in both
+directions: a free order cannot reach zero through `discountWithFloor` (which is
+exactly what stops a partner's 100% doing the same), and a cost price would be
+dragged *up* wherever the floor happened to sit above it.
+
+Folding the two together would have meant the commission accrual, the
+first-order rule and the margin floor each carrying an "unless it's a founder"
+branch, and the one that got missed would be the expensive one. They do share
+one thing deliberately: **the code box**. A code is a code to whoever is typing
+it, so `/api/partner-code` answers for both and `/api/cart` takes both in the
+same field.
+
+### The fences
+
+- **Single use, enforced by a claim rather than a counter.** `SqlEngine.run`
+  reports no row count on either engine, so "increment if under the cap" cannot
+  know whether it did. `founder_codes.claim_token` is written
+  `WHERE claim_token IS NULL` and read back; two tabs racing the same 100%-off
+  code both reach that line and exactly one of them wins. The claim is taken
+  **before** the order is raised, and a checkout that fails afterwards releases
+  it.
+- **One-off orders only.** A code that made a *subscription* free would make
+  every renewal free, long after the code expired — 24 hours means nothing
+  against a recurring charge. `founderCodeWorksOn` refuses `subscription`, and
+  refuses an unstated channel too (the opposite default to the partner codes,
+  because the downside here is 100% off forever).
+- **Typed, never inherited.** A partner's code is banked into a cookie for
+  thirty days on purpose. A founder code is read only from what was typed at
+  this checkout — a cookie that could silently make an order free weeks later,
+  on somebody else's basket, is not worth building.
+- **Rate-limited.** 40 bits of Crockford base32 is not guessable, but the box
+  that checks it still has a per-IP brake (`guess-limit.ts`) so working through
+  `FH-FREE-…` costs more than bandwidth. Per-instance and in-memory, with the
+  same honest caveat as the hub's front door: a brake, not a lock.
+- **Recorded at both ends.** The order carries `founderCode` and
+  `founderCodeKind` plus an audit event; the code row carries the order that
+  spent it and the founder who issued it. A £0.00 order in the financials is
+  explained where it is read, rather than looking like a pricing fault.
+- **Still reviewed.** Free to the buyer is not free to us. A founder order lands
+  in the same queue as everything else — nothing reaches PowerBody unreviewed.
+
+### The one path that books a paid order nobody paid for
+
+Stripe cannot take £0.00; Checkout refuses a session under its minimum charge.
+So a `free` code raises the order as **paid** directly and returns
+`#founder-code` instead of a checkout URL. It is the only such path in the app,
+and what authorises it is the claim above.
+
+That order then reaches `/order/confirmation?order=…` with no `session_id`.
+`resolveConfirmation` admits it on the **order's** evidence — carries a founder
+code, is paid, never touched Stripe — never on the URL's, so `?order=` does not
+become a way to read an ordinary order by id.
+
+### The shop's minimum order, and where the code box went
+
+`minOrderValue` is £15 and `/api/cart` has always enforced it server-side. Until
+now the only way to discover that was to press **Checkout** and be refused — and
+the code box that can waive it lived on the quiz and bundle screens only, so the
+one journey where a small basket is normal was also the one with no way to say
+anything about it.
+
+The basket drawer now carries the box **whatever the basket is worth**, and
+states the shortfall as a fact about the basket rather than as an error after a
+failed attempt. Under a founder code the free-delivery progress bar stands down
+— "£12 away from free delivery" describes a ladder that no longer applies — and
+the drawer prices through the same `priceAtFounderTerms` the checkout bills
+from, so the £0.00 on screen is the £0.00 on the card.

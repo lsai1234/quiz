@@ -8,6 +8,8 @@ import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { formatGBP, getPricingConfig, qualifiesForFreeDelivery, PRICING_CONFIG, type OneOffPricing } from '@/lib/stack-blueprint/pricing'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
+import { founderDeliveryOptions } from '@/lib/founder-codes/codes'
+import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { IconButton } from '@/components/ui/IconButton'
 import { Icon } from '@/components/ui/Icon'
@@ -21,6 +23,10 @@ interface Props {
   subtotal: number
   /** The discounted price — what /api/cart will bill. */
   priced: OneOffPricing
+  /** What we pay PowerBody for these goods, ex VAT — what a cost-price code ships on. */
+  supplierValue: number
+  appliedCode: AppliedCode | null
+  onCodeChange: (applied: AppliedCode | null) => void
   checkoutState: ShopCheckoutState
   onCheckout: () => void
   onClose: () => void
@@ -32,7 +38,17 @@ function variantLabel(v: { title: string; flavour: string | null; size: string |
 }
 
 /** A right-side slide-in cart drawer: line items up top, the money below. */
-export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onCheckout, onClose }: Props) {
+export function BasketDrawer({
+  resolved,
+  subtotal,
+  priced,
+  supplierValue,
+  appliedCode,
+  onCodeChange,
+  checkoutState,
+  onCheckout,
+  onClose,
+}: Props) {
   const { setQty, remove } = useBasket()
   const [mounted, setMounted] = useState(false)
   const [shown, setShown] = useState(false)
@@ -59,14 +75,43 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
   const threshold = config.freeDeliveryThreshold
   const freeDelivery = qualifiesForFreeDelivery(subtotal, config)
   const remaining = Math.max(0, Math.round((threshold - subtotal) * 100) / 100)
+  const founderKind = appliedCode?.founderKind ?? null
   // The mainland rate — the one all but ~4% of baskets pay, and the one Stripe
   // will show as the default choice. A Highlands address picks the surcharged
   // option there.
-  const deliveryCharge = customerDeliveryCharge(subtotal, 'uk-1', config)
+  //
+  // A founder code moves this, and for a cost-price one it moves it UP: the
+  // parcel is charged at what PowerBody charge US rather than at our customer
+  // rate. Read from the same function `/api/cart` books the shipping line from,
+  // so the two cannot disagree.
+  const deliveryCharge = founderKind
+    ? founderDeliveryOptions(founderKind, { supplierValue, orderValue: priced.total }, config)[0]?.price ?? 0
+    : customerDeliveryCharge(subtotal, 'uk-1', config)
   const progress = threshold > 0 ? Math.min(1, subtotal / threshold) : 1
   const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
 
+  /**
+   * Below the minimum order, and said HERE rather than after a failed checkout.
+   *
+   * `/api/cart` has always refused these baskets, but only once "Checkout" had
+   * been pressed — so the way to find out the minimum existed was to hit it.
+   * Worse, the code box that can waive it lived only on the quiz and bundle
+   * screens, so the one journey where a small basket is normal was also the one
+   * with no way to say anything about it.
+   *
+   * A founder code clears it, which is why the notice reads as a fact about the
+   * basket rather than an error, and why it disappears the moment one applies.
+   */
+  const minimum = config.minOrderValue
+  // Judged on the UNDISCOUNTED subtotal, which is the expression `/api/cart`
+  // refuses on. Measuring the discounted total here would put a basket through
+  // this notice that the checkout then let past, or the reverse.
+  const belowMinimum = !founderKind && minimum > 0 && priced.subtotal < minimum && resolved.length > 0
+  const shortfall = Math.max(0, Math.round((minimum - priced.subtotal) * 100) / 100)
+
   const mockDone = checkoutState.status === 'mock-complete'
+  /** Nothing to pay at all — only a `free` code reaches this. */
+  const free = founderKind === 'free' && priced.total + deliveryCharge <= 0
 
   if (!mounted) return null
 
@@ -129,8 +174,11 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
 
             {/* Footer */}
             <div className="flex-shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3" style={{ borderTop: '1px solid var(--color-border)' }}>
-              {/* Free-delivery progress */}
-              {threshold > 0 && (
+              {/* Free-delivery progress. Hidden under a founder code: the offer
+                  is a customer-facing ladder, and under one of these codes the
+                  postage is either nothing or our supplier's actual charge —
+                  neither of which "£12 away from free delivery" describes. */}
+              {threshold > 0 && !founderKind && (
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-[11px] font-semibold" style={{ color: freeDelivery ? ACCENT : 'var(--color-text-2)' }}>
@@ -162,6 +210,41 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                 <span aria-hidden>→</span>
               </Link>
 
+              {/* The code box, at the top of the money and visible whatever the
+                  basket is worth.
+
+                  It did not exist here at all, and there was no way to reach a
+                  code box in the shop under £15 — the checkout refused the
+                  basket before any screen carrying one was rendered. That is
+                  precisely backwards for the code whose entire job is getting a
+                  small basket through. */}
+              <PartnerCodeBox
+                subtotal={subtotal}
+                channel="shop"
+                applied={appliedCode}
+                onChange={onCodeChange}
+              />
+
+              {belowMinimum && (
+                <p className="text-[11px]" style={{ color: 'var(--color-text-2)' }}>
+                  Orders start at {formatGBP(minimum)} — {formatGBP(shortfall)} to go.
+                </p>
+              )}
+
+              {/* Under a founder code the postage is not the customer ladder, so
+                  it is stated as its own line rather than as progress towards an
+                  offer that no longer applies. */}
+              {founderKind && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>
+                    {founderKind === 'cost' ? 'Delivery at cost' : 'Delivery'}
+                  </span>
+                  <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>
+                    {deliveryCharge > 0 ? formatGBP(deliveryCharge) : 'Free'}
+                  </span>
+                </div>
+              )}
+
               {/* Show the discount they've earned, and total at what the card
                   will actually be charged. Both come from `priceOneOffLines`,
                   the same function /api/cart bills Stripe from, so the number
@@ -178,8 +261,13 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                     <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between">
+                    {/* A founder code has no tier and no rate — it replaces the
+                        prices. Naming it "0% off" would be a lie about a line
+                        that took £48 off, so it is named by what it is. */}
                     <span className="text-sm" style={{ color: GREEN }}>
-                      {priced.tierLabel ?? 'Bundle discount'} · {Math.round(priced.tierPct * 100)}% off
+                      {founderKind
+                        ? appliedCode?.founderLabel ?? 'Founder code'
+                        : `${priced.tierLabel ?? 'Bundle discount'} · ${Math.round(priced.tierPct * 100)}% off`}
                     </span>
                     <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
                   </div>
@@ -203,14 +291,26 @@ export function BasketDrawer({ resolved, subtotal, priced, checkoutState, onChec
                 style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
               >
                 {checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
-                  ? 'Taking you to secure checkout…'
-                  : mockDone ? 'Demo checkout' : 'Checkout →'}
+                  ? free
+                    ? 'Placing your order…'
+                    : 'Taking you to secure checkout…'
+                  : mockDone
+                    ? 'Demo checkout'
+                    : free
+                      ? 'Place order (nothing to pay) →'
+                      : 'Checkout →'}
               </button>
 
-              {/* Secure-checkout reassurance — honest cues, no surprise steps. */}
+              {/* Secure-checkout reassurance — honest cues, no surprise steps.
+                  Which means not promising a card step on an order that has no
+                  payment in it at all. */}
               <div className="flex items-center justify-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                <span className="text-[10px] font-semibold">Secure checkout · card &amp; wallet payments, encrypted</span>
+                <span className="text-[10px] font-semibold">
+                  {free
+                    ? 'Nothing to pay — no card step'
+                    : 'Secure checkout · card & wallet payments, encrypted'}
+                </span>
               </div>
 
               {mockDone && (

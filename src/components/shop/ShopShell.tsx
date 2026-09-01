@@ -7,7 +7,8 @@ import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
-import { resolveBasket, basketSubtotal, priceBasket, resolvedItemCount } from '@/lib/basket/helpers'
+import { resolveBasket, basketSubtotal, basketSupplierValue, priceBasket, resolvedItemCount } from '@/lib/basket/helpers'
+import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
@@ -125,6 +126,12 @@ export function ShopShell() {
   const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [filters, setFilters] = useState<DietaryTag[]>([])
+  /**
+   * A code applied in the basket. Held here rather than in the drawer so it
+   * survives the drawer being closed and re-opened mid-shop — and so the prices
+   * on this page are computed from it.
+   */
+  const [appliedCode, setAppliedCode] = useState<AppliedCode | null>(null)
 
   // Dietary tags actually present in the catalogue, in canonical order.
   const availableDietary = useMemo(() => {
@@ -200,14 +207,21 @@ export function ShopShell() {
    * What they'll actually be charged — the same computation /api/cart bills
    * from, so the total on screen is the total on the card.
    *
-   * No partner code here, and no box to enter one in. A code is an acquisition
+   * A PARTNER code still cannot apply here. A partner code is an acquisition
    * cost priced against what a stack is worth over its life; a single tub off
    * the shelf has neither a renewal behind it nor the basket size to carry 25%
-   * and a commission on top. `/api/cart` refuses one on this channel whatever
-   * the browser sends, so a box here would only have offered a discount the
-   * checkout then took back.
+   * and a commission on top, and `/api/cart` refuses one on this channel
+   * whatever the browser sends.
+   *
+   * A FOUNDER code can, and that is why the box exists here at all — it is the
+   * only journey where you can buy one thing off the shelf, which is exactly
+   * what those codes are for. It repriced the basket rather than discounting
+   * it, so it has to be in this call: a drawer showing £0.00 against a checkout
+   * billing £48 is the failure `priceBasket` exists to prevent.
    */
-  const pricedBasket = priceBasket(resolved)
+  const config = getPricingConfig()
+  const pricedBasket = priceBasket(resolved, config, appliedCode?.founderKind ?? null)
+  const supplierValue = basketSupplierValue(resolved, config)
   // Counted from the RESOLVED lines, like every price on this page. Counting
   // raw persisted lines showed "2 · £0.00" for a basket of products that had
   // left the catalogue. See `resolvedItemCount`.
@@ -234,7 +248,7 @@ export function ShopShell() {
   const handleBuyNow = () => {
     setExpanded(null)
     setDrawerOpen(true)
-    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now')
+    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now', appliedCode?.code ?? null)
   }
 
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
@@ -361,8 +375,11 @@ export function ShopShell() {
           resolved={resolved}
           subtotal={subtotal}
           priced={pricedBasket}
+          supplierValue={supplierValue}
+          appliedCode={appliedCode}
+          onCodeChange={setAppliedCode}
           checkoutState={state}
-          onCheckout={() => checkout(resolved, 'basket')}
+          onCheckout={() => checkout(resolved, 'basket', appliedCode?.code ?? null)}
           onClose={closeDrawer}
         />
       )}
