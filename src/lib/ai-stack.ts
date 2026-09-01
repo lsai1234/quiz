@@ -1,4 +1,5 @@
 import type { QuizAnswers } from './types'
+import { DRIVERS, NOTED, type DriverId } from './quiz-v2/drivers'
 
 // Pure, network-free helpers for the AI blueprint personaliser. Kept separate
 // from the route handler so the prompt shape and output validation can be
@@ -84,6 +85,27 @@ export function buildBlueprintPrompt(answers: QuizAnswers, slots: SlotOption[]):
     .filter(d => d.question && d.answer)
     .map(d => `- ${stripMd(d.question)} → ${stripMd(d.answer)}`)
 
+  /*
+   * ── The same slot, filled from v2's drivers ──────────────────────────────
+   *
+   * The DEEPER CONTEXT block exists to carry WHY this person is low on energy,
+   * which the flat profile cannot. v1 fills it from the deep-dive follow-ups;
+   * v2 has no deep-dive step — its whole run is root-cause questions — so on
+   * the v2 arm the block was empty and the personaliser was working from LESS
+   * than it gets on v1, having been told MORE. Exactly backwards.
+   *
+   * The strings are `DRIVERS[].heard`, which are pre-written, reviewed, and
+   * already what the recap screen says to the member's face. Nothing here is
+   * generated, and no confidence figure goes over — a decimal in a prompt reads
+   * as precision this does not have.
+   */
+  const drivers = Object.entries(answers.drivers ?? {})
+    .filter(([id, weight]) => typeof weight === 'number' && weight >= NOTED && DRIVERS[id as DriverId])
+    .sort((a, b) => (b[1] as number) - (a[1] as number))
+    .map(([id]) => `- ${DRIVERS[id as DriverId].heard}`)
+
+  const context = [...deepDive, ...drivers]
+
   const slotBlocks = slots.map(s => {
     const opts = s.options.map(o => {
       const flags = [o.vegan ? 'vegan' : null, o.stimulant ? 'stimulant' : null].filter(Boolean).join(', ')
@@ -104,7 +126,7 @@ PERSON
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
 - Monthly budget: ${budget}
 ${answers.drinksMode ? '- Package type: CHRGD LQD — a pre-made drinks package. Every option offered arrives READY TO DRINK (bottles, cans, shots); write reasons in grab-and-drink language (crack a can, knock back a shot, open a bottle) and lean on the convenience: no powders, no pills, no mixing — they drink what we send and they are covered.' : ''}
-${deepDive.length ? `\nDEEPER CONTEXT (their answers to tailored follow-up questions — use this to break ties between options and to make the reasons specific)\n${deepDive.join('\n')}\n` : ''}
+${context.length ? `\nDEEPER CONTEXT (what they told us about why — use this to break ties between options and to make the reasons specific)\n${context.join('\n')}\n` : ''}
 BUDGET RULE
 - The combined one-off list price of the products you choose must stay within the top of this person's monthly budget. If a pricier option would push the total over, choose a cheaper option from that slot that still fits. Use the budget well — but never exceed it.
 
