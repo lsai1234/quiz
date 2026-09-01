@@ -115,6 +115,39 @@ describe('reading a typed day without a model', () => {
     expect(picks.snacks).toBeUndefined()
   })
 
+  /**
+   * A day written as a list, with some meals named and some not.
+   *
+   * Both halves have to work at once, and the version before this failed badly
+   * rather than gracefully: a single stray "mid-morning" claimed one clause and
+   * silently discarded the other three, turning a full day into a 10g one.
+   */
+  it.each([
+    [
+      'porridge in the morning, meal deal sandwich at lunch, chicken and rice for dinner, nothing in between',
+      { breakfast: 'b-carbs', lunch: 'l-light', dinner: 'd-protein', snacks: 's-none' },
+    ],
+    [
+      'I skip breakfast, big lunch usually chicken, light dinner, couple of protein bars',
+      { breakfast: 'b-none', lunch: 'l-big', dinner: 'd-light', snacks: 's-many' },
+    ],
+    [
+      'shake for breakfast, steak salad lunch, curry for tea, nuts in the afternoon',
+      { breakfast: 'b-shake', lunch: 'l-protein', dinner: 'd-protein', snacks: 's-light' },
+    ],
+    // Nobody names a meal: three clauses, read in the order a day happens.
+    ['toast, sandwich, pasta', { breakfast: 'b-carbs', lunch: 'l-light', dinner: 'd-normal' }],
+    // One meal named at the END. "mid-morning" contains breakfast's own
+    // "morning", and checking breakfast first filed the yoghurt as breakfast,
+    // displaced the real breakfast clause, and cascaded through the rest.
+    [
+      'eggs and bacon, tuna wrap, salmon and veg, greek yoghurt mid-morning',
+      { breakfast: 'b-protein', lunch: 'l-protein', dinner: 'd-protein', snacks: 's-light' },
+    ],
+  ])('reads %s', (text, expected) => {
+    expect(read(text)).toEqual(expected)
+  })
+
   it('is null when there is nothing to read', () => {
     expect(read('')).toBeNull()
     expect(read('   ')).toBeNull()

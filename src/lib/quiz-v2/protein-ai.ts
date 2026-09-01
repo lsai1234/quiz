@@ -145,7 +145,7 @@ interface Cue { id: string; words: string[]; weight?: number }
  */
 const CUES: Record<Meal, Cue[]> = {
   breakfast: [
-    { id: 'b-none', words: ['skip breakfast', 'no breakfast', 'nothing for breakfast', 'nothing until', 'just coffee', 'black coffee', 'only coffee', "don't eat breakfast", 'dont eat breakfast', 'never eat breakfast'], weight: 3 },
+    { id: 'b-none', words: ['skip breakfast', 'no breakfast', 'nothing for breakfast', 'nothing until', 'nothing till', 'just coffee', 'black coffee', 'only coffee', 'coffee only', 'coffee and nothing', "don't eat breakfast", 'dont eat breakfast', 'never eat breakfast'], weight: 3 },
     { id: 'b-shake', words: ['shake for breakfast', 'protein shake', 'shake in the morning', 'smoothie'], weight: 3 },
     { id: 'b-protein', words: ['eggs', 'omelette', 'scrambled', 'yoghurt', 'yogurt', 'greek', 'bacon', 'sausage', 'fry up', 'fry-up', 'kippers', 'cottage cheese'], weight: 2 },
     { id: 'b-carbs', words: ['toast', 'cereal', 'porridge', 'oats', 'granola', 'croissant', 'banana', 'fruit', 'crumpet', 'bagel', 'weetabix'], weight: 1 },
@@ -171,13 +171,12 @@ const CUES: Record<Meal, Cue[]> = {
 }
 
 /**
- * Words that say which meal the writer has moved on to.
+ * Words that say which meal a clause is about.
  *
  * Without these the reader scans the whole sentence for every meal, and
- * "chicken salad for lunch, pasta for dinner" reads chicken into dinner too —
- * inflating the estimate, which is the one direction this module must not err
- * in. Ordered longest-first inside each meal so "evening meal" is not consumed
- * by "evening".
+ * "chicken salad for lunch, pasta for dinner" reads the chicken into dinner too
+ * — inflating the estimate, which is the one direction this module must not err
+ * in.
  */
 const MEAL_MARKERS: Array<{ meal: Meal; words: string[] }> = [
   { meal: 'breakfast', words: ['breakfast', 'first thing', 'when i wake', 'in the morning', 'morning'] },
@@ -185,54 +184,70 @@ const MEAL_MARKERS: Array<{ meal: Meal; words: string[] }> = [
   { meal: 'dinner', words: ['evening meal', 'dinner', 'supper', 'for tea', 'at night', 'in the evening'] },
   {
     meal: 'snacks',
-    // "Afternoon" earns its place here rather than under lunch: somebody
-    // writing "a protein bar in the afternoon" is describing a snack, and it is
-    // the commonest way anybody names one.
+    // "Afternoon" earns its place here rather than under lunch: somebody writing
+    // "a protein bar in the afternoon" is describing a snack, and it is the
+    // commonest way anybody names one.
     words: ['in between', 'between meals', 'snacking', 'snacks', 'snack', 'afternoon', 'mid-morning', 'elevenses', 'through the day', 'throughout the day', 'during the day', 'on the go'],
   },
 ]
 
-/** Where the current clause starts — a comma, an "and" or a "then". */
-const CLAUSE_BREAKS = [',', ' and ', ' then ', ' but ']
-
-function clauseStart(haystack: string, at: number, floor: number): number {
-  let start = Math.max(floor, at - 40)
-  for (const brk of CLAUSE_BREAKS) {
-    const found = haystack.lastIndexOf(brk, at)
-    if (found >= floor && found + brk.length > start) start = found + brk.length
-  }
-  return start
-}
+/**
+ * Every marker as one list, longest word first.
+ *
+ * Flat and length-ordered rather than meal-by-meal, because the meals' words
+ * overlap and the longer one is always the more specific: breakfast's "morning"
+ * contains snacks' "mid-morning", and checking breakfast first filed "greek
+ * yoghurt mid-morning" as breakfast — which then displaced the real breakfast
+ * clause and cascaded through every meal after it. One four-meal day read as a
+ * single 25g one.
+ */
+const MARKERS_BY_LENGTH: Array<{ word: string; meal: Meal }> = MEAL_MARKERS
+  .flatMap(({ meal, words }) => words.map((word) => ({ word, meal })))
+  .sort((a, b) => b.word.length - a.word.length)
 
 /**
- * The text belonging to each meal, or null when nothing named a meal at all.
+ * The text belonging to each meal.
  *
- * The lead-in is why this is not a plain split. People write "eggs for
- * breakfast" as often as "breakfast is eggs", so each meal's slice has to reach
- * back before its own marker word — but only to the start of that CLAUSE.
- * Reaching back a fixed distance instead pulled the lunch chicken into dinner
- * in "chicken salad for lunch, pasta for dinner", and reading a protein into a
- * meal that did not have one is the error this whole module is written against.
+ * ── Clauses, marked then positional ─────────────────────────────────────────
+ * People answer "what does a normal day look like?" as a list in order, and
+ * they name some of the meals and not others. Both halves have to work.
+ *
+ * So the sentence is split on commas — commas only, because "eggs and bacon" is
+ * one thing and splitting it would strand the bacon in somebody else's lunch —
+ * and each clause is assigned in two passes. A clause that names a meal goes to
+ * that meal. Every clause left over goes to the next meal nobody has claimed,
+ * in meal order.
+ *
+ * The positional pass is what an earlier version was missing, and it failed
+ * badly rather than gracefully: in "eggs and bacon, tuna wrap, salmon and veg,
+ * greek yoghurt mid-morning" the single stray "mid-morning" was enough to claim
+ * one clause and silently discard the other three, because the whole-text
+ * fallback only applied when NO meal was named anywhere. One word turned a
+ * complete day into a 10g one.
+ *
+ * Clauses past the last free meal are dropped rather than folded into a
+ * neighbour. Dropping errs low, and low is the direction to err.
  */
-function segmentByMeal(haystack: string): Partial<Record<Meal, string>> | null {
-  const hits: Array<{ at: number; meal: Meal }> = []
-  for (const { meal, words } of MEAL_MARKERS) {
-    for (const word of words) {
-      const at = haystack.indexOf(word)
-      if (at >= 0) { hits.push({ at, meal }); break }
-    }
-  }
-  if (hits.length === 0) return null
-
-  hits.sort((a, b) => a.at - b.at)
+function segmentByMeal(haystack: string): Partial<Record<Meal, string>> {
+  const clauses = haystack.split(',').map((c) => ` ${c.trim()} `).filter((c) => c.trim())
   const out: Partial<Record<Meal, string>> = {}
-  for (let i = 0; i < hits.length; i++) {
-    const from = hits[i].at
-    const to = i + 1 < hits.length ? hits[i + 1].at : haystack.length
-    const floor = i === 0 ? 0 : hits[i - 1].at
-    const meal = hits[i].meal
-    out[meal] = `${out[meal] ?? ''} ${haystack.slice(clauseStart(haystack, from, floor), to)}`
+
+  const named = clauses.map((clause) => MARKERS_BY_LENGTH.find((m) => clause.includes(m.word))?.meal ?? null)
+
+  named.forEach((meal, i) => {
+    if (meal) out[meal] = `${out[meal] ?? ''}${clauses[i]}`
+  })
+
+  // Whatever is left, in the order a day happens.
+  let next = 0
+  for (let i = 0; i < clauses.length; i++) {
+    if (named[i]) continue
+    while (next < MEALS.length && out[MEALS[next]] !== undefined) next++
+    if (next >= MEALS.length) break
+    out[MEALS[next]] = clauses[i]
+    next++
   }
+
   return out
 }
 
@@ -257,10 +272,10 @@ export function readProteinDay(
   const out: ProteinDayResult = {}
 
   for (const meal of MEALS) {
-    // With no meal named anywhere, one short description is all there is and
-    // every meal reads the whole of it. With meals named, a meal nobody
-    // mentioned stays unanswered rather than being read out of somebody else's.
-    const scope = segments ? segments[meal] : haystack
+    // A meal with no clause of its own stays unanswered, and the screen asks
+    // for it in the ordinary way. A middle option picked to avoid a blank is a
+    // number nobody said.
+    const scope = segments[meal]
     if (!scope) continue
 
     let bestId: string | null = null
