@@ -40,6 +40,29 @@ const STACK_FACTS: Partial<Record<StepId, { icon: string; text: string }>> = {
 }
 
 /**
+ * v2's bank questions that hold the same place in the run as the v1 steps
+ * carrying a tidbit.
+ *
+ * The adaptive interview has no fixed steps, so the facts hang off the two
+ * questions that occupy the same moments: the one about how meals happen, and
+ * the already-taking screen that closes the run. Deliberately NOT the protein
+ * check — that screen's footer is already showing the reader a number about
+ * their own diet, and a floating brand aside over the top of it is the one
+ * place this chip would be an interruption rather than an aside.
+ */
+const V2_FACT_QUESTIONS: Record<string, StepId> = {
+  'how-meals-happen': 'diet',
+  supps: 'supps',
+}
+
+/** The tidbit for a v2 bank question, or null. Same ids, so the once-per-session
+ *  rule and the analytics read identically across the two arms. */
+export function quizFactForQuestion(questionId: string): QuizFact | null {
+  const step = V2_FACT_QUESTIONS[questionId]
+  return step ? quizFactFor(step) : null
+}
+
+/**
  * The tidbit for a step, or null if that step carries none. Keyed by step + mode
  * so it's stable; callers should show each `id` at most once per session.
  */

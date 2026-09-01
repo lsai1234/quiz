@@ -1,6 +1,6 @@
 import type { QuizAnswers, QuizTrack, Goal, AgeBracket, Gender, WeightBand, HealthDataConsent } from '@/lib/types'
 import type { DriverId, DriverWeights } from './drivers'
-import type { Meal } from './protein'
+import type { Meal, PortionSize } from './protein'
 
 /**
  * The shapes the adaptive interview is built from.
@@ -141,6 +141,22 @@ export interface InterviewState {
   cleared: DriverId[]
   /** Question ids in the order they were asked. */
   asked: string[]
+  /**
+   * How big their portions are, on the protein check's counted day.
+   *
+   * Defaults to `average`, where it changes nothing. See `PortionSize`.
+   */
+  portions?: PortionSize
+  /**
+   * Items the member already takes but asked us to send ours of anyway.
+   *
+   * v1 has this and v2 did not, which is not a cosmetic difference: the supps
+   * screen HARD-EXCLUDES anything ticked, so without the follow-up a member who
+   * takes a supermarket multivitamin can never be sent ours, however well it
+   * fits. Held on the interview rather than on an option because it is a
+   * decision about an answer, not an answer.
+   */
+  tryOurs?: string[]
   /** The compound personal screen. */
   form: {
     name: string
@@ -168,6 +184,8 @@ export function emptyInterview(budget: number): InterviewState {
     picked: {},
     drivers: {},
     cleared: [],
+    tryOurs: [],
+    portions: 'average',
     healthDataConsent: null,
     asked: [],
     form: { name: '', ageBracket: null, gender: null, weightBand: null },

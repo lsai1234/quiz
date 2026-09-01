@@ -1,5 +1,6 @@
 import type { Goal, QuizTrack } from '@/lib/types'
 import type { BankQuestion, InterviewState } from './types'
+import type { PortionSize } from './protein'
 import { addDrivers } from './drivers'
 import { questionById } from './bank'
 
@@ -33,6 +34,28 @@ export function setForm(
   patch: Partial<InterviewState['form']>,
 ): InterviewState {
   return { ...state, form: { ...state.form, ...patch } }
+}
+
+/** How big their portions are, on the protein check's counted day. */
+export function setPortions(state: InterviewState, portions: PortionSize): InterviewState {
+  return { ...state, portions }
+}
+
+/**
+ * Which of the things they already take they would rather have ours of.
+ *
+ * Pruned to `allowed` on every write, so an item that stops being ticked on the
+ * supps screen cannot leave a stale "send me yours" behind it — the exclusion
+ * it was overriding no longer exists, and a preference for a product nobody
+ * said they take is not a preference at all.
+ */
+export function setTryOurs(
+  state: InterviewState,
+  ids: readonly string[],
+  allowed: readonly string[],
+): InterviewState {
+  const keep = new Set(allowed)
+  return { ...state, tryOurs: [...new Set(ids.filter((id) => keep.has(id)))] }
 }
 
 /**

@@ -114,6 +114,20 @@ export function projectAnswers(state: InterviewState): QuizAnswers {
     }
   }
 
+  /*
+   * "Keep yours, or try ours?" — the supps screen's follow-up.
+   *
+   * Applied AFTER the option patches, because it is a decision about them: the
+   * options write `currentSupplements` / `currentVitamins`, which the engine
+   * reads as a hard exclusion, and this is the member's own override of that
+   * exclusion. Pruned to what they actually said they take, so it can never
+   * un-exclude something nothing had excluded.
+   */
+  if (state.tryOurs?.length) {
+    const taking = new Set([...answers.currentSupplements, ...answers.currentVitamins])
+    answers.tryOurs = state.tryOurs.filter((id) => taking.has(id))
+  }
+
   // The protein check, when it produced a number, replaces the guess with the
   // subtraction — including the case where the subtraction says zero.
   const protein = proteinReading(state)
@@ -166,7 +180,7 @@ function proteinReading(
    */
   if (!proteinComplete(question.options, picked)) return null
 
-  const intakeG = proteinIntakeFrom(question.options, picked)
+  const intakeG = proteinIntakeFrom(question.options, picked, state.portions)
   // "I honestly have no idea" — the coarse driver from the option stands, and
   // no number is claimed.
   if (intakeG === null) return null
