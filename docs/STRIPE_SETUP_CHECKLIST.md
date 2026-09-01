@@ -99,13 +99,14 @@ charge.refunded
 ☐ **3.1** — Make up a long random password for the next step. Any password
 generator, 30+ characters. This just stops strangers triggering your daily job.
 
-☐ **3.2** — Add these five settings, all set to **Production**:
+☐ **3.2** — Add these six settings, all set to **Production**:
 
 | Name (copy exactly) | What to put |
 |---|---|
 | `PAYMENTS_SOURCE` | `stripe` |
-| `STRIPE_SECRET_KEY` | The `sk_test_...` key from 2.2 |
-| `STRIPE_WEBHOOK_SECRET` | The `whsec_...` secret from 2.10 |
+| `STRIPE_ENVIRONMENT` | `test` |
+| `STRIPE_TEST_SECRET_KEY` | The `sk_test_...` key from 2.2 |
+| `STRIPE_TEST_WEBHOOK_SECRET` | The `whsec_...` secret from 2.10 |
 | `APP_URL` | `https://getchrgd.co.uk` |
 | `CRON_SECRET` | The random password from 3.1 |
 
@@ -196,10 +197,12 @@ have to do it all again with the Test toggle **off**.
 
 ☐ Turn **Test mode OFF** in Stripe
 
-☐ Get a new secret key (starts `sk_live_`) → update `STRIPE_SECRET_KEY`
+☐ Get a new secret key (starts `sk_live_`) → **add** `STRIPE_LIVE_SECRET_KEY`.
+Add it, don't replace the test one — keeping both is what makes the switch below
+a button rather than an edit.
 
 ☐ Create the webhook again, same address, same seven events → new signing
-secret → update `STRIPE_WEBHOOK_SECRET`
+secret → add `STRIPE_LIVE_WEBHOOK_SECRET`
 
 ☐ **Turn the customer portal on again** — the setting doesn't carry over. Easy
 one to miss.
@@ -208,6 +211,10 @@ one to miss.
 limbo even though payments work
 
 ☐ Redeploy
+
+☐ **Founders Hub → Settings → Payments → Which Stripe → Live mode.** It asks you
+to confirm, then applies on the next request. This is the moment real cards start
+being charged. Switching back to test is instant.
 
 ☐ Buy something cheap with your own real card, then refund it from the Founders
 Hub. That one round trip proves everything works for real.

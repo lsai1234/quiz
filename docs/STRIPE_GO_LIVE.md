@@ -105,8 +105,11 @@ Then copy the endpoint's **Signing secret** (`whsec_…`).
 | Variable | Value | Notes |
 |---|---|---|
 | `PAYMENTS_SOURCE` | `stripe` | Falls back to mock if the key is missing, so it fails safe |
-| `STRIPE_SECRET_KEY` | `sk_test_…` | Swap for `sk_live_…` at go-live |
-| `STRIPE_WEBHOOK_SECRET` | `whsec_…` | From §2c. **Different per endpoint** — test and live have separate ones |
+| `STRIPE_ENVIRONMENT` | `test` | Which key set is used. Flipped from the hub at go-live — no redeploy |
+| `STRIPE_TEST_SECRET_KEY` | `sk_test_…` | |
+| `STRIPE_TEST_WEBHOOK_SECRET` | `whsec_…` | From §2c. **Different per endpoint** — test and live have separate ones |
+| `STRIPE_LIVE_SECRET_KEY` | `sk_live_…` | Add at go-live. Empty until then, which is what stops the hub switching to live |
+| `STRIPE_LIVE_WEBHOOK_SECRET` | `whsec_…` | From the **live** endpoint, added at go-live |
 | `APP_URL` | `https://getchrgd.co.uk` | Used for Stripe return URLs and email links. Get it wrong and members land on localhost |
 | `CRON_SECRET` | a long random string | `openssl rand -hex 32`. Without it the cron route is **closed** in production, so the daily job never runs |
 | `DATABASE_URL` | *(already set)* | |
@@ -187,17 +190,28 @@ curl -H "Authorization: Bearer $CRON_SECRET" \
 Test mode and live mode share **nothing** — not keys, not customers, not
 webhooks, not the portal config. Repeat §2 with the Test-mode toggle **off**:
 
-1. New **live** secret key → `STRIPE_SECRET_KEY`.
+1. New **live** secret key → `STRIPE_LIVE_SECRET_KEY`. This is *added alongside*
+   the test key, not swapped for it.
 2. **New webhook endpoint** in live mode, same URL, same seven events → new
-   `STRIPE_WEBHOOK_SECRET`.
+   `STRIPE_LIVE_WEBHOOK_SECRET`.
 3. **Re-enable the Billing Portal in live mode** — the test-mode setting does not
    carry over. This one catches people out.
 4. Complete Stripe's account activation (bank details, business verification) or
    payouts sit in limbo even though charges succeed.
-5. Redeploy.
-6. Buy something real and cheap with your own card, then refund it from the
+5. Redeploy — the live keys are new variables, and Vercel does not apply those to
+   a running deployment.
+6. **Founders Hub → Settings → Payments → Which Stripe → Live mode.** This is the
+   moment real cards start being charged; it asks you to confirm, and applies on
+   the next request. Going back to test is instant and needs no confirmation.
+7. Buy something real and cheap with your own card, then refund it from the
    Founders Hub. That single round trip proves charges, the webhook, the order
    and the refund path all work with live credentials.
+
+> The keys are added by redeploy; the **switch** is not. That is deliberate:
+> flipping to live is the moment you least want to be hand-editing secrets in a
+> hosting dashboard and hoping you pasted the right one. It is also why the app
+> reads the **key prefix** rather than the variable name — an `sk_test_…` pasted
+> into `STRIPE_LIVE_SECRET_KEY` is ignored, and the hub says so.
 
 ---
 

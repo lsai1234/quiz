@@ -18,14 +18,43 @@
  * Server-only: sessions and webhooks are created in route handlers. The
  * publishable key is still exposed to the client via `NEXT_PUBLIC_*` for
  * Stripe.js, but the mock-vs-live *decision* lives here, server-side.
+ *
+ * ── Which Stripe? ───────────────────────────────────────────────────────────
+ * A second, independent switch. This module decides whether Stripe is used at
+ * all; `./keys.ts` decides whether that means the test account or the live one,
+ * and every question about *keys* belongs there. Keeping them apart is what
+ * lets "stop charging anybody" and "swap the world we charge in" be two
+ * separate, separately reversible actions.
  */
+
+import { activeStripeKeys } from './keys'
 
 export type PaymentSource = 'mock' | 'stripe'
 export type PaymentMode = 'auto' | 'mock' | 'stripe'
 
-/** True when the Stripe secret key is configured (server-side auth). */
+export {
+  getStripeEnvironment,
+  getStripeEnvironmentOverride,
+  setStripeEnvironmentOverride,
+  isStripeEnvironmentConfigured,
+  stripeKeysFor,
+  stripeKeyProblems,
+  activeStripeKeys,
+  STRIPE_ENVIRONMENTS,
+  type StripeEnvironment,
+  type StripeKeySet,
+  type StripeKeyProblem,
+} from './keys'
+
+/**
+ * True when the SELECTED Stripe environment has a usable secret key.
+ *
+ * Environment-aware on purpose: having live keys on hand is not credentials for
+ * test mode, and a founder switched to test with only live keys configured must
+ * fall back to mock rather than quietly charge real cards.
+ */
 export function hasStripeCredentials(): boolean {
-  return Boolean(process.env.STRIPE_SECRET_KEY)
+  return activeStripeKeys().secretKey !== null
 }
 
 // Runtime override set by the portal (server in-memory, hydrated from the DB by
@@ -69,7 +98,7 @@ export function getPaymentSource(): PaymentSource {
     if (hasStripeCredentials()) return 'stripe'
     if (process.env.NODE_ENV !== 'test') {
       console.warn(
-        '[payments] PAYMENTS_SOURCE=stripe but Stripe credentials are missing — falling back to mock.',
+        '[payments] PAYMENTS_SOURCE=stripe but no secret key is configured for the selected Stripe environment — falling back to mock.',
       )
     }
     return 'mock'
@@ -93,9 +122,11 @@ export function isStripeLive(): boolean {
  * become the same DELETE unless each row records which world made it.
  *
  * Read from the key itself rather than from a setting, because the key is the
- * thing that actually decides: a portal override or a `PAYMENTS_SOURCE` can be
- * changed after the fact, but a row created against `sk_live_…` took real money
- * and no later setting change makes that untrue.
+ * thing that actually decides: a portal override, a `PAYMENTS_SOURCE` or the
+ * test/live switch can all be changed after the fact, but a row created against
+ * `sk_live_…` took real money and no later setting change makes that untrue.
+ * This is the one place that must NOT ask `getStripeEnvironment()` — that is
+ * the setting, and the setting is exactly what could be lying.
  *
  * See `src/lib/portal/go-live.ts`, which refuses to delete anything marked
  * `live`.
@@ -104,5 +135,6 @@ export type StripeWorld = 'mock' | 'sandbox' | 'live'
 
 export function currentStripeWorld(): StripeWorld {
   if (getPaymentSource() !== 'stripe') return 'mock'
-  return (process.env.STRIPE_SECRET_KEY ?? '').startsWith('sk_live_') ? 'live' : 'sandbox'
+  const key = activeStripeKeys().secretKey ?? ''
+  return key.startsWith('sk_live_') || key.startsWith('rk_live_') ? 'live' : 'sandbox'
 }

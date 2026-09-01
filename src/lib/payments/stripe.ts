@@ -8,6 +8,7 @@
  */
 import Stripe from 'stripe'
 import type { DeliveryOption } from '@/lib/pricing/delivery'
+import { activeStripeKeys, getStripeEnvironment, stripeKeysFor, STRIPE_ENVIRONMENTS } from './keys'
 
 /**
  * Pinned deliberately. Left unset, Stripe applies whatever default version the
@@ -36,12 +37,31 @@ const LINE_TAG_KEY = 'chrgdLine'
 const STACK_LINE = 'stack'
 const DELIVERY_LINE = 'delivery'
 
+/**
+ * Cached against the key it was built with, not just "one client".
+ *
+ * The test/live switch is a runtime setting now (`./keys.ts`), so the secret
+ * this module should be using can change between two requests served by the
+ * same warm instance. A client cached on first use alone would keep talking to
+ * the world the process happened to start in — which, on the wrong side of that
+ * switch, means charging real cards after a founder has moved back to test.
+ */
 let _client: Stripe | null = null
+let _clientKey: string | null = null
 
 export function getStripeClient(): Stripe {
-  const key = process.env.STRIPE_SECRET_KEY
-  if (!key) throw new Error('STRIPE_SECRET_KEY is not set — cannot use Stripe.')
-  if (!_client) _client = new Stripe(key, { apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion })
+  const key = activeStripeKeys().secretKey
+  if (!key) {
+    const env = getStripeEnvironment()
+    throw new Error(
+      `No Stripe secret key for the selected ${env} environment — set ` +
+        `STRIPE_${env.toUpperCase()}_SECRET_KEY (or switch environments in Settings → Payments).`,
+    )
+  }
+  if (!_client || _clientKey !== key) {
+    _client = new Stripe(key, { apiVersion: STRIPE_API_VERSION as Stripe.LatestApiVersion })
+    _clientKey = key
+  }
   return _client
 }
 
@@ -541,12 +561,50 @@ export async function createBillingPortalSession(customerId: string, returnUrl: 
   return { url: session.url }
 }
 
-/** Verify + parse a webhook payload. Throws when the signature doesn't check out. */
+/**
+ * Verify + parse a webhook payload. Throws when the signature doesn't check out.
+ *
+ * Verified against the SELECTED environment's signing secret only. Test and live
+ * endpoints have different ones, and an event signed by the other world is not
+ * an event this deployment should act on: a test-mode `checkout.session.completed`
+ * processed while live would mark a real order paid for money that never moved.
+ *
+ * When the other world's secret does verify it, that is said out loud in the
+ * error rather than left as a bare "invalid signature" — it is the single most
+ * likely thing to be wrong right after flipping the switch, and it looks
+ * identical to a stale secret from the outside.
+ */
 export function constructWebhookEvent(rawBody: string, signature: string): Stripe.Event {
   const stripe = getStripeClient()
-  const secret = process.env.STRIPE_WEBHOOK_SECRET
-  if (!secret) throw new Error('STRIPE_WEBHOOK_SECRET is not set — cannot verify webhooks.')
-  return stripe.webhooks.constructEvent(rawBody, signature, secret)
+  const selected = getStripeEnvironment()
+  const secret = stripeKeysFor(selected).webhookSecret
+  if (!secret) {
+    throw new Error(
+      `No Stripe webhook signing secret for the selected ${selected} environment — set ` +
+        `STRIPE_${selected.toUpperCase()}_WEBHOOK_SECRET. Nothing can be verified without it.`,
+    )
+  }
+
+  try {
+    return stripe.webhooks.constructEvent(rawBody, signature, secret)
+  } catch (err) {
+    for (const other of STRIPE_ENVIRONMENTS) {
+      if (other === selected) continue
+      const otherSecret = stripeKeysFor(other).webhookSecret
+      if (!otherSecret) continue
+      try {
+        stripe.webhooks.constructEvent(rawBody, signature, otherSecret)
+      } catch {
+        continue
+      }
+      throw new Error(
+        `This webhook was signed by the ${other}-mode endpoint, but payments are switched to ${selected}. ` +
+          `Rejected rather than processed — a ${other}-mode event must not touch ${selected}-mode records. ` +
+          `Point the ${selected} endpoint at this URL, or switch environments in Settings → Payments.`,
+      )
+    }
+    throw err
+  }
 }
 
 /** Refund a payment in full by its PaymentIntent id. */

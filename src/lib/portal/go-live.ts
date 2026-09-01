@@ -40,7 +40,13 @@
  */
 import { getEngine } from '@/lib/db/engine'
 import { kvGet, kvSet } from '@/lib/db/kv'
-import { currentStripeWorld, getPaymentSource, type StripeWorld } from '@/lib/payments'
+import {
+  currentStripeWorld,
+  getPaymentSource,
+  getStripeEnvironment,
+  stripeKeysFor,
+  type StripeWorld,
+} from '@/lib/payments'
 
 /** What a reset can be asked to clear. */
 export type ResetGroupId =
@@ -159,30 +165,44 @@ function envSet(name: string): boolean {
  */
 export async function preflight(): Promise<PreflightItem[]> {
   const world = currentStripeWorld()
-  const key = process.env.STRIPE_SECRET_KEY ?? ''
+  const environment = getStripeEnvironment()
+  const liveKeys = stripeKeysFor('live')
   const items: PreflightItem[] = []
 
+  // Two questions now, not one: are the live keys THERE, and are they SELECTED.
+  // Since the switch became a setting, "we have the live key" stopped implying
+  // "we are using it" — and a checklist that ticked on the first would be
+  // reassuring about a deployment still charging nobody.
   items.push({
     id: 'stripe-key',
-    label: 'Stripe secret key',
-    state: world === 'live' ? 'ok' : world === 'sandbox' ? 'todo' : 'todo',
+    label: 'Live Stripe key',
+    state: liveKeys.secretKey ? 'ok' : 'todo',
+    detail: liveKeys.secretKey
+      ? `A live key (…${liveKeys.secretKey.slice(-4)}) is configured.`
+      : 'No live secret key is set. Add STRIPE_LIVE_SECRET_KEY (sk_live_…) from the Stripe dashboard with test mode switched off.',
+  })
+
+  items.push({
+    id: 'stripe-selected',
+    label: 'Switched to live',
+    state: world === 'live' ? 'ok' : 'todo',
     detail:
       world === 'live'
-        ? 'A live key (sk_live_…) is set.'
-        : world === 'sandbox'
-          ? 'A test key (sk_test_…) is set. Swap it for the live key when you are ready.'
-          : key
-            ? 'A key is set but payments are switched to mock. Switch payments to Stripe in Settings → Payments.'
-            : 'No STRIPE_SECRET_KEY is set, so checkout cannot charge anybody.',
+        ? 'Checkout is charging real cards.'
+        : getPaymentSource() !== 'stripe'
+          ? 'Payments are switched to mock, so checkout charges nobody. Switch them to Stripe in Settings → Payments.'
+          : environment === 'test'
+            ? 'Stripe is switched to test mode. Flip it to live in Settings → Payments when you are ready — no redeploy needed.'
+            : 'Stripe is switched to live but the selected key is not a live key.',
   })
 
   items.push({
     id: 'webhook-secret',
-    label: 'Webhook signing secret',
-    state: process.env.STRIPE_WEBHOOK_SECRET ? 'ok' : 'todo',
-    detail: process.env.STRIPE_WEBHOOK_SECRET
-      ? 'Set. It must be the secret from the *live* endpoint — test and live have different ones.'
-      : 'Unset. Without it no webhook is verified, so no order is ever marked paid.',
+    label: 'Live webhook signing secret',
+    state: liveKeys.webhookSecret ? 'ok' : 'todo',
+    detail: liveKeys.webhookSecret
+      ? 'Set. It is the secret from the *live* endpoint — test and live have different ones.'
+      : 'Unset. Set STRIPE_LIVE_WEBHOOK_SECRET. Without it no live webhook is verified, so no order is ever marked paid.',
   })
 
   items.push({

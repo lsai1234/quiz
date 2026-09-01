@@ -24,10 +24,11 @@ Add to `.env.local` (local) or your host's env (Vercel → Project → Settings 
 
 ```
 PAYMENTS_SOURCE=stripe
-STRIPE_SECRET_KEY=sk_test_xxx
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_xxx   # optional today (we use hosted Checkout)
-STRIPE_WEBHOOK_SECRET=whsec_xxx                  # from step 3
-APP_URL=http://localhost:3000                    # your public origin when deployed
+STRIPE_ENVIRONMENT=test
+STRIPE_TEST_SECRET_KEY=sk_test_xxx
+NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY=pk_test_xxx   # optional today (we use hosted Checkout)
+STRIPE_TEST_WEBHOOK_SECRET=whsec_xxx                  # from step 3
+APP_URL=http://localhost:3000                         # your public origin when deployed
 
 # leave the supplier on mock
 SUPPLIER_SOURCE=mock
@@ -36,12 +37,23 @@ SUPPLIER_SOURCE=mock
 Notes:
 - The **secret key is required** — without it the payments resolver falls back to
   mock (safe by design). `getPaymentSource()` returns `stripe` only when the key
-  is present *and* the mode is `stripe`/`auto`.
-- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` isn't used by the current hosted-checkout
-  flow (we redirect to Stripe's page); set it now for future embedded UI.
-- You can also flip the mode at runtime from the **Founders Hub → Settings →
-  Payments** toggle (it persists in the DB and wins over the env var). The key
-  still has to be set in the environment.
+  for the *selected* environment is present *and* the mode is `stripe`/`auto`.
+- `NEXT_PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY` isn't used by the current
+  hosted-checkout flow (we redirect to Stripe's page); set it now for future
+  embedded UI. It is `NEXT_PUBLIC_*`, so changing it needs a redeploy.
+- **Two runtime switches, both in Founders Hub → Settings → Payments**, both
+  persisted in the DB and both winning over the env vars: *how checkout takes
+  money* (mock / auto / Stripe) and *which Stripe* (test / live). The keys still
+  have to be in the environment.
+- Adding `STRIPE_LIVE_SECRET_KEY` and `STRIPE_LIVE_WEBHOOK_SECRET` alongside the
+  test pair is what turns going live into a button rather than an edit. Until
+  they are set, the hub cannot switch to live — see `docs/STRIPE_GO_LIVE.md` §6.
+- The **key prefix is the authority**, not the variable name: an `sk_test_…`
+  pasted into `STRIPE_LIVE_SECRET_KEY` is ignored rather than used, and the hub
+  says which variable is wrong.
+- The single-key form (`STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` /
+  `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`) still works and fills in for whichever
+  world its prefix belongs to. It just cannot switch.
 
 ## 3. Receive webhooks
 
@@ -53,7 +65,7 @@ subscription orders, and syncs cancellations. It **must** reach your app.
 stripe login
 stripe listen --forward-to localhost:3000/api/webhooks/stripe
 ```
-The CLI prints a `whsec_…` — put it in `STRIPE_WEBHOOK_SECRET` and restart `npm run dev`.
+The CLI prints a `whsec_…` — put it in `STRIPE_TEST_WEBHOOK_SECRET` and restart `npm run dev`.
 Keep `stripe listen` running while you test.
 
 ### Deployed (Vercel etc.)

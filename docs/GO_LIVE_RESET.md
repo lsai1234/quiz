@@ -13,11 +13,12 @@ and subscriptions you made while testing so the first real month starts at zero.
 1. **Read the checklist** on the page. Every item is read from the running
    deployment, not from a document, so it cannot go stale.
 2. **Download a copy** of what is about to be deleted.
-3. **Run the reset** — while you are still on the sandbox keys.
-4. **Then** swap `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` for the live
-   ones and redeploy.
+3. **Run the reset** — while you are still on the test keys.
+4. **Then** switch to live: add `STRIPE_LIVE_SECRET_KEY` and
+   `STRIPE_LIVE_WEBHOOK_SECRET`, redeploy, and flip **Settings → Payments →
+   Which Stripe** to live mode.
 
-Running the reset *after* the swap is the mistake the whole screen is shaped to
+Running the reset *after* the switch is the mistake the whole screen is shaped to
 prevent. The guard below means it cannot destroy anything real if you do, but the
 order above is still the one that leaves you with clean numbers.
 

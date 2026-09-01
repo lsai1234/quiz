@@ -22,7 +22,7 @@
  */
 import { getEngine } from '@/lib/db/engine'
 import { kvGet, kvSet } from '@/lib/db/kv'
-import { getPaymentSource } from '@/lib/payments'
+import { activeStripeKeys, getPaymentSource, getStripeEnvironment } from '@/lib/payments'
 import { criticalCountSince } from './repo'
 
 export type HealthStatus = 'ok' | 'warn' | 'fail'
@@ -214,7 +214,8 @@ async function checkCron(): Promise<HealthCheck> {
  */
 function checkPayments(): HealthCheck {
   const source = getPaymentSource()
-  const key = process.env.STRIPE_SECRET_KEY ?? ''
+  const environment = getStripeEnvironment()
+  const keys = activeStripeKeys()
   const production = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production'
 
   if (source === 'mock') {
@@ -223,28 +224,36 @@ function checkPayments(): HealthCheck {
       title: 'Payments are mocked',
       status: production ? 'warn' : 'ok',
       detail: production
-        ? 'This deployment is production but checkout does not charge anybody. Set STRIPE_SECRET_KEY and switch payments to Stripe.'
+        ? `This deployment is production but checkout does not charge anybody. Set STRIPE_${environment.toUpperCase()}_SECRET_KEY and switch payments to Stripe.`
         : 'Checkout returns a placeholder. Expected while building.',
       href: '/founderhub/settings/payments',
     }
   }
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+  // Per-environment, because the two endpoints have different signing secrets:
+  // a live switch with only the test secret set verifies nothing, and the shape
+  // of the failure — cards charged, no order ever marked paid — is identical to
+  // having no secret at all.
+  if (!keys.webhookSecret) {
     return {
       id: 'payments',
       title: 'Stripe webhook secret missing',
       status: 'fail',
-      detail:
-        'Stripe is taking payments but STRIPE_WEBHOOK_SECRET is unset, so no webhook can be verified — orders will never be marked paid.',
+      detail: `Stripe is taking ${environment}-mode payments but STRIPE_${environment.toUpperCase()}_WEBHOOK_SECRET is unset, so no webhook can be verified — orders will never be marked paid.`,
       href: '/founderhub/settings/payments',
     }
   }
+  const isLive = environment === 'live'
   return {
     id: 'payments',
-    title: key.startsWith('sk_live_') ? 'Stripe live' : 'Stripe test mode',
-    status: 'ok',
-    detail: key.startsWith('sk_live_')
+    title: isLive ? 'Stripe live' : 'Stripe test mode',
+    // A live deployment on test keys is not an error, but it is almost never
+    // what was intended, and nothing else on this screen would say so.
+    status: isLive || !production ? 'ok' : 'warn',
+    detail: isLive
       ? 'Taking real payments, with a webhook secret set.'
-      : 'Taking test payments with a test key.',
+      : production
+        ? 'This deployment is production but Stripe is switched to test mode, so no real money is moving. Switch to live in Settings → Payments.'
+        : 'Taking test payments with a test key.',
     href: '/founderhub/settings/payments',
   }
 }

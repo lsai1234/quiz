@@ -21,8 +21,13 @@ import type { SupplierMode } from '@/lib/supplier'
 import { getSupplierMode, setSupplierOverride } from '@/lib/supplier'
 import type { OrderingMode } from '@/lib/supplier/ordering'
 import { getOrderingMode, setOrderingOverride } from '@/lib/supplier/ordering'
-import type { PaymentMode } from '@/lib/payments'
-import { getPaymentMode, setPaymentOverride } from '@/lib/payments'
+import type { PaymentMode, StripeEnvironment } from '@/lib/payments'
+import {
+  getPaymentMode,
+  setPaymentOverride,
+  getStripeEnvironment,
+  setStripeEnvironmentOverride,
+} from '@/lib/payments'
 import {
   normaliseExperiment,
   DEFAULT_QUIZ_EXPERIMENT,
@@ -57,6 +62,9 @@ interface PersistedSettings {
    *  `supplierMode` on purpose — see `lib/supplier/ordering.ts`. */
   orderingMode?: OrderingMode
   paymentMode?: PaymentMode
+  /** Test-mode or live-mode Stripe keys. Separate from `paymentMode` on
+   *  purpose — see `lib/payments/keys.ts`. */
+  stripeEnvironment?: StripeEnvironment
   pricingOverrides?: Partial<PricingConfig>
   /** Which quiz customers get, and how the adaptive one behaves. See
    *  `lib/experiments/assignment.ts`. Absent = off, everyone gets v1. */
@@ -100,6 +108,7 @@ export async function syncPortalRuntime(force = false): Promise<void> {
     setSupplierOverride(settings.supplierMode ?? null)
     setOrderingOverride(settings.orderingMode ?? null)
     setPaymentOverride(settings.paymentMode ?? null)
+    setStripeEnvironmentOverride(settings.stripeEnvironment ?? null)
     lastSyncedAt = Date.now()
   } catch {
     /* unreachable database — keep current in-memory state */
@@ -164,6 +173,21 @@ export async function getPaymentSetting(): Promise<PaymentMode> {
 export async function setPaymentSetting(mode: PaymentMode): Promise<void> {
   await saveSettings({ paymentMode: mode })
   setPaymentOverride(mode)
+  lastSyncedAt = Date.now()
+}
+
+// ── Which Stripe (test keys vs live keys) ──
+// Deliberately its own setting rather than a fourth `PaymentMode`. "Do not
+// charge anybody" and "charge in the live world" are different questions, and
+// folding them into one control makes going back to mock for an afternoon also
+// throw away which world you were in.
+export async function getStripeEnvironmentSetting(): Promise<StripeEnvironment> {
+  const settings = await loadSettings()
+  return settings.stripeEnvironment ?? getStripeEnvironment()
+}
+export async function setStripeEnvironmentSetting(env: StripeEnvironment): Promise<void> {
+  await saveSettings({ stripeEnvironment: env })
+  setStripeEnvironmentOverride(env)
   lastSyncedAt = Date.now()
 }
 
