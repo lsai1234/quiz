@@ -7,7 +7,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { lqdOnly, inStockOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
-import { budgetCapFor, discountedOneOffTotal, unitCostOf, getPricingConfig } from './pricing'
+import { budgetCapFor, discountedOneOffTotal, sizeConsumption, unitCostOf, getPricingConfig } from './pricing'
 import {
   SLOT_ORDER, GOAL_SLOT_RELEVANCE, WELLBEING_GOAL_SLOTS, GOAL_AFFINITY,
   SCORING, FOUNDATIONAL_SWAP_GROUPS, applyBundleRules, type SlotType,
@@ -123,6 +123,60 @@ const ARCHETYPE_SUMMARIES: Record<Archetype, string> = {
   'performance': 'Optimised for endurance, energy, and athletic output.',
   'health':      'A smart daily foundation for energy, recovery, and long-term health.',
   'wellbeing':   'A daily routine built around how you actually feel — sleep, stress, and everyday resilience.',
+}
+
+/**
+ * How many months one container lasts this member, at their own usage.
+ *
+ * The same tub is a monthly item for someone training six times a week and a
+ * three-month one for someone training once, so this can only be answered per
+ * member. A product we cannot size — no serving information — is treated as
+ * long-lasting, which is the answer that changes nothing.
+ */
+function cadenceMonths(product: CatalogueProduct, answers: QuizAnswers): number {
+  try {
+    return Math.max(1, sizeConsumption(product, answers).shipEveryMonths)
+  } catch {
+    return Infinity
+  }
+}
+
+/**
+ * Between two products that do the SAME job, prefer the one that runs out about
+ * monthly.
+ *
+ * ── Why this is a tie-break inside a swap group, not a score ────────────────
+ * The obvious build is `score += bonus` for a monthly product, and it is wrong.
+ * Cadence tracks price and serving count, so a blanket bonus systematically
+ * demotes exactly the cheap, long-lasting foundational vitamins — a 120-capsule
+ * vitamin D is a four-month item — in favour of pricier monthly powders. Tried
+ * as a score term, it swapped vitamin D out of a plant-based member's box for
+ * magnesium and put £7 a month on the bill. Cadence is not a reason to prefer
+ * magnesium OVER vitamin D; they are not substitutes and it was never asked to
+ * decide between them.
+ *
+ * So it only ever chooses between products that could each fill the same place:
+ * same swap group, and within `tieMargin` of the winner's score. It can change
+ * WHICH omega-3 is in the box and never WHETHER an omega-3 is.
+ */
+function preferMonthlySibling(
+  chosen: { product: CatalogueProduct; score: number },
+  scored: ReadonlyArray<{ product: CatalogueProduct; score: number }>,
+  answers: QuizAnswers,
+): { product: CatalogueProduct; score: number } {
+  let best = chosen
+  let bestMonths = cadenceMonths(chosen.product, answers)
+  if (bestMonths === 1) return chosen
+
+  for (const candidate of scored) {
+    if (candidate.product.id === chosen.product.id) continue
+    if (candidate.product.swapGroup !== chosen.product.swapGroup) continue
+    if (candidate.score < chosen.score - SCORING.cadence.tieMargin) continue
+    const months = cadenceMonths(candidate.product, answers)
+    // Strictly shorter, so an equal cadence never disturbs the score order.
+    if (months < bestMonths) { best = candidate; bestMonths = months }
+  }
+  return best
 }
 
 export function scoreProduct(
@@ -287,6 +341,7 @@ export function scoreProduct(
 
   // Budget sensitivity
   if ((answers.budget === 'under-30' || answers.budget === '30-50') && product.basePrice > SCORING.budgetThresholdPrice) score += SCORING.budgetOverThreshold
+
 
   /*
    * ── The protein check said they are already over ─────────────────────────
@@ -611,17 +666,16 @@ export function buildStackBlueprint(
 
   /** Highest-scoring candidate (score ≥ 0). Ignores the budget cap. */
   function pickBest(candidates: CatalogueProduct[], slotType: SlotType): { product: CatalogueProduct; score: number } | null {
-    let bestProduct: CatalogueProduct | null = null
-    let bestScore = -Infinity
-    for (const product of candidates) {
-      const score = scoreProduct(product, slotType, answers, archetype)
-      if (score > bestScore) {
-        bestScore = score
-        bestProduct = product
-      }
+    const scored = candidates.map((product) => ({
+      product,
+      score: scoreProduct(product, slotType, answers, archetype),
+    }))
+    let best: { product: CatalogueProduct; score: number } | null = null
+    for (const c of scored) {
+      if (!best || c.score > best.score) best = c
     }
-    if (!bestProduct || bestScore < 0) return null
-    return { product: bestProduct, score: bestScore }
+    if (!best || best.score < 0) return null
+    return preferMonthlySibling(best, scored, answers)
   }
 
   /**
@@ -635,7 +689,9 @@ export function buildStackBlueprint(
       .filter(x => x.score >= 0)
       .sort((a, b) => b.score - a.score)
     for (const c of scored) {
-      if (fitsWithinBudget(c.product)) return c
+      if (!fitsWithinBudget(c.product)) continue
+      // Only siblings that also fit the cap are eligible to be preferred.
+      return preferMonthlySibling(c, scored.filter((s) => fitsWithinBudget(s.product)), answers)
     }
     return null
   }

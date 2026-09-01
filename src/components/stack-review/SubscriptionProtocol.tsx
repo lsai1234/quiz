@@ -1,7 +1,7 @@
 'use client'
 
 import type { SubscriptionLine } from '@/lib/stack-blueprint/pricing'
-import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { cadenceNote, formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { QuizAnswers } from '@/lib/types'
 import { ProductTile } from './ProductTile'
 
@@ -38,6 +38,8 @@ export function SubscriptionProtocol({ plan, answers, minMonths = 1, monthlyTota
 
   const freq = answers?.trainingFrequency ? FREQ_LABEL[answers.trainingFrequency] : null
   const hasIntro = introPct > 0 && firstMonth != null && firstMonth < monthlyTotal
+
+  const note = cadenceNote(plan)
 
   const months = Array.from({ length: HORIZON }, (_, i) => {
     const m = i + 1
@@ -100,9 +102,14 @@ export function SubscriptionProtocol({ plan, answers, minMonths = 1, monthlyTota
             </div>
           ))}
         </div>
-        <p className="text-[10px] mt-2.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
-          Most items refill every month; longer-lasting ones ship less often, so you never over-stock.
-        </p>
+        {/* Derived from the plan, not asserted over it — see `cadenceNote`. A
+            stack of three-month tubs used to be captioned "most items refill
+            every month" directly under a timeline showing two empty months. */}
+        {note && (
+          <p className="text-[10px] mt-2.5 leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+            {note}
+          </p>
+        )}
 
         {/* Footer: flat fee + intro + commitment */}
         <div className="mt-4 pt-4 border-t border-[var(--color-border)] space-y-1.5">

@@ -1488,6 +1488,46 @@ export interface SubscriptionLine {
 }
 
 /**
+ * What the delivery timeline actually says, in a sentence.
+ *
+ * This used to be a hardcoded line — *"most items refill every month; longer-lasting
+ * ones ship less often"* — asserted next to a timeline that frequently showed the
+ * opposite. A 100-serving tub taken daily lasts three months, and with a stack of
+ * those the caption was telling the member something the picture underneath it
+ * contradicted. So the sentence is derived from the plan it captions, and there is
+ * no arrangement of lines it can be wrong about.
+ *
+ * Returns null for an empty plan — there is nothing to caption.
+ */
+export function cadenceNote(plan: readonly SubscriptionLine[]): string | null {
+  if (plan.length === 0) return null
+
+  const monthly = plan.filter((l) => Math.max(1, l.shipEveryMonths) === 1).length
+  const longer = plan.length - monthly
+  const longest = plan.reduce((m, l) => Math.max(m, Math.max(1, l.shipEveryMonths)), 1)
+
+  if (longer === 0) {
+    return plan.length === 1
+      ? 'It ships every month, and the price is the same every month.'
+      : 'Everything here ships every month, and the price is the same every month.'
+  }
+
+  if (monthly === 0) {
+    return plan.length === 1
+      ? `One delivery every ${longest} months — the cost is spread evenly, so you pay the same each month.`
+      : `Nothing here needs replacing monthly: each one arrives when it runs out, up to every ${longest} months. The cost is spread evenly across them.`
+  }
+
+  // The noun agrees with the TOTAL (always two or more in this branch, since
+  // both counts are non-zero); the verb agrees with the monthly count.
+  const verb = monthly === 1 ? 'ships' : 'ship'
+  const rest = longer === 1
+    ? 'The other lasts longer and arrives when it runs out'
+    : 'The rest last longer and arrive when they run out'
+  return `${monthly} of your ${plan.length} items ${verb} every month. ${rest} — up to every ${longest} months — and the cost is spread evenly, so the monthly price never moves.`
+}
+
+/**
  * Build the deduplicated monthly subscription from a blueprint: each slot's
  * product is resolved to its subscription product, and slots that resolve to
  * the SAME subscription product are merged into one line (billed once).

@@ -88,6 +88,27 @@ export const SCORING = {
    */
   protein: { overTarget: -200 },
 
+  /**
+   * How often the product needs replacing.
+   *
+   * A box where something lands every month reads as a subscription; a box of
+   * six-month tubs reads as a standing order somebody forgot to cancel, and it
+   * is the shape most likely to be cancelled after the second silent month. So
+   * between two products that could each fill the same place, the one that runs
+   * out about monthly is preferred.
+   *
+   * `tieMargin` is how much worse-fitting a monthly product is allowed to be
+   * and still win. Deliberately smaller than a single `goalOverlap` (15): two
+   * products within six points of each other are two answers to the same
+   * question, and past that the fit is what separates them.
+   *
+   * NOT a score term. `preferMonthlySibling` in `stack-blueprint/factory.ts`
+   * carries the argument for why — the short version is that cadence tracks
+   * price, so a blanket bonus demotes the cheap foundational vitamins and puts
+   * money on the bill for nothing.
+   */
+  cadence: { tieMargin: 6 },
+
   /** Diet quality. */
   diet: {
     cleanProtein: -20,
