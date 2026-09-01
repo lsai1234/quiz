@@ -145,7 +145,12 @@ test.describe('orders', () => {
        this runner. Every other date in the product names `en-GB`. */
     const body = await page.locator('main').innerText()
     expect(body, 'a slash-separated date is back').not.toMatch(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/)
-    expect(body).toMatch(/\d{1,2} \w{3} \d{4}/)
+    /* `\w{3,4}`, not `\w{3}`: en-GB abbreviates September to "Sept" and every
+       other month to three letters, so a three-letter pattern passed for eleven
+       months of the year and failed for the twelfth. It was written in a month
+       that was not September. The assertion is about the ORDER — day, then
+       month, then year — not about the month's length. */
+    expect(body).toMatch(/\d{1,2} \w{3,4} \d{4}/)
   })
 })
 
