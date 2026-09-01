@@ -57,6 +57,21 @@ const FALLBACK_IDENTITY: StackIdentity = {
 }
 
 /**
+ * The safety options that are special category data, derived rather than listed
+ * twice: an option is Article 9 iff it writes a `safetyFlags` entry.
+ *
+ * "Plant-based only" and "None of these" are not health data — one is a dietary
+ * preference and the other is an answer of "no" — so neither needs consent, and
+ * gating them behind one would be asking permission we do not need for data we
+ * are allowed to have. Only these three are dropped when the tick is not given.
+ */
+function healthDataOptionIds(question: BankQuestion): Set<string> {
+  return new Set(
+    question.options.filter((o) => (o.answers?.safetyFlags ?? []).length > 0).map((o) => o.id),
+  )
+}
+
+/**
  * The already-taking items that hard-exclude a product in `scoreProduct`.
  *
  * Ids like `collagen` and `vitamin-d` gate a swap group; the rest of the supps
@@ -229,6 +244,9 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   const optionsRef = useRef<HTMLDivElement>(null)
   /** Whether the options region has content below the fold — v1's scroll cue. */
   const [moreBelow, setMoreBelow] = useState(false)
+  /** Set when somebody taps a health option before ticking, so the tick can say
+   *  so rather than the tap doing nothing at all. */
+  const [needsTick, setNeedsTick] = useState(false)
   /** The occasional brand tidbit. v1 has had one since launch; v2 shipped without. */
   const [cue, setCue] = useState<QuizFact | null>(null)
   /** Whether the protein day on screen came from the typed door. Telemetry only —
@@ -275,6 +293,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     currentRef.current = { id: currentId, index }
     stepEnterRef.current = performance.now()
     describedRef.current = false
+    setNeedsTick(false)
     funnel.stepView({ stepId: currentId, index, total, track: state.track, drinksMode: false })
     setMultiPicks(state.picked[currentId] ?? [])
     optionsRef.current?.scrollTo({ top: 0 })
@@ -367,8 +386,28 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     prefetch(next)
   }, [currentId, index, update, prefetch])
 
-  const answerCurrent = useCallback((optionIds: string[]) => {
+  const answerCurrent = useCallback((rawIds: string[]) => {
     if (!current) return
+    /*
+     * ── The Article 9 gate, where it actually bites ──────────────────────────
+     *
+     * The safety options are tappable before the tick is given, because a
+     * question you cannot read is a worse consent experience than one you can.
+     * What makes "optional" mean NOT COLLECTED rather than collected-and-ignored
+     * is this line: without a current consent, the health answers never make it
+     * out of the component. They are not stored, not projected, and not sent.
+     *
+     * The non-health options on the same screen — plant-based, none of these —
+     * are not special category data and pass through untouched.
+     *
+     * `sanitiseHealthData` does the same job again server-side. Two checks, on
+     * purpose: a browser is not where a lawful basis is decided.
+     */
+    const optionIds =
+      current.id === 'safety' && !state.healthDataConsent?.accepted
+        ? rawIds.filter((id) => !healthDataOptionIds(current).has(id))
+        : rawIds
+
     if (editingId) {
       // One answer changed, later answers that no longer apply dropped, and
       // straight back to the review — no re-walking the interview.
@@ -398,6 +437,21 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
    * breastfeeding" AND "None of these" at the same time, which is not an answer.
    */
   const toggleMulti = (optionId: string) => {
+    /*
+     * A health answer does not select without the tick.
+     *
+     * `answerCurrent` strips these at commit anyway, so this is not what makes
+     * the consent real — but a control that LOOKS answered while nothing is
+     * being recorded is a lie told to the one person entitled to know. Refusing
+     * the tap is what makes the tick legible as the thing that switches the
+     * question on.
+     */
+    if (
+      current?.id === 'safety' &&
+      !state.healthDataConsent?.accepted &&
+      healthDataOptionIds(current).has(optionId)
+    ) { setNeedsTick(true); return }
+
     const exclusiveId = current?.options.find((o) => o.exclusive)?.id
     setMultiPicks((picks) => {
       if (optionId === exclusiveId) return picks.includes(optionId) ? [] : [optionId]
@@ -773,31 +827,12 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
 
             {!isGoals && current && current.select === 'multi' && (
               <div>
-                {/* The safety screen collects Article 9 data, so its options do
-                    not exist until consent is given. Every other multi-select
-                    screen renders straight through. */}
-                {isSafety && (
-                  <HealthDataConsent
-                    consent={state.healthDataConsent}
-                    onAccept={(version) =>
-                      update({ ...state, healthDataConsent: healthDataConsentRecord(version) })
-                    }
-                    onDecline={() => {
-                      // Clear the COMMITTED picks as well as the local ones.
-                      // `projectAnswers` reads `state.picked`, so a member who
-                      // answered the screen, moved on, came back and declined
-                      // would otherwise carry those flags all the way to the
-                      // reveal — the withdrawal has to reach the state the
-                      // answers are actually built from, not just the checkboxes
-                      // on screen.
-                      setMultiPicks([])
-                      const { safety: _dropped, ...picked } = state.picked
-                      update({ ...state, picked, healthDataConsent: null })
-                    }}
-                  />
-                )}
-
-                {(!isSafety || state.healthDataConsent?.accepted) && (
+                {/* The safety screen's options render straight away, like every
+                    other multi-select. The Article 9 tick sits UNDER them now —
+                    what makes the consent real is not a gate in front of the
+                    question, it is that an unticked box means the health answers
+                    are never committed. See `HealthDataConsent`. */}
+                {(
                   <>
                     <div className="grid grid-cols-2 gap-2.5">
                       {current.options.map((o) => (
@@ -811,6 +846,11 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
                             multiPicks.includes(o.id) ||
                             (!!o.exclusive && multiPicks.length === 0)
                           }
+                          inactive={
+                            isSafety &&
+                            !state.healthDataConsent?.accepted &&
+                            healthDataOptionIds(current).has(o.id)
+                          }
                           onClick={() => toggleMulti(o.id)}
                         />
                       ))}
@@ -819,6 +859,38 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
                       <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
                         {current.reassurance}
                       </p>
+                    )}
+
+                    {isSafety && (
+                      <HealthDataConsent
+                        consent={state.healthDataConsent}
+                        nudge={needsTick}
+                        onAccept={(version) => {
+                          setNeedsTick(false)
+                          update({ ...state, healthDataConsent: healthDataConsentRecord(version) })
+                        }}
+                        onDecline={() => {
+                          /*
+                           * Unticking drops the health answers on the spot — on
+                           * screen AND in the committed state.
+                           *
+                           * `projectAnswers` reads `state.picked`, so a member
+                           * who answered, moved on, came back and unticked would
+                           * otherwise carry those flags all the way to the
+                           * reveal. The non-health picks survive: withdrawing
+                           * consent to health processing is not a reason to
+                           * forget that somebody is plant-based.
+                           */
+                          const health = healthDataOptionIds(current)
+                          const kept = multiPicks.filter((id) => !health.has(id))
+                          setMultiPicks(kept)
+                          update({
+                            ...state,
+                            picked: { ...state.picked, [current.id]: kept },
+                            healthDataConsent: null,
+                          })
+                        }}
+                      />
                     )}
 
                     {/* Keep-or-try, ported from v1. Ticking an item hard-excludes

@@ -482,6 +482,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const subRef = useRef<HTMLDivElement>(null)
   // Whether the options region has content below the fold (drives the scroll cue).
   const [moreBelow, setMoreBelow] = useState(false)
+  /** Set when somebody taps a health option before ticking, so the tick can say
+   *  so rather than the tap doing nothing at all. */
+  const [needsTick, setNeedsTick] = useState(false)
 
   // ── Funnel instrumentation (Phase 0) ──────────────────────────────────────
   // Timing + guards for the analytics events. `stepEnterRef` clocks time-on-step,
@@ -1161,14 +1164,47 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           ))}
 
           {/* ── Safety screen — private, remove-only filter ──
-                The options render only once health-data consent is given: these
-                are Article 9 answers, and "optional" has to mean not collected
-                rather than collected-and-ignorable. See HealthDataConsent. */}
+                The options render straight away and the Article 9 tick sits
+                under them. What makes "optional" mean NOT COLLECTED rather than
+                collected-and-ignorable is not a gate in front of the question:
+                it is that ticking an option without the consent never writes a
+                flag, and unticking the consent clears the ones already written.
+                See HealthDataConsent. */}
           {id === 'safety' && (
             <div>
+              <div className="grid grid-cols-2 gap-2.5">
+                {SAFETY_DATA.map(({ id: sid, label }) => (
+                  <AnswerOption
+                    key={`safety-${sid}`} label={label} multi
+                    selected={(answers.safetyFlags ?? []).includes(sid)}
+                    inactive={!answers.healthDataConsent?.accepted}
+                    onClick={() => {
+                      // A health flag is only ever written under a live consent.
+                      // The tap still fires so the tick can point at itself —
+                      // silence is the one response worse than a dimmed option.
+                      if (!answers.healthDataConsent?.accepted) { setNeedsTick(true); return }
+                      const c = answers.safetyFlags ?? []
+                      setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
+                    }}
+                  />
+                ))}
+                <AnswerOption
+                  key="safety-none" label="None of these" multi
+                  selected={(answers.safetyFlags ?? []).length === 0}
+                  onClick={() => setAnswer('safetyFlags', [])}
+                />
+              </div>
+              <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
+                Not medical advice — check with your GP or midwife if you are unsure.
+              </p>
+
               <HealthDataConsent
                 consent={answers.healthDataConsent}
-                onAccept={(version) => setAnswer('healthDataConsent', healthDataConsentRecord(version))}
+                nudge={needsTick}
+                onAccept={(version) => {
+                  setNeedsTick(false)
+                  setAnswer('healthDataConsent', healthDataConsentRecord(version))
+                }}
                 onDecline={() => {
                   // Withdrawing drops anything already ticked — leaving it behind
                   // would keep processing data the member just declined.
@@ -1176,31 +1212,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   setAnswer('safetyFlags', [])
                 }}
               />
-
-              {answers.healthDataConsent?.accepted && (
-                <>
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {SAFETY_DATA.map(({ id: sid, label }) => (
-                      <AnswerOption
-                        key={`safety-${sid}`} label={label} multi
-                        selected={(answers.safetyFlags ?? []).includes(sid)}
-                        onClick={() => {
-                          const c = answers.safetyFlags ?? []
-                          setAnswer('safetyFlags', c.includes(sid) ? c.filter((x) => x !== sid) : [...c, sid])
-                        }}
-                      />
-                    ))}
-                    <AnswerOption
-                      key="safety-none" label="None of these" multi
-                      selected={(answers.safetyFlags ?? []).length === 0}
-                      onClick={() => setAnswer('safetyFlags', [])}
-                    />
-                  </div>
-                  <p className="text-[12px] text-white/30 leading-snug mt-3 px-1">
-                    Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.
-                  </p>
-                </>
-              )}
             </div>
           )}
 

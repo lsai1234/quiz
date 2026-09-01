@@ -39,10 +39,23 @@ export function CheckMark({ selected, reduced, multi }: { selected: boolean; red
 // hairline border, and a crisp accent-selected state with a small check. `multi`
 // lays out a compact grid card; otherwise a full-width row with optional sub.
 export function AnswerOption({
-  label, sub, icon, selected, multi, onClick,
+  label, sub, icon, selected, multi, onClick, inactive,
 }: {
   label: string; sub?: string; icon?: string; selected: boolean
   multi?: boolean; onClick: () => void
+  /**
+   * Readable, but not yet answerable — the safety screen's health options
+   * before the Article 9 tick is given.
+   *
+   * Dimmed rather than removed, because the question is what the tick is ABOUT:
+   * nobody can agree to answer something they have not been allowed to read.
+   * And dimmed rather than left looking live, because an option that takes a
+   * tap and does nothing is the one state worse than either.
+   *
+   * Not `disabled` — the click still fires, so the caller can point at what
+   * would switch it on. A dead button gives no feedback at all.
+   */
+  inactive?: boolean
 }) {
   const base = selected
     ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]'
@@ -58,6 +71,7 @@ export function AnswerOption({
           'relative w-full flex items-center gap-2 text-left rounded-xl border px-3 py-3 pr-8',
           'transition-all duration-200 active:scale-[0.98]',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
+          inactive ? 'opacity-40' : '',
           base,
         ].join(' ')}
       >

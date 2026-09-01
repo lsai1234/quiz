@@ -5,6 +5,7 @@ import { projectAnswers } from '../project'
 import { planNext } from '../planner'
 import { questionById, BANK } from '../bank'
 import { defaultAnswers } from '@/lib/quiz-answers'
+import { sanitiseHealthData } from '@/lib/legal/health-data'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 
@@ -329,5 +330,60 @@ describe('health-data consent', () => {
     const { safety: _dropped, ...picked } = s.picked
     s = { ...s, picked, healthDataConsent: null }
     expect(projectAnswers(s).safetyFlags).toEqual([])
+  })
+})
+
+/**
+ * The Article 9 tick, after it stopped being a gate.
+ *
+ * The consent used to hide the questions until it was given, so "no consent, no
+ * flags" fell out of the UI for free. The tick sits under the visible options
+ * now, which means the guarantee has to be enforced rather than implied — in
+ * the screen, in the projection, and again on the server.
+ *
+ * These pin the projection half. `sanitiseHealthData` covers the server half,
+ * and `16-health-consent.spec.ts` drives the screen.
+ */
+describe('health answers without the tick', () => {
+  const consent = { accepted: true as const, version: '2026-08-30', at: '2026-08-30T10:00:00.000Z' }
+
+  it('are not in the answers when the tick was never given', () => {
+    // Belt to the screen's braces: even if a flag reached `picked` — an older
+    // client, a restored run, a bug — the answers must not carry it.
+    let s = seeded()
+    s = answerQuestion(s, Q('safety'), ['pregnancy', 'medication'])
+    const a = projectAnswers(s)
+    expect(a.healthDataConsent ?? null).toBeNull()
+    expect(sanitiseHealthData(a).safetyFlags).toEqual([])
+  })
+
+  it('are in the answers once it is', () => {
+    let s = seeded()
+    s = answerQuestion(s, Q('safety'), ['pregnancy'])
+    s = { ...s, healthDataConsent: consent }
+    expect(sanitiseHealthData(projectAnswers(s)).safetyFlags).toEqual(['pregnancy'])
+  })
+
+  /**
+   * "Plant-based only" and "None of these" are on the same screen and are not
+   * health data — one is a dietary preference, the other is an answer of "no".
+   * Gating them behind an Article 9 consent would be asking permission we do
+   * not need, and losing them on withdrawal would punish somebody for changing
+   * their mind about something else entirely.
+   */
+  it('does not take the non-health answers down with them', () => {
+    let s = seeded()
+    s = answerQuestion(s, Q('safety'), ['pregnancy', 'vegan'])
+    const a = sanitiseHealthData(projectAnswers(s))
+    expect(a.safetyFlags).toEqual([])
+    expect(a.lifestyle).toContain('vegan')
+  })
+
+  it('is not consent when the version is not the current one', () => {
+    let s = seeded()
+    s = answerQuestion(s, Q('safety'), ['pregnancy'])
+    s = { ...s, healthDataConsent: { ...consent, version: 'an-older-notice' } }
+    // Consent to an earlier notice is not consent to this one.
+    expect(sanitiseHealthData(projectAnswers(s)).safetyFlags).toEqual([])
   })
 })

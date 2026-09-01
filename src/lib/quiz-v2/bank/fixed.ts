@@ -43,12 +43,17 @@ export const FIXED_QUESTIONS: BankQuestion[] = [
     fixed: true,
     discriminates: [],
     summary: 'Safety flags that hard-exclude products.',
-    // v1's reassurance, verbatim. This screen asks the most personal question in
-    // the quiz and it is the one people are most likely to skip warily, so it
-    // says what the answer does — removes products, never adds — before they
-    // answer rather than after.
-    reassurance:
-      'Private, and optional — this only ever removes products, never adds. It isn’t medical advice; check with your GP or midwife if you’re unsure.',
+    /*
+     * Trimmed to the only part that is not already on screen twice.
+     *
+     * It used to open "Private, and optional — this only ever removes products,
+     * never adds", which the hint above the options says, and which the consent
+     * tick below them says again. Three statements of one promise on one screen
+     * is not reassurance, it is noise, and it was the bulk of what made this
+     * screen feel like a legal event. The medical-advice line is the only thing
+     * here that appears nowhere else.
+     */
+    reassurance: 'Not medical advice — check with your GP or midwife if you are unsure.',
     options: [
       {
         id: 'pregnancy',

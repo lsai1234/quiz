@@ -26,11 +26,8 @@ async function answerOne(page: Page, prefer?: string): Promise<string> {
     // The safety screen holds its options back until the health-data notice is
     // accepted. Without this the walk clicks straight past on Continue and the
     // arm silently never exercises the exclusions at all.
-    const agree = page.getByRole('button', { name: /^Yes — use my answers/ })
-    if (await agree.count()) {
-      await agree.first().click()
-      await expect(page.getByRole('button', { name: 'None of these' })).toBeVisible({ timeout: 10_000 })
-    }
+    const tick = page.getByRole('checkbox', { name: /rule products out/i })
+    if (await tick.count()) await tick.first().click()
 
     const options = page.locator('.overflow-y-auto button[aria-pressed]')
     const target = prefer ? page.getByRole('button', { name: prefer }) : options.first()
@@ -71,10 +68,10 @@ async function startV2(page: Page, goal = 'More energy') {
   await expect(heading(page)).toHaveText(/Anything we should factor in/)
 }
 
-/** Agree to the health-data notice, so the safety options render at all. */
+/** Tick the health-data consent, so the safety answers are actually taken. */
 async function giveConsent(page: Page) {
-  const yes = page.locator('.overflow-y-auto button').filter({ hasText: /^Yes —/ }).first()
-  if (await yes.count()) await yes.click()
+  const tick = page.getByRole('checkbox', { name: /rule products out/i })
+  if (await tick.count()) await tick.first().click()
 }
 
 /** Walk to the review screen. */
@@ -487,7 +484,10 @@ test.describe('the protein check', () => {
     // written as "pregnancy is not ticked" would be true for everyone who
     // declined, including the person it exists for.
     await startV2(page, 'Build muscle')
-    await page.getByRole('button', { name: /^Skip this/ }).click()
+    // Left unticked, which is the default — so the health answers are never
+    // taken, and the protein module must stay away.
+    await expect(page.getByRole('checkbox', { name: /rule products out/i }))
+      .toHaveAttribute('aria-checked', 'false')
     await page.getByRole('button', { name: /^Continue/ }).click()
 
     await page.locator('input[autocomplete="given-name"]').fill('Alex')

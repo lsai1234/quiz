@@ -6,81 +6,102 @@ import type { HealthDataConsent as HealthDataConsentRecord } from '@/lib/types'
 const ACCENT = '#00D4FF'
 
 /**
- * The Article 9 gate on the safety screen.
+ * The Article 9 tick on the safety screen.
  *
- * The screen behind this asks whether someone is pregnant, on prescription
- * medication, or allergic to shellfish. That is special category data, and the
- * only condition available to a supplement retailer is explicit consent — so it
- * is taken here, before the questions are shown, rather than folded into the
- * subscription tick at checkout three screens later.
+ * The screen asks whether someone is pregnant, on prescription medication, or
+ * allergic to shellfish. That is special category data, and the only condition
+ * available to a supplement retailer is explicit consent — so it is asked for
+ * here, on its own control, rather than folded into the subscription tick at
+ * checkout three screens later. `docs/DPIA.md` R6 is the risk that separation
+ * closes, and it is the reason this cannot become a line in the terms.
  *
- * Two things make it explicit rather than implied:
+ * ── Why it is one line and not a card ───────────────────────────────────────
+ * It used to be a bordered panel with an eyebrow, two paragraphs and two
+ * full-width buttons, sitting in front of the question and holding the screen
+ * hostage until it was answered. That is more ceremony than the decision
+ * deserves, and ceremony on a consent control is not neutral: a screen that
+ * makes a routine question look like a legal event teaches people to click past
+ * legal events.
  *
- *  • The options do not exist until it is given. Declining is not a smaller set
- *    of answers, it is no health data collected at all — which is the only
- *    version of "optional" that means anything.
- *  • It is a deliberate affirmative action on its own control, unticked by
- *    default, describing this processing and nothing else.
+ * What the law actually asks for here is narrow — an affirmative act, in words,
+ * about this processing and nothing else, refusable without losing the service.
+ * A single unticked checkbox is all four. So the options are shown immediately
+ * and this sits under them, quiet, and Continue works whether or not it is
+ * ticked.
  *
- * `onAccept` receives the version so the caller stores what was actually
- * displayed; the server re-renders and hashes that document itself when the
- * record is written, so a stale or edited payload cannot manufacture consent.
+ * ── What "unticked" has to mean ─────────────────────────────────────────────
+ * Not "collected and ignored" — not collected. The caller is responsible for
+ * refusing and dropping the health answers when this is not ticked
+ * (`healthDataOptionIds` in the v2 screen, the `safetyFlags` guard in v1), and
+ * `sanitiseHealthData` strips them again server-side, because a browser is not
+ * where a lawful basis is decided.
+ *
+ * `onAccept` receives the version so the caller stores what was actually shown;
+ * the server re-renders and hashes that document itself when the record is
+ * written, so a stale or edited payload cannot manufacture consent.
  */
 export function HealthDataConsent({
   consent,
   onAccept,
   onDecline,
+  nudge,
 }: {
   consent: HealthDataConsentRecord | null | undefined
   onAccept: (version: string) => void
   onDecline: () => void
+  /**
+   * Somebody just tapped a health option that is not switched on yet.
+   *
+   * The options are dimmed, so the tap is not a surprise — but "nothing
+   * happened" is still the worst answer a control can give, so the row says
+   * where the switch is instead of leaving them to work it out.
+   */
+  nudge?: boolean
 }) {
   const accepted = !!consent?.accepted
-
-  if (accepted) {
-    return (
-      <div className="flex items-center gap-2 mb-3 px-1">
-        <span className="text-[11px] text-white/40 leading-snug">
-          You’ve agreed we can use these answers to rule products out.
-        </span>
-        <button
-          type="button"
-          onClick={onDecline}
-          className="text-[11px] underline underline-offset-2 shrink-0"
-          style={{ color: ACCENT }}
-        >
-          Undo
-        </button>
-      </div>
-    )
-  }
+  const asking = !!nudge && !accepted
 
   return (
     <div
-      className="rounded-2xl p-4 mb-4"
-      style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)' }}
+      className="mt-3.5 px-1 rounded-xl transition-colors duration-300"
+      style={asking ? { background: 'rgba(0,212,255,0.06)', boxShadow: '0 0 0 1px rgba(0,212,255,0.25)' } : undefined}
     >
-      <p
-        className="text-[10px] font-bold tracking-widest uppercase mb-2"
-        style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}
+      <button
+        type="button"
+        role="checkbox"
+        aria-checked={accepted}
+        onClick={() => (accepted ? onDecline() : onAccept(HEALTH_DATA_VERSION))}
+        className="flex w-full items-start gap-2.5 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40 rounded-lg py-1"
       >
-        Before we ask
-      </p>
-      <p className="text-[12px] leading-relaxed text-[var(--color-text-2)]">
-        The next question asks about pregnancy, medication and allergies. That’s health
-        information, so we need your say-so before we use it — only ever to leave out products
-        that aren’t right for you. It’s never shared, never used for marketing, and never sent to
-        our AI.
-      </p>
-      <p className="text-[12px] leading-relaxed text-[var(--color-text-2)] mt-2">
-        You can skip it and still get a plan. You can also change your mind later from your
-        account.{' '}
+        <span
+          aria-hidden
+          className="mt-[1px] flex h-[17px] w-[17px] shrink-0 items-center justify-center rounded-[5px] transition-colors"
+          style={
+            accepted
+              ? { background: ACCENT, border: `1px solid ${ACCENT}` }
+              : { background: 'transparent', border: '1px solid rgba(255,255,255,0.28)' }
+          }
+        >
+          {accepted && (
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 6.2L4.8 8.5L9.5 3.5" stroke="#04121a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </span>
+        <span className={`text-[12px] leading-snug ${asking ? 'text-white/80' : 'text-white/55'}`}>
+          Use these to rule products out. That’s health information, so we only use it with your
+          say-so — never shared, never used for marketing, never sent to our AI.
+        </span>
+      </button>
+
+      <p className="text-[11px] leading-snug text-white/30 mt-1 ml-[27px] pb-1">
+        {asking ? 'Tick this and the answers above switch on. ' : 'Leave it unticked and we simply don’t ask — you still get a plan. '}
         <a
           href="/legal/health-data"
           target="_blank"
           rel="noopener noreferrer"
-          className="underline"
-          style={{ color: ACCENT }}
+          className="underline underline-offset-2"
+          style={{ color: 'rgba(0,212,255,0.75)' }}
         >
           The detail
         </a>
@@ -89,31 +110,12 @@ export function HealthDataConsent({
           href="/legal/privacy"
           target="_blank"
           rel="noopener noreferrer"
-          className="underline"
-          style={{ color: ACCENT }}
+          className="underline underline-offset-2"
+          style={{ color: 'rgba(0,212,255,0.75)' }}
         >
           Privacy notice
         </a>
       </p>
-
-      <div className="flex flex-col gap-2 mt-4 sm:flex-row">
-        <button
-          type="button"
-          onClick={() => onAccept(HEALTH_DATA_VERSION)}
-          className="flex-1 rounded-xl px-4 py-3 text-[13px] font-semibold transition-opacity hover:opacity-90"
-          style={{ background: ACCENT, color: '#04121a' }}
-        >
-          Yes — use my answers to rule things out
-        </button>
-        <button
-          type="button"
-          onClick={onDecline}
-          className="flex-1 rounded-xl px-4 py-3 text-[13px] font-semibold text-[var(--color-text-2)] transition-colors hover:text-white"
-          style={{ border: '1px solid var(--color-border)' }}
-        >
-          Skip this
-        </button>
-      </div>
     </div>
   )
 }

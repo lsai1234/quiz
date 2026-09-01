@@ -142,10 +142,13 @@ replies going to the real contact inbox. The setup guide for both routes is
 The quiz collects special category health data (pregnancy, medication, allergies)
 under Article 9, so the handling of it is deliberate rather than incidental:
 
-- **Consent is taken on the safety screen**, before any option is shown, on its
-  own control — not folded into the checkout tick. Decline and the questions are
-  never asked. `src/components/legal/HealthDataConsent.tsx`, enforced server-side
-  in `src/lib/legal/health-data.ts`.
+- **Consent is taken on the safety screen**, on its own control — one unticked
+  box, about this processing and nothing else, never folded into the terms or
+  the checkout tick (that bundling is `docs/DPIA.md` R6). Leave it unticked and
+  the health answers are refused on tap, dropped at commit, and stripped again
+  server-side; the quiz carries on and still builds a plan.
+  `src/components/legal/HealthDataConsent.tsx`, enforced in
+  `src/lib/legal/health-data.ts`.
 - **The flags never leave.** They are in no AI prompt, go to no processor, and
   are kept out of the strings the Founders Hub renders.
 - **Retention runs nightly** from `/api/cron/daily`. Windows live in `RETENTION`

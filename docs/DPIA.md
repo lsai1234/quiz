@@ -127,8 +127,14 @@ from, so the notice cannot promise what the job does not do.
 **L4 × S3 = 12 (medium-high).** One tick-box covered the subscription terms and
 the health disclaimer together, so someone who wanted the plan could not refuse
 the health processing.
-**Mitigation:** separated entirely — different document, different screen,
-different record, and refusable without losing the service.
+**Mitigation:** separated entirely — its own document, its own record, its own
+unticked control, and refusable without losing the service. It is a tick under
+the safety options rather than a card in front of them (changed 2026-09-01, for
+being more ceremony than the decision deserves), which changes how it looks and
+not one thing about what it is: still an affirmative act, in words, about this
+processing alone. What enforces it is that an unticked box means the health
+answers are refused on tap, dropped at commit and stripped server-side — not
+that the question was hidden.
 **Residual: L1 × S3 = 3.**
 
 ### R7 — Health data left on a shared device

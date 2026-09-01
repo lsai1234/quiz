@@ -235,16 +235,28 @@ export async function subscribeFromQuiz(
  * looks for "None of these" a frame before it exists.
  */
 export async function acceptHealthDataConsent(page: Page): Promise<void> {
-  const agree = page.getByRole('button', { name: /^Yes — use my answers/ })
-  if (!(await agree.count())) return
-  await agree.first().click()
-  await expect(page.getByRole('button', { name: 'None of these', exact: false }).first())
-    .toBeVisible({ timeout: 10_000 })
+  const tick = healthConsentTick(page)
+  if (!(await tick.count())) return
+  if ((await tick.first().getAttribute('aria-checked')) === 'true') return
+  await tick.first().click()
+  await expect(tick.first()).toHaveAttribute('aria-checked', 'true', { timeout: 10_000 })
 }
 
-/** Decline it instead — the path where no health data is collected at all. */
+/**
+ * Leave it unticked — the path where no health data is collected at all.
+ *
+ * There is nothing to press: unticked is the default, and that is the point of
+ * the control. This exists so a spec can say which path it is on, and so it
+ * fails loudly if the tick ever ships pre-ticked.
+ */
 export async function declineHealthDataConsent(page: Page): Promise<void> {
-  const skip = page.getByRole('button', { name: 'Skip this', exact: true })
-  await expect(skip).toBeVisible()
-  await skip.click()
+  const tick = healthConsentTick(page)
+  await expect(tick.first()).toBeVisible()
+  if ((await tick.first().getAttribute('aria-checked')) === 'true') await tick.first().click()
+  await expect(tick.first()).toHaveAttribute('aria-checked', 'false')
+}
+
+/** The Article 9 checkbox on the safety screen. */
+export function healthConsentTick(page: Page) {
+  return page.getByRole('checkbox', { name: /rule products out/i })
 }

@@ -509,14 +509,26 @@ export function getPrivacyDocument(entity = LEGAL_ENTITY): LegalDocument {
 // ─── Health data consent (Article 9) ──────────────────────────────────────────
 
 /**
- * The explicit consent taken at the safety screen, before a single health
- * answer is collected.
+ * The explicit consent taken at the safety screen.
  *
  * Its own document rather than a paragraph in the terms, because Article 9(2)(a)
  * consent has to be specific and separable — bundled into a subscription
  * agreement it is neither, and a member who wants the plan would have no way to
- * refuse the health processing. It is short on purpose: this is read in the
- * middle of a quiz, on a phone.
+ * refuse the health processing. `docs/DPIA.md` R6 is that risk, and this
+ * document is half of how it stays closed. It is short on purpose: this is read
+ * in the middle of a quiz, on a phone.
+ *
+ * ── The 2026-09-01 rewording, and why the version did not move ─────────────
+ * The consent stopped being a card in front of the question and became a tick
+ * under it, so "the next screen asks…" and "skip it" no longer described
+ * anything. The wording follows the control.
+ *
+ * `HEALTH_DATA_VERSION` is deliberately unchanged: the rule on it is bump on a
+ * MATERIAL change, and nothing here changed about what is being agreed to —
+ * same data, same single purpose, same refusal, same withdrawal. Bumping would
+ * have invalidated every existing consent and stripped those members' safety
+ * filtering until they re-agreed, which is a real cost to impose for a sentence
+ * that now points at the right part of the screen.
  */
 export function getHealthDataDocument(entity = LEGAL_ENTITY): LegalDocument {
   return {
@@ -524,13 +536,13 @@ export function getHealthDataDocument(entity = LEGAL_ENTITY): LegalDocument {
     title: 'Using your health answers',
     version: HEALTH_DATA_VERSION,
     effectiveFrom: '2026-08-30',
-    summary: 'What the next question does with your answer, and how to take it back.',
+    summary: 'What the safety question does with your answer, and how to take it back.',
     sections: [
       {
         id: 'what',
         heading: 'What you are agreeing to',
         body: [
-          'The next screen asks whether you are pregnant or breastfeeding, take prescription medication, or have a shellfish allergy. That is health information, and the law says we need your clear permission before we can use it.',
+          'The safety question asks whether you are pregnant or breastfeeding, take prescription medication, or have a shellfish allergy. That is health information, and the law says we need your clear permission before we can use it.',
           'We use it for one thing only: leaving out products that are not right for you. It never adds anything to your plan.',
           'It is not sent to anyone else, it is not used for marketing, and it is not included in anything our AI writes.',
         ],
@@ -539,7 +551,7 @@ export function getHealthDataDocument(entity = LEGAL_ENTITY): LegalDocument {
         id: 'optional',
         heading: 'You do not have to',
         body: [
-          'Skip it and the quiz still works — you will still get a plan. We simply will not be able to rule products out for you, so you will need to check the label yourself before taking anything.',
+          'Leave the box unticked and the quiz still works — you will still get a plan. We simply will not be able to rule products out for you, so you will need to check the label yourself before taking anything.',
           `You can change your mind whenever you like from your account, or by emailing ${entity.contactEmail}. Withdrawing stops us using these answers and deletes them.`,
         ],
       },
