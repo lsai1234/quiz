@@ -407,6 +407,81 @@ test.describe('the protein check', () => {
     await expect(strip(page)).toContainText('≈147g a day')
   })
 
+  /**
+   * Door D — the typed day.
+   *
+   * The suite runs with `OPENAI_API_KEY: ''`, so this is the deterministic
+   * word-list reader, which is the point: the door has to work with no key at
+   * all, or it is a feature that only exists in production.
+   */
+  test('reads a day somebody typed, and lets them fix what it got wrong', async ({ page }) => {
+    await toProtein(page)
+    await page.getByRole('button', { name: /Or just tell us what you eat/ }).click()
+
+    await page.locator('#protein-day').fill(
+      'Eggs on toast for breakfast, a chicken salad at lunch, curry in the evening, protein bar in the afternoon',
+    )
+    await page.getByRole('button', { name: /^Work it out/ }).click()
+
+    // It lands on the SUMMARY, with every row still tappable — never straight
+    // into a verdict off four answers the reader has not seen.
+    await expect(page.getByText('Your day')).toBeVisible()
+    await expect(page.getByText(/change anything we got wrong/i)).toBeVisible()
+    await expect(page.getByText('Eggs, yoghurt or similar')).toBeVisible()
+    await expect(page.getByText('Chicken, fish or similar')).toBeVisible()
+    await expect(strip(page)).toContainText('a day');
+
+    // And the correction actually corrects.
+    await page.locator('.overflow-y-auto button').filter({ hasText: 'Lunch' }).first().click()
+    await page.getByRole('button', { name: 'I skip it' }).click()
+    await expect(page.getByText('I skip it')).toBeVisible()
+  })
+
+  test('asks for the meals it could not read rather than guessing at them', async ({ page }) => {
+    // A middle option chosen to avoid a blank is a number nobody said.
+    await toProtein(page)
+    await page.getByRole('button', { name: /Or just tell us what you eat/ }).click()
+    await page.locator('#protein-day').fill('eggs for breakfast and a sandwich for lunch')
+    await page.getByRole('button', { name: /^Work it out/ }).click()
+
+    await expect(page.getByText(/Fill in the rest/i)).toBeVisible()
+    // Not finishable until the blanks are answered, so no partial day can be
+    // held up against a full-day target.
+    await expect(page.getByRole('button', { name: /Finish the day/ })).toBeVisible()
+  })
+
+  test('says so plainly when it cannot make anything of what was typed', async ({ page }) => {
+    await toProtein(page)
+    await page.getByRole('button', { name: /Or just tell us what you eat/ }).click()
+    await page.locator('#protein-day').fill('no idea really')
+    await page.getByRole('button', { name: /^Work it out/ }).click()
+    await expect(page.getByText(/could not make much of that one/i)).toBeVisible()
+  })
+
+  /**
+   * Portions. Every option carried one gram figure, so the estimate did not
+   * scale with the person while the target did — and the error ran in our
+   * favour, telling bigger people they were short.
+   */
+  test('lets someone say their portions are bigger, and moves the number', async ({ page }) => {
+    await toProtein(page)
+    await page.getByRole('button', { name: /Rather work it out properly/ }).click()
+    for (const pick of ['Eggs, yoghurt or similar', 'Chicken, fish or similar', 'A normal portion', 'Nuts, cheese or yoghurt']) {
+      await page.getByRole('button', { name: pick }).click()
+    }
+    await expect(strip(page)).toContainText('≈95g a day')
+
+    await page.getByRole('button', { name: 'Bigger than most' }).click()
+    await expect(strip(page)).toContainText('≈115g a day')
+
+    await page.getByRole('button', { name: 'Smaller than most' }).click()
+    await expect(strip(page)).toContainText('≈70g a day')
+
+    // Average is where it started, and where it changes nothing.
+    await page.getByRole('button', { name: 'About average' }).click()
+    await expect(strip(page)).toContainText('≈95g a day')
+  })
+
   test('is never put to someone who declined the health-data notice', async ({ page }) => {
     // Declining produces no safety answer at all, not an empty one — so a guard
     // written as "pregnancy is not ticked" would be true for everyone who

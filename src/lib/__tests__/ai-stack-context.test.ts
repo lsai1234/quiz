@@ -31,7 +31,7 @@ describe('the deeper-context block', () => {
     const prompt = buildBlueprintPrompt(
       answers({
         dynamicAnswers: {
-          q1: { question: 'When does it hit?', answer: 'Mid-afternoon', signals: [] },
+          q1: { optionId: 'afternoon', question: 'When does it hit?', answer: 'Mid-afternoon', signals: [] },
         },
       }),
       slots,

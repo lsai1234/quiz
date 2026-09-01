@@ -399,7 +399,10 @@ function DescribeDay({
         className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/10 text-white text-[14px] leading-snug placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors resize-none"
       />
 
-      <p className="text-[11.5px] text-white/30 leading-snug">
+      {/* white/45, not the quiet tier the rest of the small print uses: this is
+          the one disclosure in the quiz about text leaving the browser, and it
+          has to be legible rather than tasteful. */}
+      <p className="text-[11.5px] text-white/45 leading-snug">
         Roughly is fine. We read it into the four meals below and you can change
         anything we get wrong. The sentence is all that is sent — not your name,
         your weight or anything else you have told us.
