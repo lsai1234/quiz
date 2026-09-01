@@ -9,6 +9,10 @@ says otherwise. Where the build differed from the proposal, the section says so.
 (`docs/QUIZ_V2_ADAPTIVE.md`); V1 is untouched, which keeps the experiment
 readable.
 
+**Part 5 is the second pass** — a fourth door that reads a typed day, and the
+portion correction that fixes a bias the first build had against larger people.
+Read Part 1 first; Part 5 says what changed about it and why.
+
 ---
 
 ## Part 1 — The concept
@@ -726,3 +730,100 @@ conversion mechanism, and Phase 5 is what measures whether it works.
    imprecise. **Recommendation:** keep the nudge small (+0.2 g/kg on the floor
    only) and do not mention age in the copy, so we are not making a claim we
    cannot support with a band this wide.
+
+---
+
+## Part 5 — Door D, and the portion correction
+
+Added after the first build. Part 1 describes three doors; there are now four,
+and the counted day carries one correction it did not have. Both are here rather
+than folded into Part 1 so the original argument stays readable next to what
+changed about it.
+
+### 5.1 Door D — "just tell us what you eat"
+
+One box, one sentence, and the four meal rows filled in from it.
+
+```
+┌─────────────────────────────────────────────────┐
+│  What does a normal day look like?              │
+│  ┌───────────────────────────────────────────┐  │
+│  │ eggs on toast, chicken salad at work,     │  │
+│  │ curry in the evening, protein bar in the  │  │
+│  │ afternoon                                 │  │
+│  └───────────────────────────────────────────┘  │
+│  Roughly is fine. We read it into the four      │
+│  meals below and you can change anything we     │
+│  get wrong. The sentence is all that is sent.   │
+│                          [ Work it out ]        │
+└─────────────────────────────────────────────────┘
+                      ↓
+      the ordinary summary, every row tappable
+```
+
+**The model never produces a number.** This is the whole safety design and it is
+worth stating flatly, because "AI protein calculator" describes a product that
+would be reckless to ship. The model is a *classifier*: for each of the four
+meals it picks one of the option ids the bank already declares. Grams come off
+the bank — the same table Door C uses — and every word the reader sees is one of
+the pre-written strings in `protein.ts`.
+
+So the worst a wrong, confused or adversarial answer can do is put somebody on
+the wrong rung of a four-rung ladder they can see and correct. It cannot invent a
+gram figure, write a sentence, reach another question, or make a claim about
+anybody's diet. §1.7's rule — *the copy is pre-written, all of it* — is intact,
+and `parseProteinDayResult` enforces the rest: an id that was not offered, or a
+real id filed under the wrong meal, is dropped rather than trusted.
+
+**It lands on the summary, never on a verdict.** Even a complete reading goes to
+the four editable rows with a line above them saying so. A partial reading goes
+there too rather than stepping into the first gap, because a reader who has just
+handed over a sentence needs to see what was made of it before being asked
+anything else.
+
+**It works with no API key.** `readProteinDay` is a deterministic word-list
+reader that does the same job — segmenting the sentence by meal first, so
+"chicken salad for lunch, pasta for dinner" cannot read the chicken into dinner
+as well. It is what runs on every local machine and in the whole e2e suite,
+which is this repo's standing rule, and it is also the fallback when the model
+times out. The member typed a sentence and pressed a button; "nothing happened"
+is not an available answer.
+
+**What is sent.** One sentence about food, and the option labels. No name, no
+age, no weight, no goals, no safety flags, and not the target — that is computed
+on the client and never leaves it. This is the only place in the quiz that sends
+a member's own words anywhere, which is why the screen says so before they type
+rather than in a policy.
+
+### 5.2 Portions, and the bias they were hiding
+
+Every option in the counted day carried one gram figure: "a normal portion" was
+25g whoever picked it. But the target it is compared against scales with weight,
+and the estimate did not — so the error ran in one direction, and it was ours:
+**the bigger you are, the more likely the module told you that you were short.**
+That is the exact failure §1.4 was written to prevent, caught one level down.
+
+The fix is one optional control on the summary — *smaller than most / about
+average / bigger than most* — scaling the counted total by 0.75 / 1 / 1.2. Three
+things about it are deliberate:
+
+- **It is asked, not inferred from the weight band.** The band is already on the
+  other side of the sum, and reading portion size off it would mean deriving the
+  estimate from the target. A big light person and a small heavy one both exist.
+- **It defaults to average, where it changes nothing.** Left alone the module
+  behaves exactly as before, which is what makes it safe to add to a screen whose
+  design goal is speed.
+- **The steps are asymmetric, in our own disfavour.** Down 25%, up 20%. The
+  version of this control most likely to be tapped carelessly is the one that
+  shrinks the gap we are selling against.
+
+It applies to the counted day only. The presets are whole-day shapes whose grams
+were fixed against the same descriptions, so scaling one and not the other would
+make the two doors disagree about the same day.
+
+### 5.3 What it measures
+
+`quiz_protein_check` now carries `door: 'described'` separately from `'counted'`
+— the picks a typed day produces are indistinguishable from Door C's, and "does
+the typed door earn its slot?" is the only question it was built to answer — and
+`portions`, which is the direct read on whether the bias in §5.2 was real.

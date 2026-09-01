@@ -156,6 +156,50 @@ export function proteinIntake(
 export const dayComplete = (answered: readonly Meal[]): boolean =>
   MEALS.every((m) => answered.includes(m))
 
+/**
+ * How big their portions are, relative to the person the option labels describe.
+ *
+ * ── Why this exists ─────────────────────────────────────────────────────────
+ * Every option in the counted day carries ONE gram figure — "a normal portion"
+ * is 25g whoever picked it. But a normal portion is not a fixed quantity: a
+ * 110kg man's is not a 52kg woman's, and the target they are compared against
+ * scales with weight while the estimate did not. That asymmetry is a systematic
+ * error in ONE direction — the bigger you are, the more likely the module told
+ * you that you were short — and it is the exact error the whole module is
+ * written to avoid, because it errs in our own commercial favour.
+ *
+ * ── Why it is asked rather than inferred from the weight band ───────────────
+ * Because the weight band is already on both sides of the sum, and reading
+ * portion size off it would mean deriving the estimate from the target. A big
+ * light person and a small heavy one both exist. It is one optional tap, it
+ * defaults to `average`, and left alone it changes nothing — which is what
+ * makes it safe to add to a screen whose whole design goal is speed.
+ *
+ * The steps are deliberately coarse and asymmetric. ±20% is roughly the honest
+ * spread of what "a chicken breast" means, and the bigger step is the SMALLER
+ * one, so the version of this control that is most likely to be picked
+ * carelessly is the one that lowers our own estimate of the gap.
+ */
+export const PORTION_SIZES = ['smaller', 'average', 'bigger'] as const
+export type PortionSize = (typeof PORTION_SIZES)[number]
+
+const PORTION_FACTOR: Record<PortionSize, number> = {
+  smaller: 0.75,
+  average: 1,
+  bigger: 1.2,
+}
+
+/** Labels for the control. Sizes, never bodies — this asks about the plate. */
+export const PORTION_LABEL: Record<PortionSize, string> = {
+  smaller: 'Smaller than most',
+  average: 'About average',
+  bigger: 'Bigger than most',
+}
+
+/** Scale a counted total, rounded back to 5g — the resolution the inputs support. */
+export const applyPortions = (grams: number, portions: PortionSize): number =>
+  portions === 'average' ? grams : round5(grams * PORTION_FACTOR[portions])
+
 // ─── The comparison ──────────────────────────────────────────────────────────
 
 /**
@@ -228,10 +272,10 @@ export function proteinDriverWeight(target: ProteinTarget, intakeG: number): num
  * asked, prove the quiz was listening, and hand over nothing to aim at.
  */
 export const BASIS_LINE: Record<TargetBasis, string> = {
-  lifting: 'You lift — that moves this number more than most people expect.',
-  deficit: 'You’re eating less to lose weight, which changes this more than it looks.',
-  active: 'You’re active most weeks, and that shifts what you need.',
-  sedentary: 'Worth a look even if you’re not training — most people are under.',
+  lifting: 'You lift, which moves this number a long way up.',
+  deficit: 'You’re eating less to lose weight, which is exactly when this matters most.',
+  active: 'You train most weeks, so this sits above the standard figure.',
+  sedentary: 'Worth a look even if you don’t train — most people are under.',
 }
 
 export interface VerdictCopy {
@@ -429,6 +473,12 @@ export function proteinComplete(
 export function proteinIntakeFrom(
   options: readonly OptionLike[],
   picked: readonly string[],
+  portions: PortionSize = 'average',
 ): number | null {
-  return proteinIntake(picked, (id) => byId(options, id)?.grams)
+  const raw = proteinIntake(picked, (id) => byId(options, id)?.grams)
+  if (raw === null) return null
+  // Portions only mean anything on the counted day. The presets are whole-day
+  // shapes whose grams were fixed against the same descriptions, so scaling one
+  // would make the two doors disagree about the same day.
+  return proteinDoor(options, picked) === 'counted' ? applyPortions(raw, portions) : raw
 }

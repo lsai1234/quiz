@@ -1,13 +1,15 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { WeightBand } from '@/lib/types'
 import { AnswerOption } from '@/components/quiz/AnswerOption'
 import type { BankQuestion, InterviewState } from '@/lib/quiz-v2/types'
 import {
-  MEALS, mealsAnswered, nextMeal, proteinDoor, proteinIntakeFrom, proteinProfile,
-  proteinTarget, runningTotal, verdictCopy, type Meal,
+  MEALS, PORTION_LABEL, PORTION_SIZES, mealsAnswered, nextMeal, proteinDoor,
+  proteinIntakeFrom, proteinProfile, proteinTarget, runningTotal, verdictCopy,
+  type Meal, type PortionSize,
 } from '@/lib/quiz-v2/protein'
+import { MAX_DAY_TEXT, parseProteinDayResult } from '@/lib/quiz-v2/protein-ai'
 
 /**
  * The protein check.
@@ -66,15 +68,25 @@ const MEAL_PROMPT: Record<Meal, string> = {
 }
 
 export function ProteinCheck({
-  question, state, picks, onPicks, onWeight,
+  question, state, picks, onPicks, onWeight, onPortions, onDescribed,
 }: {
   question: BankQuestion
   state: InterviewState
   picks: string[]
   onPicks: (ids: string[]) => void
   onWeight: (band: WeightBand) => void
+  onPortions: (size: PortionSize) => void
+  /** Telemetry: whether the day on screen was typed rather than tapped. */
+  onDescribed: (described: boolean) => void
 }) {
   const presets = useMemo(() => question.options.filter((o) => !o.meal), [question])
+  const mealOptions = useMemo(
+    () =>
+      question.options
+        .filter((o): o is typeof o & { meal: Meal } => !!o.meal)
+        .map((o) => ({ id: o.id, meal: o.meal, label: o.label })),
+    [question],
+  )
   const door = proteinDoor(question.options, picks)
 
   /*
@@ -94,7 +106,30 @@ export function ProteinCheck({
   const counting = chosen ?? (door === 'counted')
   /** A single beat reopened from the summary, rather than the next unanswered. */
   const [editing, setEditing] = useState<Meal | null>(null)
-  useEffect(() => { setChosen(null); setEditing(null) }, [question.id])
+  /** Door D — the typed day. `read` is what came back, for the line above the summary. */
+  const [describing, setDescribing] = useState(false)
+  const [read, setRead] = useState<'none' | 'partial' | 'all'>('none')
+  useEffect(() => { setChosen(null); setEditing(null); setDescribing(false); setRead('none') }, [question.id])
+
+  /**
+   * Take what the reader typed and put it on the meal rows.
+   *
+   * Whatever comes back lands on the SUMMARY, never on a verdict: every row is
+   * the same tappable row it would have been if they had counted, and a meal
+   * that could not be read is simply left blank for them to answer. Nothing here
+   * commits anything the reader has not been shown and given a way to change.
+   */
+  const applyDay = useCallback((raw: unknown) => {
+    const picksByMeal = parseProteinDayResult(raw, mealOptions)
+    if (!picksByMeal) { setRead('none'); return false }
+    const ids = MEALS.map((m) => picksByMeal[m]).filter((id): id is string => !!id)
+    onPicks(ids)
+    onDescribed(true)
+    setRead(ids.length === MEALS.length ? 'all' : 'partial')
+    setDescribing(false)
+    setChosen(true)
+    return true
+  }, [mealOptions, onPicks, onDescribed])
 
   const answered = mealsAnswered(question.options, picks)
   const beat = nextMeal(question.options, picks)
@@ -114,6 +149,16 @@ export function ProteinCheck({
     const last = answered[answered.length - 1]
     if (!last) { setChosen(false); return }
     onPicks(picks.filter((p) => question.options.find((o) => o.id === p)?.meal !== last))
+  }
+
+  if (describing) {
+    return (
+      <DescribeDay
+        options={mealOptions}
+        onRead={applyDay}
+        onCancel={() => setDescribing(false)}
+      />
+    )
   }
 
   if (!counting) {
@@ -136,13 +181,29 @@ export function ProteinCheck({
           properly" in the same visual grammar as "I eat eggs" is a category
           error the eye notices before the brain does.
         */}
-        <button
-          type="button"
-          onClick={() => { onPicks([]); setChosen(true) }}
-          className="self-start mt-1.5 text-[13px] text-white/45 hover:text-white/75 transition-colors underline underline-offset-4 decoration-white/20"
-        >
-          Rather work it out properly?
-        </button>
+        <div className="flex flex-col items-start gap-1.5 mt-1.5">
+          <button
+            type="button"
+            onClick={() => { onPicks([]); setChosen(true); onDescribed(false) }}
+            className="text-[13px] text-white/45 hover:text-white/75 transition-colors underline underline-offset-4 decoration-white/20"
+          >
+            Rather work it out properly?
+          </button>
+          {/*
+            Door D. Also a link, and for the same reason Door C is: it is a
+            change of instrument, not an answer. It sits under Door C rather
+            than above it because counting is the one that always works — this
+            one asks the reader to type, which on a phone is the most expensive
+            thing the quiz could ask for, and it should be the second offer.
+          */}
+          <button
+            type="button"
+            onClick={() => { onPicks([]); setDescribing(true) }}
+            className="text-[13px] text-[#00D4FF]/70 hover:text-[#00D4FF] transition-colors underline underline-offset-4 decoration-[#00D4FF]/25"
+          >
+            Or just tell us what you eat →
+          </button>
+        </div>
       </div>
     )
   }
@@ -156,7 +217,14 @@ export function ProteinCheck({
    * exactly what an edit from the review screen asks somebody to do, and it is
    * the difference between a flow that steps and one that traps.
    */
-  const active = editing ?? beat
+  /*
+   * A day that came back from the typed door goes to the SUMMARY even when it
+   * is incomplete, rather than stepping into the first gap. The reader has just
+   * handed over a sentence and needs to see what was made of it — dropping them
+   * straight onto a meal question would hide the three answers we had just
+   * decided on their behalf. Blank rows are tappable like any other.
+   */
+  const active = editing ?? (read !== 'none' ? null : beat)
 
   if (!active) {
     return (
@@ -165,8 +233,23 @@ export function ProteinCheck({
           <span className="text-[13px] text-white/55" style={{ fontFamily: 'var(--font-display)' }}>
             Your day
           </span>
-          <Dots done={MEALS.length} total={MEALS.length} />
+          <Dots done={answered.length} total={MEALS.length} />
         </div>
+
+        {/*
+          What we made of what they typed, said plainly and BEFORE the rows.
+          The reader has to know these four answers came from a machine reading
+          their sentence, or the first wrong one reads as us telling them what
+          they eat. Pre-written, both of them: nothing the model produced ever
+          becomes a sentence on this screen.
+        */}
+        {read !== 'none' && (
+          <p className="text-[12px] text-[#00D4FF]/70 leading-snug mb-1">
+            {read === 'all'
+              ? 'Here is what we made of that — change anything we got wrong.'
+              : 'Here is what we could pick out. Fill in the rest and change anything we got wrong.'}
+          </p>
+        )}
 
         {MEALS.map((m) => {
           const chosenHere = question.options.find(
@@ -190,13 +273,24 @@ export function ProteinCheck({
           )
         })}
 
-        <button
-          type="button"
-          onClick={() => { onPicks([]); setEditing(null); setChosen(false) }}
-          className="self-start mt-1.5 text-[13px] text-white/45 hover:text-white/75 transition-colors underline underline-offset-4 decoration-white/20"
-        >
-          Back to the quick version
-        </button>
+        <PortionRow value={state.portions ?? 'average'} onChange={onPortions} />
+
+        <div className="flex flex-col items-start gap-1.5 mt-1.5">
+          <button
+            type="button"
+            onClick={() => { onPicks([]); setEditing(null); setDescribing(true); setRead('none') }}
+            className="text-[13px] text-white/45 hover:text-white/75 transition-colors underline underline-offset-4 decoration-white/20"
+          >
+            Describe it in your own words instead
+          </button>
+          <button
+            type="button"
+            onClick={() => { onPicks([]); setEditing(null); setChosen(false); setRead('none'); onDescribed(false) }}
+            className="text-[13px] text-white/45 hover:text-white/75 transition-colors underline underline-offset-4 decoration-white/20"
+          >
+            Back to the quick version
+          </button>
+        </div>
       </div>
     )
   }
@@ -238,6 +332,152 @@ export function ProteinCheck({
   )
 }
 
+/**
+ * Door D — one box, one sentence, and the four rows filled in from it.
+ *
+ * ── Why a textarea is allowed on a screen that hates typing ────────────────
+ * It is not on the path. Nobody reaches this without tapping past five options
+ * and two links, so the reader who is here has decided that typing a sentence
+ * is easier than four taps — which for somebody whose lunch is genuinely hard
+ * to place on a four-rung scale, it is. The presets remain the screen.
+ *
+ * ── What it says before they type ──────────────────────────────────────────
+ * That the sentence is read by a machine, and that nothing else about them goes
+ * with it. This is the only place in the quiz that sends a member's own words
+ * anywhere, and a person typing about their own eating deserves to be told that
+ * plainly, before they type, not in a policy.
+ */
+function DescribeDay({
+  options, onRead, onCancel,
+}: {
+  options: Array<{ id: string; meal: Meal; label: string }>
+  onRead: (raw: unknown) => boolean
+  onCancel: () => void
+}) {
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  const submit = async () => {
+    if (busy || text.trim().length < 3) return
+    setBusy(true)
+    setFailed(false)
+    try {
+      const res = await fetch('/api/quiz/protein-day', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text.slice(0, MAX_DAY_TEXT), options }),
+      })
+      const data = await res.json()
+      if (!onRead(data?.picks)) setFailed(true)
+    } catch {
+      // The reader typed a sentence and pressed a button; "nothing happened" is
+      // not an answer. Say so, and leave the counted day one tap away.
+      setFailed(true)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <label
+        htmlFor="protein-day"
+        className="text-[13px] text-white/55"
+        style={{ fontFamily: 'var(--font-display)' }}
+      >
+        What does a normal day look like?
+      </label>
+
+      <textarea
+        id="protein-day"
+        value={text}
+        onChange={(e) => setText(e.target.value.slice(0, MAX_DAY_TEXT))}
+        rows={4}
+        autoFocus
+        placeholder="Eggs on toast, chicken salad at work, curry or something in the evening, protein bar in the afternoon"
+        className="w-full px-4 py-3 rounded-xl bg-white/[0.04] border border-white/10 text-white text-[14px] leading-snug placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors resize-none"
+      />
+
+      <p className="text-[11.5px] text-white/30 leading-snug">
+        Roughly is fine. We read it into the four meals below and you can change
+        anything we get wrong. The sentence is all that is sent — not your name,
+        your weight or anything else you have told us.
+      </p>
+
+      {failed && (
+        <p className="text-[12px] text-white/55 leading-snug">
+          We could not make much of that one. Try naming the meals — or count the
+          day instead, which is four taps.
+        </p>
+      )}
+
+      <button
+        type="button"
+        onClick={() => void submit()}
+        disabled={busy || text.trim().length < 3}
+        className={`w-full py-3.5 rounded-xl text-sm font-semibold tracking-wide transition-all duration-200 active:scale-[0.99] ${
+          busy || text.trim().length < 3
+            ? 'bg-white/[0.06] text-white/25 cursor-not-allowed'
+            : 'bg-[#00D4FF] text-[#0A0A0A]'
+        }`}
+        style={{ fontFamily: 'var(--font-display)' }}
+      >
+        {busy ? 'Reading it…' : 'Work it out'}
+      </button>
+
+      <button
+        type="button"
+        onClick={onCancel}
+        className="self-start mt-0.5 text-[13px] text-white/45 hover:text-white/75 transition-colors underline underline-offset-4 decoration-white/20"
+      >
+        Back to the options
+      </button>
+    </div>
+  )
+}
+
+/**
+ * The portion control, on the summary rather than in the flow.
+ *
+ * Every option in the counted day carries one gram figure, and "a normal
+ * portion" is not one quantity — see `PortionSize` for why leaving that alone
+ * biased the whole module against larger people, in our own favour. It sits
+ * here, after the day is described and defaulted to average, because it is a
+ * correction to an answer rather than a question: nobody has to touch it, and
+ * the reader who knows their plates are enormous now has somewhere to say so.
+ */
+function PortionRow({
+  value, onChange,
+}: {
+  value: PortionSize
+  onChange: (size: PortionSize) => void
+}) {
+  return (
+    <div className="mt-3">
+      <p className="text-[12px] text-white/35 leading-snug mb-2">
+        And the size of those portions?
+      </p>
+      <div className="grid grid-cols-3 gap-2">
+        {PORTION_SIZES.map((size) => (
+          <button
+            key={size}
+            type="button"
+            onClick={() => onChange(size)}
+            aria-pressed={value === size}
+            className="px-2 py-2.5 rounded-xl text-[11.5px] font-semibold leading-tight transition-all active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
+            style={value === size
+              ? { color: '#0A0A0A', background: '#00D4FF' }
+              : { color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.09)' }}
+          >
+            {PORTION_LABEL[size]}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** Four discrete dots. Not a bar — a bar implies a duration. */
 function Dots({ done, total }: { done: number; total: number }) {
   return (
@@ -264,8 +504,8 @@ function WeightRow({ onWeight }: { onWeight: (band: WeightBand) => void }) {
   return (
     <div className="mt-3">
       <p className="text-[12px] text-white/35 leading-snug mb-2">
-        Roughly what do you weigh? It is the one thing we need to say anything
-        useful about the amount — skip it and we will keep it general.
+        Roughly what do you weigh? It’s the one thing we need before we can say
+        anything useful about the amount. Skip it and we’ll keep it general.
       </p>
       <div className="grid grid-cols-2 gap-2.5">
         {WEIGHT_CHOICES.map(([id, label]) => (
@@ -299,7 +539,7 @@ export function ProteinVerdict({
   picks: string[]
   reducedMotion: boolean
 }) {
-  const intake = proteinIntakeFrom(question.options, picks)
+  const intake = proteinIntakeFrom(question.options, picks, state.portions)
   const target = proteinTarget(proteinProfile(state))
   const complete = proteinDoor(question.options, picks) === 'preset'
     || mealsAnswered(question.options, picks).length === MEALS.length

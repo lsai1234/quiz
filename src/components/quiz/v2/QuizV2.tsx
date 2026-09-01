@@ -15,8 +15,9 @@ import {
   proteinProfile, proteinTarget, proteinVerdict,
 } from '@/lib/quiz-v2/protein'
 import { funnel } from '@/lib/analytics/quiz'
+import { quizFactForQuestion, type QuizFact } from '@/lib/quiz-sell'
 import { emptyInterview, type BankQuestion, type InterviewState } from '@/lib/quiz-v2/types'
-import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setTrack } from '@/lib/quiz-v2/interview'
+import { answerQuestion, previousQuestionId, reviseAnswer, rewindTo, setForm, setGoals, setPortions, setTrack, setTryOurs } from '@/lib/quiz-v2/interview'
 import { endedEarly, planNext } from '@/lib/quiz-v2/planner'
 import { projectAnswers } from '@/lib/quiz-v2/project'
 import { questionById } from '@/lib/quiz-v2/bank'
@@ -53,6 +54,118 @@ const FALLBACK_IDENTITY: StackIdentity = {
     'Your stack is built around output and recovery. These selections may suit your goals and are commonly used by people with similar profiles.',
   focusAreas: ['Performance Output', 'Faster Recovery', 'Daily Energy'],
   routineFitScore: 84,
+}
+
+/**
+ * The already-taking items that hard-exclude a product in `scoreProduct`.
+ *
+ * Ids like `collagen` and `vitamin-d` gate a swap group; the rest of the supps
+ * screen's options gate nothing, so a "send me yours" toggle on them would be a
+ * control that does nothing. Kept in step with the exclusions in
+ * `stack-blueprint/factory.ts` — v1 holds the same list for the same reason.
+ */
+const EXCLUDABLE_SUPPS = new Set([
+  'protein', 'creatine', 'pre-workout',
+  'multivitamin', 'vitamin-d', 'omega-3', 'magnesium', 'vitamin-c', 'collagen',
+])
+
+/**
+ * "Keep yours, or try ours?"
+ *
+ * Ticking something on the supps screen excludes that whole swap group, which is
+ * right by default and wrong for the member who takes a supermarket
+ * multivitamin and would happily swap. v1 has had this since launch; v2 shipped
+ * without it, so on the v2 arm that member had no way to say so.
+ */
+function TryOurs({
+  items, chosen, onChange, reducedMotion,
+}: {
+  items: Array<{ id: string; label: string }>
+  chosen: string[]
+  onChange: (ids: string[]) => void
+  reducedMotion: boolean
+}) {
+  return (
+    <div
+      className="mt-6 pt-5 border-t border-white/[0.08]"
+      style={{ animation: reducedMotion ? undefined : 'slide-up-in 0.3s cubic-bezier(0.22,1,0.36,1) both' }}
+    >
+      <div className="flex items-center gap-2 mb-1.5">
+        <div className="w-px h-4 bg-[#00D4FF]" />
+        <span className="text-[10px] font-bold tracking-[0.22em] uppercase text-[#00D4FF]" style={{ fontFamily: 'var(--font-display)' }}>
+          Quick follow-up
+        </span>
+      </div>
+      <p className="text-sm font-bold text-white mb-1" style={{ fontFamily: 'var(--font-display)' }}>
+        Keep yours, or try ours?
+      </p>
+      <p className="text-xs text-white/35 mb-3">
+        We&apos;ll leave these out so you don&apos;t double up — unless you&apos;d rather have the
+        CHRGD version in your box when yours runs out.
+      </p>
+      <div className="flex flex-col gap-2">
+        {items.map(({ id, label }) => {
+          const trying = chosen.includes(id)
+          return (
+            <div key={`try-${id}`} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-white/[0.08] bg-white/[0.015]">
+              <span className="flex-1 text-[13px] font-medium text-white truncate" style={{ fontFamily: 'var(--font-display)' }}>
+                {label}
+              </span>
+              {[
+                { v: false, chip: 'Keep my own' },
+                { v: true, chip: 'Include CHRGD’s' },
+              ].map(({ v, chip }) => (
+                <button
+                  key={`try-${id}-${String(v)}`}
+                  type="button"
+                  onClick={() => onChange(v ? [...chosen, id] : chosen.filter((x) => x !== id))}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all active:scale-95 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
+                  style={trying === v
+                    ? { color: '#0A0A0A', background: '#00D4FF' }
+                    : { color: 'rgba(255,255,255,0.45)', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The odd "did you know?" — v1's chip, verbatim, so the two arms differ in what
+ * they ask and in nothing else.
+ */
+function DidYouKnowChip({ cue, reduced, onDismiss }: { cue: QuizFact; reduced: boolean; onDismiss: () => void }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-5" style={{ bottom: 104 }}>
+      <button
+        key={cue.id}
+        onClick={onDismiss}
+        aria-label="Dismiss"
+        className="pointer-events-auto flex items-start gap-2.5 max-w-md text-left rounded-2xl pl-3 pr-4 py-2.5 border backdrop-blur-md"
+        style={{
+          background: 'linear-gradient(100deg, rgba(0,212,255,0.14), rgba(0,212,255,0.05))',
+          borderColor: 'rgba(0,212,255,0.3)',
+          boxShadow: '0 8px 30px -12px rgba(0,212,255,0.45)',
+          animation: reduced ? undefined : 'cue-pop 0.45s cubic-bezier(0.22,1,0.36,1) both',
+        }}
+      >
+        <span className="mt-0.5 shrink-0 flex items-center justify-center w-6 h-6 rounded-full" style={{ background: 'rgba(0,212,255,0.16)' }}>
+          <QuizIcon name={cue.icon} size={14} className="text-[#00D4FF]" />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[9px] font-bold tracking-[0.2em] uppercase text-[#00D4FF]/80 mb-0.5" style={{ fontFamily: 'var(--font-display)' }}>
+            Did you know?
+          </span>
+          <span className="block text-[12.5px] leading-snug text-white/85">{cue.text}</span>
+        </span>
+      </button>
+    </div>
+  )
 }
 
 function CHRGDIcon({ size = 18 }: { size?: number }) {
@@ -114,6 +227,13 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   const pendingRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
   const optionsRef = useRef<HTMLDivElement>(null)
+  /** Whether the options region has content below the fold — v1's scroll cue. */
+  const [moreBelow, setMoreBelow] = useState(false)
+  /** The occasional brand tidbit. v1 has had one since launch; v2 shipped without. */
+  const [cue, setCue] = useState<QuizFact | null>(null)
+  /** Whether the protein day on screen came from the typed door. Telemetry only —
+   *  the picks it produces are Door C's, so nothing else can tell them apart. */
+  const describedRef = useRef(false)
 
   // Local mirrors for the compound personal screen, committed on Continue.
   const [localName, setLocalName] = useState(state.form.name)
@@ -154,6 +274,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   useEffect(() => {
     currentRef.current = { id: currentId, index }
     stepEnterRef.current = performance.now()
+    describedRef.current = false
     funnel.stepView({ stepId: currentId, index, total, track: state.track, drinksMode: false })
     setMultiPicks(state.picked[currentId] ?? [])
     optionsRef.current?.scrollTo({ top: 0 })
@@ -163,6 +284,66 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentId])
+
+  /*
+   * ── The "more below" cue, ported from v1 ─────────────────────────────────
+   *
+   * v1 grew this because a follow-up rendered under the options was invisible
+   * on a short window and people pressed Continue without seeing it. v2 has the
+   * same shape and more of it — the counted protein day, the try-ours
+   * follow-up, a long safety screen behind the consent gate — so it had the
+   * same bug and none of the fix.
+   */
+  const recomputeMoreBelow = useCallback(() => {
+    const el = optionsRef.current
+    if (!el) { setMoreBelow(false); return }
+    setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 16)
+  }, [])
+
+  useEffect(() => {
+    const el = optionsRef.current
+    if (!el) return
+    recomputeMoreBelow()
+    el.addEventListener('scroll', recomputeMoreBelow, { passive: true })
+    let ro: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(recomputeMoreBelow)
+      ro.observe(el)
+      if (el.firstElementChild) ro.observe(el.firstElementChild)
+    }
+    return () => { el.removeEventListener('scroll', recomputeMoreBelow); ro?.disconnect() }
+  }, [recomputeMoreBelow])
+
+  // Recompute after anything that swaps the content out under it.
+  useEffect(() => {
+    const t = setTimeout(recomputeMoreBelow, 80)
+    return () => clearTimeout(t)
+  }, [currentId, animKey, multiPicks, state, recomputeMoreBelow])
+
+  /*
+   * The odd "did you know?" — v1's, on the two questions that hold the same
+   * place in this run. Surfaced a beat after the screen settles so it does not
+   * fight the question, and each one shows at most once.
+   */
+  const shownFactsRef = useRef<Set<string>>(new Set())
+  const cueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const cueDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    const fact = quizFactForQuestion(currentId)
+    setCue(null)
+    if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
+    if (cueDelayRef.current) clearTimeout(cueDelayRef.current)
+    if (!fact || shownFactsRef.current.has(fact.id)) return
+    cueDelayRef.current = setTimeout(() => {
+      shownFactsRef.current.add(fact.id)
+      setCue(fact)
+      cueTimerRef.current = setTimeout(() => setCue(null), 5200)
+    }, 1100)
+  }, [currentId])
+  useEffect(() => () => {
+    if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
+    if (cueDelayRef.current) clearTimeout(cueDelayRef.current)
+  }, [])
 
   // ── Navigation ────────────────────────────────────────────────────────────
 
@@ -347,6 +528,21 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
   const isSafety = currentId === 'safety'
   const isMulti = current?.select === 'multi'
   const isProtein = current?.select === 'protein'
+  const isSupps = currentId === 'supps'
+  /*
+   * The already-taking items that actually drive an exclusion in `scoreProduct`
+   * — the only ones a "send me yours anyway" toggle can change anything about.
+   * Read off the LIVE picks so the follow-up appears and disappears as they tick.
+   */
+  const tryOursItems = useMemo(
+    () =>
+      !isSupps || !current
+        ? []
+        : current.options
+            .filter((o) => multiPicks.includes(o.id) && EXCLUDABLE_SUPPS.has(o.id))
+            .map((o) => ({ id: o.id, label: o.label })),
+    [isSupps, current, multiPicks],
+  )
   // The protein screen needs Continue for a reason the others do not: the
   // verdict lands the instant they answer, and auto-advancing would carry the
   // reader straight past the one number the whole screen exists to show them.
@@ -390,11 +586,13 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     if (!current) return
     const door = proteinDoor(current.options, multiPicks)
     if (door === 'none') return
-    const intake = proteinIntakeFrom(current.options, multiPicks)
+    const intake = proteinIntakeFrom(current.options, multiPicks, state.portions)
     const target = proteinTarget(proteinProfile(state))
     const gap = intake !== null && target ? proteinGap(target, intake) : null
     funnel.proteinCheck({
-      door: door === 'no-idea' ? 'no-idea' : door,
+      door: door === 'counted' && describedRef.current ? 'described'
+        : door === 'no-idea' ? 'no-idea' : door,
+      portions: state.portions ?? 'average',
       verdict: intake !== null && target ? proteinVerdict(target, intake) : 'unknown',
       gapBand: gap === null ? 'unknown'
         : gap === 0 ? 'none'
@@ -461,7 +659,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
             <p className="text-xl font-semibold text-white mb-1.5 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
               Fully charged
             </p>
-            <p className="text-sm text-white/35">Building around what you told us…</p>
+            <p className="text-sm text-white/35">Putting your box together…</p>
           </div>
         </div>
       )}
@@ -622,6 +820,20 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
                         {current.reassurance}
                       </p>
                     )}
+
+                    {/* Keep-or-try, ported from v1. Ticking an item hard-excludes
+                        that product, so without this there is no way back into
+                        the box for someone who takes a cheap version of it. */}
+                    {tryOursItems.length > 0 && (
+                      <TryOurs
+                        items={tryOursItems}
+                        chosen={state.tryOurs ?? []}
+                        onChange={(ids) =>
+                          update(setTryOurs(state, ids, tryOursItems.map((i) => i.id)))
+                        }
+                        reducedMotion={reducedMotion}
+                      />
+                    )}
                   </>
                 )}
               </div>
@@ -634,6 +846,8 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
                 picks={multiPicks}
                 onPicks={setMultiPicks}
                 onWeight={(band) => update(setForm(state, { weightBand: band }))}
+                onPortions={(size) => update(setPortions(state, size))}
+                onDescribed={(v) => { describedRef.current = v }}
               />
             )}
 
@@ -650,7 +864,24 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
             {onReview && <ReviewRows state={state} onEdit={editFrom} />}
           </div>
         </div>
+
+        {/* "More below" — v1's fix for a follow-up nobody could see. */}
+        {moreBelow && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 pr-[42px]">
+            <div className="mx-auto max-w-lg h-14 flex items-end justify-center pb-1.5 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/85 to-transparent">
+              <span className="text-[#00D4FF]/85" style={{ animation: reducedMotion ? undefined : 'chevron-bounce 1.4s ease-in-out infinite' }}>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+                  <path d="M5 8l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
+      {cue && !isGenerating && (
+        <DidYouKnowChip cue={cue} reduced={reducedMotion} onDismiss={() => setCue(null)} />
+      )}
 
       {/* The verdict, in flow above the CTA at a height reserved from first
           paint — ProteinVerdict says why this reserves space where Reflection
@@ -820,7 +1051,7 @@ function PersonalFields({
           className="w-full px-5 py-4 rounded-2xl bg-white/[0.04] border border-white/10 text-white text-sm font-medium placeholder-white/20 focus:outline-none focus:border-[#00D4FF]/50 focus:bg-white/[0.06] transition-colors"
           style={{ fontFamily: 'var(--font-display)' }}
         />
-        <p className="text-[11px] text-white/20 mt-2">Personalises your results</p>
+        <p className="text-[11px] text-white/20 mt-2">Optional — it just puts your name on the results</p>
       </div>
 
       <div>
@@ -856,7 +1087,7 @@ function PersonalFields({
             />
           ))}
         </div>
-        <p className="text-[11px] text-white/20 mt-2">Makes your protein &amp; creatine doses accurate</p>
+        <p className="text-[11px] text-white/20 mt-2">Optional — protein and creatine are dosed by bodyweight</p>
       </div>
     </div>
   )
@@ -895,7 +1126,7 @@ function ReviewRows({ state, onEdit }: { state: InterviewState; onEdit: (id: str
       if (q.select === 'protein') {
         // The number, not four food labels — and never the raw ids, which have
         // reached this screen twice already ("35-44", "75-90").
-        const intake = proteinIntakeFrom(q.options, picked)
+        const intake = proteinIntakeFrom(q.options, picked, state.portions)
         if (intake === null) {
           const said = q.options.find((o) => picked.includes(o.id))?.label
           return said ? { id, label: q.section, value: said } : null

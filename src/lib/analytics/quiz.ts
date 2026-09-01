@@ -148,13 +148,20 @@ export const funnel = {
    * health-adjacent number and analytics is not where it belongs.
    */
   proteinCheck(p: {
-    door: 'preset' | 'counted' | 'no-idea'
+    /** `described` is the typed day — counted rows, but reached by writing a
+     *  sentence rather than tapping four times. Reported separately because
+     *  "does the typed door earn its slot?" is the only question it was built
+     *  to answer, and the picks it produces are indistinguishable from Door C's. */
+    door: 'preset' | 'counted' | 'described' | 'no-idea'
     verdict: 'big-gap' | 'small-gap' | 'on-target' | 'over' | 'unknown'
     gapBand: 'none' | 'under-25' | '25-50' | 'over-50' | 'unknown'
+    /** Whether they corrected the portion size, and which way. */
+    portions: 'smaller' | 'average' | 'bigger'
     msOnStep: number
   }) {
     track('quiz_protein_check', {
-      door: p.door, verdict: p.verdict, gapBand: p.gapBand, msOnStep: p.msOnStep,
+      door: p.door, verdict: p.verdict, gapBand: p.gapBand,
+      portions: p.portions, msOnStep: p.msOnStep,
     })
   },
 
