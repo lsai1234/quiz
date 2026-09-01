@@ -28,6 +28,20 @@ export function SceneRail() {
   // longer exists — detected by the #scene-plan anchor leaving the DOM.
   const [visible, setVisible] = useState(true)
   const [reduced, setReduced] = useState(false)
+  /*
+   * Retracted while reading down the page.
+   *
+   * The rail floats over the content — that is what lets it stay reachable —
+   * and on a phone that means it sits on top of whatever is at the top of the
+   * viewport. Scrolling down through the product cards, it covered the price
+   * and the first line of the description of the card being read.
+   *
+   * So it gets out of the way in the direction where nobody is looking for it,
+   * and comes straight back on the first upward scroll, which is the gesture
+   * somebody makes when they want to go somewhere else. Reduced motion keeps it
+   * pinned rather than animating it in and out.
+   */
+  const [retracted, setRetracted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -36,8 +50,15 @@ export function SceneRail() {
 
   useEffect(() => {
     let frame = 0
+    let lastY = typeof window === 'undefined' ? 0 : window.scrollY
     const compute = () => {
       frame = 0
+      const y = window.scrollY
+      // A small threshold, so a thumb resting on the page does not flicker it.
+      if (Math.abs(y - lastY) > 6) {
+        setRetracted(y > lastY && y > 120)
+        lastY = y
+      }
       let current = 0
       SCENES.forEach((s, i) => {
         const el = document.getElementById(s.id)
@@ -68,7 +89,21 @@ export function SceneRail() {
   if (!mounted || !visible) return null
 
   return createPortal(
-    <div className="fixed top-3 inset-x-0 z-40 flex justify-center px-4 pointer-events-none">
+    /*
+     * `top-3` was measured from the top of the VIEWPORT, which on a notched
+     * phone is behind the status bar — the rail sat under the clock. The inset
+     * is the device's own answer to where content may start; the 0.75rem is the
+     * gap we wanted on a screen that has no notch.
+     */
+    <div
+      className="fixed inset-x-0 z-40 flex justify-center px-4 pointer-events-none"
+      style={{
+        top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)',
+        transform: retracted && !reduced ? 'translateY(-160%)' : 'translateY(0)',
+        opacity: retracted && !reduced ? 0 : 1,
+        transition: reduced ? undefined : 'transform 0.25s ease, opacity 0.2s ease',
+      }}
+    >
       <div
         className="pointer-events-auto flex items-center gap-1 rounded-full p-1"
         style={{

@@ -179,7 +179,7 @@ export async function completeQuiz(page: Page, track: Track = 'performance'): Pr
  * receipt: a one-off bundle, or a monthly plan at the subscribe-and-save rate.
  */
 export async function choosePlan(page: Page, plan: 'oneoff' | 'subscription'): Promise<void> {
-  const tab = plan === 'oneoff' ? /One-off bundle/ : /Subscribe monthly/
+  const tab = plan === 'oneoff' ? /Just this once/ : /Keep me stocked/
   const control = page.getByRole('button', { name: tab })
   await control.scrollIntoViewIfNeeded()
   await control.click()
@@ -187,7 +187,7 @@ export async function choosePlan(page: Page, plan: 'oneoff' | 'subscription'): P
 
 /** Press whatever the receipt's buy button currently is, and wait for an answer. */
 export async function checkoutFromStack(page: Page): Promise<void> {
-  const cta = page.getByRole('button', { name: /Continue to Checkout|Start Subscription/ })
+  const cta = page.getByRole('button', { name: /Continue to checkout|Start subscription/i })
   await cta.scrollIntoViewIfNeeded()
   await cta.click()
 }

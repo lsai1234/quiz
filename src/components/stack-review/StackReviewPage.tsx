@@ -414,7 +414,35 @@ export function StackReviewPage() {
     && pricing.subscriptionItemCount > 0
     && pricing.subscriptionMinOrderMet
   const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
-  const showStickyBar = !swapSlot && !journeyOpen && !shareOpen
+  /*
+   * ── The bar gets out of the receipt's way ────────────────────────────────
+   *
+   * The sticky bar exists so checkout stays reachable while you are still
+   * reading. Once you have scrolled to the receipt, its own button IS the
+   * checkout — and the bar was sitting directly on top of it, so the page
+   * offered the same action twice and physically covered the better one.
+   *
+   * So it retires when the real button is on screen. Nothing is removed: the
+   * receipt keeps the button that carries the loading state, and the bar keeps
+   * every position where there is no button to press.
+   */
+  const [ctaOnScreen, setCtaOnScreen] = useState(false)
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined') return
+    const cta = document.querySelector('[data-checkout-cta]')
+    if (!cta) { setCtaOnScreen(false); return }
+    const io = new IntersectionObserver(
+      ([entry]) => setCtaOnScreen(entry.isIntersecting),
+      // A slice off the bottom, so the bar clears before the button reaches it
+      // rather than at the moment they overlap.
+      { rootMargin: '0px 0px -96px 0px' },
+    )
+    io.observe(cta)
+    return () => io.disconnect()
+    // Re-run when the receipt's own visibility conditions change.
+  }, [planType, answers.drinksMode, checkoutState.status])
+
+  const showStickyBar = !swapSlot && !journeyOpen && !shareOpen && !ctaOnScreen
     && checkoutState.status !== 'needs-account'
     && checkoutState.status !== 'needs-consent'
   const leavingForStripe = checkoutState.status === 'redirecting'
@@ -564,8 +592,6 @@ export function StackReviewPage() {
           drinksMode={!!answers.drinksMode}
         />
 
-        <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
-
         <div className="h-px bg-[var(--color-border)] mx-5" />
 
         {/* Honest "no strong match" note — a chosen goal whose only products were
@@ -617,7 +643,20 @@ export function StackReviewPage() {
             onChangeProduct={handleOpenSwap}
             onChangeVariant={handleChangeVariant}
             onRemove={handleRemove}
-            trailing={<UpgradesCard boosters={boosters} axes={statAxes} onAdd={handleAddBooster} />}
+            /*
+             * Only when there is something to add.
+             *
+             * `UpgradesCard` has an empty state — a tick and "You're all set" —
+             * which is the right thing for a panel somebody opened on purpose
+             * and the wrong thing for the last card of a swipe deck. It read as
+             * a full card of dead space at the end of the stack, and the swipe
+             * that reached it was wasted.
+             */
+            trailing={
+              boosters.length > 0
+                ? <UpgradesCard boosters={boosters} axes={statAxes} onAdd={handleAddBooster} />
+                : undefined
+            }
           />
         </div>
 
@@ -730,6 +769,22 @@ export function StackReviewPage() {
             Consult your GP before use if you are pregnant, breastfeeding, or taking
             prescribed medication (including HRT).
           </p>
+
+          {/*
+            The share prompt, after the plan rather than before the stack.
+            ─────────────────────────────────────────────────────────────────
+            It used to sit between the hero and the product deck — the highest
+            intent position on the page — where it competed with the buying
+            decision it interrupts. A poster of a stack is a lovely thing to
+            offer somebody and a strange thing to offer them mid-purchase.
+
+            Here it reads as the thing to do once the deciding is done, and the
+            sticky bar keeps the checkout permanently reachable, so nothing is
+            buried by the move.
+          */}
+          <div className="mt-2 -mx-5">
+            <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
+          </div>
         </div>
       </div>
 

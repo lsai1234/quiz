@@ -1488,6 +1488,150 @@ export interface SubscriptionLine {
 }
 
 /**
+ * One-off against subscription, on a unit a person can compare.
+ *
+ * ── The bug this exists for ────────────────────────────────────────────────
+ * The plan chooser put "£65.28" next to "£31.57/mo" and invited the reader to
+ * subtract them. Do that and you conclude subscribing costs more. It does not —
+ * it is cheaper per unit at every rung, and `lib/pricing/ladder.ts` enforces
+ * that as an invariant — but the two figures describe different things:
+ *
+ *   one-off       = one pack of each, lasting however long each pack lasts
+ *   subscription  = continuous supply, priced by the month
+ *
+ * A stack whose shortest pack is a 30-day multivitamin runs out in a month; the
+ * probiotic beside it lasts three. So the one-off column has no duration on it,
+ * and comparing an undated basket to a monthly price is not a comparison. The
+ * interface asserted one anyway, in the direction that made our own better
+ * offer look worse.
+ *
+ * Everything here is derived from the plan rather than written into the copy,
+ * because the honest answer differs per stack — sometimes month one is the same
+ * box for less, and sometimes it is a bigger box (two tubs of protein where the
+ * one-off bought one), which is a different sentence.
+ */
+export interface PlanComparison {
+  /** Months until the FIRST item in a one-off basket runs out. */
+  runsOutMonths: number
+  /** What runs out first — the reason the basket is not "a month of supply". */
+  firstToRunOut: string
+  /** Months the longest-lasting item covers. */
+  lastsMonths: number
+  /** The longest-lasting item. */
+  longestLasting: string
+  /**
+   * Whether month one of the subscription delivers the same units as the
+   * one-off basket buys.
+   *
+   * True for the common case, and false as soon as any line ships more than one
+   * unit — a heavy protein user gets two tubs where the one-off bought one. The
+   * copy has to change when this is false: it is still cheaper per unit, but it
+   * is no longer "the same box for less" and claiming so would be a lie the
+   * reader can check by counting the tubs.
+   */
+  firstDeliveryIdentical: boolean
+  /** What a month of the same supply costs bought one-off, at our one-off rate. */
+  oneOffPerMonth: number
+  /** The subscription's monthly figure. */
+  subscriptionPerMonth: number
+  /** Per month, positive when subscribing is cheaper. */
+  perMonthSaving: number
+  /** What the one-off basket costs today, for the first-delivery line. */
+  oneOffToday: number
+  /** What the first subscription payment is, for the same. */
+  subscriptionToday: number
+  /** Positive when the first delivery costs less on the subscription. */
+  firstDeliverySaving: number
+}
+
+/**
+ * Build the comparison. Null when there is no subscription to compare against.
+ *
+ * `oneOffRate` is the one-off discount actually applied to this basket (0–1), so
+ * the "buying it yourself" column is priced the way we would really sell it —
+ * quoting it at list would inflate our own saving.
+ */
+export function planComparison(
+  plan: readonly SubscriptionLine[],
+  opts: {
+    oneOffTotal: number
+    subscriptionTotal: number
+    subscriptionFirstMonth: number
+    oneOffDiscountRate: number
+  },
+): PlanComparison | null {
+  if (plan.length === 0) return null
+
+  let runsOutMonths = Infinity
+  let firstToRunOut = ''
+  let lastsMonths = 0
+  let longestLasting = ''
+  let oneOffPerMonth = 0
+  let firstDeliveryIdentical = true
+
+  for (const line of plan) {
+    // `monthlyUnits` is units consumed per month, so one unit covers its
+    // reciprocal — exact, and it does not round the way `shipEveryMonths` does.
+    const covers = line.monthlyUnits > 0 ? 1 / line.monthlyUnits : Infinity
+    const name = shortLineName(line)
+    if (covers < runsOutMonths) { runsOutMonths = covers; firstToRunOut = name }
+    if (covers > lastsMonths && Number.isFinite(covers)) { lastsMonths = covers; longestLasting = name }
+    if (line.unitsPerShipment > 1) firstDeliveryIdentical = false
+    // A month of this product, bought the one-off way.
+    oneOffPerMonth += line.monthlyBaseline * (1 - opts.oneOffDiscountRate)
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  return {
+    runsOutMonths: Math.round(runsOutMonths * 10) / 10,
+    firstToRunOut,
+    lastsMonths: Math.round(lastsMonths * 10) / 10,
+    longestLasting,
+    firstDeliveryIdentical,
+    oneOffPerMonth: round2(oneOffPerMonth),
+    subscriptionPerMonth: round2(opts.subscriptionTotal),
+    perMonthSaving: round2(oneOffPerMonth - opts.subscriptionTotal),
+    oneOffToday: round2(opts.oneOffTotal),
+    subscriptionToday: round2(opts.subscriptionFirstMonth),
+    firstDeliverySaving: round2(opts.oneOffTotal - opts.subscriptionFirstMonth),
+  }
+}
+
+/**
+ * How a line is taken and how often it lands — "Taken every day · 1 tub every
+ * 3 months".
+ *
+ * Lifted out of the subscription journey so the receipt can show it too. It is
+ * the clearest explanation on the site of why a monthly figure buys more than a
+ * one-off basket, and it was two taps deep inside a modal most people never
+ * open.
+ */
+export function cadenceLine(line: SubscriptionLine): string {
+  const noun = (line.product.formats?.[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
+  const ship =
+    line.shipEveryMonths > 1
+      ? `1 ${noun} every ${line.shipEveryMonths} months`
+      : line.unitsPerShipment > 1
+        ? `${line.unitsPerShipment} ${noun}s a month`
+        : `1 ${noun} a month`
+  const taken =
+    line.cadence === 'daily'
+      ? 'every day'
+      : line.cadence === 'as-needed'
+        ? `when you need it (~${line.occasionsPerMonth}/mo)`
+        : `on training days (~${line.occasionsPerMonth}/mo)`
+  return `Taken ${taken} · ${ship}`
+}
+
+/** A product name short enough to sit in a sentence. */
+function shortLineName(line: SubscriptionLine): string {
+  const title = line.product.shortName?.trim() || line.product.title
+  // Supplier titles run long ("Super Strong Omega 3, 500 EPA / 250 DHA, 120
+  // caps"); the first clause is the name and the rest is the spec sheet.
+  return (title.split(/[,(]/)[0] ?? title).trim()
+}
+
+/**
  * What the delivery timeline actually says, in a sentence.
  *
  * This used to be a hardcoded line — *"most items refill every month; longer-lasting

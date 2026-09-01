@@ -2,7 +2,7 @@
 
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { StackPricing, SubscriptionLine } from '@/lib/stack-blueprint/pricing'
-import { formatGBP, getPricingConfig, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
+import { cadenceLine, formatGBP, getPricingConfig, planComparison, qualifiesForFreeDelivery } from '@/lib/stack-blueprint/pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import type { StackLevel } from '@/lib/types'
@@ -18,6 +18,8 @@ interface LineItem {
   title: string
   price: number
   suffix?: string
+  /** How it is taken and how often it lands. Subscription lines only. */
+  note?: string
 }
 
 interface Props {
@@ -33,6 +35,82 @@ interface Props {
   isLoading?: boolean
   /** The applied partner code, so its line can be named rather than anonymous. */
   partnerCode?: string | null
+}
+
+/** Months, said the way a person would say them. */
+function months(n: number): string {
+  if (n < 1.25) return 'about a month'
+  if (n < 1.75) return 'about six weeks'
+  const whole = Math.round(n)
+  return `about ${whole === 2 ? 'two' : whole === 3 ? 'three' : whole === 4 ? 'four' : whole === 5 ? 'five' : whole === 6 ? 'six' : whole} months`
+}
+
+/**
+ * What the two columns actually mean, on a unit you can compare.
+ *
+ * ── Why this is here at all ────────────────────────────────────────────────
+ * The chooser showed "£65.28" and "£31.57/mo" side by side and left the reader
+ * to subtract them, which says subscribing costs £34 more. It is cheaper — at
+ * every rung, enforced in `lib/pricing/ladder.ts` — but the one-off column had
+ * no duration on it, so the two numbers were never comparable and the reader's
+ * arithmetic was the only one on offer.
+ *
+ * Three sentences fix it, in this order:
+ *  1. what the one-off basket really is (a box that runs out, and when)
+ *  2. what today costs either way — the strongest true thing on the page
+ *  3. what a month costs either way, once you are buying the same quantity
+ *
+ * Every figure comes from `planComparison`, because the honest sentence differs
+ * per stack: month one is usually the same box for less, and sometimes a bigger
+ * box (two tubs of protein where the one-off bought one). Claiming the first
+ * when the second is true is a lie the reader can check by counting the tubs.
+ */
+function PlanCompare({ c, isSub }: { c: ReturnType<typeof planComparison> & object; isSub: boolean }) {
+  const cheaperToday = c.firstDeliverySaving > 0.5
+  const cheaperMonthly = c.perMonthSaving > 0.5
+
+  return (
+    <div
+      className="-mt-2 mb-4 rounded-xl px-3.5 py-3 space-y-1.5"
+      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
+    >
+      <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
+        <span className="font-bold" style={{ color: 'var(--color-text)' }}>Just this once</span>{' '}
+        is one pack of each. Your {c.firstToRunOut} runs out in {months(c.runsOutMonths)}
+        {c.longestLasting && c.lastsMonths > c.runsOutMonths + 0.5
+          ? `; the ${c.longestLasting} lasts ${months(c.lastsMonths)}.`
+          : '.'}
+      </p>
+
+      {cheaperToday && (
+        <p className="text-[11.5px] leading-relaxed" style={{ color: 'var(--color-text-2)' }}>
+          <span className="font-bold" style={{ color: 'var(--color-text)' }}>Keep me stocked</span>{' '}
+          {c.firstDeliveryIdentical
+            ? 'sends the identical box today'
+            : 'sends more today, not less'}{' '}
+          for{' '}
+          <span className="font-bold" style={{ color: 'var(--color-accent)' }}>
+            {formatGBP(c.firstDeliverySaving)} less
+          </span>
+          , then tops each one up as it runs out.
+        </p>
+      )}
+
+      {cheaperMonthly && (
+        <p className="text-[11px] leading-relaxed" style={{ color: 'var(--color-muted)' }}>
+          Buying the same amount yourself works out at {formatGBP(c.oneOffPerMonth)} a month.
+          Subscribed it is {formatGBP(c.subscriptionPerMonth)} — {formatGBP(c.perMonthSaving)} a month less.
+        </p>
+      )}
+
+      {!isSub && cheaperToday && (
+        <p className="text-[11px] leading-snug pt-0.5" style={{ color: 'var(--color-muted)' }}>
+          Nothing is locked in on the first box — the delivery detail below shows exactly what
+          lands and when.
+        </p>
+      )}
+    </div>
+  )
 }
 
 function PlanTab({ label, sub, active, disabled, onClick }: { label: string; sub: string; active: boolean; disabled?: boolean; onClick: () => void }) {
@@ -123,6 +201,9 @@ export function PlanReceipt({
         title: line.product.title,
         price: line.monthlyPrice,
         suffix: '/mo',
+        // The clearest explanation on the site of why a monthly figure buys
+        // more than a one-off basket, and it used to be two taps inside a modal.
+        note: cadenceLine(line),
       }))
     : slots.map((slot) => {
         const product = products.find((p) => p.id === slot.selectedProductId)
@@ -138,14 +219,30 @@ export function PlanReceipt({
         }
       })
 
+  /*
+   * The comparison, derived rather than written — see `planComparison`. Null
+   * when there is nothing to subscribe to, in which case the chooser is a
+   * single option and there is nothing to compare.
+   */
+  const comparison = canSubscribe
+    ? planComparison(subscriptionPlan, {
+        oneOffTotal,
+        subscriptionTotal,
+        subscriptionFirstMonth: hasIntro ? subscriptionFirstMonth : subscriptionTotal,
+        oneOffDiscountRate: bundleDiscountPct / 100,
+      })
+    : null
+
   return (
     <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden">
       <div className="p-5">
         {/* Plan chooser */}
         <div className="grid grid-cols-2 gap-1 p-1 rounded-xl mb-4" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-          <PlanTab label="One-off bundle" sub={formatGBP(oneOffTotal)} active={!isSub} onClick={() => onPlanChange('oneoff')} />
-          <PlanTab label="Subscribe monthly" sub={subTabLabel} active={isSub} disabled={!canSubscribe} onClick={() => onPlanChange('subscription')} />
+          <PlanTab label="Just this once" sub={formatGBP(oneOffTotal)} active={!isSub} onClick={() => onPlanChange('oneoff')} />
+          <PlanTab label="Keep me stocked" sub={subTabLabel} active={isSub} disabled={!canSubscribe} onClick={() => onPlanChange('subscription')} />
         </div>
+
+        {comparison && <PlanCompare c={comparison} isSub={isSub} />}
 
         {!canSubscribe && (
           <div className="-mt-2 mb-4 rounded-xl px-3 py-2.5 text-[11px] leading-snug text-[var(--color-muted)]" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
@@ -161,10 +258,17 @@ export function PlanReceipt({
         </p>
         <div className="space-y-2">
           {items.map((it) => (
-            <div key={it.key} className="flex items-center gap-2.5">
+            <div key={it.key} className="flex items-start gap-2.5">
               <ProductTile imageUrl={it.imageUrl} slot={it.slotType} title={it.title} size={30} />
-              <span className="flex-1 min-w-0 text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
-                {it.title}
+              <span className="flex-1 min-w-0">
+                <span className="block text-xs font-medium truncate" style={{ color: 'var(--color-text)' }}>
+                  {it.title}
+                </span>
+                {it.note && (
+                  <span className="block text-[10.5px] leading-snug mt-0.5" style={{ color: 'var(--color-muted)' }}>
+                    {it.note}
+                  </span>
+                )}
               </span>
               <span className="text-xs font-bold flex-shrink-0" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                 {formatGBP(it.price)}{it.suffix ?? ''}
@@ -301,20 +405,24 @@ export function PlanReceipt({
 
         {/* CTAs */}
         <div className="space-y-2 mt-3">
+          {/* `data-checkout-cta` is how the page knows this button is on screen,
+              so the sticky bar can get out of its way — the bar used to sit
+              directly on top of it. See `ctaOnScreen` in StackReviewPage. */}
           <button
+            data-checkout-cta
             onClick={onCheckout}
             disabled={isLoading}
             className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            {isLoading ? 'Building your cart…' : isSub ? 'Start Subscription →' : 'Continue to Checkout →'}
+            {isLoading ? 'Building your cart…' : isSub ? 'Start subscription →' : 'Continue to checkout →'}
           </button>
           <button
             onClick={onCustomise}
             className="w-full py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Customise Stack
+            Customise stack
           </button>
         </div>
       </div>

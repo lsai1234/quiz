@@ -9,6 +9,7 @@ import {
   buildSubscriptionPlan,
   calculatePricing,
   allowedUsageLevels,
+  cadenceLine,
   formatGBP,
   USAGE_LEVELS,
   type UsageLevel,
@@ -32,23 +33,6 @@ const LEVEL_LABEL: Record<StackLevel, string> = { essentials: 'Essentials', perf
 
 function unitNoun(formats: string[]): string {
   return (formats[0] ?? '').toLowerCase().includes('powder') ? 'tub' : 'pack'
-}
-
-function cadenceLine(line: SubscriptionLine): string {
-  const noun = unitNoun(line.product.formats)
-  const ship =
-    line.shipEveryMonths > 1
-      ? `1 ${noun} every ${line.shipEveryMonths} months`
-      : line.unitsPerShipment > 1
-        ? `${line.unitsPerShipment} ${noun}s a month`
-        : `1 ${noun} a month`
-  const taken =
-    line.cadence === 'daily'
-      ? 'every day'
-      : line.cadence === 'as-needed'
-        ? `when you need it (~${line.occasionsPerMonth}/mo)`
-        : `on training days (~${line.occasionsPerMonth}/mo)`
-  return `Taken ${taken} · ${ship}`
 }
 
 /** The member's answer to "what if something becomes unavailable?", plan-wide
