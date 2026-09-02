@@ -10,7 +10,9 @@ import {
   holdOrder,
   rejectOrderForFulfilment,
   returnOrderToQueue,
+  updateShippingAddress,
 } from '@/lib/orders/service'
+import type { SupplierAddress } from '@/lib/supplier/types'
 import { getFounder } from '@/lib/portal/guard'
 import { getPaymentSource } from '@/lib/payments'
 
@@ -28,7 +30,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 /**
  * POST /api/portal/orders/[id]  Body: { action, note? }
  *
- * action ∈ approve | hold | reject | return | submit | sync | refund | cancel.
+ * action ∈ approve | hold | reject | return | submit | sync | refund | cancel | address.
  *
  * The first four are the fulfilment review; `submit` is the only one that talks
  * to PowerBody and it requires an approval first (enforced in the orders domain,
@@ -39,7 +41,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const { id } = await params
-  let body: { action?: string; note?: string }
+  let body: { action?: string; note?: string; address?: SupplierAddress }
   try {
     body = await req.json()
   } catch {
@@ -83,6 +85,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
         return NextResponse.json({ ok: true, order })
       }
+      case 'address': {
+        if (!body.address || typeof body.address !== 'object') {
+          return NextResponse.json({ error: 'address is required' }, { status: 400 })
+        }
+        // Validation lives in the orders domain, so the fulfilment queue and any
+        // later caller get the same rules rather than this route's copy of them.
+        const order = await updateShippingAddress(id, body.address, by)
+        if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+        return NextResponse.json({ ok: true, order })
+      }
       case 'refund': {
         const existing = await getOrder(id)
         if (!existing) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
@@ -101,7 +113,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       }
       default:
         return NextResponse.json(
-          { error: 'action must be approve | hold | reject | return | submit | sync | refund | cancel' },
+          { error: 'action must be approve | hold | reject | return | submit | sync | refund | cancel | address' },
           { status: 400 },
         )
     }

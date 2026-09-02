@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
-import { Button, Card } from '@/components/system'
+import { Button, Card, Input, Note } from '@/components/system'
 
 
 interface OrderLine {
@@ -16,6 +16,16 @@ interface OrderLine {
   supplierCost?: number | null
 }
 interface OrderEvent { at: string; type: string; detail?: string }
+interface ShippingAddress {
+  name: string
+  line1: string
+  line2?: string | null
+  city: string
+  postcode: string
+  country: string
+  phone?: string | null
+  email?: string | null
+}
 interface OrderReview { state: string; by?: string | null; at?: string; note?: string | null }
 interface Order {
   id: string
@@ -33,6 +43,7 @@ interface Order {
   supplierOrderId: string | null
   supplierStatus: string | null
   trackingNumber: string | null
+  shippingAddress: ShippingAddress | null
   partnerCode?: string | null
   partnerDiscountPct?: number | null
   events: OrderEvent[]
@@ -85,6 +96,22 @@ export function OrderDetail({ id }: { id: string }) {
     if (res.ok && d.order) setOrder(d.order)
     else setError(d.error ?? 'Action failed')
     setBusy(null)
+  }, [id])
+
+  const saveAddress = useCallback(async (address: ShippingAddress): Promise<string | null> => {
+    const res = await fetch(`/api/portal/orders/${id}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'address', address }),
+    })
+    const d = await res.json().catch(() => ({}))
+    if (res.ok && d.order) {
+      setOrder(d.order)
+      return null
+    }
+    // Returned rather than thrown: the panel shows it against its own form,
+    // where the field that needs fixing is.
+    return d.error ?? 'Could not save the address.'
   }, [id])
 
   if (notFound) return <p className="text-sm text-[var(--ink-3)]">Order not found. <Link href={BACK_HREF} className="underline">Back to orders</Link></p>
@@ -167,6 +194,15 @@ export function OrderDetail({ id }: { id: string }) {
         </p>
       )}
 
+      {/* Delivery address — what PowerBody will actually ship against. */}
+      <AddressPanel
+        address={order.shippingAddress}
+        locked={Boolean(order.supplierOrderId) || SUPPLIER_HELD.has(order.status)}
+        terminal={terminal}
+        fallbackEmail={order.email}
+        onSave={saveAddress}
+      />
+
       {/* Lines */}
       <section>
         <h2 className="text-sm font-bold mb-2" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>Items</h2>
@@ -225,5 +261,147 @@ export function OrderDetail({ id }: { id: string }) {
         </div>
       </section>
     </div>
+  )
+}
+
+/** Statuses where PowerBody holds the address and ours is no longer the truth. */
+const SUPPLIER_HELD = new Set(['submitted_to_supplier', 'supplier_confirmed', 'shipped', 'delivered'])
+
+const EMPTY_ADDRESS: ShippingAddress = {
+  name: '',
+  line1: '',
+  line2: '',
+  city: '',
+  postcode: '',
+  country: 'GB',
+  phone: '',
+  email: '',
+}
+
+/**
+ * The delivery address, shown and correctable.
+ *
+ * It was not on this page at all, which made the one field that decides where
+ * goods physically go the only thing about an order a founder could not check
+ * before pressing "send to PowerBody". Showing it is most of the fix; being
+ * able to correct it is the rest.
+ *
+ * Locked once the order has gone to the supplier, because at that point they
+ * hold a copy this form cannot reach and an edit here would only teach the hub
+ * to disagree with the parcel. The server refuses it too — this is the
+ * explanation, not the enforcement.
+ */
+function AddressPanel({
+  address,
+  locked,
+  terminal,
+  fallbackEmail,
+  onSave,
+}: {
+  address: ShippingAddress | null
+  locked: boolean
+  terminal: boolean
+  fallbackEmail: string | null
+  onSave: (address: ShippingAddress) => Promise<string | null>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState<ShippingAddress>(EMPTY_ADDRESS)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function open() {
+    setDraft({
+      ...EMPTY_ADDRESS,
+      ...(address ?? {}),
+      line2: address?.line2 ?? '',
+      phone: address?.phone ?? '',
+      // Pre-fill from the order's own email so the courier-contact rule is
+      // usually already satisfied rather than being a hurdle on every edit.
+      email: address?.email ?? fallbackEmail ?? '',
+      country: address?.country || 'GB',
+    })
+    setError(null)
+    setEditing(true)
+  }
+
+  async function save() {
+    setSaving(true)
+    const message = await onSave(draft)
+    setSaving(false)
+    setError(message)
+    if (!message) setEditing(false)
+  }
+
+  const set = (key: keyof ShippingAddress) => (e: { target: { value: string } }) =>
+    setDraft((d) => ({ ...d, [key]: e.target.value }))
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <h2 className="text-sm font-bold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-display)' }}>
+          Delivery address
+        </h2>
+        {!editing && !locked && !terminal && (
+          <Button size="sm" onClick={open}>
+            {address ? 'Edit' : 'Add address'}
+          </Button>
+        )}
+      </div>
+
+      {editing ? (
+        <Card padding="tight">
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(13rem, 1fr))' }}>
+            <Input label="Recipient" required value={draft.name} onChange={set('name')} />
+            <Input label="Phone" value={draft.phone ?? ''} onChange={set('phone')} hint="Phone or email is required" />
+            <Input label="Address line 1" required value={draft.line1} onChange={set('line1')} />
+            <Input label="Address line 2" value={draft.line2 ?? ''} onChange={set('line2')} />
+            <Input label="Town or city" required value={draft.city} onChange={set('city')} />
+            <Input label="Postcode" required value={draft.postcode} onChange={set('postcode')} />
+            <Input label="Email" type="email" value={draft.email ?? ''} onChange={set('email')} />
+            <Input label="Country" value={draft.country} onChange={set('country')} hint="UK only — PowerBody dropship domestically" />
+          </div>
+
+          {error && (
+            <div style={{ marginTop: 'var(--space-3)' }}>
+              <Note tone="critical" icon="alert-triangle" live="assertive">{error}</Note>
+            </div>
+          )}
+
+          <div className="flex gap-2" style={{ marginTop: 'var(--space-4)' }}>
+            <Button variant="primary" size="sm" loading={saving} onClick={() => void save()}>
+              Save address
+            </Button>
+            <Button variant="ghost" size="sm" disabled={saving} onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Card>
+      ) : address ? (
+        <div className="rounded-2xl border p-3" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)', lineHeight: 'var(--leading-snug)' }}>
+            {address.name}
+          </p>
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)', lineHeight: 'var(--leading-loose)' }}>
+            {[address.line1, address.line2, address.city, address.postcode, address.country]
+              .filter(Boolean)
+              .join(', ')}
+          </p>
+          {(address.phone || address.email) && (
+            <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+              {[address.phone, address.email].filter(Boolean).join(' · ')}
+            </p>
+          )}
+          {locked && (
+            <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
+              Sent to the supplier — they hold this address now. Ring them to change it.
+            </p>
+          )}
+        </div>
+      ) : (
+        <Note tone="critical" icon="alert-triangle">
+          No delivery address on this order. PowerBody cannot be asked to ship it until there is one.
+        </Note>
+      )}
+    </section>
   )
 }

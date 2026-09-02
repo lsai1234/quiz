@@ -25,19 +25,64 @@ import { advanceCycle } from '@/lib/recharge/clock'
 import { defaultCardFor } from './stripe'
 import { linkStripeSubscription, userIdForStripeSubscription } from './subscription-link'
 import type { SupplierAddress } from '@/lib/supplier/types'
+import { reportError } from '@/lib/monitoring/report'
 
-/** Pull the delivery address out of a completed Checkout Session, tolerant of
- *  Stripe API-version differences in where it lives. */
+/**
+ * Pull the DELIVERY address out of a completed Checkout Session.
+ *
+ * Tolerant about where Stripe puts it — `shipping_details` on older API
+ * versions, `collected_information.shipping_details` on newer ones, and a
+ * webhook payload is serialised at the *endpoint's* API version rather than the
+ * one the SDK is pinned to, so both shapes can arrive at the same deployment.
+ *
+ * ── Why there is no fallback to the billing address ─────────────────────────
+ * There used to be one, to `customer_details.address`, and it was a bug wearing
+ * the clothes of a safety net. That field is where the CARD is registered, not
+ * where the customer wants their goods: pay with a company card and it is the
+ * office; pay with a parent's card and it is their house. Substituting it
+ * produced an address that was complete, plausible and wrong — and a wrong
+ * address that looks right is far worse here than none at all, because "none"
+ * is caught twice (the fulfilment queue flags it, and `submitOrderToSupplier`
+ * refuses) while "plausible" goes straight through to a real parcel.
+ *
+ * So: shipping details or nothing. Nothing is loud — the order shows as having
+ * no delivery address, and the miss is reported — which is a blocked order
+ * somebody fixes rather than a box posted to the wrong building.
+ */
 function addressFromSession(session: Stripe.Checkout.Session): SupplierAddress | null {
-  // `shipping_details` (older) or `collected_information.shipping_details` (newer);
-  // fall back to the billing address on customer_details.
   const s = session as unknown as {
     shipping_details?: { name?: string | null; address?: Record<string, string | null> | null }
     collected_information?: { shipping_details?: { name?: string | null; address?: Record<string, string | null> | null } }
   }
   const shipping = s.shipping_details ?? s.collected_information?.shipping_details
-  const address = shipping?.address ?? session.customer_details?.address ?? null
-  if (!address) return null
+  const address = shipping?.address ?? null
+
+  if (!address?.line1) {
+    // Every session we create sets `shipping_address_collection`, so this should
+    // be unreachable. If it happens it is a real fault — an API-version shape we
+    // do not know about, or collection switched off — and it silently costs us
+    // every delivery address until someone notices.
+    void reportError(
+      new Error('Checkout session completed with no shipping address — the order cannot be dropshipped'),
+      {
+        surface: 'webhook',
+        severity: 'critical',
+        path: '/api/webhooks/stripe',
+        context: {
+          stage: 'address-extraction',
+          sessionId: session.id,
+          mode: session.mode ?? null,
+          // Which shapes were present, to tell "Stripe moved the field" apart
+          // from "the customer was never asked".
+          hasShippingDetails: Boolean(s.shipping_details),
+          hasCollectedInformation: Boolean(s.collected_information),
+          hasBillingAddress: Boolean(session.customer_details?.address),
+        },
+      },
+    )
+    return null
+  }
+
   return {
     name: shipping?.name ?? session.customer_details?.name ?? 'Customer',
     line1: address.line1 ?? '',

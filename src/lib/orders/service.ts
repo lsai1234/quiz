@@ -430,6 +430,131 @@ export async function approveOrderForSupplier(id: string, by?: string | null, no
   return setReview(id, 'approved', { by, note })
 }
 
+/**
+ * Correct the delivery address on an order.
+ *
+ * Stripe collects this once, at checkout, and until now it was whatever landed
+ * there for good. That is fine right up until it isn't: a customer types the
+ * wrong postcode, Stripe's autofill hands over a billing address that was never
+ * where they wanted the box, or somebody test-ordering to their own office
+ * realises after paying. The order is the thing PowerBody ships against, so the
+ * order has to be correctable.
+ *
+ * ── Why it stops at the supplier ────────────────────────────────────────────
+ * Editable while the order is ours — `pending_payment` or `paid`. The moment it
+ * has been sent, PowerBody holds a copy we cannot reach through `createOrder`,
+ * and rewriting our row would make the hub confidently disagree with the parcel
+ * actually in their picking queue. Refusing loudly and telling the founder to
+ * ring the supplier is the honest failure; a silent local edit is the one that
+ * ends with a box at the wrong house and a record saying otherwise.
+ *
+ * The old address goes into the audit event rather than being overwritten in
+ * silence — "who changed it, when, and from what" is the whole point of keeping
+ * a trail on an object that decides where goods go.
+ */
+export async function updateShippingAddress(
+  id: string,
+  input: SupplierAddress,
+  by?: string | null,
+): Promise<Order | null> {
+  const order = await getOrder(id)
+  if (!order) return null
+
+  if (order.supplierOrderId || SUPPLIER_HELD_STATUSES.has(order.status)) {
+    throw new Error(
+      `Order ${id} has already gone to the supplier, who now holds the old address. ` +
+        'Contact them to change it — editing it here would only make this record disagree with the parcel.',
+    )
+  }
+  if (order.status === 'refunded' || order.status === 'cancelled') {
+    throw new Error(`Order ${id} is ${order.status} — there is nothing left to deliver.`)
+  }
+
+  const address = normaliseShippingAddress(input)
+  const previous = order.shippingAddress
+
+  return updateOrder(id, (o) => {
+    o.shippingAddress = address
+    o.events.push(
+      event(
+        'address-updated',
+        `${by ? `${by} set` : 'Set'} the delivery address to ${oneLineAddress(address)}` +
+          (previous ? ` (was ${oneLineAddress(previous)})` : ' (none was recorded before)'),
+      ),
+    )
+  })
+}
+
+/** Statuses where the supplier already has the address and we no longer own it. */
+const SUPPLIER_HELD_STATUSES = new Set<OrderStatus>([
+  'submitted_to_supplier',
+  'supplier_confirmed',
+  'shipped',
+  'delivered',
+])
+
+function oneLineAddress(a: SupplierAddress): string {
+  return [a.name, a.line1, a.line2, a.city, a.postcode].filter(Boolean).join(', ')
+}
+
+/**
+ * Trim, require what the supplier requires, and refuse anything not in the UK.
+ *
+ * The email-or-phone rule is PowerBody's, not ours: couriers send the recipient
+ * a verification code, and an address with neither is one they may fail to
+ * deliver. `submitOrderToSupplier` would let it through — it only checks line1
+ * and the postcode — so the check belongs here, where a person is looking at
+ * the form and can actually supply the missing one.
+ */
+function normaliseShippingAddress(input: SupplierAddress): SupplierAddress {
+  const text = (v: string | null | undefined) => (v ?? '').trim()
+  const name = text(input.name)
+  const line1 = text(input.line1)
+  const city = text(input.city)
+  const postcode = text(input.postcode).toUpperCase().replace(/\s+/g, ' ')
+  const phone = text(input.phone) || null
+  const email = text(input.email) || null
+
+  const missing = [
+    !name && 'a name',
+    !line1 && 'the first address line',
+    !city && 'a town or city',
+    !postcode && 'a postcode',
+  ].filter(Boolean) as string[]
+  // Everything missing, in one sentence, rather than one field per attempt —
+  // three round trips to learn three things is the worst way to fill a form.
+  if (missing.length > 0) {
+    const listed =
+      missing.length === 1
+        ? missing[0]
+        : `${missing.slice(0, -1).join(', ')} and ${missing[missing.length - 1]}`
+    throw new Error(`The delivery address needs ${listed}.`)
+  }
+
+  const country = text(input.country) || 'GB'
+  const reach = deliverability({ postcode, country })
+  if (reach.excluded) {
+    throw new Error(reach.reason ?? 'PowerBody will not dropship to that address.')
+  }
+
+  if (!phone && !email) {
+    throw new Error(
+      'The delivery address needs a phone number or an email — couriers send the recipient a verification code, and PowerBody require one of the two.',
+    )
+  }
+
+  return {
+    name,
+    line1,
+    line2: text(input.line2) || null,
+    city,
+    postcode,
+    country: country.toUpperCase() === 'UK' ? 'GB' : country,
+    phone,
+    email,
+  }
+}
+
 /** Park an order — a query on the address, a stock doubt — without rejecting it. */
 export async function holdOrder(id: string, by?: string | null, note?: string | null) {
   return setReview(id, 'held', { by, note })
