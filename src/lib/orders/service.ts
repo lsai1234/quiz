@@ -486,11 +486,27 @@ export async function updateShippingAddress(
   let sentToSupplier = false
   if (order.supplierOrderId) {
     const fulfilable = order.lines.filter((l) => l.sku)
-    const simulated = order.supplierSimulated ?? getOrderingSource() === 'simulate'
-    const supplier = await supplierForOrdering(simulated)
-    await supplier.updateOrder(
-      await supplierOrderInputFor({ ...order, shippingAddress: address }, fulfilable),
-    )
+    // `=== true`, matching `syncSupplierStatus`, NOT a read of today's setting.
+    // The order records how it was sent precisely so that the switch changing
+    // afterwards cannot rewrite its history — and an order we hold a supplier id
+    // for was really sent unless we wrote down that it wasn't.
+    const supplier = await supplierForOrdering(order.supplierSimulated === true)
+    try {
+      await supplier.updateOrder(
+        await supplierOrderInputFor({ ...order, shippingAddress: address }, fulfilable),
+      )
+    } catch (err) {
+      // Their faults arrive as raw PHP — "Call to a member function
+      // addFieldToFilter() on bool" is Magento failing to load a row — and
+      // showing a founder that alone reads as OUR app breaking. Say whose error
+      // it is, and say the thing they most need to know: nothing changed.
+      const said = err instanceof Error ? err.message : String(err)
+      throw new Error(
+        `The supplier would not accept the new address for order ${id}: ${said} — ` +
+          'so nothing has been changed here either, and this order still holds the address they have. ' +
+          'If they cannot find the order, it was never placed with them under this reference.',
+      )
+    }
     sentToSupplier = true
   }
 

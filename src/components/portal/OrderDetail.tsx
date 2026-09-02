@@ -42,6 +42,7 @@ interface Order {
   stripePaymentIntentId: string | null
   supplierOrderId: string | null
   supplierStatus: string | null
+  supplierSimulated?: boolean
   trackingNumber: string | null
   shippingAddress: ShippingAddress | null
   partnerCode?: string | null
@@ -238,6 +239,19 @@ export function OrderDetail({ id }: { id: string }) {
         <div className="rounded-2xl border p-3.5 text-xs space-y-1" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
           <p className="font-bold text-[var(--ink-1)] mb-1" style={{ fontFamily: 'var(--font-display)' }}>Supplier</p>
           <p className="text-[var(--ink-3)]">Order id: <span className="text-[var(--ink-2)]">{order.supplierOrderId ?? 'not submitted'}</span></p>
+          {/* Whether PowerBody actually has this order — the fact that decides
+              whether an order in their dashboard is this one or an older one,
+              and the thing every other line here is silently assumed to mean. */}
+          {order.supplierOrderId && (
+            <p className="text-[var(--ink-3)]">
+              Reached PowerBody:{' '}
+              <span style={{ color: order.supplierSimulated ? 'var(--tone-attention)' : 'var(--ink-2)' }}>
+                {order.supplierSimulated
+                  ? 'no — simulated, nothing was sent'
+                  : 'yes — sent for real'}
+              </span>
+            </p>
+          )}
           <p className="text-[var(--ink-3)]">Supplier status: <span className="text-[var(--ink-2)]">{order.supplierStatus ? statusLabel(order.supplierStatus) : '—'}</span></p>
           <p className="text-[var(--ink-3)]">Tracking: <span className="text-[var(--ink-2)]">{order.trackingNumber ?? '—'}</span></p>
         </div>

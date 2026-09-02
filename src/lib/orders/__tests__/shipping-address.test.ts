@@ -167,8 +167,13 @@ describe('updateShippingAddress', () => {
       // as PowerBody would for an order they have already picked.
       __resetMockOrders()
 
+      // The refusal names the supplier and says plainly that nothing changed —
+      // a raw Magento fault on its own reads as our app breaking.
       await expect(updateShippingAddress(order.id, { ...GOOD, line1: '9 New Road' })).rejects.toThrow(
-        /to update/,
+        /supplier would not accept the new address/,
+      )
+      await expect(updateShippingAddress(order.id, { ...GOOD, line1: '9 New Road' })).rejects.toThrow(
+        /never placed with them under this reference/,
       )
       expect((await getOrder(order.id))?.shippingAddress).toBeNull()
     })
