@@ -440,13 +440,21 @@ export async function approveOrderForSupplier(id: string, by?: string | null, no
  * realises after paying. The order is the thing PowerBody ships against, so the
  * order has to be correctable.
  *
- * ── Why it stops at the supplier ────────────────────────────────────────────
- * Editable while the order is ours — `pending_payment` or `paid`. The moment it
- * has been sent, PowerBody holds a copy we cannot reach through `createOrder`,
- * and rewriting our row would make the hub confidently disagree with the parcel
- * actually in their picking queue. Refusing loudly and telling the founder to
- * ring the supplier is the honest failure; a silent local edit is the one that
- * ends with a box at the wrong house and a record saying otherwise.
+ * ── An order already with the supplier is corrected THERE first ─────────────
+ * PowerBody's `dropshipping.updateOrder` overwrites an order they hold, keyed on
+ * our reference, and their guide allows it right up until the order completes —
+ * a window that is real rather than theoretical, because an order sits "on hold"
+ * waiting to be paid for before anything is picked, which is exactly when a
+ * customer notices the address is wrong.
+ *
+ * So the supplier is updated BEFORE our row, and our row is only written if they
+ * accepted. That ordering is the whole safety property: if they refuse — too
+ * late, already picked — nothing local changes, and the hub keeps agreeing with
+ * the parcel. A local-first write with a best-effort push is the version that
+ * ends with a record nobody can trust.
+ *
+ * Past that window (shipped, delivered, cancelled) it refuses outright: their
+ * API would too, and "ring them" is the only honest answer left.
  *
  * The old address goes into the audit event rather than being overwritten in
  * silence — "who changed it, when, and from what" is the whole point of keeping
@@ -460,10 +468,10 @@ export async function updateShippingAddress(
   const order = await getOrder(id)
   if (!order) return null
 
-  if (order.supplierOrderId || SUPPLIER_HELD_STATUSES.has(order.status)) {
+  if (TOO_LATE_STATUSES.has(order.status)) {
     throw new Error(
-      `Order ${id} has already gone to the supplier, who now holds the old address. ` +
-        'Contact them to change it — editing it here would only make this record disagree with the parcel.',
+      `Order ${id} is ${order.status} — the parcel has left, so the address on it can no longer change. ` +
+        'Contact PowerBody directly if it has not yet been delivered.',
     )
   }
   if (order.status === 'refunded' || order.status === 'cancelled') {
@@ -473,25 +481,34 @@ export async function updateShippingAddress(
   const address = normaliseShippingAddress(input)
   const previous = order.shippingAddress
 
+  // With the supplier and still changeable: correct it at their end FIRST, so a
+  // refusal leaves our row matching what they are about to pick.
+  let sentToSupplier = false
+  if (order.supplierOrderId) {
+    const fulfilable = order.lines.filter((l) => l.sku)
+    const simulated = order.supplierSimulated ?? getOrderingSource() === 'simulate'
+    const supplier = await supplierForOrdering(simulated)
+    await supplier.updateOrder(
+      await supplierOrderInputFor({ ...order, shippingAddress: address }, fulfilable),
+    )
+    sentToSupplier = true
+  }
+
   return updateOrder(id, (o) => {
     o.shippingAddress = address
     o.events.push(
       event(
         'address-updated',
         `${by ? `${by} set` : 'Set'} the delivery address to ${oneLineAddress(address)}` +
-          (previous ? ` (was ${oneLineAddress(previous)})` : ' (none was recorded before)'),
+          (previous ? ` (was ${oneLineAddress(previous)})` : ' (none was recorded before)') +
+          (sentToSupplier ? ' · the supplier was updated too' : ''),
       ),
     )
   })
 }
 
-/** Statuses where the supplier already has the address and we no longer own it. */
-const SUPPLIER_HELD_STATUSES = new Set<OrderStatus>([
-  'submitted_to_supplier',
-  'supplier_confirmed',
-  'shipped',
-  'delivered',
-])
+/** Past this the goods are gone and their API would refuse the update as well. */
+const TOO_LATE_STATUSES = new Set<OrderStatus>(['shipped', 'delivered'])
 
 function oneLineAddress(a: SupplierAddress): string {
   return [a.name, a.line1, a.line2, a.city, a.postcode].filter(Boolean).join(', ')

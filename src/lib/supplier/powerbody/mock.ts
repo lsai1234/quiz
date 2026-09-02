@@ -149,6 +149,23 @@ export function createMockSupplier(): SupplierProvider {
       return { supplierOrderId, status: 'received' }
     },
 
+    /**
+     * Overwrite a stored order, found by OUR reference — which is how their
+     * `updateOrder` is keyed, so a simulated correction resolves the order the
+     * same way a real one does.
+     */
+    async updateOrder(input: SupplierOrderInput): Promise<SupplierOrderResult> {
+      const existing = [...orders.values()].find((o) => o.reference === input.reference)
+      if (!existing) throw new Error(`No supplier order for reference ${input.reference} to update.`)
+      const updated: SupplierOrder = {
+        ...existing,
+        lines: input.lines,
+        updatedAt: new Date().toISOString(),
+      }
+      orders.set(existing.supplierOrderId, updated)
+      return { supplierOrderId: existing.supplierOrderId, status: updated.status }
+    },
+
     async getOrder(supplierOrderId) {
       return orders.get(supplierOrderId) ?? null
     },

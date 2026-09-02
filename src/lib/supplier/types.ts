@@ -390,6 +390,19 @@ export interface SupplierProvider {
   resetSession?(): Promise<void>
   /** Place a dropship order (Phase 3 wires this to the orders domain). */
   placeOrder(order: SupplierOrderInput): Promise<SupplierOrderResult>
+  /**
+   * Overwrite an order they already hold — `dropshipping.updateOrder`.
+   *
+   * Their guide: available "until the order is not completed", the order number
+   * is unchanged, and the whole order is replaced rather than patched. So it
+   * takes the same input as `placeOrder` and is keyed the same way, on OUR
+   * reference (`id` in their payload), not their increment id.
+   *
+   * The window is real rather than theoretical: an order sits "on hold" waiting
+   * to be paid for before anything is picked, which is exactly when a customer
+   * notices the address is wrong.
+   */
+  updateOrder(order: SupplierOrderInput): Promise<SupplierOrderResult>
   getOrder(supplierOrderId: string): Promise<SupplierOrder | null>
   listOrders(): Promise<SupplierOrder[]>
 }

@@ -197,7 +197,8 @@ export function OrderDetail({ id }: { id: string }) {
       {/* Delivery address — what PowerBody will actually ship against. */}
       <AddressPanel
         address={order.shippingAddress}
-        locked={Boolean(order.supplierOrderId) || SUPPLIER_HELD.has(order.status)}
+        locked={SUPPLIER_HELD.has(order.status)}
+        withSupplier={Boolean(order.supplierOrderId)}
         terminal={terminal}
         fallbackEmail={order.email}
         onSave={saveAddress}
@@ -264,8 +265,12 @@ export function OrderDetail({ id }: { id: string }) {
   )
 }
 
-/** Statuses where PowerBody holds the address and ours is no longer the truth. */
-const SUPPLIER_HELD = new Set(['submitted_to_supplier', 'supplier_confirmed', 'shipped', 'delivered'])
+/**
+ * Past these the parcel has left and the address cannot change — PowerBody's
+ * `updateOrder` refuses a completed order too. Before them, an order they
+ * already hold is still correctable: the server updates it at their end first.
+ */
+const SUPPLIER_HELD = new Set(['shipped', 'delivered'])
 
 const EMPTY_ADDRESS: ShippingAddress = {
   name: '',
@@ -294,12 +299,15 @@ const EMPTY_ADDRESS: ShippingAddress = {
 function AddressPanel({
   address,
   locked,
+  withSupplier,
   terminal,
   fallbackEmail,
   onSave,
 }: {
   address: ShippingAddress | null
   locked: boolean
+  /** They already hold the order — an edit goes to them as well as to us. */
+  withSupplier: boolean
   terminal: boolean
   fallbackEmail: string | null
   onSave: (address: ShippingAddress) => Promise<string | null>
@@ -391,11 +399,17 @@ function AddressPanel({
               {[address.phone, address.email].filter(Boolean).join(' · ')}
             </p>
           )}
-          {locked && (
+          {locked ? (
             <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
-              Sent to the supplier — they hold this address now. Ring them to change it.
+              The parcel has left, so this can no longer be changed here. Ring PowerBody if it has
+              not been delivered.
             </p>
-          )}
+          ) : withSupplier ? (
+            <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
+              PowerBody hold this order. Editing it here updates their copy too, and is refused if
+              they have already picked it.
+            </p>
+          ) : null}
         </div>
       ) : (
         <Note tone="critical" icon="alert-triangle">

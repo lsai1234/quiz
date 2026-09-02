@@ -7,6 +7,7 @@
  */
 import { createOrderFromCheckout, updateShippingAddress, newOrderId } from '@/lib/orders/service'
 import { getOrder, saveOrder } from '@/lib/orders/repo'
+import { __resetMockOrders, createMockSupplier } from '@/lib/supplier/powerbody/mock'
 import type { SupplierAddress } from '@/lib/supplier/types'
 
 const GOOD: SupplierAddress = {
@@ -35,6 +36,11 @@ async function paidOrder() {
 }
 
 describe('updateShippingAddress', () => {
+  beforeEach(() => {
+    __resetMockOrders()
+    process.env.SUPPLIER_ORDERING = 'simulate'
+  })
+
   it('sets the address and records what it was changed from', async () => {
     const order = await paidOrder()
     const updated = await updateShippingAddress(order.id, GOOD, 'Founder One')
@@ -68,15 +74,22 @@ describe('updateShippingAddress', () => {
   })
 
   describe('what it refuses', () => {
-    it('refuses once the order has gone to the supplier', async () => {
+    it('refuses once the parcel has shipped', async () => {
       const order = await paidOrder()
-      order.status = 'submitted_to_supplier'
+      order.status = 'shipped'
       order.supplierOrderId = 'PB-123'
       await saveOrder(order)
 
-      await expect(updateShippingAddress(order.id, GOOD)).rejects.toThrow(/already gone to the supplier/)
+      await expect(updateShippingAddress(order.id, GOOD)).rejects.toThrow(/parcel has left/)
       // And nothing was written.
       expect((await getOrder(order.id))?.shippingAddress).toBeNull()
+    })
+
+    it('refuses once delivered', async () => {
+      const order = await paidOrder()
+      order.status = 'delivered'
+      await saveOrder(order)
+      await expect(updateShippingAddress(order.id, GOOD)).rejects.toThrow(/parcel has left/)
     })
 
     it('refuses a refunded order', async () => {
@@ -112,6 +125,52 @@ describe('updateShippingAddress', () => {
       const updated = await updateShippingAddress(order.id, { ...GOOD, phone: null })
       expect(updated?.shippingAddress?.email).toBe('ada@example.com')
       expect(updated?.shippingAddress?.phone).toBeNull()
+    })
+  })
+
+  /**
+   * The half that matters: an order PowerBody already holds is corrected at
+   * THEIR end first, and a refusal from them leaves our row untouched.
+   */
+  describe('an order already with the supplier', () => {
+    async function submittedOrder() {
+      const order = await paidOrder()
+      const supplier = createMockSupplier()
+      const placed = await supplier.placeOrder({
+        // `supplierOrderInputFor` sends the internal id as the supplier
+        // reference, which is what PowerBody key `updateOrder` on.
+        reference: order.id,
+        shippingAddress: { ...GOOD, postcode: 'LS1 4DY' },
+        shippingPrice: 0,
+        weightKg: null,
+        lines: [{ sku: 'SKU1', quantity: 1, name: 'Whey', unitPrice: 20, taxPercent: 20 }],
+      })
+      order.status = 'submitted_to_supplier'
+      order.supplierOrderId = placed.supplierOrderId
+      order.supplierSimulated = true
+      await saveOrder(order)
+      return order
+    }
+
+    it('still allows the edit, and says the supplier was updated too', async () => {
+      const order = await submittedOrder()
+      const updated = await updateShippingAddress(order.id, { ...GOOD, line1: '9 New Road' })
+
+      expect(updated?.shippingAddress?.line1).toBe('9 New Road')
+      const entry = updated?.events.filter((e) => e.type === 'address-updated').pop()
+      expect(entry?.detail).toContain('the supplier was updated too')
+    })
+
+    it('writes nothing locally when the supplier refuses', async () => {
+      const order = await submittedOrder()
+      // No stored supplier order for this reference — the mock refuses, exactly
+      // as PowerBody would for an order they have already picked.
+      __resetMockOrders()
+
+      await expect(updateShippingAddress(order.id, { ...GOOD, line1: '9 New Road' })).rejects.toThrow(
+        /to update/,
+      )
+      expect((await getOrder(order.id))?.shippingAddress).toBeNull()
     })
   })
 })

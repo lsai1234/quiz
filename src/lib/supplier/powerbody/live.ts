@@ -861,6 +861,34 @@ export function createPowerBodyProvider(options: PowerBodyProviderOptions = {}):
       return { supplierOrderId, status: toSupplierOrder({ ...response, status: response?.status }).status }
     },
 
+    /**
+     * `dropshipping.updateOrder` — the same payload as `createOrder`, which is
+     * what their guide specifies ("similar to createOrder method"), keyed on
+     * our reference. They overwrite the order wholesale and keep its number.
+     *
+     * Unlike `placeOrder` this does NOT fail the order on rejection: the caller
+     * is correcting something on an order that already exists and is fine, and
+     * the honest outcome of a refused correction is "we could not change it",
+     * not "your order is now broken". `UPDATE_SUCCESS` is already in the
+     * accepted set — see `readOrderAck`.
+     */
+    async updateOrder(order: SupplierOrderInput): Promise<SupplierOrderResult> {
+      const payload = toCreateOrderPayload(order, options.orderContext?.(order) ?? {})
+      const response = await client.call<PbOrderResponse | null>('dropshipping.updateOrder', payload)
+      const ack = readOrderAck(response)
+      if (!ack.ok) {
+        throw new Error(
+          `PowerBody would not update order ${order.reference}: ${ack.response}. ` +
+            'They may already have picked it — the order still stands as it was.',
+        )
+      }
+      const supplierOrderId =
+        response?.powerbody_order_id != null && String(response.powerbody_order_id) !== ''
+          ? String(response.powerbody_order_id)
+          : order.reference
+      return { supplierOrderId, status: toSupplierOrder({ ...response, status: response?.status }).status }
+    },
+
     async getOrder(supplierOrderId: string): Promise<SupplierOrder | null> {
       // `ids` matches on our reference, which is what we sent as `id`. An order
       // we only know by their increment id is found by scanning the same reply.
