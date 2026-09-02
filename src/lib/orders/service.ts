@@ -750,6 +750,13 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
   // sent as a simulation stays a simulation even after the switch is flipped.
   const simulated = getOrderingSource() === 'simulate'
   const supplier = await supplierForOrdering(simulated)
+  // Written into the trail below. `getOrders` gives back only a status and a
+  // tracking number — never an address — so if the supplier's own record of
+  // where a parcel is going ever disagrees with ours, this line is the ONLY
+  // evidence of what we actually put on the wire. Reconstructing it afterwards
+  // is impossible: the order's address is editable, so today's value is not
+  // proof of what was sent last Tuesday.
+  const sentAddress = oneLineAddress(order.shippingAddress)
   try {
     const result = await supplier.placeOrder(await supplierOrderInputFor(order, fulfilable))
     return updateOrder(id, (o) => {
@@ -760,7 +767,8 @@ export async function submitOrderToSupplier(id: string): Promise<Order | null> {
       o.events.push(
         event(
           'submitted_to_supplier',
-          `${simulated ? 'SIMULATED — not sent to PowerBody · ' : ''}supplierOrderId=${result.supplierOrderId}`,
+          `${simulated ? 'SIMULATED — not sent to PowerBody · ' : ''}supplierOrderId=${result.supplierOrderId}` +
+            ` · shipping to ${sentAddress}`,
         ),
       )
     })

@@ -5,7 +5,13 @@
  * refusals: an address the supplier already holds, and an address that is
  * missing something PowerBody needs.
  */
-import { createOrderFromCheckout, updateShippingAddress, newOrderId } from '@/lib/orders/service'
+import {
+  createOrderFromCheckout,
+  updateShippingAddress,
+  approveOrderForSupplier,
+  submitOrderToSupplier,
+  newOrderId,
+} from '@/lib/orders/service'
 import { getOrder, saveOrder } from '@/lib/orders/repo'
 import { __resetMockOrders, createMockSupplier } from '@/lib/supplier/powerbody/mock'
 import type { SupplierAddress } from '@/lib/supplier/types'
@@ -177,5 +183,46 @@ describe('updateShippingAddress', () => {
       )
       expect((await getOrder(order.id))?.shippingAddress).toBeNull()
     })
+  })
+})
+
+/**
+ * What we put on the wire, written down at the moment we put it there.
+ *
+ * `getOrders` returns a status and a tracking number and nothing else — never
+ * an address — so when the supplier's record of where a parcel is going
+ * disagrees with ours, there is no way to ask them what we sent. And the
+ * order's own address is editable, so reading it back later proves nothing
+ * about what left the building.
+ */
+describe('the address sent to the supplier is recorded', () => {
+  beforeEach(() => {
+    __resetMockOrders()
+    process.env.SUPPLIER_ORDERING = 'simulate'
+  })
+
+  it('names it in the submitted_to_supplier event', async () => {
+    const order = await paidOrder()
+    await updateShippingAddress(order.id, GOOD)
+    await approveOrderForSupplier(order.id, 'Founder One')
+    const sent = await submitOrderToSupplier(order.id)
+
+    const entry = sent?.events.find((e) => e.type === 'submitted_to_supplier')
+    expect(entry?.detail).toContain('shipping to Ada Lovelace, 12 Bell Street')
+    expect(entry?.detail).toContain('LS1 4DY')
+  })
+
+  it('survives the address being changed afterwards', async () => {
+    const order = await paidOrder()
+    await updateShippingAddress(order.id, GOOD)
+    await approveOrderForSupplier(order.id, 'Founder One')
+    await submitOrderToSupplier(order.id)
+
+    const after = await updateShippingAddress(order.id, { ...GOOD, line1: '9 Somewhere Else' })
+
+    // Current address is the new one; the trail still says what was sent.
+    expect(after?.shippingAddress?.line1).toBe('9 Somewhere Else')
+    const entry = after?.events.find((e) => e.type === 'submitted_to_supplier')
+    expect(entry?.detail).toContain('12 Bell Street')
   })
 })
