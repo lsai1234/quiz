@@ -21,6 +21,9 @@ interface Props {
   tone?: 'default' | 'deal'
   /** Optional line under the section title (e.g. "Save up to 25%"). */
   subtitle?: string
+  /** Products currently picked for a duel. Absent = no compare affordance. */
+  compareIds?: ReadonlySet<string>
+  onToggleCompare?: (product: CatalogueProduct) => void
 }
 
 /**
@@ -29,7 +32,7 @@ interface Props {
  * swiping compares them like top-trumps within the category. Cards deal in as
  * the shelf scrolls into view; desktop gets scroll arrows.
  */
-export function ShopSection({ section, onExpand, tone = 'default', subtitle }: Props) {
+export function ShopSection({ section, onExpand, tone = 'default', subtitle, compareIds, onToggleCompare }: Props) {
   const [reduced, setReduced] = useState(false)
   const deckRef = useRef<HTMLDivElement>(null)
 
@@ -89,7 +92,14 @@ export function ShopSection({ section, onExpand, tone = 'default', subtitle }: P
         >
           {section.products.map((product) => (
             <div key={product.id} data-card className="snap-center flex-shrink-0 w-[80vw] max-w-[300px]">
-              <ShopProductCard product={product} axes={axes} animate={!reduced} onExpand={onExpand} />
+              <ShopProductCard
+                product={product}
+                axes={axes}
+                animate={!reduced}
+                onExpand={onExpand}
+                compareSelected={compareIds?.has(product.id)}
+                onToggleCompare={onToggleCompare}
+              />
             </div>
           ))}
         </div>

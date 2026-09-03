@@ -17,6 +17,7 @@ import { stripPhrase } from '@/lib/shop/synonyms'
 import { buildSuggestions, jumpPatch, type Suggestion } from '@/lib/shop/suggestions'
 import { readRecentSearches, rememberSearch, clearRecentSearches } from '@/lib/shop/recent-searches'
 import { bestNudge } from '@/lib/shop/basket-alchemy'
+import { MAX_DUEL_PRODUCTS } from '@/lib/shop/duel'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -33,6 +34,8 @@ import { ShopProductSheet } from './ShopProductSheet'
 import { ShopSearchBar } from './ShopSearchBar'
 import { ShopFilterSheet } from './ShopFilterSheet'
 import { ShopBasketNudge } from './ShopBasketNudge'
+import { ShopDuelSheet } from './ShopDuelSheet'
+import { ShopCompareBar } from './ShopCompareBar'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
@@ -164,6 +167,13 @@ export function ShopShell() {
    * next week.
    */
   const [dismissedNudges, setDismissedNudges] = useState<ReadonlySet<string>>(new Set())
+  /**
+   * Products picked for a duel, in the order they were picked. Two at most —
+   * see `MAX_DUEL_PRODUCTS`; a third replaces the oldest rather than being
+   * refused, because a silent no-op reads as a broken button.
+   */
+  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [duelOpen, setDuelOpen] = useState(false)
   /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
@@ -364,6 +374,27 @@ export function ShopShell() {
     () => bestNudge({ resolved, subtotal, bundles, products, dismissed: dismissedNudges, skipDelivery: true }),
     [resolved, subtotal, bundles, products, dismissedNudges],
   )
+
+  const compareSet = useMemo(() => new Set(compareIds), [compareIds])
+  const comparing = useMemo(
+    () => compareIds.map((id) => productsById.get(id)).filter((p): p is CatalogueProduct => !!p),
+    [compareIds, productsById],
+  )
+
+  const toggleCompare = (product: CatalogueProduct) => {
+    setCompareIds((ids) => {
+      if (ids.includes(product.id)) return ids.filter((id) => id !== product.id)
+      // Picking a third drops the first, so the button always does something.
+      const next = [...ids, product.id]
+      return next.slice(-MAX_DUEL_PRODUCTS)
+    })
+  }
+
+  const openDuel = () => {
+    if (comparing.length < MAX_DUEL_PRODUCTS) return
+    track('shop_duel_open', { a: comparing[0].id, b: comparing[1].id })
+    setDuelOpen(true)
+  }
 
   const dismissNudge = (key: string) => {
     track('shop_nudge_dismiss', { key })
@@ -633,16 +664,31 @@ export function ShopShell() {
                   tone="deal"
                   subtitle={`Save up to ${maxDealPct(dealsSection.products)}%`}
                   onExpand={openProduct}
+                  compareIds={compareSet}
+                  onToggleCompare={toggleCompare}
                 />
               )}
               {filteredSections.map((section) => (
-                <ShopSection key={section.slug} section={section} onExpand={openProduct} />
+                <ShopSection
+                  key={section.slug}
+                  section={section}
+                  onExpand={openProduct}
+                  compareIds={compareSet}
+                  onToggleCompare={toggleCompare}
+                />
               ))}
             </div>
           )}
         </>
       )}
       </main>
+
+      {duelOpen && comparing.length === MAX_DUEL_PRODUCTS && (
+        <ShopDuelSheet
+          products={[comparing[0], comparing[1]]}
+          onClose={() => setDuelOpen(false)}
+        />
+      )}
 
       {filtersOpen && (
         <ShopFilterSheet
@@ -659,11 +705,26 @@ export function ShopShell() {
         <ShopProductSheet product={expanded} onBuyNow={handleBuyNow} onClose={() => setExpanded(null)} />
       )}
 
-      {/* Slim basket opener — the full drawer opens on tap */}
-      {count > 0 && !drawerOpen && (
+      {/* The bottom region: a duel being assembled, a suggestion, a basket — or
+          any combination. It appears for a compare selection even with an empty
+          basket, because picking two products is a task of its own. */}
+      {!drawerOpen && (count > 0 || comparing.length > 0) && (
         <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6 pointer-events-none" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
-          {/* Above the basket bar, where there is still something to add. */}
-          {shelfNudge && (
+          {/*
+            While a duel is being assembled the compare bar takes the nudge's
+            place. Compare is an active task and the nudge is a passive
+            suggestion; stacking both above the basket bar is three things
+            competing for the bottom of a phone.
+          */}
+          {comparing.length > 0 ? (
+            <div className="pointer-events-auto mb-2">
+              <ShopCompareBar
+                products={comparing}
+                onOpen={openDuel}
+                onClear={() => setCompareIds([])}
+              />
+            </div>
+          ) : count > 0 && shelfNudge && (
             <div className="pointer-events-auto mb-2">
               <ShopBasketNudge
                 nudge={shelfNudge}
@@ -672,6 +733,7 @@ export function ShopShell() {
               />
             </div>
           )}
+          {count > 0 && (
           <button
             onClick={openDrawer}
             className="max-w-lg mx-auto w-full flex items-center gap-3 rounded-2xl pl-4 pr-3 py-3 pointer-events-auto active:scale-[0.99] transition-transform"
@@ -681,6 +743,7 @@ export function ShopShell() {
             <span className="flex-1 text-left text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>View basket</span>
             <span className="text-sm font-black" style={{ fontFamily: 'var(--font-display)' }}>{formatGBP(subtotal)} →</span>
           </button>
+          )}
         </div>
       )}
 

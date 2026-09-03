@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
@@ -152,8 +152,9 @@ describe('ShopFilterSheet', () => {
     await userEvent.click(chip(/Show 3 results/))
     expect(onClose).toHaveBeenCalledTimes(1)
 
-    const dialog = screen.getByRole('dialog', { name: 'Filters' })
-    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Close filters' })[0])
+    // Exactly one control carries this name — the scrim is an unlabelled div,
+    // so nothing else answers to "Close filters".
+    await userEvent.click(screen.getByRole('button', { name: 'Close filters' }))
     expect(onClose).toHaveBeenCalledTimes(2)
 
     await userEvent.keyboard('{Escape}')

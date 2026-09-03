@@ -93,10 +93,17 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
 
   const sheet = (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Filters">
-      <button
-        aria-label="Close filters"
+      {/*
+        The scrim. A plain div rather than a labelled button: the header button
+        and Escape are the real ways out, and a second control with the SAME
+        accessible name is an ambiguity for anyone navigating by name — it also
+        sits under the panel, so "click the first Close" lands on something that
+        cannot receive the click.
+      */}
+      <div
+        aria-hidden
         onClick={onClose}
-        className="absolute inset-0 w-full h-full cursor-default"
+        className="absolute inset-0 w-full h-full"
         style={{ background: 'color-mix(in srgb, var(--color-bg) 72%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
       />
 

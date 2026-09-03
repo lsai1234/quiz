@@ -343,6 +343,52 @@ guess also has to be right more often than not, and "protein £30" means "around
 £30" at least as often as "under £30". A removable chip is not a reason to add a
 filter nobody asked for.
 
+### F3 — "the data is entirely in place" was not quite true
+
+Price per serving was the headline of this feature, and computing it the obvious
+way would have got it **backwards**.
+
+`servings` is a PRODUCT field describing one container — in practice the first
+variant — while the catalogue is full of products sold in several sizes:
+
+| | `servings` | variants |
+|---|---|---|
+| Whey | 30 | 1kg £34.99, **2kg £59.99** |
+| Omega-3 | 90 | 90 softgels £14.99, **180 £26.99** |
+| Vitamin D3 + K2 | 60 | 60 caps £12.99, **120 caps £22.99** |
+
+`variant.price / product.servings` prices the 2kg tub at £2.00 a serving against
+the 1kg tub's £1.17 — declaring the bigger tub *worse* value. A headline number
+that is confidently inverted is worse than no number.
+
+`per-serving.ts` therefore scales servings by container size, on the one
+assumption that holds within a single product: the same product at a different
+size is taken at the same dose. Across different products no such assumption is
+made. Where a size cannot be read, or two sizes are not the same unit, it returns
+null and the sheet shows an em dash — silence is the right answer to a question
+we cannot answer.
+
+**And a consolation has to be true.** Every scored row was carrying a note
+naming what the losing column is better for — "Costs less up front", "May go
+further per serving". Rendering the sheet showed Vitamin D3 (22p a serving,
+£12.99) beating a multivitamin (57p, £16.99) on *both* money rows, with both
+consolations still printed and both false. They are now conditional on the
+figures, and when one product simply wins on the money there is no consolation
+at all. Boilerplate reassurance is how a comparison starts lying.
+
+Smaller ones: a row is only scored where "better" is a fact, so format, dietary,
+onset and actives carry both values and no crown — crowning a preference invents
+a verdict. A crown is named in text as well as coloured, so it survives without
+the accent. Both products are compared at the variant the shelf card prices. And
+picking a third product replaces the oldest rather than being refused, because a
+control that silently does nothing reads as broken.
+
+Two a11y bugs of the same family as SS2's and SS3's, found by driving the real
+page: the sheet scrim and the header button shared the name "Close comparison"
+(so did the filter sheet's, from SS2 — both scrims are now unlabelled divs, since
+the header button and Escape are the real ways out), and the two "Add" buttons
+in the duel footer were both just "Add".
+
 ### F1 — and a pricing finding worth acting on
 
 **There is currently no bundle in the shop that is cheaper than its own products
@@ -507,6 +553,8 @@ A gsap card-flip makes it feel like a duel; reduced motion gets a straight
 reveal.
 
 *Why:* the data is entirely in place. Cheapest of the five to build.
+
+**Built.** With a correction to that claim — see below.
 
 ## F4 — Say It, Don't Sort It
 **The intent bar: type a sentence, get a shelf.**

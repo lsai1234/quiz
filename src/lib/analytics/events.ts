@@ -45,6 +45,8 @@ export const SHOP_EVENTS = [
   'shop_nudge_view',
   'shop_nudge_click',
   'shop_nudge_dismiss',
+  /** The Shelf Duel — two products opened head to head. */
+  'shop_duel_open',
   'product_open',
   'add_to_basket',
   'basket_open',

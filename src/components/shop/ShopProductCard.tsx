@@ -22,9 +22,16 @@ interface Props {
   animate?: boolean
   /** Open the detail sheet (wired in S4). */
   onExpand?: (product: CatalogueProduct) => void
+  /**
+   * Compare state. Absent means the card shows no compare affordance at all —
+   * the results grid and the empty state's "closest we stock" both pass nothing,
+   * because a duel is a shelf-browsing gesture.
+   */
+  compareSelected?: boolean
+  onToggleCompare?: (product: CatalogueProduct) => void
 }
 
-export function ShopProductCard({ product, axes, animate = true, onExpand }: Props) {
+export function ShopProductCard({ product, axes, animate = true, onExpand, compareSelected, onToggleCompare }: Props) {
   const add = useBasket((s) => s.add)
   const [justAdded, setJustAdded] = useState(false)
   const [reduced, setReduced] = useState(false)
@@ -56,7 +63,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
 
   return (
     <div
-      className="flex flex-col rounded-2xl overflow-hidden h-full"
+      className="relative flex flex-col rounded-2xl overflow-hidden h-full"
       style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
     >
       {/* Expandable body */}
@@ -77,7 +84,7 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5 mb-1">
+            <div className={`flex flex-wrap items-center gap-1.5 mb-1 ${onToggleCompare ? 'pr-7' : ''}`}>
               <span
                 className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
                 style={{
@@ -135,6 +142,35 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
           style={{ borderTop: '1px solid var(--color-border)' }}
         />
       </button>
+
+      {/*
+        Compare, in the corner rather than the action row: the row belongs to
+        "Add to basket", and a second button beside it competes with the thing
+        the card is for. Quiet until it is on.
+
+        Positioned absolutely but placed here in the DOM, AFTER the card's own
+        expand button, so opening the product stays the first thing a keyboard
+        (and every e2e card helper) reaches.
+      */}
+      {onToggleCompare && (
+        <button
+          onClick={() => onToggleCompare(product)}
+          aria-pressed={!!compareSelected}
+          aria-label={`Compare ${product.title}`}
+          className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
+          style={{
+            color: compareSelected ? 'var(--color-bg)' : 'var(--color-muted)',
+            background: compareSelected ? 'var(--color-accent)' : 'var(--color-surface-2)',
+            border: `1px solid ${compareSelected ? 'transparent' : 'var(--color-border-2)'}`,
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            {compareSelected
+              ? <path d="M20 6 9 17l-5-5" />
+              : <><path d="M8 3v18M16 3v18" /><path d="M3 8h18M3 16h18" /></>}
+          </svg>
+        </button>
+      )}
 
       {/* Add to basket */}
       <div className="p-3" style={{ borderTop: '1px solid var(--color-border)' }}>

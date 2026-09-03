@@ -238,6 +238,68 @@ test.describe('the shop', () => {
     await expect(page.getByRole('button', { name: 'Dismiss suggestion' })).toHaveCount(0)
   })
 
+  test('two products can be put head to head', async ({ page }) => {
+    await openShop(page)
+    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
+
+    // The tray appears on the FIRST pick and says what it is waiting for.
+    await compare.first().click()
+    await expect(page.getByText('Pick one more to compare')).toBeVisible()
+
+    await compare.nth(1).click()
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+
+    const sheet = page.getByRole('dialog', { name: 'Compare products' })
+    await expect(sheet).toBeVisible()
+    // The headline row, and the reason the sheet exists.
+    await expect(sheet.getByRole('rowheader', { name: 'Price per serving' })).toBeVisible()
+    await expect(sheet.getByRole('rowheader', { name: 'Price', exact: true })).toBeVisible()
+  })
+
+  test('the duel scores facts and leaves preferences alone', async ({ page }) => {
+    await openShop(page)
+    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
+    await compare.first().click()
+    await compare.nth(1).click()
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+
+    const sheet = page.getByRole('dialog', { name: 'Compare products' })
+    // A crown is named, not just coloured — so it survives without the accent.
+    await expect(sheet.getByText(/better on Price per serving/)).toBeAttached()
+    // Format is a preference: both values, no verdict.
+    const formatRow = sheet.getByRole('row').filter({ has: page.getByRole('rowheader', { name: 'Format' }) })
+    await expect(formatRow.getByText(/better on/)).toHaveCount(0)
+  })
+
+  test('a duel adds to the basket and closes', async ({ page }) => {
+    await openShop(page)
+    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
+    await compare.first().click()
+    await compare.nth(1).click()
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+
+    const sheet = page.getByRole('dialog', { name: 'Compare products' })
+    await sheet.getByRole('button', { name: /^Add CHRGD / }).first().click()
+    await expect.poll(() => basketCount(page), { timeout: 10_000 }).toBe(1)
+
+    await sheet.getByRole('button', { name: 'Close comparison' }).click()
+    await expect(sheet).toBeHidden()
+  })
+
+  test('a third pick replaces the oldest rather than doing nothing', async ({ page }) => {
+    await openShop(page)
+    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
+    await compare.first().click()
+    await compare.nth(1).click()
+    await compare.nth(2).click()
+
+    // The first pick has been dropped, and the pair is still ready to compare.
+    // (Counting pressed BUTTONS would not work: a product on the Deals rail also
+    // appears on its category shelf, so one product carries two toggles.)
+    await expect(compare.first()).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeVisible()
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')
