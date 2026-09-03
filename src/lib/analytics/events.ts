@@ -38,6 +38,13 @@ export const SHOP_EVENTS = [
   'shop_filter_apply',
   /** A sort order chosen. */
   'shop_sort_change',
+  /**
+   * Basket Alchemy — what the basket is close to being. `view` fires once per
+   * distinct suggestion, so the click-through rate below it means something.
+   */
+  'shop_nudge_view',
+  'shop_nudge_click',
+  'shop_nudge_dismiss',
   'product_open',
   'add_to_basket',
   'basket_open',

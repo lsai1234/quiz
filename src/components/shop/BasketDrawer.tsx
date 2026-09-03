@@ -14,6 +14,8 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
 import { IconButton } from '@/components/ui/IconButton'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
+import type { BasketNudge } from '@/lib/shop/basket-alchemy'
+import { ShopBasketNudge } from './ShopBasketNudge'
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -27,6 +29,14 @@ interface Props {
   supplierValue: number
   appliedCode: AppliedCode | null
   onCodeChange: (applied: AppliedCode | null) => void
+  /**
+   * What the basket is close to being. Bundles only — this drawer draws its own
+   * free-delivery ladder below, and saying the same thing twice in one view is
+   * noise. See `lib/shop/basket-alchemy`.
+   */
+  nudge?: BasketNudge | null
+  onNudgeAct?: () => void
+  onNudgeDismiss?: () => void
   checkoutState: ShopCheckoutState
   onCheckout: () => void
   onClose: () => void
@@ -44,6 +54,9 @@ export function BasketDrawer({
   priced,
   supplierValue,
   appliedCode,
+  nudge,
+  onNudgeAct,
+  onNudgeDismiss,
   onCodeChange,
   checkoutState,
   onCheckout,
@@ -174,6 +187,16 @@ export function BasketDrawer({
 
             {/* Footer */}
             <div className="flex-shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+              {/* What this basket is close to being. Above the delivery ladder,
+                  because a bundle is the bigger and more specific of the two. */}
+              {nudge && (
+                <ShopBasketNudge
+                  nudge={nudge}
+                  onAct={() => onNudgeAct?.()}
+                  onDismiss={() => onNudgeDismiss?.()}
+                />
+              )}
+
               {/* Free-delivery progress. Hidden under a founder code: the offer
                   is a customer-facing ladder, and under one of these codes the
                   postage is either nothing or our supplier's actual charge —

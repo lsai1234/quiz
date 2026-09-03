@@ -197,6 +197,47 @@ test.describe('the shop', () => {
     await expect(page.getByText('Recent', { exact: true })).toBeHidden()
   })
 
+  test('a basket that is nearly a bundle says so, without promising the basket a bundle price', async ({ page }) => {
+    await openShop(page)
+    // Two of the three core products in the Early Shift bundle.
+    await addProductToBasket(page, 'CHRGD Whey Protein')
+    await addProductToBasket(page, 'CHRGD Electrolyte Mix')
+
+    const nudge = page.getByRole('link', { name: /bought on their own page/i })
+    await expect(nudge).toBeVisible({ timeout: 10_000 })
+    await expect(nudge).toHaveAttribute('href', /^\/bundles\//)
+
+    // The honesty constraint: a bundle is a separate checkout, so the nudge may
+    // never read as "add this to your basket and save". And it only quotes a
+    // price when the bundle genuinely beats the same products through the
+    // basket — the £50+ tier the basket already earns is not a bundle saving.
+    const text = (await nudge.textContent()) ?? ''
+    expect(text).not.toMatch(/add to basket/i)
+    expect(text).not.toMatch(/£0\.00/)
+    if (/less as a bundle/i.test(text)) {
+      expect(text).toMatch(/You have \d+ of its \d+/)
+    } else {
+      expect(text).toMatch(/\d+ of the \d+ in the/i)
+    }
+  })
+
+  test('a basket with nothing near a bundle gets the delivery ladder instead', async ({ page }) => {
+    await openShop(page)
+    await addProductToBasket(page, 'CHRGD Whey Protein')
+    // One product is a long way under the free-delivery line, and holding one of
+    // a three-product bundle is an advert rather than a near-miss.
+    await expect(page.getByText(/from free delivery/i).first()).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('a suggestion can be waved away', async ({ page }) => {
+    await openShop(page)
+    await addProductToBasket(page, 'CHRGD Whey Protein')
+    const dismiss = page.getByRole('button', { name: 'Dismiss suggestion' }).first()
+    await expect(dismiss).toBeVisible({ timeout: 10_000 })
+    await dismiss.click()
+    await expect(page.getByRole('button', { name: 'Dismiss suggestion' })).toHaveCount(0)
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')

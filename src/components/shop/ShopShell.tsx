@@ -16,6 +16,7 @@ import { decodeShopQuery, shopQuerySearch } from '@/lib/shop/query-url'
 import { stripPhrase } from '@/lib/shop/synonyms'
 import { buildSuggestions, jumpPatch, type Suggestion } from '@/lib/shop/suggestions'
 import { readRecentSearches, rememberSearch, clearRecentSearches } from '@/lib/shop/recent-searches'
+import { bestNudge } from '@/lib/shop/basket-alchemy'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -31,6 +32,7 @@ import { ShopBundlesRow } from './ShopBundlesRow'
 import { ShopProductSheet } from './ShopProductSheet'
 import { ShopSearchBar } from './ShopSearchBar'
 import { ShopFilterSheet } from './ShopFilterSheet'
+import { ShopBasketNudge } from './ShopBasketNudge'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
@@ -156,6 +158,12 @@ export function ShopShell() {
    */
   const [recent, setRecent] = useState<string[]>([])
   useEffect(() => { setRecent(readRecentSearches()) }, [])
+  /**
+   * Nudges waved away this session. Not persisted: the basket changes, and a
+   * suggestion about a basket someone no longer has is not one worth suppressing
+   * next week.
+   */
+  const [dismissedNudges, setDismissedNudges] = useState<ReadonlySet<string>>(new Set())
   /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
@@ -338,6 +346,40 @@ export function ShopShell() {
   // raw persisted lines showed "2 · £0.00" for a basket of products that had
   // left the catalogue. See `resolvedItemCount`.
   const count = resolvedItemCount(resolved)
+
+  /**
+   * What this basket is close to being — a bundle it nearly completes, or the
+   * free-delivery line. One suggestion at a time; see `basket-alchemy`.
+   *
+   * The shelf bar carries the delivery ladder too, because that is the half of
+   * this the drawer already had and it lived behind a tap — after the decision
+   * had been made rather than while there was still something to add.
+   */
+  const shelfNudge = useMemo(
+    () => bestNudge({ resolved, subtotal, bundles, products, dismissed: dismissedNudges }),
+    [resolved, subtotal, bundles, products, dismissedNudges],
+  )
+  /** The drawer draws its own free-delivery ladder, so it only takes bundles. */
+  const drawerNudge = useMemo(
+    () => bestNudge({ resolved, subtotal, bundles, products, dismissed: dismissedNudges, skipDelivery: true }),
+    [resolved, subtotal, bundles, products, dismissedNudges],
+  )
+
+  const dismissNudge = (key: string) => {
+    track('shop_nudge_dismiss', { key })
+    setDismissedNudges((keys) => new Set([...keys, key]))
+  }
+
+  // One view event per nudge, per basket state — a suggestion that survives a
+  // re-render is still the same suggestion, and counting it twice would make the
+  // click-through rate meaningless.
+  const viewedNudges = useRef(new Set<string>())
+  useEffect(() => {
+    const key = shelfNudge?.key
+    if (!key || viewedNudges.current.has(key)) return
+    viewedNudges.current.add(key)
+    track('shop_nudge_view', { key, kind: shelfNudge.kind })
+  }, [shelfNudge])
 
   // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
   const viewed = useRef(false)
@@ -620,6 +662,16 @@ export function ShopShell() {
       {/* Slim basket opener — the full drawer opens on tap */}
       {count > 0 && !drawerOpen && (
         <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6 pointer-events-none" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
+          {/* Above the basket bar, where there is still something to add. */}
+          {shelfNudge && (
+            <div className="pointer-events-auto mb-2">
+              <ShopBasketNudge
+                nudge={shelfNudge}
+                onAct={() => track('shop_nudge_click', { key: shelfNudge.key, kind: shelfNudge.kind })}
+                onDismiss={() => dismissNudge(shelfNudge.key)}
+              />
+            </div>
+          )}
           <button
             onClick={openDrawer}
             className="max-w-lg mx-auto w-full flex items-center gap-3 rounded-2xl pl-4 pr-3 py-3 pointer-events-auto active:scale-[0.99] transition-transform"
@@ -640,6 +692,9 @@ export function ShopShell() {
           supplierValue={supplierValue}
           appliedCode={appliedCode}
           onCodeChange={setAppliedCode}
+          nudge={drawerNudge}
+          onNudgeAct={() => drawerNudge && track('shop_nudge_click', { key: drawerNudge.key, kind: drawerNudge.kind })}
+          onNudgeDismiss={() => drawerNudge && dismissNudge(drawerNudge.key)}
           checkoutState={state}
           onCheckout={() => checkout(resolved, 'basket', appliedCode?.code ?? null)}
           onClose={closeDrawer}

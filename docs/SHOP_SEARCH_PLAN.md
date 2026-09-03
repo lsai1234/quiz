@@ -343,6 +343,45 @@ guess also has to be right more often than not, and "protein £30" means "around
 £30" at least as often as "under £30". A removable chip is not a reason to add a
 filter nobody asked for.
 
+### F1 — and a pricing finding worth acting on
+
+**There is currently no bundle in the shop that is cheaper than its own products
+bought à la carte.** This surfaced while building the nudge and it changed what
+the feature says.
+
+`BundlePriceSummary.saving` — the number behind "Save £6.48 vs buying
+separately" on the bundle cards — is `oneOffSubtotal − oneOffTotal`, i.e. the
+sum of the parts minus the same sum with the **£50+ bundle tier (8%)** applied.
+But `priceBasket` applies that identical tier to the shop basket. So a shopper
+who buys the three products loose gets the same 8%, and the "bundle saving" is a
+discount they were getting anyway.
+
+The nudge therefore computes its own figure (`bundleEdge`): the bundle price
+against the same products priced *through the basket*, so the tier is on both
+sides and cancels. Against the live catalogue that comes out at **zero for every
+bundle**, and the nudge leads on what the bundle *is* instead — "2 of the 3 in
+the Big Night, Big Morning. Add CHRGD Creatine Monohydrate for the full stack."
+No invented saving.
+
+Two consequences worth a decision, neither of which this branch takes:
+
+1. **The bundle cards' own "Save £X vs buying separately" is the same
+   comparison**, and is arguably misleading for the same reason. Changing it is
+   a copy and pricing question for the founder, not a refactor.
+2. **If bundles are meant to be cheaper, they are not priced that way.** The
+   nudge will start quoting a real saving automatically the day one is, with no
+   code change.
+
+Three smaller decisions: a bundle qualifies as "nearly" only when the basket
+holds at least as many of its products as it is missing — without that, one whey
+protein is "one of the three in the Early Shift" and every basket of one thing
+gets a bundle pitched at it. The nudge links out rather than adding to the
+basket, because `BundleLandingPage` checks out through `useStackCheckout` and not
+the shop basket: adding the missing product would not get the bundle price, and
+buying the bundle does not empty the basket — so the copy says bundles are bought
+on their own page. And only ONE suggestion shows at a time; the drawer takes
+bundles only, since it already draws the delivery ladder itself.
+
 ### SS3
 
 **The combobox role arrived with the listbox, as promised.** Through SS1 and SS2
