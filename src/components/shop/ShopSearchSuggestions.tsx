@@ -23,6 +23,7 @@ function labelFor(suggestion: Suggestion): string {
   if (suggestion.kind === 'jump') {
     return `${suggestion.label}, ${suggestion.count} ${suggestion.count === 1 ? 'product' : 'products'}`
   }
+  if (suggestion.kind === 'example') return `Try searching: ${suggestion.query}`
   return `Recent search: ${suggestion.query}`
 }
 
@@ -54,6 +55,7 @@ export function ShopSearchSuggestions({ id, suggestions, activeId, onSelect, onH
   if (suggestions.length === 0) return null
 
   const showingRecent = suggestions.some((s) => s.kind === 'recent')
+  const showingExamples = suggestions.some((s) => s.kind === 'example')
 
   return (
     <div
@@ -65,12 +67,12 @@ export function ShopSearchSuggestions({ id, suggestions, activeId, onSelect, onH
       }}
       onMouseDown={(e) => e.preventDefault()}
     >
-      {showingRecent && (
+      {(showingRecent || showingExamples) && (
         <p
           className="px-3.5 pt-2.5 pb-1 text-[9px] font-bold tracking-[0.18em] uppercase"
           style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
         >
-          Recent
+          {showingRecent ? 'Recent' : 'Try a sentence'}
         </p>
       )}
 
@@ -159,17 +161,27 @@ function Row({ suggestion }: { suggestion: Suggestion }) {
     )
   }
 
+  const isExample = suggestion.kind === 'example'
   return (
     <>
       <span
         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ background: 'var(--color-surface-2)', color: 'var(--color-muted)' }}
+        style={{
+          background: isExample ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'var(--color-surface-2)',
+          color: isExample ? 'var(--color-accent)' : 'var(--color-muted)',
+        }}
         aria-hidden
       >
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 8v4l3 2" />
-          <circle cx="12" cy="12" r="9" />
-        </svg>
+        {isExample ? (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" />
+          </svg>
+        ) : (
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 8v4l3 2" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        )}
       </span>
       <span className="flex-1 min-w-0 text-xs font-semibold truncate" style={{ color: 'var(--color-text-2)' }}>
         {suggestion.query}

@@ -18,6 +18,7 @@ import { buildSuggestions, jumpPatch, type Suggestion } from '@/lib/shop/suggest
 import { readRecentSearches, rememberSearch, clearRecentSearches } from '@/lib/shop/recent-searches'
 import { bestNudge } from '@/lib/shop/basket-alchemy'
 import { MAX_DUEL_PRODUCTS } from '@/lib/shop/duel'
+import { shouldAskModel, isEmptyPatch, type IntentPatch } from '@/lib/shop/intent-ai'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -396,6 +397,57 @@ export function ShopShell() {
     setDuelOpen(true)
   }
 
+  /**
+   * ── The fallback parse ──────────────────────────────────────────────────────
+   *
+   * Only for a sentence the local pass could make NOTHING of: no results, no
+   * intent read from the table, at least three words. A query that already works
+   * is never sent away to be answered again, and nothing on screen waits for
+   * this — local results render first and this folds in if it arrives with
+   * something. With no OPENAI_API_KEY the route returns an empty patch and the
+   * shop behaves exactly as it did before it existed.
+   */
+  const askedModel = useRef<string | null>(null)
+  useEffect(() => {
+    if (isLoading || !results) return
+    const text = query.q.trim()
+    if (!shouldAskModel(text, results.products.length, results.matchedPhrases.length)) return
+    if (askedModel.current === text) return
+    askedModel.current = text
+
+    let live = true
+    void fetch('/api/shop-intent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: text }),
+    })
+      .then((r) => r.json())
+      .then(({ patch }: { patch?: IntentPatch }) => {
+        // Only if they are still looking at the search this was asked about —
+        // rewriting a query someone has since changed is worse than not helping.
+        if (!live || !patch || isEmptyPatch(patch) || useLatestQuery.current !== text) return
+        track('shop_intent_ai', { applied: true })
+        setQuery((q) => ({
+          ...q,
+          q: patch.text || '',
+          dietary: [...new Set([...q.dietary, ...patch.dietary])],
+          goals: [...new Set([...q.goals, ...patch.goals])],
+          slots: [...new Set([...q.slots, ...patch.slots])],
+          categories: [...new Set([...q.categories, ...patch.categories])],
+          priceMax: q.priceMax ?? patch.priceMax,
+          priceMin: q.priceMin ?? patch.priceMin,
+          stimFree: q.stimFree || patch.stimFree,
+        }))
+        setSearchInput(patch.text || '')
+      })
+      .catch(() => { /* a search that works without this must not break because of it */ })
+    return () => { live = false }
+  }, [isLoading, results, query.q])
+
+  /** What the box holds right now, for the async parse to check against. */
+  const useLatestQuery = useRef('')
+  useEffect(() => { useLatestQuery.current = query.q.trim() }, [query.q])
+
   const dismissNudge = (key: string) => {
     track('shop_nudge_dismiss', { key })
     setDismissedNudges((keys) => new Set([...keys, key]))
@@ -482,7 +534,10 @@ export function ShopShell() {
    * ends up on screen is a state the shopper can see and undo.
    */
   const handleSuggestion = (suggestion: Suggestion) => {
-    if (suggestion.kind === 'recent') {
+    // A recent search and an example both just fill the box — the difference is
+    // where the words came from, and that matters to analytics, not behaviour.
+    if (suggestion.kind === 'recent' || suggestion.kind === 'example') {
+      if (suggestion.kind === 'example') track('shop_search_example', { q: suggestion.query })
       handleQueryChange({ ...query, q: suggestion.query })
       return
     }

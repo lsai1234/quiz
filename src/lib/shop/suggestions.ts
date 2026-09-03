@@ -20,6 +20,10 @@ import { parseQuery } from './synonyms'
  *      turns a vague search into a filter the shopper chose.
  *   3. **Recents** — only on an empty box, because they answer a different
  *      question ("what was I doing") and would be noise beside real matches.
+ *   4. **Examples** — also only on an empty box, and only to fill the space
+ *      recents have not. Nothing on the page tells a shopper that a whole
+ *      sentence works here, and a placeholder cannot carry that; a tappable
+ *      "vegan protein under £30" teaches it in one go.
  *
  * Everything here is pure so it can be tested without a DOM: the component
  * renders this list and owns nothing but the keyboard.
@@ -40,6 +44,26 @@ export type Suggestion =
   | { kind: 'product'; id: string; product: CatalogueProduct }
   | { kind: 'jump'; id: string; facet: JumpFacet; value: string; label: string; count: number }
   | { kind: 'recent'; id: string; query: string }
+  | { kind: 'example'; id: string; query: string }
+
+/**
+ * Sentences the shop can actually read, offered on an empty box.
+ *
+ * Every one is parseable by `synonyms.ts` AND returns products today — an
+ * example that needed the AI fallback, or that came back empty, would teach the
+ * wrong lesson twice over. `suggestions.test.ts` runs each one through
+ * `applyShopQuery` against the real catalogue, so a price bound that outlives
+ * the products behind it fails the build rather than the shopper.
+ */
+export const EXAMPLE_QUERIES = [
+  'vegan protein under £40',
+  'stim free pre workout',
+  'something for sleep',
+  'cheapest electrolytes',
+] as const
+
+/** Rows an empty box aims to fill, between recents and examples. */
+const EMPTY_BOX_ROWS = 4
 
 export interface SuggestionInput {
   index: SearchIndex
@@ -105,7 +129,16 @@ export function buildSuggestions({ index, products, query, recent }: SuggestionI
   const trimmed = query.trim()
 
   if (normalise(trimmed).length < MIN_QUERY_LENGTH) {
-    return recent.map((q) => ({ kind: 'recent', id: `recent:${q}`, query: q }))
+    const rows: Suggestion[] = recent.map((q) => ({ kind: 'recent', id: `recent:${q}`, query: q }))
+    // Examples fill what history has not — a shopper with a full history has
+    // already learned what the box does.
+    const seen = new Set(recent.map((q) => normalise(q)))
+    for (const example of EXAMPLE_QUERIES) {
+      if (rows.length >= EMPTY_BOX_ROWS) break
+      if (seen.has(normalise(example))) continue
+      rows.push({ kind: 'example', id: `example:${example}`, query: example })
+    }
+    return rows
   }
 
   // Parsed, not raw: "vegan protein" should suggest proteins, and the search

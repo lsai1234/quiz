@@ -1,7 +1,10 @@
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { buildIndex } from '../search'
+import { EMPTY_QUERY, applyShopQuery } from '../shop-query'
 import {
   buildSuggestions,
+  EXAMPLE_QUERIES,
   jumpPatch,
   MAX_PRODUCT_SUGGESTIONS,
   MAX_JUMP_SUGGESTIONS,
@@ -46,18 +49,56 @@ const kinds = (s: Suggestion[]) => s.map((x) => x.kind)
 const ids = (s: Suggestion[]) => s.map((x) => x.id)
 
 describe('an empty box', () => {
-  it('offers recent searches and nothing else', () => {
+  it('leads with recent searches', () => {
     const out = build('', ['whey', 'magnesium'])
-    expect(kinds(out)).toEqual(['recent', 'recent'])
-    expect(out.map((s) => (s.kind === 'recent' ? s.query : ''))).toEqual(['whey', 'magnesium'])
+    expect(out.slice(0, 2).map((s) => (s.kind === 'recent' ? s.query : ''))).toEqual(['whey', 'magnesium'])
   })
 
-  it('offers nothing at all when there is no history', () => {
-    expect(build('')).toEqual([])
+  /**
+   * Nothing else on the page says a whole sentence works here, and a placeholder
+   * cannot carry that. A tappable "vegan protein under £30" teaches it in one go.
+   */
+  it('offers example sentences when there is no history to show', () => {
+    const out = build('')
+    expect(out.length).toBeGreaterThan(0)
+    expect(out.every((s) => s.kind === 'example')).toBe(true)
   })
 
-  it('still shows recents for a single character — one letter is not a search', () => {
-    expect(kinds(build('m', ['whey']))).toEqual(['recent'])
+  it('lets history push the examples out as it fills up', () => {
+    const full = build('', ['a1', 'b2', 'c3', 'd4', 'e5'])
+    expect(full.every((s) => s.kind === 'recent')).toBe(true)
+
+    const partial = build('', ['whey'])
+    expect(kinds(partial)[0]).toBe('recent')
+    expect(kinds(partial)).toContain('example')
+  })
+
+  it('does not offer an example the shopper has already run', () => {
+    const out = build('', [EXAMPLE_QUERIES[0]])
+    const examples = out.filter((s) => s.kind === 'example').map((s) => (s.kind === 'example' ? s.query : ''))
+    expect(examples).not.toContain(EXAMPLE_QUERIES[0])
+  })
+
+  it('still answers the empty-box question for a single character', () => {
+    expect(kinds(build('m', ['whey']))[0]).toBe('recent')
+  })
+
+  /**
+   * Asserted against the REAL catalogue, not the fixture above: an example that
+   * returns nothing teaches the wrong lesson twice over, and whether it returns
+   * anything depends on what the shop actually stocks. This fails the day an
+   * example outlives the products behind it.
+   */
+  it('only offers examples the real shop can actually answer', () => {
+    const index = buildIndex(MOCK_CATALOGUE)
+    for (const example of EXAMPLE_QUERIES) {
+      // The RESULT SET, not the suggestion list. An earlier version of this
+      // checked suggestions, which search the parsed text without applying the
+      // filters — so "vegan protein under £30" looked fine here while returning
+      // nothing in the shop, because the cheapest vegan protein is £36.99.
+      const result = applyShopQuery(MOCK_CATALOGUE, { ...EMPTY_QUERY, q: example }, index)
+      expect(result.products.length).toBeGreaterThan(0)
+    }
   })
 })
 

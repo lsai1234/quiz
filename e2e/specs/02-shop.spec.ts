@@ -336,6 +336,20 @@ test.describe('the shop', () => {
     expect(text).not.toMatch(/too much|unsafe|overdose|stop taking/i)
   })
 
+  test('the empty search box teaches that a whole sentence works', async ({ page }) => {
+    await openShop(page)
+    const box = page.getByRole('combobox', { name: 'Search the shop' })
+    await box.click()
+
+    await expect(page.getByText('Try a sentence')).toBeVisible({ timeout: 10_000 })
+    const example = page.getByRole('option', { name: /^Try searching: / }).first()
+    await example.click()
+
+    // Tapping one runs it, and it returns products rather than teaching a dead end.
+    await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
+    expect(await page.locator('[data-card]').count()).toBeGreaterThan(0)
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')

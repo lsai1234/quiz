@@ -47,6 +47,10 @@ export const SHOP_EVENTS = [
   'shop_nudge_dismiss',
   /** The Shelf Duel — two products opened head to head. */
   'shop_duel_open',
+  /** The fallback parse read a sentence the synonym table could not. */
+  'shop_intent_ai',
+  /** An example sentence tapped — does the box teach what it can do? */
+  'shop_search_example',
   'product_open',
   'add_to_basket',
   'basket_open',

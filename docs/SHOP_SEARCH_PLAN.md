@@ -343,6 +343,46 @@ guess also has to be right more often than not, and "protein £30" means "around
 £30" at least as often as "under £30". A removable chip is not a reason to add a
 filter nobody asked for.
 
+### F4 — most of it was already built; the missing half was teaching it
+
+The marquee behaviour — parse a sentence, show the reading back as editable
+chips — shipped in SS1 and SS2. What was genuinely missing was two things.
+
+**Nobody knew they could type a sentence.** A placeholder cannot carry that. The
+empty search box now offers example queries beneath any recent searches, and
+tapping one runs it. Every example is asserted against the REAL catalogue through
+`applyShopQuery`, because an example that returns nothing teaches the wrong
+lesson twice over — and the first draft did exactly that: "vegan protein under
+£30" came back empty, since the cheapest vegan protein is £36.99. The unit test
+that was supposed to catch it was checking the suggestion list rather than the
+result set, which searches the parsed text without applying the filters. Both are
+fixed, and the test now fails the day a price bound outlives the products behind
+it.
+
+**The fallback parse, `/api/shop-intent`.** For sentences the table cannot read.
+Three things keep it from making the shop worse:
+
+- It only runs when the local pass found NOTHING, read no intent, and the query
+  is at least three words. A query that already works is never sent away to be
+  answered again.
+- Nothing waits for it. Local results render first and the patch folds in if it
+  arrives with something — and is discarded if the shopper has since changed
+  what they typed.
+- Everything the model returns is validated against the live catalogue before it
+  reaches a query: an unknown dietary tag, a slot that is not ours, a category
+  nobody stocks, a negative price — all dropped. The worst a bad completion can
+  do is nothing. Whatever survives is applied as ordinary filters, so it lands as
+  the same removable chips a person would get from tapping.
+
+With no `OPENAI_API_KEY` the route returns an empty patch and the shop behaves
+exactly as it did before it existed.
+
+One small thing worth recording: the system prompt is worded to avoid the word
+"treats". `claim-safety.ts` lints authored copy for it, a prompt is authored
+copy, and a regexp cannot tell that this one uses the word to *forbid* a claim.
+Saying the same thing in words the lint passes keeps the guard meaningful
+everywhere.
+
 ### F2 — split in two, and the gap half deliberately declawed
 
 **Coverage went to the basket drawer, not a floating ring.** The plan wanted a
