@@ -22,7 +22,7 @@ test.describe('the shop', () => {
     const cards = page.locator('[data-card]')
     const before = await cards.count()
 
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatine')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('creatine')
 
     // The heading is the contract: a count, and the words that produced it.
     await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
@@ -34,14 +34,14 @@ test.describe('the shop', () => {
     await openShop(page)
     // Nothing in the catalogue is titled "sleep" — this only works because the
     // index carries stack slots and goals.
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('sleep')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('sleep')
     await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
     expect(await page.locator('[data-card]').count()).toBeGreaterThan(0)
   })
 
   test('a search that finds nothing offers a way out', async ({ page }) => {
     await openShop(page)
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('bicycle')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('bicycle')
 
     await expect(page.getByText(/Nothing matched/i)).toBeVisible({ timeout: 10_000 })
     // A dead end with nothing on it ends the visit — the nearest products are
@@ -53,12 +53,12 @@ test.describe('the shop', () => {
     // only drops the text, which is why they do not share a name.
     await page.getByRole('button', { name: 'Start over' }).click()
     await expect(page.getByText(/Nothing matched/i)).toHaveCount(0)
-    await expect(page.getByRole('searchbox', { name: 'Search the shop' })).toHaveValue('')
+    await expect(page.getByRole('combobox', { name: 'Search the shop' })).toHaveValue('')
   })
 
   test('a typo still finds the product', async ({ page }) => {
     await openShop(page)
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatiine')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('creatiine')
     await expect(page.getByText(/closest spellings/i)).toBeVisible({ timeout: 10_000 })
     await expect(page.locator('[data-card]').first()).toContainText(/creatine/i)
   })
@@ -66,7 +66,7 @@ test.describe('the shop', () => {
   test('a search result adds to the basket', async ({ page }) => {
     await openShop(page)
     expect(await basketCount(page)).toBe(0)
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatine')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('creatine')
     await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
     await addProductToBasket(page, 'CHRGD Creatine Monohydrate')
     expect(await basketCount(page)).toBe(1)
@@ -74,13 +74,13 @@ test.describe('the shop', () => {
 
   test('a search is in the URL, and a deep link restores it', async ({ page }) => {
     await openShop(page)
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatine')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('creatine')
     await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
     await expect.poll(() => new URL(page.url()).searchParams.get('q'), { timeout: 10_000 }).toBe('creatine')
 
     // The whole point of the URL: a narrowed shop is a place you can send someone.
     await page.goto('/shop?q=creatine&d=vegan&sort=price-asc')
-    await expect(page.getByRole('searchbox', { name: 'Search the shop' })).toHaveValue('creatine', { timeout: 20_000 })
+    await expect(page.getByRole('combobox', { name: 'Search the shop' })).toHaveValue('creatine', { timeout: 20_000 })
     await expect(page.getByRole('button', { name: 'Vegan', exact: true })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByRole('button', { name: 'Price: low to high' })).toBeVisible()
   })
@@ -114,16 +114,87 @@ test.describe('the shop', () => {
 
   test('an inferred filter is shown back, and removing it edits the search', async ({ page }) => {
     await openShop(page)
-    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('vegan protein')
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('vegan protein')
 
     // What we worked out from the phrasing, shown back in their own words.
     const chip = page.getByRole('button', { name: 'Remove filter: Vegan' })
     await expect(chip).toBeVisible({ timeout: 10_000 })
+    // The suggestion popup sits over the chip row while the box has focus, as
+    // any combobox does — dismiss it first, the way a shopper would.
+    await page.getByRole('combobox', { name: 'Search the shop' }).press('Escape')
 
     await chip.click()
     // Dismissing it deletes the word from the box, so the two can never disagree.
-    await expect(page.getByRole('searchbox', { name: 'Search the shop' })).toHaveValue('protein')
+    await expect(page.getByRole('combobox', { name: 'Search the shop' })).toHaveValue('protein')
     await expect(chip).toBeHidden()
+  })
+
+  test('the search box suggests products, and one opens its sheet', async ({ page }) => {
+    await openShop(page)
+    const box = page.getByRole('combobox', { name: 'Search the shop' })
+    await box.fill('creatine')
+
+    const listbox = page.getByRole('listbox', { name: 'Search suggestions' })
+    await expect(listbox).toBeVisible({ timeout: 10_000 })
+    await expect(box).toHaveAttribute('aria-expanded', 'true')
+
+    const first = listbox.getByRole('option').first()
+    await expect(first).toContainText(/creatine/i)
+    await first.click()
+
+    // A product suggestion goes straight to its sheet — routing the common case
+    // through a one-row results grid would just add a step.
+    const sheet = page.locator('div.fixed.inset-0.z-50').last()
+    await expect(sheet.getByRole('button', { name: 'Add to basket' })).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('the keyboard drives the suggestion list', async ({ page }) => {
+    await openShop(page)
+    const box = page.getByRole('combobox', { name: 'Search the shop' })
+    await box.fill('creatine')
+    await expect(page.getByRole('listbox', { name: 'Search suggestions' })).toBeVisible({ timeout: 10_000 })
+
+    // Nothing is highlighted until an arrow key asks for it.
+    await expect(box).not.toHaveAttribute('aria-activedescendant', /.+/)
+    await box.press('ArrowDown')
+    const active = await box.getAttribute('aria-activedescendant')
+    expect(active).toMatch(/^product:/)
+    await expect(page.locator(`[id="${active}"]`)).toHaveAttribute('aria-selected', 'true')
+
+    await box.press('Enter')
+    const sheet = page.locator('div.fixed.inset-0.z-50').last()
+    await expect(sheet.getByRole('button', { name: 'Add to basket' })).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('a shelf suggestion becomes a filter you can see and undo', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill('hydration')
+
+    const jump = page.getByRole('option', { name: /^Hydration, \d+ product/ })
+    await expect(jump).toBeVisible({ timeout: 10_000 })
+    await jump.click()
+
+    // The text clears and the filter takes its place, as a chip that can be removed.
+    await expect(page.getByRole('combobox', { name: 'Search the shop' })).toHaveValue('')
+    await expect(page.getByRole('button', { name: /^Remove filter: / })).toBeVisible()
+    await expect.poll(() => new URL(page.url()).searchParams.toString()).not.toBe('')
+  })
+
+  test('a search that was acted on comes back as a recent search', async ({ page }) => {
+    await openShop(page)
+    const box = page.getByRole('combobox', { name: 'Search the shop' })
+
+    await box.fill('creatine')
+    await expect(page.getByRole('listbox', { name: 'Search suggestions' })).toBeVisible({ timeout: 10_000 })
+    await box.press('Enter')
+
+    await box.fill('')
+    await box.click()
+    await expect(page.getByText('Recent', { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('option', { name: 'Recent search: creatine' })).toBeVisible()
+
+    await page.getByRole('button', { name: 'Clear recent searches' }).click()
+    await expect(page.getByText('Recent', { exact: true })).toBeHidden()
   })
 
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {

@@ -14,6 +14,8 @@ import { buildIndex, queryForAnalytics } from '@/lib/shop/search'
 import { EMPTY_QUERY, applyShopQuery, isEmptyQuery, needsResultsView, type ShopQuery } from '@/lib/shop/shop-query'
 import { decodeShopQuery, shopQuerySearch } from '@/lib/shop/query-url'
 import { stripPhrase } from '@/lib/shop/synonyms'
+import { buildSuggestions, jumpPatch, type Suggestion } from '@/lib/shop/suggestions'
+import { readRecentSearches, rememberSearch, clearRecentSearches } from '@/lib/shop/recent-searches'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -148,6 +150,13 @@ export function ShopShell() {
   const [searchInput, setSearchInput] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   /**
+   * Recent searches, from this browser only. Read once on mount rather than on
+   * every render: `localStorage` is synchronous and reading it during render
+   * would also differ between the server pass and the client one.
+   */
+  const [recent, setRecent] = useState<string[]>([])
+  useEffect(() => { setRecent(readRecentSearches()) }, [])
+  /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
    * on this page are computed from it.
@@ -213,6 +222,16 @@ export function ShopShell() {
     if (next === `${window.location.pathname}${window.location.search}`) return
     window.history.replaceState(window.history.state, '', next)
   }, [query])
+
+  /**
+   * Suggestions track the BOX, not the results — they are undebounced on
+   * purpose. A dropdown that lags a keystroke behind the text above it reads as
+   * broken, and the work is a few hundred string comparisons.
+   */
+  const suggestions = useMemo(
+    () => buildSuggestions({ index, products, query: searchInput, recent }),
+    [index, products, searchInput, recent],
+  )
 
   const searching = needsResultsView(query)
   const results = useMemo(
@@ -339,7 +358,8 @@ export function ShopShell() {
    */
   const openFromResults = (p: CatalogueProduct, rank: number) => {
     const safe = queryForAnalytics(query.q)
-    track('shop_search_select', { id: p.id, rank, ...(safe ? { q: safe } : {}) })
+    track('shop_search_select', { id: p.id, rank, source: 'grid', ...(safe ? { q: safe } : {}) })
+    rememberCurrentSearch()
     openProduct(p)
   }
 
@@ -380,6 +400,44 @@ export function ShopShell() {
    * that produced it. The box changes in front of them, so the text and the
    * filters can never disagree — see `stripPhrase`.
    */
+  /**
+   * A suggestion chosen from the dropdown.
+   *
+   * A product goes straight to its sheet — most searches here are for a thing,
+   * and routing them through a one-row results grid adds a step to the common
+   * case. A shelf jump becomes the filter it names and clears the text, so what
+   * ends up on screen is a state the shopper can see and undo.
+   */
+  const handleSuggestion = (suggestion: Suggestion) => {
+    if (suggestion.kind === 'recent') {
+      handleQueryChange({ ...query, q: suggestion.query })
+      return
+    }
+
+    if (suggestion.kind === 'jump') {
+      setRecent(rememberSearch(searchInput))
+      handleQueryChange({ ...query, ...jumpPatch(suggestion), q: '' })
+      track('shop_filter_apply', { facet: suggestion.facet, value: suggestion.value, on: true, results: suggestion.count })
+      return
+    }
+
+    const rank = suggestions.findIndex((s) => s.id === suggestion.id)
+    const safe = queryForAnalytics(searchInput)
+    track('shop_search_select', { id: suggestion.product.id, rank, source: 'suggestion', ...(safe ? { q: safe } : {}) })
+    setRecent(rememberSearch(searchInput))
+    openProduct(suggestion.product)
+  }
+
+  /**
+   * A search is only worth remembering once it has been ACTED on — a product
+   * opened, a shelf jumped to, or Enter pressed. Recording every settled
+   * keystroke instead would fill the list with the prefixes someone typed on the
+   * way to the thing they wanted.
+   */
+  const rememberCurrentSearch = () => {
+    if (searchInput.trim()) setRecent(rememberSearch(searchInput))
+  }
+
   const dismissIntent = (phrase: string) => {
     const q = stripPhrase(query.q, phrase)
     track('shop_filter_apply', { facet: 'intent', value: phrase, on: false, results: results?.products.length ?? 0 })
@@ -473,6 +531,10 @@ export function ShopShell() {
                   value={searchInput}
                   onChange={setSearchInput}
                   resultCount={results ? results.products.length : null}
+                  suggestions={suggestions}
+                  onSelect={handleSuggestion}
+                  onSubmit={rememberCurrentSearch}
+                  onClearRecent={() => setRecent(clearRecentSearches())}
                 />
                 <ShopFilterBar
                   tags={availableDietary}

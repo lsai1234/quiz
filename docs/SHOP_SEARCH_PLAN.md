@@ -274,7 +274,7 @@ recovers into an add-to-basket; the filter sheet applies and clears.
 |---|---|---|
 | **SS1** | `search.ts`, `synonyms.ts`, `shop-query.ts` + tests; search bar; results grid; zero state | **Built** — see below |
 | **SS2** | Filter sheet with live facet counts, sort, chips, URL deep links, analytics | **Built** — see below |
-| **SS3** | Suggestions dropdown, recent searches, typo tolerance, `⌘K` | Yes |
+| **SS3** | Suggestions dropdown, recent searches, typo tolerance, `⌘K` | **Built** — see below |
 | **SS4** | The features in Part B, individually | Each on its own |
 
 Rough sizing: SS1 a day, SS2 a day, SS3 half a day.
@@ -342,6 +342,41 @@ Visibility makes a guess *correctable*, but that was never the only test: the
 guess also has to be right more often than not, and "protein £30" means "around
 £30" at least as often as "under £30". A removable chip is not a reason to add a
 filter nobody asked for.
+
+### SS3
+
+**The combobox role arrived with the listbox, as promised.** Through SS1 and SS2
+the input stayed a plain `type="search"`; `role="combobox"` promises a screen
+reader a popup, arrow keys and an `aria-activedescendant`, and claiming that with
+nothing to honour it is worse than not claiming it. The role, the listbox and the
+keyboard landed together. (This renamed the role in every test that addressed the
+box — `getByRole('searchbox')` became `getByRole('combobox')`.)
+
+**Suggestions are undebounced, unlike results.** They track the BOX, not the
+query: a dropdown that lags a keystroke behind the text above it reads as broken,
+and the work is a few hundred string comparisons.
+
+**A recent search is recorded when it is ACTED on**, not when it settles — a
+product opened, a shelf jumped to, or Enter pressed. Recording every settled
+keystroke would fill the list with the prefixes someone typed on the way to the
+thing they wanted.
+
+**Recents never leave the device.** `localStorage` only, and deliberately not an
+analytics event: a search history in a supplement shop is a list of what someone
+thinks is wrong with them, and `shop_search` already answers the only question
+the business has, in aggregate, with contact-shaped queries dropped.
+
+**Option names are explicit `aria-label`s.** A product row holds three separate
+facts and the gaps between them are flex `gap`, so the browser's default name
+came out as "CHRGD Whey ProteinProtein£30.00" — the third time this trap has
+appeared in this feature, after the filter chips in SS2. Worth stating as a rule:
+in this codebase, a row built from several spans needs its name written down.
+
+**A product suggestion goes straight to its sheet**, and a shelf suggestion
+becomes the filter it names and clears the text. Most searches here are for a
+thing, so routing the common case through a one-row results grid would add a
+step; and a jump that leaves visible, removable state is better than one that
+silently re-runs a search.
 
 ---
 
