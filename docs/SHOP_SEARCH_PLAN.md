@@ -343,6 +343,39 @@ guess also has to be right more often than not, and "protein £30" means "around
 £30" at least as often as "under £30". A removable chip is not a reason to add a
 filter nobody asked for.
 
+### F5 — the one place margin may steer, stated plainly
+
+The wheel is weighted: towards discounted lines, towards variants we hold a lot
+of, and towards higher `marginPriority`. That last one deserves saying out loud,
+because everywhere else in this shop margin is forbidden from influencing what
+surfaces — `search.ts` refuses it in ranking and a test enforces it.
+
+The difference is that **a search is a question and this is a game.** Someone
+typing "creatine" is owed the best answer to what they asked. Someone pulling a
+lever has asked for a surprise, and which surprise arrives is ours to choose. If
+this ever stops being a lever and starts being an answer, the weighting goes.
+
+Three guardrails are not negotiable, and all three are asserted:
+
+- It only lands on a variant that is **in stock**.
+- It only lands on something that passes the shopper's **active filters** — a
+  wheel that lands on something you cannot eat is a broken toy. It reuses
+  `applyShopQuery` rather than re-implementing the predicates, so it cannot drift
+  from the filters on screen. It ignores the search TEXT, though: spinning for a
+  surprise inside a question is a different gesture.
+- The price shown is `variant.price`, the price charged.
+
+The outcome is decided before the first frame; the names flicking past are
+decoration, so the wheel cannot land somewhere the guardrails have not cleared.
+Reduced motion gets the answer without the theatre.
+
+**A bug worth recording.** The wheel span forever and never landed. The pull was
+guarded by a ref while its timers were cleared from a different effect — React's
+development remount cleared the timers and the ref survived, so nothing ever
+restarted. The spin and its timers now live in one effect and are torn down
+together. Only reproducible in the running app, which is why it was found by
+driving it rather than by a test.
+
 ### F4 — most of it was already built; the missing half was teaching it
 
 The marquee behaviour — parse a sentence, show the reading back as editable

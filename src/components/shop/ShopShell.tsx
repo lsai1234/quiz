@@ -37,6 +37,7 @@ import { ShopFilterSheet } from './ShopFilterSheet'
 import { ShopBasketNudge } from './ShopBasketNudge'
 import { ShopDuelSheet } from './ShopDuelSheet'
 import { ShopCompareBar } from './ShopCompareBar'
+import { ShopRouletteSheet } from './ShopRouletteSheet'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
@@ -175,6 +176,7 @@ export function ShopShell() {
    */
   const [compareIds, setCompareIds] = useState<string[]>([])
   const [duelOpen, setDuelOpen] = useState(false)
+  const [rouletteOpen, setRouletteOpen] = useState(false)
   /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
@@ -643,6 +645,26 @@ export function ShopShell() {
           </button>
         </div>
         )}
+
+        {/*
+          The third way in, and the only one that is a game. Under the two
+          serious paths rather than beside them: it is a lever, not an answer.
+        */}
+        {!searching && (
+          <button
+            onClick={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
+            className="w-full mt-2.5 flex items-center gap-2 rounded-xl px-4 py-2.5 text-left active:scale-[0.99] transition-transform"
+            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)' }}
+          >
+            <span className="text-xs font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+              Feeling lucky?
+            </span>
+            <span className="flex-1 text-[11px]" style={{ color: 'var(--color-text-2)' }}>
+              Spin for a flavour
+            </span>
+            <span className="text-xs" style={{ color: 'var(--color-accent)' }} aria-hidden>→</span>
+          </button>
+        )}
       </div>
 
       {!searching && <TrustStrip products={products} />}
@@ -737,6 +759,10 @@ export function ShopShell() {
         </>
       )}
       </main>
+
+      {rouletteOpen && (
+        <ShopRouletteSheet products={products} query={query} onClose={() => setRouletteOpen(false)} />
+      )}
 
       {duelOpen && comparing.length === MAX_DUEL_PRODUCTS && (
         <ShopDuelSheet

@@ -350,6 +350,44 @@ test.describe('the shop', () => {
     expect(await page.locator('[data-card]').count()).toBeGreaterThan(0)
   })
 
+  test('the roulette lands on something real, at the price it charges', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('button', { name: /Feeling lucky/ }).click()
+
+    const sheet = page.getByRole('dialog', { name: 'Flavour roulette' })
+    await expect(sheet).toBeVisible()
+
+    // It opens already spun — nobody opens this to look at an empty wheel.
+    const add = sheet.getByRole('button', { name: /^Add for £/ })
+    await expect(add).toBeEnabled({ timeout: 10_000 })
+
+    // The price on the button is the price it adds.
+    const label = (await add.textContent()) ?? ''
+    const price = label.match(/£[\d.]+/)?.[0]
+    expect(price).toBeTruthy()
+    await add.click()
+    await expect.poll(() => basketCount(page), { timeout: 10_000 }).toBe(1)
+  })
+
+  test('the roulette stays inside the shopper’s filters', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('button', { name: 'Vegan', exact: true }).click()
+    await page.getByRole('button', { name: /Feeling lucky/ }).click()
+
+    const sheet = page.getByRole('dialog', { name: 'Flavour roulette' })
+    await expect(sheet.getByRole('button', { name: /^Add for £/ })).toBeEnabled({ timeout: 10_000 })
+
+    // Whatever it landed on has to be a product the vegan filter allows — a
+    // wheel that lands on something you cannot eat is a broken toy.
+    const status = await sheet.getByRole('status').textContent()
+    expect(status).toMatch(/Landed on /)
+    const name = status!.replace(/^Landed on /, '').split(',')[0]
+
+    await sheet.getByRole('button', { name: 'Close roulette' }).click()
+    await page.getByRole('combobox', { name: 'Search the shop' }).fill(name)
+    await expect(page.locator('[data-card]').filter({ hasText: name }).first()).toBeVisible({ timeout: 10_000 })
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')

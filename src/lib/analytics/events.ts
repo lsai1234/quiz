@@ -51,6 +51,9 @@ export const SHOP_EVENTS = [
   'shop_intent_ai',
   /** An example sentence tapped — does the box teach what it can do? */
   'shop_search_example',
+  /** Flavour Roulette — opened, and each pull of the lever. */
+  'shop_roulette_open',
+  'shop_roulette_spin',
   'product_open',
   'add_to_basket',
   'basket_open',
