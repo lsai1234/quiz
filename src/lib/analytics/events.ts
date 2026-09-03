@@ -16,6 +16,24 @@ import { getQuizArm } from '@/lib/experiments/client'
 export const SHOP_EVENTS = [
   'shop_view',
   'shop_filter_toggle',
+  /**
+   * One per SETTLED search — fired off the debounced query, so it records what
+   * someone actually searched for rather than every prefix on the way there.
+   * Carries the result count and how many dietary filters were on.
+   */
+  'shop_search',
+  /**
+   * A search that returned nothing. Split out from `shop_search` because it is
+   * the most commercially useful thing search knows: what people ask us for that
+   * we do not stock. Read it as a buying list, not as an error log.
+   */
+  'shop_search_zero',
+  /**
+   * A result opened, with its position in the list. The only signal that says
+   * whether the ranking is any good — a search whose answer is always at
+   * position nine is a search nobody trusts.
+   */
+  'shop_search_select',
   'product_open',
   'add_to_basket',
   'basket_open',

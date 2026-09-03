@@ -272,12 +272,45 @@ recovers into an add-to-basket; the filter sheet applies and clears.
 
 | Phase | Scope | Shippable alone? |
 |---|---|---|
-| **SS1** | `search.ts`, `synonyms.ts`, `shop-query.ts` + tests; search bar; results grid; zero state | Yes — this is the whole complaint solved |
+| **SS1** | `search.ts`, `synonyms.ts`, `shop-query.ts` + tests; search bar; results grid; zero state | **Built** — see below |
 | **SS2** | Filter sheet with live facet counts, sort, chips, URL deep links, analytics | Yes |
 | **SS3** | Suggestions dropdown, recent searches, typo tolerance, `⌘K` | Yes |
 | **SS4** | The features in Part B, individually | Each on its own |
 
 Rough sizing: SS1 a day, SS2 a day, SS3 half a day.
+
+## What SS1 changed about this plan
+
+Three things came out differently in the build, and the reasons are worth
+keeping.
+
+**The browse/results switch is not `isEmptyQuery`.** The plan had any active
+filter flipping the page into a results grid, which would have been a regression:
+the dietary chips have always narrowed every shelf *in place*, and that works.
+`needsResultsView()` is the real switch — dietary filters keep you on the
+shelves, and text, price, sort, stock, deals or a category selection move you to
+the grid, because those are what a horizontal deck genuinely cannot express.
+
+**A dietary word is removed from the search text, not kept.** The plan argued for
+keeping "vegan" in the text so a product titled "Vegan Protein" still matched.
+In practice that double-counted: the word matched the product's own dietary tag
+as *text* while the filter was already enforcing it, so "vegan protein" returned
+every vegan product in the shop rather than the vegan proteins. The tag is the
+source of truth for the question; a title that claims it without the tag behind
+it is a catalogue bug, not a match.
+
+**The search bar is a plain `type="search"`, not a combobox.** `role="combobox"`
+without a listbox promises a keyboard contract to a screen reader that nothing
+can honour. The combobox semantics land in SS3, with the suggestion list they
+describe.
+
+Two smaller ones: the empty state's reset is labelled **"Start over"** rather
+than "Clear search", because the input already has a Clear button and two
+controls sharing a name in one view is a real ambiguity; and a bare `£30` in a
+query still sets no price bound, as planned — the guess is only safe once SS2
+shows the parse back as an editable chip.
+
+---
 
 ## Two decisions worth making before starting
 

@@ -17,6 +17,61 @@ test.describe('the shop', () => {
     await expect(page.getByRole('heading', { name: /Hydration/i }).first()).toBeVisible()
   })
 
+  test('search narrows the shop to a results grid', async ({ page }) => {
+    await openShop(page)
+    const cards = page.locator('[data-card]')
+    const before = await cards.count()
+
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatine')
+
+    // The heading is the contract: a count, and the words that produced it.
+    await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
+    await expect.poll(async () => cards.count(), { timeout: 10_000 }).toBeLessThan(before)
+    await expect(cards.first()).toContainText(/creatine/i)
+  })
+
+  test('search finds a product by what it is FOR, not just its name', async ({ page }) => {
+    await openShop(page)
+    // Nothing in the catalogue is titled "sleep" — this only works because the
+    // index carries stack slots and goals.
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('sleep')
+    await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
+    expect(await page.locator('[data-card]').count()).toBeGreaterThan(0)
+  })
+
+  test('a search that finds nothing offers a way out', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('bicycle')
+
+    await expect(page.getByText(/Nothing matched/i)).toBeVisible({ timeout: 10_000 })
+    // A dead end with nothing on it ends the visit — the nearest products are
+    // offered regardless.
+    await expect(page.getByRole('heading', { name: /Popular right now|Closest we stock/ })).toBeVisible()
+    expect(await page.locator('[data-card]').count()).toBeGreaterThan(0)
+
+    // "Start over" drops the search AND the filters; the box's own Clear button
+    // only drops the text, which is why they do not share a name.
+    await page.getByRole('button', { name: 'Start over' }).click()
+    await expect(page.getByText(/Nothing matched/i)).toHaveCount(0)
+    await expect(page.getByRole('searchbox', { name: 'Search the shop' })).toHaveValue('')
+  })
+
+  test('a typo still finds the product', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatiine')
+    await expect(page.getByText(/closest spellings/i)).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('[data-card]').first()).toContainText(/creatine/i)
+  })
+
+  test('a search result adds to the basket', async ({ page }) => {
+    await openShop(page)
+    expect(await basketCount(page)).toBe(0)
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatine')
+    await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
+    await addProductToBasket(page, 'CHRGD Creatine Monohydrate')
+    expect(await basketCount(page)).toBe(1)
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')

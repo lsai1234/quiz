@@ -10,6 +10,8 @@ import { useShopCheckout } from '@/hooks/useShopCheckout'
 import { resolveBasket, basketSubtotal, basketSupplierValue, priceBasket, resolvedItemCount } from '@/lib/basket/helpers'
 import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
+import { buildIndex, queryForAnalytics } from '@/lib/shop/search'
+import { EMPTY_QUERY, applyShopQuery, needsResultsView, type ShopQuery } from '@/lib/shop/shop-query'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -23,6 +25,9 @@ import { ShopCategoryNav } from './ShopCategoryNav'
 import { ShopSection } from './ShopSection'
 import { ShopBundlesRow } from './ShopBundlesRow'
 import { ShopProductSheet } from './ShopProductSheet'
+import { ShopSearchBar } from './ShopSearchBar'
+import { ShopResultsGrid } from './ShopResultsGrid'
+import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 
 // Canonical dietary-chip order (matches the sheet's labels).
@@ -125,7 +130,20 @@ export function ShopShell() {
   const { state, checkout, reset } = useShopCheckout()
   const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [filters, setFilters] = useState<DietaryTag[]>([])
+  /**
+   * Everything narrowing the shop, in one object. Replaces the old
+   * `filters: DietaryTag[]`, which could only ever express dietary tags and died
+   * on navigation. SS2 puts this in the URL.
+   */
+  const [query, setQuery] = useState<ShopQuery>(EMPTY_QUERY)
+  /**
+   * The search box's own value, updated on every keystroke and committed to
+   * `query.q` on a 250ms debounce. Two values rather than one because the input
+   * has to stay responsive while the result set — and the analytics event behind
+   * it — should not be recomputed per character.
+   */
+  const [searchInput, setSearchInput] = useState('')
+  const filters = query.dietary
   /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
@@ -145,6 +163,46 @@ export function ShopShell() {
 
   const sections = useMemo(() => groupByCategory(products), [products])
   const dealsAll = useMemo(() => dealsProducts(products), [products])
+
+  // One index per catalogue. Rebuilding it is tens of products' worth of string
+  // work, so it is keyed on the catalogue itself rather than invalidated by hand.
+  const index = useMemo(() => buildIndex(products), [products])
+
+  /**
+   * Commit the typed value to the query on a debounce. `searchInput` drives the
+   * input; this drives the results — so the box never lags a keystroke behind
+   * while the result set is not recomputed per character.
+   */
+  useEffect(() => {
+    if (searchInput === query.q) return
+    const timer = setTimeout(() => setQuery((q) => ({ ...q, q: searchInput })), 250)
+    return () => clearTimeout(timer)
+  }, [searchInput, query.q])
+
+  const searching = needsResultsView(query)
+  const results = useMemo(
+    () => (searching ? applyShopQuery(products, query, index) : null),
+    [searching, products, query, index],
+  )
+
+  /**
+   * One `shop_search` per settled query, not per keystroke — it fires off the
+   * debounced value, so it records what someone actually searched for rather
+   * than every prefix on the way there. A zero-result search is recorded
+   * separately because it is the most commercially useful thing search knows:
+   * what people ask us for that we do not stock.
+   */
+  const lastTracked = useRef<string | null>(null)
+  useEffect(() => {
+    if (isLoading || !results) return
+    const text = query.q.trim()
+    if (!text || text === lastTracked.current) return
+    lastTracked.current = text
+    const safe = queryForAnalytics(text)
+    const props = { results: results.products.length, filters: query.dietary.length, ...(safe ? { q: safe } : {}) }
+    track('shop_search', props)
+    if (results.products.length === 0) track('shop_search_zero', safe ? { q: safe } : {})
+  }, [isLoading, results, query.q, query.dietary.length])
 
   // Apply dietary filters, dropping any section (or the Deals rail) left empty.
   const filteredSections = useMemo(
@@ -238,11 +296,32 @@ export function ShopShell() {
   const openDrawer = () => { reset(); track('basket_open', { items: count }); setDrawerOpen(true) }
   const closeDrawer = () => { setDrawerOpen(false); reset() }
   const openProduct = (p: CatalogueProduct) => { track('product_open', { id: p.id, category: p.category }); setExpanded(p) }
+
+  /**
+   * A product opened from the result grid. The rank is the whole point: it is
+   * the only signal that says whether the ranking is any good — a search whose
+   * answer is always at position nine is a search nobody trusts.
+   */
+  const openFromResults = (p: CatalogueProduct, rank: number) => {
+    const safe = queryForAnalytics(query.q)
+    track('shop_search_select', { id: p.id, rank, ...(safe ? { q: safe } : {}) })
+    openProduct(p)
+  }
+
+  /**
+   * Set the whole query at once — the empty state's recoveries do this. The
+   * input is pushed in step so the box never shows a search that is no longer
+   * running (and the debounce sees them equal and stands down).
+   */
+  const handleQueryChange = (next: ShopQuery) => {
+    setQuery(next)
+    setSearchInput(next.q)
+  }
   const toggleFilter = (tag: DietaryTag) => {
     const on = !filters.includes(tag)
     const next = on ? [...filters, tag] : filters.filter((t) => t !== tag)
     track('shop_filter_toggle', { tag, on, active: next.length })
-    setFilters(next)
+    setQuery((q) => ({ ...q, dietary: next }))
   }
 
   const handleBuyNow = () => {
@@ -275,7 +354,13 @@ export function ShopShell() {
           Protein, performance, hydration and everyday health — the full CHRGD range, priced à la carte.
         </p>
 
-        {/* Two clear "start here" paths: the personalised quiz and the deals rail. */}
+        {/*
+          Two clear "start here" paths: the personalised quiz and the deals rail.
+          Both are answers to "what should I look at" — so they stand down once
+          someone has said what they are looking for, along with the trust strip
+          below, and the results start higher up the page.
+        */}
+        {!searching && (
         <div className="grid grid-cols-2 gap-2.5 mt-4">
           <Link
             href="/"
@@ -309,44 +394,80 @@ export function ShopShell() {
             </span>
           </button>
         </div>
+        )}
       </div>
 
-      <TrustStrip products={products} />
+      {!searching && <TrustStrip products={products} />}
 
       {isLoading ? (
         <LoadingSkeleton />
-      ) : noResults ? (
-        <div className="px-5 max-w-lg mx-auto text-center py-16">
-          <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Nothing matches those filters</p>
-          <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>Try removing a dietary filter.</p>
-          <button onClick={() => setFilters([])} className="mt-5 px-5 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-transform" style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
-            Clear filters
-          </button>
-        </div>
       ) : (
         <>
           {availableDietary.length > 0 && (
             <div className="pb-1">
-              <ShopFilterBar tags={availableDietary} active={filters} onToggle={toggleFilter} onClear={() => setFilters([])} />
+              <ShopFilterBar tags={availableDietary} active={filters} onToggle={toggleFilter} onClear={() => setQuery((q) => ({ ...q, dietary: [] }))} />
             </div>
           )}
-          <ShopCategoryNav categories={navCategories} />
-          <div className="pb-4">
-            {filteredBundles.length > 0 && (
-              <ShopBundlesRow bundles={filteredBundles} products={products} />
-            )}
-            {dealsSection && (
-              <ShopSection
-                section={dealsSection}
-                tone="deal"
-                subtitle={`Save up to ${maxDealPct(dealsSection.products)}%`}
+          <ShopCategoryNav
+            categories={searching ? [] : navCategories}
+            search={
+              <ShopSearchBar
+                value={searchInput}
+                onChange={setSearchInput}
+                resultCount={results ? results.products.length : null}
+              />
+            }
+          />
+
+          {/*
+            Two modes. Browsing is the page exactly as it has always been —
+            shelves, bundles, deals — because the dietary chips already narrow
+            them in place and that works. A search replaces the shelves with a
+            grid: a horizontal deck cannot answer "how many, and is it in there".
+          */}
+          {searching && results ? (
+            results.products.length > 0 ? (
+              <ShopResultsGrid
+                products={results.products}
+                query={query.q.trim()}
+                fuzzy={results.fuzzy}
+                onExpand={openFromResults}
+              />
+            ) : (
+              <ShopNoResults
+                products={products}
+                index={index}
+                query={query}
+                onQueryChange={handleQueryChange}
                 onExpand={openProduct}
               />
-            )}
-            {filteredSections.map((section) => (
-              <ShopSection key={section.slug} section={section} onExpand={openProduct} />
-            ))}
-          </div>
+            )
+          ) : noResults ? (
+            <ShopNoResults
+              products={products}
+              index={index}
+              query={query}
+              onQueryChange={handleQueryChange}
+              onExpand={openProduct}
+            />
+          ) : (
+            <div className="pb-4">
+              {filteredBundles.length > 0 && (
+                <ShopBundlesRow bundles={filteredBundles} products={products} />
+              )}
+              {dealsSection && (
+                <ShopSection
+                  section={dealsSection}
+                  tone="deal"
+                  subtitle={`Save up to ${maxDealPct(dealsSection.products)}%`}
+                  onExpand={openProduct}
+                />
+              )}
+              {filteredSections.map((section) => (
+                <ShopSection key={section.slug} section={section} onExpand={openProduct} />
+              ))}
+            </div>
+          )}
         </>
       )}
       </main>
