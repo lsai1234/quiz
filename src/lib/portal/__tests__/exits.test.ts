@@ -116,7 +116,7 @@ describe('a parcel on its way back', () => {
       {
         at: '2026-08-01T00:00:00.000Z',
         items: [
-          { title: 'LQD Recover', quantity: 1, value: 36.54 },
+          { title: 'CHRGD Recover', quantity: 1, value: 36.54 },
           { title: 'Creatine', quantity: 2, value: 32.26 },
         ],
       },
@@ -138,7 +138,7 @@ describe('a parcel on its way back', () => {
   it('lists what was sent, so it can be ticked off against the box', () => {
     const [row] = buildExitQueue([member('r', returning())]).rows
     expect(row.returnItems).toEqual([
-      { key: '0:0', title: 'LQD Recover', quantity: 1, value: 36.54, at: '2026-08-01T00:00:00.000Z' },
+      { key: '0:0', title: 'CHRGD Recover', quantity: 1, value: 36.54, at: '2026-08-01T00:00:00.000Z' },
       { key: '0:1', title: 'Creatine', quantity: 2, value: 32.26, at: '2026-08-01T00:00:00.000Z' },
     ])
     expect(row.paidTotal).toBe(46.86)

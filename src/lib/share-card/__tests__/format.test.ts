@@ -159,11 +159,6 @@ describe('saying what this is', () => {
     expect(view.standfirst).toContain('SUPPLEMENT STACK')
   })
 
-  it('says LQD when the stack is drinks', () => {
-    const view = buildShareCardView(PERSONAS.drinks, 'story')
-    expect(view.standfirst).toContain('LQD')
-  })
-
   it('is on every format — a stranger sees whichever one got shared', () => {
     for (const format of ['story', 'square', 'og', 'entry'] as const) {
       expect(buildShareCardView(PERSONAS.complete, format).standfirst).toBeTruthy()
@@ -217,10 +212,6 @@ describe('the eyebrow', () => {
     expect(buildShareCardView(PERSONAS.complete, 'og').eyebrow).toBe('CHRGD STACK')
   })
 
-  it('reframes for drinks mode', () => {
-    expect(buildShareCardView(PERSONAS.drinks, 'story').eyebrow).toContain('CHRGD LQD')
-  })
-
   it('is where an opted-in first name goes, not the headline', () => {
     // The headline is the stack's name. A card that says "SAM'S IRON FOUNDATIONS"
     // has two subjects and no hook.
@@ -258,7 +249,6 @@ describe('the rest of the view', () => {
     // strength stack never gets the wellbeing image.
     expect(buildShareCardView(PERSONAS.complete, 'story').artKey).toBe('strength')
     expect(buildShareCardView(PERSONAS.wellbeing, 'story').artKey).toBe('recovery')
-    expect(buildShareCardView(PERSONAS.drinks, 'story').artKey).toBe('hydration')
   })
 
   it('says out loud that the art is still a placeholder', () => {

@@ -290,7 +290,7 @@ export function buildShareCardView(
 
   const greeting = payload.firstName ? `${payload.firstName.toUpperCase()}’S ` : ''
   const tier = TIER_LABEL[payload.level] ?? null
-  const base = payload.drinksMode ? 'CHRGD LQD' : 'CHRGD STACK'
+  const base = 'CHRGD STACK'
   const eyebrow = spec.showTier && tier ? `${greeting}${base} · ${tier}` : `${greeting}${base}`
 
   // The band costs a product row. That trade is the point rather than a
@@ -335,10 +335,8 @@ export function buildShareCardView(
     spec,
     specRows: shown.map((row) => ({ name: row.product, qty: row.dose ?? '' })),
     stamp: `STACK REPORT — ${String(artIndex).padStart(2, '0')}`,
-    kicker: (payload.archetype.trim() || (payload.drinksMode ? 'The LQD Package' : 'Your Stack')).toUpperCase(),
-    standfirst: payload.drinksMode
-      ? 'MY CHRGD LQD PACKAGE, BUILT BY THE QUIZ'
-      : 'MY SUPPLEMENT STACK, BUILT BY THE CHRGD QUIZ',
+    kicker: (payload.archetype.trim() || 'Your Stack').toUpperCase(),
+    standfirst: 'MY SUPPLEMENT STACK, BUILT BY THE CHRGD QUIZ',
     // The footer is the only place that says how to get one, and "build yours"
     // assumed the reader already knew what "yours" would be. Naming the quiz is
     // the instruction; the URL beside it is where.

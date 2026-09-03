@@ -34,7 +34,7 @@ import {
 /** Fields where two answers both contributing means "both", not "the later one". */
 const UNION_FIELDS = [
   'goals', 'lifestyle', 'safetyFlags', 'currentSupplements', 'currentVitamins',
-  'trainingType', 'tryOurs', 'workoutAddOns',
+  'trainingType', 'tryOurs',
 ] as const
 
 type UnionField = (typeof UNION_FIELDS)[number]

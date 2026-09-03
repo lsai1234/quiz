@@ -39,64 +39,6 @@ wellness sections), and the wellness follow-up questions appear on either track
 special-casing: required slots and product picks key off the chosen goals, not
 the track.
 
-## CHRGD LQD — the pre-made drinks package
-
-A third choice on the opening screen (`Act1Hero`): tapping **CHRGD LQD** flips
-the two track cards into drinks framing and shows the zero-prep pitch ("Every
-drink arrives ready-made · No powders, no pills, no mixing · Drink what we
-send — you're covered"). It sets `answers.drinksMode` alongside the normal
-track; everything downstream rides the existing machinery.
-
-**The package promise is convenience**: everything arrives as a real,
-ready-made drink. Easier than a shelf of tubs and pill bottles — the customer
-drinks what we send and their month is covered.
-
-- **Same quiz**, minus the formats question (`skipInDrinksMode` in
-  `quiz-flow.ts` — the answer is implied), plus one LQD-only step — **"How many
-  drinks a day?"** (`drinksPerDay`, `onlyInDrinksMode`, sits right after goals)
-  — and with LQD copy overrides (`lqd: { q, hint }`, applied after the track
-  override). `drinksPerDay` is a *pace*, not a dose: it never changes the
-  amounts or pricing, only how the month-of-drinks story is framed.
-- **Pre-made only blueprint**: `buildStackBlueprint` filters candidates
-  through `isReadyToDrink` (`src/lib/catalogue/filters.ts` — `rtd`, `drink`,
-  `shot`, `can`… formats). **Powders and effervescents never qualify** — they
-  need mixing. Slots with no RTD candidate fall away via the existing graceful
-  omission. Swap alternatives and boosters on the review page respect the same
-  filter (`lqdOnly`).
-- **The LQD ready-to-drink range** (mock catalogue): LQD Protein (bottled
-  shakes), Hydrate (electrolyte bottles), Charge / Charge Zero (energy cans),
-  Daily Vits (vitamin drink), Night (wind-down bottle), Immunity Shot, Greens
-  (cold-pressed bottles), Recover (post-session bottles) and Creatine Shot —
-  full slot coverage as drinks. One case ≈ one month at standard usage, so a
-  subscription never needs more than a case per line per month. Priorities and
-  goal sets sit at/below the powder/capsule counterparts, so **normal-mode
-  picks are unchanged** (regression-tested). Live, tag Shopify products
-  `rtd`/`drink`/`shot` and they join LQD automatically.
-- **Month-of-drinks logic** (`src/lib/lqd.ts`, `buildLqdPlan`): the LQD promise
-  is that you *don't* need a drink of everything every day. The whole month's
-  drinks land in one box and you sip them at your own pace — it's the **monthly
-  total** that keeps you covered, not a daily schedule. So each line is
-  classified as:
-  - **timed** — the pre-workout / `energy` slot only: one per session, a real
-    moment (keeps its `pourMomentFor` note).
-  - **anytime** — vitamins, protein, greens, hydration, recovery, sleep, gut:
-    a pool with no daily obligation (gets a `coverageNoteFor` line: "N for the
-    month — have them most days and you're covered").
-
-  `buildLqdPlan` totals the pool, splits timed vs anytime, and **reconciles the
-  chosen `drinksPerDay` pace against the fixed pool**: `daysOfCover` +
-  a `fit` (`brisk` runs it down early → suggest boosters · `balanced` lands on a
-  month · `stretches` lasts past 30 days). This is a presentation layer over the
-  already-sized subscription plan — quantities, pricing, checkout, accounts and
-  the hub are all unchanged. `LqdPourGuide` renders it as a **liquid**
-  experience (filling month gauge with a drifting meniscus, drinks as little
-  liquid levels; `.lqd-*` classes in `globals.css`, held still under
-  `prefers-reduced-motion`). The quiz's pace step uses the same liquid-glass
-  motif.
-- The mixable powders added earlier (Daily Fizz, Clear Whey, Night Pour,
-  Immunity Fizz) remain regular-catalogue products for the normal stack
-  builder; they are not LQD-eligible.
-
 ## UX in `Act2Quiz`
 
 - **Answer-guidance pill.** Each step declares a `select` mode in
@@ -127,10 +69,8 @@ A light-touch brand aside, not a per-tap sell. `src/lib/quiz-sell.ts`
 (`quizFactFor`) carries a claim-safe tidbit for only a **handful of steps**;
 `Act2Quiz` fades it in as a labelled "Did you know?" chip (`DidYouKnowChip`) a
 beat after the step settles and shows each fact **at most once per session**
-(tracked in `shownFactsRef`), so it stays an occasional surprise. Two copy sets:
-the normal stack gets the stack version; **drinks mode leans into drinks &
-convenience** ("one box in the fridge — no tubs, no pills, no scoops"). Tapping
-the chip dismisses it.
+(tracked in `shownFactsRef`), so it stays an occasional surprise. Tapping the
+chip dismisses it.
 
 ## The three depths on the reveal (`Act4Reveal`)
 
@@ -145,26 +85,12 @@ the same money whatever the quiz said. The depths nest — each contains
 everything the one below it has — and required slots plus anything the member
 added from the upgrades card are in every depth however much they cost. A stack
 too small to fill three brackets offers two options, or one, rather than the
-same list at two prices. Drinks mode is pace-sized rather than banded and shows
-the whole box.
+same list at two prices.
 
 Everything downstream (receipt, subscription journey, checkout) prices the
 depth on screen at that depth's subscribe-&-save rung, so the number the member
 chose is the number the card is charged. `docs/PRICING_GUIDE.md` §4 has the
 brackets and the reasoning.
-
-## Liquid brand chrome (LQD)
-
-In drinks mode the whole run *feels* like liquid, not just the copy:
-- the signature right-edge rail becomes a **`LiquidRail`** — a glass tube that
-  fills with liquid as you answer (wavy meniscus, rising bubbles, droplet cap,
-  a quiet "% poured"), swapped in for the `ChargeRail`;
-- the floor becomes a **rising liquid pool** that grows with progress, with a
-  drifting surface and bubbles;
-- the pace step's options use a **liquid-glass** motif (each glass fills to its
-  level); and the generating overlay pours ("Topped up · Pouring your month…").
-All liquid motion is held still under `prefers-reduced-motion`
-(`.lqd-*` / `cue-*` rules in `globals.css`).
 
 ## Retention-style UX roadmap (north-star: quiz-taking experience)
 

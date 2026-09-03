@@ -5,7 +5,7 @@
  * defects are gone: no active-ingredient appears twice, no dose cap is exceeded,
  * and no conf-below-floor filler survives — across representative personas.
  */
-import { applyBundleRules, DOSE_CAPS } from '../bundle-rules'
+import { applyBundleRules, BUNDLE_RULES, DOSE_CAPS } from '../bundle-rules'
 import { buildStackBlueprint } from '@/lib/stack-blueprint/factory'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { StackSlotEntry } from '@/lib/stack-blueprint/types'
@@ -47,12 +47,15 @@ describe('applyBundleRules (unit)', () => {
   })
 
   it('enforces a total dose cap across the bundle', () => {
-    // Two caffeine products would total 350mg > the 200mg cap → the later drops.
+    // Two vitamin-C products would total 2000mg > the 1000mg cap → the later
+    // drops. Dedup is switched off so this pins the dose-cap rule itself rather
+    // than the shared-active rule that would also have dropped it.
     const slots = [
-      slot({ slotId: 'pre', selectedProductId: 'chrgd-pre-workout', displayOrder: 0 }),
-      slot({ slotId: 'can', selectedProductId: 'chrgd-lqd-charge', displayOrder: 1 }),
+      slot({ slotId: 'vitc', selectedProductId: 'chrgd-vitamin-c-zinc', displayOrder: 0 }),
+      slot({ slotId: 'fizz', selectedProductId: 'chrgd-immunity-fizz', displayOrder: 1 }),
     ]
-    expect(applyBundleRules(slots, MOCK_CATALOGUE).map((s) => s.slotId)).toEqual(['pre'])
+    const noDedup = { ...BUNDLE_RULES, dedupActives: false }
+    expect(applyBundleRules(slots, MOCK_CATALOGUE, noDedup).map((s) => s.slotId)).toEqual(['vitc'])
   })
 
   it('a disabled rule is a rollback (flag off = no-op)', () => {
@@ -68,8 +71,7 @@ describe('applyBundleRules (unit)', () => {
 // ── Audit-style sweep: the defects are gone across real bundles ──────────────
 function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
-    name: 'P', track: 'performance', drinksMode: false, drinksPerDay: null,
-    dailyDrinks: null, drinkVariety: null, workoutAddOns: [], primaryGoal: null,
+    name: 'P', track: 'performance', primaryGoal: null,
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male',
     safetyFlags: [], weightBand: null, goals: ['health'], trainingFrequency: '3-4x',
     trainingType: [], lifestyle: [], diet: 'mostly-good', currentSupplements: [],

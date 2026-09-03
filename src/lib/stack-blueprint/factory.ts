@@ -4,7 +4,7 @@
 import type { QuizAnswers, Goal } from '@/lib/types'
 import { PERFORMANCE_GOALS } from '@/lib/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { lqdOnly, inStockOnly } from '@/lib/catalogue/filters'
+import { inStockOnly } from '@/lib/catalogue/filters'
 import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculateStackPrice, calculateSubscriptionPrice } from './helpers'
 import { budgetCapFor, discountedOneOffTotal, sizeConsumption, unitCostOf, getPricingConfig } from './pricing'
@@ -574,9 +574,6 @@ export function buildStackBlueprint(
   // that slot is simply omitted (handled gracefully below).
   // Subscription-only refills never enter the quiz recommendation — they only
   // exist as monthly subscription resolution targets.
-  // CHRGD LQD (drinks mode) sees only PRE-MADE drinks (zero-prep promise);
-  // slots with no ready-to-drink candidate fall away via the same graceful
-  // omission.
   // Products too cheap to carry a slot of their own are also excluded.
   //
   // PowerBody charge per parcel, so even shared three ways a stack line carries
@@ -595,11 +592,8 @@ export function buildStackBlueprint(
   // mock catalogue here used to hide a missing load behind a plausible-looking
   // stack of products the shop cannot sell — every card then read "Product
   // unavailable" on the reveal, because the ids came from sample data.
-  const effectiveCatalogue = lqdOnly(
-    inStockOnly(catalogue).filter(
-      (p) => !p.isSubscriptionOnly && (minLinePrice <= 0 || p.basePrice >= minLinePrice),
-    ),
-    answers.drinksMode,
+  const effectiveCatalogue = inStockOnly(catalogue).filter(
+    (p) => !p.isSubscriptionOnly && (minLinePrice <= 0 || p.basePrice >= minLinePrice),
   )
 
   const primaryGoal: Goal = answers.goals[0] ?? 'health'
@@ -610,13 +604,7 @@ export function buildStackBlueprint(
   const summary = ARCHETYPE_SUMMARIES[archetype]
 
   // Cap total slots to match the selected budget / stack size.
-  // LQD (drinks mode) never asks for a budget — the drinks/day pace IS the
-  // package size: a faster pace needs more distinct drinks in the box.
   const maxSlots = (() => {
-    if (answers.drinksMode) {
-      const pace = answers.drinksPerDay && answers.drinksPerDay > 0 ? answers.drinksPerDay : 2
-      return Math.min(2 + pace, 7) // 1/day → 3 drinks … 4+/day → 6 drinks
-    }
     switch (answers.budget) {
       case 'under-30': return 2
       case '30-50':    return 3
@@ -646,9 +634,7 @@ export function buildStackBlueprint(
   // product that fits, so we get as close to the ceiling as possible without
   // ever going over. null cap (top tier) means no upper limit.
   const pricingConfig = getPricingConfig()
-  // Drinks mode has no budget question, so no price ceiling — the pace-derived
-  // slot cap above is the only sizing control.
-  const budgetCap = answers.drinksMode ? null : budgetCapFor(answers.budget, pricingConfig)
+  const budgetCap = budgetCapFor(answers.budget, pricingConfig)
   const selectedLines: { price: number; cost: number }[] = []
 
   function lineFor(product: CatalogueProduct): { price: number; cost: number } {

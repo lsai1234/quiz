@@ -84,7 +84,7 @@ const SEED: Seed[] = [
   { sku: 'OPT-PROBIO-30', name: 'Bio-Cultures Probiotic (30 caps)', brand: 'Optibac', category: 'Probiotics', description: '5 billion live cultures per capsule for gut health.', imageUrl: null, wholesalePrice: 7.0, rrp: 13.99, stock: 92, barcode: '5060086610123', flavours: [], servings: 30 },
   { sku: 'PBD-ASH-120', name: 'KSM-66 Ashwagandha 600mg (120 caps)', brand: 'PBD', category: 'Health & Wellbeing', description: 'KSM-66 ashwagandha, traditionally used to help the body adapt to stress.', imageUrl: null, wholesalePrice: 8.0, rrp: 16.99, stock: 47, barcode: '5060424706789', flavours: [], servings: 60 },
 
-  // ── Ready-to-drink (LQD-eligible) ──
+  // ── Ready-to-drink ──
   { sku: 'GRE-CARB-KILLA-12', name: 'Carb Killa Protein Shake 330ml (12 pack)', brand: 'Grenade', category: 'Ready To Drink', description: 'Ready-to-drink protein shake, 25g protein, low sugar.', imageUrl: null, wholesalePrice: 15.5, rrp: 27.99, stock: 84, barcode: '5060217012222', flavours: ['Chocolate', 'Caramel'], servings: 12 },
   { sku: 'APP-BODYFUEL-12', name: 'Body Fuel Energy Water 500ml (12 pack)', brand: 'Applied Nutrition', category: 'Ready To Drink', description: 'Ready-to-drink energy water with BCAAs and 100mg caffeine.', imageUrl: null, wholesalePrice: 11.0, rrp: 21.99, stock: 60, barcode: '5060398125555', flavours: ['Watermelon', 'Cherry'], servings: 12 },
 ]

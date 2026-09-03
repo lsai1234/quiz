@@ -95,7 +95,5 @@ export function cardFileName(payload: ShareCardPayload, format: ShareFormat): st
  * than a line anyway.
  */
 export function cardShareText(payload: ShareCardPayload): string {
-  return payload.drinksMode
-    ? `My CHRGD LQD package: ${payload.stackName}.`
-    : `My CHRGD stack: ${payload.stackName}.`
+  return `My CHRGD stack: ${payload.stackName}.`
 }

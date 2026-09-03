@@ -28,13 +28,13 @@ const s = (v: string | null | undefined): string | undefined => (v == null ? und
 
 export const funnel = {
   /** Quiz mounted — top of funnel. `track` may be null before the goal step. */
-  start(p: { track: QuizTrack | null; drinksMode: boolean }) {
-    track('quiz_start', { track: s(p.track), drinksMode: p.drinksMode })
+  start(p: { track: QuizTrack | null }) {
+    track('quiz_start', { track: s(p.track) })
   },
 
   /** A step became active. `total` = advertised question count (seq − review/deepDive). */
-  stepView(p: { stepId: StepRef; index: number; total: number; track: QuizTrack | null; drinksMode: boolean }) {
-    track('quiz_step_view', { stepId: p.stepId, index: p.index, total: p.total, track: s(p.track), drinksMode: p.drinksMode })
+  stepView(p: { stepId: StepRef; index: number; total: number; track: QuizTrack | null }) {
+    track('quiz_step_view', { stepId: p.stepId, index: p.index, total: p.total, track: s(p.track) })
   },
 
   /** A step was advanced past — carries time-on-question. */
@@ -66,7 +66,6 @@ export const funnel = {
   /** Reached the build step (completed the quiz). */
   complete(p: {
     track: QuizTrack | null
-    drinksMode: boolean
     goalCount: number
     primaryGoal?: Goal
     budget: Budget | null
@@ -74,7 +73,6 @@ export const funnel = {
   }) {
     track('quiz_complete', {
       track: s(p.track),
-      drinksMode: p.drinksMode,
       goalCount: p.goalCount,
       primaryGoal: s(p.primaryGoal),
       budget: s(p.budget),

@@ -49,26 +49,25 @@ describe('activeSteps', () => {
     expect(well).not.toContain('type')
   })
 
-  it('neither budget nor formats is a step any more, in either mode', () => {
+  it('neither budget nor formats is a step any more', () => {
     // Budget went when depth moved to the results screen; formats went because
     // the answer was a guess and the swap modal already changes any product.
     for (const track of ['performance', 'wellbeing'] as const) {
-      for (const drinks of [false, true]) {
-        const ids = activeSteps(track, drinks).map((s) => s.id)
-        expect(ids).not.toContain('budget')
-        expect(ids).not.toContain('formats')
-      }
+      const ids = activeSteps(track).map((s) => s.id)
+      expect(ids).not.toContain('budget')
+      expect(ids).not.toContain('formats')
     }
   })
 
-  it('drinkVariety is gone (near-inert question removed)', () => {
-    expect(QUIZ_STEPS.some((s) => (s.id as string) === 'drinkVariety')).toBe(false)
-    expect(activeSteps('wellbeing', true).map((s) => s.id)).not.toContain('drinkVariety')
+  it('the CHRGD LQD drinks steps are gone with the feature', () => {
+    for (const id of ['dailyDrinks', 'drinkVariety', 'workoutAddOns']) {
+      expect(QUIZ_STEPS.some((s) => (s.id as string) === id)).toBe(false)
+    }
   })
 
   it('caffeine + training-time are performance-only when answers are supplied', () => {
-    const wellIds = activeSteps('wellbeing', false, { track: 'wellbeing' }).map((s) => s.id)
-    const perfIds = activeSteps('performance', false, { track: 'performance' }).map((s) => s.id)
+    const wellIds = activeSteps('wellbeing', { track: 'wellbeing' }).map((s) => s.id)
+    const perfIds = activeSteps('performance', { track: 'performance' }).map((s) => s.id)
     expect(wellIds).not.toContain('caffeine')
     expect(wellIds).not.toContain('trainingTime')
     expect(perfIds).toContain('caffeine')
@@ -76,31 +75,25 @@ describe('activeSteps', () => {
   })
 
   it('without answers the conditional steps stay in (stable first-screen count)', () => {
-    const ids = activeSteps('wellbeing', false).map((s) => s.id)
+    const ids = activeSteps('wellbeing').map((s) => s.id)
     expect(ids).toContain('caffeine')
     expect(ids).toContain('trainingTime')
   })
 
   it('advertised question counts per path (review + deepDive excluded)', () => {
-    const count = (track: 'performance' | 'wellbeing', drinks: boolean) =>
-      activeSteps(track, drinks, { track }).filter((s) => s.id !== 'review' && s.id !== 'deepDive').length
+    const count = (track: 'performance' | 'wellbeing') =>
+      activeSteps(track, { track }).filter((s) => s.id !== 'review' && s.id !== 'deepDive').length
     // Post-Phase-3 counts (budget removed; safety screen added; weight folded
     // into the personal step, so no extra step for it), less the formats step.
-    // Drinks mode is now the LONGER path on both tracks, which it was not
-    // before: it adds steps and no longer removes one.
-    expect(count('wellbeing', false)).toBe(6)    // goals, safety, personal, lifestyle, diet, supps
-    expect(count('performance', false)).toBe(10) // + frequency, type, caffeine, trainingTime
-    expect(count('wellbeing', true)).toBe(7)     // goals, safety, dailyDrinks, personal, lifestyle, diet, supps
-    expect(count('performance', true)).toBe(12)  // + workoutAddOns, frequency, type, caffeine, trainingTime
+    expect(count('wellbeing')).toBe(6)    // goals, safety, personal, lifestyle, diet, supps
+    expect(count('performance')).toBe(10) // + frequency, type, caffeine, trainingTime
   })
 })
 
 describe('stepCopy precedence', () => {
-  it('LQD override beats the wellbeing override beats the base', () => {
+  it('the wellbeing override beats the base', () => {
     const supps = QUIZ_STEPS.find((s) => s.id === 'supps')!
-    expect(stepCopy(supps, 'performance', false).q).toBe('Already using any of these?')
-    expect(stepCopy(supps, 'wellbeing', false).q).toBe('Already taking any of these?')
-    const review = QUIZ_STEPS.find((s) => s.id === 'review')!
-    expect(stepCopy(review, 'wellbeing', true).q).toBe('Quick check before we pour.')
+    expect(stepCopy(supps, 'performance').q).toBe('Already using any of these?')
+    expect(stepCopy(supps, 'wellbeing').q).toBe('Already taking any of these?')
   })
 })

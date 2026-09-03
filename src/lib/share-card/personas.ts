@@ -22,8 +22,7 @@ import type { ShareCardPayload } from './types'
 
 function answers(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
-    name: 'Sam Whitlock', track: 'performance', drinksMode: false, drinksPerDay: null,
-    dailyDrinks: null, drinkVariety: null, workoutAddOns: [], primaryGoal: null,
+    name: 'Sam Whitlock', track: 'performance', primaryGoal: null,
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male',
     safetyFlags: [], weightBand: null, goals: ['health'],
     trainingFrequency: '3-4x', trainingType: [], lifestyle: [], diet: 'mostly-good',
@@ -89,15 +88,6 @@ const SPECS: Spec[] = [
     },
   },
   {
-    id: 'drinks',
-    note: 'CHRGD LQD. Different eyebrow, different framing.',
-    answers: answers({
-      drinksMode: true, goals: ['muscle', 'energy'], dailyDrinks: 2, drinksPerDay: 2,
-      drinkVariety: 'staples', workoutAddOns: ['pre-workout'], budget: null, stackPreference: null,
-    }),
-    identity: { ...IDENTITY, name: 'Pour Protocol', archetype: 'The Everyday Sipper' },
-  },
-  {
     id: 'no-identity',
     note: 'The AI identity call failed or is unconfigured. No archetype, no chips, no ring.',
     answers: answers({ goals: ['muscle'], trainingFrequency: '3-4x', trainingType: ['strength'] }),
@@ -136,7 +126,6 @@ export function sharePersonas(): SharePersona[] {
         customerName: spec.answers.name,
         showFirstName: spec.showFirstName,
         code: spec.code,
-        drinksMode: spec.answers.drinksMode,
         // Fixed, so a preview page and a snapshot do not differ by the clock.
         now: () => new Date('2026-08-17T09:00:00.000Z'),
       },

@@ -194,8 +194,6 @@ export interface BuildSharePayloadOptions {
   showFirstName?: boolean
   /** Partner or competition entry code. */
   code?: string | null
-  /** CHRGD LQD — the all-drinks package, which reframes the card's eyebrow. */
-  drinksMode?: boolean
   /** Injectable for deterministic tests. */
   now?: () => Date
 }
@@ -220,7 +218,6 @@ export function buildSharePayload(
     customerName = null,
     showFirstName = false,
     code = null,
-    drinksMode = false,
     now = () => new Date(),
   } = options
 
@@ -282,8 +279,7 @@ export function buildSharePayload(
     lineup,
     coverage,
     level: stackLevelOf(blueprint),
-    drinksMode,
-    artKey: pickArtKey([blueprint.primaryGoal, ...blueprint.secondaryGoals], drinksMode),
+    artKey: pickArtKey([blueprint.primaryGoal, ...blueprint.secondaryGoals]),
     ...(inStack[0]?.imageUrl ? { heroImage: inStack[0].imageUrl } : {}),
     ...(name ? { firstName: name } : {}),
     ...(code ? { code: code.trim().toUpperCase() } : {}),

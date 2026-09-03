@@ -1312,9 +1312,9 @@ export function resolveConsumption(product: CatalogueProduct): { cadence: Consum
 }
 
 // ─── Rhythm sizing — the single source of truth for monthly occasions ─────────
-// Each drink is sized to HOW IT'S CONSUMED, so the Pour Plan and the priced
-// box always agree (see docs/POUR_PLAN_SPEC.md). Untagged products resolve to
-// the previous behaviour (daily → 30, else training sessions/month).
+// Each product is sized to HOW IT'S CONSUMED, so the plan and the priced box
+// always agree. Untagged products resolve to the previous behaviour
+// (daily → 30, else training sessions/month).
 
 const WEEKS_PER_MONTH = 4.345
 const AS_NEEDED_FLOOR = 4
@@ -1322,27 +1322,6 @@ const AS_NEEDED_CAP = 20
 
 function asNeededWeekly(freq: 'often' | 'sometimes' | 'rarely'): number {
   return freq === 'often' ? 4 : freq === 'rarely' ? 1 : 2
-}
-
-/** The everyday drinks/day pace (dailyDrinks → legacy drinksPerDay → 2). */
-export function resolveDrinksPace(answers?: QuizAnswers | null): number {
-  const v = answers?.dailyDrinks ?? answers?.drinksPerDay
-  return v && v > 0 ? v : 2
-}
-
-/** Minimum monthly occasions a daily anchor keeps after pace-scaling (~2/week). */
-export const PACE_DAILY_FLOOR = 8
-
-/**
- * In LQD drinks mode the pace is a daily RATE, not a per-kind count: the everyday
- * base should total ~pace × 30 across all the daily kinds (the "pool you sip
- * ~pace a day" model). This returns the factor to scale daily-anchor occasions
- * so their sum lands on the pace target (1 = no scaling needed / not drinks mode).
- */
-export function paceDailyFactor(dailyOccasionsSum: number, answers?: QuizAnswers | null): number {
-  if (!answers?.drinksMode || dailyOccasionsSum <= 0) return 1
-  const target = resolveDrinksPace(answers) * DAYS_PER_MONTH
-  return dailyOccasionsSum <= target ? 1 : target / dailyOccasionsSum
 }
 
 /** Monthly occasions for a product from its consumption rhythm + the answers. */
@@ -1824,28 +1803,6 @@ export function buildSubscriptionPlan(
       productRef: sub,
       unitPrice,
     })
-  }
-
-  // ── Drinks-mode pace scaling ──
-  // The everyday base = ~pace × 30 across all daily kinds (a pool sipped ~pace a
-  // day), not ×30 per kind. Scale daily anchors to the pace and re-derive their
-  // ship schedule so the box and the Pour Plan both land on the chosen pace.
-  if (answers?.drinksMode) {
-    const dailyEntries = [...raw.values()].filter((r) => r.cadence === 'daily')
-    const dailySum = dailyEntries.reduce((s, r) => s + r.occasionsPerMonth, 0)
-    const factor = paceDailyFactor(dailySum, answers)
-    if (factor < 1) {
-      for (const r of dailyEntries) {
-        const scaled = Math.max(PACE_DAILY_FLOOR, Math.round(r.occasionsPerMonth * factor))
-        if (scaled >= r.occasionsPerMonth) continue
-        const resized = sizeConsumption(r.product, answers, config, r.usageLevel, scaled)
-        r.occasionsPerMonth = resized.occasionsPerMonth
-        r.servingsPerUnit = resized.servingsPerUnit
-        r.unitsPerShipment = resized.unitsPerShipment
-        r.shipEveryMonths = resized.shipEveryMonths
-        r.monthlyUnits = resized.monthlyUnits
-      }
-    }
   }
 
   // ── Resolve the order-level discount, then apply it (with the margin floor) ──

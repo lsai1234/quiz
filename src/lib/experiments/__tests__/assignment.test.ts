@@ -1,5 +1,5 @@
 import {
-  armFor, armForRun, normaliseExperiment, parseBucket, parseArm, mintBucket,
+  armFor, normaliseExperiment, parseBucket, parseArm, mintBucket,
   BUCKET_COUNT, DEFAULT_QUIZ_EXPERIMENT, type QuizExperimentConfig,
 } from '../assignment'
 
@@ -113,25 +113,3 @@ describe('mintBucket', () => {
   })
 })
 
-/**
- * The drinks route, and the arm it has to run on.
- *
- * A v2-arm visitor who tapped the CHRGD LQD card lost drinks mode entirely:
- * v2 never asks the two drinks questions, and finishing it overwrote the flag
- * the hero had set. They were handed a stack of tubs. Nothing errored.
- */
-describe('the arm a run can actually use', () => {
-  it('sends a drinks run to v1 even when the visitor is in the v2 arm', () => {
-    expect(armForRun('v2', { drinksMode: true })).toBe('v1')
-  })
-
-  it('leaves an ordinary run on whichever arm it was assigned', () => {
-    expect(armForRun('v2', { drinksMode: false })).toBe('v2')
-    expect(armForRun('v2', {})).toBe('v2')
-    expect(armForRun('v1', { drinksMode: false })).toBe('v1')
-  })
-
-  it('treats a missing flag as not drinks', () => {
-    expect(armForRun('v2', { drinksMode: null })).toBe('v2')
-  })
-})

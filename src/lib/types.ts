@@ -55,33 +55,9 @@ export type StimPreference = 'yes' | 'no'
 export type QuizTrack = 'performance' | 'wellbeing'
 
 /**
- * CHRGD LQD — how many drinks a day the customer wants to sip. Not a dose or a
- * schedule: it's the pace they'll get through the month's box at, which the LQD
- * logic reconciles against a fixed monthly pool (see `buildLqdPlan`). '4' means
- * "4 or more". Only asked in drinks mode.
- */
-export type DrinksPerDay = 1 | 2 | 3 | 4
-
-/**
- * CHRGD LQD — the FOUNDATION intake. Two signals shape the everyday base of the
- * drinks box (shown to everyone in drinks mode):
- *   • dailyDrinks  — how many drinks on a normal day (the pace).
- *   • drinkVariety — the same go-to drinks each day ('staples'), or a rotating
- *                    mix across the month ('variety').
- */
-export type DailyDrinks = 1 | 2 | 3
-export type DrinkVariety = 'staples' | 'variety'
-
-/**
- * CHRGD LQD — WORKOUT ADD-ONS. Only offered on the training route: opt-in
- * drinks tied to sessions (sized from training frequency, not the daily pace).
- */
-export type WorkoutAddOn = 'pre-workout' | 'protein' | 'recovery'
-
-/**
  * How often an as-needed trigger applies to the customer — sets the monthly
- * allowance for as-needed drinks in the Pour Plan (often ≈ 4/wk, sometimes ≈ 2,
- * rarely ≈ 1). See docs/POUR_PLAN_SPEC.md.
+ * allowance for as-needed products in the plan (often ≈ 4/wk, sometimes ≈ 2,
+ * rarely ≈ 1).
  */
 export type AsNeededFrequency = 'often' | 'sometimes' | 'rarely'
 
@@ -120,35 +96,14 @@ export interface QuizAnswers {
   /** Which quiz track the user chose on the goal step */
   track: QuizTrack | null
   /**
-   * CHRGD LQD — the all-drinks package. When true the stack is built only from
-   * drinkable products (powders/RTDs), framed as a monthly pool of drinks to
-   * mix whenever, rather than a daily regimen. Chosen on the opening screen
-   * alongside the track; the track still shapes goals and questions.
-   * Optional so answers saved before the feature existed stay valid.
-   */
-  drinksMode?: boolean
-  /**
-   * CHRGD LQD — the pace the customer wants to drink at (drinks/day). Kept as
-   * the engine's pace signal (see factory) and mirrored from `dailyDrinks`.
-   * Optional so answers saved before the feature existed stay valid.
-   */
-  drinksPerDay?: DrinksPerDay | null
-  /** CHRGD LQD foundation — how many drinks on a normal day. Mirrors into
-   *  `drinksPerDay` so the sizing engine is unchanged. */
-  dailyDrinks?: DailyDrinks | null
-  /** CHRGD LQD foundation — same staples daily vs a monthly mix. */
-  drinkVariety?: DrinkVariety | null
-  /** CHRGD LQD — opt-in workout drinks (training route only). */
-  workoutAddOns?: WorkoutAddOn[]
-  /**
-   * The goal that matters MOST — a single pick on the goals step. Leans the Pour
-   * Plan toward this goal's drinks (protected in sizing). Optional so older saved
+   * The goal that matters MOST — a single pick on the goals step. Leans sizing
+   * toward this goal's products (protected in sizing). Optional so older saved
    * answers stay valid; falls back to the first of `goals` when unset.
    */
   primaryGoal?: Goal | null
   /**
    * How often as-needed triggers apply (sweat, sleep, run-down…), used to size
-   * the as-needed pool in the Pour Plan. Only `sweat` is asked directly; the rest
+   * the as-needed pool. Only `sweat` is asked directly; the rest
    * are inferred from goals + lifestyle. Optional/partial.
    */
   asNeeded?: Partial<Record<AsNeededTrigger, AsNeededFrequency>>

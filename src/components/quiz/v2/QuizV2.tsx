@@ -273,7 +273,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     startTsRef.current = performance.now()
     if (!startedRef.current) {
       startedRef.current = true
-      funnel.start({ track: state.track, drinksMode: false })
+      funnel.start({ track: state.track })
     }
     const onLeave = () => {
       if (completedRef.current) return
@@ -294,7 +294,7 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     stepEnterRef.current = performance.now()
     describedRef.current = false
     setNeedsTick(false)
-    funnel.stepView({ stepId: currentId, index, total, track: state.track, drinksMode: false })
+    funnel.stepView({ stepId: currentId, index, total, track: state.track })
     setMultiPicks(state.picked[currentId] ?? [])
     optionsRef.current?.scrollTo({ top: 0 })
     if (!reducedMotion) {
@@ -551,7 +551,6 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
     }
     funnel.complete({
       track: state.track,
-      drinksMode: false,
       goalCount: state.goals.length,
       primaryGoal: state.primaryGoal ?? undefined,
       budget: null,

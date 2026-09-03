@@ -221,12 +221,8 @@ const FAMILY_RANK: ArtKey[] = [
  * Ranking the set fixes the disagreement at its source, and costs nothing that
  * was actually being expressed: tap order is not a ranking, and nothing in the
  * quiz asks the customer to make one.
- *
- * Drinks mode still overrides everything — an LQD package is a box of drinks
- * whatever it is for, and the hydration image is the one that says so.
  */
-export function pickArtKey(goals: Goal[], drinksMode = false): ArtKey {
-  if (drinksMode) return 'hydration'
+export function pickArtKey(goals: Goal[]): ArtKey {
   const families = new Set(goals.map((goal) => GOAL_FAMILY[goal]).filter(Boolean))
   return FAMILY_RANK.find((family) => families.has(family)) ?? 'wellbeing'
 }

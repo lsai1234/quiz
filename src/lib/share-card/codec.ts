@@ -85,7 +85,6 @@ function isShareCardPayload(value: unknown): value is ShareCardPayload {
   if (!isString(p.stackName) || !p.stackName.trim()) return false
   if (!isString(p.archetype)) return false
   if (!isString(p.level) || !isString(p.createdAt)) return false
-  if (typeof p.drinksMode !== 'boolean') return false
   if (p.fitScore !== null && typeof p.fitScore !== 'number') return false
 
   if (!Array.isArray(p.lineup) || !p.lineup.every(isLineupEntry)) return false

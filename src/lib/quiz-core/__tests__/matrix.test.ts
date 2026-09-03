@@ -17,8 +17,7 @@ import type { QuizAnswers } from '@/lib/types'
 
 function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
-    name: 'P', track: 'wellbeing', drinksMode: false, drinksPerDay: null,
-    dailyDrinks: null, drinkVariety: null, workoutAddOns: [], primaryGoal: null,
+    name: 'P', track: 'wellbeing', primaryGoal: null,
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male',
     safetyFlags: [], weightBand: null, goals: ['immune'], trainingFrequency: null,
     trainingType: [], lifestyle: [], diet: 'mostly-good', currentSupplements: [],
@@ -69,8 +68,8 @@ describe('curated-core data', () => {
   it('the dedup/dose-cap-critical products carry actives', () => {
     const need = [
       'chrgd-magnesium', 'chrgd-sleep-support', 'chrgd-ashwagandha',
-      'chrgd-pre-workout', 'chrgd-lqd-charge', 'chrgd-vitamin-c-zinc',
-      'chrgd-lqd-immunity', 'chrgd-menopause-complete',
+      'chrgd-pre-workout', 'chrgd-vitamin-c-zinc',
+      'chrgd-immunity-fizz', 'chrgd-menopause-complete',
     ]
     for (const id of need) {
       const p = MOCK_CATALOGUE.find((x) => x.id === id)

@@ -6,8 +6,8 @@ import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
+import { categoryHue } from '@/lib/shop/category-visuals'
 import { track } from '@/lib/analytics/events'
-import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productFacts, productDietary } from '@/lib/product-facts'
 import { productBars, goalAxis } from '@/lib/stack-stats'
 import { useBasket } from '@/lib/basket/store'
@@ -71,7 +71,8 @@ export function ShopProductSheet({ product, onBuyNow, onClose }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [onClose])
 
-  const hue = slotVisual(product.stackSlots[0]).hue
+  // Same category chip colour as the card that opened this sheet.
+  const hue = categoryHue(product.category)
   const variant = product.variants.find((v) => v.id === variantId)
     ?? product.variants.find((v) => v.available)
     ?? product.variants[0]

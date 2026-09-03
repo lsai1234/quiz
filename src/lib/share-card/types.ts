@@ -101,7 +101,6 @@ export interface ShareCardPayload {
   lineup: ShareLineupEntry[]
   coverage: ShareCoverageEntry[]
   level: StackLevel
-  drinksMode: boolean
   /**
    * Which of the six card images this stack gets, frozen at share time.
    *

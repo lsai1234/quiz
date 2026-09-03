@@ -12,8 +12,6 @@ interface Props {
    *  stack can subscribe; otherwise the one-off price is shown without /mo. */
   monthlyPrice?: number
   canSubscribe?: boolean
-  /** CHRGD LQD (all-drinks package) framing. */
-  drinksMode?: boolean
 }
 
 function prettifyGoal(goal: string) {
@@ -25,7 +23,7 @@ function prettifyGoal(goal: string) {
  * below, so this is deliberately compact — name, one supporting line, and the
  * key stats as chips.
  */
-export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, canSubscribe, drinksMode }: Props) {
+export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, canSubscribe }: Props) {
   const showMonthly = !!canSubscribe && monthlyPrice != null && monthlyPrice > 0
   return (
     <div className="px-5 pt-12 pb-7 max-w-lg mx-auto">
@@ -34,7 +32,7 @@ export function StackHero({ blueprint, productCount, totalPrice, monthlyPrice, c
           className="text-[10px] font-bold tracking-[0.25em] uppercase block"
           style={{ fontFamily: 'var(--font-display)', color: 'var(--color-accent)' }}
         >
-          {drinksMode ? 'Your CHRGD LQD Package' : 'Your CHRGD Stack'}
+          Your CHRGD Stack
         </span>
         {blueprint.personalised && (
           <span

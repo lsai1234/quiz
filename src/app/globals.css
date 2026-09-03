@@ -248,38 +248,6 @@
   50%       { opacity: 0.8;  transform: translateY(4px); }
 }
 
-/* CHRGD LQD — liquid fills. A drifting meniscus on horizontal (glass/vial) and
-   vertical (progress bar) surfaces, plus a gentle body sway, so the drinks bits
-   feel liquid. Reduced-motion holds everything still. */
-@keyframes lqd-wave-x {
-  0%, 100% { transform: translateX(-25%); }
-  50%       { transform: translateX(0%); }
-}
-@keyframes lqd-meniscus-drift {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
-}
-@keyframes lqd-body-sway {
-  0%, 100% { transform: translateY(0); }
-  50%       { transform: translateY(-0.5px); }
-}
-@keyframes lqd-bob-v {
-  0%, 100% { transform: scaleY(1); }
-  50%       { transform: scaleY(0.82); }
-}
-.lqd-fill {
-  animation: lqd-body-sway 4.5s ease-in-out infinite;
-}
-.lqd-meniscus {
-  animation: lqd-meniscus-drift 3.4s linear infinite;
-}
-.lqd-meniscus-v {
-  animation: lqd-bob-v 2.4s ease-in-out infinite;
-}
-@media (prefers-reduced-motion: reduce) {
-  .lqd-fill, .lqd-meniscus, .lqd-meniscus-v { animation: none !important; }
-}
-
 /* The odd "did you know?" chip — fades gently up, no jump. */
 @keyframes cue-pop {
   0%   { opacity: 0; transform: translateY(12px); }

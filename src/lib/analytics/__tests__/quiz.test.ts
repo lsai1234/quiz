@@ -15,14 +15,14 @@ describe('funnel', () => {
   beforeEach(() => mockTrack.mockClear())
 
   it('drops a null track to undefined (never serialises "null")', () => {
-    funnel.start({ track: null, drinksMode: false })
-    expect(mockTrack).toHaveBeenCalledWith('quiz_start', { track: undefined, drinksMode: false })
+    funnel.start({ track: null })
+    expect(mockTrack).toHaveBeenCalledWith('quiz_start', { track: undefined })
   })
 
   it('stepView carries the full timing context', () => {
-    funnel.stepView({ stepId: 'goals', index: 0, total: 8, track: 'performance', drinksMode: false })
+    funnel.stepView({ stepId: 'goals', index: 0, total: 8, track: 'performance' })
     expect(mockTrack).toHaveBeenCalledWith('quiz_step_view', {
-      stepId: 'goals', index: 0, total: 8, track: 'performance', drinksMode: false,
+      stepId: 'goals', index: 0, total: 8, track: 'performance',
     })
   })
 
@@ -44,9 +44,9 @@ describe('funnel', () => {
   })
 
   it('complete drops nullish budget/primaryGoal/track', () => {
-    funnel.complete({ track: 'wellbeing', drinksMode: true, goalCount: 2, primaryGoal: undefined, budget: null, msTotal: 5000 })
+    funnel.complete({ track: 'wellbeing', goalCount: 2, primaryGoal: undefined, budget: null, msTotal: 5000 })
     expect(mockTrack).toHaveBeenCalledWith('quiz_complete', {
-      track: 'wellbeing', drinksMode: true, goalCount: 2, primaryGoal: undefined, budget: undefined, msTotal: 5000,
+      track: 'wellbeing', goalCount: 2, primaryGoal: undefined, budget: undefined, msTotal: 5000,
     })
   })
 
@@ -63,15 +63,15 @@ describe('funnel', () => {
 
   it('every wrapper emits a registered event, and every quiz event is covered', () => {
     const known = new Set<string>([...QUIZ_EVENTS, ...SHOP_EVENTS])
-    funnel.start({ track: null, drinksMode: false })
-    funnel.stepView({ stepId: 'goals', index: 0, total: 8, track: null, drinksMode: false })
+    funnel.start({ track: null })
+    funnel.stepView({ stepId: 'goals', index: 0, total: 8, track: null })
     funnel.stepComplete({ stepId: 'goals', index: 0, msOnStep: 1 })
     funnel.stepBack({ from: 'diet', to: 'supps', via: 'back' })
     funnel.subView({ subId: 'x', parentStepId: 'type' })
     funnel.subAnswer({ subId: 'x', parentStepId: 'type', optionId: 'y' })
     funnel.deepDiveOffer()
     funnel.deepDiveAccept()
-    funnel.complete({ track: null, drinksMode: false, goalCount: 1, budget: null, msTotal: 1 })
+    funnel.complete({ track: null, goalCount: 1, budget: null, msTotal: 1 })
     funnel.abandon({ lastStepId: 'diet', index: 3, msTotal: 1 })
     funnel.revealView({ slotCount: 3, oneOff: 40, sub: 30, plan: 'oneoff' })
     funnel.stackSwap({ slotId: 's', to: 'p' })

@@ -18,7 +18,7 @@ import { selectStatAxes } from '@/lib/stack-stats'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { SLOT_LABELS } from '@/lib/catalogue/types'
-import { lqdOnly, inStockOnly } from '@/lib/catalogue/filters'
+import { inStockOnly } from '@/lib/catalogue/filters'
 import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
 import { useStackCheckout } from '@/hooks/useStackCheckout'
 import { StackHero } from './StackHero'
@@ -32,8 +32,7 @@ import { CheckoutSuccess } from './CheckoutSuccess'
 import { receiptItemsFromSlots } from '@/lib/receipt/build'
 import { ProductSwapModal } from './ProductSwapModal'
 import { UpgradesCard } from './UpgradesCard'
-import { LqdPourGuide } from './LqdPourGuide'
-import { defaultVariantId } from '@/lib/pour-plan'
+import { defaultVariantId } from '@/lib/catalogue/variants'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { ShareSheet } from '@/components/share-card/ShareSheet'
 import { ShareStackButton } from '@/components/share-card/ShareStackButton'
@@ -325,18 +324,11 @@ export function StackReviewPage() {
     [subscriptionUsage, revealedIntroDiscount, changePolicy, partnerCode],
   )
 
-  const sortedSlots = useMemo(
-    () => [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder),
-    [blueprint.slots],
-  )
-
   // ── Value-first tiers ──────────────────────────────────────────────────────
   // The engine builds the full stack; the customer chooses a depth here, seeing
   // the value before the price. Each depth is filled to its own monthly price
   // band (`planTiers`), so Essentials costs about the same whatever the quiz
   // said and the number of products is what varies — not the other way round.
-  // Drinks mode is pace-sized (not tiered), so it shows the whole box.
-  const isDrinks = !!answers.drinksMode
   const tierPlans = useMemo(
     () => planTiers(blueprint, products, answers, undefined, priceOpts),
     [blueprint, products, answers, priceOpts],
@@ -347,13 +339,13 @@ export function StackReviewPage() {
   // THIS level rather than the stored one, so the card is charged what the
   // selector showed.
   const activePlan = tierPlanFor(tierPlans, stackLevel)
-  const activeLevel = isDrinks ? stackLevel : activePlan.level
-  const activeSlots = isDrinks ? sortedSlots : activePlan.slots
+  const activeLevel = activePlan.level
+  const activeSlots = activePlan.slots
   const activeBlueprint = useMemo(
     () => ({ ...blueprint, slots: activeSlots, level: activeLevel }),
     [blueprint, activeSlots, activeLevel],
   )
-  const showTiers = !isDrinks && tierPlans.length > 1
+  const showTiers = tierPlans.length > 1
 
   const subOpts = useMemo(() => ({ ...priceOpts, level: activeLevel }), [priceOpts, activeLevel])
 
@@ -366,9 +358,9 @@ export function StackReviewPage() {
   // prices at £0, they all fold into one, and the member's default would be
   // rewritten from a plan built out of nothing.
   useEffect(() => {
-    if (isDrinks || products.length === 0) return
+    if (products.length === 0) return
     if (activeLevel !== stackLevel) setStackLevel(activeLevel)
-  }, [isDrinks, products.length, activeLevel, stackLevel, setStackLevel])
+  }, [products.length, activeLevel, stackLevel, setStackLevel])
 
   const handleCheckout = useCallback(
     () => checkout(activeBlueprint, products, planType, answers, subOpts),
@@ -403,9 +395,8 @@ export function StackReviewPage() {
       buildSharePayload(activeBlueprint, identity, products, {
         customerName: answers.name,
         code: partnerCode?.code ?? null,
-        drinksMode: !!answers.drinksMode,
       }),
-    [activeBlueprint, identity, products, answers.name, answers.drinksMode, partnerCode],
+    [activeBlueprint, identity, products, answers.name, partnerCode],
   )
 
   // Sticky bar: the active plan's headline total + a one-tap path to checkout,
@@ -478,18 +469,13 @@ export function StackReviewPage() {
   // IDs already in the stack (core + added boosters)
   const stackProductIds = new Set(blueprint.slots.map((s) => s.selectedProductId))
 
-  // LQD (drinks mode): boosters and swap alternatives only ever offer drinks,
-  // so the package can't accidentally grow a capsule product.
-  //
-  // Out-of-stock products are held out of both for the same reason the engine
+  // Out-of-stock products are held out of boosters and swap alternatives for the
+  // same reason the engine
   // won't recommend one: the swap sheet exists to get someone OUT of an
   // unavailable pick, so offering another unavailable product sends them round
   // the same loop. The slot's current product is added back by
   // `swapAlternatives` below, so it stays visible in its own list.
-  const offerableProducts = useMemo(
-    () => inStockOnly(lqdOnly(products, !!answers.drinksMode)),
-    [products, answers.drinksMode],
-  )
+  const offerableProducts = useMemo(() => inStockOnly(products), [products])
 
   // Booster candidates: isBoosterEligible, not already in stack, ordered by
   // goal overlap with blueprint then recommendationPriority
@@ -590,7 +576,6 @@ export function StackReviewPage() {
           totalPrice={pricing.oneOffTotal}
           monthlyPrice={pricing.subscriptionTotal}
           canSubscribe={pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet}
-          drinksMode={!!answers.drinksMode}
         />
 
         <div className="h-px bg-[var(--color-border)] mx-5" />
@@ -632,9 +617,7 @@ export function StackReviewPage() {
             className="px-5 max-w-lg mx-auto text-[10px] font-bold tracking-widest uppercase text-[var(--color-muted)] mb-4"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            {answers.drinksMode
-              ? `Your LQD package — ${activeSlots.length} ready-made drinks · swipe to compare`
-              : `Your personalised stack — ${activeSlots.length} products · swipe to compare`}
+            {`Your personalised stack — ${activeSlots.length} products · swipe to compare`}
           </p>
           <StackDeck
             slots={activeSlots}
@@ -666,26 +649,6 @@ export function StackReviewPage() {
 
         {/* Price summary + checkout */}
         <div id="scene-plan" className="px-5 pt-6 max-w-lg mx-auto scroll-mt-20">
-          {/* LQD: the Pour Plan reveal */}
-          {answers.drinksMode && (
-            <LqdPourGuide
-              plan={subscriptionPlan}
-              answers={answers}
-              catalogue={offerableProducts}
-              planType={planType}
-              onPlanChange={setPlanType}
-              selectedVariantByProductId={selectedVariantByProductId}
-              onSwapProduct={(productId) => {
-                const slot = blueprint.slots.find((s) => s.selectedProductId === productId)
-                if (slot) handleOpenSwap(slot.slotId)
-              }}
-              onSelectFlavour={(productId, variantId) => {
-                const slot = blueprint.slots.find((s) => s.selectedProductId === productId)
-                if (slot) handleChangeVariant(slot.slotId, variantId)
-              }}
-            />
-          )}
-
           {checkoutState.status === 'error' && (
             <div className="mb-4 rounded-xl border border-[var(--color-red)]/30 bg-[var(--color-red)]/8 px-4 py-3 space-y-1">
               {checkoutState.messages.map((msg, i) => (
@@ -822,9 +785,7 @@ export function StackReviewPage() {
                 ? 'Taking you to secure checkout…'
                 : stickyIsSub
                   ? 'Start subscription →'
-                  : answers.drinksMode
-                    ? 'Get my drinks →'
-                    : 'Checkout →'}
+                  : 'Checkout →'}
             </button>
           </div>
         </div>,

@@ -31,7 +31,7 @@ const ANSWERS: Record<string, string[]> = {
 /** The name typed on the "A little about you" step, asserted later in the hub. */
 export const QUIZ_NAME = 'Alex'
 
-export type Track = 'performance' | 'wellbeing' | 'lqd'
+export type Track = 'performance' | 'wellbeing'
 
 /** Act 1 — choose a track and enter the questions. */
 export async function startQuiz(page: Page, track: Track = 'performance'): Promise<void> {
@@ -39,7 +39,6 @@ export async function startQuiz(page: Page, track: Track = 'performance'): Promi
   const entry = {
     performance: /Performance \+ wellness/,
     wellbeing: /Everyday wellness/,
-    lqd: /A month of real, ready-made drinks/,
   }[track]
 
   /* The hero is server-rendered, so the button is on screen and clickable a

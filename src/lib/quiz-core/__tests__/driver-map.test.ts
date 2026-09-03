@@ -12,8 +12,7 @@ import type { QuizAnswers } from '@/lib/types'
 
 function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
-    name: 'P', track: 'performance', drinksMode: false, drinksPerDay: null,
-    dailyDrinks: null, drinkVariety: null, workoutAddOns: [], primaryGoal: null,
+    name: 'P', track: 'performance', primaryGoal: null,
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male', goals: ['health'],
     trainingFrequency: '3-4x', trainingType: [], lifestyle: [], diet: 'mostly-good',
     currentSupplements: [], currentVitamins: [], tryOurs: [],

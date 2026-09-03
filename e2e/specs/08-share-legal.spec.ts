@@ -142,7 +142,6 @@ test.describe('the uploaded card photography', () => {
       lineup: [{ slot: 'Protein', product: 'Whey', reason: 'because', dose: '1KG' }],
       coverage: [],
       level: 'performance',
-      drinksMode: false,
       artKey: KEY,
       ...(withHero ? { heroImage: 'https://example.com/product-render.png' } : {}),
       createdAt: new Date().toISOString(),

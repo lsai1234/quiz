@@ -33,11 +33,6 @@ describe('pickArtKey', () => {
     }
   })
 
-  it('gives an LQD package the hydration frame whatever it is for', () => {
-    expect(pickArtKey(['muscle', 'performance'], true)).toBe('hydration')
-    expect(pickArtKey([], true)).toBe('hydration')
-  })
-
   it('falls back to wellbeing when there are no goals', () => {
     expect(pickArtKey([])).toBe('wellbeing')
   })

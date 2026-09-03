@@ -52,7 +52,7 @@ describe('rejects', () => {
   })
 
   it('a payload missing the parts the card is made of', () => {
-    for (const key of ['stackName', 'lineup', 'coverage', 'focusAreas', 'level', 'drinksMode']) {
+    for (const key of ['stackName', 'lineup', 'coverage', 'focusAreas', 'level']) {
       const broken: Record<string, unknown> = { ...persona.payload }
       delete broken[key]
       reject(Buffer.from(JSON.stringify(broken), 'utf8').toString('base64url'))

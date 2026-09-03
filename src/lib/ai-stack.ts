@@ -125,7 +125,6 @@ PERSON
 - Lifestyle factors: ${lifestyle}
 - Caffeine preference: ${answers.caffeineLevel ?? 'moderate'}
 - Monthly budget: ${budget}
-${answers.drinksMode ? '- Package type: CHRGD LQD — a pre-made drinks package. Every option offered arrives READY TO DRINK (bottles, cans, shots); write reasons in grab-and-drink language (crack a can, knock back a shot, open a bottle) and lean on the convenience: no powders, no pills, no mixing — they drink what we send and they are covered.' : ''}
 ${context.length ? `\nDEEPER CONTEXT (what they told us about why — use this to break ties between options and to make the reasons specific)\n${context.join('\n')}\n` : ''}
 BUDGET RULE
 - The combined one-off list price of the products you choose must stay within the top of this person's monthly budget. If a pricier option would push the total over, choose a cheaper option from that slot that still fits. Use the budget well — but never exceed it.

@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { productBars, type StatAxis } from '@/lib/stack-stats'
-import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { dealInfo, productBadge, variantStock } from '@/lib/shop/merchandising'
+import { categoryHue } from '@/lib/shop/category-visuals'
 import { useBasket } from '@/lib/basket/store'
 import { hasRating } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -35,7 +35,8 @@ export function ShopProductCard({ product, axes, animate = true, onExpand }: Pro
     return () => { if (addTimer.current) clearTimeout(addTimer.current) }
   }, [])
 
-  const hue = slotVisual(product.stackSlots[0]).hue
+  // Colour-coded by category, so every card in a section carries the same chip.
+  const hue = categoryHue(product.category)
   const variant = product.variants.find((v) => v.available) ?? product.variants[0]
   const { price, rrp, onDeal, pct: discountPct } = dealInfo(product)
   const badge = productBadge(product)

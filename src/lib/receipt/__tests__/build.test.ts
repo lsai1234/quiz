@@ -315,7 +315,7 @@ describe('a subscription that has no order yet', () => {
         firstPayment: 4174,
         shippingAddress: null,
         lines: [
-          { name: 'CHRGD LQD Recover', qty: 1, cadenceMonths: 2 },
+          { name: 'CHRGD Recover', qty: 1, cadenceMonths: 2 },
           { name: 'Creatine', qty: 1, cadenceMonths: 1 },
         ],
         minMonths: 1,
@@ -349,7 +349,7 @@ describe('a subscription that has no order yet', () => {
   it('lists the plan as a schedule, with no amounts to mis-add', () => {
     const receipt = receiptFromConfirmation(plan())!
     expect(receipt.items).toEqual([
-      { name: 'CHRGD LQD Recover', qty: 1, amount: null, note: 'every 2 months' },
+      { name: 'CHRGD Recover', qty: 1, amount: null, note: 'every 2 months' },
       { name: 'Creatine', qty: 1, amount: null, note: 'every month' },
     ])
   })

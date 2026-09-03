@@ -5,13 +5,13 @@ import { buildSharePayload, shortReason } from '../payload'
 import { SHARE_PAYLOAD_VERSION } from '../types'
 
 /**
- * The payload builder, run over the six stacks the renderer has to survive.
+ * The payload builder, run over the stacks the renderer has to survive.
  *
  * These use the real engine and the real catalogue rather than a hand-written
  * blueprint, because the interesting failures are not in the mapping — they are
  * in the shapes the engine actually produces. A stack with nine slots, a
- * wellbeing stack with no training language, a drinks-mode package, a stack
- * whose goals nothing in the catalogue can serve: each of those is a layout the
+ * wellbeing stack with no training language, a stack whose goals nothing in the
+ * catalogue can serve: each of those is a layout the
  * card has to hold, and none of them appear if the fixture is one tidy stack
  * written by hand.
  *
@@ -22,8 +22,7 @@ import { SHARE_PAYLOAD_VERSION } from '../types'
 
 function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
-    name: 'Sam Whitlock', track: 'performance', drinksMode: false, drinksPerDay: null,
-    dailyDrinks: null, drinkVariety: null, workoutAddOns: [], primaryGoal: null,
+    name: 'Sam Whitlock', track: 'performance', primaryGoal: null,
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male',
     safetyFlags: [], weightBand: null, goals: ['health'],
     trainingFrequency: '3-4x', trainingType: [], lifestyle: [], diet: 'mostly-good',
@@ -48,10 +47,6 @@ const PERSONAS = {
     goals: ['muscle', 'energy'], trainingFrequency: '5-6x', trainingType: ['strength'],
     trainingFocus: 'hypertrophy', trainingExperience: 'experienced',
     budget: '80-plus', stackPreference: 'complete', caffeineLevel: 'high',
-  }),
-  drinks: A({
-    drinksMode: true, goals: ['muscle', 'energy'], dailyDrinks: 2, drinksPerDay: 2,
-    drinkVariety: 'staples', workoutAddOns: ['pre-workout'], budget: null, stackPreference: null,
   }),
   wellbeing: A({
     track: 'wellbeing', goals: ['sleep-better', 'less-stress'], gender: 'female',
@@ -250,11 +245,6 @@ describe('buildSharePayload', () => {
   it('normalises the code to the form printed on the card', () => {
     expect(build(PERSONAS.essentials, IDENTITY, { code: ' sarah20 ' }).code).toBe('SARAH20')
     expect(build(PERSONAS.essentials).code).toBeUndefined()
-  })
-
-  it('flags drinks mode, which reframes the card', () => {
-    expect(build(PERSONAS.drinks, IDENTITY, { drinksMode: true }).drinksMode).toBe(true)
-    expect(build(PERSONAS.essentials).drinksMode).toBe(false)
   })
 
   it('orders the lineup the way the results screen does', () => {

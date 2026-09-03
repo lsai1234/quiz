@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { useQuizStore, hasQuizProgress } from '@/lib/store'
 import { useQuizArmState } from '@/lib/experiments/client'
-import { armForRun } from '@/lib/experiments/assignment'
 import { Act1Hero } from './Act1Hero'
 import { Act2Quiz } from './Act2Quiz'
 import { QuizV2 } from '@/components/quiz/v2/QuizV2'
@@ -41,9 +40,7 @@ export function ScrollExperience() {
    */
   const { arm } = useQuizArmState()
 
-  // CHRGD LQD always runs on v1, whatever the experiment says — see `armForRun`.
-  const drinksMode = useQuizStore((s) => s.answers.drinksMode)
-  const useV2 = armForRun(arm, { drinksMode }) === 'v2'
+  const useV2 = arm === 'v2'
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')

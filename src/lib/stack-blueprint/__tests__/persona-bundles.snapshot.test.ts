@@ -11,15 +11,13 @@
  * (Date.now-based) are deliberately excluded.
  */
 import { buildStackBlueprint } from '../factory'
-import { calculatePricing, buildSubscriptionPlan, levelForStackPreference } from '../pricing'
-import { buildLqdPlan } from '@/lib/lqd'
+import { calculatePricing, levelForStackPreference } from '../pricing'
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import type { QuizAnswers } from '@/lib/types'
 
 function A(o: Partial<QuizAnswers> = {}): QuizAnswers {
   return {
-    name: 'P', track: 'performance', drinksMode: false, drinksPerDay: null,
-    dailyDrinks: null, drinkVariety: null, workoutAddOns: [], primaryGoal: null,
+    name: 'P', track: 'performance', primaryGoal: null,
     asNeeded: {}, ageBracket: '25-34', exactAge: null, gender: 'male', goals: ['health'],
     trainingFrequency: '3-4x', trainingType: [], lifestyle: [], diet: 'mostly-good',
     currentSupplements: [], currentVitamins: [], tryOurs: [],
@@ -42,8 +40,6 @@ const PERSONAS: Array<{ n: string; a: QuizAnswers }> = [
   { n: 'well-skin-veggie', a: A({ track: 'wellbeing', goals: ['skin-hair-nails'], wellbeingAnswers: { collagenOk: 'veggie' }, budget: '30-50', stackPreference: 'simple' }) },
   { n: 'well-menopause-gut-female45', a: A({ track: 'wellbeing', goals: ['menopause', 'gut-health'], gender: 'female', ageBracket: '45+', budget: '80-plus', stackPreference: 'complete' }) },
   { n: 'well-health-under30', a: A({ track: 'wellbeing', goals: ['health'], budget: 'under-30', stackPreference: 'simple' }) },
-  { n: 'drinks-perf-muscle-energy', a: A({ drinksMode: true, goals: ['muscle', 'energy'], dailyDrinks: 2, drinksPerDay: 2, drinkVariety: 'staples', workoutAddOns: ['pre-workout', 'protein'], trainingFrequency: '3-4x', budget: null, stackPreference: null }) },
-  { n: 'drinks-well-sleep-immune-gut', a: A({ track: 'wellbeing', drinksMode: true, goals: ['sleep-better', 'immune', 'gut-health'], dailyDrinks: 3, drinksPerDay: 3, drinkVariety: 'variety', trainingFrequency: null, budget: null, stackPreference: null }) },
   // Value-first (Phase 2): no budget is asked, so the flow builds the full stack
   // and tiers it on the reveal. These lock the complete (budget: null) build.
   { n: 'valuefirst-perf-muscle-energy', a: A({ goals: ['muscle', 'energy'], trainingFrequency: '5-6x', trainingType: ['strength'], trainingFocus: 'hypertrophy', budget: null, stackPreference: null }) },
@@ -62,10 +58,6 @@ function summarise(a: QuizAnswers) {
     oneOffTotal: pricing.oneOffTotal,
     subscriptionTotal: pricing.subscriptionTotal,
     subscriptionItemCount: pricing.subscriptionItemCount,
-  }
-  if (a.drinksMode) {
-    const lqd = buildLqdPlan(buildSubscriptionPlan(bp, MOCK_CATALOGUE, a), a)
-    summary.lqd = { totalDrinks: lqd.totalDrinks, timed: lqd.timedDrinks, anytime: lqd.anytimeDrinks, fit: lqd.fit }
   }
   return summary
 }

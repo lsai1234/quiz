@@ -1,6 +1,6 @@
 /**
- * The odd "did you know?" tidbits — sparse brand asides, drinks-forward in LQD
- * mode, shown on a few steps only (not per tap).
+ * The odd "did you know?" tidbits — sparse brand asides, shown on a few steps
+ * only (not per tap).
  */
 import { quizFactFor } from '@/lib/quiz-sell'
 import { QUIZ_STEPS, type StepId } from '@/lib/quiz-flow'
@@ -8,33 +8,23 @@ import { QUIZ_STEPS, type StepId } from '@/lib/quiz-flow'
 describe('quizFactFor', () => {
   it('only a few steps carry a fact — most say nothing', () => {
     const ids = QUIZ_STEPS.map((s) => s.id)
-    // Sparse on purpose, per mode: an occasional aside, never every step.
-    expect(ids.filter((id) => quizFactFor(id, true)).length).toBeLessThanOrEqual(3)
-    expect(ids.filter((id) => quizFactFor(id, false)).length).toBeLessThanOrEqual(3)
-    expect(quizFactFor('personal', true)).toBeNull()
-    expect(quizFactFor('goals', true)).toBeNull()
-    expect(quizFactFor('review', false)).toBeNull()
+    // Sparse on purpose: an occasional aside, never every step.
+    expect(ids.filter((id) => quizFactFor(id)).length).toBeLessThanOrEqual(3)
+    expect(quizFactFor('personal')).toBeNull()
+    expect(quizFactFor('goals')).toBeNull()
+    expect(quizFactFor('review')).toBeNull()
   })
 
-  it('drinks mode leans into drinks & convenience; normal mode into the stack', () => {
-    // LQD's ships-monthly fact lives on trainingTime.
-    expect(quizFactFor('trainingTime', true)?.text).toMatch(/box|month|pause|skip/i)
-    // Budget and formats are both gone as steps; `supps` now carries the
-    // subscribe-&-save line as well as its own, in stack mode only.
-    expect(quizFactFor('supps', false)?.text).toMatch(/subscribe|bundle|rate/i)
-    expect(quizFactFor('supps', false)?.text).toMatch(/already take|gaps/i)
-    expect(quizFactFor('supps', true)).toBeNull()
+  it('`supps` carries its own line and the subscribe-&-save one', () => {
+    // Budget and formats are both gone as steps, so `supps` — the last step
+    // before review — took the subscribe-&-save line the formats step held.
+    expect(quizFactFor('supps')?.text).toMatch(/subscribe|bundle|rate/i)
+    expect(quizFactFor('supps')?.text).toMatch(/already take|gaps/i)
   })
 
-  it('the LQD daily-drinks step gets the one-box-in-the-fridge tidbit', () => {
-    expect(quizFactFor('dailyDrinks', true)?.text).toMatch(/box|fridge|no tubs|no pills/i)
-    // …and that step carries nothing in the normal stack quiz.
-    expect(quizFactFor('dailyDrinks', false)).toBeNull()
-  })
-
-  it('a fact id is stable for a given step + mode (so it shows at most once)', () => {
-    const a = quizFactFor('diet', true)
-    const b = quizFactFor('diet', true)
+  it('a fact id is stable for a given step (so it shows at most once)', () => {
+    const a = quizFactFor('diet')
+    const b = quizFactFor('diet')
     expect(a?.id).toBe(b?.id)
   })
 })

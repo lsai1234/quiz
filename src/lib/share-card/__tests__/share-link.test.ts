@@ -70,8 +70,4 @@ describe('cardShareText', () => {
     expect(text).toBe('My CHRGD stack: Iron Foundations.')
     expect(text).not.toMatch(/boost|improve|increase|cure|treat|burn/i)
   })
-
-  it('reframes for drinks mode', () => {
-    expect(cardShareText(sharePersonas()[3].payload)).toContain('LQD package')
-  })
 })

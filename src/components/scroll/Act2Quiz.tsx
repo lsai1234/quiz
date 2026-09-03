@@ -7,7 +7,6 @@ import { activeSteps, stepCopy, selectHint, type StepId } from '@/lib/quiz-flow'
 import { withDeepDiveSignals } from '@/lib/ai-questions'
 import { maybePrefetchDeepDive, applyDeepDiveFallback, DEEP_DIVE_WAIT_MS } from '@/lib/deep-dive'
 import { ChargeRail } from '@/components/quiz/ChargeRail'
-import { LiquidRail } from '@/components/quiz/LiquidRail'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { AnswerOption, CheckMark } from '@/components/quiz/AnswerOption'
 import { GOALS_DATA, WELLBEING_DATA, GOAL_LABELS } from '@/lib/quiz-goals'
@@ -18,7 +17,7 @@ import type {
   Goal, TrainingFrequency, TrainingType, DietLevel,
   CaffeineLevel,
   TrainingExperience, StimPreference, AgeBracket, Gender, StackIdentity,
-  DailyDrinks, WorkoutAddOn, SafetyFlag, WeightBand,
+  SafetyFlag, WeightBand,
 } from '@/lib/types'
 
 // Client-side fallback identity so the reveal is never empty if the identity
@@ -266,53 +265,12 @@ const CAFFEINE_DATA: Array<{ id: CaffeineLevel; label: string; sub: string }> = 
 // customer chooses a depth (Essentials / Balanced / Complete) on the results
 // screen, value before price (see StackReviewPage tiers).
 
-// LQD FOUNDATION — how many drinks on a normal day. Not a dose: it tunes the
-// "your box lasts ~X days" story, never the amounts. `fills` drives the little
-// liquid-level graphic on each option.
-const DAILY_DRINKS_DATA: Array<{ id: DailyDrinks; label: string; sub: string; fills: number }> = [
-  { id: 1, label: 'One a day',  sub: 'One go-to drink, same time most days',     fills: 1 },
-  { id: 2, label: 'A couple',   sub: 'One in the morning, one later',            fills: 2 },
-  { id: 3, label: 'Three+',     sub: 'A drink with most meals',                  fills: 3 },
-]
-
-// LQD WORKOUT ADD-ONS — a single opt-in pre-workout drink (performance route
-// only). The protein/recovery options were inert (the daily base already covers
-// those slots), so it's now one toggle that adds/keeps the pre-workout line.
-const WORKOUT_ADDON_DATA: Array<{ id: WorkoutAddOn; label: string; sub: string }> = [
-  { id: 'pre-workout', label: 'Yes — add a pre-workout drink', sub: 'One before you train, on training days only' },
-]
-
 // ─── Label lookups (for the review summary) ───────────────────────────────────
 
 const labelOf = (data: Array<{ id: string; label: string }>, id: string | null) => data.find(d => d.id === id)?.label ?? ''
 const labelsOf = (data: Array<{ id: string; label: string }>, ids: string[]) => ids.map(id => labelOf(data, id)).filter(Boolean)
 
 // ─── Single option component ──────────────────────────────────────────────────
-
-// A little liquid glass for the LQD pace step: fills to `level` (0–1) with a
-// drifting meniscus wave. Selected → accent fill; otherwise a calm ghost.
-function PaceGlass({ level, selected, reduced }: { level: number; selected: boolean; reduced?: boolean }) {
-  const fillPct = Math.max(10, Math.min(100, Math.round(level * 100)))
-  const liquid = selected ? '#00D4FF' : 'rgba(255,255,255,0.22)'
-  return (
-    <div
-      className="relative w-9 h-11 rounded-b-[10px] rounded-t-[4px] overflow-hidden shrink-0 border transition-colors duration-200"
-      style={{ borderColor: selected ? 'rgba(0,212,255,0.5)' : 'rgba(255,255,255,0.15)', background: 'rgba(255,255,255,0.02)' }}
-      aria-hidden="true"
-    >
-      <div className="absolute inset-x-0 bottom-0 transition-[height] duration-500" style={{ height: `${fillPct}%`, background: liquid, opacity: selected ? 0.9 : 0.55 }}>
-        {/* meniscus wave riding the surface */}
-        <div
-          className="absolute -top-1 left-0 h-2 w-[200%] rounded-[50%]"
-          style={{
-            background: liquid,
-            animation: reduced ? undefined : 'lqd-wave-x 2.6s ease-in-out infinite',
-          }}
-        />
-      </div>
-    </div>
-  )
-}
 
 // The odd "did you know?" — a calm, non-blocking aside that fades in on a few
 // steps and drifts away on its own. Tappable to dismiss early.
@@ -453,11 +411,11 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   } = useQuizStore()
 
   // Active step sequence for the chosen track (single source of truth).
-  const seq = useMemo(() => activeSteps(answers.track, answers.drinksMode, { track: answers.track }), [answers.track, answers.drinksMode])
+  const seq = useMemo(() => activeSteps(answers.track, { track: answers.track }), [answers.track])
   const index = Math.min(step, seq.length - 1)
   const current = seq[index]
   const id = current.id
-  const { section, q, hint } = stepCopy(current, answers.track, answers.drinksMode)
+  const { section, q, hint } = stepCopy(current, answers.track)
   const isFirst = index === 0
 
   // Selected already-taking items eligible for the keep-yours-or-try-ours
@@ -508,10 +466,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     prevChargeRef.current = charge
   }, [charge])
 
-  // CHRGD LQD — the whole run is drinks & convenience: the rail becomes a
-  // filling liquid tube and the floor a rising pool.
-  const drinksMode = !!answers.drinksMode
-
   // ── The odd "did you know?" ── a light brand tidbit on a few steps only,
   // each shown at most once, so it's an occasional aside — never per-tap.
   const [cue, setCue] = useState<QuizFact | null>(null)
@@ -519,7 +473,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
   const cueTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const cueDelayRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    const fact = quizFactFor(id, drinksMode)
+    const fact = quizFactFor(id)
     // Clear anything showing when we land on a new step.
     setCue(null)
     if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
@@ -532,7 +486,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       setCue(fact)
       cueTimerRef.current = setTimeout(() => setCue(null), 5200)
     }, 1100)
-  }, [id, drinksMode])
+  }, [id])
   useEffect(() => () => {
     if (cueTimerRef.current) clearTimeout(cueTimerRef.current)
     if (cueDelayRef.current) clearTimeout(cueDelayRef.current)
@@ -557,7 +511,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     startTsRef.current = performance.now()
     if (!startedRef.current) {
       startedRef.current = true
-      funnel.start({ track: answers.track, drinksMode: !!answers.drinksMode })
+      funnel.start({ track: answers.track })
     }
     const onLeave = () => {
       if (completedRef.current) return
@@ -579,7 +533,7 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     stepEnterRef.current = performance.now()
     funnel.stepView({
       stepId: id, index, total: Math.max(1, seq.length - 2),
-      track: answers.track, drinksMode: !!answers.drinksMode,
+      track: answers.track,
     })
     if (id === 'review' && Object.keys(answers.dynamicAnswers ?? {}).length === 0) {
       funnel.deepDiveOffer()
@@ -763,7 +717,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     completedRef.current = true
     funnel.complete({
       track: answers.track,
-      drinksMode: !!answers.drinksMode,
       goalCount: answers.goals.length,
       primaryGoal: answers.primaryGoal ?? answers.goals[0],
       budget: answers.budget,
@@ -816,8 +769,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       case 'goals': return !!answers.track && answers.goals.length > 0
       case 'personal': return !!localAge
       case 'safety': case 'lifestyle': case 'deepDive': case 'supps': case 'review': return true
-      // Workout add-ons are optional — always allowed to continue (with or without picks).
-      case 'workoutAddOns': return true
       case 'type': return answers.trainingType.length > 0
       default: return false
     }
@@ -857,14 +808,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     if ((answers.safetyFlags ?? []).length) {
       rows.push({ label: 'To factor in', value: labelsOf(SAFETY_DATA, answers.safetyFlags ?? []).join(', '), edit: 'safety' })
     }
-    if (answers.drinksMode && answers.dailyDrinks) {
-      const pace = DAILY_DRINKS_DATA.find((d) => d.id === answers.dailyDrinks)
-      if (pace) rows.push({ label: 'Daily drinks', value: `${pace.label} · ${pace.id === 3 ? '3+' : pace.id}/day`, edit: 'dailyDrinks' })
-    }
-    if (answers.drinksMode && answers.track === 'performance' && (answers.workoutAddOns ?? []).length > 0) {
-      const labels = WORKOUT_ADDON_DATA.filter((w) => (answers.workoutAddOns ?? []).includes(w.id)).map((w) => w.label)
-      rows.push({ label: 'Workout drinks', value: labels.join(', '), edit: 'workoutAddOns' })
-    }
     if (localAge) rows.push({ label: 'You', value: [localName.trim(), labelOf(AGE_DATA, localAge), labelOf(WEIGHT_DATA, localWeight || null)].filter(Boolean).join(' · '), edit: 'personal' })
     if (answers.track === 'performance') {
       const t = [labelOf(FREQ_DATA, answers.trainingFrequency), labelsOf(TYPE_DATA, answers.trainingType).join(', ')].filter(Boolean).join(' · ')
@@ -897,52 +840,15 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
       style={{ height: 'var(--app-height, 100dvh)' }}
     >
 
-      {/* The signature rail — a filling liquid tube in LQD, the charge rail
-          otherwise. Always in frame, climbing as you answer. */}
-      {drinksMode
-        ? <LiquidRail level={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
-        : <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />}
+      {/* The signature rail — always in frame, climbing as you answer. */}
+      <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
 
-      {/* Floor. LQD: a real liquid pool that RISES with progress, with a wavy
-          surface — the screen visibly fills with drink. Otherwise: a calm
-          charge whisper. Never competes with the question. */}
-      {drinksMode ? (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-0 overflow-hidden"
-          style={{ height: `${Math.round(70 + charge * 1.1)}px` }}
-        >
-          {/* wavy meniscus at the pool surface */}
-          <div
-            className="absolute inset-x-0 top-0 h-4"
-            style={{
-              marginLeft: '-50%', width: '200%',
-              background: 'radial-gradient(60% 130% at 20% 0%, rgba(0,212,255,0.28), transparent 60%), radial-gradient(60% 130% at 70% 0%, rgba(0,212,255,0.22), transparent 60%)',
-              animation: reducedMotion ? undefined : 'wave-drift 7s linear infinite',
-            }}
-          />
-          <div className="absolute inset-0 top-2" style={{ background: 'linear-gradient(to top, rgba(0,212,255,0.16), rgba(0,212,255,0.05) 55%, transparent)' }} />
-          {/* a few bubbles drifting up through the pool */}
-          {!reducedMotion && charge > 20 && [0, 1, 2, 3].map((i) => (
-            <span
-              key={`floor-bub-${i}`}
-              className="absolute rounded-full"
-              style={{
-                left: `${12 + i * 24}%`, bottom: 4, width: 4, height: 4,
-                background: 'rgba(0,212,255,0.5)',
-                ['--sway' as string]: `${i % 2 ? 5 : -5}px`,
-                animation: `bubble-rise ${4 + i}s ease-in ${i * 1.1}s infinite`,
-              }}
-            />
-          ))}
-        </div>
-      ) : (
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-0"
-          style={{ height: 180, background: 'radial-gradient(120% 100% at 50% 135%, rgba(0,212,255,0.06), transparent 70%)' }}
-        />
-      )}
+      {/* Floor — a calm charge whisper. Never competes with the question. */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-0"
+        style={{ height: 180, background: 'radial-gradient(120% 100% at 50% 135%, rgba(0,212,255,0.06), transparent 70%)' }}
+      />
 
       {/* The odd "did you know?" aside */}
       {cue && !isGenerating && <DidYouKnowChip cue={cue} reduced={reducedMotion} onDismiss={() => setCue(null)} />}
@@ -958,9 +864,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
           </div>
           <div className="text-center">
             <p className="text-xl font-semibold text-white mb-1.5 tracking-tight" style={{ fontFamily: 'var(--font-display)' }}>
-              {drinksMode ? 'Topped up' : 'Fully charged'}
+              Fully charged
             </p>
-            <p className="text-sm text-white/35">{drinksMode ? 'Pouring your month of drinks…' : 'Powering on your personalised stack…'}</p>
+            <p className="text-sm text-white/35">Powering on your personalised stack…</p>
           </div>
           <div className="flex gap-1.5 mt-2">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -1212,79 +1118,6 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
                   setAnswer('safetyFlags', [])
                 }}
               />
-            </div>
-          )}
-
-          {/* ── LQD pace — how many drinks a day (drinks mode only) ── */}
-          {/* ── LQD foundation — how many drinks a day (mirrors into drinksPerDay
-                so the box-sizing engine is unchanged) ── */}
-          {id === 'dailyDrinks' && (
-            <div className="flex flex-col gap-2.5">
-              {DAILY_DRINKS_DATA.map(({ id: did, label, sub, fills }) => {
-                const active = answers.dailyDrinks === did
-                return (
-                  <button
-                    key={`daily-${did}`}
-                    onClick={() => {
-                      setAnswer('dailyDrinks', did)
-                      setAnswer('drinksPerDay', did) // keep the engine's pace signal in sync
-                      clearPending()
-                      pendingTimerRef.current = setTimeout(() => advance(), 340)
-                    }}
-                    aria-pressed={active}
-                    className={[
-                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
-                      'transition-all duration-200 active:scale-[0.99]',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
-                      active ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
-                    ].join(' ')}
-                  >
-                    <PaceGlass level={fills / 4} selected={active} reduced={reducedMotion} />
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[15px] font-medium leading-snug ${active ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
-                    </div>
-                    <CheckMark selected={active} />
-                  </button>
-                )
-              })}
-              <p className="text-[12px] text-white/30 leading-snug mt-1 px-1">
-                Your everyday base. No pressure to hit a number — it just helps us size and show how your box will flow.
-              </p>
-            </div>
-          )}
-
-          {/* ── LQD workout add-ons — opt-in, training route only ── */}
-          {id === 'workoutAddOns' && (
-            <div className="flex flex-col gap-2.5">
-              {WORKOUT_ADDON_DATA.map(({ id: wid, label, sub }) => {
-                const selected = (answers.workoutAddOns ?? []).includes(wid)
-                return (
-                  <button
-                    key={`wa-${wid}`}
-                    onClick={() => {
-                      const cur = answers.workoutAddOns ?? []
-                      setAnswer('workoutAddOns', cur.includes(wid) ? cur.filter((x) => x !== wid) : [...cur, wid])
-                    }}
-                    aria-pressed={selected}
-                    className={[
-                      'w-full flex items-center gap-4 px-5 py-4 rounded-xl border text-left',
-                      'transition-all duration-200 active:scale-[0.99]',
-                      'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40',
-                      selected ? 'border-[#00D4FF]/55 bg-[#00D4FF]/[0.07]' : 'border-white/[0.08] bg-white/[0.015] hover:border-white/20 hover:bg-white/[0.04]',
-                    ].join(' ')}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-[15px] font-medium leading-snug ${selected ? 'text-white' : 'text-white/80'}`} style={{ fontFamily: 'var(--font-display)' }}>{label}</div>
-                      <div className="text-[13px] mt-1 text-white/35 leading-snug">{sub}</div>
-                    </div>
-                    <CheckMark selected={selected} />
-                  </button>
-                )
-              })}
-              <p className="text-[12px] text-white/30 leading-snug mt-1 px-1">
-                Optional — these ride on top of your everyday drinks and are sized to how often you train. Skip if you just want the daily base.
-              </p>
             </div>
           )}
 
@@ -1641,8 +1474,8 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
             >
               {continueNeeds ? continueNeeds
                 : returnToReview ? 'Save and go back'
-                : id === 'review' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
-                : id === 'deepDive' ? (drinksMode ? 'Build my drinks box' : 'Build my stack')
+                : id === 'review' ? 'Build my stack'
+                : id === 'deepDive' ? 'Build my stack'
                 : id === 'goals' && answers.goals.length > 0 ? `Continue with ${answers.goals.length} goal${answers.goals.length > 1 ? 's' : ''}`
                 : id === 'personal' && localName.trim() ? `Continue, ${localName.trim()}`
                 : 'Continue'}

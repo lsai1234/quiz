@@ -14,11 +14,6 @@ import type { QuizAnswers } from './types'
 export const defaultAnswers: QuizAnswers = {
   name: '',
   track: null,
-  drinksMode: false,
-  drinksPerDay: null,
-  dailyDrinks: null,
-  drinkVariety: null,
-  workoutAddOns: [],
   primaryGoal: null,
   asNeeded: {},
   ageBracket: null,
