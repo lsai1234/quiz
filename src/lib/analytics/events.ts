@@ -34,6 +34,10 @@ export const SHOP_EVENTS = [
    * position nine is a search nobody trusts.
    */
   'shop_search_select',
+  /** A facet turned on or off, with what the shop was left showing. */
+  'shop_filter_apply',
+  /** A sort order chosen. */
+  'shop_sort_change',
   'product_open',
   'add_to_basket',
   'basket_open',

@@ -8,11 +8,13 @@ const ACCENT = '#00D4FF'
 interface Props {
   categories: ShopCategory[]
   /**
-   * The search bar, rendered above the chips inside this same sticky container.
-   * It lives here rather than in its own sticky bar because two of them cost
-   * about a third of a 360px viewport before any product is visible.
+   * The search box and the filter row, rendered above the chips inside this same
+   * sticky container. They live here rather than in sticky bars of their own
+   * because each extra one costs a band of a 360px viewport before any product
+   * is visible — and because this is the order the page reads in: what are you
+   * looking for, how do you narrow it, where do you jump to.
    */
-  search?: ReactNode
+  controls?: ReactNode
 }
 
 /**
@@ -20,11 +22,11 @@ interface Props {
  * you're in. Plain sticky (the shop page has no transformed/clipped ancestor),
  * so no portal is needed here.
  *
- * Also the shop's one sticky bar: it hosts the search input above the chips.
- * With a search running there are no shelves to jump to, so the caller passes no
- * categories and only the input renders.
+ * Also the shop's one sticky bar: it hosts the search input and the filter row
+ * above the chips. With a search running there are no shelves to jump to, so the
+ * caller passes no categories and only the controls render.
  */
-export function ShopCategoryNav({ categories, search }: Props) {
+export function ShopCategoryNav({ categories, controls }: Props) {
   const [activeSlug, setActiveSlug] = useState(categories[0]?.slug ?? '')
 
   useEffect(() => {
@@ -52,9 +54,9 @@ export function ShopCategoryNav({ categories, search }: Props) {
   const go = (slug: string) =>
     document.getElementById(`shop-cat-${slug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  // Nothing to render only when there is neither a shelf to jump to nor a
-  // search box to host — otherwise the bar stays and carries whichever it has.
-  if (categories.length === 0 && !search) return null
+  // Nothing to render only when there is neither a shelf to jump to nor any
+  // controls to host — otherwise the bar stays and carries whichever it has.
+  if (categories.length === 0 && !controls) return null
 
   return (
     <nav
@@ -62,7 +64,7 @@ export function ShopCategoryNav({ categories, search }: Props) {
       className="sticky top-0 z-30"
       style={{ background: 'color-mix(in srgb, var(--color-bg) 82%, transparent)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--color-border)' }}
     >
-      {search}
+      {controls}
       {categories.length > 0 && (
       <div className="flex gap-2 overflow-x-auto px-5 py-3 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
         {categories.map((c) => {

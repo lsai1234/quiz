@@ -1,4 +1,4 @@
-import { EXPANSIONS, INTENT_RULES, parseQuery, expand } from '../synonyms'
+import { EXPANSIONS, INTENT_RULES, parseQuery, expand, stripPhrase } from '../synonyms'
 import { isClaimSafe, claimFlags } from '../claim-safety'
 
 /**
@@ -136,5 +136,49 @@ describe('parseQuery — combinations', () => {
     expect(text).toBe('')
     expect(intent).toEqual({})
     expect(matchedPhrases).toEqual([])
+  })
+})
+
+/**
+ * `stripPhrase` is what makes an inferred filter removable rather than merely
+ * visible: dismissing the chip deletes the words that produced it, so the search
+ * box and the filter chips can never disagree about what is on.
+ */
+describe('stripPhrase', () => {
+  it('removes the phrase and leaves the rest of the query intact', () => {
+    expect(stripPhrase('stim free pre workout', 'stim free')).toBe('pre workout')
+    expect(stripPhrase('vegan protein', 'vegan')).toBe('protein')
+  })
+
+  it('is case-insensitive, because the box holds what they typed', () => {
+    expect(stripPhrase('Vegan Protein', 'vegan')).toBe('Protein')
+  })
+
+  it('only removes whole words', () => {
+    expect(stripPhrase('veganism protein', 'vegan')).toBe('veganism protein')
+  })
+
+  it('collapses the gap it leaves behind', () => {
+    expect(stripPhrase('cheap vegan protein', 'vegan')).toBe('cheap protein')
+  })
+
+  it('handles the phrase being the whole query', () => {
+    expect(stripPhrase('vegan', 'vegan')).toBe('')
+  })
+
+  it('removes a price phrase, punctuation and all', () => {
+    expect(stripPhrase('protein under £30', 'under £30')).toBe('protein')
+  })
+
+  it('leaves a query alone when the phrase is not in it', () => {
+    expect(stripPhrase('protein', 'vegan')).toBe('protein')
+  })
+
+  it('round-trips with parseQuery: dismissing a phrase drops its intent', () => {
+    const before = parseQuery('vegan protein')
+    expect(before.intent.dietary).toEqual(['vegan'])
+    const after = parseQuery(stripPhrase('vegan protein', 'vegan'))
+    expect(after.intent.dietary).toBeUndefined()
+    expect(after.text).toBe('protein')
   })
 })

@@ -273,13 +273,13 @@ recovers into an add-to-basket; the filter sheet applies and clears.
 | Phase | Scope | Shippable alone? |
 |---|---|---|
 | **SS1** | `search.ts`, `synonyms.ts`, `shop-query.ts` + tests; search bar; results grid; zero state | **Built** — see below |
-| **SS2** | Filter sheet with live facet counts, sort, chips, URL deep links, analytics | Yes |
+| **SS2** | Filter sheet with live facet counts, sort, chips, URL deep links, analytics | **Built** — see below |
 | **SS3** | Suggestions dropdown, recent searches, typo tolerance, `⌘K` | Yes |
 | **SS4** | The features in Part B, individually | Each on its own |
 
 Rough sizing: SS1 a day, SS2 a day, SS3 half a day.
 
-## What SS1 changed about this plan
+## What the build changed about this plan
 
 Three things came out differently in the build, and the reasons are worth
 keeping.
@@ -304,11 +304,44 @@ without a listbox promises a keyboard contract to a screen reader that nothing
 can honour. The combobox semantics land in SS3, with the suggestion list they
 describe.
 
-Two smaller ones: the empty state's reset is labelled **"Start over"** rather
+One smaller one: the empty state's reset is labelled **"Start over"** rather
 than "Clear search", because the input already has a Clear button and two
-controls sharing a name in one view is a real ambiguity; and a bare `£30` in a
-query still sets no price bound, as planned — the guess is only safe once SS2
-shows the parse back as an editable chip.
+controls sharing a name in one view is a real ambiguity.
+
+### SS2
+
+**One control row, not two.** The plan had `ShopFilterChips` replacing
+`ShopFilterBar`, which would have demoted the dietary chips — by far the
+most-used filter, and the one the shop already had — from one tap to two. Instead
+`ShopFilterBar` grew into the whole control row: `Filters (n)` · sort · what your
+search implied · what you set · the dietary quick-toggles, in one scrolling line.
+It sits inside the sticky bar with the search box above it and the category chips
+below, which is the order the page reads in.
+
+**The URL is synced through `window.history`, not `router.replace`.** Two
+reasons, both concrete. `/shop` is a statically rendered route, and
+`useSearchParams` inside it forces the whole shell behind a Suspense boundary;
+and `router.replace` fetches an RSC payload on every call, which for a query that
+changes as you type is a request per settled keystroke to learn nothing.
+`replaceState` also keeps typing "magnesium" from leaving nine history entries
+between the shopper and wherever they came from.
+
+**An inferred chip is removed by editing the search text.** Dismissing "Vegan" on
+a search for "vegan protein" deletes the word from the box (`stripPhrase`) rather
+than suppressing the rule behind the scenes. Suppression would leave a hidden
+piece of state contradicting text the shopper can read.
+
+**The filter sheet applies live.** It covers the results, so the footer count is
+the feedback — "Show 23 results" answers "did that do anything" as you tap. A
+draft-then-apply model would leave that button lying until you committed. A
+side-effect worth knowing: because a zero-count option is disabled, no sequence
+of taps in the sheet can reach an empty shop; only the price box can.
+
+**A bare `£30` still sets no price bound** — reversing what the SS1 note implied.
+Visibility makes a guess *correctable*, but that was never the only test: the
+guess also has to be right more often than not, and "protein £30" means "around
+£30" at least as often as "under £30". A removable chip is not a reason to add a
+filter nobody asked for.
 
 ---
 

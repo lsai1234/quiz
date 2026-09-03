@@ -72,6 +72,60 @@ test.describe('the shop', () => {
     expect(await basketCount(page)).toBe(1)
   })
 
+  test('a search is in the URL, and a deep link restores it', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('creatine')
+    await expect(page.getByRole('heading', { name: /result(s)? for/i })).toBeVisible({ timeout: 10_000 })
+    await expect.poll(() => new URL(page.url()).searchParams.get('q'), { timeout: 10_000 }).toBe('creatine')
+
+    // The whole point of the URL: a narrowed shop is a place you can send someone.
+    await page.goto('/shop?q=creatine&d=vegan&sort=price-asc')
+    await expect(page.getByRole('searchbox', { name: 'Search the shop' })).toHaveValue('creatine', { timeout: 20_000 })
+    await expect(page.getByRole('button', { name: 'Vegan', exact: true })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByRole('button', { name: 'Price: low to high' })).toBeVisible()
+  })
+
+  test('a stale or hand-edited link is ignored rather than fatal', async ({ page }) => {
+    await page.goto('/shop?sort=cheapest&d=unicorn&max=-5&utm_source=email')
+    await expect(page.getByRole('heading', { name: 'Everything, à la carte' })).toBeVisible()
+    await expect(page.locator('[data-card]').first()).toBeVisible({ timeout: 20_000 })
+    // Every bad value dropped, so nothing is narrowing and no sort chip shows.
+    await expect(page.getByRole('button', { name: /^Filters$/ })).toBeVisible()
+  })
+
+  test('the filter sheet narrows the shop and says how many are left', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('button', { name: /^Filters$/ }).click()
+
+    const sheet = page.getByRole('dialog', { name: 'Filters' })
+    await expect(sheet).toBeVisible()
+    await sheet.getByRole('button', { name: /^On offer \d+$/ }).click()
+
+    // The footer count is the feedback while the sheet covers the results.
+    const showResults = sheet.getByRole('button', { name: /^Show \d+ results?$/ })
+    await expect(showResults).toBeVisible()
+    await showResults.click()
+
+    await expect(sheet).toBeHidden()
+    await expect(page.getByRole('button', { name: 'Filters (1)' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Remove filter: On offer' })).toBeVisible()
+    await expect.poll(() => new URL(page.url()).searchParams.get('deal')).toBe('1')
+  })
+
+  test('an inferred filter is shown back, and removing it edits the search', async ({ page }) => {
+    await openShop(page)
+    await page.getByRole('searchbox', { name: 'Search the shop' }).fill('vegan protein')
+
+    // What we worked out from the phrasing, shown back in their own words.
+    const chip = page.getByRole('button', { name: 'Remove filter: Vegan' })
+    await expect(chip).toBeVisible({ timeout: 10_000 })
+
+    await chip.click()
+    // Dismissing it deletes the word from the box, so the two can never disagree.
+    await expect(page.getByRole('searchbox', { name: 'Search the shop' })).toHaveValue('protein')
+    await expect(chip).toBeHidden()
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')

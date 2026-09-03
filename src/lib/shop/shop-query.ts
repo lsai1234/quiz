@@ -17,7 +17,25 @@ import { parseQuery, type QueryIntent } from './synonyms'
  * file.
  */
 
-export type ShopSort = 'relevance' | 'featured' | 'price-asc' | 'price-desc' | 'rating' | 'saving'
+/**
+ * The sort orders, as a value rather than only a type — the sort control renders
+ * from this, and `decodeShopQuery` validates a URL against it. A type alone
+ * cannot do either, and a hand-kept second list is how a URL starts accepting a
+ * sort the UI no longer offers.
+ */
+export const SHOP_SORTS = ['relevance', 'featured', 'price-asc', 'price-desc', 'rating', 'saving'] as const
+
+export type ShopSort = (typeof SHOP_SORTS)[number]
+
+/** What each sort is called on screen. */
+export const SORT_LABELS: Record<ShopSort, string> = {
+  relevance: 'Best match',
+  featured: 'Featured',
+  'price-asc': 'Price: low to high',
+  'price-desc': 'Price: high to low',
+  rating: 'Top rated',
+  saving: 'Biggest saving',
+}
 
 export interface ShopQuery {
   q: string

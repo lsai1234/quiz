@@ -11,7 +11,9 @@ import { resolveBasket, basketSubtotal, basketSupplierValue, priceBasket, resolv
 import type { AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { groupByCategory, type ShopCategory } from '@/lib/shop/categories'
 import { buildIndex, queryForAnalytics } from '@/lib/shop/search'
-import { EMPTY_QUERY, applyShopQuery, needsResultsView, type ShopQuery } from '@/lib/shop/shop-query'
+import { EMPTY_QUERY, applyShopQuery, isEmptyQuery, needsResultsView, type ShopQuery } from '@/lib/shop/shop-query'
+import { decodeShopQuery, shopQuerySearch } from '@/lib/shop/query-url'
+import { stripPhrase } from '@/lib/shop/synonyms'
 import { dealsProducts, maxDealPct } from '@/lib/shop/merchandising'
 import { catalogueRatingSummary } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
@@ -26,6 +28,7 @@ import { ShopSection } from './ShopSection'
 import { ShopBundlesRow } from './ShopBundlesRow'
 import { ShopProductSheet } from './ShopProductSheet'
 import { ShopSearchBar } from './ShopSearchBar'
+import { ShopFilterSheet } from './ShopFilterSheet'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
@@ -143,7 +146,7 @@ export function ShopShell() {
    * it — should not be recomputed per character.
    */
   const [searchInput, setSearchInput] = useState('')
-  const filters = query.dietary
+  const [filtersOpen, setFiltersOpen] = useState(false)
   /**
    * A code applied in the basket. Held here rather than in the drawer so it
    * survives the drawer being closed and re-opened mid-shop — and so the prices
@@ -159,7 +162,7 @@ export function ShopShell() {
   }, [products])
 
   const matchesFilters = (p: CatalogueProduct) =>
-    filters.length === 0 || filters.every((f) => p.dietaryTags.includes(f))
+    query.dietary.length === 0 || query.dietary.every((f) => p.dietaryTags.includes(f))
 
   const sections = useMemo(() => groupByCategory(products), [products])
   const dealsAll = useMemo(() => dealsProducts(products), [products])
@@ -178,6 +181,38 @@ export function ShopShell() {
     const timer = setTimeout(() => setQuery((q) => ({ ...q, q: searchInput })), 250)
     return () => clearTimeout(timer)
   }, [searchInput, query.q])
+
+  /*
+   * ── The query lives in the URL ──────────────────────────────────────────────
+   *
+   * Read once on mount, written on every change. Done against `window.history`
+   * rather than `useSearchParams` + `router.replace` for two reasons: /shop is a
+   * statically rendered route, and `useSearchParams` inside it would force the
+   * whole shell behind a Suspense boundary; and `router.replace` asks the server
+   * for an RSC payload on every call, which for a query that changes as you type
+   * is a request per settled keystroke to learn nothing.
+   *
+   * `replaceState`, not `pushState`: typing "magnesium" should not leave nine
+   * history entries between the shopper and the page they arrived from.
+   */
+  const hydratedFromUrl = useRef(false)
+  useEffect(() => {
+    if (hydratedFromUrl.current) return
+    hydratedFromUrl.current = true
+    const initial = decodeShopQuery(window.location.search)
+    if (isEmptyQuery(initial) && initial.sort === EMPTY_QUERY.sort) return
+    setQuery(initial)
+    setSearchInput(initial.q)
+  }, [])
+
+  useEffect(() => {
+    // Never before the URL has been read, or the first render would wipe the
+    // deep link it is about to load.
+    if (!hydratedFromUrl.current) return
+    const next = `${window.location.pathname}${shopQuerySearch(query)}`
+    if (next === `${window.location.pathname}${window.location.search}`) return
+    window.history.replaceState(window.history.state, '', next)
+  }, [query])
 
   const searching = needsResultsView(query)
   const results = useMemo(
@@ -211,13 +246,13 @@ export function ShopShell() {
         .map((s) => ({ ...s, products: s.products.filter(matchesFilters) }))
         .filter((s) => s.products.length > 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sections, filters],
+    [sections, query.dietary],
   )
   const dealsSection = useMemo<ShopCategory | null>(() => {
     const deals = dealsAll.filter(matchesFilters)
     return deals.length > 0 ? { category: 'Deals', slug: 'deals', products: deals } : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealsAll, filters])
+  }, [dealsAll, query.dietary])
 
   // Bundles are visible when their whole curated stack passes the active dietary
   // filters — buying a bundle means buying every core product, so one excluded
@@ -228,10 +263,10 @@ export function ShopShell() {
       bundles.filter((v) =>
         v.bundle.blueprint.slots.every((slot) => {
           const p = productsById.get(slot.selectedProductId)
-          return p ? filters.every((f) => p.dietaryTags.includes(f)) : filters.length === 0
+          return p ? query.dietary.every((f) => p.dietaryTags.includes(f)) : query.dietary.length === 0
         }),
       ),
-    [bundles, productsById, filters],
+    [bundles, productsById, query.dietary],
   )
 
   const bundlesNav: ShopCategory | null =
@@ -309,19 +344,46 @@ export function ShopShell() {
   }
 
   /**
-   * Set the whole query at once — the empty state's recoveries do this. The
-   * input is pushed in step so the box never shows a search that is no longer
-   * running (and the debounce sees them equal and stands down).
+   * Set the whole query at once — the empty state's recoveries, the control row
+   * and the filter sheet all do this. The input is pushed in step so the box
+   * never shows a search that is no longer running (and the debounce sees them
+   * equal and stands down).
    */
   const handleQueryChange = (next: ShopQuery) => {
     setQuery(next)
     setSearchInput(next.q)
   }
-  const toggleFilter = (tag: DietaryTag) => {
-    const on = !filters.includes(tag)
-    const next = on ? [...filters, tag] : filters.filter((t) => t !== tag)
-    track('shop_filter_toggle', { tag, on, active: next.length })
-    setQuery((q) => ({ ...q, dietary: next }))
+
+  /**
+   * Every change from the control row and the filter sheet. Named for what it
+   * does rather than for the sort, which is only the part that needs its own
+   * event on the way through.
+   */
+  const applyQueryChange = (next: ShopQuery) => {
+    if (next.sort !== query.sort) track('shop_sort_change', { sort: next.sort })
+    handleQueryChange(next)
+  }
+
+  const handleFacetApplied = (facet: string, value: string, on: boolean) => {
+    track('shop_filter_apply', { facet, value, on, results: results?.products.length ?? products.length })
+    // `shop_filter_toggle` predates the filter sheet and only ever meant a
+    // dietary chip. Kept firing for exactly that, so the existing series stays
+    // continuous rather than stopping dead the day filters got a panel.
+    if (facet === 'dietary') {
+      const active = on ? query.dietary.length + 1 : query.dietary.length - 1
+      track('shop_filter_toggle', { tag: value, on, active })
+    }
+  }
+
+  /**
+   * Dismiss a filter we INFERRED from the search text, by deleting the words
+   * that produced it. The box changes in front of them, so the text and the
+   * filters can never disagree — see `stripPhrase`.
+   */
+  const dismissIntent = (phrase: string) => {
+    const q = stripPhrase(query.q, phrase)
+    track('shop_filter_apply', { facet: 'intent', value: phrase, on: false, results: results?.products.length ?? 0 })
+    handleQueryChange({ ...query, q })
   }
 
   const handleBuyNow = () => {
@@ -403,19 +465,25 @@ export function ShopShell() {
         <LoadingSkeleton />
       ) : (
         <>
-          {availableDietary.length > 0 && (
-            <div className="pb-1">
-              <ShopFilterBar tags={availableDietary} active={filters} onToggle={toggleFilter} onClear={() => setQuery((q) => ({ ...q, dietary: [] }))} />
-            </div>
-          )}
           <ShopCategoryNav
             categories={searching ? [] : navCategories}
-            search={
-              <ShopSearchBar
-                value={searchInput}
-                onChange={setSearchInput}
-                resultCount={results ? results.products.length : null}
-              />
+            controls={
+              <>
+                <ShopSearchBar
+                  value={searchInput}
+                  onChange={setSearchInput}
+                  resultCount={results ? results.products.length : null}
+                />
+                <ShopFilterBar
+                  tags={availableDietary}
+                  query={query}
+                  onChange={applyQueryChange}
+                  onOpenFilters={() => setFiltersOpen(true)}
+                  onFacetApplied={handleFacetApplied}
+                  intentPhrases={results?.matchedPhrases ?? []}
+                  onDismissIntent={dismissIntent}
+                />
+              </>
             }
           />
 
@@ -471,6 +539,17 @@ export function ShopShell() {
         </>
       )}
       </main>
+
+      {filtersOpen && (
+        <ShopFilterSheet
+          products={products}
+          query={query}
+          resultCount={results ? results.products.length : products.length}
+          onChange={applyQueryChange}
+          onFacetApplied={handleFacetApplied}
+          onClose={() => setFiltersOpen(false)}
+        />
+      )}
 
       {expanded && (
         <ShopProductSheet product={expanded} onBuyNow={handleBuyNow} onClose={() => setExpanded(null)} />

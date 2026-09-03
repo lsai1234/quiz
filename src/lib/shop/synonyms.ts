@@ -230,3 +230,22 @@ export function expand(text: string): string {
   }
   return added.length > 0 ? `${text} ${added.join(' ')}` : text
 }
+
+/**
+ * Remove a phrase the parser matched from the shopper's RAW query text.
+ *
+ * This is what makes an inferred filter genuinely removable rather than merely
+ * visible. Dismissing a chip does not suppress the rule — it deletes the words
+ * that fired it, so the search box visibly changes too and the shopper can see
+ * exactly why the filter went away. Suppressing the rule while leaving the words
+ * in the box would be a hidden piece of state contradicting what they can read.
+ *
+ * Case-insensitive and whole-word, matching how `parseQuery` found it.
+ */
+export function stripPhrase(raw: string, phrase: string): string {
+  const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return raw
+    .replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, 'gi'), ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
