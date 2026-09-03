@@ -4,6 +4,7 @@ import type { StackBlueprint } from '@/lib/stack-blueprint/types'
 import { getPricingConfig, type PricingConfig } from '@/lib/stack-blueprint/pricing'
 import { priceBasket } from '@/lib/basket/helpers'
 import { defaultVariant } from './merchandising'
+import { activeOverlaps, overlapSentence, type ActiveOverlap } from './stack-radar'
 
 /**
  * Basket Alchemy: what this basket is close to being.
@@ -71,7 +72,19 @@ export interface DeliveryNudge {
   threshold: number
 }
 
-export type BasketNudge = BundleNudge | DeliveryNudge
+/**
+ * The same active arriving from two products. Not a sale — the opposite: it
+ * usually means buy one, not two. See `stack-radar`.
+ */
+export interface OverlapNudge {
+  kind: 'overlap'
+  key: string
+  /** Plain arithmetic, never advice. */
+  sentence: string
+  overlap: ActiveOverlap
+}
+
+export type BasketNudge = OverlapNudge | BundleNudge | DeliveryNudge
 
 /**
  * What buying a bundle saves against the same products bought à la carte.
@@ -209,14 +222,26 @@ export interface NudgeInput {
  * ONE, deliberately. A stack of suggestions above a basket is a nag, and the
  * second-best thing to say is nearly always worth less than the silence.
  *
- * A bundle outranks the delivery bar: it is a specific, larger, and more
- * interesting saving than "spend more and postage is free", and the delivery
- * ladder is still there in the drawer either way.
+ * The order is the point:
+ *
+ *   1. **An overlap.** The only one that does not want money — "both of these
+ *      give you magnesium" usually means buy one, not two. A shop that would
+ *      rather sell a bundle than mention it has answered the question of what it
+ *      is for, and answered it badly.
+ *   2. **A bundle.** A specific, larger and more interesting thought than
+ *      "spend more and postage is free".
+ *   3. **The delivery ladder**, which is still in the drawer either way.
  */
 export function bestNudge({
   resolved, subtotal, bundles, products, dismissed, config, skipDelivery,
 }: NudgeInput): BasketNudge | null {
   const isLive = (key: string) => !dismissed?.has(key)
+
+  for (const overlap of activeOverlaps(resolved)) {
+    const key = `overlap:${overlap.key}`
+    if (!isLive(key)) continue
+    return { kind: 'overlap', key, sentence: overlapSentence(overlap), overlap }
+  }
 
   const bundle = bundleNudges(resolved, bundles, products, config).find((n) => isLive(n.key))
   if (bundle) return bundle

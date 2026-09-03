@@ -87,6 +87,7 @@ describe('needsResultsView — the browse/results switch', () => {
     expect(needsResultsView(query({ sort: 'price-asc' }))).toBe(true)
     expect(needsResultsView(query({ onDealOnly: true }))).toBe(true)
     expect(needsResultsView(query({ categories: ['Protein'] }))).toBe(true)
+    expect(needsResultsView(query({ slots: ['hydration'] }))).toBe(true)
   })
 
   it('treats whitespace as no search', () => {
@@ -98,6 +99,7 @@ describe('activeFilterCount', () => {
   it('counts each active facet, with a price range counting once', () => {
     expect(activeFilterCount(EMPTY_QUERY)).toBe(0)
     expect(activeFilterCount(query({ dietary: ['vegan', 'halal'], stimFree: true }))).toBe(3)
+    expect(activeFilterCount(query({ slots: ['sleep'] }))).toBe(1)
     expect(activeFilterCount(query({ priceMin: 10, priceMax: 40 }))).toBe(1)
   })
 
@@ -115,6 +117,11 @@ describe('filtering', () => {
   it('ORs within a facet', () => {
     expect(ids({ categories: ['Protein', 'Hydration'] })).toEqual(['whey', 'plant', 'salts'])
     expect(ids({ goals: ['energy', 'hydration'] })).toEqual(['pre', 'salts'])
+  })
+
+  it('filters on the stack slot a product fills — what the Stack Radar sets', () => {
+    expect(ids({ slots: ['hydration'] })).toEqual(['salts'])
+    expect(ids({ slots: ['protein', 'energy'] })).toEqual(['whey', 'plant', 'pre'])
   })
 
   it('matches a format case-insensitively, across all of a product’s formats', () => {

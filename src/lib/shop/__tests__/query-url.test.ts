@@ -37,6 +37,7 @@ describe('round-tripping', () => {
       dietary: ['vegan', 'gluten-free'],
       categories: ['Protein', 'Sleep'],
       goals: ['muscle', 'sleep-better'],
+      slots: ['protein', 'sleep'],
       formats: ['powder', 'capsule'],
       priceMin: 10,
       priceMax: 40.5,
@@ -82,6 +83,10 @@ describe('decodeShopQuery never throws', () => {
 
   it('drops a goal we do not have', () => {
     expect(decodeShopQuery('g=muscle,teleportation').goals).toEqual(['muscle'])
+  })
+
+  it('drops a stack slot we do not have', () => {
+    expect(decodeShopQuery('sl=protein,telekinesis').slots).toEqual(['protein'])
   })
 
   it('falls back to the default sort for one the UI no longer offers', () => {

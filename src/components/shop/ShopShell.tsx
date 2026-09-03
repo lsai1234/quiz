@@ -755,6 +755,12 @@ export function ShopShell() {
           supplierValue={supplierValue}
           appliedCode={appliedCode}
           onCodeChange={setAppliedCode}
+          products={products}
+          onBrowseSlot={(slot) => {
+            closeDrawer()
+            handleQueryChange({ ...EMPTY_QUERY, slots: [slot] })
+            track('shop_filter_apply', { facet: 'slot', value: slot, on: true, results: 0 })
+          }}
           nudge={drawerNudge}
           onNudgeAct={() => drawerNudge && track('shop_nudge_click', { key: drawerNudge.key, kind: drawerNudge.kind })}
           onNudgeDismiss={() => drawerNudge && dismissNudge(drawerNudge.key)}

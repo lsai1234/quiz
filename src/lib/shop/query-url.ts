@@ -1,4 +1,5 @@
-import type { DietaryTag } from '@/lib/catalogue/types'
+import type { DietaryTag, StackSlot } from '@/lib/catalogue/types'
+import { STACK_SLOTS } from '@/lib/catalogue/types'
 import type { Goal } from '@/lib/types'
 import { ALL_GOALS } from '@/lib/types'
 import { DIETARY_LABEL } from '@/lib/product-facts'
@@ -30,6 +31,7 @@ const KEYS = {
   dietary: 'd',
   categories: 'c',
   goals: 'g',
+  slots: 'sl',
   formats: 'f',
   priceMin: 'min',
   priceMax: 'max',
@@ -65,6 +67,7 @@ export function encodeShopQuery(query: ShopQuery): URLSearchParams {
   if (query.dietary.length > 0) params.set(KEYS.dietary, query.dietary.join(','))
   if (query.categories.length > 0) params.set(KEYS.categories, query.categories.join(','))
   if (query.goals.length > 0) params.set(KEYS.goals, query.goals.join(','))
+  if (query.slots.length > 0) params.set(KEYS.slots, query.slots.join(','))
   if (query.formats.length > 0) params.set(KEYS.formats, query.formats.join(','))
   if (query.priceMin !== null) params.set(KEYS.priceMin, String(query.priceMin))
   if (query.priceMax !== null) params.set(KEYS.priceMax, String(query.priceMax))
@@ -139,6 +142,7 @@ export function decodeShopQuery(input: URLSearchParams | string | null | undefin
     dietary: list(params, KEYS.dietary).filter((t): t is DietaryTag => DIETARY_TAGS.includes(t as DietaryTag)),
     categories: list(params, KEYS.categories),
     goals: list(params, KEYS.goals).filter((g): g is Goal => ALL_GOALS.includes(g as Goal)),
+    slots: list(params, KEYS.slots).filter((sl): sl is StackSlot => STACK_SLOTS.includes(sl as StackSlot)),
     formats: list(params, KEYS.formats),
     priceMin: money(params, KEYS.priceMin),
     priceMax: money(params, KEYS.priceMax),

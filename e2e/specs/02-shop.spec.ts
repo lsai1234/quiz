@@ -300,6 +300,42 @@ test.describe('the shop', () => {
     await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeVisible()
   })
 
+  test('the basket says what it covers, and a gap is somewhere to look', async ({ page }) => {
+    await openShop(page)
+    await addProductToBasket(page, 'CHRGD Whey Protein')
+    await openBasket(page)
+
+    const radar = page.getByRole('region', { name: 'What this basket covers' })
+    await expect(radar).toBeVisible()
+    await expect(radar.getByText('Protein', { exact: true })).toBeVisible()
+
+    // An uncovered slot is stated, not prescribed — and it is somewhere to look.
+    await expect(radar.getByText(/Not in this basket/)).toBeVisible()
+    await radar.getByRole('button').first().click()
+
+    // The drawer closes and the shop is filtered to that slot, as a chip.
+    await expect(radar).toBeHidden()
+    await expect(page.getByRole('button', { name: /^Remove filter: / })).toBeVisible()
+    await expect.poll(() => new URL(page.url()).searchParams.get('sl')).not.toBeNull()
+  })
+
+  test('a basket carrying the same ingredient twice says so', async ({ page }) => {
+    await openShop(page)
+    // Both of these list magnesium.
+    await addProductToBasket(page, 'CHRGD Magnesium Glycinate')
+    await addProductToBasket(page, 'CHRGD Sleep & Recovery')
+
+    // It leads the suggestion queue: telling someone to buy less outranks
+    // selling them a bundle.
+    const nudge = page.getByText(/both contain magnesium/i).first()
+    await expect(nudge).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/You may only need one/i).first()).toBeVisible()
+
+    // Arithmetic, never advice.
+    const text = (await nudge.textContent()) ?? ''
+    expect(text).not.toMatch(/too much|unsafe|overdose|stop taking/i)
+  })
+
   test('a dietary filter narrows the shelves and says it is on', async ({ page }) => {
     await openShop(page)
     const cards = page.locator('[data-card]')

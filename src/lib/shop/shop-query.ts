@@ -1,4 +1,4 @@
-import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
+import type { CatalogueProduct, DietaryTag, StackSlot } from '@/lib/catalogue/types'
 import type { Goal } from '@/lib/types'
 import { dealInfo } from './merchandising'
 import { hasRating } from './ratings'
@@ -44,6 +44,13 @@ export interface ShopQuery {
   /** OR within the facet. */
   categories: string[]
   goals: Goal[]
+  /**
+   * Stack slots — the functional job a product does. Set by the Stack Radar
+   * (tapping an uncovered slot) rather than by the filter sheet: slots and goals
+   * overlap heavily and a panel offering both would be asking the same question
+   * twice. It still shows as a removable chip and still clears with Clear all.
+   */
+  slots: StackSlot[]
   formats: string[]
   priceMin: number | null
   priceMax: number | null
@@ -60,6 +67,7 @@ export const EMPTY_QUERY: ShopQuery = {
   dietary: [],
   categories: [],
   goals: [],
+  slots: [],
   formats: [],
   priceMin: null,
   priceMax: null,
@@ -85,6 +93,7 @@ export function isEmptyQuery(query: ShopQuery): boolean {
     query.dietary.length === 0 &&
     query.categories.length === 0 &&
     query.goals.length === 0 &&
+    query.slots.length === 0 &&
     query.formats.length === 0 &&
     query.priceMin === null &&
     query.priceMax === null &&
@@ -113,6 +122,7 @@ export function needsResultsView(query: ShopQuery): boolean {
     query.q.trim() !== '' ||
     query.categories.length > 0 ||
     query.goals.length > 0 ||
+    query.slots.length > 0 ||
     query.formats.length > 0 ||
     query.priceMin !== null ||
     query.priceMax !== null ||
@@ -128,7 +138,8 @@ export function needsResultsView(query: ShopQuery): boolean {
 /** How many filters are on — the number on the "Filters (3)" button. */
 export function activeFilterCount(query: ShopQuery): number {
   let count =
-    query.dietary.length + query.categories.length + query.goals.length + query.formats.length
+    query.dietary.length + query.categories.length + query.goals.length +
+    query.slots.length + query.formats.length
   if (query.priceMin !== null || query.priceMax !== null) count++
   if (query.stimFree) count++
   if (query.inStockOnly) count++
@@ -156,6 +167,7 @@ function matches(product: CatalogueProduct, query: ShopQuery): boolean {
   if (!query.dietary.every((tag) => product.dietaryTags.includes(tag))) return false
   if (query.categories.length > 0 && !query.categories.includes(product.category)) return false
   if (query.goals.length > 0 && !query.goals.some((g) => product.goals.includes(g))) return false
+  if (query.slots.length > 0 && !query.slots.some((sl) => product.stackSlots.includes(sl))) return false
   if (query.formats.length > 0) {
     const formats = product.formats.map((f) => f.toLowerCase())
     if (!query.formats.some((f) => formats.includes(f.toLowerCase()))) return false

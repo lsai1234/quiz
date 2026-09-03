@@ -1,6 +1,7 @@
 'use client'
 
 import type { DietaryTag } from '@/lib/catalogue/types'
+import { SLOT_LABELS } from '@/lib/catalogue/types'
 import { DIETARY_LABEL } from '@/lib/product-facts'
 import { GOAL_LABELS } from '@/lib/quiz-goals'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
@@ -65,6 +66,15 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
       key: `g:${goal}`,
       label: GOAL_LABELS[goal] ?? goal,
       clear: () => { onChange({ ...query, goals: query.goals.filter((g) => g !== goal) }); onFacetApplied?.('goal', goal, false) },
+    })
+  }
+  // Slots are set by the Stack Radar rather than the sheet, so this chip is the
+  // only place one can be switched off short of Clear all.
+  for (const slot of query.slots) {
+    applied.push({
+      key: `s:${slot}`,
+      label: SLOT_LABELS[slot],
+      clear: () => { onChange({ ...query, slots: query.slots.filter((v) => v !== slot) }); onFacetApplied?.('slot', slot, false) },
     })
   }
   for (const format of query.formats) {

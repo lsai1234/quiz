@@ -31,14 +31,22 @@ interface Props {
  * before.
  */
 export function ShopBasketNudge({ nudge, onAct, onDismiss }: Props) {
-  const body = nudge.kind === 'bundle' ? <BundleBody nudge={nudge} /> : <DeliveryBody nudge={nudge} />
+  const body =
+    nudge.kind === 'bundle' ? <BundleBody nudge={nudge} />
+      : nudge.kind === 'overlap' ? <OverlapBody nudge={nudge} />
+        : <DeliveryBody nudge={nudge} />
+
+  // An overlap is not an offer, so it does not wear the accent an offer wears.
+  const offerish = nudge.kind !== 'overlap'
 
   return (
     <div
       className="flex items-center gap-2 rounded-xl pl-3 pr-1.5 py-2 max-w-lg mx-auto w-full"
       style={{
-        background: 'color-mix(in srgb, var(--color-accent) 9%, var(--color-surface))',
-        border: '1px solid color-mix(in srgb, var(--color-accent) 26%, transparent)',
+        background: offerish
+          ? 'color-mix(in srgb, var(--color-accent) 9%, var(--color-surface))'
+          : 'var(--color-surface)',
+        border: `1px solid ${offerish ? 'color-mix(in srgb, var(--color-accent) 26%, transparent)' : 'var(--color-border-2)'}`,
       }}
     >
       {nudge.kind === 'bundle' ? (
@@ -89,6 +97,24 @@ function BundleBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'bundle' }>
         {nudge.saving > 0
           ? `You have ${nudge.have} of its ${total}. Bundles are bought on their own page.`
           : `Add ${missingList} for the full stack. Bundles are bought on their own page.`}
+      </p>
+    </>
+  )
+}
+
+/**
+ * The overlap line. Reads as information, not as an offer — no accent, no arrow,
+ * nowhere to tap. It exists to help someone buy LESS, and dressing that as a
+ * promotion would be the wrong shape entirely.
+ */
+function OverlapBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'overlap' }> }) {
+  return (
+    <>
+      <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        Two of these overlap
+      </p>
+      <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+        {nudge.sentence} You may only need one.
       </p>
     </>
   )

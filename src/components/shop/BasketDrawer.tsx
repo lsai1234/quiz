@@ -14,8 +14,10 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
 import { IconButton } from '@/components/ui/IconButton'
 import { Icon } from '@/components/ui/Icon'
 import type { ShopCheckoutState } from '@/hooks/useShopCheckout'
+import type { CatalogueProduct, StackSlot } from '@/lib/catalogue/types'
 import type { BasketNudge } from '@/lib/shop/basket-alchemy'
 import { ShopBasketNudge } from './ShopBasketNudge'
+import { ShopStackRadar } from './ShopStackRadar'
 
 const ACCENT = '#00D4FF'
 const GREEN = '#34d399'
@@ -37,6 +39,10 @@ interface Props {
   nudge?: BasketNudge | null
   onNudgeAct?: () => void
   onNudgeDismiss?: () => void
+  /** The catalogue, for the Stack Radar's coverage reading. */
+  products?: CatalogueProduct[]
+  /** Browse the shop filtered to a slot — the drawer closes on the way. */
+  onBrowseSlot?: (slot: StackSlot) => void
   checkoutState: ShopCheckoutState
   onCheckout: () => void
   onClose: () => void
@@ -57,6 +63,8 @@ export function BasketDrawer({
   nudge,
   onNudgeAct,
   onNudgeDismiss,
+  products,
+  onBrowseSlot,
   onCodeChange,
   checkoutState,
   onCheckout,
@@ -187,6 +195,11 @@ export function BasketDrawer({
 
             {/* Footer */}
             <div className="flex-shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+              {/* What this basket IS, before what it could be. */}
+              {products && onBrowseSlot && (
+                <ShopStackRadar resolved={resolved} products={products} onBrowseSlot={onBrowseSlot} />
+              )}
+
               {/* What this basket is close to being. Above the delivery ladder,
                   because a bundle is the bigger and more specific of the two. */}
               {nudge && (

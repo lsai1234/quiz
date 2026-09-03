@@ -343,6 +343,39 @@ guess also has to be right more often than not, and "protein £30" means "around
 £30" at least as often as "under £30". A removable chip is not a reason to add a
 filter nobody asked for.
 
+### F2 — split in two, and the gap half deliberately declawed
+
+**Coverage went to the basket drawer, not a floating ring.** The plan wanted a
+persistent collapsible ring on the shelf. The bottom of a phone already carries
+the compare tray, a suggestion and the basket bar; a fourth would be one too
+many. The drawer is also where the reading belongs — it is about what you have,
+and it is the last look before paying.
+
+**The overlap half travels separately, as a nudge, and outranks everything.**
+`bestNudge` now returns an overlap before a bundle or the delivery ladder. A shop
+that would rather sell a bundle than mention you are buying magnesium twice has
+answered what it is for, and answered it badly. It renders without the accent and
+with nothing to tap, because it is information rather than an offer.
+
+**"Nothing for hydration" is a fact; "you need hydration" is a pitch.** The plan
+framed uncovered slots as gaps to close. We know nothing here about who is
+shopping — the quiz is the thing that asks — so coverage is stated as a map:
+what is in the basket, what is not, and an uncovered slot offered as somewhere to
+look rather than something missing from their life. Slots the shop sells nothing
+for are omitted entirely: a dead end is not information.
+
+**The overlap sentence is arithmetic, never advice.** It says what is in the
+basket and what the labels add up to. No dose is called too much, nothing is
+called unsafe, nobody is told to stop — all three are claims, and a test asserts
+the sentence stays clear of them as well as passing `isClaimSafe`. It also
+withholds the total rather than understating it when a product does not state its
+dose, because low is the one direction that figure must never round.
+
+This added a `slots` facet to `ShopQuery` so tapping an uncovered slot filters
+the shop exactly. It is set by the radar rather than the filter sheet — slots and
+goals overlap heavily and a panel offering both asks the same question twice —
+but it shows as a removable chip and clears with Clear all like any other.
+
 ### F3 — "the data is entirely in place" was not quite true
 
 Price per serving was the headline of this feature, and computing it the obvious
