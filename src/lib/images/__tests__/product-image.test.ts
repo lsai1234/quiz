@@ -1,5 +1,5 @@
 import {
-  isAllowedImageHost,
+  isNormalisableUrl,
   snapWidth,
   productImageSrc,
   productImageSrcSet,
@@ -8,37 +8,27 @@ import {
 } from '../product-image'
 
 /**
- * The allowlist is the whole security boundary of `/api/product-image`: past it,
- * the server fetches a URL a client chose and hands back the bytes. Every one of
- * these is a URL somebody would actually try.
+ * The shape check only. It is deliberately NOT the security boundary — the
+ * route re-checks every URL against the catalogue before it fetches anything,
+ * which is what makes `powerbody.co.uk.evil.com` and an internal address
+ * unreachable regardless of what this says. See the route's `isCatalogueImage`.
  */
-describe('isAllowedImageHost', () => {
-  it('accepts the supplier and its subdomains', () => {
-    expect(isAllowedImageHost('https://powerbody.co.uk/img/a.jpg')).toBe(true)
-    expect(isAllowedImageHost('https://cdn.powerbody.co.uk/img/a.jpg')).toBe(true)
-    expect(isAllowedImageHost('https://POWERBODY.CO.UK/img/a.jpg')).toBe(true)
+describe('isNormalisableUrl', () => {
+  it('accepts an https image URL', () => {
+    expect(isNormalisableUrl('https://cdn.powerbody.co.uk/img/a.jpg')).toBe(true)
   })
 
-  it('rejects a host that merely CONTAINS an allowed one', () => {
-    expect(isAllowedImageHost('https://powerbody.co.uk.evil.com/a.jpg')).toBe(false)
-    expect(isAllowedImageHost('https://notpowerbody.co.uk/a.jpg')).toBe(false)
-  })
-
-  it('rejects the internal addresses an SSRF would reach for', () => {
-    expect(isAllowedImageHost('http://169.254.169.254/latest/meta-data/')).toBe(false)
-    expect(isAllowedImageHost('https://localhost/admin')).toBe(false)
-    expect(isAllowedImageHost('https://10.0.0.1/')).toBe(false)
-  })
-
-  it('rejects every scheme but https', () => {
-    expect(isAllowedImageHost('http://powerbody.co.uk/a.jpg')).toBe(false)
-    expect(isAllowedImageHost('file:///etc/passwd')).toBe(false)
-    expect(isAllowedImageHost('data:image/png;base64,AAA')).toBe(false)
+  it('rejects every scheme but https, so no local file or data URI is asked for', () => {
+    expect(isNormalisableUrl('http://powerbody.co.uk/a.jpg')).toBe(false)
+    expect(isNormalisableUrl('file:///etc/passwd')).toBe(false)
+    expect(isNormalisableUrl('data:image/png;base64,AAA')).toBe(false)
   })
 
   it('rejects anything that is not a URL rather than throwing', () => {
-    expect(isAllowedImageHost('')).toBe(false)
-    expect(isAllowedImageHost('/img/a.jpg')).toBe(false)
+    expect(isNormalisableUrl('')).toBe(false)
+    expect(isNormalisableUrl('/img/a.jpg')).toBe(false)
+    expect(isNormalisableUrl(null)).toBe(false)
+    expect(isNormalisableUrl(undefined)).toBe(false)
   })
 })
 
@@ -61,9 +51,17 @@ describe('productImageSrc', () => {
     expect(src).toBe('/api/product-image?u=https%3A%2F%2Fpowerbody.co.uk%2Fimg%2Fwhey.jpg&w=56')
   })
 
-  it('leaves an image we do not normalise exactly as it is', () => {
-    // A hand-entered URL in the Founders Hub still has to render.
-    expect(productImageSrc('https://example.com/a.jpg', 56)).toBe('https://example.com/a.jpg')
+  it('routes ANY https image, whoever is hosting it', () => {
+    // The hostname is not the boundary — the catalogue is. A supplier moving
+    // CDN must not silently stop being normalised, which is what a hardcoded
+    // host list did: the only symptom was cropped photos on a phone.
+    expect(productImageSrc('https://images.somebrand.net/a.jpg', 56))
+      .toBe('/api/product-image?u=https%3A%2F%2Fimages.somebrand.net%2Fa.jpg&w=56')
+  })
+
+  it('leaves an image we cannot normalise exactly as it is', () => {
+    // A hand-entered http URL in the Founders Hub still has to render.
+    expect(productImageSrc('http://example.com/a.jpg', 56)).toBe('http://example.com/a.jpg')
   })
 
   it('returns null when there is no image, so the caller draws the fallback tile', () => {
@@ -84,8 +82,9 @@ describe('productImageSrcSet', () => {
     expect(productImageSrcSet('https://powerbody.co.uk/a.jpg', 640)).toBeNull()
   })
 
-  it('gives none for an image we do not normalise', () => {
-    expect(productImageSrcSet('https://example.com/a.jpg', 56)).toBeNull()
+  it('gives none for an image we cannot normalise', () => {
+    expect(productImageSrcSet('http://example.com/a.jpg', 56)).toBeNull()
+    expect(productImageSrcSet(null, 56)).toBeNull()
   })
 })
 
@@ -103,9 +102,9 @@ describe('parseImageRequest', () => {
     expect(parse('u=https://powerbody.co.uk/a.jpg&w=57')!.width).toBe(96)
   })
 
-  it('refuses anything the route must not fetch', () => {
+  it('refuses a request that is not even the right shape', () => {
     expect(parse('w=96')).toBeNull()
-    expect(parse('u=https://evil.com/a.jpg&w=96')).toBeNull()
+    expect(parse('u=not-a-url&w=96')).toBeNull()
     expect(parse('u=http://powerbody.co.uk/a.jpg&w=96')).toBeNull()
   })
 

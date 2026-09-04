@@ -88,30 +88,70 @@ links to `/shop#basket`, which opens the real one.
 ### 6. The image pipeline
 
 `/api/product-image` + `@/lib/images/product-image`. Every supplier photo is
-contained inside a square (nothing cropped — a tall bottle keeps its cap),
-flattened onto the shelf's own surface colour (no white box on a dark page, no
-transparent hole), and re-encoded to WebP at one of five widths the layout
-actually uses.
+contained inside a square (nothing cropped — a tall pouch keeps its top and
+bottom), padded onto white, and re-encoded to WebP at one of five widths the
+layout actually uses.
 
-Two decisions worth keeping:
+**Why white and not the shelf colour.** Padding onto the dark surface is the
+obvious move and it is wrong for this catalogue. Supplement photography is shot
+on white and delivered as JPEG with no alpha, so the photo is a white rectangle
+whatever we pad around it — a dark pad just puts a white box inside a dark box,
+and the box changes shape with the aspect ratio. Committing to white makes every
+tile the same object: a white card with the product centred on it.
 
-- **The cache key is the source URL and width, not the SKU.** A SKU is stable
-  across a photo being *replaced*, which is exactly when a cached image must stop
-  being served. Keying on the source URL makes the output content-addressed, so
-  the response can be `immutable` for a year with no invalidation path at all —
-  a stronger guarantee than a SKU key with a TTL, not a weaker one.
-- **The host allowlist is the security boundary.** A route that fetches a
-  client-supplied URL server-side and returns the bytes is an open proxy and an
-  SSRF hole. `isAllowedImageHost` matches parsed hostnames exactly or as
-  subdomains, never as substrings, and refuses anything that is not https.
+**Why the boundary is the catalogue, not a list of hostnames.** A route that
+fetches a client-supplied URL server-side and returns the bytes is an open proxy
+and an SSRF hole, so something has to gate it. The first version of this gated on
+a hardcoded list of PowerBody hostnames, and that was wrong twice over: the live
+feed serves images from a host that was not on it, so nothing was ever
+normalised; and it failed *silently*, falling through to the raw URL, so the only
+symptom was cropped photos on a phone.
+
+The exact boundary is the catalogue itself: the route fetches a URL if and only
+if that URL appears verbatim as some product's `imageUrl`. It cannot go stale, it
+needs no maintenance when a supplier changes CDN, and it is narrower than any
+hostname list — `powerbody.co.uk/../../etc/passwd` is not in the catalogue
+either. The gate has its own test file, because it is the security boundary.
+
+**`object-contain`, everywhere, with a fallback chain.** `object-cover` only
+ever made sense on the assumption that the pipeline had squared the image, and
+that assumption broke the moment the pipeline declined one. Contain never crops,
+so it is correct whether or not the image was normalised. `ProductTile` then
+falls back from the pipeline URL to the supplier's own URL to the designed tile:
+an unnormalised photo is a worse-looking card, a broken image is a broken shop.
+The same crop existed in `ProductSwapModal` (quiz) and in the Founders Hub
+supplier import preview — the screen where somebody checks what the supplier
+actually sent — and both are fixed.
+
+**Why the cache key is the source URL and not the SKU.** A SKU is stable across a
+photo being *replaced*, which is exactly when a cached image must stop being
+served. Keying on the source URL makes the output content-addressed, so the
+response can be `immutable` for a year with no invalidation path at all — a
+stronger guarantee than a SKU key with a TTL, not a weaker one.
 
 Cached in the CDN and the browser rather than on disk: this app runs on ephemeral
 instances, so a filesystem cache would be cold on nearly every request. A small
 in-process LRU covers the one warm case that matters — twenty cards on a shelf
 asking for the same handful of widths at once.
 
-It applies to the quiz too, via `ProductTile` and `ProductSwapModal`, which are
-shared.
+### 7. Compare, as a word
+
+The duel toggle was a 13px unlabelled glyph in the corner of the photo: two
+rounded bars that read as a `#` at that size, on a card with no other icon to
+explain it. Nobody who had not been told what it was could find out by looking.
+
+Two rewrites to land it, both worth recording because the first fix created the
+second problem:
+
+1. Giving it the word put a high-contrast pill on top of the product on every
+   card — the second-brightest thing on the shelf, four times a screen.
+2. Moving it into the action row beside Add made it *wider than Add*, because at
+   two columns a card is about 166px and "Compare" does not fit next to "Add".
+   That inverts the one hierarchy the card has.
+
+It ends up stacked underneath Add, full width, at label size in the muted ink:
+available without being offered. Selected, it fills accent and reads "Comparing",
+and `ShopCompareBar` takes over from there.
 
 ---
 

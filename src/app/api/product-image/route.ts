@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import sharp from 'sharp'
+import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { parseImageRequest, IMAGE_BACKGROUND, type ImageWidth } from '@/lib/images/product-image'
 
 /**
@@ -15,8 +16,9 @@ import { parseImageRequest, IMAGE_BACKGROUND, type ImageWidth } from '@/lib/imag
  *   WebP at quality 80       — roughly a third of the supplier's JPEG for the
  *                              same rendered result at these sizes
  *
- * See `@/lib/images/product-image` for why the cache key is the source URL
- * rather than the SKU, and why the host allowlist is not optional.
+ * See `@/lib/images/product-image` for why the pad is white, why the cache key
+ * is the source URL rather than the SKU, and why the fetch boundary is the
+ * catalogue rather than a list of hostnames.
  */
 
 export const runtime = 'nodejs'
@@ -71,10 +73,41 @@ async function normalise(source: ArrayBuffer, width: ImageWidth): Promise<Buffer
     .toBuffer()
 }
 
+/**
+ * The set of image URLs the catalogue actually contains — the fetch boundary.
+ *
+ * Re-read on a short TTL rather than per request: a shelf fires twenty of these
+ * at once and they must not each resolve the whole catalogue, but a photo added
+ * in the Founders Hub should start being normalised within a minute rather than
+ * at the next deploy.
+ */
+const CATALOGUE_TTL_MS = 60_000
+let catalogueUrls: Set<string> | null = null
+let catalogueAt = 0
+
+async function isCatalogueImage(url: string): Promise<boolean> {
+  if (!catalogueUrls || Date.now() - catalogueAt >= CATALOGUE_TTL_MS) {
+    try {
+      const { products } = await getResolvedCatalogue()
+      catalogueUrls = new Set(products.map((p) => p.imageUrl).filter((u): u is string => !!u))
+      catalogueAt = Date.now()
+    } catch {
+      // A catalogue we cannot read is not a reason to widen the boundary. Keep
+      // whatever set we last had; an empty one refuses everything, which is the
+      // correct failure direction for a route that fetches URLs.
+      if (!catalogueUrls) return false
+    }
+  }
+  return catalogueUrls.has(url)
+}
+
 export async function GET(request: Request) {
   const req = parseImageRequest(new URL(request.url).searchParams)
   if (!req) {
     return NextResponse.json({ error: 'Unsupported image request' }, { status: 400 })
+  }
+  if (!(await isCatalogueImage(req.url))) {
+    return NextResponse.json({ error: 'Not a catalogue image' }, { status: 400 })
   }
 
   const key = `${req.url}|${req.width}`

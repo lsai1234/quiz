@@ -1,8 +1,9 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
-import { productImageSrc, productImageSrcSet } from '@/lib/images/product-image'
+import { productImageSrc, productImageSrcSet, IMAGE_BACKGROUND } from '@/lib/images/product-image'
 
 interface Props {
   /** Product photo. When null/absent, a designed slot-coloured tile is shown. */
@@ -23,21 +24,38 @@ interface Props {
 }
 
 /**
- * The visual anchor for a product across Act 4. Shows the real photo when the
- * catalogue has one; otherwise renders a designed fallback — a soft, slot-hued
- * gradient tile with the slot's monoline glyph — so an image-less catalogue
- * still looks deliberate instead of broken.
+ * The visual anchor for a product across Act 4 and the shop.
  *
- * The photo goes through `/api/product-image`, which contains it inside a square
- * and flattens it onto this same surface colour — so `object-cover` here can
- * never crop a bottle, because by the time the bytes arrive they are already
- * square. See `@/lib/images/product-image` for why that happens at ingest rather
- * than in CSS.
+ * Shows the real photo when the catalogue has one, otherwise a designed
+ * fallback — a soft, slot-hued gradient tile with the slot's monoline glyph — so
+ * an image-less catalogue still looks deliberate instead of broken.
+ *
+ * ── `object-contain`, on white, always ───────────────────────────────────────
+ * `object-cover` was cropping real product photos: a 500g pouch shot in
+ * portrait lost its top and bottom to a square tile. Cover is only safe when
+ * the source is already square, and the source is whatever the brand sent.
+ * Contain never crops, and the padding it leaves is white to match the ground
+ * these photos are shot on — see `@/lib/images/product-image` for why the
+ * pipeline pads the same colour.
+ *
+ * ── The fallback chain ───────────────────────────────────────────────────────
+ * The photo is requested through `/api/product-image`, which declines anything
+ * that is not in the catalogue. If it declines, or the supplier's own image
+ * 404s, this falls back to the raw source and then to the designed tile. A
+ * photo that renders unnormalised is a worse-looking card; a broken image is a
+ * broken shop, and the first version of this failed silently into the second.
  */
 export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, className }: Props) {
   const { glyph, hue } = slotVisual(slot)
-  const src = productImageSrc(imageUrl, size)
-  const srcSet = productImageSrcSet(imageUrl, size)
+  const normalised = productImageSrc(imageUrl, size)
+
+  /** 0 = the pipeline, 1 = the supplier's own URL, 2 = give up and draw the tile. */
+  const [attempt, setAttempt] = useState(0)
+  useEffect(() => { setAttempt(0) }, [imageUrl])
+
+  const raw = imageUrl ?? null
+  const src = attempt === 0 ? normalised : attempt === 1 ? raw : null
+  const srcSet = attempt === 0 ? productImageSrcSet(imageUrl, size) : null
 
   return (
     <div
@@ -46,7 +64,7 @@ export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, cl
         width: fill ? undefined : size,
         height: fill ? undefined : size,
         background: src
-          ? 'var(--color-surface-2)'
+          ? IMAGE_BACKGROUND
           : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--color-surface-2)`,
         border: src
           ? '1px solid var(--color-border)'
@@ -61,9 +79,10 @@ export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, cl
           alt={title ?? ''}
           width={size}
           height={size}
-          className="w-full h-full object-cover"
+          className="w-full h-full object-contain"
           loading="lazy"
           decoding="async"
+          onError={() => setAttempt((a) => a + 1)}
         />
       ) : (
         /* The glyph is sized against the tile it is drawn in, which in `fill`

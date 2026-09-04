@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import type { SupplierRow } from '@/lib/supplier/row'
 import { Badge, Button, Card, Textarea } from '@/components/system'
+import { IMAGE_BACKGROUND } from '@/lib/images/product-image'
 
 
 /**
@@ -424,9 +425,12 @@ const money = (n: number) => `£${n.toFixed(2)}`
 function ProductCard({ row: r, adding, onAdd }: { row: SupplierRow; adding: boolean; onAdd: () => void }) {
   return (
     <div className="rounded-2xl border p-3.5 flex items-start gap-3" style={{ background: 'var(--surface-1)', borderColor: 'var(--edge)' }}>
+      {/* Contain on white: these are the supplier's own shots, and this is the
+          screen a founder checks them on — cropping them here hides exactly what
+          they came to look at. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       {r.imageUrl ? (
-        <img src={r.imageUrl} alt="" className="w-16 h-16 rounded-xl object-cover shrink-0" />
+        <img src={r.imageUrl} alt="" className="w-16 h-16 rounded-xl object-contain shrink-0" style={{ background: IMAGE_BACKGROUND }} />
       ) : (
         <div className="w-16 h-16 rounded-xl shrink-0 grid place-items-center text-[9px] text-[var(--ink-3)]" style={{ background: 'var(--surface-2)' }}>
           No image

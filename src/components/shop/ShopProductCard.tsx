@@ -143,35 +143,22 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
       </Link>
 
       {/*
-        Compare, in the corner rather than the action row: the row belongs to
-        "Add to basket", and a second button beside it competes with the thing
-        the card is for. Quiet until it is on.
+        The action row: Add, and — where a duel is on offer — Compare beside it.
 
-        Placed after the link in the DOM so opening the product stays the first
-        thing a keyboard reaches, and outside it because an interactive control
-        may not be nested inside an anchor.
+        Compare was an unlabelled 13px glyph in the corner of the photo. Two
+        problems, and the second only appeared once the first was fixed: nobody
+        who had not been told what the glyph was could find out by looking, and
+        giving it the word put a high-contrast pill on top of the product on
+        every card. So it says the word, and it says it down here on the dark
+        ground where a control belongs, off the photograph.
+
+        Stacked, not side by side: at two columns a card is about 166px wide,
+        and "Compare" as a word simply does not fit next to "Add" — laid out in
+        a row it came out WIDER than the primary action, which inverts the one
+        hierarchy the card has. Underneath, at label size and in the muted ink,
+        it is available without being offered.
       */}
-      {onToggleCompare && (
-        <button
-          onClick={() => onToggleCompare(product)}
-          aria-pressed={!!compareSelected}
-          aria-label={`Compare ${product.title}`}
-          className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
-          style={{
-            color: compareSelected ? 'var(--color-bg)' : 'var(--color-text)',
-            background: compareSelected ? 'var(--color-accent)' : 'var(--color-surface)',
-            border: `1px solid ${compareSelected ? 'transparent' : 'var(--color-border-2)'}`,
-          }}
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-            {compareSelected
-              ? <path d="M20 6 9 17l-5-5" />
-              : <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></>}
-          </svg>
-        </button>
-      )}
-
-      <div className="p-2.5" style={{ borderTop: '1px solid var(--color-border)' }}>
+      <div className="p-2.5 flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-border)' }}>
         <button
           onClick={handleAdd}
           disabled={soldOut}
@@ -180,8 +167,7 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
           /*
             Tinted rather than filled. Two solid-accent slabs side by side in a
             two-column grid were the brightest thing on the shelf by a distance
-            — the eye went to the buttons and not to the products. The accent
-            still carries it; it just stops shouting over the photo.
+            — the eye went to the buttons and not to the products.
           */
           style={{
             fontFamily: 'var(--font-display)',
@@ -192,6 +178,27 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
         >
           {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add'}
         </button>
+
+        {onToggleCompare && (
+          <button
+            onClick={() => onToggleCompare(product)}
+            aria-pressed={!!compareSelected}
+            aria-label={compareSelected ? `Stop comparing ${product.title}` : `Compare ${product.title}`}
+            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg label active:scale-95 transition-all"
+            style={{
+              color: compareSelected ? 'var(--color-bg)' : 'var(--color-muted)',
+              background: compareSelected ? 'var(--color-accent)' : 'transparent',
+              border: `1px solid ${compareSelected ? 'transparent' : 'var(--color-border-2)'}`,
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              {compareSelected
+                ? <path d="M20 6 9 17l-5-5" />
+                : <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></>}
+            </svg>
+            {compareSelected ? 'Comparing' : 'Compare'}
+          </button>
+        )}
       </div>
     </div>
   )
