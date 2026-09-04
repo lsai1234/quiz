@@ -40,8 +40,8 @@
      pair is `--danger` on `--surface` at 4.63:1; `--text-dim` on `--surface-hi`,
      the smallest text in the app, is 5.14:1. */
   --bg: #0A0B0D;
-  --surface: #141619;
-  --surface-hi: #1C1F24;
+  --surface: #17191E;
+  --surface-hi: #212530;
   --line: rgba(255, 255, 255, 0.08);
   --text: #F2F3F5;
   --text-dim: #8A9099;
@@ -98,7 +98,7 @@
      Three. Controls are never pills — a pill-shaped button reads as a tag, and
      the storefront had 129 `rounded-full` elements of which most were buttons. */
   --r-control: 8px;
-  --r-card: 16px;
+  --r-card: 20px;
   --r-pill: 999px;
 
   /* ══ Motion ═══════════════════════════════════════════════════════════════
@@ -299,4 +299,77 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sf-chip:active { transform: none; }
+}
+
+/* ── Card and shelf type ──────────────────────────────────────────────────────
+   The card's scan order, expressed as three classes. Price leads because it is
+   the first thing anyone looks for on a shelf; the name is second and set at
+   500 so it holds its own against the figure above it; everything else is meta.
+
+   `--price-size` is the seventh step in the scale and the only one added for
+   this: five sizes could not express "bigger than body, smaller than a title",
+   which is exactly what a card price is. */
+:root {
+  --price-size: 17px;
+  --name-size: 13px;
+}
+
+.sf-price {
+  font-family: var(--font-sans);
+  font-size: var(--price-size);
+  font-weight: var(--weight-medium);
+  line-height: 1.2;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+.sf-name {
+  font-family: var(--font-sans);
+  font-size: var(--name-size);
+  font-weight: var(--weight-medium);
+  line-height: 1.35;
+  color: var(--text);
+}
+
+/* Figures inside meta text — sizes, servings, review counts — kept on the same
+   advance width as the price above them so a column of cards aligns. Sans, not
+   mono: mono earns its place in a column of figures like a basket or a
+   comparison table, and reads as a gap-toothed novelty on a single value. */
+.sf-tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ── The card as an object ────────────────────────────────────────────────────
+   A hairline of light on the top edge only. Not a border — a lit edge, the way
+   a physical tile catches the light from above. It is the cheapest way to make
+   a surface read as an object rather than as a slightly lighter region, and at
+   4% separation between --surface and --bg the card needs it. */
+.sf-card {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.sf-card:active {
+  transform: scale(0.99);
+}
+
+.sf-add {
+  cursor: pointer;
+  box-shadow: 0 0 0 3px var(--surface);
+}
+
+@media (hover: hover) {
+  .sf-add:hover {
+    background: color-mix(in srgb, var(--surface-hi) 80%, #fff);
+  }
+}
+
+.sf-add:active {
+  transform: scale(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-card:active,
+  .sf-add:active { transform: none; }
 }

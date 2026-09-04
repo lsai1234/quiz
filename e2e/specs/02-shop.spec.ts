@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
 import { openShop, addProductToBasket, openBasket, basketCount, openProductSheet } from '../support/shop'
 import { inspect, report } from '../support/inspect'
 
@@ -238,16 +238,29 @@ test.describe('the shop', () => {
     await expect(page.getByRole('button', { name: 'Dismiss suggestion' })).toHaveCount(0)
   })
 
+  /**
+   * Enter compare mode and return a locator for the selectable cards.
+   *
+   * Compare used to be a button on every card. It is now a shelf mode — one
+   * control in the filter row, after which the cards themselves select — so
+   * that eight identical grey buttons stopped being the thing a shopper saw
+   * first. The gesture is: turn it on, then tap products.
+   */
+  async function enterCompareMode(page: Page) {
+    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    return page.locator('[data-card] a[aria-pressed]')
+  }
+
   test('two products can be put head to head', async ({ page }) => {
     await openShop(page)
-    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
+    const cards = await enterCompareMode(page)
 
     // The tray appears on the FIRST pick and says what it is waiting for.
-    await compare.first().click()
+    await cards.first().click()
     await expect(page.getByText('Pick one more to compare')).toBeVisible()
 
-    await compare.nth(1).click()
-    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    await cards.nth(1).click()
+    await page.getByRole('button', { name: 'Compare', exact: true }).last().click()
 
     const sheet = page.getByRole('dialog', { name: 'Compare products' })
     await expect(sheet).toBeVisible()
@@ -258,10 +271,10 @@ test.describe('the shop', () => {
 
   test('the duel scores facts and leaves preferences alone', async ({ page }) => {
     await openShop(page)
-    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
-    await compare.first().click()
-    await compare.nth(1).click()
-    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    const cards = await enterCompareMode(page)
+    await cards.first().click()
+    await cards.nth(1).click()
+    await page.getByRole('button', { name: 'Compare', exact: true }).last().click()
 
     const sheet = page.getByRole('dialog', { name: 'Compare products' })
     // A crown is named, not just coloured — so it survives without the accent.
@@ -273,10 +286,10 @@ test.describe('the shop', () => {
 
   test('a duel adds to the basket and closes', async ({ page }) => {
     await openShop(page)
-    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
-    await compare.first().click()
-    await compare.nth(1).click()
-    await page.getByRole('button', { name: 'Compare', exact: true }).click()
+    const cards = await enterCompareMode(page)
+    await cards.first().click()
+    await cards.nth(1).click()
+    await page.getByRole('button', { name: 'Compare', exact: true }).last().click()
 
     const sheet = page.getByRole('dialog', { name: 'Compare products' })
     await sheet.getByRole('button', { name: /^Add CHRGD / }).first().click()
@@ -288,16 +301,16 @@ test.describe('the shop', () => {
 
   test('a third pick replaces the oldest rather than doing nothing', async ({ page }) => {
     await openShop(page)
-    const compare = page.getByRole('button', { name: /^Compare CHRGD / })
-    await compare.first().click()
-    await compare.nth(1).click()
-    await compare.nth(2).click()
+    const cards = await enterCompareMode(page)
+    await cards.first().click()
+    await cards.nth(1).click()
+    await cards.nth(2).click()
 
     // The first pick has been dropped, and the pair is still ready to compare.
-    // (Counting pressed BUTTONS would not work: a product on the Deals rail also
-    // appears on its category shelf, so one product carries two toggles.)
-    await expect(compare.first()).toHaveAttribute('aria-pressed', 'false')
-    await expect(page.getByRole('button', { name: 'Compare', exact: true })).toBeVisible()
+    // (Counting pressed CARDS would not work on its own: a product on the Deals
+    // rail also appears on its category shelf, so one product has two cards.)
+    await expect(cards.first()).toHaveAttribute('aria-pressed', 'false')
+    await expect(page.getByRole('button', { name: 'Compare', exact: true }).last()).toBeVisible()
   })
 
   test('the basket says what it covers, and a gap is somewhere to look', async ({ page }) => {

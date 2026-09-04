@@ -14,6 +14,12 @@ import {
 import { Button, Chip } from '@/components/storefront'
 
 interface Props {
+  /** Prices shown per serving rather than per unit. */
+  perServing: boolean
+  onPerServingChange: (on: boolean) => void
+  /** The shelf is in compare mode. */
+  compareMode: boolean
+  onCompareModeChange: (on: boolean) => void
   /** Dietary tags actually present in the catalogue, in canonical order. */
   tags: DietaryTag[]
   query: ShopQuery
@@ -39,7 +45,8 @@ interface Props {
  * shop already had, and demoting the common case to two taps to make room for
  * the rare ones would be a poor trade.
  */
-export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApplied, intentPhrases, onDismissIntent }: Props) {
+export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApplied, intentPhrases, onDismissIntent, perServing, onPerServingChange, compareMode, onCompareModeChange,
+}: Props) {
   const count = activeFilterCount(query)
   const sorted = query.sort !== EMPTY_QUERY.sort
 
@@ -130,6 +137,34 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
           {SORT_LABELS[query.sort]}
         </Chip>
       )}
+
+      {/*
+        Two view controls, not filters — they change how the shelf is READ
+        rather than what is on it.
+
+        Per-serving is the most useful number in this category and the shop has
+        always computed it: 100 servings at £18.99 against 30 at £29.99 is the
+        whole answer to "why is one more than the other", and it was on no
+        screen anywhere. One tap re-frames every price.
+
+        Compare puts the shelf into selection mode. It used to be a button on
+        every card — eight identical grey rectangles per screen, which is what
+        made the grid read as a form. Here it costs one control and the cards
+        stay clean.
+      */}
+      <Chip selected={perServing} onClick={() => onPerServingChange(!perServing)}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M3 6h18M3 12h18M3 18h10" />
+        </svg>
+        Per serving
+      </Chip>
+
+      <Chip selected={compareMode} onClick={() => onCompareModeChange(!compareMode)}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" />
+        </svg>
+        Compare
+      </Chip>
 
       {/*
         What the SEARCH TEXT implied, shown back in the shopper's own words.

@@ -8,18 +8,21 @@
  * white-ground JPEG sits on a dark shelf as a glowing rectangle. Neither is a
  * styling problem; both are an ingest problem.
  *
- * So every product photo goes through one transform before it is shown:
- * contained inside a square (nothing cropped), padded onto white, re-encoded to
- * WebP at a width the layout actually uses.
+ * So every product photo goes through one transform before it is shown: the
+ * white ground is cut away, the result is trimmed to the product, squared, and
+ * re-encoded to WebP with alpha at a width the layout actually uses.
  *
- * ── Why white and not the shelf colour ──────────────────────────────────────
- * Padding onto the dark surface is the obvious move and it is wrong for this
- * catalogue. Supplement photography is shot on white and delivered as JPEG with
- * no alpha, so the photo is a white rectangle whatever we pad around it — a
- * dark pad just puts a white box inside a dark box, and the box moves as the
- * aspect ratio changes. Committing to white makes every tile the same object:
- * a white card with the product centred on it, whether the source was 400×600
- * with no alpha or a square PNG that had some.
+ * ── Why the white comes off rather than being padded to match ───────────────
+ * Padding the photo onto our own white was the previous answer and it was the
+ * wrong one. It leaves a hard white rectangle butted against a near-black card
+ * — the highest-contrast edge in the UI, twice per row — so the eye goes to the
+ * rectangles instead of the products. And no two suppliers shoot on the same
+ * white, so the pad shows a seam.
+ *
+ * Cut out, the product floats on the card's own surface. See
+ * `@/lib/images/key-white` for how the cut is made safe, and
+ * `IMAGE_FALLBACK_BACKGROUND` for what happens to the photographs that cannot
+ * be cut.
  *
  * ── Why the boundary is the catalogue and not a list of hostnames ───────────
  * A route that fetches a client-supplied URL server-side and returns the bytes
@@ -55,8 +58,16 @@
 export const IMAGE_WIDTHS = [56, 96, 160, 320, 640] as const
 export type ImageWidth = (typeof IMAGE_WIDTHS)[number]
 
-/** The ground a contained image is padded onto. See the header for why white. */
-export const IMAGE_BACKGROUND = '#ffffff'
+/**
+ * The tile a photo is padded onto WHEN THE KEYING DECLINES.
+ *
+ * The normal path returns the product on transparency — see
+ * `@/lib/images/key-white`. This is the fallback for the photographs that
+ * cannot be safely cut: a white tub on white, a lifestyle shot, anything whose
+ * background is continuous with the product. A light tile rather than pure
+ * white so it reads as a deliberate plate rather than as a hole in the page.
+ */
+export const IMAGE_FALLBACK_BACKGROUND = '#F4F5F7'
 
 /**
  * Could this URL be normalised at all?

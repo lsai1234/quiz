@@ -114,7 +114,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           title={product.title}
           size={640}
           fill
-          plain
+          spotlight
           className="mb-5"
         />
 

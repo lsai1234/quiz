@@ -129,6 +129,10 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
  */
 export function ShopShell() {
   const router = useRouter()
+
+  /** Two view modes the shelf offers: prices per serving, and duel selection. */
+  const [perServing, setPerServing] = useState(false)
+  const [compareMode, setCompareMode] = useState(false)
   const { products, isLoading: productsLoading } = useCatalogueProducts()
   const { bundles, isLoading: bundlesLoading } = useShopBundles()
   // Hold the skeleton until BOTH the catalogue and the bundles rail are ready, so
@@ -706,6 +710,10 @@ export function ShopShell() {
               onClearRecent={() => setRecent(clearRecentSearches())}
             />
             <ShopFilterBar
+              perServing={perServing}
+              onPerServingChange={setPerServing}
+              compareMode={compareMode}
+              onCompareModeChange={(on) => { setCompareMode(on); if (!on) setCompareIds([]) }}
               tags={availableDietary}
               query={query}
               onChange={applyQueryChange}
@@ -762,8 +770,10 @@ export function ShopShell() {
                 <ShopSection
                   section={dealsSection}
                   onOpen={openProduct}
-                  compareIds={compareSet}
-                  onToggleCompare={toggleCompare}
+                  perServing={perServing}
+                  selectable={compareMode}
+                  selectedIds={compareSet}
+                  onToggleSelect={toggleCompare}
                 />
               )}
               {filteredSections.map((section) => (
@@ -771,8 +781,10 @@ export function ShopShell() {
                   key={section.slug}
                   section={section}
                   onOpen={openProduct}
-                  compareIds={compareSet}
-                  onToggleCompare={toggleCompare}
+                  perServing={perServing}
+                  selectable={compareMode}
+                  selectedIds={compareSet}
+                  onToggleSelect={toggleCompare}
                 />
               ))}
             </div>

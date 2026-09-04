@@ -22,14 +22,48 @@ jest.mock('@/lib/catalogue/resolve', () => ({
   getResolvedCatalogue: (...args: unknown[]) => getResolvedCatalogue(...args),
 }))
 
-const toBuffer = jest.fn(async () => Buffer.from('webp-bytes'))
+/**
+ * A chainable sharp stand-in.
+ *
+ * Every method returns the chain; `toBuffer` returns either encoded bytes or a
+ * raw RGBA frame, depending on whether the caller asked for the object form —
+ * which is exactly how the route distinguishes "give me pixels to key" from
+ * "give me the finished image".
+ *
+ * The raw frame it hands back is a real one: a white border round a dark
+ * centre, so `keyBackground` runs for real and the keyed path is what these
+ * tests actually exercise.
+ */
+const W = 12
+function rawFrame(centre: number): Buffer {
+  const buf = Buffer.alloc(W * W * 4)
+  for (let y = 0; y < W; y++) {
+    for (let x = 0; x < W; x++) {
+      const edge = x < 3 || y < 3 || x >= W - 3 || y >= W - 3
+      const v = edge ? 255 : centre
+      const p = (y * W + x) * 4
+      buf[p] = v; buf[p + 1] = v; buf[p + 2] = v; buf[p + 3] = 255
+    }
+  }
+  return buf
+}
+
+/** Swapped per test: 20 keys cleanly, 255 is white-on-white and must not. */
+let centreValue = 20
+const encodeFails = { current: false }
+
 jest.mock('sharp', () => {
-  const chain = {
-    rotate: () => chain,
-    resize: () => chain,
-    flatten: () => chain,
-    webp: () => chain,
-    toBuffer: () => toBuffer(),
+  const chain: Record<string, unknown> = {}
+  for (const m of ['rotate', 'clone', 'ensureAlpha', 'removeAlpha', 'raw', 'resize', 'flatten', 'trim', 'webp', 'joinChannel']) {
+    chain[m] = () => chain
+  }
+  chain.toBuffer = (opts?: { resolveWithObject?: boolean }) => {
+    if (opts?.resolveWithObject) {
+      return Promise.resolve({ data: rawFrame(centreValue), info: { width: W, height: W, channels: 4 } })
+    }
+    return encodeFails.current
+      ? Promise.reject(new Error('unsupported image format'))
+      : Promise.resolve(Buffer.from('webp-bytes'))
   }
   return { __esModule: true, default: () => chain }
 })
@@ -51,6 +85,8 @@ const fetchMock = jest.fn()
 beforeEach(() => {
   jest.resetModules()
   jest.clearAllMocks()
+  centreValue = 20
+  encodeFails.current = false
   getResolvedCatalogue.mockResolvedValue({ products: [product(CATALOGUE_IMAGE), product(null)] })
   fetchMock.mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { 'content-length': '3' } }),
@@ -71,6 +107,22 @@ describe('what it will fetch', () => {
     // must not silently stop being normalised.
     expect(CATALOGUE_IMAGE).not.toContain('powerbody')
     expect((await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)).status).toBe(200)
+  })
+
+  it('cuts the white ground away and says so', async () => {
+    const res = await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('X-Image-Keyed')).toBe('1')
+  })
+
+  it('falls back to the light tile for a photo it cannot safely cut', async () => {
+    // White on white: nothing separates the product from its ground, so the
+    // fill reaches the centre and the keying declines. A product that keeps its
+    // plate is a worse card; one with its middle eaten out is a broken one.
+    centreValue = 255
+    const res = await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)
+    expect(res.status).toBe(200)
+    expect(res.headers.get('X-Image-Keyed')).toBe('0')
   })
 
   it('serves it as a year-long immutable response, because the URL is content-addressed', async () => {
@@ -134,7 +186,7 @@ describe('when the supplier is the problem', () => {
   })
 
   it('does not throw when the bytes are not an image sharp can read', async () => {
-    toBuffer.mockRejectedValue(new Error('unsupported image format'))
+    encodeFails.current = true
     expect((await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)).status).toBe(502)
   })
 })

@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { parseImageRequest, IMAGE_BACKGROUND, type ImageWidth } from '@/lib/images/product-image'
+import { parseImageRequest, IMAGE_FALLBACK_BACKGROUND, type ImageWidth } from '@/lib/images/product-image'
+import { keyBackground, shouldKey, featherMask } from '@/lib/images/key-white'
 
 /**
  * The product image normaliser.
@@ -64,13 +65,65 @@ function memoSet(key: string, value: Buffer): void {
   }
 }
 
-async function normalise(source: ArrayBuffer, width: ImageWidth): Promise<Buffer> {
-  return sharp(Buffer.from(source))
-    .rotate() // Honour EXIF orientation before resizing, or a phone photo lands sideways.
-    .resize(width, width, { fit: 'contain', background: IMAGE_BACKGROUND })
-    .flatten({ background: IMAGE_BACKGROUND })
+/**
+ * One photo, normalised.
+ *
+ * The white ground is flood-filled away from the frame edge and the product is
+ * returned on transparency, so the card composites it onto its own surface and
+ * the product floats. See `@/lib/images/key-white` for why it is a flood fill
+ * and not a brightness threshold, and for the three ways it declines.
+ *
+ * When it declines, the fallback is the old behaviour — contained and padded
+ * onto a light tile. A product that keeps its white plate is a worse card; a
+ * product with its middle eaten out is a broken one.
+ */
+async function normalise(source: ArrayBuffer, width: ImageWidth): Promise<{ out: Buffer; keyed: boolean }> {
+  const upright = sharp(Buffer.from(source)).rotate()
+
+  /* RGBA, so the mask can be written straight into the fourth channel below. */
+  const { data, info } = await upright
+    .clone()
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+
+  const result = keyBackground(data, info.width, info.height, info.channels)
+
+  if (shouldKey(result)) {
+    /*
+      The mask is written straight into the alpha channel of the raw RGBA we
+      already have, rather than handed to sharp's `joinChannel`.
+
+      `joinChannel` appends, and its position in sharp's internal pipeline order
+      is not the position it appears in the chain — joined onto an image that
+      already had alpha it produced a five-channel image that rendered fully
+      transparent, and after `removeAlpha` it silently dropped the mask and
+      produced three channels. Writing the bytes is unambiguous and needs no
+      knowledge of that ordering.
+    */
+    const rgba = Buffer.from(data)
+    const mask = featherMask(result.alpha, info.width, info.height)
+    for (let i = 0; i < mask.length; i++) rgba[i * 4 + 3] = mask[i]
+
+    const out = await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } })
+      /* Crop to what is left. Suppliers frame wildly differently — one product
+         fills its JPEG, the next floats in the middle of a 2:3 — and trimming to
+         the product itself is what makes a shelf of them look like one set of
+         photographs rather than a collage. */
+      .trim({ threshold: 1 })
+      .resize(width, width, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .webp({ quality: 82, alphaQuality: 90 })
+      .toBuffer()
+    return { out, keyed: true }
+  }
+
+  const out = await upright
+    .clone()
+    .resize(width, width, { fit: 'contain', background: IMAGE_FALLBACK_BACKGROUND })
+    .flatten({ background: IMAGE_FALLBACK_BACKGROUND })
     .webp({ quality: 80 })
     .toBuffer()
+  return { out, keyed: false }
 }
 
 /**
@@ -140,8 +193,9 @@ export async function GET(request: Request) {
   }
 
   let out: Buffer
+  let keyed = false
   try {
-    out = await normalise(body, req.width)
+    ;({ out, keyed } = await normalise(body, req.width))
   } catch {
     // Not an image, or one sharp cannot read. The caller falls back to the
     // designed tile, which is a better outcome than a broken image icon.
@@ -150,6 +204,13 @@ export async function GET(request: Request) {
 
   memoSet(key, out)
   return new NextResponse(new Uint8Array(out), {
-    headers: { 'Content-Type': 'image/webp', 'Cache-Control': IMMUTABLE, 'X-Image-Cache': 'miss' },
+    headers: {
+      'Content-Type': 'image/webp',
+      'Cache-Control': IMMUTABLE,
+      'X-Image-Cache': 'miss',
+      /* Which treatment this photo got, so a shelf that looks wrong can be
+         diagnosed from the network tab rather than by eye. */
+      'X-Image-Keyed': keyed ? '1' : '0',
+    },
   })
 }

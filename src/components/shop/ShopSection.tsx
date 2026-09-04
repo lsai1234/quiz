@@ -7,9 +7,12 @@ import { ShopProductCard } from './ShopProductCard'
 interface Props {
   section: ShopCategory
   onOpen?: (product: CatalogueProduct) => void
-  /** Products currently picked for a duel. Absent = no compare affordance. */
-  compareIds?: ReadonlySet<string>
-  onToggleCompare?: (product: CatalogueProduct) => void
+  /** Show every price as a price per serving. */
+  perServing?: boolean
+  /** The shelf is in compare mode — cards select instead of navigating. */
+  selectable?: boolean
+  selectedIds?: ReadonlySet<string>
+  onToggleSelect?: (product: CatalogueProduct) => void
 }
 
 /**
@@ -29,7 +32,7 @@ interface Props {
  * The GSAP deal-in animation went with the deck. It was a transform driven by
  * scroll position, and the storefront's motion is 150ms on interaction only.
  */
-export function ShopSection({ section, onOpen, compareIds, onToggleCompare }: Props) {
+export function ShopSection({ section, onOpen, perServing, selectable, selectedIds, onToggleSelect }: Props) {
   return (
     /*
       `scroll-margin-top` is 88px, not the old 96px guess: the sticky bar is now
@@ -50,7 +53,7 @@ export function ShopSection({ section, onOpen, compareIds, onToggleCompare }: Pr
         className="grid"
         style={{
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-          gap: 'var(--space-4)',
+          gap: 'var(--space-3)',
           padding: '0 var(--space-4)',
         }}
       >
@@ -59,8 +62,10 @@ export function ShopSection({ section, onOpen, compareIds, onToggleCompare }: Pr
             <ShopProductCard
               product={product}
               onOpen={onOpen}
-              compareSelected={compareIds?.has(product.id)}
-              onToggleCompare={onToggleCompare}
+              perServing={perServing}
+              selectable={selectable}
+              selected={selectedIds?.has(product.id)}
+              onToggleSelect={onToggleSelect}
             />
           </div>
         ))}
