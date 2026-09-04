@@ -11,6 +11,7 @@ import {
   activeFilterCount,
   type ShopQuery,
 } from '@/lib/shop/shop-query'
+import { Button, Chip } from '@/components/storefront'
 
 interface Props {
   /** Dietary tags actually present in the catalogue, in canonical order. */
@@ -102,36 +103,32 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
   }
 
   return (
-    <div className="flex gap-2 overflow-x-auto px-5 py-1.5 max-w-lg mx-auto scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
-      <button
+    /*
+      A control row, not a pill row.
+
+      "Filters" is a BUTTON — rounded rectangle, so it is visibly a different
+      kind of thing from the category pills below it. Everything after it is a
+      chip, because everything after it narrows the catalogue: the dietary
+      toggles, the facets already applied, and the phrases the search text
+      implied. That is the distinction the two stacked rows never made.
+    */
+    <div className="sf-scroll-row flex items-center" style={{ gap: 'var(--space-2)', paddingTop: 'var(--space-3)' }}>
+      <Button
+        variant={count > 0 ? 'secondary' : 'ghost'}
+        size="sm"
         onClick={onOpenFilters}
-        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide active:scale-95 transition-all"
-        style={{
-          fontFamily: 'var(--font-display)',
-          color: count > 0 ? 'var(--color-accent)' : 'var(--color-text-2)',
-          background: 'var(--color-surface)',
-          border: `1px solid ${count > 0 ? 'color-mix(in srgb, var(--color-accent) 40%, transparent)' : 'var(--color-border-2)'}`,
-        }}
+        className="flex-shrink-0"
       >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
           <path d="M3 6h18M7 12h10M11 18h2" />
         </svg>
         {count > 0 ? `Filters (${count})` : 'Filters'}
-      </button>
+      </Button>
 
       {sorted && (
-        <button
-          onClick={onOpenFilters}
-          className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide active:scale-95 transition-all"
-          style={{
-            fontFamily: 'var(--font-display)',
-            color: 'var(--color-accent)',
-            background: 'var(--color-surface)',
-            border: '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)',
-          }}
-        >
+        <Chip selected onClick={onOpenFilters}>
           {SORT_LABELS[query.sort]}
-        </button>
+        </Chip>
       )}
 
       {/*
@@ -143,7 +140,7 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
         <RemovableChip
           key={`i:${phrase}`}
           label={phrase.charAt(0).toUpperCase() + phrase.slice(1)}
-          title={`From your search — remove “${phrase}”`}
+          title={`From your search — remove \u201C${phrase}\u201D`}
           inferred
           onRemove={() => onDismissIntent(phrase)}
         />
@@ -153,25 +150,11 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
         <RemovableChip key={chip.key} label={chip.label} onRemove={chip.clear} />
       ))}
 
-      {tags.map((tag) => {
-        const on = query.dietary.includes(tag)
-        return (
-          <button
-            key={tag}
-            onClick={() => toggleDietary(tag)}
-            aria-pressed={on}
-            className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all active:scale-95"
-            style={{
-              fontFamily: 'var(--font-display)',
-              color: on ? 'var(--color-bg)' : 'var(--color-text-2)',
-              background: on ? 'var(--color-accent)' : 'var(--color-surface)',
-              border: on ? '1px solid transparent' : '1px solid var(--color-border-2)',
-            }}
-          >
-            {DIETARY_LABEL[tag]}
-          </button>
-        )
-      })}
+      {tags.map((tag) => (
+        <Chip key={tag} selected={query.dietary.includes(tag)} onClick={() => toggleDietary(tag)}>
+          {DIETARY_LABEL[tag]}
+        </Chip>
+      ))}
     </div>
   )
 }
@@ -182,26 +165,33 @@ export function ShopFilterBar({ tags, query, onChange, onOpenFilters, onFacetApp
  * `inferred` marks the ones we worked out from the search text rather than ones
  * the shopper set — a dashed edge, so a guess never looks like an instruction.
  */
+/**
+ * A filter that is on, and can be taken off.
+ *
+ * It is a `Chip` in its selected state with a cross after the label, so an
+ * applied filter and a selected dietary toggle look identical — which they
+ * should, because they are the same thing arrived at two ways.
+ *
+ * `inferred` marks one the search TEXT implied rather than one the shopper
+ * tapped. It reads at 70% opacity rather than in a different colour: the
+ * storefront has one accent and spending it on "we guessed this" would put a
+ * guess at the same volume as a decision.
+ */
 function RemovableChip({
   label, onRemove, inferred = false, title,
 }: { label: string; onRemove: () => void; inferred?: boolean; title?: string }) {
   return (
-    <button
+    <Chip
+      selected
       onClick={onRemove}
       title={title}
       aria-label={`Remove filter: ${label}`}
-      className="flex-shrink-0 flex items-center gap-1.5 pl-3.5 pr-2.5 py-1.5 rounded-full text-xs font-bold tracking-wide active:scale-95 transition-all"
-      style={{
-        fontFamily: 'var(--font-display)',
-        color: 'var(--color-accent)',
-        background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)',
-        border: `1px ${inferred ? 'dashed' : 'solid'} color-mix(in srgb, var(--color-accent) 40%, transparent)`,
-      }}
+      className={inferred ? 'opacity-70' : ''}
     >
       {label}
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
         <path d="M18 6 6 18M6 6l12 12" />
       </svg>
-    </button>
+    </Chip>
   )
 }

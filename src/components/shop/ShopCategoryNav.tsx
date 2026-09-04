@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import type { ShopCategory } from '@/lib/shop/categories'
+import { Chip } from '@/components/storefront'
 
 const ACCENT = '#00D4FF'
 
@@ -14,7 +15,6 @@ interface Props {
    * is visible — and because this is the order the page reads in: what are you
    * looking for, how do you narrow it, where do you jump to.
    */
-  controls?: ReactNode
 }
 
 /**
@@ -24,9 +24,8 @@ interface Props {
  *
  * Also the shop's one sticky bar: it hosts the search input and the filter row
  * above the chips. With a search running there are no shelves to jump to, so the
- * caller passes no categories and only the controls render.
  */
-export function ShopCategoryNav({ categories, controls }: Props) {
+export function ShopCategoryNav({ categories }: Props) {
   const [activeSlug, setActiveSlug] = useState(categories[0]?.slug ?? '')
 
   useEffect(() => {
@@ -54,38 +53,41 @@ export function ShopCategoryNav({ categories, controls }: Props) {
   const go = (slug: string) =>
     document.getElementById(`shop-cat-${slug}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 
-  // Nothing to render only when there is neither a shelf to jump to nor any
-  // controls to host — otherwise the bar stays and carries whichever it has.
-  if (categories.length === 0 && !controls) return null
+  // No shelves to jump to, no bar.
+  if (categories.length === 0) return null
 
   return (
+    /*
+      Only the category row is sticky now, and it is the ONLY pill row on the
+      screen.
+
+      Search and filters used to ride inside this bar, which put two visually
+      identical rows of pills directly on top of each other — one narrowing the
+      catalogue, one jumping within it — with nothing but their contents to say
+      which was which. They are now separated by placement: search and filters
+      sit in the page above, scroll away with it, and are a field and a button;
+      this is a pill row and it is the thing that stays.
+
+      No blur, no translucency: the storefront has no ground behind this to
+      refract, so `backdrop-filter` here was grey haze over a flat colour. An
+      opaque bar and one hairline is what actually divides two sections.
+    */
     <nav
-      aria-label="Shop search and categories"
+      aria-label="Shop categories"
       className="sticky top-0 z-30"
-      style={{ background: 'color-mix(in srgb, var(--color-bg) 82%, transparent)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderBottom: '1px solid var(--color-border)' }}
+      style={{ background: 'var(--bg)', borderBottom: '1px solid var(--line)' }}
     >
-      {controls}
       {categories.length > 0 && (
-      <div className="flex gap-2 overflow-x-auto px-5 py-3 scrollbar-hide" style={{ scrollbarWidth: 'none' }}>
-        {categories.map((c) => {
-          const active = activeSlug === c.slug
-          return (
-            <button
-              key={c.slug}
-              onClick={() => go(c.slug)}
-              className="flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide transition-all active:scale-95"
-              style={{
-                fontFamily: 'var(--font-display)',
-                color: active ? 'var(--color-bg)' : 'var(--color-text-2)',
-                background: active ? ACCENT : 'var(--color-surface)',
-                border: active ? '1px solid transparent' : '1px solid var(--color-border-2)',
-              }}
-            >
+        <div
+          className="sf-scroll-row flex"
+          style={{ gap: 'var(--space-2)', padding: 'var(--space-3) var(--space-4)' }}
+        >
+          {categories.map((c) => (
+            <Chip key={c.slug} selected={activeSlug === c.slug} onClick={() => go(c.slug)}>
               {c.category}
-            </button>
-          )
-        })}
-      </div>
+            </Chip>
+          ))}
+        </div>
       )}
     </nav>
   )

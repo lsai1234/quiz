@@ -11,7 +11,7 @@ interface Props {
   query: string
   /** True when these results came from the one-edit typo fallback. */
   fuzzy: boolean
-  onExpand: (product: CatalogueProduct, rank: number) => void
+  onOpen: (product: CatalogueProduct, rank: number) => void
 }
 
 /**
@@ -27,32 +27,32 @@ interface Props {
  * columns at 360px) the title clamps to nothing and the add button wraps. The
  * card sets the column count, not the other way round.
  */
-export function ShopResultsGrid({ products, query, fuzzy, onExpand }: Props) {
+export function ShopResultsGrid({ products, query, fuzzy, onOpen }: Props) {
   // Axes drawn from the result set itself, so the stat bars compare the things
   // actually on screen — the same trick the category shelves use.
   const axes = useMemo(() => selectShopAxes(products), [products])
 
   return (
-    <section aria-label="Search results" className="px-5 pt-4 max-w-5xl mx-auto">
+    <section aria-label="Search results" style={{ padding: 'var(--space-4) var(--space-4) 0' }}>
       <div className="flex items-baseline justify-between gap-3 mb-3">
-        <h2 className="text-sm font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
+        <h2 className="sf-title" style={{ color: 'var(--text)' }}>
           {products.length} {products.length === 1 ? 'result' : 'results'}
           {query && (
             <>
               {' for '}
-              <span style={{ color: 'var(--color-accent)' }}>&ldquo;{query}&rdquo;</span>
+              <span style={{ color: 'var(--text)' }}>&ldquo;{query}&rdquo;</span>
             </>
           )}
         </h2>
       </div>
 
       {fuzzy && (
-        <p className="text-xs mb-3" style={{ color: 'var(--color-muted)' }}>
+        <p className="sf-meta" style={{ marginBottom: 'var(--space-3)' }}>
           Nothing matched exactly — showing the closest spellings.
         </p>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-4)' }}>
         {/*
           `data-card` marks a product card for the rest of the app — the deck
           animations query it, and every e2e card selector is built on it. It
@@ -62,7 +62,7 @@ export function ShopResultsGrid({ products, query, fuzzy, onExpand }: Props) {
           <div key={product.id} data-card>
             <ShopProductCard
               product={product}
-              onExpand={() => onExpand(product, i)}
+              onOpen={() => onOpen(product, i)}
             />
           </div>
         ))}

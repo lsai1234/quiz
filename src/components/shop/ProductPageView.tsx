@@ -5,7 +5,6 @@ import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
-import { categoryHue } from '@/lib/shop/category-visuals'
 import { track } from '@/lib/analytics/events'
 import { useBasket } from '@/lib/basket/store'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
@@ -14,7 +13,7 @@ import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { ProductDetailBody, variantLabel } from './ProductDetail'
 import { StarRating } from './StarRating'
-import { StockChip } from './StockChip'
+import { Button, Badge } from '@/components/storefront'
 
 interface Props {
   product: CatalogueProduct
@@ -52,7 +51,6 @@ export function ProductPageView({ product, sellableKeys }: Props) {
   const [qty, setQty] = useState(1)
   const [justAdded, setJustAdded] = useState(false)
 
-  const hue = categoryHue(product.category)
   const variant = product.variants.find((v) => v.id === variantId)
     ?? product.variants.find((v) => v.available)
     ?? product.variants[0]
@@ -73,7 +71,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
   }
 
   return (
-    <main className="min-h-dvh" style={{ background: 'var(--color-bg)', color: 'var(--color-text)' }}>
+    <main className="storefront min-h-dvh" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
       <header className="px-5 pt-6 pb-2 max-w-lg mx-auto flex items-center justify-between">
         <Link href="/" aria-label="getCHRGD home" className="active:scale-95 transition-transform">
           <CHRGDLogo markSize={22} wordClassName="text-lg" />
@@ -109,35 +107,38 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           Back to the shop
         </Link>
 
-        {/* Hero. Image-forward, because a product page is the one place with the
-            room to show the thing you are buying at a size worth showing —
-            capped, because a full-width square on a phone is 390px of tub, and
-            for a product the supplier sent no photo for it is 390px of nothing. */}
+        {/* Full width, flush, on the page's own ground. */}
         <ProductTile
           imageUrl={product.imageUrl}
           slot={product.stackSlots[0]}
           title={product.title}
-          size={320}
+          size={640}
           fill
-          className="mb-5 max-w-[300px] mx-auto"
+          plain
+          className="mb-5"
         />
 
-        <span
-          className="inline-block px-2 py-0.5 rounded-full label mb-2"
-          style={{ color: hue, background: `color-mix(in srgb, ${hue} 12%, transparent)`, border: `1px solid color-mix(in srgb, ${hue} 24%, transparent)` }}
-        >
-          {product.category}
-        </span>
-        <h1 className="type-display" style={{ color: 'var(--color-text)' }}>{product.title}</h1>
+        <Badge className="mb-2">{product.category}</Badge>
+        <h1 className="sf-display" style={{ color: 'var(--text)' }}>{product.title}</h1>
 
-        <div className="flex items-baseline gap-2 mt-2 flex-wrap">
-          <span className="text-xl font-black tabular-nums" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>{formatGBP(price)}</span>
-          {onDeal && <span className="text-sm line-through tabular-nums" style={{ color: 'var(--color-muted)' }}>{formatGBP(rrp!)}</span>}
-          {variant && <span className="text-sm" style={{ color: 'var(--color-muted)' }}>· {variantLabel(variant)}</span>}
+        <div className="flex items-baseline flex-wrap" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+          <span className="sf-num sf-title" style={{ color: 'var(--text)' }}>{formatGBP(price)}</span>
+          {onDeal && <span className="sf-num sf-meta line-through">{formatGBP(rrp!)}</span>}
+          {variant && <span className="sf-meta">{variantLabel(variant)}</span>}
         </div>
 
         {hasRating(product.rating) && <StarRating rating={product.rating} size={14} showAverage showCount className="mt-2.5" />}
-        {stock.low && stock.count != null && <StockChip count={stock.count} className="mt-2.5" />}
+        {/*
+          Stock as one line of meta, and only when it is genuinely nearly gone.
+          The amber chip this replaces appeared at every "low" threshold and on
+          the grid as well, which is the shape of a scarcity badge whether or
+          not the number behind it is true.
+        */}
+        {stock.count != null && stock.count < 5 && (
+          <p className="sf-meta" style={{ marginTop: 'var(--space-3)' }}>
+            Only <span className="sf-num">{stock.count}</span> left
+          </p>
+        )}
         {soldOut && product.restockingSoon && (
           <p className="text-[11px] font-semibold mt-2.5" style={{ color: 'var(--color-amber)' }}>Back in stock soon</p>
         )}
@@ -146,7 +147,6 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           product={product}
           variant={variant}
           onSelectVariant={setVariantId}
-          hue={hue}
           className="mt-7"
         />
       </div>
@@ -154,28 +154,23 @@ export function ProductPageView({ product, sellableKeys }: Props) {
       {/* The add bar. Fixed rather than in flow: the description runs long, and
           a shopper who has read to the bottom should not have to scroll back. */}
       <div
-        className="fixed bottom-0 inset-x-0 z-40 px-5 py-3.5 pb-[max(0.9rem,env(safe-area-inset-bottom))]"
-        style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
+        className="fixed bottom-0 inset-x-0 z-40"
+        style={{
+          padding: 'var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom))',
+          borderTop: '1px solid var(--line)',
+          background: 'var(--bg)',
+        }}
       >
         <div className="max-w-lg mx-auto flex items-center gap-2.5">
-          <div className="flex items-center rounded-xl flex-shrink-0" style={{ border: '1px solid var(--color-border-2)' }}>
-            <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-9 h-11 text-lg active:opacity-60" style={{ color: 'var(--color-text-2)' }} aria-label="Decrease quantity">–</button>
-            <span className="w-6 text-center text-sm font-bold tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>{qty}</span>
-            <button onClick={() => setQty((q) => Math.min(MAX_LINE_QTY, q + 1))} className="w-9 h-11 text-lg active:opacity-60" style={{ color: 'var(--color-text-2)' }} aria-label="Increase quantity">+</button>
+          <div className="flex items-center flex-shrink-0" style={{ background: 'var(--surface-hi)', borderRadius: 'var(--r-control)' }}>
+            <Button variant="ghost" size="lg" onClick={() => setQty((q) => Math.max(1, q - 1))} aria-label="Decrease quantity">−</Button>
+            <span className="sf-num text-center" style={{ width: 24, color: 'var(--text)' }}>{qty}</span>
+            <Button variant="ghost" size="lg" onClick={() => setQty((q) => Math.min(MAX_LINE_QTY, q + 1))} aria-label="Increase quantity">+</Button>
           </div>
-          <button
-            onClick={handleAdd}
-            disabled={soldOut}
-            className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all disabled:opacity-40"
-            style={{
-              fontFamily: 'var(--font-display)',
-              background: justAdded ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'var(--color-accent)',
-              color: justAdded ? 'var(--color-accent)' : 'var(--color-bg)',
-              border: justAdded ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
-            }}
-          >
+          {/* The one primary on the page. */}
+          <Button variant="primary" size="lg" fullWidth onClick={handleAdd} disabled={soldOut}>
             {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add to basket'}
-          </button>
+          </Button>
         </div>
       </div>
     </main>

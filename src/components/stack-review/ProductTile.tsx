@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { productImageSrc, productImageSrcSet, IMAGE_BACKGROUND } from '@/lib/images/product-image'
@@ -31,6 +31,17 @@ interface Props {
    * the source images were not.
    */
   pad?: boolean
+  /** Layout only — radius corners, mostly. */
+  style?: CSSProperties
+  /**
+   * Storefront mode: no plate, no border, no inset — the photo sits directly on
+   * whatever surface the caller provides and is contained within it.
+   *
+   * The white plate is a device for cut-out photography on a dark page, and on
+   * a two-column grid it made the white rectangle the loudest object on the
+   * shelf. The quiz and the hubs still use the plate; the shop does not.
+   */
+  plain?: boolean
   className?: string
 }
 
@@ -56,7 +67,7 @@ interface Props {
  * photo that renders unnormalised is a worse-looking card; a broken image is a
  * broken shop, and the first version of this failed silently into the second.
  */
-export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, pad = false, className }: Props) {
+export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, pad = false, plain = false, className, style }: Props) {
   const { glyph, hue } = slotVisual(slot)
   const normalised = productImageSrc(imageUrl, size)
 
@@ -74,12 +85,17 @@ export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, pa
       style={{
         width: fill ? undefined : size,
         height: fill ? undefined : size,
-        background: src
-          ? IMAGE_BACKGROUND
-          : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--color-surface-2)`,
-        border: src
-          ? '1px solid var(--color-border)'
-          : `1px solid color-mix(in srgb, ${hue} 24%, var(--color-border))`,
+        ...(plain
+          ? { background: 'transparent', border: 'none' }
+          : {
+              background: src
+                ? IMAGE_BACKGROUND
+                : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--color-surface-2)`,
+              border: src
+                ? '1px solid var(--color-border)'
+                : `1px solid color-mix(in srgb, ${hue} 24%, var(--color-border))`,
+            }),
+        ...style,
       }}
     >
       {src ? (

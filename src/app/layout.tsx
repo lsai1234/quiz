@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Space_Grotesk, Inter } from 'next/font/google'
+import { Space_Grotesk, Inter, Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { PortalSync } from '@/components/portal/PortalSync'
 import { ErrorReporter } from '@/components/monitoring/ErrorReporter'
@@ -14,6 +14,27 @@ const spaceGrotesk = Space_Grotesk({
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-body',
+  display: 'swap',
+})
+
+/*
+ * The storefront faces. Self-hosted by `next/font` — the files are downloaded
+ * at build time and served from this origin, so there is no request to a font
+ * CDN, no render-blocking third party and no layout shift from a late swap.
+ *
+ * Four families ship because the refactor is scoped to the storefront: Space
+ * Grotesk and Inter still dress the quiz and the hubs. If the storefront look
+ * is adopted for those too, those two go and this drops back to two.
+ */
+const geistSans = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist-sans',
+  display: 'swap',
+})
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
   display: 'swap',
 })
 
@@ -35,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     /* The inline script below writes to this element before React hydrates, so
        React is told to take the DOM's word for it rather than treat the extra
        style property as a mismatch. */
-    <html lang="en" className={`h-full ${spaceGrotesk.variable} ${inter.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`h-full ${spaceGrotesk.variable} ${inter.variable} ${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
       <head>
         {/* Sizes the app shells before the first paint — see ViewportHeight. */}
         <script dangerouslySetInnerHTML={{ __html: VIEWPORT_HEIGHT_SNIPPET }} />

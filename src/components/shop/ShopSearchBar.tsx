@@ -125,8 +125,8 @@ export function ShopSearchBar({
   return (
     <div className="relative px-5 pt-3 pb-1 max-w-lg mx-auto">
       <div
-        className="flex items-center gap-2 rounded-xl pl-3 pr-1.5 py-1"
-        style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)' }}
+        className="flex items-center gap-2 rounded-[var(--r-control)] pl-3 pr-1.5 py-1"
+        style={{ background: 'var(--surface)', border: 'none' }}
       >
         <svg
           width="15" height="15" viewBox="0 0 24 24" fill="none"
@@ -157,7 +157,7 @@ export function ShopSearchBar({
           autoCorrect="off"
           spellCheck={false}
           className="flex-1 min-w-0 bg-transparent py-2 text-sm outline-none placeholder:opacity-70"
-          style={{ color: 'var(--color-text)' }}
+          style={{ color: 'var(--text)' }}
         />
 
         {value !== '' && (
@@ -166,7 +166,7 @@ export function ShopSearchBar({
             onClick={clear}
             aria-label="Clear search"
             className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-            style={{ color: 'var(--color-muted)' }}
+            style={{ color: 'var(--text-dim)' }}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
               <path d="M18 6 6 18M6 6l12 12" />

@@ -1,5 +1,7 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
@@ -31,7 +33,6 @@ import { ShopFilterBar } from './ShopFilterBar'
 import { ShopCategoryNav } from './ShopCategoryNav'
 import { ShopSection } from './ShopSection'
 import { ShopBundlesRow } from './ShopBundlesRow'
-import { ShopProductSheet } from './ShopProductSheet'
 import { ShopSearchBar } from './ShopSearchBar'
 import { ShopFilterSheet } from './ShopFilterSheet'
 import { ShopBasketNudge } from './ShopBasketNudge'
@@ -41,7 +42,7 @@ import { ShopRouletteSheet } from './ShopRouletteSheet'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
-import { Ground } from '@/components/system'
+import { Button } from '@/components/storefront'
 
 // Canonical dietary-chip order (matches the sheet's labels).
 const DIETARY_ORDER = Object.keys(DIETARY_LABEL) as DietaryTag[]
@@ -102,28 +103,22 @@ function TrustChip({ children }: { children: React.ReactNode }) {
 function TrustStrip({ products }: { products: CatalogueProduct[] }) {
   const threshold = getPricingConfig().freeDeliveryThreshold
   const summary = catalogueRatingSummary(products)
-  const accent = 'var(--color-accent)'
+
+  /*
+    Three facts on one line of meta text. It was three icon chips in a bordered
+    card, with the icons stroked in accent — three more accent objects in a hero
+    that already had four.
+  */
+  const facts = [
+    summary ? `${summary.average.toFixed(1)} from ${summary.count.toLocaleString()} reviews` : null,
+    threshold > 0 ? `Free delivery over ${formatGBP(threshold)}` : null,
+    'Secure checkout',
+  ].filter(Boolean) as string[]
+
   return (
-    <div className="px-5 pb-1 max-w-lg mx-auto">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-2.5 px-3.5 rounded-xl" style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}>
-        {summary && (
-          <TrustChip>
-            <Icon name="star" size={12} className="shrink-0" />
-            <span><span style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{summary.average.toFixed(1)}</span> from {summary.count.toLocaleString()} reviews</span>
-          </TrustChip>
-        )}
-        {threshold > 0 && (
-          <TrustChip>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M1 3h15v13H1zM16 8h4l3 3v5h-7z" /><circle cx="5.5" cy="18.5" r="2" /><circle cx="18.5" cy="18.5" r="2" /></svg>
-            <span>Free delivery over {formatGBP(threshold)}</span>
-          </TrustChip>
-        )}
-        <TrustChip>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-          <span>Secure checkout</span>
-        </TrustChip>
-      </div>
-    </div>
+    <p className="sf-meta" style={{ padding: '0 var(--space-4) var(--space-2)' }}>
+      {facts.join('  ·  ')}
+    </p>
   )
 }
 
@@ -133,6 +128,7 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
  * detail and the basket are bottom/side sheets.
  */
 export function ShopShell() {
+  const router = useRouter()
   const { products, isLoading: productsLoading } = useCatalogueProducts()
   const { bundles, isLoading: bundlesLoading } = useShopBundles()
   // Hold the skeleton until BOTH the catalogue and the bundles rail are ready, so
@@ -141,7 +137,6 @@ export function ShopShell() {
   const isLoading = productsLoading || bundlesLoading
   const { lines } = useBasket()
   const { state, checkout, reset } = useShopCheckout()
-  const [expanded, setExpanded] = useState<CatalogueProduct | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   /**
    * Everything narrowing the shop, in one object. Replaces the old
@@ -492,7 +487,13 @@ export function ShopShell() {
     setDrawerOpen(true)
   }, [])
   const closeDrawer = () => { setDrawerOpen(false); reset() }
-  const openProduct = (p: CatalogueProduct) => { track('product_open', { id: p.id, category: p.category }); setExpanded(p) }
+  /*
+   * Tracking only. The card is a link to `/product/[handle]` and the browser
+   * does the navigating — the bottom sheet this used to open is gone. A sheet
+   * cannot be linked to, shared, bookmarked, opened in a tab or indexed, and
+   * the back button does not mean what a shopper expects inside one.
+   */
+  const openProduct = (p: CatalogueProduct) => { track('product_open', { id: p.id, category: p.category }) }
 
   /**
    * A product opened from the result grid. The rank is the whole point: it is
@@ -572,6 +573,9 @@ export function ShopShell() {
     track('shop_search_select', { id: suggestion.product.id, rank, source: 'suggestion', ...(safe ? { q: safe } : {}) })
     setRecent(rememberSearch(searchInput))
     openProduct(suggestion.product)
+    /* A suggestion used to open the sheet. With the sheet gone it has to take
+       the shopper somewhere, and the somewhere is the product's own URL. */
+    router.push(`/product/${suggestion.product.handle}`)
   }
 
   /**
@@ -590,12 +594,6 @@ export function ShopShell() {
     handleQueryChange({ ...query, q })
   }
 
-  const handleBuyNow = () => {
-    setExpanded(null)
-    setDrawerOpen(true)
-    checkout(resolveBasket(useBasket.getState().lines, products), 'buy_now', appliedCode?.code ?? null)
-  }
-
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
   // are no deals). Kept content-agnostic so the hero never depends on load timing.
   const dealsPct = dealsSection ? maxDealPct(dealsSection.products) : 0
@@ -606,113 +604,79 @@ export function ShopShell() {
 
   return (
     /*
-      The shop on the lit ground.
-      
-      DESIGN.md says the storefront was never migrated onto the design system,
-      and this is the layer that absence was most visible in: the hubs sit on
-      three drifting blooms with a vignette and film grain, and the shop sat on
-      a flat `#09090b` rectangle. Everything above the ground depends on it —
-      a translucent card over a flat colour is just a lighter box, and large
-      dark gradients band visibly on an 8-bit phone screen without the grain to
-      break them up. It is the cheapest single change that stops the shelf
-      reading as a wireframe.
+      `.storefront` is the scope for the whole token set: the global transition,
+      the focus ring and the type roles are all defined under it, so nothing
+      here can reach the quiz or the hubs, which still run the glass system.
+
+      The lit ground came off. It is a good effect and the hubs keep it, but it
+      is a gradient and a glow, and the storefront now has neither.
     */
-    <Ground className="text-[var(--color-text)] pb-40">
+    <div className="storefront min-h-[100dvh]" style={{ background: 'var(--bg)', color: 'var(--text)', paddingBottom: 'var(--space-12)' }}>
       <ShopHeader count={count} onOpenBasket={openDrawer} />
 
       <main>
-      <div className="px-5 pt-2 pb-4 max-w-lg mx-auto">
-        <p className="label" style={{ color: 'var(--color-accent)' }}>
-          The Shop
-        </p>
-        <h1 className="font-black tracking-tight leading-[1.03] mt-1" style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-fluid-h1)' }}>
+      <div style={{ padding: 'var(--space-2) var(--space-4) var(--space-4)' }}>
+        <p className="sf-label">The Shop</p>
+        <h1 className="sf-display" style={{ color: 'var(--text)', marginTop: 'var(--space-2)' }}>
           Everything, à la carte
         </h1>
-        <p className="text-sm mt-2" style={{ color: 'var(--color-text-2)' }}>
+        <p className="sf-meta" style={{ marginTop: 'var(--space-2)' }}>
           Protein, performance, hydration and everyday health — the full CHRGD range, priced à la carte.
         </p>
 
         {/*
-          Two clear "start here" paths: the personalised quiz and the deals rail.
-          Both are answers to "what should I look at" — so they stand down once
-          someone has said what they are looking for, along with the trust strip
-          below, and the results start higher up the page.
+          Two ways in, as plain cards.
+
+          They were two accent-tinted panels with bolt glyphs in tinted circles,
+          a third accent-tinted "lever" underneath, an accent eyebrow above and
+          an accent trust strip below — six accent objects before a single
+          product. The screen's one primary is the basket bar; these are
+          navigation, so they are surfaces with text on them.
         */}
         {!searching && (
-        <div className="grid grid-cols-2 gap-2.5 mt-4">
-          <Link
-            href="/"
-            className="flex flex-col justify-between rounded-2xl px-4 py-3.5 min-h-[92px] active:scale-[0.99] transition-transform"
-            style={{ background: 'color-mix(in srgb, var(--color-accent) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 26%, transparent)' }}
-          >
-            <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }} aria-hidden>
-              <CHRGDBolt size={15} />
-            </span>
-            <span>
-              <span className="block text-sm font-black leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Take the 2-min quiz</span>
-              <span className="block text-[11px] mt-0.5" style={{ color: 'var(--color-text-2)' }}>A stack built around your goals</span>
-            </span>
-          </Link>
+          <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
+            <Link
+              href="/"
+              data-interactive
+              className="flex flex-col justify-between"
+              style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)', padding: 'var(--space-4)', minHeight: 88 }}
+            >
+              <span className="sf-body" style={{ color: 'var(--text)' }}>Take the 2-min quiz</span>
+              <span className="sf-meta">A stack built around your goals</span>
+            </Link>
 
-          <button
-            onClick={goToDeals}
-            className="flex flex-col justify-between text-left rounded-2xl px-4 py-3.5 min-h-[92px] active:scale-[0.99] transition-transform"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)' }}
-          >
-            <span className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' }} aria-hidden>
-              <CHRGDBolt size={15} color="var(--color-accent)" />
-            </span>
-            <span>
-              <span className="block text-sm font-black leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                {dealsSection ? "Today’s deals" : 'Browse the range'}
+            <button
+              onClick={goToDeals}
+              data-interactive
+              className="flex flex-col justify-between text-left"
+              style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)', border: 'none', padding: 'var(--space-4)', minHeight: 88 }}
+            >
+              <span className="sf-body" style={{ color: 'var(--text)' }}>
+                {dealsSection ? 'Today’s deals' : 'Browse the range'}
               </span>
-              <span className="block text-[11px] mt-0.5" style={{ color: dealsSection ? 'var(--color-accent)' : 'var(--color-text-2)' }}>
+              <span className="sf-meta">
                 {dealsSection ? `Save up to ${dealsPct}%` : 'Jump to the shelves'}
               </span>
-            </span>
-          </button>
-        </div>
+            </button>
+          </div>
         )}
 
         {/*
-          The third way in, and the only one that is a game. Under the two
-          serious paths rather than beside them: it is a lever, not an answer.
+          The roulette. Its lever — a gradient fill, an accent bloom underneath
+          and a band of light sweeping across every six seconds — is gone with
+          the rest of the glow; it is a ghost button now, because it is the
+          least important of the three ways in and it was the loudest.
         */}
         {!searching && (
-          <button
+          <Button
+            variant="ghost"
+            size="md"
+            fullWidth
             onClick={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
-            className="system-lever w-full mt-2.5 flex items-center gap-3 rounded-2xl px-4 py-3 text-left"
-            style={{
-              background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 13%, var(--color-surface)) 0%, var(--color-surface) 100%)',
-              border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
-            }}
+            className="justify-start"
           >
-            {/*
-              The three-window reel, at rest and riffling on press. A lever
-              should look like the machine it opens — the old control was a grey
-              row with an arrow on it, indistinguishable from a link, and
-              nothing about it suggested there was anything behind it worth
-              pulling.
-            */}
-            <span aria-hidden className="system-lever-reel flex-shrink-0 flex gap-[3px] rounded-md p-[3px]" style={{ background: 'color-mix(in srgb, var(--color-bg) 55%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 22%, transparent)' }}>
-              <i /><i /><i />
-            </span>
-
-            <span className="flex-1 min-w-0">
-              <span className="block text-[13px] font-black leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                Feeling lucky?
-              </span>
-              <span className="block text-[11px] leading-tight mt-0.5" style={{ color: 'var(--color-text-2)' }}>
-                Pull the lever for a flavour
-              </span>
-            </span>
-
-            <span className="system-lever-arrow flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', color: 'var(--color-accent)' }} aria-hidden>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M13 6l6 6-6 6" />
-              </svg>
-            </span>
-          </button>
+            Feeling lucky? Spin for a flavour
+          </Button>
         )}
       </div>
 
@@ -722,31 +686,37 @@ export function ShopShell() {
         <LoadingSkeleton />
       ) : (
         <>
-          <ShopCategoryNav
-            categories={searching ? [] : navCategories}
-            controls={
-              <>
-                <ShopSearchBar
-                  value={searchInput}
-                  onChange={setSearchInput}
-                  resultCount={results ? results.products.length : null}
-                  suggestions={suggestions}
-                  onSelect={handleSuggestion}
-                  onSubmit={rememberCurrentSearch}
-                  onClearRecent={() => setRecent(clearRecentSearches())}
-                />
-                <ShopFilterBar
-                  tags={availableDietary}
-                  query={query}
-                  onChange={applyQueryChange}
-                  onOpenFilters={() => setFiltersOpen(true)}
-                  onFacetApplied={handleFacetApplied}
-                  intentPhrases={results?.matchedPhrases ?? []}
-                  onDismissIntent={dismissIntent}
-                />
-              </>
-            }
-          />
+          {/*
+            Search and filters live in the page, not in the sticky bar.
+
+            They used to be passed into `ShopCategoryNav` as `controls`, which
+            stacked them directly above the category pills — two rows of chips,
+            same shape, same size, one narrowing the catalogue and one jumping
+            within it. Separating them by placement is what makes them legible
+            as different things: this scrolls away, the category row stays.
+          */}
+          <div style={{ padding: '0 var(--space-4) var(--space-4)' }}>
+            <ShopSearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              resultCount={results ? results.products.length : null}
+              suggestions={suggestions}
+              onSelect={handleSuggestion}
+              onSubmit={rememberCurrentSearch}
+              onClearRecent={() => setRecent(clearRecentSearches())}
+            />
+            <ShopFilterBar
+              tags={availableDietary}
+              query={query}
+              onChange={applyQueryChange}
+              onOpenFilters={() => setFiltersOpen(true)}
+              onFacetApplied={handleFacetApplied}
+              intentPhrases={results?.matchedPhrases ?? []}
+              onDismissIntent={dismissIntent}
+            />
+          </div>
+
+          <ShopCategoryNav categories={searching ? [] : navCategories} />
 
           {/*
             Two modes. Browsing is the page exactly as it has always been —
@@ -760,7 +730,7 @@ export function ShopShell() {
                 products={results.products}
                 query={query.q.trim()}
                 fuzzy={results.fuzzy}
-                onExpand={openFromResults}
+                onOpen={openFromResults}
               />
             ) : (
               <ShopNoResults
@@ -768,7 +738,7 @@ export function ShopShell() {
                 index={index}
                 query={query}
                 onQueryChange={handleQueryChange}
-                onExpand={openProduct}
+                onOpen={openProduct}
               />
             )
           ) : noResults ? (
@@ -777,7 +747,7 @@ export function ShopShell() {
               index={index}
               query={query}
               onQueryChange={handleQueryChange}
-              onExpand={openProduct}
+              onOpen={openProduct}
             />
           ) : (
             <div className="pb-4">
@@ -785,11 +755,13 @@ export function ShopShell() {
                 <ShopBundlesRow bundles={filteredBundles} products={products} />
               )}
               {dealsSection && (
+                /* The Deals shelf is an ordinary shelf. It used to take an
+                   accent heading and a "Save up to N%" subtitle; the heading
+                   already says Deals, and accent is now spent only on the one
+                   primary action per screen. */
                 <ShopSection
                   section={dealsSection}
-                  tone="deal"
-                  subtitle={`Save up to ${maxDealPct(dealsSection.products)}%`}
-                  onExpand={openProduct}
+                  onOpen={openProduct}
                   compareIds={compareSet}
                   onToggleCompare={toggleCompare}
                 />
@@ -798,7 +770,7 @@ export function ShopShell() {
                 <ShopSection
                   key={section.slug}
                   section={section}
-                  onExpand={openProduct}
+                  onOpen={openProduct}
                   compareIds={compareSet}
                   onToggleCompare={toggleCompare}
                 />
@@ -831,15 +803,16 @@ export function ShopShell() {
         />
       )}
 
-      {expanded && (
-        <ShopProductSheet product={expanded} onBuyNow={handleBuyNow} onClose={() => setExpanded(null)} />
-      )}
-
       {/* The bottom region: a duel being assembled, a suggestion, a basket — or
           any combination. It appears for a compare selection even with an empty
           basket, because picking two products is a task of its own. */}
       {!drawerOpen && (count > 0 || comparing.length > 0) && (
-        <div className="fixed inset-x-0 bottom-0 z-40 px-4 pb-[max(0.9rem,env(safe-area-inset-bottom))] pt-6 pointer-events-none" style={{ background: 'linear-gradient(to top, var(--color-bg) 55%, transparent)' }}>
+        /* No gradient scrim: an opaque bar is what divides two sections, and the
+           storefront has no gradients. */
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 pointer-events-none"
+          style={{ padding: 'var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom))' }}
+        >
           {/*
             While a duel is being assembled the compare bar takes the nudge's
             place. Compare is an active task and the nudge is a passive
@@ -864,15 +837,13 @@ export function ShopShell() {
             </div>
           )}
           {count > 0 && (
-          <button
-            onClick={openDrawer}
-            className="max-w-lg mx-auto w-full flex items-center gap-3 rounded-2xl pl-4 pr-3 py-3 pointer-events-auto active:scale-[0.99] transition-transform"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', boxShadow: '0 10px 34px -10px rgba(0,0,0,0.7)' }}
-          >
-            <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0" style={{ background: 'var(--color-bg)', color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>{count}</span>
-            <span className="flex-1 text-left text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>View basket</span>
-            <span className="text-sm font-black tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>{formatGBP(subtotal)} →</span>
-          </button>
+            /* The shelf's one primary action. */
+            <div className="pointer-events-auto" style={{ background: 'var(--bg)', borderRadius: 'var(--r-control)' }}>
+              <Button variant="primary" size="lg" fullWidth onClick={openDrawer} aria-label={`View basket, ${count} item${count !== 1 ? 's' : ''}, ${formatGBP(subtotal)}`}>
+                <span className="flex-1 text-left">View basket</span>
+                <span className="sf-num">{formatGBP(subtotal)}</span>
+              </Button>
+            </div>
           )}
         </div>
       )}
@@ -899,6 +870,6 @@ export function ShopShell() {
           onClose={closeDrawer}
         />
       )}
-    </Ground>
+    </div>
   )
 }

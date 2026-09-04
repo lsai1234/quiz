@@ -5,6 +5,10 @@
    migrated. See DESIGN.md. */
 @import "./tokens.css";
 @import "./system.css";
+/* The storefront token set. Scoped to the shop, product, bundles and checkout
+   surfaces; see its header for why it lives alongside tokens.css rather than
+   replacing it. */
+@import "./storefront.css";
 
 @theme inline {
   --color-bg: #09090b;

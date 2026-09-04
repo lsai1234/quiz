@@ -1,0 +1,302 @@
+/**
+ * The storefront token set.
+ *
+ * One file. Every colour, size, weight, space and radius the shop, the product
+ * route, the bundles pages and checkout are allowed to use. Components consume
+ * it through `var()` and define nothing of their own.
+ *
+ * ── Why this is a second file and not a replacement for tokens.css ──────────
+ * `tokens.css` is the migrated design system and the three hubs are built on
+ * it — glass, specular highlights, three surface elevations, a lit ground. Its
+ * values are held by `tokens.test.ts`. This refactor is scoped to the
+ * storefront, so deleting that file would take the hubs with it.
+ *
+ * The two therefore run side by side, on deliberately non-colliding names:
+ * everything here is a short root name (`--bg`, `--surface`, `--text`), the hub
+ * system uses roles (`--ink-1`, `--surface-1`, `--edge`). The one overlap is
+ * `--space-*`, which is redefined here to exactly the values tokens.css already
+ * has — a no-op, kept so this file reads as the complete scale it is.
+ *
+ * If the storefront look is adopted for the quiz and the hubs, this file
+ * becomes the token set and `tokens.css` goes. Until then, two languages, and
+ * this comment is the record of which is which.
+ *
+ * ── Why no utilities are generated ─────────────────────────────────────────
+ * Plain `:root`, not `@theme`. Tailwind v4 turns `@theme` entries into
+ * utilities and its namespaces would collide — `--text-*` would redefine
+ * `text-sm`, `--font-*` would redefine `font-sans`. Custom properties can't
+ * collide with anything.
+ */
+
+:root {
+  /* ══ Colour ═══════════════════════════════════════════════════════════════
+     Nine values. There is no tenth.
+
+     Category and status are carried by position and copy, not hue: a chip that
+     says "Protein" under a heading that says "Protein" does not also need to be
+     violet, and twelve category colours is twelve colours nobody can name.
+
+     Measured against WCAG AA on every ground they are used on. The tightest
+     pair is `--danger` on `--surface` at 4.63:1; `--text-dim` on `--surface-hi`,
+     the smallest text in the app, is 5.14:1. */
+  --bg: #0A0B0D;
+  --surface: #141619;
+  --surface-hi: #1C1F24;
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #F2F3F5;
+  --text-dim: #8A9099;
+  --accent: #00C8F0;
+  --accent-ink: #04252E;
+  --danger: #E5484D;
+
+  /* ══ Type ═════════════════════════════════════════════════════════════════
+     Five roles. Two weights.
+
+     The storefront had twenty-four distinct font sizes (fifteen of them
+     arbitrary px values including 9.5, 10.5, 11.5, 12.5 and 13.5) and four
+     hundred weight declarations of which three hundred and eighty were 600 or
+     heavier. Everything was bold, so nothing was.
+
+     400 and 500 only. `font-weight: 600` and above do not exist in the
+     storefront; emphasis is carried by size, colour and position. */
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+
+  --display-size: 32px;
+  --display-tracking: -0.02em;
+  --display-leading: 1.15;
+
+  --title-size: 20px;
+  --title-tracking: -0.01em;
+  --title-leading: 1.25;
+
+  --body-size: 15px;
+  --body-leading: 1.55;
+
+  --meta-size: 13px;
+
+  --label-size: 11px;
+  --label-tracking: 0.08em;
+
+  /* ══ Space ════════════════════════════════════════════════════════════════
+     A 4px scale, and only these eight steps. The storefront was using
+     twenty-two, including 2px, 6px, 10px and 14px half-steps that existed
+     because a number looked slightly better once. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* ══ Radius ═══════════════════════════════════════════════════════════════
+     Three. Controls are never pills — a pill-shaped button reads as a tag, and
+     the storefront had 129 `rounded-full` elements of which most were buttons. */
+  --r-control: 8px;
+  --r-card: 16px;
+  --r-pill: 999px;
+
+  /* ══ Motion ═══════════════════════════════════════════════════════════════
+     One duration, one curve. Applied to the four properties that actually
+     change on interaction — see the global rule below. */
+  --t-fast: 150ms;
+  --t-ease: ease-out;
+}
+
+/* ── Type roles ───────────────────────────────────────────────────────────────
+   Classes rather than more tokens, for the reason the eyebrow was a class: a
+   token can be picked wrongly and a class cannot. Colour is set by `.sf-meta`
+   and `.sf-label` because it is part of what those roles MEAN; the other three
+   inherit, so a title can be dimmed without inventing a variant. */
+
+.sf-display {
+  font-family: var(--font-sans);
+  font-size: var(--display-size);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--display-tracking);
+  line-height: var(--display-leading);
+}
+
+.sf-title {
+  font-family: var(--font-sans);
+  font-size: var(--title-size);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--title-tracking);
+  line-height: var(--title-leading);
+}
+
+.sf-body {
+  font-family: var(--font-sans);
+  font-size: var(--body-size);
+  font-weight: var(--weight-regular);
+  line-height: var(--body-leading);
+}
+
+.sf-meta {
+  font-family: var(--font-sans);
+  font-size: var(--meta-size);
+  font-weight: var(--weight-regular);
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.sf-label {
+  font-family: var(--font-sans);
+  font-size: var(--label-size);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--label-tracking);
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+/* ── Numerals ─────────────────────────────────────────────────────────────────
+   Every price, stock count and quantity. Mono for the figure itself and
+   `tabular-nums` so the advance width is fixed: a column of prices lines up on
+   the decimal, and a total that updates does not jitter as its digits change. */
+.sf-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ── Clamp ────────────────────────────────────────────────────────────────────
+   Two lines, then an ellipsis, done by the line box rather than by counting
+   characters. */
+.sf-clamp-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────────
+   One global rule for everything that responds to a pointer. Scoped to
+   `.storefront` so it cannot reach the hubs, which have their own spring
+   easing and longer durations.
+
+   Only the four properties that actually change on interaction. `transition:
+   all` also animates layout properties, so a control that reflows animates its
+   own reflow — which is the cheapest way to make a fast interface feel slow. */
+.storefront a,
+.storefront button,
+.storefront input,
+.storefront select,
+.storefront textarea,
+.storefront [role='button'],
+.storefront [data-interactive] {
+  transition:
+    background-color var(--t-fast) var(--t-ease),
+    border-color var(--t-fast) var(--t-ease),
+    opacity var(--t-fast) var(--t-ease),
+    transform var(--t-fast) var(--t-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .storefront a,
+  .storefront button,
+  .storefront input,
+  .storefront select,
+  .storefront textarea,
+  .storefront [role='button'],
+  .storefront [data-interactive] {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* ── Focus ────────────────────────────────────────────────────────────────────
+   A 2px accent ring on every focusable thing in the storefront, offset so it
+   reads against a fill. `:focus-visible`, so it appears for a keyboard and not
+   for a tap. */
+.storefront :focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-control);
+}
+
+/* ── Scrolling chip rows ──────────────────────────────────────────────────────
+   A horizontal row of chips wider than the viewport cuts off at a hard vertical
+   edge, which reads as a rendering fault rather than as "there is more". The
+   mask fades the last 24px out, and the scroll padding stops the final chip
+   sitting flush against the edge when the row is scrolled to its end. */
+.sf-scroll-row {
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: var(--space-4);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent 100%);
+}
+
+.sf-scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Button states ────────────────────────────────────────────────────────────
+   The fills come from the component (it knows which variant it is); the states
+   live here because an inline style cannot express `:hover` or `:disabled`.
+   Hover is behind `@media (hover: hover)` — an unguarded `:hover` on a touch
+   device sticks after the tap and leaves the last thing pressed looking
+   permanently active. */
+.sf-button {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .sf-button:hover:not(:disabled) {
+    background: var(--sf-hover);
+  }
+}
+
+.sf-button:active:not(:disabled) {
+  background: var(--sf-active);
+  transform: scale(0.98);
+}
+
+.sf-button:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sf-spinner {
+  animation: sf-spin 700ms linear infinite;
+}
+
+@keyframes sf-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The ring still has to say "working", so it steps rather than sweeps —
+     motion, but not a spin. */
+  .sf-spinner { animation-duration: 2.4s; animation-timing-function: steps(8); }
+  .sf-button:active:not(:disabled) { transform: none; }
+}
+
+/* ── Chip states ─────────────────────────────────────────────────────────────*/
+.sf-chip {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .sf-chip[aria-pressed='false']:hover {
+    background: color-mix(in srgb, var(--surface-hi) 82%, #fff);
+    color: var(--text);
+  }
+}
+
+.sf-chip:active { transform: scale(0.98); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-chip:active { transform: none; }
+}

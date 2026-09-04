@@ -16,7 +16,7 @@ interface Props {
   index: SearchIndex
   query: ShopQuery
   onQueryChange: (query: ShopQuery) => void
-  onExpand: (product: CatalogueProduct) => void
+  onOpen: (product: CatalogueProduct) => void
 }
 
 /**
@@ -31,7 +31,7 @@ interface Props {
  *   3. The nearest products anyway, ignoring the filters entirely. A dead end
  *      with nothing on it is the one outcome guaranteed to end the visit.
  */
-export function ShopNoResults({ products, index, query, onQueryChange, onExpand }: Props) {
+export function ShopNoResults({ products, index, query, onQueryChange, onOpen }: Props) {
   const suggestion = useMemo(
     () => (query.q.trim() ? suggestTerm(index, query.q) : null),
     [index, query.q],
@@ -124,7 +124,7 @@ export function ShopNoResults({ products, index, query, onQueryChange, onExpand 
               <div key={product.id} data-card>
                 <ShopProductCard
                   product={product}
-                  onExpand={onExpand}
+                  onOpen={onOpen}
                 />
               </div>
             ))}

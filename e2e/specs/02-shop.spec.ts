@@ -142,10 +142,10 @@ test.describe('the shop', () => {
     await expect(first).toContainText(/creatine/i)
     await first.click()
 
-    // A product suggestion goes straight to its sheet — routing the common case
-    // through a one-row results grid would just add a step.
-    const sheet = page.locator('div.fixed.inset-0.z-50').last()
-    await expect(sheet.getByRole('button', { name: 'Add to basket' })).toBeVisible({ timeout: 10_000 })
+    // A product suggestion goes straight to that product's page — routing the
+    // common case through a one-row results grid would just add a step.
+    await page.waitForURL(/\/product\//, { timeout: 30_000 })
+    await expect(page.getByRole('button', { name: 'Add to basket' })).toBeVisible({ timeout: 15_000 })
   })
 
   test('the keyboard drives the suggestion list', async ({ page }) => {
@@ -162,8 +162,8 @@ test.describe('the shop', () => {
     await expect(page.locator(`[id="${active}"]`)).toHaveAttribute('aria-selected', 'true')
 
     await box.press('Enter')
-    const sheet = page.locator('div.fixed.inset-0.z-50').last()
-    await expect(sheet.getByRole('button', { name: 'Add to basket' })).toBeVisible({ timeout: 10_000 })
+    await page.waitForURL(/\/product\//, { timeout: 30_000 })
+    await expect(page.getByRole('button', { name: 'Add to basket' })).toBeVisible({ timeout: 15_000 })
   })
 
   test('a shelf suggestion becomes a filter you can see and undo', async ({ page }) => {
@@ -398,7 +398,7 @@ test.describe('the shop', () => {
     await expect.poll(async () => cards.count(), { timeout: 10_000 }).toBeLessThan(before)
   })
 
-  test('a product sheet opens and adds to the basket', async ({ page }) => {
+  test('a product page opens and adds to the basket', async ({ page }) => {
     await openShop(page)
     expect(await basketCount(page)).toBe(0)
     await addProductToBasket(page, 'CHRGD Creatine Monohydrate')
@@ -424,11 +424,11 @@ test.describe('the shop', () => {
     expect(report('the basket drawer', findings), report('the basket drawer', findings)).toBe('')
   })
 
-  test('a product sheet renders cleanly', async ({ page }) => {
+  test('a product page renders cleanly', async ({ page }) => {
     await openShop(page)
     await openProductSheet(page, 'CHRGD Creatine Monohydrate')
     const findings = await inspect(page)
-    expect(report('the product sheet', findings), report('the product sheet', findings)).toBe('')
+    expect(report('the product page', findings), report('the product page', findings)).toBe('')
   })
 })
 
