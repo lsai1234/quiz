@@ -69,8 +69,8 @@ export function ShopSearchSuggestions({ id, suggestions, activeId, onSelect, onH
     >
       {(showingRecent || showingExamples) && (
         <p
-          className="px-3.5 pt-2.5 pb-1 text-[9px] font-bold tracking-[0.18em] uppercase"
-          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+          className="px-3.5 pt-2.5 pb-1 label"
+          style={{ color: 'var(--color-muted)' }}
         >
           {showingRecent ? 'Recent' : 'Try a sentence'}
         </p>

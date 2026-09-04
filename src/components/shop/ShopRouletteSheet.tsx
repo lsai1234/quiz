@@ -158,7 +158,7 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
 
               {/* Only ever the real price of the variant it landed on. */}
               {entry && (
-                <p className="text-sm font-bold mt-2" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                <p className="text-sm font-bold mt-2 tabular-nums" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
                   {formatGBP(entry.variant.price)}
                   {deal.onDeal && (
                     <span className="ml-2" style={{ color: 'var(--color-accent)' }}>−{deal.pct}%</span>

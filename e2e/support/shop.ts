@@ -27,9 +27,14 @@ export async function openShop(page: Page): Promise<void> {
 export async function openProductSheet(page: Page, productName: string) {
   const card = page.locator('[data-card]').filter({ hasText: productName }).first()
   await card.scrollIntoViewIfNeeded()
-  await card.getByRole('button').first().click()
-  /* Every card carries its own quick-add button, so "Add to basket" matches ~69
-     elements on this page and has to be scoped to the sheet.
+  /* The card body is a link to `/product/<handle>` that opens the quick view
+     instead when clicked plainly — see `ShopProductCard`. The buttons on a card
+     are now Add and Compare, so this has to target the link. */
+  await card.getByRole('link').first().click()
+  /* Cards carry their own quick-add button, so an add control has to be scoped
+     to the sheet. (The card's button is labelled "Add"; the sheet's is "Add to
+     basket" — but the aria-label on the card names the product, so an exact
+     name match would still be ambiguous without the scope.)
      NOTE: the sheet is a bare `fixed inset-0` div — it carries no `role="dialog"`
      and no accessible name, unlike `@/components/ui/Sheet`, so there is no role
      to select it by. Reported in docs/E2E_AUTOMATED_PLAN.md; swap this for

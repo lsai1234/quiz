@@ -48,7 +48,7 @@ export function ShopStackRadar({ resolved, products, onBrowseSlot }: Props) {
 
   return (
     <section aria-label="What this basket covers">
-      <h3 className="text-[10px] font-bold tracking-[0.18em] uppercase mb-2" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
+      <h3 className="label mb-2" style={{ color: 'var(--color-muted)' }}>
         This basket covers
       </h3>
 

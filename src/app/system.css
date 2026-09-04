@@ -572,3 +572,72 @@
     display: none;
   }
 }
+
+/* ── Typography roles ─────────────────────────────────────────────────────────
+   Four classes and two modifiers, so a screen has one answer to "how big is
+   this". They read the size/weight/tracking roles from tokens.css and set no
+   colour of their own — colour is the component's decision, and the two palettes
+   (`--color-*` on the shop and hubs, `--ink-*` on the migrated primitives) must
+   both be able to use these.
+
+   Why classes and not more tokens: the shop had seventeen spellings of the same
+   uppercase eyebrow — 8, 9, 10 and 11px against `tracking-wide`, `-widest`,
+   `[0.18em]` and `[0.25em]` — because a token can be picked wrongly and a class
+   cannot. `.label` is the eyebrow. There is no second one. */
+
+.type-display {
+  font-family: var(--font-display);
+  font-size: var(--text-display);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-tight);
+}
+
+.type-title {
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-title);
+  line-height: var(--leading-tight);
+}
+
+/* The default. Body copy is 400-adjacent by intent — `--weight-body` is 500,
+   which is where this face reads as regular at 14px on a dark ground; 400 goes
+   thin enough to lose the second ink tier. */
+.type-body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: var(--weight-body);
+  line-height: var(--leading-snug);
+}
+
+.type-meta {
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-body);
+  line-height: var(--leading-snug);
+}
+
+/* The one uppercase class. Everything else in the app is sentence case. */
+.label {
+  font-family: var(--font-display);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-strong);
+  letter-spacing: var(--tracking-eyebrow);
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+/* ── Numerals ─────────────────────────────────────────────────────────────────
+   Prices, counts and stock figures use Tailwind's `tabular-nums`, which this
+   codebase already reaches for in the hub, the receipts and the quiz. There is
+   deliberately no `.numeric` class alongside it: a second spelling of one
+   intention is the thing this section exists to stop.
+
+   And no mono face. The obvious way to make a column of prices line up is to
+   set them in a monospace, but this app ships two families already and a third
+   for digits alone is a webfont's worth of weight to buy something
+   `font-variant-numeric` gives for nothing. Fixing the advance width is the part
+   that actually matters — it is what stops a column of prices wandering off the
+   decimal and a live total jittering as it updates — and both Inter and Space
+   Grotesk carry the feature, so it works on the type already loaded. */

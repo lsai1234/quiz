@@ -36,7 +36,7 @@ export function ShopBundleCard({ view, products }: Props) {
       <div className="p-4 pb-3">
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
           <span
-            className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
+            className="inline-block px-2 py-0.5 rounded-full label"
             style={{
               color: 'var(--color-accent)',
               background: 'color-mix(in srgb, var(--color-accent) 14%, transparent)',
@@ -47,7 +47,7 @@ export function ShopBundleCard({ view, products }: Props) {
             Bundle
           </span>
           <span
-            className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
+            className="inline-block px-2 py-0.5 rounded-full label"
             style={{
               color: 'var(--color-muted)',
               border: '1px solid var(--color-border-2)',
@@ -60,7 +60,7 @@ export function ShopBundleCard({ view, products }: Props) {
         <p className="text-lg font-black leading-tight tracking-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
           {bundle.name}
         </p>
-        <p className="text-[11px] font-bold tracking-wide uppercase mt-1" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+        <p className="label mt-1" style={{ color: 'var(--color-accent)' }}>
           {bundle.tagline}
         </p>
       </div>
@@ -95,11 +95,11 @@ export function ShopBundleCard({ view, products }: Props) {
           <div className="min-w-0">
             <div className="flex items-baseline gap-1.5">
               {price.saving > 0 && (
-                <span className="text-[11px] line-through" style={{ color: 'var(--color-muted)' }}>
+                <span className="text-[11px] line-through tabular-nums" style={{ color: 'var(--color-muted)' }}>
                   {formatGBP(price.sumOfParts)}
                 </span>
               )}
-              <span className="text-xl font-black" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+              <span className="text-xl font-black tabular-nums" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
                 {formatGBP(price.price)}
               </span>
             </div>
@@ -110,8 +110,8 @@ export function ShopBundleCard({ view, products }: Props) {
             )}
           </div>
           <span
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[9px] font-bold tracking-widest uppercase flex-shrink-0"
-            style={{ color: 'var(--color-text-2)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)', fontFamily: 'var(--font-display)' }}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full label flex-shrink-0"
+            style={{ color: 'var(--color-text-2)', background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)' }}
           >
             + Workout
           </span>

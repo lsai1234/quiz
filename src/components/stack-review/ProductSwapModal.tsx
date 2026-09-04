@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { IconButton } from '@/components/ui/IconButton'
 import type { StackSlotEntry } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { productImageSrc, productImageSrcSet } from '@/lib/images/product-image'
 
 interface Props {
   slot: StackSlotEntry
@@ -128,9 +129,16 @@ export function ProductSwapModal({ slot, currentProduct, alternatives, onSelect,
                   <div className="flex gap-3 items-start">
                     {/* Image */}
                     <div className="w-16 h-16 rounded-xl flex-shrink-0 overflow-hidden bg-[var(--color-surface)] border border-[var(--color-border)] flex items-center justify-center">
-                      {alt.imageUrl ? (
+                      {productImageSrc(alt.imageUrl, 64) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={alt.imageUrl} alt={alt.title} className="w-full h-full object-cover" loading="lazy" />
+                        <img
+                          src={productImageSrc(alt.imageUrl, 64)!}
+                          srcSet={productImageSrcSet(alt.imageUrl, 64) ?? undefined}
+                          alt={alt.title}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
+                        />
                       ) : (
                         <span className="text-xl font-black opacity-40" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
                           {slot.title.charAt(0)}

@@ -124,8 +124,6 @@ export function ShopNoResults({ products, index, query, onQueryChange, onExpand 
               <div key={product.id} data-card>
                 <ShopProductCard
                   product={product}
-                  axes={axes}
-                  animate={false}
                   onExpand={onExpand}
                 />
               </div>

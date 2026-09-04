@@ -2,7 +2,7 @@
 export function StockChip({ count, className = '' }: { count: number; className?: string }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase whitespace-nowrap ${className}`}
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full label whitespace-nowrap ${className}`}
       style={{
         color: 'var(--color-amber)',
         background: 'color-mix(in srgb, var(--color-amber) 13%, transparent)',

@@ -84,47 +84,28 @@ export function ShopSection({ section, onExpand, tone = 'default', subtitle, com
         </span>
       </div>
 
-      <div className="relative group">
-        <div
-          ref={deckRef}
-          className="flex gap-3 overflow-x-auto px-5 pb-1 snap-x snap-mandatory scrollbar-hide"
-          style={{ WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}
-        >
-          {section.products.map((product) => (
-            <div key={product.id} data-card className="snap-center flex-shrink-0 w-[80vw] max-w-[300px]">
-              <ShopProductCard
-                product={product}
-                axes={axes}
-                animate={!reduced}
-                onExpand={onExpand}
-                compareSelected={compareIds?.has(product.id)}
-                onToggleCompare={onToggleCompare}
-              />
-            </div>
-          ))}
-        </div>
+      {/*
+        A grid, not a deck.
 
-        {/* Desktop scroll arrows — only where there's more than one card */}
-        {section.products.length > 1 && (
-          <>
-            <button
-              onClick={() => scrollBy(-1)}
-              aria-label={`Scroll ${section.category} left`}
-              className="hidden md:flex absolute left-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"
-              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)', boxShadow: '0 6px 18px -8px rgba(0,0,0,0.6)' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text)' }}><path d="M15 18l-6-6 6-6" /></svg>
-            </button>
-            <button
-              onClick={() => scrollBy(1)}
-              aria-label={`Scroll ${section.category} right`}
-              className="hidden md:flex absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity active:scale-90"
-              style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)', boxShadow: '0 6px 18px -8px rgba(0,0,0,0.6)' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text)' }}><path d="M9 18l6-6-6-6" /></svg>
-            </button>
-          </>
-        )}
+        These were horizontally scrolling carousels: one card and a sliver
+        visible at a time, the rest of the category behind a gesture nobody
+        makes, and the products past position three effectively unmerchandised.
+        Two columns show six products in the same vertical space and make the
+        section scannable, which is what a category page is for. The cards got
+        short enough to make this work when they stopped carrying five claims
+        each — see `ShopProductCard`.
+      */}
+      <div className="px-5 max-w-lg mx-auto grid grid-cols-2 gap-3">
+        {section.products.map((product) => (
+          <div key={product.id} data-card>
+            <ShopProductCard
+              product={product}
+              onExpand={onExpand}
+              compareSelected={compareIds?.has(product.id)}
+              onToggleCompare={onToggleCompare}
+            />
+          </div>
+        ))}
       </div>
     </section>
   )

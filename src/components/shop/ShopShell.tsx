@@ -475,6 +475,21 @@ export function ShopShell() {
   }, [])
 
   const openDrawer = () => { reset(); track('basket_open', { items: count }); setDrawerOpen(true) }
+
+  /*
+   * `/shop#basket` opens the drawer.
+   *
+   * The basket lives in this shell, so a product page — which has no shell —
+   * cannot open it directly. Rather than give that page a second, thinner
+   * basket, its header links here and the hash says what to do on arrival. The
+   * hash is then cleared so a refresh or a back-navigation does not re-open a
+   * drawer the shopper already closed.
+   */
+  useEffect(() => {
+    if (window.location.hash !== '#basket') return
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    setDrawerOpen(true)
+  }, [])
   const closeDrawer = () => { setDrawerOpen(false); reset() }
   const openProduct = (p: CatalogueProduct) => { track('product_open', { id: p.id, category: p.category }); setExpanded(p) }
 
@@ -594,7 +609,7 @@ export function ShopShell() {
 
       <main>
       <div className="px-5 pt-2 pb-4 max-w-lg mx-auto">
-        <p className="text-[10px] font-bold tracking-[0.25em] uppercase" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+        <p className="label" style={{ color: 'var(--color-accent)' }}>
           The Shop
         </p>
         <h1 className="font-black tracking-tight leading-[1.03] mt-1" style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-fluid-h1)' }}>
@@ -822,7 +837,7 @@ export function ShopShell() {
           >
             <span className="w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black flex-shrink-0" style={{ background: 'var(--color-bg)', color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>{count}</span>
             <span className="flex-1 text-left text-sm font-bold" style={{ fontFamily: 'var(--font-display)' }}>View basket</span>
-            <span className="text-sm font-black" style={{ fontFamily: 'var(--font-display)' }}>{formatGBP(subtotal)} →</span>
+            <span className="text-sm font-black tabular-nums" style={{ fontFamily: 'var(--font-display)' }}>{formatGBP(subtotal)} →</span>
           </button>
           )}
         </div>

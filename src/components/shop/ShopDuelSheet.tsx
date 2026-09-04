@@ -173,8 +173,8 @@ function Row({ row }: { row: DuelRow }) {
     <tr style={{ borderTop: '1px solid var(--color-border)' }}>
       <th
         scope="row"
-        className="text-left align-top py-2.5 pr-2 text-[10px] font-bold tracking-wide uppercase w-[5.5rem]"
-        style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+        className="text-left align-top py-2.5 pr-2 label w-[5.5rem]"
+        style={{ color: 'var(--color-muted)' }}
       >
         {row.label}
       </th>

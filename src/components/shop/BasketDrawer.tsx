@@ -186,7 +186,7 @@ export function BasketDrawer({
                         <span className="w-6 text-center text-xs font-bold" style={{ fontFamily: 'var(--font-display)' }}>{l.quantity}</span>
                         <button onClick={() => setQty(l.product.id, l.variant.id, Math.min(MAX_LINE_QTY, l.quantity + 1))} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--color-text-2)' }} aria-label="Increase">+</button>
                       </div>
-                      <span className="text-sm font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(l.lineTotal)}</span>
+                      <span className="text-sm font-black tabular-nums" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(l.lineTotal)}</span>
                     </div>
                   </div>
                 </div>
@@ -294,7 +294,7 @@ export function BasketDrawer({
                 <>
                   <div className="flex items-center justify-between">
                     <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>Subtotal</span>
-                    <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
+                    <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     {/* A founder code has no tier and no rate — it replaces the
@@ -305,7 +305,7 @@ export function BasketDrawer({
                         ? appliedCode?.founderLabel ?? 'Founder code'
                         : `${priced.tierLabel ?? 'Bundle discount'} · ${Math.round(priced.tierPct * 100)}% off`}
                     </span>
-                    <span className="text-sm font-bold" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
+                    <span className="text-sm font-bold tabular-nums" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
                   </div>
                 </>
               )}
@@ -313,7 +313,7 @@ export function BasketDrawer({
                 <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>
                   {priced.discount > 0.01 ? 'Total' : 'Subtotal'}
                 </span>
-                <span className="text-xl font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(priced.total)}</span>
+                <span className="text-xl font-black tabular-nums" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(priced.total)}</span>
               </div>
 
               {checkoutState.status === 'error' && (

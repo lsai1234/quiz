@@ -62,8 +62,6 @@ export function ShopResultsGrid({ products, query, fuzzy, onExpand }: Props) {
           <div key={product.id} data-card>
             <ShopProductCard
               product={product}
-              axes={axes}
-              animate={false}
               onExpand={() => onExpand(product, i)}
             />
           </div>

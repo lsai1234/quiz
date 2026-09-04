@@ -1,26 +1,24 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import { productBars, type StatAxis } from '@/lib/stack-stats'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { dealInfo, productBadge, variantStock } from '@/lib/shop/merchandising'
+import { dealInfo } from '@/lib/shop/merchandising'
 import { categoryHue } from '@/lib/shop/category-visuals'
 import { useBasket } from '@/lib/basket/store'
 import { hasRating } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { StatBars } from '@/components/stack-review/StatBars'
 import { StarRating } from './StarRating'
-import { StockChip } from './StockChip'
 
 interface Props {
   product: CatalogueProduct
-  /** Shared section axes so cards in a category compare like top-trumps. */
-  axes: StatAxis[]
-  /** Play the bar sweep (deck deal-in). */
-  animate?: boolean
-  /** Open the detail sheet (wired in S4). */
+  /**
+   * Open the quick-view sheet. When given, the card's link is intercepted and
+   * the sheet opens instead — the browse gesture. The href is still real, so
+   * cmd-click, middle-click, "copy link" and a crawler all reach the page.
+   */
   onExpand?: (product: CatalogueProduct) => void
   /**
    * Compare state. Absent means the card shows no compare affordance at all —
@@ -31,7 +29,38 @@ interface Props {
   onToggleCompare?: (product: CatalogueProduct) => void
 }
 
-export function ShopProductCard({ product, axes, animate = true, onExpand, compareSelected, onToggleCompare }: Props) {
+/**
+ * A product on the shelf: the photo, the name, the price.
+ *
+ * ── What this card used to carry, and why it doesn't ─────────────────────────
+ * A merchandising badge, a low-stock chip, a one-line reason, four animated
+ * "best for" bars and a discount pill over the image — five competing claims per
+ * card, twenty-odd cards a screen. Every one of them was defensible on its own
+ * and together they made the shelf unreadable: the eye had nowhere to rest, and
+ * the three things a shopper is actually choosing between were the smallest
+ * elements on the card.
+ *
+ * So the card answers three questions and stops. What is it (photo, name), what
+ * does it cost (price, and the struck RRP when it is down), and can I have it
+ * (Add). The bars, the facts, the stock count and the variants all still exist —
+ * one tap away, in the sheet and on the product page, where there is room to
+ * read them.
+ *
+ * Two things survived the cull and it is worth saying why. The category chip is
+ * a classification, not a claim, and search results are mixed-category — without
+ * it a grid of twelve tubs has no structure. The price it is REDUCED FROM is a
+ * fact about the price and belongs next to it; the `-25%` pill that used to sit
+ * over the photo was the same fact said twice, so that one went.
+ *
+ * ── Why the Add button stayed ────────────────────────────────────────────────
+ * A card that is nothing but a link is the cleaner object, and on a desktop
+ * catalogue it would be right. This shop is a phone shop whose basket, bundle
+ * nudges and free-delivery line are all built around adding from the shelf, and
+ * routing every add through a sheet adds a tap to the only action that matters.
+ * It is one button, in its own row, below a divider — it does not compete with
+ * the photo. The trade is noted rather than hidden.
+ */
+export function ShopProductCard({ product, onExpand, compareSelected, onToggleCompare }: Props) {
   const add = useBasket((s) => s.add)
   const [justAdded, setJustAdded] = useState(false)
   const [reduced, setReduced] = useState(false)
@@ -45,11 +74,8 @@ export function ShopProductCard({ product, axes, animate = true, onExpand, compa
   // Colour-coded by category, so every card in a section carries the same chip.
   const hue = categoryHue(product.category)
   const variant = product.variants.find((v) => v.available) ?? product.variants[0]
-  const { price, rrp, onDeal, pct: discountPct } = dealInfo(product)
-  const badge = productBadge(product)
+  const { price, rrp, onDeal } = dealInfo(product)
   const soldOut = !variant?.available
-  const stock = variant ? variantStock(variant) : { count: null, low: false }
-  const bars = productBars(product, axes)
 
   const handleAdd = () => {
     if (!variant || soldOut) return
@@ -66,91 +92,64 @@ export function ShopProductCard({ product, axes, animate = true, onExpand, compa
       className="relative flex flex-col rounded-2xl overflow-hidden h-full"
       style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
     >
-      {/* Expandable body */}
-      <button
-        onClick={() => onExpand?.(product)}
-        className="flex flex-col text-left active:opacity-90 transition-opacity"
+      <Link
+        href={`/product/${product.handle}`}
+        onClick={(e) => {
+          if (!onExpand) return
+          // Leave the modified clicks alone — those are the ones asking for the
+          // URL rather than the quick view.
+          if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return
+          e.preventDefault()
+          onExpand(product)
+        }}
+        className="flex flex-col flex-1 active:opacity-90 transition-opacity"
       >
-        <div className="p-4 pb-3 flex items-center gap-3">
-          <div className="relative">
-            <ProductTile imageUrl={product.imageUrl} slot={product.stackSlots[0]} title={product.title} size={56} />
-            {onDeal && (
-              <span
-                className="absolute -top-1.5 -left-1.5 px-1.5 py-0.5 rounded-full text-[9px] font-black"
-                style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-              >
-                -{discountPct}%
-              </span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className={`flex flex-wrap items-center gap-1.5 mb-1 ${onToggleCompare ? 'pr-7' : ''}`}>
-              <span
-                className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
-                style={{
-                  color: hue,
-                  background: `color-mix(in srgb, ${hue} 12%, transparent)`,
-                  border: `1px solid color-mix(in srgb, ${hue} 24%, transparent)`,
-                  fontFamily: 'var(--font-display)',
-                }}
-              >
-                {product.category}
-              </span>
-              {stock.low && stock.count != null && <StockChip count={stock.count} />}
-              {badge && (
-                <span
-                  className="inline-block px-2 py-0.5 rounded-full text-[8px] font-bold tracking-widest uppercase"
-                  style={{
-                    color: 'var(--color-accent)',
-                    background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
-                    border: '1px solid color-mix(in srgb, var(--color-accent) 24%, transparent)',
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  {badge}
-                </span>
-              )}
-            </div>
-            <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-              {product.title}
-            </p>
-            {hasRating(product.rating) && <StarRating rating={product.rating} size={11} className="mt-1.5" />}
-          </div>
-        </div>
-
-        <div className="px-4">
-          <div className="flex items-baseline justify-between gap-2">
-            <p className="text-xs leading-snug line-clamp-1 flex-1 min-w-0 pr-2" style={{ color: 'var(--color-muted)' }}>
-              {product.shortReason || product.description}
-            </p>
-            <span className="flex items-baseline gap-1.5 flex-shrink-0">
-              {onDeal && (
-                <span className="text-[11px] line-through" style={{ color: 'var(--color-muted)' }}>{formatGBP(rrp!)}</span>
-              )}
-              <span className="text-base font-black" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
-                {formatGBP(price)}
-              </span>
-            </span>
-          </div>
-        </div>
-
-        <StatBars
-          bars={bars}
-          animate={animate}
-          label="Best for"
-          className="px-4 pt-3.5 pb-3 mt-2 flex-1"
-          style={{ borderTop: '1px solid var(--color-border)' }}
+        <ProductTile
+          imageUrl={product.imageUrl}
+          slot={product.stackSlots[0]}
+          title={product.title}
+          size={320}
+          fill
+          className="rounded-none border-0"
         />
-      </button>
+
+        <div className="p-3 flex flex-col gap-1.5 flex-1">
+          <span
+            className="self-start px-2 py-0.5 rounded-full label"
+            style={{
+              color: hue,
+              background: `color-mix(in srgb, ${hue} 12%, transparent)`,
+              border: `1px solid color-mix(in srgb, ${hue} 24%, transparent)`,
+            }}
+          >
+            {product.category}
+          </span>
+
+          <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+            {product.title}
+          </p>
+
+          {hasRating(product.rating) && <StarRating rating={product.rating} size={11} />}
+
+          <span className="flex items-baseline gap-1.5 mt-auto pt-1">
+            <span className="text-base font-black tabular-nums" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+              {formatGBP(price)}
+            </span>
+            {onDeal && (
+              <span className="text-[11px] line-through tabular-nums" style={{ color: 'var(--color-muted)' }}>{formatGBP(rrp!)}</span>
+            )}
+          </span>
+        </div>
+      </Link>
 
       {/*
         Compare, in the corner rather than the action row: the row belongs to
         "Add to basket", and a second button beside it competes with the thing
         the card is for. Quiet until it is on.
 
-        Positioned absolutely but placed here in the DOM, AFTER the card's own
-        expand button, so opening the product stays the first thing a keyboard
-        (and every e2e card helper) reaches.
+        Placed after the link in the DOM so opening the product stays the first
+        thing a keyboard reaches, and outside it because an interactive control
+        may not be nested inside an anchor.
       */}
       {onToggleCompare && (
         <button
@@ -159,33 +158,39 @@ export function ShopProductCard({ product, axes, animate = true, onExpand, compa
           aria-label={`Compare ${product.title}`}
           className="absolute top-2 right-2 z-10 w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
           style={{
-            color: compareSelected ? 'var(--color-bg)' : 'var(--color-muted)',
-            background: compareSelected ? 'var(--color-accent)' : 'var(--color-surface-2)',
+            color: compareSelected ? 'var(--color-bg)' : 'var(--color-text)',
+            background: compareSelected ? 'var(--color-accent)' : 'var(--color-surface)',
             border: `1px solid ${compareSelected ? 'transparent' : 'var(--color-border-2)'}`,
           }}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
             {compareSelected
               ? <path d="M20 6 9 17l-5-5" />
-              : <><path d="M8 3v18M16 3v18" /><path d="M3 8h18M3 16h18" /></>}
+              : <><rect x="3" y="4" width="7" height="16" rx="1.5" /><rect x="14" y="4" width="7" height="16" rx="1.5" /></>}
           </svg>
         </button>
       )}
 
-      {/* Add to basket */}
-      <div className="p-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+      <div className="p-2.5" style={{ borderTop: '1px solid var(--color-border)' }}>
         <button
           onClick={handleAdd}
           disabled={soldOut}
-          className="w-full py-3 rounded-xl text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          aria-label={soldOut ? undefined : `Add ${product.title} to basket`}
+          className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          /*
+            Tinted rather than filled. Two solid-accent slabs side by side in a
+            two-column grid were the brightest thing on the shelf by a distance
+            — the eye went to the buttons and not to the products. The accent
+            still carries it; it just stops shouting over the photo.
+          */
           style={{
             fontFamily: 'var(--font-display)',
-            background: justAdded ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'var(--color-accent)',
-            color: justAdded ? 'var(--color-accent)' : 'var(--color-bg)',
-            border: justAdded ? '1px solid color-mix(in srgb, var(--color-accent) 40%, transparent)' : '1px solid transparent',
+            background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
+            color: 'var(--color-accent)',
+            border: `1px solid color-mix(in srgb, var(--color-accent) ${justAdded ? 55 : 28}%, transparent)`,
           }}
         >
-          {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add to basket'}
+          {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add'}
         </button>
       </div>
     </div>
