@@ -16,6 +16,7 @@
  * what it is letting through.
  */
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { IMAGE_PLATE } from '@/lib/images/product-image'
 
 const getResolvedCatalogue = jest.fn()
 jest.mock('@/lib/catalogue/resolve', () => ({
@@ -52,10 +53,16 @@ function rawFrame(centre: number): Buffer {
 let centreValue = 20
 const encodeFails = { current: false }
 
+/** Every argument the route hands sharp, per method, in call order. */
+const mockCalls: Record<string, unknown[][]> = {}
+
 jest.mock('sharp', () => {
   const chain: Record<string, unknown> = {}
   for (const m of ['rotate', 'clone', 'ensureAlpha', 'removeAlpha', 'raw', 'resize', 'flatten', 'trim', 'webp', 'joinChannel']) {
-    chain[m] = () => chain
+    chain[m] = (...args: unknown[]) => {
+      ;(mockCalls[m] ??= []).push(args)
+      return chain
+    }
   }
   chain.toBuffer = (opts?: { resolveWithObject?: boolean }) => {
     if (opts?.resolveWithObject) {
@@ -85,6 +92,7 @@ const fetchMock = jest.fn()
 beforeEach(() => {
   jest.resetModules()
   jest.clearAllMocks()
+  for (const k of Object.keys(mockCalls)) delete mockCalls[k]
   centreValue = 20
   encodeFails.current = false
   getResolvedCatalogue.mockResolvedValue({ products: [product(CATALOGUE_IMAGE), product(null)] })
@@ -129,6 +137,65 @@ describe('what it will fetch', () => {
     const res = await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)
     expect(res.headers.get('Cache-Control')).toContain('immutable')
     expect(res.headers.get('Cache-Control')).toContain('max-age=31536000')
+  })
+})
+
+/**
+ * The one thing a shelf cannot survive: two treatments side by side.
+ *
+ * Both branches of the transform have to end on the SAME white. That has been
+ * broken three separate ways — a dark `#18181b` pad, a light grey `#F4F5F7`
+ * one, and a keyed branch that resized onto transparency while the branch next
+ * to it padded onto a colour — and every time, the symptom was a shelf where
+ * some products sat on a panel and the rest did not. Nothing above catches it:
+ * every one of those versions returned 200 with valid WebP bytes.
+ */
+describe('every path ends on the same white plate', () => {
+  const backgrounds = (method: 'resize' | 'flatten') =>
+    (mockCalls[method] ?? []).map((args) => {
+      const opts = (method === 'resize' ? args[2] : args[0]) as { background?: unknown }
+      return opts?.background
+    })
+
+  it('the keyed path pads and flattens onto white, never onto transparency', async () => {
+    expect((await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)).headers.get('X-Image-Keyed')).toBe('1')
+    expect(backgrounds('resize')).toEqual([IMAGE_PLATE])
+    expect(backgrounds('flatten')).toEqual([IMAGE_PLATE])
+  })
+
+  it('and so does the path that declines to cut', async () => {
+    centreValue = 255
+    expect((await get(`u=${encodeURIComponent(CATALOGUE_IMAGE)}&w=320`)).headers.get('X-Image-Keyed')).toBe('0')
+    expect(backgrounds('resize')).toEqual([IMAGE_PLATE])
+    expect(backgrounds('flatten')).toEqual([IMAGE_PLATE])
+  })
+
+  it('and the white is white, not the card, not a near-white', () => {
+    // Named rather than inferred: the whole failure mode is a plate that is a
+    // shade off the one next to it, which nobody notices in a diff.
+    expect(IMAGE_PLATE).toBe('#FFFFFF')
+  })
+})
+
+/**
+ * Why the pipeline version is in the cache key.
+ *
+ * These responses are `immutable` for a year and the URL names only the source
+ * image and the width, so nothing ever re-asks for one. Two accessories were
+ * still being served padded onto `#18181b` three revisions after that colour
+ * had been removed from the code — not because the transform was wrong, but
+ * because it was never run for them again. Every cache between here and the
+ * phone keys on the full URL, so the version has to be in it.
+ */
+describe('a change to the transform is a change to the URL', () => {
+  it('does not answer one pipeline version out of another one\'s cache', async () => {
+    const url = `u=${encodeURIComponent(CATALOGUE_IMAGE)}`
+    await get(`${url}&w=320&p=1`)
+    await get(`${url}&w=320&p=1`)
+    await get(`${url}&w=320&p=2`)
+    // Twice: once for p=1, once for p=2. The repeat of p=1 is the memo hit that
+    // proves the second fetch is the version change and not just a cold cache.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })
 
