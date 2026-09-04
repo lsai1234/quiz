@@ -13,7 +13,7 @@ import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { ProductDetailBody, variantLabel } from './ProductDetail'
 import { StarRating } from './StarRating'
-import { Button, Badge } from '@/components/storefront'
+import { Button } from '@/components/storefront'
 
 interface Props {
   product: CatalogueProduct
@@ -72,38 +72,41 @@ export function ProductPageView({ product, sellableKeys }: Props) {
 
   return (
     <main className="storefront min-h-dvh" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-      <header className="px-5 pt-6 pb-2 max-w-lg mx-auto flex items-center justify-between">
-        <Link href="/" aria-label="getCHRGD home" className="active:scale-95 transition-transform">
+      <header className="flex items-center justify-between" style={{ padding: 'var(--space-6) var(--space-4) var(--space-2)' }}>
+        <Link href="/" aria-label="getCHRGD home" data-interactive>
           <CHRGDLogo markSize={22} wordClassName="text-lg" />
         </Link>
+        {/* The same control as the shelf header. It was a 40px circle with an
+            accent counter pinned to its corner — the shop's last floating
+            badge. */}
         <Link
           href="/shop#basket"
-          className="relative w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-          style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}
+          data-interactive
+          className="sf-button inline-flex items-center justify-center"
+          style={{
+            minHeight: 36, padding: '0 var(--space-3)', gap: 'var(--space-2)',
+            borderRadius: 'var(--r-control)', background: 'transparent', color: 'var(--text-dim)',
+            fontSize: 'var(--meta-size)', fontWeight: 'var(--weight-medium)',
+            ['--sf-hover' as string]: 'var(--surface-hi)',
+            ['--sf-active' as string]: 'var(--surface-hi)',
+          }}
           aria-label={`Open basket, ${count} item${count !== 1 ? 's' : ''}`}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text)' }} aria-hidden>
-            <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-            <path d="M3 6h18M16 10a4 4 0 0 1-8 0" />
-          </svg>
-          {count > 0 && (
-            <span
-              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-medium tabular-nums"
-              style={{ background: 'var(--accent)', color: 'var(--bg)' }}
-            >
-              {count}
-            </span>
-          )}
+          Basket
+          {count > 0 && <span className="sf-tnum" style={{ color: 'var(--text)' }}>{count}</span>}
         </Link>
       </header>
 
-      <div className="px-5 max-w-lg mx-auto pb-32">
+      <div className="max-w-lg mx-auto" style={{ padding: '0 var(--space-4)', paddingBottom: 120 }}>
         <Link
           href="/shop"
-          className="inline-flex items-center gap-1.5 mt-2 mb-4 text-xs font-medium"
-          style={{ color: 'var(--text-dim)' }}
+          data-interactive
+          className="sf-meta inline-flex items-center"
+          style={{ gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}
         >
-          <span aria-hidden>←</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M19 12H5M11 18l-6-6 6-6" />
+          </svg>
           Back to the shop
         </Link>
 
@@ -118,14 +121,14 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           className="mb-5"
         />
 
-        <Badge className="mb-2">{product.category}</Badge>
+        {product.brand && <p className="sf-label" style={{ marginBottom: 'var(--space-2)' }}>{product.brand}</p>}
         <h1 className="sf-display" style={{ color: 'var(--text)' }}>{product.title}</h1>
 
-        <div className="flex items-baseline flex-wrap" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
-          <span className="sf-num sf-title" style={{ color: 'var(--text)' }}>{formatGBP(price)}</span>
-          {onDeal && <span className="sf-num sf-meta line-through">{formatGBP(rrp!)}</span>}
-          {variant && <span className="sf-meta">{variantLabel(variant)}</span>}
+        <div className="flex items-baseline flex-wrap" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-3)' }}>
+          <span className="sf-display sf-tnum" style={{ color: 'var(--text)', fontSize: 26 }}>{formatGBP(price)}</span>
+          {onDeal && <span className="sf-meta sf-tnum line-through">{formatGBP(rrp!)}</span>}
         </div>
+        {variant && <p className="sf-meta" style={{ marginTop: 'var(--space-1)' }}>{variantLabel(variant)}</p>}
 
         {hasRating(product.rating) && <StarRating rating={product.rating} size={14} showAverage showCount className="mt-2.5" />}
         {/*
@@ -139,8 +142,10 @@ export function ProductPageView({ product, sellableKeys }: Props) {
             Only <span className="sf-num">{stock.count}</span> left
           </p>
         )}
-        {soldOut && product.restockingSoon && (
-          <p className="text-[11px] font-medium mt-2.5" style={{ color: 'var(--text-dim)' }}>Back in stock soon</p>
+        {soldOut && (
+          <p className="sf-meta" style={{ marginTop: 'var(--space-3)' }}>
+            {product.restockingSoon ? 'Back in stock soon' : 'Sold out'}
+          </p>
         )}
 
         <ProductDetailBody

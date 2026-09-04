@@ -43,7 +43,7 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
       rather than tucked under its edge. Search and filters scroll away, so they
       no longer count towards this — which is why the old value clipped.
     */
-    <section id={`shop-cat-${section.slug}`} style={{ scrollMarginTop: 88, paddingTop: 'var(--space-8)' }}>
+    <section className="sf-shelf" id={`shop-cat-${section.slug}`} style={{ scrollMarginTop: 88, paddingTop: 'var(--space-8)' }}>
       {/*
         The heading does some work now. It was a name and a count in grey; it is
         the only thing separating twenty shelves from each other, so it carries

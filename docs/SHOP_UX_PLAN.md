@@ -289,3 +289,54 @@ ShopDuelSheet, ShopRouletteSheet, ShopSearchSuggestions, StarRating).
    not presentation-only. It is the highest-value single addition to the card.
 5. **An editorial hero image** — do we have one, or should the banner be a
    rendered product arrangement?
+
+
+---
+
+# Delivered
+
+All four phases, and the five decisions were taken as recommended.
+
+| Phase | What landed |
+|---|---|
+| 1 | White keyed out at ingest; card rebuilt round a focal point; surfaces separated; density |
+| 2 | Brand through the supplier mapping; per-serving toggle; ratings; deals pricing; section glyphs |
+| 3 | Compare into shelf mode; one bottom bar; editorial banner; shop-by-goal row; trust with icons |
+| 4 | Every sheet on the token layer; scroll restoration; add feedback; matching skeleton; drawn empty state |
+
+## Five bugs the work surfaced, none visible in a screenshot
+
+1. **`MAX_REMOVED` at 0.55.** An ordinary cut-out is 55-75% background, so the
+   guard rejected every good cut and the keying would have silently done nothing
+   in production. Found by running the real pipeline over realistic shots rather
+   than hand-drawn fixtures.
+2. **`sharp`'s `joinChannel` appends**, and its position in the internal
+   pipeline is not its position in the chain. Onto an image with alpha it made a
+   five-channel image that rendered fully transparent; after `removeAlpha` it
+   dropped the mask silently.
+3. **`onLoad` never fires for a cached image.** The fade-in left every photo at
+   opacity 0 on a warm load — fine cold, total on a second visit.
+4. **Portaled sheets are outside `.storefront`.** Every control in every sheet
+   had lost its focus ring and its transition while looking almost right.
+5. **The roulette lost its only entry point** when the hero was rebuilt. The
+   feature compiled and was unreachable; the e2e specs caught it.
+
+## Deliberately not done
+
+- **`--surface` stayed dark rather than going lighter as the plan suggested.**
+  #17191E against #0A0B0D plus a 1px lit top edge separates the card without
+  raising the whole page's floor.
+- **Nothing became a tenth colour.** No green for a saving, no amber for low
+  stock: the minus sign says which direction a discount goes, and stock is one
+  line of meta under five.
+- **The quiz-hero visual baseline is still stale.** It went that way at
+  `772d0ff` and belongs to whoever made that change; `--update-snapshots` keeps
+  trying to adopt it and it keeps being reverted.
+
+## What is genuinely left
+
+- The keying has only been run against synthetic shots. Real packaging has
+  gradients behind the product, baked-in drop shadows and transparent lids;
+  `X-Image-Keyed` on each response says per photo whether the cut ran.
+- The quiz flow, the hubs, checkout and the share card are still on the old
+  layer, by scope. Adopting the storefront look there is the next decision.

@@ -43,6 +43,7 @@ import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 import { ShopGoalRow } from './ShopGoalRow'
+import { rememberScroll, readScroll, forgetScroll } from '@/lib/shop/scroll-memory'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { Button } from '@/components/storefront'
 
@@ -492,6 +493,23 @@ export function ShopShell() {
   }, [shelfNudge])
 
   // Funnel: one shop_view per mount (a ref keeps dev StrictMode from double-firing).
+  /**
+   * Put them back where they were, once there is a page tall enough to do it.
+   *
+   * Restoring on mount is too early: the catalogue arrives from a client fetch,
+   * so the document is a skeleton a fraction of its final height and the scroll
+   * clamps. Waiting for `isLoading` to clear and then for one frame is the
+   * point at which the shelves have actually laid out.
+   */
+  useEffect(() => {
+    if (isLoading) return
+    const y = readScroll()
+    if (y === null) return
+    forgetScroll()
+    const frame = requestAnimationFrame(() => window.scrollTo({ top: y, behavior: 'auto' }))
+    return () => cancelAnimationFrame(frame)
+  }, [isLoading])
+
   const viewed = useRef(false)
   useEffect(() => {
     if (viewed.current) return
@@ -522,7 +540,12 @@ export function ShopShell() {
    * cannot be linked to, shared, bookmarked, opened in a tab or indexed, and
    * the back button does not mean what a shopper expects inside one.
    */
-  const openProduct = (p: CatalogueProduct) => { track('product_open', { id: p.id, category: p.category }) }
+  const openProduct = (p: CatalogueProduct) => {
+    track('product_open', { id: p.id, category: p.category })
+    /* Where they were, so coming back lands on the same shelf rather than at
+       the top — see `scroll-memory` for why the browser cannot do this here. */
+    rememberScroll(window.scrollY)
+  }
 
   /**
    * A product opened from the result grid. The rank is the whole point: it is

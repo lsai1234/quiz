@@ -103,7 +103,7 @@ export function ShopProductCard({
         outline: selectable && selected ? '2px solid var(--accent)' : 'none',
         outlineOffset: -2 }}
     >
-      <div className="relative">
+      <div className={`relative ${justAdded ? 'sf-added' : ''}`}>
         <ProductTile
           imageUrl={product.imageUrl}
           slot={product.stackSlots[0]}

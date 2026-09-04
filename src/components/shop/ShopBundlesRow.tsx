@@ -21,7 +21,7 @@ export function ShopBundlesRow({ bundles, products }: Props) {
       floating over the first and last card's content at exactly the viewport
       edges where a thumb already is.
     */
-    <section id="shop-cat-bundles" style={{ scrollMarginTop: 88, paddingTop: 'var(--space-8)' }}>
+    <section className="sf-shelf" id="shop-cat-bundles" style={{ scrollMarginTop: 88, paddingTop: 'var(--space-8)' }}>
       <div className="flex items-baseline justify-between" style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
         <h2 className="sf-title min-w-0" style={{ color: 'var(--text)' }}>Bundles</h2>
         <span className="sf-meta flex-shrink-0">

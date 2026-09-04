@@ -387,3 +387,35 @@
 @media (prefers-reduced-motion: reduce) {
   .sf-goal:active { transform: none; }
 }
+
+/* ── Off-screen shelves ───────────────────────────────────────────────────────
+   Twenty-odd category grids, most of them below the fold. `content-visibility`
+   lets the browser skip laying out and painting a section until it is near the
+   viewport; `contain-intrinsic-size` gives it a height to reserve in the
+   meantime, so the scrollbar does not jump as sections realise how tall they
+   are. The value is a rough two rows of cards — being approximately right is
+   the whole contract. */
+.sf-shelf {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 720px;
+}
+
+/* ── Added to basket ──────────────────────────────────────────────────────────
+   The card acknowledges the press. A count changing in a bar at the bottom of
+   the screen is not feedback for a tap that happened at the top of it — the
+   product itself has to react, or the shopper taps again.
+
+   A short settle on the photo, not a bounce: this is a confirmation, and a
+   confirmation that draws attention for half a second is one that has to be
+   waited out on every add. */
+.sf-added { animation: sf-added 420ms var(--t-ease) 1; }
+
+@keyframes sf-added {
+  0%   { transform: scale(1); }
+  38%  { transform: scale(0.93); }
+  100% { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-added { animation: none; }
+}
