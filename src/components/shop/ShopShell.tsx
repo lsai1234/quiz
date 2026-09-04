@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
-import { useCatalogueProducts } from '@/hooks/useCatalogueProducts'
+import { useCatalogueProducts, invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { useShopBundles } from '@/hooks/useShopBundles'
 import { useBasket } from '@/lib/basket/store'
 import { useShopCheckout } from '@/hooks/useShopCheckout'
@@ -149,6 +149,39 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
 }
 
 /**
+ * What the shop says when it has no catalogue.
+ *
+ * Not a spinner and not a blank grid: it names what failed, and offers the one
+ * action that ever helps — try again. The reason comes from `loadCatalogue`,
+ * which distinguishes "took too long" from whatever the server actually said,
+ * because those need different things from whoever is reading.
+ */
+function CatalogueUnavailable({ message }: { message: string }) {
+  return (
+    <section style={{ padding: 'var(--space-12) var(--space-4)' }} className="max-w-lg mx-auto text-center">
+      <svg
+        width="72" height="72" viewBox="0 0 72 72" fill="none" aria-hidden className="mx-auto"
+        style={{ color: 'var(--text-dim)', opacity: 0.5, marginBottom: 'var(--space-4)' }}
+      >
+        <rect x="10" y="20" width="52" height="6" rx="3" fill="currentColor" opacity="0.55" />
+        <rect x="10" y="44" width="52" height="6" rx="3" fill="currentColor" opacity="0.55" />
+        <path d="M16 26v18M56 26v18" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" opacity="0.35" />
+        <path d="M28 35h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+
+      <p className="sf-title" style={{ color: 'var(--text)' }}>The shelves are empty</p>
+      <p className="sf-meta" style={{ marginTop: 'var(--space-2)' }}>{message}</p>
+
+      <div style={{ marginTop: 'var(--space-5)' }}>
+        <Button variant="secondary" size="md" onClick={() => { invalidateCatalogue(); window.location.reload() }}>
+          Try again
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+/**
  * The shop browse experience: a header + basket, dietary filters, a sticky
  * category jump-nav, and category swipe decks led by a Deals rail. Product
  * detail and the basket are bottom/side sheets.
@@ -159,7 +192,7 @@ export function ShopShell() {
   /** Two view modes the shelf offers: prices per serving, and duel selection. */
   const [perServing, setPerServing] = useState(false)
   const [compareMode, setCompareMode] = useState(false)
-  const { products, isLoading: productsLoading } = useCatalogueProducts()
+  const { products, isLoading: productsLoading, error: catalogueError } = useCatalogueProducts()
   const { bundles, isLoading: bundlesLoading } = useShopBundles()
   // Hold the skeleton until BOTH the catalogue and the bundles rail are ready, so
   // everything swaps in together — the bundles rail can't pop in late and shove the
@@ -700,7 +733,18 @@ export function ShopShell() {
 
       {!searching && <TrustStrip products={products} />}
 
-      {isLoading ? (
+      {/*
+        Three states, not two.
+
+        The shop used to have "loading" and "loaded", and discarded the
+        catalogue's error entirely — so a failed or slow fetch showed a skeleton
+        for a moment and then an empty page with a search box and no
+        explanation. A shop with nothing in it and nothing to say about why is
+        indistinguishable from a broken one, which is exactly what it is.
+      */}
+      {!isLoading && catalogueError && products.length === 0 ? (
+        <CatalogueUnavailable message={catalogueError} />
+      ) : isLoading ? (
         <LoadingSkeleton />
       ) : (
         <>

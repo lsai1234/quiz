@@ -607,8 +607,16 @@ export const MIGRATIONS: string[] = [
   // `position` orders them and `active` hides one without deleting it — a
   // seasonal banner comes back next year, and a founder who has to delete
   // artwork to take it down will not take it down.
+  //
+  // `IF NOT EXISTS` on both statements: SQLite runs a migration's statements
+  // outside a transaction, so a failure partway leaves the table created and
+  // the index missing, and every retry then dies on the CREATE TABLE — a
+  // permanently wedged engine, which takes the whole shop down with it, because
+  // `getEngine` throws for every caller once a migration has failed. Adding it
+  // is the one edit to an applied migration that is safe: it changes nothing
+  // for a database that already ran this, and it lets one that half-ran recover.
   `
-  CREATE TABLE shop_banners (
+  CREATE TABLE IF NOT EXISTS shop_banners (
     id          TEXT PRIMARY KEY,
     mime        TEXT NOT NULL,
     data        TEXT NOT NULL,
@@ -625,7 +633,7 @@ export const MIGRATIONS: string[] = [
     created_at  TEXT NOT NULL,
     updated_at  TEXT NOT NULL
   );
-  CREATE INDEX shop_banners_order ON shop_banners(active, position);
+  CREATE INDEX IF NOT EXISTS shop_banners_order ON shop_banners(active, position);
   `,
 ]
 

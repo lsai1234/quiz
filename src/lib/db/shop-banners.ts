@@ -114,7 +114,16 @@ export async function putBanner(id: string | null, input: PutBannerInput): Promi
         input.active ? 1 : 0, input.position, stamp, id,
       ],
     )
-    return { ...meta({ ...(existing as unknown as Row), ...input, active: input.active ? 1 : 0, version, updated_at: stamp } as Omit<Row, 'data'>) }
+    return {
+      ...existing,
+      headline: input.headline, subhead: input.subhead, href: input.href, alt: input.alt,
+      active: input.active, position: input.position,
+      mime: input.mime ?? existing.mime,
+      width: input.width ?? existing.width,
+      height: input.height ?? existing.height,
+      bytes: Buffer.byteLength(data, 'base64'),
+      version, updatedAt: stamp,
+    }
   }
 
   if (!input.data || !input.mime) throw new Error('A new banner needs artwork')

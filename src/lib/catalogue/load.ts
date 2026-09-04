@@ -45,6 +45,18 @@ export function invalidateCatalogue(): void {
 }
 
 /**
+ * How long the shop will wait for the catalogue before saying so.
+ *
+ * Without this the fetch has no deadline: a route that hangs rather than
+ * erroring — a cold serverless function, a supplier call with no timeout of its
+ * own, a wedged database connection — leaves the promise pending forever, and
+ * the shop sits on its loading skeleton with no explanation and no way out.
+ * That is a worse failure than an error, because it looks like the page is
+ * still working.
+ */
+const CATALOGUE_TIMEOUT_MS = 15_000
+
+/**
  * The catalogue, fetched once and cached for the session.
  *
  * An empty result is reported as an error rather than quietly substituting
@@ -54,8 +66,14 @@ export function invalidateCatalogue(): void {
 export function loadCatalogue(): Promise<CatalogueLoad> {
   if (inflight) return inflight
 
-  inflight = fetch('/api/catalogue')
-    .then((r) => r.json())
+  inflight = fetch('/api/catalogue', { signal: AbortSignal.timeout(CATALOGUE_TIMEOUT_MS) })
+    .then((r) => {
+      // A 500 usually answers with an HTML error page, and parsing that as JSON
+      // throws "Unexpected token <" — a message that tells whoever is reading
+      // the shop nothing at all. Say what actually happened instead.
+      if (!r.ok) throw new Error(`The catalogue could not be loaded (${r.status}).`)
+      return r.json()
+    })
     .then((data: { products?: CatalogueProduct[]; source?: string; error?: string }) => {
       const products = Array.isArray(data.products) ? data.products : []
       const source: 'mock' | 'real' = data.source === 'real' ? 'real' : 'mock'
@@ -72,7 +90,14 @@ export function loadCatalogue(): Promise<CatalogueLoad> {
       // Let the next caller try again rather than caching the failure forever.
       inflight = null
       console.error('[loadCatalogue]', err)
-      return { products: [], source: 'mock' as const, error: err.message }
+      const timedOut = err.name === 'TimeoutError' || err.name === 'AbortError'
+      return {
+        products: [],
+        source: 'mock' as const,
+        error: timedOut
+          ? 'The catalogue took too long to load. Check the connection and try again.'
+          : err.message,
+      }
     })
 
   return inflight
