@@ -229,6 +229,16 @@ export interface CatalogueProduct {
   /** Short, one-sentence description shown on cards */
   description: string
   imageUrl: string | null
+  /**
+   * The manufacturer, e.g. "Optimum Nutrition".
+   *
+   * PowerBody has always sent this and the catalogue has always thrown it away.
+   * It is how people actually scan a supplement shelf — brand first, product
+   * second — and without it every card in a category opens with the same three
+   * words. Optional because a hand-entered product may not have one, and the
+   * card simply omits the line.
+   */
+  brand?: string | null
 
   // ── Classification ───────────────────────────────────────────────────────────
   /** Primary display category (Protein, Pre-Workout, Health…) */

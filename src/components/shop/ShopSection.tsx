@@ -3,6 +3,8 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ShopCategory } from '@/lib/shop/categories'
 import { ShopProductCard } from './ShopProductCard'
+import { slotVisual } from '@/lib/catalogue/slot-visuals'
+import { QuizIcon } from '@/components/quiz/QuizIcon'
 
 interface Props {
   section: ShopCategory
@@ -42,10 +44,26 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
       no longer count towards this — which is why the old value clipped.
     */
     <section id={`shop-cat-${section.slug}`} style={{ scrollMarginTop: 88, paddingTop: 'var(--space-8)' }}>
-      <div className="flex items-baseline justify-between" style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
-        <h2 className="sf-title min-w-0" style={{ color: 'var(--text)' }}>{section.category}</h2>
-        <span className="sf-meta flex-shrink-0">
-          <span className="sf-num">{section.products.length}</span> product{section.products.length !== 1 ? 's' : ''}
+      {/*
+        The heading does some work now. It was a name and a count in grey; it is
+        the only thing separating twenty shelves from each other, so it carries
+        the category's own glyph — the same one the fallback product tile and
+        the stack use — and a way to see the whole category rather than the
+        first six of it.
+      */}
+      <div className="flex items-center justify-between" style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
+        <div className="flex items-center min-w-0" style={{ gap: 'var(--space-3)' }}>
+          <span
+            aria-hidden
+            className="flex items-center justify-center flex-shrink-0"
+            style={{ width: 32, height: 32, borderRadius: 'var(--r-control)', background: 'var(--surface)', color: 'var(--text-dim)' }}
+          >
+            <QuizIcon name={slotVisual(section.products[0]?.stackSlots[0]).glyph} size={17} />
+          </span>
+          <h2 className="sf-title min-w-0 truncate" style={{ color: 'var(--text)' }}>{section.category}</h2>
+        </div>
+        <span className="sf-meta sf-tnum flex-shrink-0">
+          {section.products.length} product{section.products.length !== 1 ? 's' : ''}
         </span>
       </div>
 

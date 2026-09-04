@@ -5,7 +5,6 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ShopBundleView } from '@/hooks/useShopBundles'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from '@/components/stack-review/ProductTile'
-import { Badge } from '@/components/storefront'
 
 interface Props {
   view: ShopBundleView
@@ -38,34 +37,41 @@ export function ShopBundleCard({ view, products }: Props) {
       className="flex flex-col overflow-hidden h-full"
       style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)' }}
     >
-      <div className="flex flex-col flex-1" style={{ padding: 'var(--space-5)', gap: 'var(--space-3)' }}>
-        <Badge>{bundle.seriesName}</Badge>
-
-        <p className="sf-body sf-clamp-2" style={{ color: 'var(--text)' }}>{bundle.name}</p>
-
-        <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
-          {coreSlots.map((slot) => {
-            const product = byId.get(slot.selectedProductId)
-            return (
-              <ProductTile
-                key={slot.slotId}
-                imageUrl={product?.imageUrl ?? null}
-                slot={slot.slotType}
-                title={product?.title ?? slot.title}
-                size={36}
-              />
-            )
-          })}
-        </div>
-
-        <p className="sf-meta"><span className="sf-num">{coreSlots.length}</span> products</p>
-
-        <p className="sf-num sf-body" style={{ color: 'var(--text)', marginTop: 'auto' }}>
-          {formatGBP(price.price)}
-        </p>
+      {/*
+        A bundle is a stack, so the stack is the picture: the products it
+        contains, on the same lit ground a single product gets. That is the
+        card's focal point, and it is what a "3 products" line was standing in
+        for before.
+      */}
+      <div className="relative flex items-end justify-center" style={{ height: 128, gap: 'var(--space-1)', padding: '0 var(--space-4)' }}>
+        <span
+          aria-hidden
+          className="absolute inset-0 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 60% 52% at 50% 62%, rgba(255,255,255,0.06), transparent 70%)' }}
+        />
+        {coreSlots.slice(0, 3).map((slot, i) => {
+          const product = byId.get(slot.selectedProductId)
+          return (
+            <ProductTile
+              key={slot.slotId}
+              imageUrl={product?.imageUrl ?? null}
+              slot={slot.slotType}
+              title=""
+              size={96}
+              style={{ width: 42, height: 92 - Math.abs(1 - i) * 12, position: 'relative' }}
+            />
+          )
+        })}
       </div>
 
-      <div style={{ padding: '0 var(--space-5) var(--space-5)' }}>
+      <div className="flex flex-col flex-1" style={{ padding: 'var(--space-3)', gap: 2 }}>
+        <p className="sf-label truncate">{bundle.seriesName}</p>
+        <p className="sf-price">{formatGBP(price.price)}</p>
+        <p className="sf-name sf-clamp-2" style={{ marginTop: 2 }}>{bundle.name}</p>
+        <p className="sf-meta sf-tnum">{coreSlots.length} products</p>
+      </div>
+
+      <div style={{ padding: '0 var(--space-3) var(--space-3)' }}>
         <span
           className="sf-button inline-flex items-center justify-center w-full"
           style={{

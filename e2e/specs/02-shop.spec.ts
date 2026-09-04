@@ -365,7 +365,7 @@ test.describe('the shop', () => {
 
   test('the roulette lands on something real, at the price it charges', async ({ page }) => {
     await openShop(page)
-    await page.getByRole('button', { name: /Feeling lucky/ }).click()
+    await page.getByRole('button', { name: 'Surprise me' }).click()
 
     const sheet = page.getByRole('dialog', { name: 'Flavour roulette' })
     await expect(sheet).toBeVisible()
@@ -385,7 +385,7 @@ test.describe('the shop', () => {
   test('the roulette stays inside the shopper’s filters', async ({ page }) => {
     await openShop(page)
     await page.getByRole('button', { name: 'Vegan', exact: true }).click()
-    await page.getByRole('button', { name: /Feeling lucky/ }).click()
+    await page.getByRole('button', { name: 'Surprise me' }).click()
 
     const sheet = page.getByRole('dialog', { name: 'Flavour roulette' })
     await expect(sheet.getByRole('button', { name: /^Add for £/ })).toBeEnabled({ timeout: 10_000 })

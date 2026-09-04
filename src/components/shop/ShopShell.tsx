@@ -42,6 +42,8 @@ import { ShopRouletteSheet } from './ShopRouletteSheet'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
+import { ShopGoalRow } from './ShopGoalRow'
+import { ProductTile } from '@/components/stack-review/ProductTile'
 import { Button } from '@/components/storefront'
 
 // Canonical dietary-chip order (matches the sheet's labels).
@@ -105,20 +107,31 @@ function TrustStrip({ products }: { products: CatalogueProduct[] }) {
   const summary = catalogueRatingSummary(products)
 
   /*
-    Three facts on one line of meta text. It was three icon chips in a bordered
-    card, with the icons stroked in accent — three more accent objects in a hero
-    that already had four.
+    Three facts, each with its glyph. It was a run-on sentence of grey text
+    joined by middots, which is the shape of a footer rather than of
+    reassurance — and it was one more block of prose on a screen made entirely
+    of prose.
   */
-  const facts = [
-    summary ? `${summary.average.toFixed(1)} from ${summary.count.toLocaleString()} reviews` : null,
-    threshold > 0 ? `Free delivery over ${formatGBP(threshold)}` : null,
-    'Secure checkout',
-  ].filter(Boolean) as string[]
+  const facts: Array<{ icon: string; text: string }> = [
+    ...(summary ? [{ icon: 'star', text: `${summary.average.toFixed(1)} from ${summary.count.toLocaleString()} reviews` }] : []),
+    ...(threshold > 0 ? [{ icon: 'truck', text: `Free delivery over ${formatGBP(threshold)}` }] : []),
+    { icon: 'lock', text: 'Secure checkout' },
+  ]
 
+  /* Wrapped, not scrolled: three short facts do not fit one 390px line, and a
+     reassurance the shopper has to swipe to reach is not reassuring. */
   return (
-    <p className="sf-meta" style={{ padding: '0 var(--space-4) var(--space-2)' }}>
-      {facts.join('  ·  ')}
-    </p>
+    <ul
+      className="flex flex-wrap"
+      style={{ gap: 'var(--space-2) var(--space-4)', padding: 'var(--space-4) var(--space-4) 0' }}
+    >
+      {facts.map((f) => (
+        <li key={f.text} className="sf-meta flex items-center flex-shrink-0" style={{ gap: 'var(--space-2)' }}>
+          <Icon name={f.icon as never} size={14} className="shrink-0" />
+          {f.text}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -600,6 +613,12 @@ export function ShopShell() {
 
   // Second "start here" path: jump to the Deals rail (or the first shelf if there
   // are no deals). Kept content-agnostic so the hero never depends on load timing.
+  /** Three photographed products for the banner — the shop's only imagery. */
+  const heroProducts = useMemo(
+    () => products.filter((p) => p.imageUrl).slice(0, 3),
+    [products],
+  )
+
   const dealsPct = dealsSection ? maxDealPct(dealsSection.products) : 0
   const goToDeals = () => {
     const el = document.getElementById('shop-cat-deals') ?? document.querySelector('section[id^="shop-cat-"]')
@@ -629,60 +648,77 @@ export function ShopShell() {
         </p>
 
         {/*
-          Two ways in, as plain cards.
+          One banner, then the goals.
 
-          They were two accent-tinted panels with bolt glyphs in tinted circles,
-          a third accent-tinted "lever" underneath, an accent eyebrow above and
-          an accent trust strip below — six accent objects before a single
-          product. The screen's one primary is the basket bar; these are
-          navigation, so they are surfaces with text on them.
+          This was four grey boxes of grey text — a quiz card, a deals card, a
+          roulette line and a run-on trust sentence — and it was the worst
+          screen in the shop: nothing to look at, nothing to press that was not
+          a paragraph. The banner gives the page one image; the goal row gives
+          it the first thing that is not a sentence.
         */}
         {!searching && (
-          <div className="grid grid-cols-2" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-5)' }}>
-            <Link
-              href="/"
-              data-interactive
-              className="flex flex-col justify-between"
-              style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)', padding: 'var(--space-4)', minHeight: 88 }}
-            >
-              <span className="sf-body" style={{ color: 'var(--text)' }}>Take the 2-min quiz</span>
-              <span className="sf-meta">A stack built around your goals</span>
-            </Link>
-
-            <button
-              onClick={goToDeals}
-              data-interactive
-              className="flex flex-col justify-between text-left"
-              style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)', border: 'none', padding: 'var(--space-4)', minHeight: 88 }}
-            >
-              <span className="sf-body" style={{ color: 'var(--text)' }}>
-                {dealsSection ? 'Today’s deals' : 'Browse the range'}
-              </span>
-              <span className="sf-meta">
-                {dealsSection ? `Save up to ${dealsPct}%` : 'Jump to the shelves'}
-              </span>
-            </button>
-          </div>
-        )}
-
-        {/*
-          The roulette. Its lever — a gradient fill, an accent bloom underneath
-          and a band of light sweeping across every six seconds — is gone with
-          the rest of the glow; it is a ghost button now, because it is the
-          least important of the three ways in and it was the loudest.
-        */}
-        {!searching && (
-          <Button
-            variant="ghost"
-            size="md"
-            fullWidth
-            onClick={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
-            className="justify-start"
+          <Link
+            href="/"
+            data-interactive
+            className="sf-banner relative flex flex-col justify-end overflow-hidden"
+            style={{
+              marginTop: 'var(--space-5)',
+              borderRadius: 'var(--r-card)',
+              background: 'var(--surface)',
+              minHeight: 132,
+              padding: 'var(--space-5)',
+            }}
           >
-            Feeling lucky? Spin for a flavour
-          </Button>
+            {/* The stack, arranged. Cut-out product photography is the only
+                imagery this shop has, so the banner is made of it rather than
+                of a stock photograph we do not own. */}
+            {/*
+              The products get their own column and the copy gets the rest, so
+              the two never overlap however long the headline wraps. A mask
+              fades the cluster out towards the text rather than a hard edge
+              cutting it — the group should read as continuing behind the words.
+            */}
+            <span
+              aria-hidden
+              className="absolute inset-y-0 right-0 flex items-center justify-end pointer-events-none"
+              style={{
+                width: '42%',
+                gap: 'var(--space-1)',
+                paddingRight: 'var(--space-3)',
+                maskImage: 'linear-gradient(to right, transparent, #000 34%)',
+                WebkitMaskImage: 'linear-gradient(to right, transparent, #000 34%)',
+              }}
+            >
+              {heroProducts.map((p, i) => (
+                <ProductTile
+                  key={p.id}
+                  imageUrl={p.imageUrl}
+                  slot={p.stackSlots[0]}
+                  title=""
+                  size={96}
+                  style={{ width: 56, height: 92 - i * 10, opacity: 0.95 }}
+                />
+              ))}
+            </span>
+
+            <span className="relative" style={{ maxWidth: '56%' }}>
+              <span className="sf-title block" style={{ color: 'var(--text)' }}>Not sure where to start?</span>
+              <span className="sf-meta block" style={{ marginTop: 'var(--space-1)' }}>
+                A 2-minute quiz builds a stack around your goals
+              </span>
+            </span>
+          </Link>
         )}
       </div>
+
+      {!searching && (
+        <ShopGoalRow
+          products={products}
+          selected={query.goals}
+          onSelect={(goal) => applyQueryChange({ ...query, goals: goal ? [goal] : [] })}
+          onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
+        />
+      )}
 
       {!searching && <TrustStrip products={products} />}
 

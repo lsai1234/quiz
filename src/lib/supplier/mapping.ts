@@ -213,6 +213,7 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     // the next supplier we add cannot reintroduce the markup leak.
     description: cleanDescription(sp.description),
     imageUrl: sp.imageUrl,
+    brand: sp.brand || null,
     category: sp.category,
     stackSlots: c.stackSlots,
     goals: c.goals,

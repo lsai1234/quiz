@@ -152,7 +152,15 @@ export function ShopProductCard({
       </div>
 
       <div className="flex flex-col flex-1" style={{ padding: 'var(--space-3)', gap: 2 }}>
-        {/* The price leads. It is the first thing anyone looks for on a shelf. */}
+        {/*
+          Brand first. It is how a supplement shelf is actually scanned — the
+          manufacturer, then the product — and without it every card in a
+          category opens with the same three words. PowerBody has always sent
+          it; the catalogue used to throw it away.
+        */}
+        {product.brand && <p className="sf-label" style={{ paddingRight: 40 }}>{product.brand}</p>}
+
+        {/* Then the price. It is the first NUMBER anyone looks for. */}
         <p className="flex items-baseline" style={{ gap: 'var(--space-2)', paddingRight: 40 }}>
           <span className="sf-price">{formatGBP(price)}</span>
           {onDeal && rrp != null && <span className="sf-meta sf-tnum line-through">{formatGBP(rrp)}</span>}

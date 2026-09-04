@@ -373,3 +373,17 @@
   .sf-card:active,
   .sf-add:active { transform: none; }
 }
+
+/* ── Goal tiles ──────────────────────────────────────────────────────────────*/
+.sf-goal { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.sf-goal:active { transform: scale(0.96); }
+
+@media (hover: hover) {
+  .sf-goal[aria-pressed='false']:hover > span:first-child {
+    background: var(--surface-hi);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-goal:active { transform: none; }
+}

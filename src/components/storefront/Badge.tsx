@@ -16,7 +16,7 @@ import type { ReactNode } from 'react'
 export function Badge({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <span
-      className={`sf-label inline-flex items-center ${className ?? ''}`}
+      className={`sf-label inline-flex items-center whitespace-nowrap max-w-full truncate ${className ?? ''}`}
       style={{
         padding: '0 var(--space-2)',
         minHeight: 22,
