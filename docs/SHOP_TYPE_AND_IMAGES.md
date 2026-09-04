@@ -173,3 +173,110 @@ The four type classes are defined and used on the new surfaces; the rest of the
 shop still sets `text-sm`, `text-xs` and `text-[11px]` directly. Sweeping those
 is a mechanical change worth doing as its own pass, with a scoped test to hold
 it — the same shape as `tokens-only.test.ts` does for `src/components/system`.
+
+
+---
+
+# Second pass: the shop on the design system
+
+Feedback from a live phone: *"the whole UI still looks cheap"*, next to a
+reference that was — the reviewer was explicit — not about colour.
+
+## The finding
+
+The shop is not on the design system, and that is documented rather than
+accidental. `DESIGN.md` §"Every hub is migrated; the storefront is not" says the
+brief was everything *outside* the quiz flow, and the storefront was never in
+scope. So the three hubs got a lit ground, translucent surfaces at three
+elevations, a specular band that makes a plane read as a sheet catching light,
+solid controls with a gradient and a bloom, and spring easing — and the shop got
+a flat `#09090b` rectangle with 1px hairline borders.
+
+That is the whole gap. Not spacing, not radii, not the reference's colour: the
+shop was drawing boxes on a page while the rest of the app was building objects
+in a room.
+
+## What moved
+
+| | Before | Now |
+|---|---|---|
+| Page | `bg-[var(--color-bg)]`, flat | `<Ground>` — three drifting blooms, vignette, film grain |
+| Product card | hand-rolled `div` + hairline | `<Card elevation={1}>` — translucent, specular band, real shadow |
+| Add | hand-rolled accent slab | `<Button variant="secondary">` |
+| Photo | full-bleed white square | inset white plate, rounded, framed by the card |
+
+The grain is not decoration: large dark gradients band visibly on an 8-bit phone
+screen, and grain is what breaks the bands and gives the black something to be
+made of. It is the cheapest single thing separating a premium surface from a
+flat one, and the shop had none of it.
+
+**`secondary`, not `primary`, on the card.** The system reserves the filled
+gradient for the one action a screen is *for*. A shelf's is "go to the basket";
+four filled primaries in a viewport stops meaning "press this" and starts
+meaning "cyan". Tried it as primary first — it was the brightest thing on the
+shelf by a distance.
+
+**The photo as an inset plate.** Supplier cut-outs are baked onto white, so the
+plate has to be white or a seam shows. Run edge to edge, that white square *is*
+the card: four of them tile the screen and the product is the smallest thing on
+its own shelf. Inset by the card's own padding, the dark surface frames each
+photo and the cards read as objects holding pictures. A 9% inset inside the
+plate gives every product the same margin, so a 2:3 pouch and a square tub look
+like one set of objects photographed the same way — which they are not.
+
+## The roulette
+
+**The reel.** It was a `setTimeout` every 70ms swapping the product name for a
+random other one. It read as text flickering because that is what it was:
+nothing moved, nothing had weight, and the stop was a state change rather than
+an arrival.
+
+It is now a real drum. Four things make it physical, none of them a library:
+
+1. **One continuous position, not frames of content.** The strip is a column of
+   the actual products the wheel could land on, translated on Y by a number
+   that comes from a clock. Nothing swaps; a thing moves.
+2. **Deceleration with an overshoot.** Quintic ease-out, then a damped spring
+   settles it back onto the detent — so it arrives, bounces once against the
+   stop and rests. A pure ease-out lands too politely and reads as a fade.
+3. **Motion blur from the actual velocity**, computed per frame, so it smears
+   when quick and is perfectly sharp the instant it stops. A fixed blur that
+   switches off is what makes cheap slot machines look cheap.
+4. **A detent every row**, so the slowing feels like passing over stops rather
+   than sliding on ice.
+
+One `requestAnimationFrame` loop over a closed-form position function — no
+per-frame React state, no re-render per frame. Plus a sweep across the landed
+row at the moment it stops: the visual equivalent of the click, because without
+it "stopped" and "broken" look the same.
+
+The decoy rows come from the same eligible pool as the outcome, so everything
+that streaks past is a thing the shopper could actually have been given — a reel
+padded with out-of-stock or filtered-out products is showing them a shelf we
+will not sell them. Two rows continue past the landing so the window's bottom
+slot is never empty; without them the drum reads as a list scrolled to its end.
+
+The outcome is still decided by `spin()` before the first frame, under the
+guardrails `roulette.test.ts` holds. The reel is only responsible for arriving
+there convincingly.
+
+**One bug this surfaced:** the footer read `Add for £29.99` off `entry`, which is
+set the moment the pull is decided — so the result was announced in the button
+several seconds before the reveal. A reveal cannot survive that.
+
+**The lever.** The trigger was a grey row with an arrow, indistinguishable from a
+link, with nothing to suggest a machine behind it. It now has three reel windows
+that riffle when pressed, an accent bloom under it, and a band of light that
+crosses every six seconds — long gap, short pass, so it reads as something
+catching the light occasionally rather than a thing that is always animating.
+All of the motion is off under `prefers-reduced-motion`; the shape and the bloom
+are what make it read as a control, and those stay.
+
+## Still on the old layer
+
+The migration is the product card, the page ground and the roulette. Not yet
+moved: the hero action cards, the trust strip, the category nav and filter bar,
+the search bar, the product sheet, the basket drawer, the duel and the bundle
+cards. They still use `--color-*` and hairline borders, so the shelf now reads
+considerably better than the chrome around it. That unevenness is the honest
+state — worth finishing, and the same shape of change each time.

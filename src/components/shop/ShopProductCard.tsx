@@ -9,6 +9,7 @@ import { categoryHue } from '@/lib/shop/category-visuals'
 import { useBasket } from '@/lib/basket/store'
 import { hasRating } from '@/lib/shop/ratings'
 import { track } from '@/lib/analytics/events'
+import { Card, Button } from '@/components/system'
 import { ProductTile } from '@/components/stack-review/ProductTile'
 import { StarRating } from './StarRating'
 
@@ -88,10 +89,18 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
   }
 
   return (
-    <div
-      className="relative flex flex-col rounded-2xl overflow-hidden h-full"
-      style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
-    >
+    /*
+      The system's Card, not a hand-rolled bordered box.
+      
+      What that buys, and what the hairline-bordered div it replaces could not:
+      a translucent surface that lets the ground's blooms show through, the
+      specular band along the top edge that makes a plane read as a sheet
+      catching light rather than a lighter rectangle, and a real shadow so the
+      card sits ON the page instead of being drawn on it. `padding="none"`
+      because the photo goes to the edge and the caller owns the inset — the one
+      exception DESIGN.md names to the specular invariant.
+    */
+    <Card elevation={1} padding="none" className="relative flex flex-col overflow-hidden h-full">
       <Link
         href={`/product/${product.handle}`}
         onClick={(e) => {
@@ -104,14 +113,26 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
         }}
         className="flex flex-col flex-1 active:opacity-90 transition-opacity"
       >
-        <ProductTile
-          imageUrl={product.imageUrl}
-          slot={product.stackSlots[0]}
-          title={product.title}
-          size={320}
-          fill
-          className="rounded-none border-0"
-        />
+        {/*
+          The photo as an inset plate, not a full-bleed square.
+
+          Supplier cut-outs are baked onto white, so the plate has to be white or
+          the seam shows. Run edge to edge and that white square IS the card —
+          four of them tile the screen and the product is the smallest thing on
+          its own shelf. Inset by the card's own padding and rounded, the dark
+          surface frames each photo, the cards read as objects holding pictures,
+          and the eye goes to the product rather than to the rectangle.
+        */}
+        <div className="p-2.5 pb-0">
+          <ProductTile
+            imageUrl={product.imageUrl}
+            slot={product.stackSlots[0]}
+            title={product.title}
+            size={320}
+            fill
+            pad
+          />
+        </div>
 
         <div className="p-3 flex flex-col gap-1.5 flex-1">
           <span
@@ -159,25 +180,22 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
         it is available without being offered.
       */}
       <div className="p-2.5 flex flex-col gap-1.5" style={{ borderTop: '1px solid var(--color-border)' }}>
-        <button
+        {/*
+          `secondary`, not `primary`. The system reserves the filled gradient for
+          the one action a screen is FOR, and a shelf's is "go to the basket",
+          which lives in the bar at the bottom. Four primaries in a viewport
+          stops meaning "press this" and starts meaning "cyan".
+        */}
+        <Button
+          variant="secondary"
+          size="md"
+          fullWidth
           onClick={handleAdd}
           disabled={soldOut}
           aria-label={soldOut ? undefined : `Add ${product.title} to basket`}
-          className="w-full py-2.5 rounded-xl text-sm font-bold active:scale-[0.97] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          /*
-            Tinted rather than filled. Two solid-accent slabs side by side in a
-            two-column grid were the brightest thing on the shelf by a distance
-            — the eye went to the buttons and not to the products.
-          */
-          style={{
-            fontFamily: 'var(--font-display)',
-            background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)',
-            color: 'var(--color-accent)',
-            border: `1px solid color-mix(in srgb, var(--color-accent) ${justAdded ? 55 : 28}%, transparent)`,
-          }}
         >
           {soldOut ? (product.restockingSoon ? 'Back in stock soon' : 'Sold out') : justAdded ? 'Added' : 'Add'}
-        </button>
+        </Button>
 
         {onToggleCompare && (
           <button
@@ -200,6 +218,6 @@ export function ShopProductCard({ product, onExpand, compareSelected, onToggleCo
           </button>
         )}
       </div>
-    </div>
+    </Card>
   )
 }

@@ -641,3 +641,132 @@
    that actually matters — it is what stops a column of prices wandering off the
    decimal and a live total jittering as it updates — and both Inter and Space
    Grotesk carry the feature, so it works on the type already loaded. */
+
+/* ── The roulette detent ──────────────────────────────────────────────────────
+   The sweep that crosses the landed row once, at the moment the reel stops. It
+   is the visual equivalent of the click a mechanical detent makes: without it
+   the reel just quietly ceases to move, and "stopped" and "broken" look the
+   same. One pass, then gone — a loop would turn an event into decoration. */
+.roulette-landed::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.14) 48%,
+    rgba(255, 255, 255, 0.26) 52%,
+    transparent 70%
+  );
+  transform: translateX(-120%);
+  animation: roulette-sweep 620ms var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1)) 1 both;
+}
+
+@keyframes roulette-sweep {
+  to { transform: translateX(120%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The landing still needs to be marked, but not by something crossing the
+     screen. The lit frame on the row does that on its own. */
+  .roulette-landed::after {
+    display: none;
+  }
+}
+
+/* ── The roulette lever ───────────────────────────────────────────────────────
+   The control that opens the flavour roulette. It was a grey row with an arrow,
+   indistinguishable from a link, and nothing about it suggested a machine.
+
+   Three parts: a bloom under it so it sits proud of the page, a band of light
+   that crosses it every few seconds so it catches the eye without animating
+   continuously, and three little reel windows that riffle when it is pressed —
+   the control previews the thing it opens. */
+.system-lever {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  box-shadow: 0 10px 30px -18px color-mix(in srgb, var(--color-accent) 75%, transparent);
+  transition: transform 160ms var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1)),
+              box-shadow 200ms ease-out;
+}
+
+.system-lever:active {
+  transform: scale(0.985);
+  box-shadow: 0 4px 14px -10px color-mix(in srgb, var(--color-accent) 75%, transparent);
+}
+
+@media (hover: hover) {
+  .system-lever:hover {
+    box-shadow: 0 14px 38px -18px color-mix(in srgb, var(--color-accent) 90%, transparent);
+  }
+}
+
+/* The passing band of light. Long gap, short pass: it should read as something
+   catching the light occasionally, not as a thing that is always animating. */
+.system-lever::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 38%,
+    color-mix(in srgb, var(--color-accent) 22%, transparent) 50%,
+    transparent 62%
+  );
+  transform: translateX(-130%);
+  animation: system-lever-sheen 6.5s ease-in-out infinite;
+}
+
+@keyframes system-lever-sheen {
+  0%, 78% { transform: translateX(-130%); }
+  92%, 100% { transform: translateX(130%); }
+}
+
+/* The three windows. Each is a short bar that slides within its slot; they run
+   at different speeds so the group reads as three independent reels. */
+.system-lever-reel i {
+  display: block;
+  width: 5px;
+  height: 16px;
+  border-radius: 2px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-accent) 85%, transparent) 0 4px,
+      transparent 4px 8px
+    );
+  background-size: 100% 8px;
+}
+
+.system-lever:active .system-lever-reel i {
+  animation: system-lever-riffle 420ms linear;
+}
+
+.system-lever:active .system-lever-reel i:nth-child(2) { animation-duration: 520ms; }
+.system-lever:active .system-lever-reel i:nth-child(3) { animation-duration: 620ms; }
+
+@keyframes system-lever-riffle {
+  to { background-position-y: 64px; }
+}
+
+.system-lever-arrow {
+  transition: transform 200ms var(--ease-spring, cubic-bezier(0.22, 1, 0.36, 1));
+}
+
+@media (hover: hover) {
+  .system-lever:hover .system-lever-arrow { transform: translateX(2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No passing light, no riffle. The lever keeps its bloom and its shape, which
+     is what makes it read as a control; the motion was never load-bearing. */
+  .system-lever::after,
+  .system-lever:active .system-lever-reel i {
+    animation: none;
+  }
+  .system-lever::after { display: none; }
+}

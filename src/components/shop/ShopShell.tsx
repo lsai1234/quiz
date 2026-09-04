@@ -41,6 +41,7 @@ import { ShopRouletteSheet } from './ShopRouletteSheet'
 import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
+import { Ground } from '@/components/system'
 
 // Canonical dietary-chip order (matches the sheet's labels).
 const DIETARY_ORDER = Object.keys(DIETARY_LABEL) as DietaryTag[]
@@ -604,7 +605,19 @@ export function ShopShell() {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[var(--color-bg)] text-[var(--color-text)] pb-40">
+    /*
+      The shop on the lit ground.
+      
+      DESIGN.md says the storefront was never migrated onto the design system,
+      and this is the layer that absence was most visible in: the hubs sit on
+      three drifting blooms with a vignette and film grain, and the shop sat on
+      a flat `#09090b` rectangle. Everything above the ground depends on it —
+      a translucent card over a flat colour is just a lighter box, and large
+      dark gradients band visibly on an 8-bit phone screen without the grain to
+      break them up. It is the cheapest single change that stops the shelf
+      reading as a wireframe.
+    */
+    <Ground className="text-[var(--color-text)] pb-40">
       <ShopHeader count={count} onOpenBasket={openDrawer} />
 
       <main>
@@ -668,16 +681,37 @@ export function ShopShell() {
         {!searching && (
           <button
             onClick={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
-            className="w-full mt-2.5 flex items-center gap-2 rounded-xl px-4 py-2.5 text-left active:scale-[0.99] transition-transform"
-            style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)' }}
+            className="system-lever w-full mt-2.5 flex items-center gap-3 rounded-2xl px-4 py-3 text-left"
+            style={{
+              background: 'linear-gradient(180deg, color-mix(in srgb, var(--color-accent) 13%, var(--color-surface)) 0%, var(--color-surface) 100%)',
+              border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
+            }}
           >
-            <span className="text-xs font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-              Feeling lucky?
+            {/*
+              The three-window reel, at rest and riffling on press. A lever
+              should look like the machine it opens — the old control was a grey
+              row with an arrow on it, indistinguishable from a link, and
+              nothing about it suggested there was anything behind it worth
+              pulling.
+            */}
+            <span aria-hidden className="system-lever-reel flex-shrink-0 flex gap-[3px] rounded-md p-[3px]" style={{ background: 'color-mix(in srgb, var(--color-bg) 55%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 22%, transparent)' }}>
+              <i /><i /><i />
             </span>
-            <span className="flex-1 text-[11px]" style={{ color: 'var(--color-text-2)' }}>
-              Spin for a flavour
+
+            <span className="flex-1 min-w-0">
+              <span className="block text-[13px] font-black leading-tight" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                Feeling lucky?
+              </span>
+              <span className="block text-[11px] leading-tight mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+                Pull the lever for a flavour
+              </span>
             </span>
-            <span className="text-xs" style={{ color: 'var(--color-accent)' }} aria-hidden>→</span>
+
+            <span className="system-lever-arrow flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center" style={{ background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)', color: 'var(--color-accent)' }} aria-hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 12h14M13 6l6 6-6 6" />
+              </svg>
+            </span>
           </button>
         )}
       </div>
@@ -865,6 +899,6 @@ export function ShopShell() {
           onClose={closeDrawer}
         />
       )}
-    </div>
+    </Ground>
   )
 }

@@ -20,6 +20,17 @@ interface Props {
    * asked for, and roughly what the tile renders at.
    */
   fill?: boolean
+  /**
+   * Inset the photo inside its plate, as a fraction of the tile.
+   *
+   * Supplier photography is cut-outs on white at wildly different framings —
+   * one product fills its frame, the next floats in the middle of a 2:3 JPEG.
+   * Rendered flush, a shelf of them has no common baseline and reads as a
+   * collage. A consistent inset gives every product the same white margin, so
+   * the cards look like one set of objects photographed the same way even when
+   * the source images were not.
+   */
+  pad?: boolean
   className?: string
 }
 
@@ -45,7 +56,7 @@ interface Props {
  * photo that renders unnormalised is a worse-looking card; a broken image is a
  * broken shop, and the first version of this failed silently into the second.
  */
-export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, className }: Props) {
+export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, pad = false, className }: Props) {
   const { glyph, hue } = slotVisual(slot)
   const normalised = productImageSrc(imageUrl, size)
 
@@ -79,7 +90,7 @@ export function ProductTile({ imageUrl, slot, title, size = 96, fill = false, cl
           alt={title ?? ''}
           width={size}
           height={size}
-          className="w-full h-full object-contain"
+          className={`w-full h-full object-contain ${pad ? 'p-[9%]' : ''}`}
           loading="lazy"
           decoding="async"
           onError={() => setAttempt((a) => a + 1)}

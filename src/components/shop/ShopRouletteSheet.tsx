@@ -5,11 +5,11 @@ import { createPortal } from 'react-dom'
 import confetti from 'canvas-confetti'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ShopQuery } from '@/lib/shop/shop-query'
-import { spin, entryLabel, entryDeal, type RouletteEntry } from '@/lib/shop/roulette'
+import { spin, rouletteEntries, entryLabel, entryDeal, type RouletteEntry } from '@/lib/shop/roulette'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { useBasket } from '@/lib/basket/store'
 import { track } from '@/lib/analytics/events'
-import { ProductTile } from '@/components/stack-review/ProductTile'
+import { RouletteReel } from './RouletteReel'
 
 interface Props {
   products: CatalogueProduct[]
@@ -18,57 +18,64 @@ interface Props {
   onClose: () => void
 }
 
-/** How long the wheel pretends to think. Long enough to feel like a pull. */
-const SPIN_MS = 900
-
-/** How fast the names flick past while it spins. */
-const TICK_MS = 70
+/** How many rows fly past on the way to the landed one. */
+const STRIP_ROWS = 20
 
 export function ShopRouletteSheet({ products, query, onClose }: Props) {
   const [mounted, setMounted] = useState(false)
   const [reduced, setReduced] = useState(false)
   const [spinning, setSpinning] = useState(false)
   const [entry, setEntry] = useState<RouletteEntry | null>(null)
-  const [teaser, setTeaser] = useState<RouletteEntry | null>(null)
+  const [strip, setStrip] = useState<RouletteEntry[]>([])
+  const [spinKey, setSpinKey] = useState(0)
   const [added, setAdded] = useState(false)
   const add = useBasket((s) => s.add)
 
-  const timers = useRef<Array<ReturnType<typeof setTimeout>>>([])
-  const clearTimers = () => { timers.current.forEach(clearTimeout); timers.current = [] }
+  /**
+   * Build the rows the reel flies past, ending on the one it lands on.
+   *
+   * The decoys are drawn from the SAME eligible pool as the outcome, so
+   * everything that streaks past is a thing the shopper could actually have
+   * been given. A reel padded with products that are out of stock or outside
+   * their filters would be showing them a shelf we will not sell them.
+   */
+  const buildStrip = useCallback((landed: RouletteEntry): RouletteEntry[] => {
+    const pool = rouletteEntries(products, query)
+    if (pool.length === 0) return [landed]
+    const decoy = () => pool[Math.floor(Math.random() * pool.length)]
+    const rows: RouletteEntry[] = []
+    for (let i = 0; i < STRIP_ROWS; i++) rows.push(decoy())
+    rows.push(landed)
+    // Two rows past the landing, so the window's bottom slot is never empty.
+    rows.push(decoy(), decoy())
+    return rows
+  }, [products, query])
 
   const pull = useCallback(() => {
     const landed = spin(products, query, entry?.variant.id ?? null)
-    if (!landed) { setEntry(null); return }
+    if (!landed) { setEntry(null); setStrip([]); return }
     setAdded(false)
-
-    // Read synchronously rather than from state: this runs from a mount effect,
-    // before the effect that fills `reduced` in has had a turn.
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setEntry(landed)
-      track('shop_roulette_spin', { id: landed.product.id, variant: landed.variant.id })
-      return
-    }
-
+    setEntry(landed)
+    setStrip(buildStrip(landed))
     setSpinning(true)
-    setEntry(null)
-    const started = Date.now()
-    const tick = () => {
-      if (Date.now() - started >= SPIN_MS) {
-        setSpinning(false)
-        setTeaser(null)
-        setEntry(landed)
+    setSpinKey((k) => k + 1)
+  }, [products, query, entry, buildStrip])
+
+  /**
+   * The reel has arrived. Everything that is a REWARD rather than a mechanism
+   * happens here — the announcement, the confetti, the analytics — so none of
+   * it fires while the thing is still moving.
+   */
+  const handleSettled = useCallback(() => {
+    setSpinning(false)
+    setEntry((landed) => {
+      if (landed) {
         track('shop_roulette_spin', { id: landed.product.id, variant: landed.variant.id })
-        void confetti({ particleCount: 60, spread: 65, origin: { y: 0.7 }, disableForReducedMotion: true })
-        return
+        void confetti({ particleCount: 70, spread: 72, startVelocity: 34, origin: { y: 0.62 }, disableForReducedMotion: true })
       }
-      // Names flicking past are decoration only — the outcome was decided before
-      // the first frame, so the wheel cannot land somewhere the guardrails have
-      // not already cleared.
-      setTeaser(spin(products, query, null))
-      timers.current.push(setTimeout(tick, TICK_MS))
-    }
-    tick()
-  }, [products, query, entry])
+      return landed
+    })
+  }, [])
 
   useEffect(() => { setMounted(true) }, [])
   useEffect(() => {
@@ -86,16 +93,16 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
   }, [onClose])
 
   /*
-   * One pull on open — nobody opens this to look at an empty wheel.
+   * One pull on open — nobody opens this to look at a still reel.
    *
-   * The spin and its timers live in ONE effect so they are torn down together.
-   * An earlier version guarded the pull with a ref and cleared the timers from a
-   * different effect: React's development remount then cleared the timers while
-   * the ref survived, and the wheel span forever without ever landing.
+   * The reel owns its own animation frame and cancels it on unmount, so unlike
+   * the timer-based version this replaced there is nothing here to tear down
+   * and nothing a development remount can leave running. That bug — a ref that
+   * survived the remount while the timers were cleared, so the wheel span
+   * forever — is not reachable from this shape.
    */
   useEffect(() => {
     pull()
-    return clearTimers
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -106,8 +113,7 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
     setAdded(true)
   }
 
-  const shown = entry ?? teaser
-  const deal = entry ? entryDeal(entry) : { onDeal: false, pct: 0 }
+  const deal = entry && !spinning ? entryDeal(entry) : { onDeal: false, pct: 0 }
 
   const sheet = (
     <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Flavour roulette">
@@ -138,42 +144,42 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
           </button>
         </header>
 
-        <div className="px-5 py-6 min-h-[13rem] flex flex-col items-center justify-center text-center">
-          {shown ? (
+        <div className="px-1 pt-5 pb-4 min-h-[15rem] flex flex-col justify-center">
+          {strip.length > 0 ? (
             <>
-              <div style={{ opacity: spinning ? 0.45 : 1, transition: reduced ? 'none' : 'opacity 0.2s' }}>
-                <ProductTile
-                  imageUrl={shown.product.imageUrl}
-                  slot={shown.product.stackSlots[0]}
-                  title={shown.product.title}
-                  size={64}
-                />
-              </div>
-              <p className="text-sm font-black mt-3" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                {shown.product.title}
-              </p>
-              <p className="text-lg font-black mt-0.5" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
-                {entryLabel(shown)}
-              </p>
+              <RouletteReel
+                strip={strip}
+                landedIndex={Math.max(0, strip.length - 3)}
+                spinKey={spinKey}
+                reduced={reduced}
+                onSettled={handleSettled}
+              />
 
-              {/* Only ever the real price of the variant it landed on. */}
-              {entry && (
-                <p className="text-sm font-bold mt-2 tabular-nums" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
-                  {formatGBP(entry.variant.price)}
-                  {deal.onDeal && (
-                    <span className="ml-2" style={{ color: 'var(--color-accent)' }}>−{deal.pct}%</span>
-                  )}
-                </p>
-              )}
+              {/*
+                The price sits under the reel rather than in it, and only once
+                the reel has stopped. A price attached to a row that is still
+                moving is a number nobody can read and half of them are not the
+                one being offered.
+              */}
+              <div className="h-7 mt-3 text-center">
+                {entry && !spinning && (
+                  <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                    {formatGBP(entry.variant.price)}
+                    {deal.onDeal && (
+                      <span className="ml-2" style={{ color: 'var(--color-accent)' }}>−{deal.pct}%</span>
+                    )}
+                  </p>
+                )}
+              </div>
             </>
           ) : (
-            <p className="text-sm" style={{ color: 'var(--color-muted)' }}>
+            <p className="text-sm text-center px-4" style={{ color: 'var(--color-muted)' }}>
               Nothing to spin for inside your filters. Try clearing one.
             </p>
           )}
 
           <p role="status" aria-live="polite" className="sr-only">
-            {entry ? `Landed on ${entry.product.title}, ${entryLabel(entry)}, ${formatGBP(entry.variant.price)}` : ''}
+            {entry && !spinning ? `Landed on ${entry.product.title}, ${entryLabel(entry)}, ${formatGBP(entry.variant.price)}` : ''}
           </p>
         </div>
 
@@ -196,7 +202,14 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
               fontFamily: 'var(--font-display)',
             }}
           >
-            {added ? 'Added' : entry ? `Add for ${formatGBP(entry.variant.price)}` : 'Add'}
+            {/*
+              Never the landed price while the reel is still moving. `entry` is
+              set the moment the pull is decided — that is what the reel is
+              animating towards — so a label read straight off it announced the
+              result in the footer several seconds before the reveal, which is
+              the one thing a reveal cannot survive.
+            */}
+            {added ? 'Added' : spinning ? 'Spinning…' : entry ? `Add for ${formatGBP(entry.variant.price)}` : 'Add'}
           </button>
         </footer>
       </div>
