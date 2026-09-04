@@ -56,89 +56,130 @@ shop: near-black ground, one cyan accent, no clutter.
 
 ## The prompts
 
-Paste these as-is. Where a prompt says *attach your logo* or *attach a product
-photo*, use the image-input / reference-image feature of whichever model you are
-using — the logo is `public/` brand art, and product shots come from PowerBody.
+Each one is complete on its own — copy from the first word to the last and paste
+it straight into the generator. Nothing here depends on anything above it.
+
+Where a prompt says *attach your logo* or *attach a product photo*, use the
+image-input / reference-image feature of whichever model you are using. See
+**Putting the logo in**, below, and read it before you try: asking a model to
+draw the logo does not work.
 
 ### 1. The hero — "start with the quiz"
 
-> A wide 16:9 studio photograph, 1280x720. A near-black background (#0A0B0D)
-> with a soft graded falloff. On the RIGHT THIRD of the frame, three matte black
-> supplement tubs of different heights arranged in a tight group, shot from
-> slightly above eye level, lit from the upper right by a single cool cyan light
-> (#00C8F0) that rims their edges. The LEFT HALF of the frame is empty
-> near-black negative space with only a faint cyan glow bleeding in from the
-> right. Shallow depth of field, the front tub sharp and the back two softly
-> out of focus. Fine film grain. No text, no labels, no logos, no people.
-> Premium, restrained, editorial — a sports nutrition brand, not a supermarket.
+```
+A wide 16:9 studio product photograph, 1280x720 pixels, landscape.
+A near-black background, hex #0A0B0D, with a soft graded falloff so it is
+not flat. On the RIGHT THIRD of the frame, three matte black supplement tubs
+of different heights arranged in a tight overlapping group on a dark
+surface, shot from slightly above eye level. A single cool cyan light source,
+hex #00C8F0, from the upper right, rimming their edges and shoulders. The
+LEFT 45% OF THE FRAME MUST BE EMPTY near-black negative space with only a
+faint cyan glow bleeding in from the right — nothing in it, no object, no
+detail. Shallow depth of field: the front tub sharp, the back two softly out
+of focus. Deep shadows, high contrast, fine film grain. Premium, restrained,
+editorial — a sports nutrition brand, not a supermarket shelf.
+NO TEXT. NO WORDS. NO LETTERING. NO LABELS. NO LOGOS. NO PEOPLE.
+NO WATERMARK. Photographic, not illustrated, not 3D-rendered.
+```
 
-Suggested copy: **"Not sure where to start?"** / "A 2-minute quiz builds a stack
-around your goals" → `/`
+Headline **Not sure where to start?** · Subhead *A 2-minute quiz builds a stack
+around your goals* · Links to `/`
 
 ### 2. Deals
 
-> A wide 16:9 studio photograph, 1280x720. Near-black background (#0A0B0D). On
-> the RIGHT of the frame, a loose arrangement of five or six matte black and
-> dark grey supplement containers of varying heights, seen at a slight angle,
-> receding into shadow. A single cyan light source (#00C8F0) from the top right
-> catches the rims and the shoulders of the nearest containers. The LEFT 45% is
-> empty dark negative space. Deep shadows, high contrast, shallow depth of
-> field, subtle film grain. No text, no labels, no logos, no people.
+```
+A wide 16:9 studio product photograph, 1280x720 pixels, landscape.
+A near-black background, hex #0A0B0D. On the RIGHT of the frame, a loose
+arrangement of five or six matte black and dark grey supplement containers of
+varying heights, seen at a slight angle, the furthest ones receding into
+shadow. A single cool cyan light source, hex #00C8F0, from the top right,
+catching the rims and shoulders of the nearest containers only. The LEFT 45%
+OF THE FRAME MUST BE EMPTY dark negative space — nothing in it, no object, no
+detail. Deep shadows, high contrast, shallow depth of field, subtle film
+grain. Premium and restrained, not a sale poster.
+NO TEXT. NO WORDS. NO LETTERING. NO LABELS. NO PRICE TAGS. NO STARBURSTS.
+NO LOGOS. NO PEOPLE. NO WATERMARK. Photographic, not illustrated.
+```
 
-Suggested copy: **"This week's deals"** / "Up to 28% off across the range" →
-`/shop#shop-cat-deals`
+Headline **This week's deals** · Subhead *Up to 28% off across the range* ·
+Links to `/shop#shop-cat-deals`
 
 ### 3. Protein
 
-> A wide 16:9 studio photograph, 1280x720. Near-black background. On the RIGHT
-> of the frame, a single large matte black protein tub with its lid off, a
-> scoop resting against its base, a soft drift of pale powder on the dark
-> surface in front of it. Lit from the right with one cool cyan light
-> (#00C8F0); the powder catches the light. LEFT HALF empty dark negative space.
-> Macro detail on the powder texture, shallow depth of field, film grain. No
-> text, no labels, no logos, no people.
+```
+A wide 16:9 studio product photograph, 1280x720 pixels, landscape.
+A near-black background, hex #0A0B0D. On the RIGHT of the frame, a single
+large matte black protein tub with its lid off, a scoop resting against its
+base, and a soft drift of pale powder spilled on the dark surface in front of
+it. Lit from the right by one cool cyan light, hex #00C8F0, so the airborne
+powder and the drift catch the light. The LEFT 45% OF THE FRAME MUST BE EMPTY
+dark negative space — nothing in it, no object, no detail. Macro detail in
+the powder texture, very shallow depth of field, fine film grain, deep
+shadow.
+NO TEXT. NO WORDS. NO LETTERING. NO LABELS. NO NUTRITION PANEL. NO LOGOS.
+NO PEOPLE. NO WATERMARK. Photographic, not illustrated.
+```
 
-Suggested copy: **"Protein, properly"** / "Whey, isolate and plant — priced per
-serving" → `/shop#shop-cat-protein`
+Headline **Protein, properly** · Subhead *Whey, isolate and plant — priced per
+serving* · Links to `/shop#shop-cat-protein`
 
 ### 4. Hydration
 
-> A wide 16:9 studio photograph, 1280x720. Near-black background. On the RIGHT,
-> a tall glass of clear water on a dark wet surface, mid-dissolve, with fine
-> bubbles rising and a few water droplets on the surface around it. Lit from
-> behind and the right by a single cyan light (#00C8F0) so the water glows and
-> the droplets are lit points. LEFT HALF empty dark negative space. Very
-> shallow depth of field, high contrast, film grain. No text, no labels, no
-> logos, no people.
+```
+A wide 16:9 studio photograph, 1280x720 pixels, landscape.
+A near-black background, hex #0A0B0D. On the RIGHT of the frame, a tall glass
+of clear water on a dark wet surface, caught mid-dissolve, with fine bubbles
+rising through it and scattered water droplets on the surface around its
+base. Lit from behind and from the right by a single cyan light, hex #00C8F0,
+so the water glows from within and each droplet reads as a small lit point.
+The LEFT 45% OF THE FRAME MUST BE EMPTY dark negative space — nothing in it,
+no object, no detail. Very shallow depth of field, high contrast, fine film
+grain.
+NO TEXT. NO WORDS. NO LETTERING. NO LABELS. NO LOGOS. NO PEOPLE.
+NO WATERMARK. Photographic, not illustrated.
+```
 
-Suggested copy: **"Hydration that holds"** / "Electrolytes for long days and
-longer sessions" → `/shop#shop-cat-hydration`
+Headline **Hydration that holds** · Subhead *Electrolytes for long days and
+longer sessions* · Links to `/shop#shop-cat-hydration`
 
 ### 5. Sleep and recovery
 
-> A wide 16:9 studio photograph, 1280x720. Near-black background with a deep
-> indigo tint. On the RIGHT, a small dark amber glass supplement bottle and a
-> few loose capsules on a dark linen surface, shot from a low angle. Lit softly
-> from the upper right by one cool cyan light (#00C8F0), very low key, most of
-> the frame in shadow. LEFT HALF empty dark negative space. Calm, still, almost
-> nocturnal. Shallow depth of field, film grain. No text, no labels, no logos,
-> no people.
+```
+A wide 16:9 studio photograph, 1280x720 pixels, landscape.
+A near-black background, hex #0A0B0D, with a deep indigo tint in the shadows.
+On the RIGHT of the frame, a small dark amber glass supplement bottle and a
+few loose capsules resting on a dark linen surface, shot from a low angle
+close to the surface. Lit softly from the upper right by one cool cyan light,
+hex #00C8F0 — very low key, most of the frame falling away into shadow. The
+LEFT 45% OF THE FRAME MUST BE EMPTY dark negative space — nothing in it, no
+object, no detail. Calm, still, almost nocturnal. Shallow depth of field,
+fine film grain.
+NO TEXT. NO WORDS. NO LETTERING. NO LABELS. NO LOGOS. NO PEOPLE. NO BEDS.
+NO WATERMARK. Photographic, not illustrated.
+```
 
-Suggested copy: **"Wind down properly"** / "Magnesium, glycine and the rest" →
-`/shop#shop-cat-sleep`
+Headline **Wind down properly** · Subhead *Magnesium, glycine and the rest* ·
+Links to `/shop#shop-cat-sleep`
 
 ### 6. Bundles
 
-> A wide 16:9 studio photograph, 1280x720. Near-black background. On the RIGHT,
-> four matte black supplement containers of clearly different shapes — a wide
-> tub, a tall bottle, a pouch, a small jar — arranged as a considered group on a
-> dark surface, overlapping slightly, shot straight on. One cyan light
-> (#00C8F0) from the upper right rims each silhouette. LEFT 45% empty dark
-> negative space. Shallow depth of field on the back row, fine film grain. No
-> text, no labels, no logos, no people.
+```
+A wide 16:9 studio product photograph, 1280x720 pixels, landscape.
+A near-black background, hex #0A0B0D. On the RIGHT of the frame, four matte
+black supplement containers of clearly different shapes — a wide tub, a tall
+bottle, a flat pouch, a small jar — arranged as one considered group on a
+dark surface, overlapping slightly, shot straight on at eye level. A single
+cool cyan light, hex #00C8F0, from the upper right, rimming each silhouette
+so the shapes separate from each other and from the background. The LEFT 45%
+OF THE FRAME MUST BE EMPTY dark negative space — nothing in it, no object, no
+detail. Shallow depth of field falling off on the back row, deep shadow, fine
+film grain.
+NO TEXT. NO WORDS. NO LETTERING. NO LABELS. NO LOGOS. NO PEOPLE.
+NO WATERMARK. Photographic, not illustrated.
+```
 
-Suggested copy: **"Built as a set"** / "Prebuilt stacks, cheaper than the parts"
-→ `/shop#shop-cat-bundles`
+Headline **Built as a set** · Subhead *Prebuilt stacks, cheaper than the parts*
+· Links to `/shop#shop-cat-bundles`
 
 ---
 
