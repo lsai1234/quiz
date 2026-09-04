@@ -3,14 +3,25 @@ import { getEngine, now } from './engine'
 import type { ShopBannerInput, ShopBannerMeta } from '@/lib/shop/banners'
 
 /**
- * The shop's hero banners, as uploaded from the Founders Hub.
+ * The shop's hero artwork, as uploaded from the Founders Hub.
+ *
+ * ── One row per placement ───────────────────────────────────────────────────
+ * `slot` names a fixed position in the shop's layout (see
+ * `@/lib/shop/placements`), and a placement holds one picture. Saving to a slot
+ * REPLACES whatever was there — a founder swapping the masthead is not building
+ * a history of mastheads, and a table that quietly accumulates the last six
+ * pictures nobody can see is a table that eventually surprises somebody.
+ *
+ * The schema does not enforce that with a unique index, on purpose: see
+ * migration v19. It is enforced here, where it can be done without a migration
+ * that fails on a live database.
  *
  * ── Two reads, deliberately separate ────────────────────────────────────────
  * `listBanners` returns metadata only; `readBanner` returns the bytes. The
- * settings screen lists every banner on each poll and the shop wants the ones
- * it is about to draw, so a single "select *" would ship megabytes of base64 to
- * render a status line. This is the same split `share-card-art` makes, for the
- * same reason.
+ * settings screen lists every placement on each poll and the shop wants the
+ * ones it is about to draw, so a single "select *" would ship megabytes of
+ * base64 to render a status line. This is the same split `share-card-art`
+ * makes, for the same reason.
  *
  * Server-only.
  */
@@ -33,9 +44,12 @@ interface Row {
   href: string
   alt: string
   active: number
-  position: number
+  slot: string
   updated_at: string
 }
+
+const COLUMNS =
+  'id, mime, width, height, bytes, version, headline, subhead, href, alt, active, slot, updated_at'
 
 function meta(row: Omit<Row, 'data'>): ShopBannerMeta {
   return {
@@ -51,18 +65,16 @@ function meta(row: Omit<Row, 'data'>): ShopBannerMeta {
     alt: row.alt,
     // SQLite has no boolean; Postgres returns one. Both survive this.
     active: !!row.active,
-    position: Number(row.position) || 0,
+    slot: row.slot,
     updatedAt: row.updated_at,
   }
 }
 
-/** Every banner, ordered as the shop would show them. Metadata only. */
+/** Every placement that has artwork. Metadata only. */
 export async function listBanners(): Promise<ShopBannerMeta[]> {
   const engine = await getEngine()
   const rows = await engine.all<Omit<Row, 'data'>>(
-    `SELECT id, mime, width, height, bytes, version, headline, subhead, href, alt, active, position, updated_at
-       FROM shop_banners
-      ORDER BY position ASC, created_at ASC`,
+    `SELECT ${COLUMNS} FROM shop_banners ORDER BY slot ASC, updated_at ASC`,
   )
   return rows.map(meta)
 }
@@ -74,8 +86,18 @@ export async function readBanner(id: string): Promise<ShopBanner | null> {
   return row ? { ...meta(row), data: row.data } : null
 }
 
+/** What is currently in a placement, bytes included. */
+export async function readSlot(slot: string): Promise<ShopBanner | null> {
+  const engine = await getEngine()
+  const row = await engine.get<Row>(
+    'SELECT * FROM shop_banners WHERE slot = ? ORDER BY updated_at DESC',
+    [slot],
+  )
+  return row ? { ...meta(row), data: row.data } : null
+}
+
 export interface PutBannerInput extends ShopBannerInput {
-  /** Base64, no data-URI prefix. Omit to keep the existing artwork. */
+  /** Base64, no data-URI prefix. Omit to keep the artwork already in the slot. */
   data?: string
   mime?: string
   width?: number
@@ -83,71 +105,65 @@ export interface PutBannerInput extends ShopBannerInput {
 }
 
 /**
- * Create a banner, or update one.
+ * Put artwork in a placement, replacing whatever is there.
  *
- * The artwork is optional on update, which is the point of splitting the copy
- * from the image: changing a headline must not require re-uploading a
- * megabyte, and re-uploading art must not silently reset the copy.
+ * The image is optional, which is the point of splitting the copy from the art:
+ * changing a headline must not require re-uploading a megabyte, and re-uploading
+ * art must not silently reset the copy.
  *
  * `version` is a hash of the bytes, so it only changes when the artwork does —
  * which is what makes the image URL safe to cache forever.
  */
-export async function putBanner(id: string | null, input: PutBannerInput): Promise<ShopBannerMeta> {
+export async function putBanner(input: PutBannerInput): Promise<ShopBannerMeta> {
   const engine = await getEngine()
   const stamp = now()
+  const existing = await readSlot(input.slot)
 
-  if (id) {
-    const existing = await readBanner(id)
-    if (!existing) throw new Error(`No banner ${id}`)
-    const data = input.data ?? existing.data
-    const version = input.data ? createHash('sha256').update(input.data).digest('hex').slice(0, 16) : existing.version
-    await engine.run(
-      `UPDATE shop_banners
-          SET mime = ?, data = ?, width = ?, height = ?, bytes = ?, version = ?,
-              headline = ?, subhead = ?, href = ?, alt = ?, active = ?, position = ?, updated_at = ?
-        WHERE id = ?`,
-      [
-        input.mime ?? existing.mime, data,
-        input.width ?? existing.width, input.height ?? existing.height,
-        Buffer.byteLength(data, 'base64'), version,
-        input.headline, input.subhead, input.href, input.alt,
-        input.active ? 1 : 0, input.position, stamp, id,
-      ],
-    )
-    return {
-      ...existing,
-      headline: input.headline, subhead: input.subhead, href: input.href, alt: input.alt,
-      active: input.active, position: input.position,
-      mime: input.mime ?? existing.mime,
-      width: input.width ?? existing.width,
-      height: input.height ?? existing.height,
-      bytes: Buffer.byteLength(data, 'base64'),
-      version, updatedAt: stamp,
-    }
-  }
+  const data = input.data ?? existing?.data
+  if (!data) throw new Error(`No artwork for ${input.slot}, and none supplied`)
+  const mime = input.mime ?? existing?.mime
+  if (!mime) throw new Error(`No image type for ${input.slot}`)
 
-  if (!input.data || !input.mime) throw new Error('A new banner needs artwork')
-  const newId = randomUUID()
-  const version = createHash('sha256').update(input.data).digest('hex').slice(0, 16)
-  const bytes = Buffer.byteLength(input.data, 'base64')
+  const version = input.data
+    ? createHash('sha256').update(input.data).digest('hex').slice(0, 16)
+    : (existing?.version ?? '')
+
+  /*
+    Replace rather than update in place. The row is identified by its slot, not
+    by an id the caller has to hold on to, and deleting first is what makes
+    "one picture per placement" true even for a database that came through v19
+    with two rows already defaulted into the same slot.
+  */
+  await engine.run('DELETE FROM shop_banners WHERE slot = ?', [input.slot])
+
+  const id = randomUUID()
+  const bytes = Buffer.byteLength(data, 'base64')
   await engine.run(
     `INSERT INTO shop_banners
-       (id, mime, data, width, height, bytes, version, headline, subhead, href, alt, active, position, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, mime, data, width, height, bytes, version, headline, subhead, href, alt, active, slot, position, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      newId, input.mime, input.data, input.width ?? 0, input.height ?? 0, bytes, version,
+      id, mime, data,
+      input.width ?? existing?.width ?? 0,
+      input.height ?? existing?.height ?? 0,
+      bytes, version,
       input.headline, input.subhead, input.href, input.alt,
-      input.active ? 1 : 0, input.position, stamp, stamp,
+      input.active ? 1 : 0, input.slot, 0, stamp, stamp,
     ],
   )
+
   return {
-    id: newId, mime: input.mime, width: input.width ?? 0, height: input.height ?? 0,
-    bytes, version, headline: input.headline, subhead: input.subhead, href: input.href,
-    alt: input.alt, active: input.active, position: input.position, updatedAt: stamp,
+    id, mime,
+    width: input.width ?? existing?.width ?? 0,
+    height: input.height ?? existing?.height ?? 0,
+    bytes, version,
+    headline: input.headline, subhead: input.subhead, href: input.href, alt: input.alt,
+    active: input.active, slot: input.slot, updatedAt: stamp,
   }
 }
 
-export async function deleteBanner(id: string): Promise<void> {
+/** Empty a placement. The shop closes up around it — see `placements.ts`. */
+export async function clearSlot(slot: string): Promise<void> {
   const engine = await getEngine()
-  await engine.run('DELETE FROM shop_banners WHERE id = ?', [id])
+  await engine.run('DELETE FROM shop_banners WHERE slot = ?', [slot])
 }

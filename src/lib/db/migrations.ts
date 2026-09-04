@@ -635,6 +635,30 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS shop_banners_order ON shop_banners(active, position);
   `,
+  // v19 — hero artwork gets a PLACE.
+  //
+  // v18 stored banners as an ordered list and the shop stacked them at the top
+  // of the page, which is a carousel: every picture the same shape, in the same
+  // spot, distinguished only by a number. `slot` names a fixed position in the
+  // layout instead — the masthead, one of the twin tiles, one of the breaks
+  // between shelves — so a founder chooses "the picture between Protein and
+  // Hydration" rather than "banner 3". See `lib/shop/placements.ts`.
+  //
+  // Defaulted to 'masthead' rather than left NULL: any row already in the table
+  // was uploaded to be the thing at the top of the shop, so that is what it
+  // becomes. `position` is left in place, unread — dropping a column is the one
+  // schema change SQLite is awkward about, and an unused integer costs nothing.
+  //
+  // Deliberately NO unique index on `slot`. Every pre-existing row takes the
+  // same default, so a unique index would fail to build on any database that
+  // already had two banners — and a failed migration wedges `getEngine()` for
+  // every caller, which takes down the whole shop to tidy up a duplicate. One
+  // row per slot is enforced where it can be enforced safely: `putBanner`
+  // replaces by slot, and `bySlot` picks the newest if two ever race.
+  `
+  ALTER TABLE shop_banners ADD COLUMN slot TEXT NOT NULL DEFAULT 'masthead';
+  CREATE INDEX IF NOT EXISTS shop_banners_slot ON shop_banners(active, slot);
+  `,
 ]
 
 /**

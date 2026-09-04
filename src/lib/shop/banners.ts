@@ -1,9 +1,13 @@
 /**
- * The shop's hero banners — the shape of one, and the rules for it.
+ * The shop's hero artwork — the shape of one, and the rules for it.
  *
  * Pure: no database, no DOM. The storage layer (`@/lib/db/shop-banners`) and
  * the Founders Hub screen both import from here so that "what makes a valid
  * banner" is written once.
+ *
+ * WHERE a picture goes, what shape it has to be and how much copy it carries
+ * all belong to `@/lib/shop/placements`. This file is the rules that are the
+ * same wherever it goes: the formats, the weight, the link, the scrim.
  *
  * ── Why the copy is not baked into the artwork ──────────────────────────────
  * A generated image with its headline rendered into the pixels is a banner that
@@ -13,29 +17,24 @@
  * of artwork can carry three different offers over its life.
  */
 
-/** 16:9. Wide enough to be a banner, short enough not to eat a phone screen. */
-export const BANNER_RATIO = 16 / 9
+import { type Placement, ratioLabel, targetLabel } from './placements'
 
-/** Ratio tolerance, so a 1792x1024 generation is not rejected for being 1.75. */
+/**
+ * Ratio tolerance, as a fraction of the target ratio rather than an absolute.
+ *
+ * A fixed +/-0.06 is generous on a 16:9 (3%) and nearly nothing on a 4:5 (7.5%
+ * of a much smaller number), which rejected perfectly good portrait art. As a
+ * fraction it means the same thing at every shape: about 6% out is fine, which
+ * accepts the 1792x1024 that several models emit for "wide".
+ */
 export const RATIO_TOLERANCE = 0.06
-
-/** What the shop renders at 2x on the widest phone, rounded up. */
-export const BANNER_TARGET = { width: 1280, height: 720 }
-
-/** Below this the banner is visibly soft on a 3x display. */
-export const BANNER_MIN = { width: 1024, height: 576 }
 
 export const BANNER_MAX_BYTES = 6 * 1024 * 1024
 
 export const BANNER_MIMES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
-/** Headlines longer than this wrap to three lines over the art and stop working. */
-export const MAX_HEADLINE = 32
-export const MAX_SUBHEAD = 64
+/** Alt text is the same job at every size, so this one is not per-placement. */
 export const MAX_ALT = 140
-
-/** How many can be live at once. Past this it is a carousel nobody swipes. */
-export const MAX_ACTIVE_BANNERS = 4
 
 export interface ShopBannerMeta {
   id: string
@@ -52,17 +51,18 @@ export interface ShopBannerMeta {
   /** What the picture shows, for anyone who cannot see it. */
   alt: string
   active: boolean
-  position: number
+  /** Which fixed position in the shop this fills. See `placements.ts`. */
+  slot: string
   updatedAt: string
 }
 
 export interface ShopBannerInput {
+  slot: string
   headline: string
   subhead: string
   href: string
   alt: string
   active: boolean
-  position: number
 }
 
 /**
@@ -89,29 +89,39 @@ export interface SourceImage {
   mime: string
 }
 
-/** The reason this file cannot be used, or null. Written for a person. */
-export function validateImage(source: SourceImage): string | null {
+/**
+ * The reason this file cannot be used HERE, or null. Written for a person.
+ *
+ * Checked against the placement, not against one global shape: the whole point
+ * of named positions is that a masthead and a twin tile are different pictures,
+ * and a 16:9 dropped into a 4:5 slot would be cropped to a letterbox of itself.
+ */
+export function validateImage(source: SourceImage, place: Placement): string | null {
   if (!(BANNER_MIMES as readonly string[]).includes(source.mime)) {
     return 'Use a JPEG, PNG or WebP.'
   }
   if (source.bytes > BANNER_MAX_BYTES) {
     return `That file is ${(source.bytes / 1024 / 1024).toFixed(1)}MB. The limit is ${BANNER_MAX_BYTES / 1024 / 1024}MB.`
   }
-  if (source.width < BANNER_MIN.width || source.height < BANNER_MIN.height) {
-    return `That image is ${source.width}x${source.height}. It needs to be at least ${BANNER_MIN.width}x${BANNER_MIN.height} or it will look soft on a phone.`
+  if (source.width < place.min.width || source.height < place.min.height) {
+    return `That image is ${source.width}x${source.height}. ${place.label} needs at least ${place.min.width}x${place.min.height}, or it will look soft on a phone.`
   }
   const ratio = source.width / source.height
-  if (Math.abs(ratio - BANNER_RATIO) > RATIO_TOLERANCE) {
-    return `That image is ${ratio.toFixed(2)}:1. Banners need to be about 16:9 — generate at ${BANNER_TARGET.width}x${BANNER_TARGET.height}.`
+  if (Math.abs(ratio - place.ratio) > place.ratio * RATIO_TOLERANCE) {
+    return `That image is ${ratio.toFixed(2)}:1. ${place.label} is ${ratioLabel(place)} — generate at ${targetLabel(place)}.`
   }
   return null
 }
 
 /** The reason this copy cannot be saved, or null. */
-export function validateCopy(input: ShopBannerInput): string | null {
-  if (!input.headline.trim()) return 'A banner needs a headline.'
-  if (input.headline.length > MAX_HEADLINE) return `Headlines are ${MAX_HEADLINE} characters at most.`
-  if (input.subhead.length > MAX_SUBHEAD) return `Subheads are ${MAX_SUBHEAD} characters at most.`
+export function validateCopy(input: ShopBannerInput, place: Placement): string | null {
+  if (!input.headline.trim()) return `${place.label} needs a headline.`
+  if (input.headline.length > place.maxHeadline) {
+    return `${place.label} headlines are ${place.maxHeadline} characters at most — it is drawn over the picture.`
+  }
+  if (input.subhead.length > place.maxSubhead) {
+    return `${place.label} subheads are ${place.maxSubhead} characters at most.`
+  }
   if (!input.alt.trim()) {
     return 'Describe the picture. It is what a screen reader announces, and what shows if the image fails.'
   }
@@ -121,20 +131,27 @@ export function validateCopy(input: ShopBannerInput): string | null {
 }
 
 /**
- * The banners the shop should render, in order.
+ * The artwork the shop should render, by placement.
  *
- * Inactive ones are dropped and the rest capped, so a founder who uploads ten
- * gets the first four rather than a shop that scrolls sideways forever.
+ * Inactive rows are dropped, and if two rows somehow claim one placement the
+ * most recently updated wins rather than both rendering. There is no cap and no
+ * ordering to apply any more — the layout decides where each one goes, so
+ * "four at most" and "position 3" stopped meaning anything.
  */
-export function visibleBanners<T extends { active: boolean; position: number }>(all: T[]): T[] {
-  return all
-    .filter((b) => b.active)
-    .sort((a, b) => a.position - b.position)
-    .slice(0, MAX_ACTIVE_BANNERS)
+export function bySlot<T extends { active: boolean; slot: string; updatedAt: string }>(
+  all: T[],
+): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const b of all) {
+    if (!b.active) continue
+    const held = out[b.slot]
+    if (!held || held.updatedAt < b.updatedAt) out[b.slot] = b
+  }
+  return out
 }
 
 /**
- * The wash under a banner's headline.
+ * The wash under a banner's headline, for the wide placements.
  *
  * Not decoration. Generated artwork is bright and unpredictable, and white text
  * over an unknown image is the single most common way a banner ends up
@@ -146,6 +163,18 @@ export function visibleBanners<T extends { active: boolean; position: number }>(
  */
 export const SHOP_SCRIM =
   'linear-gradient(90deg, color-mix(in srgb, var(--bg) 88%, transparent) 0%, color-mix(in srgb, var(--bg) 62%, transparent) 38%, transparent 72%)'
+
+/**
+ * The wash on a portrait tile, where the label sits along the bottom.
+ *
+ * The same job as `SHOP_SCRIM` turned through ninety degrees. A left-to-right
+ * gradient on a 4:5 tile washes out the middle of the picture and still leaves
+ * the bottom edge — where the words actually are — unprotected, so a tile needs
+ * its own. It is heavier at the foot than the masthead's is at the left,
+ * because a short label has no second line to fall back on if it is unreadable.
+ */
+export const TILE_SCRIM =
+  'linear-gradient(0deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, color-mix(in srgb, var(--bg) 58%, transparent) 34%, transparent 62%)'
 
 /** The image URL for a banner at a given version. Immutable once minted. */
 export function bannerImageSrc(id: string, version: string): string {

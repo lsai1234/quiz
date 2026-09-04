@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct, DietaryTag } from '@/lib/catalogue/types'
 import { useCatalogueProducts, invalidateCatalogue } from '@/hooks/useCatalogueProducts'
@@ -43,7 +43,8 @@ import { ShopResultsGrid } from './ShopResultsGrid'
 import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 import { ShopGoalRow } from './ShopGoalRow'
-import { ShopBanner } from './ShopBanner'
+import { ShopHeroProvider, ShopMasthead, ShopTwinTiles, ShopBreak } from './ShopHeroes'
+import { BREAK_AFTER_SHELF } from '@/lib/shop/placements'
 import { rememberScroll, readScroll, forgetScroll } from '@/lib/shop/scroll-memory'
 import { Button } from '@/components/storefront'
 
@@ -696,6 +697,7 @@ export function ShopShell() {
       The lit ground came off. It is a good effect and the hubs keep it, but it
       is a gradient and a glow, and the storefront now has neither.
     */
+    <ShopHeroProvider>
     <div className="storefront min-h-[100dvh]" style={{ background: 'var(--bg)', color: 'var(--text)', paddingBottom: 'var(--space-12)' }}>
       <ShopHeader count={count} onOpenBasket={openDrawer} />
 
@@ -710,14 +712,14 @@ export function ShopShell() {
         </p>
 
         {/*
-          The banner. Uploaded artwork when a founder has added any, and a
+          The masthead. Uploaded artwork when a founder has added any, and a
           built one made of the shop's own product photography when not — see
-          `ShopBanner`. The shop never opens on a blank rectangle waiting for
+          `ShopHeroes`. The shop never opens on a blank rectangle waiting for
           somebody.
         */}
         {!searching && (
           <div style={{ marginTop: 'var(--space-5)' }}>
-            <ShopBanner products={products} />
+            <ShopMasthead products={products} />
           </div>
         )}
       </div>
@@ -730,6 +732,9 @@ export function ShopShell() {
           onSurprise={() => { track('shop_roulette_open'); setRouletteOpen(true) }}
         />
       )}
+
+      {/* The twin tiles, under the goals. Absent until a founder fills them. */}
+      {!searching && <ShopTwinTiles />}
 
       {!searching && <TrustStrip products={products} />}
 
@@ -834,17 +839,36 @@ export function ShopShell() {
                   onToggleSelect={toggleCompare}
                 />
               )}
-              {filteredSections.map((section) => (
-                <ShopSection
-                  key={section.slug}
-                  section={section}
-                  onOpen={openProduct}
-                  perServing={perServing}
-                  selectable={compareMode}
-                  selectedIds={compareSet}
-                  onToggleSelect={toggleCompare}
-                />
-              ))}
+              {/*
+                Shelves, with the breaks cut into them.
+
+                The position of each break is counted in SHELVES rather than
+                hardcoded against a category, because the category list is
+                founder-editable: pinning "after Hydration" would silently move
+                the picture to the bottom of the page the day somebody renamed
+                or removed that shelf. Counting shelves keeps it a third of the
+                way down whatever the catalogue is doing. `BREAK_AFTER_SHELF`
+                is shared with the Hub so the "where it appears" text and the
+                real position cannot disagree.
+              */}
+              {filteredSections.map((section, i) => {
+                const shelfNumber = i + 1
+                const breakSlot = Object.keys(BREAK_AFTER_SHELF)
+                  .find((slot) => BREAK_AFTER_SHELF[slot] === shelfNumber)
+                return (
+                  <Fragment key={section.slug}>
+                    <ShopSection
+                      section={section}
+                      onOpen={openProduct}
+                      perServing={perServing}
+                      selectable={compareMode}
+                      selectedIds={compareSet}
+                      onToggleSelect={toggleCompare}
+                    />
+                    {breakSlot && <ShopBreak slot={breakSlot} />}
+                  </Fragment>
+                )
+              })}
             </div>
           )}
         </>
@@ -943,5 +967,6 @@ export function ShopShell() {
         />
       )}
     </div>
+    </ShopHeroProvider>
   )
 }
