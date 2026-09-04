@@ -5,6 +5,7 @@ import {
   productImageSrcSet,
   parseImageRequest,
   IMAGE_WIDTHS,
+  IMAGE_PIPELINE_VERSION,
 } from '../product-image'
 
 /**
@@ -48,7 +49,9 @@ describe('snapWidth', () => {
 describe('productImageSrc', () => {
   it('routes a supplier image through the normaliser at a snapped width', () => {
     const src = productImageSrc('https://powerbody.co.uk/img/whey.jpg', 56)
-    expect(src).toBe('/api/product-image?u=https%3A%2F%2Fpowerbody.co.uk%2Fimg%2Fwhey.jpg&w=56')
+    expect(src).toBe(
+      `/api/product-image?u=https%3A%2F%2Fpowerbody.co.uk%2Fimg%2Fwhey.jpg&w=56&p=${IMAGE_PIPELINE_VERSION}`,
+    )
   })
 
   it('routes ANY https image, whoever is hosting it', () => {
@@ -56,7 +59,20 @@ describe('productImageSrc', () => {
     // CDN must not silently stop being normalised, which is what a hardcoded
     // host list did: the only symptom was cropped photos on a phone.
     expect(productImageSrc('https://images.somebrand.net/a.jpg', 56))
-      .toBe('/api/product-image?u=https%3A%2F%2Fimages.somebrand.net%2Fa.jpg&w=56')
+      .toBe(`/api/product-image?u=https%3A%2F%2Fimages.somebrand.net%2Fa.jpg&w=56&p=${IMAGE_PIPELINE_VERSION}`)
+  })
+
+  it('carries the pipeline version, so changing the transform changes the URL', () => {
+    /*
+      The route serves these `immutable` for a year, so nothing ever re-asks
+      for one. Without the version in the key, a change to the transform
+      reaches only the photos nobody had requested yet: two accessories were
+      still being served padded onto `#18181b` three revisions after that
+      colour had been deleted from the codebase, and no improvement to the
+      transform could have reached them, because it was never run.
+    */
+    const src = productImageSrc('https://powerbody.co.uk/img/whey.jpg', 56)!
+    expect(new URLSearchParams(src.split('?')[1]).get('p')).toBe(IMAGE_PIPELINE_VERSION)
   })
 
   it('leaves an image we cannot normalise exactly as it is', () => {
@@ -74,8 +90,10 @@ describe('productImageSrc', () => {
 describe('productImageSrcSet', () => {
   it('offers a 2x for a phone screen', () => {
     const set = productImageSrcSet('https://powerbody.co.uk/a.jpg', 56)
-    expect(set).toContain('w=56 1x')
-    expect(set).toContain('w=160 2x') // 56×2 = 112, which snaps up to 160
+    expect(set).toContain('w=56&p=')
+    expect(set).toContain(' 1x')
+    expect(set).toContain('w=160&p=') // 56×2 = 112, which snaps up to 160
+    expect(set).toContain(' 2x')
   })
 
   it('gives none when 1x is already the largest size we make', () => {
@@ -92,9 +110,10 @@ describe('parseImageRequest', () => {
   const parse = (qs: string) => parseImageRequest(new URLSearchParams(qs))
 
   it('reads a well-formed request', () => {
-    expect(parse('u=https://powerbody.co.uk/a.jpg&w=96')).toEqual({
+    expect(parse(`u=https://powerbody.co.uk/a.jpg&w=96&p=${IMAGE_PIPELINE_VERSION}`)).toEqual({
       url: 'https://powerbody.co.uk/a.jpg',
       width: 96,
+      version: IMAGE_PIPELINE_VERSION,
     })
   })
 

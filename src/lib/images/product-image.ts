@@ -46,6 +46,16 @@
  * `immutable`, and the CDN, the browser and every warm server instance can hold
  * it for a year with no invalidation path. That is a stronger guarantee than a
  * SKU key with a TTL, not a weaker one.
+ *
+ * ── ...and why the transform is part of the key too ─────────────────────────
+ * The source URL addresses the INPUT. It says nothing about which version of
+ * this pipeline produced the bytes, and `immutable` means nothing ever asks
+ * again. So every change to the transform used to leave the images already in
+ * the CDN frozen in their old treatment for a year — and it took a real shelf
+ * with two products still padded onto `#18181b`, three pipeline revisions after
+ * that colour was removed from the code, to make that obvious. The fix was not
+ * a better transform; the transform had been right for two deploys. See
+ * `IMAGE_PIPELINE_VERSION`.
  */
 
 /**
@@ -88,6 +98,33 @@ export const IMAGE_PLATE = '#FFFFFF'
 export const IMAGE_FALLBACK_BACKGROUND = IMAGE_PLATE
 
 /**
+ * Which version of the transform produced the bytes at a given URL.
+ *
+ * BUMP THIS WHENEVER THE PIPELINE CHANGES — the pad colour, the keying, the
+ * trim, the encoder settings, any of it.
+ *
+ * Derived images here are served `immutable` for a year, which is right: the
+ * URL names its source and its width, and neither can change under it. But it
+ * means a cached image is never re-fetched, so a photo normalised by an older
+ * build keeps being served exactly as that build made it, indefinitely, to
+ * everyone whose CDN edge or browser holds it.
+ *
+ * That is not theoretical. The pad colour went `#18181b` → `#F4F5F7` →
+ * transparent → `#FFFFFF` over four commits, each of which fixed the shelf for
+ * every photo that had not been requested yet and changed nothing at all for
+ * the ones that had. Two accessories sat on `#18181b` panels on a live shelf
+ * long after no code anywhere could produce that colour, and every attempt to
+ * fix them by improving the transform necessarily failed, because the transform
+ * was not being run.
+ *
+ * Putting the version in the query string makes a pipeline change mint fresh
+ * URLs, so the old bytes are simply never asked for again and expire on their
+ * own. It costs one re-encode per image per change, which is the entire price
+ * of being able to change this code at all.
+ */
+export const IMAGE_PIPELINE_VERSION = '2'
+
+/**
  * Could this URL be normalised at all?
  *
  * A cheap shape check the client can make without the catalogue: https, and
@@ -126,7 +163,7 @@ export function snapWidth(requested: number): ImageWidth {
 export function productImageSrc(url: string | null | undefined, width: number): string | null {
   if (!url) return null
   if (!isNormalisableUrl(url)) return url
-  return `/api/product-image?u=${encodeURIComponent(url)}&w=${snapWidth(width)}`
+  return `/api/product-image?u=${encodeURIComponent(url)}&w=${snapWidth(width)}&p=${IMAGE_PIPELINE_VERSION}`
 }
 
 /**
@@ -147,6 +184,13 @@ export function productImageSrcSet(url: string | null | undefined, width: number
 export interface ImageRequest {
   url: string
   width: ImageWidth
+  /**
+   * The pipeline version the caller asked for. Read but not enforced: an old
+   * URL still in somebody's HTML must keep rendering, and it is answered by
+   * whatever pipeline is deployed now — which is the current one, and correct.
+   * It is here so the in-process cache cannot key two transforms together.
+   */
+  version: string
 }
 
 /**
@@ -161,5 +205,5 @@ export function parseImageRequest(params: URLSearchParams): ImageRequest | null 
   if (!isNormalisableUrl(url)) return null
   const raw = Number(params.get('w'))
   if (!Number.isFinite(raw) || raw <= 0) return null
-  return { url: url!, width: snapWidth(raw) }
+  return { url: url!, width: snapWidth(raw), version: params.get('p') ?? '1' }
 }

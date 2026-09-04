@@ -167,7 +167,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Not a catalogue image' }, { status: 400 })
   }
 
-  const key = `${req.url}|${req.width}`
+  const key = `${req.url}|${req.width}|${req.version}`
   const memo = memoGet(key)
   if (memo) {
     return new NextResponse(new Uint8Array(memo), {
