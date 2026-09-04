@@ -588,6 +588,45 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX founder_codes_created ON founder_codes(created_at);
   `,
+
+  // v18 — the shop's hero banners, as uploaded from the Founders Hub.
+  //
+  // The shop opened on four boxes of grey text because it had no artwork and no
+  // way to get any. This is the way in: a founder generates a banner, uploads
+  // it, writes the two lines that go over it and where it points, and the shelf
+  // has something to look at.
+  //
+  // Bytes in the column, like `share_card_art` and for the same reason — at a
+  // handful of rows a blob store is a second system to operate, a second thing
+  // to authenticate and a second thing that can be down, for no gain. If the
+  // set ever grows past a dozen this is the row to move.
+  //
+  // `version` is a content hash and it goes in the image URL, so replacing a
+  // banner invalidates its cached image without touching any other row.
+  //
+  // `position` orders them and `active` hides one without deleting it — a
+  // seasonal banner comes back next year, and a founder who has to delete
+  // artwork to take it down will not take it down.
+  `
+  CREATE TABLE shop_banners (
+    id          TEXT PRIMARY KEY,
+    mime        TEXT NOT NULL,
+    data        TEXT NOT NULL,
+    width       INTEGER NOT NULL,
+    height      INTEGER NOT NULL,
+    bytes       INTEGER NOT NULL,
+    version     TEXT NOT NULL,
+    headline    TEXT NOT NULL,
+    subhead     TEXT NOT NULL,
+    href        TEXT NOT NULL,
+    alt         TEXT NOT NULL,
+    active      INTEGER NOT NULL DEFAULT 1,
+    position    INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+  CREATE INDEX shop_banners_order ON shop_banners(active, position);
+  `,
 ]
 
 /**

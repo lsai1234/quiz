@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
-import { productImageSrc, productImageSrcSet, IMAGE_FALLBACK_BACKGROUND } from '@/lib/images/product-image'
+import { productImageSrc, productImageSrcSet, IMAGE_PLATE } from '@/lib/images/product-image'
 
 interface Props {
   /** Product photo. When null/absent, a designed slot-coloured tile is shown. */
@@ -29,16 +29,6 @@ interface Props {
    * what makes it look photographed rather than jammed in.
    */
   inset?: boolean
-  /**
-   * A soft radial light behind the product.
-   *
-   * A cut-out on a flat dark card floats in a void — there is nothing for it to
-   * sit on and it reads as a sticker. A very soft pool of light gives it a
-   * ground. This is the one gradient in the storefront and it is doing a job
-   * nothing else can: it is the difference between a product photographed on a
-   * surface and a product pasted onto one.
-   */
-  spotlight?: boolean
   /** Layout only — corner radii, mostly. */
   style?: CSSProperties
   className?: string
@@ -47,22 +37,18 @@ interface Props {
 /**
  * A product photo.
  *
- * The image arrives from `/api/product-image` already cut out of its white
- * ground and trimmed to the product itself, so this composites it directly onto
- * whatever surface the caller provides. There is no plate: the tile is
- * transparent and the card shows through.
- *
- * When the pipeline could not safely cut a photo it returns that photo on a
- * light tile of its own, baked into the pixels — so this component needs no
- * branch for it, and a shelf with one uncuttable product in it degrades to one
- * light card among dark ones rather than to something broken.
+ * Every photo sits on the same white panel. The pipeline pads each image to a
+ * white square at ingest and this frame is the same white, so there is no
+ * combination of source aspect, keying outcome or cache state that produces a
+ * dark gap round a product — which is the only thing that made the shelf look
+ * unfinished.
  *
  * When the catalogue has no photo at all, a designed fallback: a soft slot-hued
  * gradient with the slot's monoline glyph, so an image-less catalogue looks
  * deliberate instead of empty.
  */
 export function ProductTile({
-  imageUrl, slot, title, size = 96, fill = false, spotlight = false, inset = false, style, className,
+  imageUrl, slot, title, size = 96, fill = false, inset = false, style, className,
 }: Props) {
   const { glyph, hue } = slotVisual(slot)
   const normalised = productImageSrc(imageUrl, size)
@@ -99,37 +85,21 @@ export function ProductTile({
         width: fill ? undefined : size,
         height: fill ? undefined : size,
         /*
-          A photo gets a plate UNLESS it has a spotlight behind it.
+          One white panel, every photo, every size.
 
-          Cut-outs are mostly dark tubs, and a dark tub on a dark drawer at 56px
-          is invisible — which is exactly what happened to the basket line items
-          the first time this shipped, twice: once with no plate at all and again
-          with a dark one.
-
-          So the plate is LIGHT, the same tile the pipeline falls back to. At
-          card size the product gets the whole frame and a spotlight to sit on,
-          and a bright rectangle there would be the loudest thing on the shelf.
-          At thumbnail size there is no room for a spotlight, the product is
-          small enough that its plate is a chip rather than a panel, and a light
-          chip is what makes a dark tub legible.
+          This is the belt to the pipeline's braces: the route already pads each
+          image to a white square, and setting the frame to the same white means
+          a photo that never reached the route — a cold CDN, a supplier timeout,
+          a deploy that is behind — still lands on an identical panel instead of
+          letterboxing into the dark card. There is no code path that produces a
+          dark gap around a product.
         */
         background: src
-          ? (spotlight ? undefined : IMAGE_FALLBACK_BACKGROUND)
+          ? IMAGE_PLATE
           : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--surface-hi, var(--color-surface-2))`,
-        borderRadius: src && !spotlight ? 'var(--r-control)' : undefined,
         ...style,
       }}
     >
-      {src && spotlight && (
-        <span
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: 'radial-gradient(ellipse 62% 55% at 50% 46%, rgba(255,255,255,0.075), transparent 70%)',
-          }}
-        />
-      )}
-
       {src ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img

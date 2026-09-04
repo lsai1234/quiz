@@ -105,6 +105,12 @@ export const SETTINGS_GROUPS: SettingsGroup[] = [
         blurb: 'The photograph printed behind the stack on every share card.',
         icon: 'share',
       },
+      {
+        slug: 'shop-banners',
+        title: 'Shop banners',
+        blurb: 'The artwork at the top of the shop, and the words over it.',
+        icon: 'monitor',
+      },
     ],
   },
 ]

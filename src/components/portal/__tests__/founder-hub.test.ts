@@ -104,6 +104,9 @@ describe('the Founders Hub', () => {
     // behind the Choose-a-CSV Button. Opening a native file picker has no other
     // route, and the Button is the labelled, focusable control.
     'src/components/portal/RosterImport.tsx': ['input'],
+    // And again in `ShopBannerSettings`, for the same reason: a hidden file
+    // input behind the Choose-artwork Button.
+    'src/components/portal/ShopBannerSettings.tsx': ['input'],
   } as const
 
   it.each(FILES)('%s builds its controls from the primitives', (file) => {

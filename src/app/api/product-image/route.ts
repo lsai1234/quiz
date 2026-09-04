@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import sharp from 'sharp'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { parseImageRequest, IMAGE_FALLBACK_BACKGROUND, type ImageWidth } from '@/lib/images/product-image'
+import { parseImageRequest, IMAGE_PLATE, type ImageWidth } from '@/lib/images/product-image'
 import { keyBackground, shouldKey, featherMask } from '@/lib/images/key-white'
 
 /**
@@ -68,14 +68,12 @@ function memoSet(key: string, value: Buffer): void {
 /**
  * One photo, normalised.
  *
- * The white ground is flood-filled away from the frame edge and the product is
- * returned on transparency, so the card composites it onto its own surface and
- * the product floats. See `@/lib/images/key-white` for why it is a flood fill
- * and not a brightness threshold, and for the three ways it declines.
- *
- * When it declines, the fallback is the old behaviour — contained and padded
- * onto a light tile. A product that keeps its white plate is a worse card; a
- * product with its middle eaten out is a broken one.
+ * Both paths end on the same white square, so a shelf cannot show two
+ * treatments at once. The keying runs to TRIM — cutting the ground away and
+ * cropping to the product is what makes one supplier's tight crop and another's
+ * floating 2:3 sit at the same size on the shelf — and then composites onto
+ * white like everything else. When it declines, the photo is simply padded to
+ * the same white square. See `IMAGE_PLATE` for why filling beats cutting here.
  */
 async function normalise(source: ArrayBuffer, width: ImageWidth): Promise<{ out: Buffer; keyed: boolean }> {
   const upright = sharp(Buffer.from(source)).rotate()
@@ -111,16 +109,22 @@ async function normalise(source: ArrayBuffer, width: ImageWidth): Promise<{ out:
          the product itself is what makes a shelf of them look like one set of
          photographs rather than a collage. */
       .trim({ threshold: 1 })
-      .resize(width, width, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
-      .webp({ quality: 82, alphaQuality: 90 })
+      /* Padded to a square with the SAME white as every other photo, keyed or
+         not. The cut is still worth making — trimming to the product is what
+         stops one tub filling its frame while the next floats in a corner — but
+         the panel it lands on has to be identical or the shelf has two
+         treatments on it. */
+      .resize(width, width, { fit: 'contain', background: IMAGE_PLATE })
+      .flatten({ background: IMAGE_PLATE })
+      .webp({ quality: 82 })
       .toBuffer()
     return { out, keyed: true }
   }
 
   const out = await upright
     .clone()
-    .resize(width, width, { fit: 'contain', background: IMAGE_FALLBACK_BACKGROUND })
-    .flatten({ background: IMAGE_FALLBACK_BACKGROUND })
+    .resize(width, width, { fit: 'contain', background: IMAGE_PLATE })
+    .flatten({ background: IMAGE_PLATE })
     .webp({ quality: 80 })
     .toBuffer()
   return { out, keyed: false }

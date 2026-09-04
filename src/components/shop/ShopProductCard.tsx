@@ -110,7 +110,6 @@ export function ShopProductCard({
           title={product.title}
           size={320}
           fill
-          spotlight
           inset
           style={{ borderTopLeftRadius: 'var(--r-card)', borderTopRightRadius: 'var(--r-card)' }}
         />

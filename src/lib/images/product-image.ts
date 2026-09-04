@@ -59,15 +59,33 @@ export const IMAGE_WIDTHS = [56, 96, 160, 320, 640] as const
 export type ImageWidth = (typeof IMAGE_WIDTHS)[number]
 
 /**
- * The tile a photo is padded onto WHEN THE KEYING DECLINES.
+ * The ground every product photo ends up on. White, always, and the same white.
  *
- * The normal path returns the product on transparency — see
- * `@/lib/images/key-white`. This is the fallback for the photographs that
- * cannot be safely cut: a white tub on white, a lifestyle shot, anything whose
- * background is continuous with the product. A light tile rather than pure
- * white so it reads as a deliberate plate rather than as a hole in the page.
+ * ── Why the answer is "fill it with white" ──────────────────────────────────
+ * The previous version cut the white ground away and composited the product
+ * onto the dark card, which is the more ambitious treatment and is what a
+ * premium dark storefront does when it controls its own photography. It has one
+ * fatal property here: it can DECLINE. A white tub on white cannot be cut, a
+ * lifestyle shot has no ground to remove, and a photo the route never got to
+ * (a cold CDN, a supplier timeout, a deploy that is behind) is not cut either.
+ * Every one of those falls back to something else, and the shelf ends up with
+ * two treatments side by side — which is exactly the complaint: they need to
+ * all be the same.
+ *
+ * Filling to white cannot fail. Whatever the source is — cut out or not, 2:3 or
+ * 3:2, cleanly shot or not — padding it to a square with white produces an
+ * identical panel every time. Consistency across twenty cards beats the better
+ * treatment on eighteen of them.
+ *
+ * The keying is still run, because trimming to the product and re-centring it
+ * is what stops one tub filling its frame while the next floats in a corner.
+ * It just composites onto white at the end instead of onto transparency, so a
+ * keyed photo and an unkeyed one are indistinguishable.
  */
-export const IMAGE_FALLBACK_BACKGROUND = '#F4F5F7'
+export const IMAGE_PLATE = '#FFFFFF'
+
+/** @deprecated Kept as an alias while call sites migrate. */
+export const IMAGE_FALLBACK_BACKGROUND = IMAGE_PLATE
 
 /**
  * Could this URL be normalised at all?

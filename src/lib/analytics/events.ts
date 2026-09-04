@@ -54,6 +54,9 @@ export const SHOP_EVENTS = [
   /** Flavour Roulette — opened, and each pull of the lever. */
   'shop_roulette_open',
   'shop_roulette_spin',
+  /* A hero banner was tapped. Which one, so a founder can tell whether the
+     artwork they generated is doing anything at all. */
+  'shop_banner_click',
   'product_open',
   'add_to_basket',
   'basket_open',
