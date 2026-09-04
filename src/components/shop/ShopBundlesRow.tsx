@@ -34,8 +34,7 @@ export function ShopBundlesRow({ bundles, products }: Props) {
         style={{
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
           gap: 'var(--space-4)',
-          padding: '0 var(--space-4)',
-        }}
+          padding: '0 var(--space-4)' }}
       >
         {bundles.map((view) => (
           <div key={view.bundle.slug} data-card>

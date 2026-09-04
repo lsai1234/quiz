@@ -130,7 +130,7 @@ export function ShopSearchBar({
       >
         <svg
           width="15" height="15" viewBox="0 0 24 24" fill="none"
-          stroke="var(--color-muted)" strokeWidth="2" strokeLinecap="round"
+          stroke="var(--text-dim)" strokeWidth="2" strokeLinecap="round"
           className="flex-shrink-0" aria-hidden
         >
           <circle cx="11" cy="11" r="7" />

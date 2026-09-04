@@ -101,8 +101,7 @@ export function ShopProductCard({
         background: 'var(--surface)',
         borderRadius: 'var(--r-card)',
         outline: selectable && selected ? '2px solid var(--accent)' : 'none',
-        outlineOffset: -2,
-      }}
+        outlineOffset: -2 }}
     >
       <div className="relative">
         <ProductTile
@@ -139,8 +138,7 @@ export function ShopProductCard({
               background: justAdded ? 'var(--accent)' : 'var(--surface-hi)',
               color: justAdded ? 'var(--accent-ink)' : 'var(--text)',
               opacity: soldOut ? 0.4 : 1,
-              pointerEvents: soldOut ? 'none' : undefined,
-            }}
+              pointerEvents: soldOut ? 'none' : undefined }}
           >
             {justAdded ? (
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5" /></svg>

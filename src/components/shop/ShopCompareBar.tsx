@@ -3,6 +3,7 @@
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { MAX_DUEL_PRODUCTS } from '@/lib/shop/duel'
 import { ProductTile } from '@/components/stack-review/ProductTile'
+import { Button } from '@/components/storefront'
 
 interface Props {
   /** Products picked so far, in pick order. Never more than `MAX_DUEL_PRODUCTS`. */
@@ -23,51 +24,53 @@ export function ShopCompareBar({ products, onOpen, onClear }: Props) {
   const ready = products.length >= MAX_DUEL_PRODUCTS
 
   return (
+    /*
+      One bar at the bottom, never two.
+
+      This used to stack above the basket bar, so a shopper assembling a duel
+      with something already in the basket lost two rows of a 844px viewport to
+      floating chrome — over browser UI, on top of the cards they were choosing
+      from. It is now a single row: the picks, what it is waiting for, and the
+      action, at the same height as the basket bar it replaces.
+    */
     <div
-      className="flex items-center gap-2 rounded-xl pl-2.5 pr-1.5 py-2 max-w-lg mx-auto w-full"
+      className="flex items-center w-full"
       style={{
-        background: 'color-mix(in srgb, var(--color-accent) 9%, var(--color-surface))',
-        border: '1px solid color-mix(in srgb, var(--color-accent) 26%, transparent)',
+        gap: 'var(--space-3)',
+        minHeight: 52,
+        padding: '0 var(--space-2) 0 var(--space-3)',
+        borderRadius: 'var(--r-control)',
+        background: 'var(--surface-hi)',
       }}
     >
-      <div className="flex items-center gap-1 flex-shrink-0" aria-hidden>
+      <div className="flex items-center flex-shrink-0" style={{ gap: 'var(--space-1)' }} aria-hidden>
         {products.map((product) => (
           <ProductTile
             key={product.id}
             imageUrl={product.imageUrl}
             slot={product.stackSlots[0]}
             title={product.title}
-            size={26}
+            size={56}
+            style={{ width: 28, height: 28 }}
           />
         ))}
       </div>
 
-      <p className="flex-1 min-w-0 text-[11px] font-semibold leading-snug" style={{ color: 'var(--color-text-2)' }}>
-        {ready
-          ? `${products[0].title} vs ${products[1].title}`
-          : 'Pick one more to compare'}
+      <p className="sf-meta flex-1 min-w-0 truncate" style={{ color: ready ? 'var(--text)' : undefined }}>
+        {ready ? `${products[0].title} vs ${products[1].title}` : 'Pick one more to compare'}
       </p>
 
       {ready && (
-        <button
-          onClick={onOpen}
-          className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-transform"
-          style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
-        >
+        <Button variant="primary" size="sm" onClick={onOpen} className="flex-shrink-0">
           Compare
-        </button>
+        </Button>
       )}
 
-      <button
-        onClick={onClear}
-        aria-label="Clear comparison"
-        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-        style={{ color: 'var(--color-muted)' }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
+      <Button variant="ghost" size="sm" onClick={onClear} aria-label="Clear comparison" className="flex-shrink-0">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
           <path d="M18 6 6 18M6 6l12 12" />
         </svg>
-      </button>
+      </Button>
     </div>
   )
 }

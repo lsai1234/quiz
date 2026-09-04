@@ -79,17 +79,17 @@ export function ProductPageView({ product, sellableKeys }: Props) {
         <Link
           href="/shop#basket"
           className="relative w-10 h-10 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-          style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border-2)' }}
+          style={{ background: 'var(--surface)', border: '1px solid var(--line)' }}
           aria-label={`Open basket, ${count} item${count !== 1 ? 's' : ''}`}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--color-text)' }} aria-hidden>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text)' }} aria-hidden>
             <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
             <path d="M3 6h18M16 10a4 4 0 0 1-8 0" />
           </svg>
           {count > 0 && (
             <span
-              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-black tabular-nums"
-              style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full flex items-center justify-center text-[10px] font-medium tabular-nums"
+              style={{ background: 'var(--accent)', color: 'var(--bg)' }}
             >
               {count}
             </span>
@@ -100,8 +100,8 @@ export function ProductPageView({ product, sellableKeys }: Props) {
       <div className="px-5 max-w-lg mx-auto pb-32">
         <Link
           href="/shop"
-          className="inline-flex items-center gap-1.5 mt-2 mb-4 text-xs font-bold"
-          style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+          className="inline-flex items-center gap-1.5 mt-2 mb-4 text-xs font-medium"
+          style={{ color: 'var(--text-dim)' }}
         >
           <span aria-hidden>←</span>
           Back to the shop
@@ -140,7 +140,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           </p>
         )}
         {soldOut && product.restockingSoon && (
-          <p className="text-[11px] font-semibold mt-2.5" style={{ color: 'var(--color-amber)' }}>Back in stock soon</p>
+          <p className="text-[11px] font-medium mt-2.5" style={{ color: 'var(--text-dim)' }}>Back in stock soon</p>
         )}
 
         <ProductDetailBody
@@ -158,8 +158,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
         style={{
           padding: 'var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom))',
           borderTop: '1px solid var(--line)',
-          background: 'var(--bg)',
-        }}
+          background: 'var(--bg)' }}
       >
         <div className="max-w-lg mx-auto flex items-center gap-2.5">
           <div className="flex items-center flex-shrink-0" style={{ background: 'var(--surface-hi)', borderRadius: 'var(--r-control)' }}>

@@ -154,8 +154,7 @@ export function RouletteReel({ strip, landedIndex, spinKey, reduced, onSettled }
         className="absolute inset-0 overflow-hidden"
         style={{
           maskImage: 'linear-gradient(180deg, transparent 0%, #000 26%, #000 74%, transparent 100%)',
-          WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, #000 26%, #000 74%, transparent 100%)',
-        }}
+          WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, #000 26%, #000 74%, transparent 100%)' }}
       >
         <div ref={trackRef} className="absolute inset-x-0" style={{ top: ROW_H, willChange: 'transform, filter' }}>
           {strip.map((e, i) => (
@@ -171,14 +170,14 @@ export function RouletteReel({ strip, landedIndex, spinKey, reduced, onSettled }
                 size={56}
               />
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-[13px] font-black leading-tight truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+                <p className="text-[13px] font-medium leading-tight truncate" style={{ color: 'var(--text)' }}>
                   {e.product.title}
                 </p>
-                <p className="text-sm font-bold leading-tight truncate mt-0.5" style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}>
+                <p className="text-sm font-medium leading-tight truncate mt-0.5" style={{ color: 'var(--accent)' }}>
                   {entryLabel(e)}
                 </p>
               </div>
-              <span className="text-sm font-black tabular-nums flex-shrink-0" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+              <span className="text-sm font-medium tabular-nums flex-shrink-0" style={{ color: 'var(--text-dim)' }}>
                 {formatGBP(e.variant.price)}
               </span>
             </div>
@@ -197,13 +196,12 @@ export function RouletteReel({ strip, landedIndex, spinKey, reduced, onSettled }
         style={{
           top: ROW_H,
           height: ROW_H,
-          border: '1px solid color-mix(in srgb, var(--color-accent) 34%, transparent)',
-          background: 'color-mix(in srgb, var(--color-accent) 7%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--accent) 34%, transparent)',
+          background: 'color-mix(in srgb, var(--accent) 7%, transparent)',
           boxShadow: resting
-            ? '0 0 0 1px color-mix(in srgb, var(--color-accent) 18%, transparent), 0 10px 34px -14px color-mix(in srgb, var(--color-accent) 60%, transparent)'
+            ? '0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent), 0 10px 34px -14px color-mix(in srgb, var(--accent) 60%, transparent)'
             : 'none',
-          transition: 'box-shadow 260ms var(--ease-spring, ease-out)',
-        }}
+          transition: 'box-shadow 260ms var(--ease-spring, ease-out)' }}
       />
     </div>
   )

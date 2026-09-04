@@ -32,7 +32,7 @@ function Stars({ value, size, color }: { value: number; size: number; color: str
   )
   return (
     <div className="relative inline-block" aria-hidden>
-      {row('none', 'color-mix(in srgb, var(--text-dim, var(--color-border-2)) 45%, transparent)')}
+      {row('none', 'color-mix(in srgb, var(--text-dim) 45%, transparent)')}
       <div className="absolute inset-0 overflow-hidden" style={{ width: `${pct}%` }}>
         {row(color, 'none')}
       </div>
@@ -50,20 +50,20 @@ export function StarRating({
   size = 12,
   showAverage = false,
   showCount = true,
-  color = 'var(--text-dim, var(--color-accent))',
+  color = 'var(--text-dim)',
   className = '',
 }: Props) {
   const label = `Rated ${rating.average} out of 5 from ${rating.count} review${rating.count === 1 ? '' : 's'}`
   return (
     <div className={`flex items-center gap-1.5 ${className}`} role="img" aria-label={label}>
       {showAverage && (
-        <span className="sf-tnum text-xs leading-none" style={{ color: 'var(--text, var(--color-text))' }}>
+        <span className="sf-tnum text-xs leading-none" style={{ color: 'var(--text)' }}>
           {rating.average.toFixed(1)}
         </span>
       )}
       <Stars value={rating.average} size={size} color={color} />
       {showCount && (
-        <span className="sf-tnum text-[11px] leading-none" style={{ color: 'var(--text-dim, var(--color-muted))' }}>
+        <span className="sf-tnum text-[11px] leading-none" style={{ color: 'var(--text-dim)' }}>
           ({formatRatingCount(rating.count)})
         </span>
       )}

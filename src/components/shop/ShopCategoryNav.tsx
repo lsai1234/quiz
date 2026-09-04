@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { ShopCategory } from '@/lib/shop/categories'
 import { Chip } from '@/components/storefront'
 
-const ACCENT = '#00D4FF'
 
 interface Props {
   categories: ShopCategory[]

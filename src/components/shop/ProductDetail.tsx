@@ -120,8 +120,7 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
                     background: isSelected ? 'var(--surface-hi)' : 'var(--surface)',
                     color: isSelected ? 'var(--text)' : 'var(--text-dim)',
                     opacity: v.available ? 1 : 0.5,
-                    cursor: v.available ? 'pointer' : 'not-allowed',
-                  }}
+                    cursor: v.available ? 'pointer' : 'not-allowed' }}
                 >
                   <span className="sf-body">{variantLabel(v)}</span>
                   <span className="flex items-center" style={{ gap: 'var(--space-3)' }}>

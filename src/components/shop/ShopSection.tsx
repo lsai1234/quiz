@@ -72,8 +72,7 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
         style={{
           gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
           gap: 'var(--space-3)',
-          padding: '0 var(--space-4)',
-        }}
+          padding: '0 var(--space-4)' }}
       >
         {section.products.map((product) => (
           <div key={product.id} data-card>

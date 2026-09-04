@@ -61,16 +61,15 @@ export function ShopSearchSuggestions({ id, suggestions, activeId, onSelect, onH
     <div
       className="absolute left-5 right-5 top-full mt-1 z-40 rounded-xl overflow-hidden max-w-lg"
       style={{
-        background: 'var(--color-surface)',
-        border: '1px solid var(--color-border-2)',
-        boxShadow: '0 18px 40px -12px rgba(0,0,0,0.65)',
-      }}
+        background: 'var(--surface)',
+        border: '1px solid var(--line)',
+        boxShadow: '0 18px 40px -12px rgba(0,0,0,0.65)' }}
       onMouseDown={(e) => e.preventDefault()}
     >
       {(showingRecent || showingExamples) && (
         <p
           className="px-3.5 pt-2.5 pb-1 label"
-          style={{ color: 'var(--color-muted)' }}
+          style={{ color: 'var(--text-dim)' }}
         >
           {showingRecent ? 'Recent' : 'Try a sentence'}
         </p>
@@ -87,7 +86,7 @@ export function ShopSearchSuggestions({ id, suggestions, activeId, onSelect, onH
             onClick={() => onSelect(suggestion)}
             onMouseEnter={() => onHover(suggestion.id)}
             className="flex items-center gap-3 px-3.5 py-2.5 cursor-pointer"
-            style={{ background: activeId === suggestion.id ? 'var(--color-surface-2)' : 'transparent' }}
+            style={{ background: activeId === suggestion.id ? 'var(--surface-hi)' : 'transparent' }}
           >
             <Row suggestion={suggestion} />
           </li>
@@ -100,11 +99,11 @@ export function ShopSearchSuggestions({ id, suggestions, activeId, onSelect, onH
         decide whether Down-arrow lands on it.
       */}
       {showingRecent && (
-        <div className="px-3.5 py-2" style={{ borderTop: '1px solid var(--color-border)' }}>
+        <div className="px-3.5 py-2" style={{ borderTop: '1px solid var(--line)' }}>
           <button
             onClick={onClearRecent}
-            className="text-[11px] font-semibold active:opacity-70"
-            style={{ color: 'var(--color-muted)' }}
+            className="text-[11px] font-medium active:opacity-70"
+            style={{ color: 'var(--text-dim)' }}
           >
             Clear recent searches
           </button>
@@ -122,16 +121,16 @@ function Row({ suggestion }: { suggestion: Suggestion }) {
       <>
         <ProductTile imageUrl={product.imageUrl} slot={product.stackSlots[0]} title={product.title} size={32} />
         <span className="flex-1 min-w-0">
-          <span className="block text-xs font-bold leading-snug truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+          <span className="block text-xs font-medium leading-snug truncate" style={{ color: 'var(--text)' }}>
             {product.title}
           </span>
-          <span className="block text-[10px] truncate" style={{ color: 'var(--color-muted)' }}>
+          <span className="block text-[10px] truncate" style={{ color: 'var(--text-dim)' }}>
             {product.category}
           </span>
         </span>
         <span
-          className="text-xs font-black flex-shrink-0 tabular-nums"
-          style={{ color: onDeal ? 'var(--color-accent)' : 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
+          className="text-xs font-medium flex-shrink-0 tabular-nums"
+          style={{ color: onDeal ? 'var(--accent)' : 'var(--text-dim)' }}
         >
           {formatGBP(price)}
         </span>
@@ -144,17 +143,17 @@ function Row({ suggestion }: { suggestion: Suggestion }) {
       <>
         <span
           className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
-          style={{ background: 'color-mix(in srgb, var(--color-accent) 12%, transparent)', color: 'var(--color-accent)' }}
+          style={{ background: 'color-mix(in srgb, var(--accent) 12%, transparent)', color: 'var(--accent)' }}
           aria-hidden
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M3 6h18M7 12h10M11 18h2" />
           </svg>
         </span>
-        <span className="flex-1 min-w-0 text-xs font-bold truncate" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <span className="flex-1 min-w-0 text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
           {suggestion.label}
         </span>
-        <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--color-muted)' }}>
+        <span className="text-[10px] flex-shrink-0" style={{ color: 'var(--text-dim)' }}>
           {suggestion.count} {suggestion.count === 1 ? 'product' : 'products'}
         </span>
       </>
@@ -167,9 +166,8 @@ function Row({ suggestion }: { suggestion: Suggestion }) {
       <span
         className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
         style={{
-          background: isExample ? 'color-mix(in srgb, var(--color-accent) 12%, transparent)' : 'var(--color-surface-2)',
-          color: isExample ? 'var(--color-accent)' : 'var(--color-muted)',
-        }}
+          background: isExample ? 'color-mix(in srgb, var(--accent) 12%, transparent)' : 'var(--surface-hi)',
+          color: isExample ? 'var(--accent)' : 'var(--text-dim)' }}
         aria-hidden
       >
         {isExample ? (
@@ -183,7 +181,7 @@ function Row({ suggestion }: { suggestion: Suggestion }) {
           </svg>
         )}
       </span>
-      <span className="flex-1 min-w-0 text-xs font-semibold truncate" style={{ color: 'var(--color-text-2)' }}>
+      <span className="flex-1 min-w-0 text-xs font-medium truncate" style={{ color: 'var(--text-dim)' }}>
         {suggestion.query}
       </span>
     </>

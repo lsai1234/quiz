@@ -55,43 +55,55 @@ const DIETARY_ORDER = Object.keys(DIETARY_LABEL) as DietaryTag[]
  * lands the shelves in roughly the same place and doesn't shift the page (S3/CLS).
  */
 function LoadingSkeleton() {
-  const box = { background: 'var(--color-surface)' } as const
+  /*
+    The same shape as the thing it stands in for: a goal row, a control row, a
+    sticky category row and a two-column grid of cards at the card's real
+    proportions. The old one laid out horizontal decks at a different height, so
+    the page jumped when the catalogue landed — which is the one job a skeleton
+    has.
+  */
+  const box = { background: 'var(--surface)' } as const
   return (
     <div aria-hidden>
-      {/* Dietary filter bar */}
-      <div className="flex gap-2 px-5 py-1 max-w-lg mx-auto overflow-hidden">
-        {[64, 82, 72, 90].map((w, i) => (
-          <div key={i} className="h-7 rounded-full flex-shrink-0" style={{ width: w, ...box }} />
+      <div className="flex" style={{ gap: 'var(--space-3)', padding: 'var(--space-2) var(--space-4)' }}>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex flex-col items-center flex-shrink-0" style={{ width: 68, gap: 'var(--space-2)' }}>
+            <div style={{ ...box, width: 56, height: 56, borderRadius: 'var(--r-pill)' }} />
+            <div style={{ ...box, width: 44, height: 10, borderRadius: 4 }} />
+          </div>
         ))}
       </div>
-      {/* Category jump-nav */}
-      <div className="px-5 py-3 mt-1" style={{ borderBottom: '1px solid var(--color-border)' }}>
-        <div className="flex gap-2 overflow-hidden">
-          {[74, 62, 84, 68, 78].map((w, i) => (
-            <div key={i} className="h-7 rounded-full flex-shrink-0" style={{ width: w, ...box }} />
+
+      <div className="flex" style={{ gap: 'var(--space-2)', padding: 'var(--space-4) var(--space-4) 0' }}>
+        {[72, 96, 104, 88].map((w, i) => (
+          <div key={i} style={{ ...box, width: w, height: 36, borderRadius: 'var(--r-pill)' }} />
+        ))}
+      </div>
+
+      <div style={{ borderBottom: '1px solid var(--line)', marginTop: 'var(--space-3)' }} />
+
+      <div style={{ padding: 'var(--space-8) var(--space-4) 0' }}>
+        <div style={{ ...box, width: 120, height: 22, borderRadius: 6, marginBottom: 'var(--space-4)' }} />
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} style={{ ...box, borderRadius: 'var(--r-card)' }}>
+              <div className="w-full aspect-square" />
+              <div style={{ padding: 'var(--space-3)' }}>
+                <div style={{ background: 'var(--surface-hi)', width: '52%', height: 10, borderRadius: 4 }} />
+                <div style={{ background: 'var(--surface-hi)', width: '40%', height: 15, borderRadius: 4, marginTop: 'var(--space-2)' }} />
+                <div style={{ background: 'var(--surface-hi)', width: '80%', height: 12, borderRadius: 4, marginTop: 'var(--space-2)' }} />
+              </div>
+            </div>
           ))}
         </div>
       </div>
-      {/* Category decks */}
-      {[0, 1].map((i) => (
-        <div key={i} className="pt-8">
-          <div className="px-5 max-w-lg mx-auto mb-3">
-            <div className="h-7 w-40 rounded-lg" style={box} />
-          </div>
-          <div className="flex gap-3 px-5 overflow-hidden">
-            {[0, 1].map((j) => (
-              <div key={j} className="w-[80vw] max-w-[300px] h-[21rem] rounded-2xl flex-shrink-0" style={{ ...box, border: '1px solid var(--color-border)' }} />
-            ))}
-          </div>
-        </div>
-      ))}
     </div>
   )
 }
 
 function TrustChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="flex items-center gap-1.5 text-[11px] font-semibold whitespace-nowrap" style={{ color: 'var(--color-text-2)' }}>
+    <span className="flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap" style={{ color: 'var(--text-dim)' }}>
       {children}
     </span>
   )
@@ -666,8 +678,7 @@ export function ShopShell() {
               borderRadius: 'var(--r-card)',
               background: 'var(--surface)',
               minHeight: 132,
-              padding: 'var(--space-5)',
-            }}
+              padding: 'var(--space-5)' }}
           >
             {/* The stack, arranged. Cut-out product photography is the only
                 imagery this shop has, so the banner is made of it rather than
@@ -686,8 +697,7 @@ export function ShopShell() {
                 gap: 'var(--space-1)',
                 paddingRight: 'var(--space-3)',
                 maskImage: 'linear-gradient(to right, transparent, #000 34%)',
-                WebkitMaskImage: 'linear-gradient(to right, transparent, #000 34%)',
-              }}
+                WebkitMaskImage: 'linear-gradient(to right, transparent, #000 34%)' }}
             >
               {heroProducts.map((p, i) => (
                 <ProductTile
@@ -867,24 +877,26 @@ export function ShopShell() {
             suggestion; stacking both above the basket bar is three things
             competing for the bottom of a phone.
           */}
+          {/* One bar. A duel being assembled REPLACES the basket bar rather than
+              sitting on top of it — see ShopCompareBar. */}
           {comparing.length > 0 ? (
-            <div className="pointer-events-auto mb-2">
+            <div className="pointer-events-auto">
               <ShopCompareBar
                 products={comparing}
                 onOpen={openDuel}
                 onClear={() => setCompareIds([])}
               />
             </div>
-          ) : count > 0 && shelfNudge && (
-            <div className="pointer-events-auto mb-2">
+          ) : count > 0 && shelfNudge ? (
+            <div className="pointer-events-auto" style={{ marginBottom: 'var(--space-2)' }}>
               <ShopBasketNudge
                 nudge={shelfNudge}
                 onAct={() => track('shop_nudge_click', { key: shelfNudge.key, kind: shelfNudge.kind })}
                 onDismiss={() => dismissNudge(shelfNudge.key)}
               />
             </div>
-          )}
-          {count > 0 && (
+          ) : null}
+          {comparing.length === 0 && count > 0 && (
             /* The shelf's one primary action. */
             <div className="pointer-events-auto" style={{ background: 'var(--bg)', borderRadius: 'var(--r-control)' }}>
               <Button variant="primary" size="lg" fullWidth onClick={openDrawer} aria-label={`View basket, ${count} item${count !== 1 ? 's' : ''}, ${formatGBP(subtotal)}`}>

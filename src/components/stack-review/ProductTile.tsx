@@ -3,7 +3,7 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
-import { productImageSrc, productImageSrcSet } from '@/lib/images/product-image'
+import { productImageSrc, productImageSrcSet, IMAGE_FALLBACK_BACKGROUND } from '@/lib/images/product-image'
 
 interface Props {
   /** Product photo. When null/absent, a designed slot-coloured tile is shown. */
@@ -69,7 +69,24 @@ export function ProductTile({
 
   /** 0 = the pipeline, 1 = the supplier's own URL, 2 = give up and draw the tile. */
   const [attempt, setAttempt] = useState(0)
-  useEffect(() => { setAttempt(0) }, [imageUrl])
+  /**
+   * Fade the photo in when it decodes.
+   *
+   * The frame is already laid out at its final size, so nothing moves — this is
+   * only about the pop. A product appearing at full opacity the instant its
+   * bytes land makes a shelf flicker into existence card by card; a 200ms fade
+   * makes the same load read as the page settling.
+   *
+   * ── Why a ref callback and not just `onLoad` ────────────────────────────────
+   * A cached image is already `complete` by the time React attaches the
+   * handler, so `onLoad` never fires and the photo stays at opacity 0 forever.
+   * That is invisible on a cold load and total on a warm one — every product in
+   * the basket drawer was a blank chip, and every shelf would have gone empty on
+   * a second visit. The ref checks `complete` at attach time; `onLoad` covers
+   * the images still in flight.
+   */
+  const [loaded, setLoaded] = useState(false)
+  useEffect(() => { setAttempt(0); setLoaded(false) }, [imageUrl])
 
   const raw = imageUrl ?? null
   const src = attempt === 0 ? normalised : attempt === 1 ? raw : null
@@ -81,9 +98,25 @@ export function ProductTile({
       style={{
         width: fill ? undefined : size,
         height: fill ? undefined : size,
+        /*
+          A photo gets a plate UNLESS it has a spotlight behind it.
+
+          Cut-outs are mostly dark tubs, and a dark tub on a dark drawer at 56px
+          is invisible — which is exactly what happened to the basket line items
+          the first time this shipped, twice: once with no plate at all and again
+          with a dark one.
+
+          So the plate is LIGHT, the same tile the pipeline falls back to. At
+          card size the product gets the whole frame and a spotlight to sit on,
+          and a bright rectangle there would be the loudest thing on the shelf.
+          At thumbnail size there is no room for a spotlight, the product is
+          small enough that its plate is a chip rather than a panel, and a light
+          chip is what makes a dark tub legible.
+        */
         background: src
-          ? undefined
+          ? (spotlight ? undefined : IMAGE_FALLBACK_BACKGROUND)
           : `radial-gradient(circle at 32% 26%, color-mix(in srgb, ${hue} 26%, transparent), transparent 72%), var(--surface-hi, var(--color-surface-2))`,
+        borderRadius: src && !spotlight ? 'var(--r-control)' : undefined,
         ...style,
       }}
     >
@@ -108,7 +141,10 @@ export function ProductTile({
           className={`relative w-full h-full object-contain ${inset ? 'p-[10%]' : ''}`}
           loading="lazy"
           decoding="async"
+          ref={(el) => { if (el?.complete) setLoaded(true) }}
+          onLoad={() => setLoaded(true)}
           onError={() => setAttempt((a) => a + 1)}
+          style={{ opacity: loaded ? 1 : 0, transition: 'opacity 200ms ease-out' }}
         />
       ) : (
         /* The glyph is sized against the tile it is drawn in, which in `fill`

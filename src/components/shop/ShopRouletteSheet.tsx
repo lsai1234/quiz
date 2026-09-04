@@ -116,27 +116,37 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
   const deal = entry && !spinning ? entryDeal(entry) : { onDeal: false, pct: 0 }
 
   const sheet = (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Flavour roulette">
+    /*
+      `storefront` on the portal root, not just on the shell.
+
+      The token layer's global transition, its focus ring and its type roles are
+      all scoped to `.storefront` so they cannot reach the quiz or the hubs. A
+      sheet renders through `createPortal` into `document.body`, which is
+      OUTSIDE that scope — so without this class every control in every sheet
+      lost its focus ring and its 150ms transition, silently, while looking
+      almost right.
+    */
+    <div className="storefront fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Flavour roulette">
       <div
         aria-hidden
         onClick={onClose}
         className="absolute inset-0 w-full h-full"
-        style={{ background: 'color-mix(in srgb, var(--color-bg) 72%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+        style={{ background: 'color-mix(in srgb, var(--bg) 72%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
       />
 
       <div
         className="relative w-full max-w-lg mx-auto rounded-t-3xl flex flex-col"
-        style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border-2)' }}
+        style={{ background: 'var(--surface)', borderTop: '1px solid var(--line)' }}
       >
-        <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <h2 className="text-base font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
+        <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3" style={{ borderBottom: '1px solid var(--line)' }}>
+          <h2 className="text-base font-medium" style={{ color: 'var(--text)' }}>
             Flavour roulette
           </h2>
           <button
             onClick={onClose}
             aria-label="Close roulette"
             className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-            style={{ color: 'var(--color-text-2)', background: 'var(--color-surface-2)' }}
+            style={{ color: 'var(--text-dim)', background: 'var(--surface-hi)' }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
               <path d="M18 6 6 18M6 6l12 12" />
@@ -163,17 +173,17 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
               */}
               <div className="h-7 mt-3 text-center">
                 {entry && !spinning && (
-                  <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}>
+                  <p className="text-sm font-medium tabular-nums" style={{ color: 'var(--text-dim)' }}>
                     {formatGBP(entry.variant.price)}
                     {deal.onDeal && (
-                      <span className="ml-2" style={{ color: 'var(--color-accent)' }}>−{deal.pct}%</span>
+                      <span className="ml-2" style={{ color: 'var(--accent)' }}>−{deal.pct}%</span>
                     )}
                   </p>
                 )}
               </div>
             </>
           ) : (
-            <p className="text-sm text-center px-4" style={{ color: 'var(--color-muted)' }}>
+            <p className="text-sm text-center px-4" style={{ color: 'var(--text-dim)' }}>
               Nothing to spin for inside your filters. Try clearing one.
             </p>
           )}
@@ -183,24 +193,22 @@ export function ShopRouletteSheet({ products, query, onClose }: Props) {
           </p>
         </div>
 
-        <footer className="flex gap-2 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]" style={{ borderTop: '1px solid var(--color-border)' }}>
+        <footer className="flex gap-2 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]" style={{ borderTop: '1px solid var(--line)' }}>
           <button
             onClick={pull}
             disabled={spinning}
-            className="px-4 py-3 rounded-xl text-xs font-bold active:scale-95 transition-transform disabled:opacity-40"
-            style={{ color: 'var(--color-text-2)', background: 'var(--color-surface-2)', fontFamily: 'var(--font-display)' }}
+            className="px-4 py-3 rounded-xl text-xs font-medium active:scale-95 transition-transform disabled:opacity-40"
+            style={{ color: 'var(--text-dim)', background: 'var(--surface-hi)' }}
           >
             {spinning ? 'Spinning…' : 'Spin again'}
           </button>
           <button
             onClick={addEntry}
             disabled={!entry || spinning}
-            className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-[0.98] transition-transform disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl text-sm font-medium active:scale-[0.98] transition-transform disabled:opacity-40"
             style={{
-              background: added ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'var(--color-accent)',
-              color: added ? 'var(--color-accent)' : 'var(--color-bg)',
-              fontFamily: 'var(--font-display)',
-            }}
+              background: added ? 'color-mix(in srgb, var(--accent) 14%, transparent)' : 'var(--accent)',
+              color: added ? 'var(--accent)' : 'var(--bg)' }}
           >
             {/*
               Never the landed price while the reel is still moving. `entry` is

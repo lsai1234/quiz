@@ -60,17 +60,17 @@ export function ShopNoResults({ products, index, query, onQueryChange, onOpen }:
   return (
     <section className="px-5 pt-8 pb-2 max-w-5xl mx-auto">
       <div className="max-w-lg mx-auto text-center">
-        <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+        <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
           {query.q.trim() ? <>Nothing matched &ldquo;{query.q.trim()}&rdquo;</> : 'Nothing matches those filters'}
         </p>
 
         {suggestion && (
-          <p className="text-xs mt-2" style={{ color: 'var(--color-muted)' }}>
+          <p className="text-xs mt-2" style={{ color: 'var(--text-dim)' }}>
             Did you mean{' '}
             <button
               onClick={() => onQueryChange({ ...query, q: suggestion })}
-              className="font-bold underline underline-offset-2 active:opacity-70"
-              style={{ color: 'var(--color-accent)', fontFamily: 'var(--font-display)' }}
+              className="font-medium underline underline-offset-2 active:opacity-70"
+              style={{ color: 'var(--accent)' }}
             >
               {suggestion}
             </button>
@@ -85,13 +85,10 @@ export function ShopNoResults({ products, index, query, onQueryChange, onOpen }:
               <button
                 key={tag}
                 onClick={() => dropDietary(tag)}
-                className="px-3 py-1.5 rounded-full text-xs font-bold active:scale-95 transition-transform"
-                style={{
-                  fontFamily: 'var(--font-display)',
-                  color: 'var(--color-text-2)',
-                  background: 'var(--color-surface)',
-                  border: '1px solid var(--color-border-2)',
-                }}
+                className="px-3 py-1.5 rounded-full text-xs font-medium active:scale-95 transition-transform"
+                style={{ color: 'var(--text-dim)',
+                  background: 'var(--surface)',
+                  border: '1px solid var(--line)' }}
               >
                 Remove &ldquo;{DIETARY_LABEL[tag]}&rdquo;
               </button>
@@ -107,8 +104,8 @@ export function ShopNoResults({ products, index, query, onQueryChange, onOpen }:
         */}
         <button
           onClick={() => onQueryChange(EMPTY_QUERY)}
-          className="mt-4 px-5 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-transform"
-          style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+          className="mt-4 px-5 py-2.5 rounded-xl text-xs font-medium active:scale-95 transition-transform"
+          style={{ background: 'var(--accent)', color: 'var(--bg)' }}
         >
           Start over
         </button>
@@ -116,7 +113,7 @@ export function ShopNoResults({ products, index, query, onQueryChange, onOpen }:
 
       {nearest.length > 0 && (
         <div className="mt-10">
-          <h3 className="text-sm font-black mb-3" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
+          <h3 className="text-sm font-medium mb-3" style={{ color: 'var(--text)' }}>
             {query.q.trim() ? 'Closest we stock' : 'Popular right now'}
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">

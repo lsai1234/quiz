@@ -92,7 +92,17 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
   const activeCount = activeFilterCount(query)
 
   const sheet = (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Filters">
+    /*
+      `storefront` on the portal root, not just on the shell.
+
+      The token layer's global transition, its focus ring and its type roles are
+      all scoped to `.storefront` so they cannot reach the quiz or the hubs. A
+      sheet renders through `createPortal` into `document.body`, which is
+      OUTSIDE that scope — so without this class every control in every sheet
+      lost its focus ring and its 150ms transition, silently, while looking
+      almost right.
+    */
+    <div className="storefront fixed inset-0 z-50 flex flex-col justify-end" role="dialog" aria-modal="true" aria-label="Filters">
       {/*
         The scrim. A plain div rather than a labelled button: the header button
         and Escape are the real ways out, and a second control with the SAME
@@ -104,22 +114,22 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
         aria-hidden
         onClick={onClose}
         className="absolute inset-0 w-full h-full"
-        style={{ background: 'color-mix(in srgb, var(--color-bg) 72%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
+        style={{ background: 'color-mix(in srgb, var(--bg) 72%, transparent)', backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)' }}
       />
 
       <div
         className="relative w-full max-w-lg mx-auto rounded-t-3xl flex flex-col max-h-[88dvh]"
-        style={{ background: 'var(--color-surface)', borderTop: '1px solid var(--color-border-2)' }}
+        style={{ background: 'var(--surface)', borderTop: '1px solid var(--line)' }}
       >
-        <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <h2 className="text-base font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
+        <header className="flex items-center justify-between gap-3 px-5 pt-4 pb-3 flex-shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
+          <h2 className="text-base font-medium" style={{ color: 'var(--text)' }}>
             Filters{activeCount > 0 ? ` (${activeCount})` : ''}
           </h2>
           <button
             onClick={onClose}
             aria-label="Close filters"
             className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-            style={{ color: 'var(--color-text-2)', background: 'var(--color-surface-2)' }}
+            style={{ color: 'var(--text-dim)', background: 'var(--surface-hi)' }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
               <path d="M18 6 6 18M6 6l12 12" />
@@ -177,7 +187,7 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
                 value={query.priceMin}
                 onCommit={(value) => apply({ priceMin: value }, 'priceMin', String(value ?? ''), value !== null)}
               />
-              <span className="text-xs" style={{ color: 'var(--color-muted)' }}>to</span>
+              <span className="text-xs" style={{ color: 'var(--text-dim)' }}>to</span>
               <PriceInput
                 label="Max price"
                 value={query.priceMax}
@@ -280,20 +290,20 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
 
         <footer
           className="flex items-center gap-3 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] flex-shrink-0"
-          style={{ borderTop: '1px solid var(--color-border)', background: 'var(--color-surface)' }}
+          style={{ borderTop: '1px solid var(--line)', background: 'var(--surface)' }}
         >
           <button
             onClick={() => onChange({ ...EMPTY_QUERY, q: query.q })}
             disabled={activeCount === 0 && query.sort === EMPTY_QUERY.sort}
-            className="px-4 py-3 rounded-xl text-xs font-bold active:scale-95 transition-transform disabled:opacity-40"
-            style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
+            className="px-4 py-3 rounded-xl text-xs font-medium active:scale-95 transition-transform disabled:opacity-40"
+            style={{ color: 'var(--text-dim)' }}
           >
             Clear all
           </button>
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-[0.98] transition-transform"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+            className="flex-1 py-3 rounded-xl text-sm font-medium active:scale-[0.98] transition-transform"
+            style={{ background: 'var(--accent)', color: 'var(--bg)' }}
           >
             {resultCount === 0
               ? 'No results'
@@ -312,10 +322,10 @@ export function ShopFilterSheet({ products, query, resultCount, onChange, onFace
 function Group({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="mb-6 last:mb-1">
-      <h3 className="label mb-2.5" style={{ color: 'var(--color-muted)' }}>
+      <h3 className="label mb-2.5" style={{ color: 'var(--text-dim)' }}>
         {label}
       </h3>
-      {hint && <p className="text-[11px] -mt-1.5 mb-2.5" style={{ color: 'var(--color-muted)' }}>{hint}</p>}
+      {hint && <p className="text-[11px] -mt-1.5 mb-2.5" style={{ color: 'var(--text-dim)' }}>{hint}</p>}
       {children}
     </section>
   )
@@ -336,13 +346,10 @@ function Chip({
       onClick={onToggle}
       aria-pressed={active}
       disabled={empty}
-      className="px-3.5 py-2 rounded-full text-xs font-bold tracking-wide transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed"
-      style={{
-        fontFamily: 'var(--font-display)',
-        color: active ? 'var(--color-bg)' : 'var(--color-text-2)',
-        background: active ? 'var(--color-accent)' : 'var(--color-surface-2)',
-        border: active ? '1px solid transparent' : '1px solid var(--color-border-2)',
-      }}
+      className="px-3.5 py-2 rounded-full text-xs font-medium tracking-wide transition-all active:scale-95 disabled:opacity-35 disabled:cursor-not-allowed"
+      style={{ color: active ? 'var(--bg)' : 'var(--text-dim)',
+        background: active ? 'var(--accent)' : 'var(--surface-hi)',
+        border: active ? '1px solid transparent' : '1px solid var(--line)' }}
     >
       {label}
       {/*
@@ -362,12 +369,11 @@ function SortRow({ sort, active, onSelect }: { sort: ShopSort; active: boolean; 
     <button
       onClick={onSelect}
       aria-pressed={active}
-      className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs font-semibold active:scale-[0.99] transition-transform"
+      className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl text-left text-xs font-medium active:scale-[0.99] transition-transform"
       style={{
-        color: active ? 'var(--color-accent)' : 'var(--color-text-2)',
-        background: active ? 'color-mix(in srgb, var(--color-accent) 10%, transparent)' : 'transparent',
-        border: active ? '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)' : '1px solid transparent',
-      }}
+        color: active ? 'var(--accent)' : 'var(--text-dim)',
+        background: active ? 'color-mix(in srgb, var(--accent) 10%, transparent)' : 'transparent',
+        border: active ? '1px solid color-mix(in srgb, var(--accent) 30%, transparent)' : '1px solid transparent' }}
     >
       {SORT_LABELS[sort]}
       {active && (
@@ -406,9 +412,9 @@ function PriceInput({
   return (
     <div
       className="flex-1 flex items-center gap-1 rounded-xl px-3 py-2"
-      style={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border-2)' }}
+      style={{ background: 'var(--surface-hi)', border: '1px solid var(--line)' }}
     >
-      <span className="text-xs" style={{ color: 'var(--color-muted)' }}>{formatGBP(0).charAt(0)}</span>
+      <span className="text-xs" style={{ color: 'var(--text-dim)' }}>{formatGBP(0).charAt(0)}</span>
       <input
         type="text"
         inputMode="decimal"
@@ -418,8 +424,8 @@ function PriceInput({
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit() } }}
-        className="w-full min-w-0 bg-transparent text-xs font-semibold outline-none"
-        style={{ color: 'var(--color-text)' }}
+        className="w-full min-w-0 bg-transparent text-xs font-medium outline-none"
+        style={{ color: 'var(--text)' }}
       />
     </div>
   )

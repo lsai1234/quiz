@@ -19,8 +19,14 @@ import type { BasketNudge } from '@/lib/shop/basket-alchemy'
 import { ShopBasketNudge } from './ShopBasketNudge'
 import { ShopStackRadar } from './ShopStackRadar'
 
-const ACCENT = '#00D4FF'
-const GREEN = '#34d399'
+/* The one hex in the drawer, replaced by the token. */
+const ACCENT = 'var(--accent)'
+/*
+ * A discount is not a semantic tone in this palette — there is no green, and
+ * inventing one for a saving would be the tenth colour. It reads as ordinary
+ * text; the minus sign in front of it is what says which direction it goes.
+ */
+const GREEN = 'var(--text)'
 
 interface Props {
   resolved: ResolvedBasketLine[]
@@ -138,22 +144,21 @@ export function BasketDrawer({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="storefront fixed inset-0 z-50 flex justify-end"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
       style={{ background: 'rgba(0,0,0,0.6)', opacity: shown ? 1 : 0, transition: reduced ? 'none' : 'opacity 0.25s ease' }}
     >
       <div
         className="w-full max-w-[420px] h-full flex flex-col"
         style={{
-          background: 'var(--color-bg)',
-          borderLeft: '1px solid var(--color-border)',
+          background: 'var(--bg)',
+          borderLeft: '1px solid var(--line)',
           transform: shown ? 'translateX(0)' : 'translateX(100%)',
-          transition: reduced ? 'none' : 'transform 0.3s cubic-bezier(0.22,1,0.36,1)',
-        }}
+          transition: reduced ? 'none' : 'transform 0.3s cubic-bezier(0.22,1,0.36,1)' }}
       >
         {/* Header */}
-        <div className="px-5 pt-5 pb-4 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid var(--color-border)' }}>
-          <h2 className="text-lg font-black" style={{ fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
+        <div className="px-5 pt-5 pb-4 flex items-center justify-between flex-shrink-0" style={{ borderBottom: '1px solid var(--line)' }}>
+          <h2 className="text-lg font-medium" style={{ color: 'var(--text)' }}>
             Your basket
           </h2>
           <IconButton icon="x" label="Close basket" size="sm" filled onClick={onClose} />
@@ -161,9 +166,9 @@ export function BasketDrawer({
 
         {resolved.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-8 text-center">
-            <p className="text-sm font-bold" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>Your basket is empty</p>
-            <p className="text-xs mt-1.5" style={{ color: 'var(--color-muted)' }}>Add something from the shelves to get started.</p>
-            <button onClick={onClose} className="mt-5 px-5 py-2.5 rounded-xl text-xs font-bold active:scale-95 transition-transform" style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}>
+            <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>Your basket is empty</p>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-dim)' }}>Add something from the shelves to get started.</p>
+            <button onClick={onClose} className="mt-5 px-5 py-2.5 rounded-xl text-xs font-medium active:scale-95 transition-transform" style={{ background: 'var(--accent)', color: 'var(--bg)' }}>
               Keep shopping
             </button>
           </div>
@@ -176,17 +181,17 @@ export function BasketDrawer({
                   <ProductTile imageUrl={l.product.imageUrl} slot={l.product.stackSlots[0]} title={l.product.title} size={56} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm font-bold leading-snug line-clamp-2" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{l.product.title}</p>
+                      <p className="text-sm font-medium leading-snug line-clamp-2" style={{ color: 'var(--text)' }}>{l.product.title}</p>
                       <IconButton icon="x" label={`Remove ${l.product.title}`} size="sm" onClick={() => remove(l.product.id, l.variant.id)} className="-mr-1 -mt-1" />
                     </div>
-                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--color-muted)' }}>{variantLabel(l.variant)}</p>
+                    <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-dim)' }}>{variantLabel(l.variant)}</p>
                     <div className="flex items-center justify-between mt-2">
-                      <div className="flex items-center rounded-lg" style={{ border: '1px solid var(--color-border-2)' }}>
-                        <button onClick={() => setQty(l.product.id, l.variant.id, l.quantity - 1)} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--color-text-2)' }} aria-label="Decrease">–</button>
-                        <span className="w-6 text-center text-xs font-bold" style={{ fontFamily: 'var(--font-display)' }}>{l.quantity}</span>
-                        <button onClick={() => setQty(l.product.id, l.variant.id, Math.min(MAX_LINE_QTY, l.quantity + 1))} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--color-text-2)' }} aria-label="Increase">+</button>
+                      <div className="flex items-center rounded-lg" style={{ border: '1px solid var(--line)' }}>
+                        <button onClick={() => setQty(l.product.id, l.variant.id, l.quantity - 1)} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--text-dim)' }} aria-label="Decrease">–</button>
+                        <span className="w-6 text-center text-xs font-medium" >{l.quantity}</span>
+                        <button onClick={() => setQty(l.product.id, l.variant.id, Math.min(MAX_LINE_QTY, l.quantity + 1))} className="w-7 h-7 active:opacity-60" style={{ color: 'var(--text-dim)' }} aria-label="Increase">+</button>
                       </div>
-                      <span className="text-sm font-black tabular-nums" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(l.lineTotal)}</span>
+                      <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--text)' }}>{formatGBP(l.lineTotal)}</span>
                     </div>
                   </div>
                 </div>
@@ -194,7 +199,7 @@ export function BasketDrawer({
             </div>
 
             {/* Footer */}
-            <div className="flex-shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3" style={{ borderTop: '1px solid var(--color-border)' }}>
+            <div className="flex-shrink-0 px-5 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] space-y-3" style={{ borderTop: '1px solid var(--line)' }}>
               {/* What this basket IS, before what it could be. */}
               {products && onBrowseSlot && (
                 <ShopStackRadar resolved={resolved} products={products} onBrowseSlot={onBrowseSlot} />
@@ -217,7 +222,7 @@ export function BasketDrawer({
               {threshold > 0 && !founderKind && (
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-[11px] font-semibold" style={{ color: freeDelivery ? ACCENT : 'var(--color-text-2)' }}>
+                    <span className="text-[11px] font-medium" style={{ color: freeDelivery ? ACCENT : 'var(--text-dim)' }}>
                       {freeDelivery ? <><Icon name="check" size={12} className="inline-block -mt-0.5 mr-1" />Free delivery unlocked</> : `${formatGBP(remaining)} away from free delivery`}
                     </span>
                     {/* What postage actually costs on this basket. It used to say
@@ -225,12 +230,12 @@ export function BasketDrawer({
                         either way — so the first time anyone saw a delivery line
                         was on Stripe's page. */}
                     {!freeDelivery && (
-                      <span className="text-[11px] font-semibold" style={{ color: 'var(--color-muted)' }}>
+                      <span className="text-[11px] font-medium" style={{ color: 'var(--text-dim)' }}>
                         +{formatGBP(deliveryCharge)} delivery
                       </span>
                     )}
                   </div>
-                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-surface-2)' }}>
+                  <div className="h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--surface-hi)' }}>
                     <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: ACCENT, transition: reduced ? 'none' : 'width 0.4s ease' }} />
                   </div>
                 </div>
@@ -239,8 +244,8 @@ export function BasketDrawer({
               {/* Subscribe-&-save nudge → the personalised quiz */}
               <Link
                 href="/"
-                className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-semibold active:scale-[0.99] transition-transform"
-                style={{ color: ACCENT, background: `color-mix(in srgb, ${ACCENT} 8%, transparent)`, border: `1px solid color-mix(in srgb, ${ACCENT} 20%, transparent)` }}
+                className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-[11px] font-medium active:scale-[0.99] transition-transform"
+                style={{ color: 'var(--text)', background: 'var(--surface)' }}
               >
                 <span className="flex-1">Want it monthly? Subscribe &amp; save up to {subscribePct}% with a personalised stack</span>
                 <span aria-hidden>→</span>
@@ -262,7 +267,7 @@ export function BasketDrawer({
               />
 
               {belowMinimum && (
-                <p className="text-[11px]" style={{ color: 'var(--color-text-2)' }}>
+                <p className="text-[11px]" style={{ color: 'var(--text-dim)' }}>
                   Orders start at {formatGBP(minimum)} — {formatGBP(shortfall)} to go.
                 </p>
               )}
@@ -272,10 +277,10 @@ export function BasketDrawer({
                   offer that no longer applies. */}
               {founderKind && (
                 <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>
+                  <span className="text-sm" style={{ color: 'var(--text-dim)' }}>
                     {founderKind === 'cost' ? 'Delivery at cost' : 'Delivery'}
                   </span>
-                  <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text-dim)' }}>
                     {deliveryCharge > 0 ? formatGBP(deliveryCharge) : 'Free'}
                   </span>
                 </div>
@@ -293,8 +298,8 @@ export function BasketDrawer({
               {priced.discount > 0.01 && (
                 <>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm" style={{ color: 'var(--color-text-2)' }}>Subtotal</span>
-                    <span className="text-sm font-semibold tabular-nums" style={{ color: 'var(--color-text-2)' }}>{formatGBP(subtotal)}</span>
+                    <span className="text-sm" style={{ color: 'var(--text-dim)' }}>Subtotal</span>
+                    <span className="text-sm font-medium tabular-nums" style={{ color: 'var(--text-dim)' }}>{formatGBP(subtotal)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     {/* A founder code has no tier and no rate — it replaces the
@@ -305,26 +310,26 @@ export function BasketDrawer({
                         ? appliedCode?.founderLabel ?? 'Founder code'
                         : `${priced.tierLabel ?? 'Bundle discount'} · ${Math.round(priced.tierPct * 100)}% off`}
                     </span>
-                    <span className="text-sm font-bold tabular-nums" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
+                    <span className="text-sm font-medium tabular-nums" style={{ color: GREEN }}>−{formatGBP(priced.discount)}</span>
                   </div>
                 </>
               )}
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold" style={{ color: 'var(--color-text-2)' }}>
+                <span className="text-sm font-medium" style={{ color: 'var(--text-dim)' }}>
                   {priced.discount > 0.01 ? 'Total' : 'Subtotal'}
                 </span>
-                <span className="text-xl font-black tabular-nums" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>{formatGBP(priced.total)}</span>
+                <span className="text-xl font-medium tabular-nums" style={{ color: 'var(--text)' }}>{formatGBP(priced.total)}</span>
               </div>
 
               {checkoutState.status === 'error' && (
-                <p className="text-[11px] text-center" style={{ color: 'var(--color-red)' }}>{checkoutState.message}</p>
+                <p className="text-[11px] text-center" style={{ color: 'var(--danger)' }}>{checkoutState.message}</p>
               )}
 
               <button
                 onClick={onCheckout}
                 disabled={checkoutState.status === 'loading' || checkoutState.status === 'redirecting'}
-                className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
-                style={{ background: 'var(--color-accent)', color: 'var(--color-bg)', fontFamily: 'var(--font-display)' }}
+                className="w-full py-4 rounded-2xl text-sm font-medium tracking-wide active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
+                style={{ background: 'var(--accent)', color: 'var(--bg)' }}
               >
                 {checkoutState.status === 'loading' || checkoutState.status === 'redirecting'
                   ? free
@@ -340,9 +345,9 @@ export function BasketDrawer({
               {/* Secure-checkout reassurance — honest cues, no surprise steps.
                   Which means not promising a card step on an order that has no
                   payment in it at all. */}
-              <div className="flex items-center justify-center gap-1.5" style={{ color: 'var(--color-muted)' }}>
+              <div className="flex items-center justify-center gap-1.5" style={{ color: 'var(--text-dim)' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
-                <span className="text-[10px] font-semibold">
+                <span className="text-[10px] font-medium">
                   {free
                     ? 'Nothing to pay — no card step'
                     : 'Secure checkout · card & wallet payments, encrypted'}
@@ -350,7 +355,7 @@ export function BasketDrawer({
               </div>
 
               {mockDone && (
-                <p className="text-[10px] text-center" style={{ color: 'var(--color-muted)' }}>
+                <p className="text-[10px] text-center" style={{ color: 'var(--text-dim)' }}>
                   Payments aren’t live — this is a demo checkout.
                 </p>
               )}

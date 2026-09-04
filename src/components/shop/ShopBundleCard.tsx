@@ -82,8 +82,7 @@ export function ShopBundleCard({ view, products }: Props) {
             fontWeight: 'var(--weight-medium)',
             borderRadius: 'var(--r-control)',
             background: 'var(--surface-hi)',
-            color: 'var(--text)',
-          }}
+            color: 'var(--text)' }}
         >
           View bundle
         </span>

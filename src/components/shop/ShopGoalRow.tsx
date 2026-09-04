@@ -81,8 +81,7 @@ export function ShopGoalRow({ products, selected, onSelect, onSurprise }: Props)
                   height: 56,
                   borderRadius: 'var(--r-pill)',
                   background: on ? 'var(--accent)' : 'var(--surface)',
-                  color: on ? 'var(--accent-ink)' : 'var(--text)',
-                }}
+                  color: on ? 'var(--accent-ink)' : 'var(--text)' }}
               >
                 <QuizIcon name={g.icon} size={24} />
               </span>

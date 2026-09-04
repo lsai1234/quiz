@@ -44,10 +44,9 @@ export function ShopBasketNudge({ nudge, onAct, onDismiss }: Props) {
       className="flex items-center gap-2 rounded-xl pl-3 pr-1.5 py-2 max-w-lg mx-auto w-full"
       style={{
         background: offerish
-          ? 'color-mix(in srgb, var(--color-accent) 9%, var(--color-surface))'
-          : 'var(--color-surface)',
-        border: `1px solid ${offerish ? 'color-mix(in srgb, var(--color-accent) 26%, transparent)' : 'var(--color-border-2)'}`,
-      }}
+          ? 'color-mix(in srgb, var(--accent) 9%, var(--surface))'
+          : 'var(--surface)',
+        border: `1px solid ${offerish ? 'color-mix(in srgb, var(--accent) 26%, transparent)' : 'var(--line)'}` }}
     >
       {nudge.kind === 'bundle' ? (
         <Link href={`/bundles/${nudge.slug}`} onClick={onAct} className="flex-1 min-w-0 active:opacity-80">
@@ -61,7 +60,7 @@ export function ShopBasketNudge({ nudge, onAct, onDismiss }: Props) {
         onClick={onDismiss}
         aria-label="Dismiss suggestion"
         className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-        style={{ color: 'var(--color-muted)' }}
+        style={{ color: 'var(--text-dim)' }}
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden>
           <path d="M18 6 6 18M6 6l12 12" />
@@ -87,13 +86,13 @@ function BundleBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'bundle' }>
 
   return (
     <>
-      <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <p className="text-xs font-medium leading-snug" style={{ color: 'var(--text)' }}>
         {nudge.saving > 0
           ? `${nudge.name} — ${formatGBP(nudge.saving)} less as a bundle`
           : `${nudge.have} of the ${total} in the ${nudge.name}`}
         <span aria-hidden> →</span>
       </p>
-      <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+      <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--text-dim)' }}>
         {nudge.saving > 0
           ? `You have ${nudge.have} of its ${total}. Bundles are bought on their own page.`
           : `Add ${missingList} for the full stack. Bundles are bought on their own page.`}
@@ -110,10 +109,10 @@ function BundleBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'bundle' }>
 function OverlapBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'overlap' }> }) {
   return (
     <>
-      <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <p className="text-xs font-medium leading-snug" style={{ color: 'var(--text)' }}>
         Two of these overlap
       </p>
-      <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--color-text-2)' }}>
+      <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--text-dim)' }}>
         {nudge.sentence} You may only need one.
       </p>
     </>
@@ -126,11 +125,11 @@ function DeliveryBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'delivery
   const progress = Math.min(1, 1 - nudge.remaining / nudge.threshold)
   return (
     <>
-      <p className="text-xs font-bold leading-snug" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
+      <p className="text-xs font-medium leading-snug" style={{ color: 'var(--text)' }}>
         {formatGBP(nudge.remaining)} from free delivery
       </p>
-      <div className="h-1 rounded-full overflow-hidden mt-1.5" style={{ background: 'var(--color-surface-2)' }}>
-        <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: 'var(--color-accent)' }} />
+      <div className="h-1 rounded-full overflow-hidden mt-1.5" style={{ background: 'var(--surface-hi)' }}>
+        <div className="h-full rounded-full" style={{ width: `${progress * 100}%`, background: 'var(--accent)' }} />
       </div>
     </>
   )
