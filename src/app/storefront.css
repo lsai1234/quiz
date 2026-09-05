@@ -419,3 +419,26 @@
 @media (prefers-reduced-motion: reduce) {
   .sf-added { animation: none; }
 }
+
+/*
+  The way through from a shelf to its guide.
+
+  Deliberately not a `.sf-button`. A shelf already has one primary action per
+  card and a category row above it; a filled button here would compete with
+  every Add on the screen and turn a page of products into a page of controls.
+  A text link in the accent, at meta size, reads as "more about this" — which
+  is what it is.
+*/
+.storefront .sf-guide-link {
+  font-family: var(--font-sans);
+  font-size: var(--meta-size);
+  font-weight: var(--weight-medium);
+  line-height: 1.45;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.storefront .sf-guide-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

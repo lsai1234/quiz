@@ -5,6 +5,8 @@ import type { ShopCategory } from '@/lib/shop/categories'
 import { ShopProductCard } from './ShopProductCard'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
+import Link from 'next/link'
+import { guideFor, guideHref } from '@/lib/shop/guides'
 
 interface Props {
   section: ShopCategory
@@ -35,6 +37,8 @@ interface Props {
  * scroll position, and the storefront's motion is 150ms on interaction only.
  */
 export function ShopSection({ section, onOpen, perServing, selectable, selectedIds, onToggleSelect }: Props) {
+  const guide = guideFor(section.slug)
+
   return (
     /*
       `scroll-margin-top` is 88px, not the old 96px guess: the sticky bar is now
@@ -66,6 +70,35 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
           {section.products.length} product{section.products.length !== 1 ? 's' : ''}
         </span>
       </div>
+
+      {/*
+        What this shelf is for, and a way to find out properly.
+
+        The shelves assumed you already knew what you came for. That is fine
+        for somebody who wants whey and reads "Protein"; it is nothing at all
+        for somebody standing in front of "Amino Acids and BCAAs" wondering
+        whether that is a thing they need. The quiz answers that by asking
+        about you. This answers it by explaining the shelf, for the shopper who
+        would rather read than be interviewed.
+
+        Absent when there is no guide for the category — the catalogue is
+        supplier data and a new shelf can appear at any time, so a shelf
+        without one simply looks the way it always did.
+      */}
+      {guide && (
+        <div style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', marginTop: 'calc(-1 * var(--space-2))' }}>
+          <p className="sf-meta" style={{ maxWidth: '58ch' }}>{guide.summary}</p>
+          <Link
+            href={guideHref(guide)}
+            data-interactive
+            className="sf-guide-link inline-flex items-center"
+            style={{ marginTop: 'var(--space-2)', gap: 'var(--space-1)' }}
+          >
+            How {guide.title.toLowerCase()} fits
+            <span aria-hidden>&#8250;</span>
+          </Link>
+        </div>
+      )}
 
       <div
         className="grid"

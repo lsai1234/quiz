@@ -7,6 +7,7 @@ import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
 import { track } from '@/lib/analytics/events'
 import { useBasket } from '@/lib/basket/store'
+import { ShopPageHeader } from './ShopPageHeader'
 import { MAX_LINE_QTY } from '@/lib/basket/helpers'
 import { hasRating } from '@/lib/shop/ratings'
 import { CHRGDLogo } from '@/components/brand/CHRGDLogo'
@@ -72,30 +73,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
 
   return (
     <main className="storefront min-h-dvh" style={{ background: 'var(--bg)', color: 'var(--text)' }}>
-      <header className="flex items-center justify-between" style={{ padding: 'var(--space-6) var(--space-4) var(--space-2)' }}>
-        <Link href="/" aria-label="getCHRGD home" data-interactive>
-          <CHRGDLogo markSize={22} wordClassName="text-lg" />
-        </Link>
-        {/* The same control as the shelf header. It was a 40px circle with an
-            accent counter pinned to its corner — the shop's last floating
-            badge. */}
-        <Link
-          href="/shop#basket"
-          data-interactive
-          className="sf-button inline-flex items-center justify-center"
-          style={{
-            minHeight: 36, padding: '0 var(--space-3)', gap: 'var(--space-2)',
-            borderRadius: 'var(--r-control)', background: 'transparent', color: 'var(--text-dim)',
-            fontSize: 'var(--meta-size)', fontWeight: 'var(--weight-medium)',
-            ['--sf-hover' as string]: 'var(--surface-hi)',
-            ['--sf-active' as string]: 'var(--surface-hi)',
-          }}
-          aria-label={`Open basket, ${count} item${count !== 1 ? 's' : ''}`}
-        >
-          Basket
-          {count > 0 && <span className="sf-tnum" style={{ color: 'var(--text)' }}>{count}</span>}
-        </Link>
-      </header>
+      <ShopPageHeader count={count} />
 
       <div className="max-w-lg mx-auto" style={{ padding: '0 var(--space-4)', paddingBottom: 120 }}>
         <Link
