@@ -118,6 +118,23 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
           body: JSON.stringify({ code, subtotal, channel }),
         })
         const d = await res.json().catch(() => ({}))
+        /*
+          A starter stack is NEVER applied from a link, only from typing.
+
+          `/api/cart` refuses to resolve one from the referral cookie
+          server-side, and this is the other half of that rule — without it the
+          server's guarantee is worthless, because the code arrives in the
+          request body either way and the checkout cannot tell how it got
+          there.
+
+          The case it prevents: a partner opens `/?ref=PS-…` once, does not
+          check out, and buys something ordinary off the quiz three weeks later.
+          The cookie is still there, the starter applies itself, and their one
+          free stack is silently spent on an order they were happy to pay for.
+          That is exactly the "silently, weeks later, on the wrong basket"
+          failure the founder codes are kept out of cookies to avoid.
+        */
+        if (d.ok && d.starter === true && silent) return
         if (d.ok) {
           onChange({
             code: d.code,
