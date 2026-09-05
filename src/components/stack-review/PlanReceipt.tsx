@@ -212,6 +212,31 @@ export function PlanReceipt({
       ? `Min ${formatGBP(config.minSubscriptionMonthly)}/mo`
       : 'Unavailable'
 
+  /*
+    The stack, resolved to the exact product and variant each slot holds.
+
+    `products` is the WHOLE CATALOGUE — it is the lookup table the slots are
+    resolved against, not the stack. Handing it to anything that treats it as
+    "the things in this stack" puts all fifty-three products in the basket,
+    which is exactly what the à la carte handoff did until this existed.
+
+    Built once and used twice, so the receipt's own line items and the basket
+    the handoff fills cannot disagree about what the stack is.
+  */
+  const stackLines = slots
+    .map((slot) => {
+      const product = products.find((p) => p.id === slot.selectedProductId)
+      if (!product) return null
+      // The variant the customer actually chose, then the first sellable one.
+      const variant =
+        product.variants.find((v) => v.id === slot.selectedVariantId) ??
+        product.variants.find((v) => v.available) ??
+        product.variants[0]
+      if (!variant) return null
+      return { slot, product, variant }
+    })
+    .filter((line): line is NonNullable<typeof line> => line !== null)
+
   // Line items reflect the active plan: monthly lines when subscribed, per-slot
   // products otherwise.
   const items: LineItem[] = isSub
@@ -227,16 +252,13 @@ export function PlanReceipt({
         note: cadenceLine(line),
       }))
     : slots.map((slot) => {
-        const product = products.find((p) => p.id === slot.selectedProductId)
-        const variant = product?.variants.find((v) => v.id === slot.selectedVariantId)
-          ?? product?.variants.find((v) => v.available)
-          ?? product?.variants[0]
+        const line = stackLines.find((l) => l.slot.slotId === slot.slotId)
         return {
           key: slot.slotId,
           slotType: slot.slotType,
-          imageUrl: product?.imageUrl ?? null,
-          title: product?.title ?? slot.title,
-          price: variant?.price ?? product?.basePrice ?? 0,
+          imageUrl: line?.product.imageUrl ?? null,
+          title: line?.product.title ?? slot.title,
+          price: line?.variant.price ?? line?.product.basePrice ?? 0,
         }
       })
 
@@ -464,7 +486,10 @@ export function PlanReceipt({
             is the product, and this exists for the minority who want two of
             the five and would otherwise leave with nothing.
           */}
-          <ShopAlaCarte products={products} partnerDiscountPct={pricing.partnerDiscountPct} />
+          <ShopAlaCarte
+            lines={stackLines.map((l) => ({ productId: l.product.id, variantId: l.variant.id }))}
+            partnerDiscountPct={pricing.partnerDiscountPct}
+          />
         </div>
       </div>
     </div>

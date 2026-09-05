@@ -2,14 +2,24 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { useBasket } from '@/lib/basket/store'
 import { markCameFromStack, whatIsLost } from '@/lib/shop/stack-handoff'
 import { track } from '@/lib/analytics/events'
 
 interface Props {
-  /** The stack's products, in the order the receipt lists them. */
-  products: CatalogueProduct[]
+  /**
+   * The stack, already resolved to one product and one variant per slot.
+   *
+   * Resolved by the caller rather than here, and deliberately not "the
+   * products": the receipt is handed the WHOLE CATALOGUE as a lookup table,
+   * and this component previously took that and added every one of them. A
+   * shopper pressing the button got fifty-three items in their basket.
+   *
+   * Taking pre-resolved lines makes that mistake impossible to repeat — there
+   * is nothing here to filter or guess at — and it carries the variant the
+   * customer actually chose rather than the product's default.
+   */
+  lines: { productId: string; variantId: string }[]
   /** The partner rate being given up, as a whole percent. 0 when there is none. */
   partnerDiscountPct: number
 }
@@ -46,13 +56,12 @@ interface Props {
  * the customer's purchase, and a shopper deciding how to spend forty pounds
  * does not need our commission structure in the middle of it.
  */
-export function ShopAlaCarte({ products, partnerDiscountPct }: Props) {
+export function ShopAlaCarte({ lines, partnerDiscountPct }: Props) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const add = useBasket((s) => s.add)
 
-  const sellable = products.filter((p) => p.variants.length > 0)
-  if (sellable.length === 0) return null
+  if (lines.length === 0) return null
 
   const lost = whatIsLost(partnerDiscountPct / 100)
 
@@ -67,19 +76,9 @@ export function ShopAlaCarte({ products, partnerDiscountPct }: Props) {
   */
   function go() {
     setBusy(true)
-    for (const p of sellable) {
-      // The variant the stack itself would have bought: the product's default
-      // when it has one, and the first sellable variant when it does not.
-      const variant =
-        sellable.length > 0
-          ? (p.variants.find((v) => v.id === p.defaultVariantId && v.available) ??
-             p.variants.find((v) => v.available) ??
-             p.variants[0])
-          : p.variants[0]
-      add(p.id, variant.id, 1)
-    }
-    markCameFromStack({ items: sellable.length, discountPct: partnerDiscountPct / 100 })
-    track('stack_shop_alacarte', { items: sellable.length })
+    for (const line of lines) add(line.productId, line.variantId, 1)
+    markCameFromStack({ items: lines.length, discountPct: partnerDiscountPct / 100 })
+    track('stack_shop_alacarte', { items: lines.length })
   }
 
   if (!open) {
@@ -99,9 +98,12 @@ export function ShopAlaCarte({ products, partnerDiscountPct }: Props) {
       className="mt-3 rounded-2xl p-4"
       style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)' }}
     >
+      {/* One string rather than text either side of an expression: the count
+          sat directly against the next word — "all 53in your shop basket". */}
       <p className="text-xs leading-relaxed" style={{ color: 'var(--color-text)' }}>
-        We&rsquo;ll put {sellable.length === 1 ? 'it' : `all ${sellable.length}`} in your shop basket so you can
-        change the quantities or drop what you don&rsquo;t want.
+        {lines.length === 1
+          ? 'We’ll put it in your shop basket so you can change the quantity or drop it.'
+          : `We’ll put all ${lines.length} in your shop basket so you can change the quantities or drop what you don’t want.`}
       </p>
 
       {lost && (

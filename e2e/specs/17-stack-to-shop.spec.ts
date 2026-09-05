@@ -54,17 +54,35 @@ test.describe('the door out of a stack', () => {
     await expect(page.getByText(/supplement identity/i)).toBeVisible({ timeout: 20_000 })
   })
 
-  test('puts the stack in the basket rather than making them find it again', async ({ page }) => {
+  test('carries the stack over — and only the stack', async ({ page }) => {
     await completeQuiz(page)
 
-    await page.getByRole('button', { name: /prefer to buy these separately/i }).scrollIntoViewIfNeeded()
-    await page.getByRole('button', { name: /prefer to buy these separately/i }).click()
+    /*
+      The count is the whole point of this test.
+
+      The receipt is handed the WHOLE CATALOGUE as the lookup table its slots
+      are resolved against, and the first version of this handoff treated that
+      as "the products in this stack". Pressing the button put fifty-three
+      items in the basket. It rendered as "We'll put all 53 in your shop
+      basket", which is the only reason anybody noticed.
+
+      A stack is a handful of products. Anything past ten is that bug back.
+    */
+    const offer = page.getByRole('button', { name: /prefer to buy these separately/i })
+    await offer.scrollIntoViewIfNeeded()
+    await offer.click()
+
+    const sentence = await page.getByText(/in your shop basket/i).innerText()
+    const stated = Number(sentence.match(/all (\d+)/)?.[1] ?? '1')
+    expect(stated).toBeGreaterThan(0)
+    expect(stated).toBeLessThanOrEqual(10)
+
     await page.getByRole('link', { name: /take me to the shop/i }).click()
     await expect(page).toHaveURL(/\/shop/)
 
-    // The basket control counts what was carried over.
+    // What the basket actually holds matches what the sentence promised.
     const basket = page.getByRole('button', { name: /open basket/i })
-    await expect(basket).toContainText(/[1-9]/)
+    await expect(basket).toContainText(String(stated))
   })
 
   test('the bar goes away once they have gone back, rather than following them around', async ({ page }) => {
