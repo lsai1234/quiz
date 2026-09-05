@@ -57,6 +57,11 @@ export const SHOP_EVENTS = [
   /* A hero banner was tapped. Which one, so a founder can tell whether the
      artwork they generated is doing anything at all. */
   'shop_banner_click',
+  /* Left a stack to shop à la carte, and came back to it. Worth watching as a
+     pair: a door people take and never return through is costing subscriptions
+     rather than rescuing abandons. */
+  'stack_shop_alacarte',
+  'stack_return',
   'product_open',
   'add_to_basket',
   'basket_open',

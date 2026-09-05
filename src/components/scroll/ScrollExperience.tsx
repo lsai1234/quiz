@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useQuizStore, hasQuizProgress } from '@/lib/store'
+import { STACK_RETURN_HASH } from '@/lib/shop/stack-handoff'
 import { useQuizArmState } from '@/lib/experiments/client'
 import { Act1Hero } from './Act1Hero'
 import { Act2Quiz } from './Act2Quiz'
@@ -53,6 +54,31 @@ export function ScrollExperience() {
   useEffect(() => {
     void useQuizStore.persist.rehydrate()
     setHydrated(true)
+
+    /*
+      `/#stack` reopens the reveal.
+
+      This experience is one route with five acts and no URL of its own, so
+      anything outside it — the shop, in this case — has nowhere to point when
+      it wants to send somebody back to their stack. The hash is read once on
+      arrival and cleared, so a refresh or a back-navigation does not drop
+      somebody into a reveal they had left. Same trick as `/shop#basket`.
+
+      Only when there is actually a stack to show. The blueprint is held in
+      memory and NOT persisted (see `partialize`), so it survives a client-side
+      trip to the shop and back — which is the journey this is for — but not a
+      hard reload. Somebody who reloads the shop and then follows the link back
+      lands on the hero with their answers still there and the resume prompt
+      offering to pick the quiz up, which is the right failure: a reveal drawn
+      from an empty blueprint would be a page of nothing.
+    */
+    if (window.location.hash === STACK_RETURN_HASH) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+      if (useQuizStore.getState().stackBlueprint) {
+        setAct(4)
+        setAnimKey((k) => k + 1)
+      }
+    }
   }, [])
 
   function goTo(next: Act) {

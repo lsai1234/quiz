@@ -59,6 +59,93 @@ describe('redeeming a code', () => {
     expect(a).toEqual(b)
   })
 
+  /**
+   * A referred customer who buys off the shop shelf.
+   *
+   * They followed a partner's link, did the quiz, and then bought the products
+   * one at a time instead of taking the stack — which is a journey the shop now
+   * offers deliberately. A code cannot discount that basket, and should not.
+   * But until this existed the partner earned NOTHING for the introduction,
+   * because a refused redemption stored no code on the order at all.
+   *
+   * Losing the discount is the customer's own choice, made in front of a
+   * sentence that says so. Losing the commission was neither.
+   */
+  describe('a referral code on a basket it cannot discount', () => {
+    it('credits the partner and discounts nothing', async () => {
+      const created = await createPartner({ email: 'attrib@example.com', name: 'Attrib Person' })
+      const result = await redeemPartnerCode(
+        created.codes[0].code,
+        { subtotal: 90, channel: 'shop', source: 'referral' },
+        never,
+      )
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.discountPct).toBe(0)
+      expect(result.attributionOnly).toBe(true)
+      // The code itself comes back, which is what puts it on the order and so
+      // into the commission ledger.
+      expect(result.code.code).toBe(created.codes[0].code)
+    })
+
+    it('still discounts normally on a basket it CAN discount', async () => {
+      const created = await createPartner({ email: 'attrib2@example.com', name: 'Attrib Two' })
+      const result = await redeemPartnerCode(
+        created.codes[0].code,
+        { subtotal: 90, channel: 'quiz', source: 'referral' },
+        never,
+      )
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.discountPct).toBeGreaterThan(0)
+      expect(result.attributionOnly).toBeUndefined()
+    })
+
+    /* Attribution is not a way round the rules that stop a code paying out. */
+    it('does not attribute for a partner who is suspended', async () => {
+      const created = await createPartner({ email: 'attrib3@example.com', name: 'Attrib Three' })
+      await setPartnerStatus(created.partner.id, 'suspended')
+
+      const result = await redeemPartnerCode(
+        created.codes[0].code,
+        { subtotal: 90, channel: 'shop', source: 'referral' },
+        never,
+      )
+      expect(result.ok).toBe(false)
+    })
+
+    it('does not attribute for a code that does not exist', async () => {
+      const result = await redeemPartnerCode(
+        'NOTACODE',
+        { subtotal: 90, channel: 'shop', source: 'referral' },
+        never,
+      )
+      expect(result.ok).toBe(false)
+    })
+
+    /*
+      The enumeration guarantee is unchanged, because it only ever covered
+      TYPED codes — and a typed code on the shop is still refused before the
+      lookup, identically, whether or not it is real.
+    */
+    it('leaves the typed path exactly as it was', async () => {
+      const real = await createPartner({ email: 'enum2@example.com', name: 'Enum Two' })
+      const a = await redeemPartnerCode(real.codes[0].code, { subtotal: 90, channel: 'shop', source: 'typed' }, never)
+      const b = await redeemPartnerCode('NOTACODE', { subtotal: 90, channel: 'shop', source: 'typed' }, never)
+      expect(a).toEqual(b)
+      expect(a.ok).toBe(false)
+    })
+
+    /* A caller that forgets to say gets the refusal, never a silent credit. */
+    it('defaults to typed when no source is given', async () => {
+      const created = await createPartner({ email: 'attrib4@example.com', name: 'Attrib Four' })
+      const result = await redeemPartnerCode(created.codes[0].code, { subtotal: 90, channel: 'shop' }, never)
+      expect(result.ok).toBe(false)
+    })
+  })
+
   it('stops the moment the partner is suspended', async () => {
     const created = await createPartner({ email: 'susp2@example.com', name: 'Susp Two' })
     await setPartnerStatus(created.partner.id, 'suspended')

@@ -9,6 +9,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { PlanType } from '@/lib/store'
 import type { StackLevel } from '@/lib/types'
 import { ProductTile } from './ProductTile'
+import { ShopAlaCarte } from './ShopAlaCarte'
 import { customerDeliveryCharge } from '@/lib/pricing/delivery'
 
 const LEVEL_LABEL: Record<StackLevel, string> = { essentials: 'Essentials', performance: 'Performance', complete: 'Complete' }
@@ -445,6 +446,13 @@ export function PlanReceipt({
           >
             Customise stack
           </button>
+
+          {/*
+            The last resort, deliberately quiet. See `ShopAlaCarte` — the stack
+            is the product, and this exists for the minority who want two of
+            the five and would otherwise leave with nothing.
+          */}
+          <ShopAlaCarte products={products} partnerDiscountPct={pricing.partnerDiscountPct} />
         </div>
       </div>
     </div>

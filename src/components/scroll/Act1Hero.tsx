@@ -8,6 +8,7 @@
  * engine, no pinning, no physics — fast, robust and reduced-motion safe.
  */
 
+import Link from 'next/link'
 import { useQuizStore } from '@/lib/store'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import type { QuizTrack } from '@/lib/types'
@@ -128,6 +129,25 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
               {t}
             </span>
           ))}
+        </div>
+
+        {/*
+          The way past the quiz, for somebody who already knows what they want.
+
+          Deliberately quiet and deliberately below the trust row: the quiz is
+          the product and this page exists to start it. But a landing page whose
+          only door is a questionnaire loses everybody who came for one tub of
+          creatine, and they leave without ever learning there is a shop — which
+          is a worse outcome than them skipping the quiz.
+        */}
+        <div className="flex justify-center mt-5">
+          <Link
+            href="/shop"
+            data-interactive
+            className="text-[11px] text-white/45 hover:text-white/80 underline underline-offset-4 decoration-white/20 transition-colors"
+          >
+            Or browse the whole shop
+          </Link>
         </div>
       </div>
     </section>

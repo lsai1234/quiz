@@ -53,6 +53,19 @@ export interface RedeemContext {
   /** Order subtotal before any discount (£). */
   subtotal: number
   /**
+   * Where the code came from, which decides what an ineligible channel means.
+   *
+   * `typed` is a customer asking for money off, and they are owed an answer:
+   * refused, out loud, with the reason. `referral` is a code banked from a
+   * link the customer may not even remember clicking — nobody asked it for
+   * anything, so on a channel where it cannot discount it attributes instead
+   * of erroring. See `worksOn`.
+   *
+   * Defaults to `typed`, which is the stricter reading: a caller that forgets
+   * to say gets the refusal, never a silent attribution.
+   */
+  source?: 'typed' | 'referral'
+  /**
    * The buyer's email, to decide whether this is their first order. Null for a
    * checkout where we do not know yet — treated as a first order, because
    * refusing a genuine new customer is worse than honouring a code twice for
@@ -65,7 +78,26 @@ export interface RedeemContext {
 }
 
 export type Redemption =
-  | { ok: true; code: PartnerCode; partner: Partner; discountPct: number }
+  | {
+      ok: true
+      code: PartnerCode
+      partner: Partner
+      discountPct: number
+      /**
+       * The partner is credited and the customer pays full price.
+       *
+       * The case this exists for: someone arrives on a partner's link, does the
+       * quiz, and then buys the products one at a time off the shop shelf
+       * instead of taking the stack. A code cannot discount that basket — see
+       * `worksOn` — but the partner still introduced the customer, and until
+       * this existed they earned NOTHING for it, because a refused redemption
+       * stored no code on the order.
+       *
+       * Losing the discount is the customer's own choice and is stated before
+       * they make it; losing the commission was neither.
+       */
+      attributionOnly?: boolean
+    }
   | { ok: false; reason: string }
 
 /**
@@ -83,10 +115,20 @@ export async function redeemPartnerCode(
   const typed = (input ?? '').trim()
   if (!typed) return { ok: false, reason: 'Enter a code.' }
 
-  // Before the lookup, so the answer is the same whether or not the code is
-  // real: in the shop no code works, and saying which ones exist there would
-  // only help someone guessing at them.
-  if (!worksOn(context.channel)) {
+  const eligible = worksOn(context.channel)
+
+  /*
+    A TYPED code on an ineligible channel is refused before the lookup, so the
+    answer is the same whether or not the code is real: in the shop no typed
+    code works, and saying which ones exist there would only help somebody
+    guessing at them.
+
+    A REFERRAL code is not refused, because nothing asked it for a discount. It
+    goes through the same validation as any other and comes back attributing
+    only. That is not an enumeration surface: no code is being typed, so there
+    is nothing for an answer to confirm.
+  */
+  if (!eligible && (context.source ?? 'typed') === 'typed') {
     return {
       ok: false,
       reason: 'Discount codes apply to bundles and subscriptions, not single products from the shop.',
@@ -112,6 +154,19 @@ export async function redeemPartnerCode(
     now: context.now,
   })
   if (!check.ok) return { ok: false, reason: check.reason }
+
+  /*
+    Eligible channel: the code discounts, as it always has.
+
+    Ineligible channel reached from a referral: the partner is credited at
+    their commission rate and the customer pays full price. The contribution
+    guard in `commissionFor` is not a worry here and is arguably inverted —
+    an undiscounted order has MORE contribution to share than a 25%-off one,
+    so this is the cheapest attribution the programme pays for.
+  */
+  if (!eligible) {
+    return { ok: true, code, partner, discountPct: 0, attributionOnly: true }
+  }
 
   return { ok: true, code, partner, discountPct: check.discountPct }
 }

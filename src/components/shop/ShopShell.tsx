@@ -44,6 +44,7 @@ import { ShopNoResults } from './ShopNoResults'
 import { BasketDrawer } from './BasketDrawer'
 import { ShopGoalRow } from './ShopGoalRow'
 import { ShopHeroProvider, ShopMasthead, ShopTwinTiles, ShopBreak } from './ShopHeroes'
+import { StackReturnBar } from './StackReturnBar'
 import { BREAK_AFTER_SHELF } from '@/lib/shop/placements'
 import { rememberScroll, readScroll, forgetScroll } from '@/lib/shop/scroll-memory'
 import { Button } from '@/components/storefront'
@@ -700,6 +701,9 @@ export function ShopShell() {
     <ShopHeroProvider>
     <div className="storefront min-h-[100dvh]" style={{ background: 'var(--bg)', color: 'var(--text)', paddingBottom: 'var(--space-12)' }}>
       <ShopHeader count={count} onOpenBasket={openDrawer} />
+
+      {/* Above everything, for anybody who stepped out of a stack to get here. */}
+      <StackReturnBar />
 
       <main>
       <div style={{ padding: 'var(--space-2) var(--space-4) var(--space-4)' }}>

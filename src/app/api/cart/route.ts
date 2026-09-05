@@ -160,7 +160,22 @@ export async function POST(req: Request) {
   const redemption = founder
     ? null
     : code
-    ? await redeemPartnerCode(code, { subtotal: undiscountedSubtotal, email: user?.email ?? null, channel })
+    ? await redeemPartnerCode(code, {
+        subtotal: undiscountedSubtotal,
+        email: user?.email ?? null,
+        channel,
+        /*
+          A code the customer TYPED is a request for money off and is answered
+          as one. A code that only exists because they followed a partner's
+          link is attribution, and on a channel that cannot discount it now
+          credits the partner rather than being dropped on the floor.
+
+          That gap was a live leak: a referred customer who bought off the shop
+          shelf earned their partner nothing, because a refused redemption
+          stored no code on the order.
+        */
+        source: typedCode ? 'typed' : 'referral',
+      })
     : null
   // A code somebody TYPED and got wrong is worth stopping for — that basket is
   // still on screen and can be fixed. A stale cookie they never typed is not:
