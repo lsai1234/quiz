@@ -28,6 +28,18 @@ export interface AppliedCode {
   /** What the founder code does, in the server's words. */
   founderLabel?: string | null
   founderNote?: string | null
+  /**
+   * Set when the code is a partner's own starter stack.
+   *
+   * A THIRD kind through the same box, and it shares the founder branch's
+   * rendering for the same reason it shares its `discountPct: 0`: it sets the
+   * price rather than discounting it, so there is no percentage to put on a
+   * line. What it is NOT is a founder code — hence its own flag rather than
+   * borrowing `founderKind: 'free'`, which would put "Everything free · founder
+   * code" in front of a partner and a founder code onto the order.
+   */
+  starter?: boolean
+  starterTier?: string | null
 }
 
 interface Props {
@@ -114,6 +126,8 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
             founderKind: d.founderKind ?? null,
             founderLabel: d.label ?? null,
             founderNote: d.note ?? null,
+            starter: d.starter === true,
+            starterTier: d.starterTier ?? null,
           })
           setFromLink(silent)
           setInput('')
@@ -141,11 +155,11 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
     if (ref) void check(ref, true)
   }, [triedReferral, applied, check])
 
-  if (applied?.founderKind) {
-    // A founder code, applied. Deliberately says what it DOES rather than what
-    // it takes off: "100% off" would be a discount line the receipt does not
-    // have, and on a cost-price order the delivery goes UP, which no percentage
-    // could ever convey.
+  if (applied?.founderKind || applied?.starter) {
+    // A founder code or a partner's starter stack, applied. Deliberately says
+    // what it DOES rather than what it takes off: "100% off" would be a
+    // discount line the receipt does not have, and on a cost-price order the
+    // delivery goes UP, which no percentage could ever convey.
     return (
       <div
         className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5"
@@ -153,7 +167,7 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
       >
         <div className="min-w-0">
           <p className="text-[11px] font-bold" style={{ color: ACCENT }}>
-            {applied.code} · {applied.founderLabel ?? 'Founder code'}
+            {applied.code} · {applied.founderLabel ?? (applied.starter ? 'Starter stack' : 'Founder code')}
           </p>
           {applied.founderNote && (
             <p className="text-[10px]" style={{ color: 'var(--color-muted)' }}>{applied.founderNote}</p>

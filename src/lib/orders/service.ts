@@ -103,6 +103,8 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
     partnerDiscountPct: input.partnerDiscountPct ?? null,
     founderCode: input.founderCode ?? null,
     founderCodeKind: input.founderCodeKind ?? null,
+    starterCode: input.starterCode ?? null,
+    starterPartnerId: input.starterPartnerId ?? null,
     billedAmount: input.billedAmount ?? null,
     subscription: input.subscription ?? null,
     events: [
@@ -113,6 +115,12 @@ export async function createOrderFromCheckout(input: CreateOrderInput): Promise<
       // free.
       ...(input.founderCode
         ? [event('founder-code', `${input.founderCodeKind ?? 'founder'} code ${input.founderCode}`)]
+        : []),
+      // On the timeline, not only in a field: somebody looking at a £0.00 order
+      // in the fulfilment queue should be able to see why from the events
+      // without knowing which columns to go and read.
+      ...(input.starterCode
+        ? [event('partner-starter', `partner starter ${input.starterCode}`)]
         : []),
       ...(status === 'paid' ? [event('paid')] : []),
     ],

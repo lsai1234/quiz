@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Ground, Input } from '@/components/system'
+import { StarterStack } from './StarterStack'
 import type { PartnerDashboard as Data } from '@/lib/partners/dashboard'
 
 const money = (n: number) => `£${n.toFixed(2)}`
@@ -53,6 +54,13 @@ export function PartnerDashboard() {
 
   return (
     <Shell onLogout={logout} name={data.partner.name}>
+      {/* Above the tabs, not inside one. It is the first thing a new partner
+          has to do and the thing they cannot do anywhere else; a tab would put
+          it behind a decision about which tab to press. It renders nothing at
+          all once there is no starter waiting, so it does not permanently cost
+          the money tab its top of screen. */}
+      <StarterStack />
+
       <div className="flex gap-1 mb-4">
         {(['money', 'assets', 'terms'] as const).map((t) => (
           <Button

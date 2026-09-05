@@ -101,10 +101,11 @@ export function useShopCheckout() {
         return
       }
 
-      // No Stripe to go to, and the order is already paid. Two ways to get
-      // here: mock payments (`#mock-checkout`), and a founder "everything free"
-      // code (`#founder-code`), where the order genuinely cost £0.00 and there
-      // was nothing for Stripe to take.
+      // No Stripe to go to, and the order is already paid. Three ways to get
+      // here: mock payments (`#mock-checkout`), a founder "everything free"
+      // code (`#founder-code`), and a partner's starter stack
+      // (`#partner-starter`) — in both of the latter the order genuinely cost
+      // £0.00 and there was nothing for Stripe to take.
       //
       // Both go to the REAL confirmation route, so mock mode exercises the same
       // screen live traffic will rather than it only ever being tested in

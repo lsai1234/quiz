@@ -14,6 +14,12 @@ import {
   releaseFounderCode,
 } from '@/lib/founder-codes/redeem'
 import { founderDeliveryOptions, priceAtFounderTerms } from '@/lib/founder-codes/codes'
+import {
+  claimStarterForCheckout,
+  markStarterUsed,
+  releaseStarter,
+} from '@/lib/partner-starter/redeem'
+import { priceStarterOrder, starterDeliveryOptions } from '@/lib/partner-starter/rules'
 import { deliveryOptions } from '@/lib/pricing/delivery'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
@@ -140,7 +146,33 @@ export async function POST(req: Request) {
    * either spends it (`markFounderCodeUsed`) or gives it back
    * (`releaseFounderCode`).
    */
-  const founderClaim = await claimFounderCodeForCheckout(typedCode, { channel })
+  /**
+   * A partner's starter stack, before everything — and, like a founder code,
+   * only from what was TYPED.
+   *
+   * Never from the referral cookie, and here the reason is sharper than it is
+   * for a founder code: the cookie a partner's own link leaves behind belongs to
+   * their FOLLOWERS. A starter that could be redeemed from a cookie would hand a
+   * free box to whoever happened to be carrying one.
+   *
+   * It is tried first because it is the most specific instrument of the three —
+   * it is checked against a named partner, a signed agreement, a channel and a
+   * value cap, and anything it refuses is refused with a reason the partner can
+   * act on rather than falling through to "we don't recognise that code".
+   */
+  const starterClaim = await claimStarterForCheckout(typedCode, {
+    channel,
+    // The list value, not what is being charged — which is zero by
+    // construction and therefore inside every ceiling ever set.
+    goodsListSubtotal: undiscountedSubtotal,
+    format: formatGBP,
+  })
+  if (starterClaim && !starterClaim.ok) {
+    return NextResponse.json({ error: starterClaim.reason, codeRejected: true }, { status: 400 })
+  }
+  const starter = starterClaim?.ok ? starterClaim : null
+
+  const founderClaim = starter ? null : await claimFounderCodeForCheckout(typedCode, { channel })
   if (founderClaim && !founderClaim.ok) {
     return NextResponse.json({ error: founderClaim.reason, codeRejected: true }, { status: 400 })
   }
@@ -155,9 +187,17 @@ export async function POST(req: Request) {
    */
   const releaseClaim = async () => {
     if (founder) await releaseFounderCode(founder.code.code, founder.token)
+    if (starter) await releaseStarter(starter.starter.code, starter.token)
   }
 
-  const redemption = founder
+  /*
+    A starter suppresses the partner path entirely, and that is a term of the
+    programme rather than a shortcut: a partner's own purchases earn them no
+    commission. Running the redemption anyway would attribute this order to the
+    very person being given it and accrue 15% of a £0.00 net — a ledger row that
+    is either meaningless or, once the net basis moves, wrong.
+  */
+  const redemption = founder || starter
     ? null
     : code
     ? await redeemPartnerCode(code, {
@@ -207,7 +247,9 @@ export async function POST(req: Request) {
    * it. `priceAtFounderTerms` returns the same shape, so everything downstream
    * bills from one object either way.
    */
-  const priced = founder
+  const priced = starter
+    ? priceStarterOrder(pricedLines, config)
+    : founder
     ? priceAtFounderTerms(founder.kind, pricedLines, config)
     : priceOneOffLines(pricedLines, config, partnerPct)
 
@@ -233,7 +275,10 @@ export async function POST(req: Request) {
   // each of these codes IS a decision to spend that money. A free code that
   // still demanded £15 of basket would refuse the £0.00 order it had just
   // built.
-  if (!founder && config.minOrderValue > 0 && priced.subtotal < config.minOrderValue) {
+  // A starter waives it for the same reason every founder code does, plus one
+  // of its own: the order it builds is £0.00 by construction, so a minimum
+  // stated in pounds would refuse every single one of them.
+  if (!founder && !starter && config.minOrderValue > 0 && priced.subtotal < config.minOrderValue) {
     return NextResponse.json(
       {
         error: `Orders start at ${formatGBP(config.minOrderValue)} — add ${formatGBP(
@@ -269,7 +314,9 @@ export async function POST(req: Request) {
    * below where it was just taken out.
    */
   const supplierValue = round(pricedLines.reduce((sum, l) => sum + l.cost * Math.max(1, l.quantity), 0))
-  const options = founder
+  const options = starter
+    ? starterDeliveryOptions(priced.total, config)
+    : founder
     ? founderDeliveryOptions(founder.kind, { supplierValue, orderValue: priced.total }, config)
     : deliveryOptions(priced.total, config)
   // What we book against the order up front. Stripe's real figure — including a
@@ -282,19 +329,38 @@ export async function POST(req: Request) {
     : {}
 
   /**
-   * Nothing to pay — a `free` code, which is the only way to reach this.
+   * The same, for a starter — and the partner id alongside the code.
+   *
+   * Two fields rather than one because the two questions asked of this order
+   * are different: "why did this cost nothing" is answered by the code, and
+   * "which partner have we already given a stack to" is a question about the
+   * partner, asked across orders, and resolving it through a join on a spent
+   * code would mean the answer disappeared the day the code was tidied up.
+   */
+  const starterFields = starter
+    ? { starterCode: starter.starter.code, starterPartnerId: starter.starter.partnerId }
+    : {}
+
+  /**
+   * Nothing to pay — a `free` founder code or a partner's starter stack, which
+   * are the only two ways to reach this.
    *
    * Stripe cannot take £0.00: Checkout refuses a session under its minimum
    * charge, so there is no payment path here to fall back on. The order is
    * raised as PAID because it is — there was nothing outstanding — and this is
-   * the one place in the app that books a paid order nobody paid for. What
-   * authorises it is the claim taken above: a single-use code, issued from an
-   * authenticated hub session, that dies in 24 hours.
+   * the one place in the app that books a paid order nobody paid for.
+   *
+   * What authorises it is the claim taken above. For a founder code that is a
+   * single-use code from an authenticated hub session that dies in a day; for a
+   * starter it is a single-use code issued to a named partner, capped to a
+   * stack, that does nothing at all until they have signed the agreement saying
+   * what they will post. Neither of them is a discount that happened to reach
+   * zero — a partner's 25% cannot get here, because the margin floor stops it.
    *
    * It still lands in the review queue like every other order. Free to the
    * buyer is not free to us, and nothing reaches PowerBody unreviewed.
    */
-  if (founder && round(priced.total + mainlandCharge) <= 0) {
+  if ((founder || starter) && round(priced.total + mainlandCharge) <= 0) {
     let order
     try {
       order = await createOrderFromCheckout({
@@ -305,14 +371,36 @@ export async function POST(req: Request) {
         status: 'paid',
         shipping: 0,
         ...founderFields,
+        ...starterFields,
       })
     } catch (err) {
       console.error('[/api/cart] could not raise the free order:', err)
       await releaseClaim()
       return NextResponse.json({ error: 'Could not place that order. Please try again.' }, { status: 502 })
     }
-    await markFounderCodeUsed(founder.code.code, founder.token, order.id)
-    return NextResponse.json({ checkoutUrl: '#founder-code', founderCode: founder.kind, orderId: order.id })
+    if (founder) await markFounderCodeUsed(founder.code.code, founder.token, order.id)
+    if (starter) await markStarterUsed(starter.starter.code, starter.token, order.id)
+    return NextResponse.json({
+      checkoutUrl: starter ? '#partner-starter' : '#founder-code',
+      founderCode: founder?.kind,
+      starterCode: starter ? starter.starter.code : undefined,
+      orderId: order.id,
+    })
+  }
+
+  /**
+   * A starter that did NOT come to zero has no business going any further.
+   *
+   * It cannot happen through the pricing — `priceStarterOrder` puts every line
+   * at zero and `starterDeliveryOptions` charges nothing — so reaching here
+   * means one of those two changed and this one did not. The safe direction is
+   * obvious: hand the code back and refuse, rather than send a partner to Stripe
+   * to pay for the stack they were told was free.
+   */
+  if (starter) {
+    console.error('[/api/cart] a starter order priced above zero:', priced.total, mainlandCharge)
+    await releaseClaim()
+    return NextResponse.json({ error: 'Could not place that order. Please try again.' }, { status: 500 })
   }
 
   // ── Stripe ──

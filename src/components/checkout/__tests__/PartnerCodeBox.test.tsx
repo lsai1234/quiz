@@ -25,6 +25,11 @@ const JOHN20 = {
   founderKind: null,
   founderLabel: null,
   founderNote: null,
+  // The box reports all three kinds of code it can hold, so an ordinary
+  // partner code is explicitly neither of the other two rather than silent
+  // about them.
+  starter: false,
+  starterTier: null,
 }
 
 const setCookie = (value: string) => {

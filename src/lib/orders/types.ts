@@ -200,6 +200,24 @@ export interface Order {
   /** Which kind it was, so a screen can say so without a second lookup. */
   founderCodeKind?: 'free' | 'cost' | 'unlock' | null
   /**
+   * The partner starter this order was bought on — a micro-influencer's own
+   * free stack. See `lib/partner-starter`.
+   *
+   * Never a partner code and never counted as one: a partner's own purchases
+   * earn them no commission, which is a term of the programme rather than a
+   * gap. `/api/cart` does not even run the redemption when a starter is in play.
+   */
+  starterCode?: string | null
+  /**
+   * Whose it was.
+   *
+   * Stored alongside the code rather than resolved through it, because the
+   * question asked of this field — "which partners have already had their
+   * stack?" — is asked across orders and must survive the code itself being
+   * tidied away.
+   */
+  starterPartnerId?: string | null
+  /**
    * What the member was actually charged for the billing cycle this order
    * belongs to (£). Subscription orders only.
    *
@@ -253,6 +271,9 @@ export interface CreateOrderInput {
   /** The founder code this order was bought on — see `Order.founderCode`. */
   founderCode?: string | null
   founderCodeKind?: 'free' | 'cost' | 'unlock' | null
+  /** The partner starter it was bought on — see `Order.starterCode`. */
+  starterCode?: string | null
+  starterPartnerId?: string | null
   /** What the cycle was billed at — see `Order.billedAmount`. */
   billedAmount?: number | null
   /** The plan behind this delivery — see `Order.subscription`. */

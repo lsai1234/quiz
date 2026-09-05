@@ -659,6 +659,65 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE shop_banners ADD COLUMN slot TEXT NOT NULL DEFAULT 'masthead';
   CREATE INDEX IF NOT EXISTS shop_banners_slot ON shop_banners(active, slot);
   `,
+  // v20 — `partner_starters` and `partner_agreements`: a micro-influencer
+  // partner's own stack, free, in exchange for a signed promise to post.
+  //
+  // TWO TABLES RATHER THAN ONE, and the split is the point. The starter is a
+  // spendable instrument with a lifecycle — issued, signed for, claimed, spent,
+  // possibly revoked — and it is UPDATED at every one of those steps. The
+  // agreement is evidence, and evidence that can be updated is not evidence: it
+  // is written once and never touched again, which is the same rule `consents`
+  // follows and the reason it is not a column on the starter row.
+  //
+  // Not folded into `founder_codes` either. That table's rows are anonymous,
+  // live a day and answer to nobody; these belong to a named counterparty, are
+  // gated on a signature, and are capped to a stack. Sharing a table would mean
+  // every read of either had to ask which kind it was holding.
+  //
+  // `agreement_id` is deliberately nullable and deliberately NOT a foreign key
+  // in the other direction: the starter is issued BEFORE anything is signed —
+  // that gap, where a code exists and buys nothing, is what the whole design is
+  // built around.
+  //
+  // No `ON DELETE CASCADE` from partners on the agreement. Deleting a partner
+  // must not delete the record of what they agreed to; the starter can go with
+  // them, the signature is our own bookkeeping.
+  `
+  CREATE TABLE partner_starters (
+    code         TEXT PRIMARY KEY,
+    partner_id   TEXT NOT NULL,
+    tier         TEXT NOT NULL,
+    goods_cap    REAL NOT NULL,
+    note         TEXT,
+    created_by   TEXT,
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    agreement_id TEXT,
+    claim_token  TEXT,
+    claimed_at   TEXT,
+    used_at      TEXT,
+    order_id     TEXT,
+    revoked_at   TEXT
+  );
+  CREATE INDEX partner_starters_partner ON partner_starters(partner_id);
+  CREATE INDEX partner_starters_created ON partner_starters(created_at);
+
+  CREATE TABLE partner_agreements (
+    id           TEXT PRIMARY KEY,
+    partner_id   TEXT NOT NULL,
+    code         TEXT NOT NULL,
+    version      TEXT NOT NULL,
+    doc_hash     TEXT NOT NULL,
+    signed_name  TEXT NOT NULL,
+    handle       TEXT,
+    deliverables TEXT NOT NULL,
+    ip           TEXT,
+    user_agent   TEXT,
+    signed_at    TEXT NOT NULL
+  );
+  CREATE INDEX partner_agreements_partner ON partner_agreements(partner_id);
+  CREATE INDEX partner_agreements_version ON partner_agreements(version);
+  `,
 ]
 
 /**

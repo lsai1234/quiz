@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Modal, ModalBody, ModalHeader, Select, Tabs, Textarea } from '@/components/system'
 import { describePayout, describeTerms } from '@/lib/partners/terms'
+import { StarterPanel } from './StarterPanel'
 import type {
   CodeTerms,
   PartnerBalance,
@@ -126,6 +127,10 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
                       onSave={(patch) => post({ action: 'code', targetCode: code.code, codePatch: patch }, 'Code updated.')}
                     />
                   ))}
+                  {/* Under the code rather than in a tab of its own: a founder
+                      setting a partner up does both in the same sitting, and
+                      the starter's own text quotes the code they just made. */}
+                  <StarterPanel partnerId={partner.id} />
                 </>
               ),
             },

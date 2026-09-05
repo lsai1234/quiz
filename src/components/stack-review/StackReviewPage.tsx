@@ -309,6 +309,8 @@ export function StackReviewPage() {
   // A partner's code, once validated. Feeds both the receipt and the checkout,
   // so what is shown and what is charged come from the same number.
   const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
+  /** `'oneoff'` while a starter stack is applied, else nothing to say. */
+  const starterPlanType = partnerCode?.starter ? ('oneoff' as const) : null
 
   // Everything the price depends on EXCEPT the depth — the depth is what the
   // tier planner is deciding, so it can't be an input to it.
@@ -362,9 +364,28 @@ export function StackReviewPage() {
     if (activeLevel !== stackLevel) setStackLevel(activeLevel)
   }, [products.length, activeLevel, stackLevel, setStackLevel])
 
+  /*
+    A starter buys one box, never a plan — so it forces the ONE-OFF path here
+    rather than trusting the tab.
+
+    The receipt already hides the subscription tab when a starter is applied
+    (`canSubscribe`), but `planType` is state: somebody who picked the
+    subscription and THEN entered their code would still be holding
+    'subscription' when they pressed the button, and the subscription checkout
+    does not go through `/api/cart` at all — it goes to `finalizeCheckout`,
+    which knows nothing about starters and would put a partner onto a paid
+    recurring plan.
+  */
   const handleCheckout = useCallback(
-    () => checkout(activeBlueprint, products, planType, answers, subOpts),
-    [checkout, activeBlueprint, products, planType, answers, subOpts],
+    () =>
+      checkout(
+        activeBlueprint,
+        products,
+        starterPlanType ?? planType,
+        answers,
+        subOpts,
+      ),
+    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts],
   )
 
   // Shared top-trumps axes for the deck — the user's own goals, so every card
@@ -404,7 +425,17 @@ export function StackReviewPage() {
   const stickyIsSub = planType === 'subscription'
     && pricing.subscriptionItemCount > 0
     && pricing.subscriptionMinOrderMet
-  const stickyTotal = stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
+  /*
+    A partner's starter stack pays for this order, so the number on the bar is
+    zero — the same number the receipt shows and the same number the server
+    charges. The bar is the figure people actually read on the way to pressing
+    the button; leaving the list price on it would put the two screens in
+    disagreement at exactly the moment that matters.
+  */
+  const starterStack = partnerCode?.starter
+    ? { label: `${partnerCode.founderLabel ?? 'Starter stack'}` }
+    : null
+  const stickyTotal = starterStack ? 0 : stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
   /*
    * ── The bar gets out of the receipt's way ────────────────────────────────
    *
@@ -690,6 +721,7 @@ export function StackReviewPage() {
             onPlanChange={setPlanType}
             onCheckout={handleCheckout}
           partnerCode={partnerCode?.code ?? null}
+            starterStack={starterStack}
             onCustomise={() => stackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             isLoading={checkoutState.status === 'loading'}
             onCtaRef={setCtaEl}
@@ -767,7 +799,11 @@ export function StackReviewPage() {
             sticky bar keeps the checkout permanently reachable, so nothing is
             buried by the move.
           */}
-          <div className="mt-2 -mx-5">
+          {/* `[&>div]:mt-0` cancels the button's own `-mt-2`, which it carries
+              for the position it used to sit in. Without it the gap below the
+              fine print is zero while the gap above is 20px, and the paragraph
+              reads as belonging to the share card rather than to the plan. */}
+          <div className="mt-5 -mx-5 [&>div]:mt-0">
             <ShareStackButton payload={sharePayload} onOpen={() => setShareOpen(true)} />
           </div>
         </div>
@@ -788,7 +824,7 @@ export function StackReviewPage() {
           >
             <div className="min-w-0">
               <p className="text-[9px] font-bold uppercase tracking-widest" style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}>
-                {stickyIsSub ? 'Monthly' : 'One-off total'}
+                {starterStack ? 'To pay' : stickyIsSub ? 'Monthly' : 'One-off total'}
               </p>
               <p className="text-xl font-black leading-none" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
                 {formatGBP(stickyTotal)}
@@ -803,9 +839,15 @@ export function StackReviewPage() {
             >
               {checkoutState.status === 'loading' || leavingForStripe
                 ? 'Taking you to secure checkout…'
-                : stickyIsSub
-                  ? 'Start subscription →'
-                  : 'Checkout →'}
+                : starterStack
+                  // Not "Checkout": there is no checkout to go to and no card
+                  // to enter. The button raises the order and lands on the
+                  // confirmation, and saying so is the difference between a
+                  // partner pressing it and a partner hunting for the catch.
+                  ? 'Place my free order →'
+                  : stickyIsSub
+                    ? 'Start subscription →'
+                    : 'Checkout →'}
             </button>
           </div>
         </div>,

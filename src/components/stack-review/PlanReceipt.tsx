@@ -39,6 +39,19 @@ interface Props {
   /** The applied partner code, so its line can be named rather than anonymous. */
   partnerCode?: string | null
   /**
+   * Set when a partner's starter stack is paying for this order.
+   *
+   * The receipt is told rather than working it out, because it cannot: a
+   * starter sets the price at zero server-side (`priceStarterOrder`) and the
+   * pricing object it is handed still carries the list figures. Without this
+   * the screen would show £126 and the order would cost nothing — a pleasant
+   * surprise, and still a receipt that disagrees with the charge.
+   *
+   * The label is the tier's, so the line reads "Balanced starter stack" rather
+   * than a code nobody recognises.
+   */
+  starterStack?: { label: string } | null
+  /**
    * Handed the checkout button as it mounts, so the page can watch whether it
    * is on screen and retire the sticky bar that would otherwise sit on top of
    * it. A callback ref rather than a `querySelector`: the receipt does not
@@ -169,7 +182,7 @@ function Row({ label, value, accent, strike }: { label: string; value: string; a
  * details" disclosure, not here.
  */
 export function PlanReceipt({
-  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, onCtaRef,
+  slots, products, subscriptionPlan, slotTitleById, pricing, planType, onPlanChange, onCheckout, onCustomise, isLoading = false, partnerCode = null, starterStack = null, onCtaRef,
 }: Props) {
   const config = getPricingConfig()
   const {
@@ -178,7 +191,15 @@ export function PlanReceipt({
     bundleDiscountPct, bundleTierLabel, subscriptionDiscountPct, bundleLevel, partnerDiscountPct,
   } = pricing
 
-  const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet
+  /*
+    A starter buys ONE BOX, never a plan.
+
+    Enforced on the server (`starterWorksOn` admits the quiz channel only), and
+    said here as well — offering a subscription tab that the checkout would then
+    refuse is a worse experience than not offering it, and this is the screen
+    where the choice is made.
+  */
+  const canSubscribe = subscriptionItemCount > 0 && subscriptionMinOrderMet && !starterStack
   const isSub = planType === 'subscription' && canSubscribe
   const hasIntro = subscriptionIntroDiscountPct > 0 && subscriptionFirstMonth < subscriptionTotal
   const oneOffSaving = Math.round((oneOffSubtotal - oneOffTotal) * 100) / 100
@@ -392,12 +413,27 @@ export function PlanReceipt({
                   <Row label={`Bundle deal · ${bundleTierLabel} · ${bundleDiscountPct}% off`} value={`−${formatGBP(oneOffSaving)}`} accent />
                 )
               )}
+              {/* The starter's own line, carrying the WHOLE remaining total.
+                  A receipt that shows £126 of products, no discount line, and
+                  £0.00 at the bottom reads as a fault — and the one thing a
+                  partner must not be uncertain about is whether they are about
+                  to be charged. */}
+              {starterStack && (
+                <Row label={starterStack.label} value={`−${formatGBP(oneOffTotal)}`} accent />
+              )}
               <div className="flex items-center justify-between pt-0.5">
-                <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>One-off total</span>
+                <span className="text-sm font-bold" style={{ color: 'var(--color-text)' }}>
+                  {starterStack ? 'To pay' : 'One-off total'}
+                </span>
                 <span className="text-lg font-black" style={{ color: 'var(--color-text)', fontFamily: 'var(--font-display)' }}>
-                  {formatGBP(oneOffTotal)}
+                  {formatGBP(starterStack ? 0 : oneOffTotal)}
                 </span>
               </div>
+              {starterStack && (
+                <p className="text-[11px] leading-relaxed text-[var(--color-muted)]">
+                  Delivery is on us too. Nothing is taken from a card — there is nothing to take.
+                </p>
+              )}
               {hasOneOffSaving && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-emerald-400">You save</span>
@@ -471,7 +507,17 @@ export function PlanReceipt({
             className="w-full py-4 rounded-2xl text-sm font-bold tracking-wide bg-[var(--color-accent)] text-[var(--color-bg)] active:scale-95 transition-all disabled:opacity-60 disabled:cursor-wait"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            {isLoading ? 'Building your cart…' : isSub ? 'Start subscription →' : 'Continue to checkout →'}
+            {isLoading
+              ? 'Building your cart…'
+              : starterStack
+                // There is no checkout to continue to and no card to enter, so
+                // the button says what pressing it does. "Continue to checkout"
+                // in front of a £0.00 total is the sentence that makes somebody
+                // go looking for the catch.
+                ? 'Place my free order →'
+                : isSub
+                  ? 'Start subscription →'
+                  : 'Continue to checkout →'}
           </button>
           <button
             onClick={onCustomise}

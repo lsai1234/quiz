@@ -792,6 +792,71 @@ dashboard.
 > marking it paid with `BACS-77213` moves three ledger rows; and the partner sees
 > the invoice, the reference and the self-billing notice on their own dashboard.
 
+### Phase 7 — The starter stack (a partner's own box, free)  ·  **DONE**
+
+The outreach message promises a micro-influencer their own stack for nothing, in
+exchange for a TikTok and two stories. This is the machinery behind that
+sentence: a code that makes one quiz stack free, and a signed agreement that has
+to exist before it works.
+
+*Done when:* a founder can issue one, a partner can sign for it in their own
+account, and the code takes a quiz stack to £0.00 with no card and no Stripe.
+
+> **Built.** `lib/partner-starter`, migration v20 (`partner_starters` and
+> `partner_agreements`).
+>
+> | Piece | Where |
+> |---|---|
+> | Rules — states, cap, channel, TTL | `lib/partner-starter/rules.ts` |
+> | The agreement text, versioned | `lib/partner-starter/agreement.ts` |
+> | Signing, hashed server-side | `lib/partner-starter/sign.ts` |
+> | Claim / release / spend | `lib/partner-starter/repo.ts`, `redeem.ts` |
+> | Issuing it | Founders Hub → a partner → **Code** tab |
+> | Signing for it | `/partner`, above the tabs. Vanishes when there is none |
+> | Spending it | the code box on the reveal, like any other code |
+>
+> **It is a third kind of code, not a founder code with a partner attached.**
+> A founder code is anonymous, lives a day and takes 100% off whatever is in the
+> basket. Every one of those is wrong here — this one belongs to a named
+> partner, is gated on a signature, is capped to a stack, and has to survive an
+> invite email and a quiz. Sharing a table would have meant every read of either
+> asking which kind it was holding.
+>
+> Decisions worth defending:
+>
+> - **Issuing gives nothing away.** A new starter is `unsigned` and buys
+>   nothing. The gate is in the claim's own `UPDATE` (`AND agreement_id IS NOT
+>   NULL`), so a caller that skips the checks is still refused — which is what
+>   makes the signature, rather than the founder's click, the thing that spends
+>   the money.
+> - **Quiz stacks only.** A starter on a subscription would not make one box
+>   free, it would make every renewal free long after the code expired. On the
+>   shop shelf it would be an open basket at 100% off. Same reasoning as
+>   `founderCodeWorksOn`, and the reveal forces the one-off path so a partner
+>   who picked the subscription tab first cannot reach `finalizeCheckout`, which
+>   knows nothing about starters.
+> - **Capped in pounds, checked before the claim.** `STARTER_GOODS_CAP` is a
+>   guard on an otherwise open basket, and a basket over it is refused without
+>   the code being spent on an order that was never going to exist.
+> - **No commission.** `/api/cart` does not run the partner redemption at all
+>   when a starter is in play — a partner's own purchases earn them nothing, and
+>   attributing this one would accrue 15% of a £0.00 net.
+> - **The agreement is evidence, so it is its own table.** Append-only, hashed
+>   from the text the SERVER rendered, never from anything the browser sent —
+>   `lib/legal/consent`'s rule, for `lib/legal/consent`'s reason. The starter
+>   row is updated at every step of its life; evidence that can be updated is
+>   not evidence.
+> - **Three weeks, not twenty-four hours.** There is a journey in front of this
+>   one: an invite that sits unread over a weekend, an agreement to read, a quiz
+>   to take. The liability a founder code bounds with time is bounded here by
+>   the signature, the cap and the named counterparty.
+>
+> Verified end to end against the running app: an unsigned code is refused with
+> the fix in the message, a £171.96 basket is refused against a £140 cap without
+> being spent, a signed one raises a paid £0.00 order carrying `starterCode` and
+> `starterPartnerId` with no commission row, a second attempt is refused as used,
+> and the confirmation screen resolves the order with no Stripe session behind it.
+
 ---
 
 ## 4. Risks

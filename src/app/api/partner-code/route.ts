@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { redeemPartnerCode, type RedeemChannel } from '@/lib/partners/redeem'
 import { checkFounderCode } from '@/lib/founder-codes/redeem'
+import { checkStarterCode } from '@/lib/partner-starter/redeem'
+import { starterTierLabel } from '@/lib/partner-starter/rules'
 import { codeAttemptAllowed, recordCodeMiss } from '@/lib/founder-codes/guess-limit'
 import { FOUNDER_CODE_LABELS } from '@/lib/founder-codes/types'
 import { getHubUser } from '@/lib/auth/session'
@@ -17,11 +19,12 @@ export const dynamic = 'force-dynamic'
  * server-side against the same function, because between this call and the
  * payment a code can be paused, capped out or its partner suspended.
  *
- * ONE box, TWO kinds of code. A partner's code and a founder's code are
- * different objects with different rules (see `lib/founder-codes/types.ts`), but
- * they are the same thing to the person typing one in: a code. Splitting the
- * endpoint would have meant splitting the box, and then deciding which of the
- * two a customer is holding before they have finished typing it.
+ * ONE box, THREE kinds of code. A partner's code, a founder's code and a
+ * partner's starter stack are different objects with different rules (see
+ * `lib/founder-codes/types.ts` and `lib/partner-starter/types.ts`), but they are
+ * the same thing to the person typing one in: a code. Splitting the endpoint
+ * would have meant splitting the box, and then deciding which of the three a
+ * customer is holding before they have finished typing it.
  *
  * Deliberately answers "we don't recognise that code" rather than distinguishing
  * a code that never existed from one that has expired: the difference is only
@@ -45,7 +48,39 @@ export async function POST(req: Request) {
   }
 
   /**
-   * Founder codes first, and only when the string is shaped like one — a code
+   * A partner's starter stack first, and only when the string is shaped like
+   * one. Same fall-through rule as the founder codes below: anything that is
+   * not ours returns null and continues down the chain, so none of this is
+   * visible to an ordinary customer typing an ordinary code.
+   *
+   * First in the chain because it is the most specific of the three, and
+   * because its refusals are the only ones the reader can act on — "sign your
+   * agreement" is a fix, where "we don't recognise that code" is a dead end for
+   * somebody holding a perfectly good code.
+   */
+  const starter = await checkStarterCode(body.code, { channel: body.channel ?? null })
+  if (starter) {
+    if (!starter.ok) {
+      recordCodeMiss(ip)
+      return NextResponse.json({ ok: false, reason: starter.reason })
+    }
+    return NextResponse.json({
+      ok: true,
+      code: starter.starter.code,
+      // Not a percentage off anything, for the same reason a founder code is
+      // not: this SETS the price at zero rather than discounting towards it,
+      // and an invented "100% off" would go onto a receipt that has no such line.
+      discountPct: 0,
+      starter: true,
+      starterTier: starter.starter.tier,
+      label: `Your ${starterTierLabel(starter.starter.tier)} starter stack`,
+      note: 'Everything in this stack is free, delivery included. There is nothing to pay.',
+      expiresAt: starter.starter.expiresAt,
+    })
+  }
+
+  /**
+   * Founder codes next, and only when the string is shaped like one — a code
    * that is not ours returns null here and falls through to the partner path
    * untouched, so nothing about this branch is visible to an ordinary customer.
    */
