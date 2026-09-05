@@ -23,7 +23,7 @@ interface Props {
  * subscribers to serve a minority.
  *
  * But the minority is real: people who want two of the five, or who want to buy
- * one and think about the rest. Today their only door is "Customise stack",
+ * one and think about the rest. Their only other door is "Swap products",
  * which still ends in a stack — so they leave. A quiet link is findable by
  * somebody actively looking for a way out and invisible to everybody else,
  * which is the correct weighting for a last resort.

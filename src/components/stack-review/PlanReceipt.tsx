@@ -395,14 +395,26 @@ export function PlanReceipt({
           )}
         </div>
 
-        {/* Free delivery */}
+        {/*
+          Free delivery — a line, not a box.
+
+          It was a bordered panel on its own surface, sitting between the total
+          and the buy button: the highest-traffic two inches of the page, spent
+          on a postage note. Boxing it made it the same weight as the total
+          above it and the button below, so the eye had to sort three equal
+          things to find the one that mattered.
+
+          A centred line does the same job and lets the total be the largest
+          thing in the card. The free-delivery case keeps its accent, because
+          that one is good news and worth seeing; the shortfall stays muted.
+        */}
         {config.freeDeliveryThreshold > 0 && (
           <div
-            className="mt-3 mb-3 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold"
+            className="mt-2.5 mb-3.5 flex items-center justify-center gap-2 text-xs font-semibold"
             style={
               freeDelivery
-                ? { color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }
-                : { color: 'var(--color-muted)', background: 'var(--color-surface)', border: '1px solid var(--color-border)' }
+                ? { color: 'var(--color-accent)' }
+                : { color: 'var(--color-muted)' }
             }
           >
             {freeDelivery ? (
@@ -444,7 +456,7 @@ export function PlanReceipt({
             className="w-full py-3 rounded-2xl text-sm font-semibold border border-[var(--color-border)] text-[var(--color-muted)] active:scale-95 transition-all"
             style={{ fontFamily: 'var(--font-display)' }}
           >
-            Customise stack
+            Swap products
           </button>
 
           {/*

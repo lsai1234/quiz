@@ -695,18 +695,33 @@ export function StackReviewPage() {
             onCtaRef={setCtaEl}
           />
 
-          {/* Delivery detail — tucked behind a disclosure so the plan stays high-level */}
+          {/*
+            Delivery detail and quantities.
+
+            ── Why these two are one block, and a quiet one ──────────────────
+            They used to be two more cards below the receipt: a bordered
+            disclosure on its own surface, then an accent-tinted button. Stacked
+            under a card that already contained five boxes, that made four
+            near-equal actions after the primary one — and nothing on the page
+            said which of them mattered.
+
+            They are both about the SAME thing (what arrives, and how much of
+            it), and both are secondary to buying. So they are one group,
+            attached to the receipt by a hairline rather than floating as peers,
+            with no border, no second surface and no accent. The accent is spent
+            once on this screen, on "Start subscription".
+          */}
           {planType === 'subscription' && subscriptionPlan.length > 0 && (
-            <>
-              <details className="mt-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-2)] overflow-hidden group">
+            <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+              <details className="group">
                 <summary
-                  className="flex items-center justify-between px-5 py-3.5 cursor-pointer list-none text-xs font-bold"
+                  className="flex items-center justify-between py-2 cursor-pointer list-none text-xs font-semibold"
                   style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
                 >
-                  Delivery details — what lands each month
-                  <Icon name="chevron-down" size={16} className="text-[var(--color-muted)] transition-transform group-open:rotate-180" />
+                  What lands each month
+                  <Icon name="chevron-down" size={15} className="text-[var(--color-muted)] transition-transform group-open:rotate-180" />
                 </summary>
-                <div className="px-3 pb-3">
+                <div className="pt-1 pb-2">
                   <SubscriptionProtocol
                     plan={subscriptionPlan}
                     answers={answers}
@@ -718,18 +733,23 @@ export function StackReviewPage() {
                   />
                 </div>
               </details>
+
+              {/* The other half of the same question, so it reads as a sibling
+                  of the disclosure rather than as another call to action. */}
               <button
                 onClick={() => setJourneyOpen(true)}
-                className="w-full mt-3 py-2.5 rounded-xl text-xs font-bold active:scale-[0.99] transition-all"
-                style={{ color: 'var(--color-accent)', background: 'color-mix(in srgb, var(--color-accent) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}
+                className="flex items-center justify-between w-full py-2 text-xs font-semibold text-left transition-colors"
+                style={{ color: 'var(--color-text-2)', fontFamily: 'var(--font-display)' }}
               >
-                {subscriptionCustomised ? 'Adjust how much you need →' : 'Customise your subscription →'}
+                Change quantities
+                <Icon name="chevron-right" size={15} className="text-[var(--color-muted)]" />
               </button>
-            </>
+            </div>
           )}
 
-          {/* Safety fine print */}
-          <p className="text-[10px] leading-relaxed mt-4 text-center" style={{ color: 'var(--color-muted)' }}>
+          {/* Safety fine print. One size, matching every other piece of small
+              print on the page — it was the fourth in this stretch alone. */}
+          <p className="text-[11px] leading-relaxed mt-5 text-center" style={{ color: 'var(--color-muted)' }}>
             Food supplements are not a substitute for a varied diet or medical care.
             Consult your GP before use if you are pregnant, breastfeeding, or taking
             prescribed medication (including HRT).

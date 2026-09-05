@@ -223,6 +223,20 @@ export interface ShareCardView {
   /** The right-hand mono item in the footer rail. */
   footNote: string
   /**
+   * The call to action, as its own band rather than fine print.
+   *
+   * The card's whole job on somebody else's story is to send a stranger to the
+   * quiz, and the address was being drawn at 42% opacity in 21px mono at the
+   * bottom-left of a rail — quieter than the serving counts. Somebody who liked
+   * the card had no idea where to go, which makes it a poster rather than an
+   * advert.
+   *
+   * Two lines, because they answer different questions: `label` says what they
+   * would get and how long it takes, `domain` says where. The domain is the
+   * larger of the two — it is the only part they have to remember.
+   */
+  cta: { label: string; domain: string }
+  /**
    * The second column: what the stack is for.
    *
    * The focus areas when an identity was generated, and the coverage axes — the
@@ -340,9 +354,16 @@ export function buildShareCardView(
     // The footer is the only place that says how to get one, and "build yours"
     // assumed the reader already knew what "yours" would be. Naming the quiz is
     // the instruction; the URL beside it is where.
-    footNote: competition
-      ? `${competition.closes.toUpperCase()} · T&CS APPLY`
-      : 'TAKE THE QUIZ · 90 SECONDS',
+    /*
+      Dates and terms only, now that `cta` carries the instruction.
+
+      This used to say "TAKE THE QUIZ · 90 SECONDS", which was the card's whole
+      call to action squeezed into a 21px mono rail. With a real CTA band above
+      it that sentence appeared twice, ten pixels apart, in two sizes — so the
+      one place it is still needed is the one where a significant condition
+      outranks everything: a live draw's closing date.
+    */
+    footNote: competition ? `${competition.closes.toUpperCase()} · T&CS APPLY` : '',
     imageRatio,
     eyebrow,
     stackName: payload.stackName,
@@ -382,5 +403,12 @@ export function buildShareCardView(
           }
         : null,
     footer: 'getchrgd.co.uk',
+    cta: {
+      /* No exclamation mark and no "scan me": the card is quiet everywhere
+         else, and one loud element would read as an ad rather than as the
+         thing the rest of the card has earned. */
+      label: 'BUILD YOUR OWN — FREE, 90 SECONDS',
+      domain: 'getchrgd.co.uk',
+    },
   }
 }

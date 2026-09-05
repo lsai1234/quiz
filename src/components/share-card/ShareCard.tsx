@@ -820,19 +820,49 @@ export function ShareCard({ view, art: override }: { view: ShareCardView; art?: 
           </div>
         ) : null}
 
-        {/* ── Footer ──────────────────────────────────────────────────────── */}
+        {/*
+          ── Where to go ───────────────────────────────────────────────────
+
+          The card's entire job on somebody else's story is to send a stranger
+          to the quiz, and the address used to be the quietest thing on it: 21px
+          mono at 42% opacity, bottom-left of a rail, smaller and fainter than
+          the serving counts. Somebody who liked the card had nowhere to go,
+          which makes it a poster rather than an advert.
+
+          It is now a band: what they get above, where to get it below, the
+          domain in the accent at nearly three times the size it was. Centred,
+          because it is addressed to the reader rather than being another field
+          in the card's own table.
+        */}
         <div
           style={{
             display: 'flex',
-            justifyContent: 'space-between',
+            flexDirection: 'column',
+            alignItems: 'center',
             marginTop: 26,
-            paddingTop: 17,
+            paddingTop: 20,
+            paddingBottom: 4,
             borderTop: `1px solid ${withAlpha(P.ink1, 0.13)}`,
           }}
         >
-          <div style={mono(railSize - 3, 400, withAlpha(P.ink1, 0.42), 0.14)}>{view.footer}</div>
-          <div style={mono(railSize - 3, 400, withAlpha(P.ink1, 0.42), 0.14)}>{view.footNote}</div>
+          <div style={mono(railSize - 4, 500, withAlpha(P.ink1, 0.55), 0.2)}>{view.cta.label}</div>
+          <div style={{ ...display(Math.round(railSize * 2.1), 800, P.accent, -0.01), marginTop: 8 }}>
+            {view.cta.domain}
+          </div>
         </div>
+
+        {/* What is left of the old rail: dates and terms, which belong small. */}
+        {view.footNote ? (
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'center',
+              marginTop: 12,
+            }}
+          >
+            <div style={mono(railSize - 5, 400, withAlpha(P.ink1, 0.38), 0.14)}>{view.footNote}</div>
+          </div>
+        ) : null}
       </div>
 
       {/* ── Grain, over everything ────────────────────────────────────────── */}

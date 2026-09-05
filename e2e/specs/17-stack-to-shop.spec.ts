@@ -5,7 +5,7 @@ import { completeQuiz } from '../support/quiz'
  * Leaving a stack to buy its products one at a time.
  *
  * The reveal sells a stack. Some people want two of the five, and until this
- * flow existed their only door was "Customise stack" — which still ends in a
+ * flow existed their only door was "Swap products" — which still ends in a
  * stack — so they left with nothing.
  *
  * The door is deliberately quiet, and it costs them their code's discount:

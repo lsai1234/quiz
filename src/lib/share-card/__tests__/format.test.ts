@@ -165,10 +165,26 @@ describe('saying what this is', () => {
     }
   })
 
-  it('tells a reader what to do, not what we would like them to feel', () => {
-    // "Build yours in 90 seconds" assumed the reader already knew what "yours"
-    // would be. Naming the quiz is the instruction; the URL beside it is where.
-    expect(buildShareCardView(PERSONAS.complete, 'story').footNote).toContain('TAKE THE QUIZ')
+  it('tells a reader what to do, and where', () => {
+    /*
+      The card's whole job on a stranger's story is to send them to the quiz,
+      and the address used to be the quietest thing on it — 21px mono at 42%
+      opacity, fainter than the serving counts. Somebody who liked the card had
+      nowhere to go.
+
+      Two lines because they answer different questions, and the domain is the
+      one they have to remember.
+    */
+    const view = buildShareCardView(PERSONAS.complete, 'story')
+    expect(view.cta.domain).toBe('getchrgd.co.uk')
+    expect(view.cta.label).toMatch(/90 SECONDS/)
+    expect(view.cta.label).toMatch(/FREE/i)
+  })
+
+  it('does not then repeat the instruction in the rail underneath it', () => {
+    // It said "TAKE THE QUIZ · 90 SECONDS" directly below a band already
+    // saying the same thing in two sizes.
+    expect(buildShareCardView(PERSONAS.complete, 'story').footNote).toBe('')
   })
 
   it('gives the closing date the footer instead while a draw is running', () => {
