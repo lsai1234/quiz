@@ -33,6 +33,32 @@ import { ProductTile } from '@/components/stack-review/ProductTile'
  * bytes. The provider fetches once and hands each component its own slot.
  */
 
+/**
+ * How wide the words may run on a wide placement.
+ *
+ * Tied to the scrim, not chosen by eye. `SHOP_SCRIM` is at full strength to
+ * 38% and has faded out entirely by 72%, so a line that runs past about 60%
+ * ends its last few words on unprotected artwork — which is exactly where a
+ * subhead landed on the tubs in the masthead. Stopping at 58% keeps every line
+ * inside the part of the frame the wash actually covers.
+ *
+ * It is a maximum, not a width: a short headline still sits at its natural
+ * length.
+ */
+const TEXT_COLUMN = '58%'
+
+/**
+ * Two lines of subhead, always, on a portrait tile.
+ *
+ * The tiles are bottom-anchored, so a two-line subhead pushes its label up and
+ * a one-line subhead does not — and a pair of tiles side by side ends up with
+ * its two labels at different heights, which reads as a bug rather than as
+ * copy of different lengths. Reserving the taller of the two cases makes both
+ * blocks the same height whatever the words are. `sf-meta` is 1.45 line-height,
+ * so two lines is 2.9em.
+ */
+const SUBHEAD_LINES = { minHeight: '2.9em', WebkitLineClamp: 2 } as const
+
 type BannerMap = Record<string, ShopBannerMeta>
 
 const HeroContext = createContext<BannerMap | null>(null)
@@ -128,7 +154,7 @@ export function ShopMasthead({ products }: { products: CatalogueProduct[] }) {
       <span aria-hidden className="absolute inset-0" style={{ background: SHOP_SCRIM }} />
       <span
         className="absolute inset-y-0 left-0 flex flex-col justify-center"
-        style={{ padding: 'var(--space-5)', maxWidth: '68%' }}
+        style={{ padding: 'var(--space-5)', maxWidth: TEXT_COLUMN }}
       >
         <span className="sf-title block" style={{ color: 'var(--text)' }}>{banner.headline}</span>
         {banner.subhead && (
@@ -247,7 +273,18 @@ export function ShopTwinTiles() {
               style={{ padding: 'var(--space-4)' }}
             >
               <span className="sf-title block" style={{ color: 'var(--text)' }}>{banner.headline}</span>
-              {banner.subhead && <span className="sf-meta block">{banner.subhead}</span>}
+              {/*
+                Always rendered, even with nothing in it, and always two lines
+                tall — see `SUBHEAD_LINES`. An absent subhead would collapse
+                this tile's label to the bottom of the frame while the tile
+                beside it kept two lines, and the pair would sit crooked.
+              */}
+              <span
+                className="sf-meta block"
+                style={{ ...SUBHEAD_LINES, display: '-webkit-box', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+              >
+                {banner.subhead}
+              </span>
             </span>
           </HeroLink>
         ) : null,
@@ -296,7 +333,7 @@ export function ShopBreak({ slot }: { slot: string }) {
       <span aria-hidden className="absolute inset-0" style={{ background: SHOP_SCRIM }} />
       <span
         className="absolute inset-y-0 left-0 flex flex-col justify-center"
-        style={{ padding: 'var(--space-5)', maxWidth: '62%' }}
+        style={{ padding: 'var(--space-5)', maxWidth: TEXT_COLUMN }}
       >
         <span className="sf-title block" style={{ color: 'var(--text)' }}>{banner.headline}</span>
         {banner.subhead && (

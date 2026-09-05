@@ -18,6 +18,8 @@ import {
   type Placement,
 } from '@/lib/shop/placements'
 import { Button, Card, Checkbox, Input, Note } from '@/components/system'
+import { groupByCategory } from '@/lib/shop/categories'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 /**
  * The shop's hero artwork, in the Founders Hub.
@@ -93,9 +95,66 @@ async function readFile(file: File): Promise<{ data: string; width: number; heig
   return { data, width, height }
 }
 
+/**
+ * The links a banner can actually point at, on THIS shop, right now.
+ *
+ * A founder types a path by hand, and a path that goes nowhere is the one kind
+ * of mistake nothing catches: tapping a tile that links to a category anchor
+ * which does not exist scrolls precisely nowhere, and looks to a customer like
+ * the shop is broken. The categories come from the live catalogue rather than a
+ * hardcoded list, because they are supplier data and change without a deploy.
+ *
+ * Empty when the catalogue cannot be read, which turns the check off rather
+ * than warning about every link — a Hub that cries wolf gets ignored.
+ */
+function useShopAnchors(): string[] {
+  const [anchors, setAnchors] = useState<string[]>([])
+
+  useEffect(() => {
+    let live = true
+    fetch('/api/catalogue')
+      .then((r) => (r.ok ? r.json() : { products: [] }))
+      .then((d) => {
+        if (!live) return
+        const products: CatalogueProduct[] = Array.isArray(d.products) ? d.products : []
+        if (products.length === 0) return
+        setAnchors([
+          '/shop#shop-cat-bundles',
+          ...groupByCategory(products).map((c) => `/shop#shop-cat-${c.slug}`),
+        ])
+      })
+      .catch(() => { /* check off */ })
+    return () => { live = false }
+  }, [])
+
+  return anchors
+}
+
+/**
+ * The reason this link probably will not work, or null. A WARNING, not a block.
+ *
+ * Only `#shop-cat-` anchors are checked, because they are the only paths whose
+ * existence can be known from here — a category anchor is generated from the
+ * catalogue, so a missing one is provably missing. Everything else is a route,
+ * and a route this screen cannot see is not evidence of anything.
+ *
+ * It never blocks a save. A founder writing a banner for a category that is
+ * about to be imported is doing something reasonable, and the catalogue can be
+ * empty for reasons that have nothing to do with the link.
+ */
+function anchorWarning(href: string, anchors: string[]): string | null {
+  if (anchors.length === 0) return null
+  if (!href.includes('#shop-cat-')) return null
+  if (anchors.includes(href)) return null
+  return `Nothing on the shop has that anchor, so tapping this will not go anywhere. The shelves right now are: ${anchors
+    .map((a) => a.split('#')[1].replace('shop-cat-', ''))
+    .join(', ')}.`
+}
+
 export function ShopBannerSettings() {
   const [banners, setBanners] = useState<Record<string, ShopBannerMeta>>({})
   const [editing, setEditing] = useState<string | null>(null)
+  const anchors = useShopAnchors()
 
   const load = useCallback(async () => {
     const res = await fetch('/api/portal/shop-banners')
@@ -119,6 +178,7 @@ export function ShopBannerSettings() {
           key={place.id}
           place={place}
           banner={banners[place.id] ?? null}
+          anchors={anchors}
           open={editing === place.id}
           onOpen={() => setEditing(place.id)}
           onClose={() => setEditing(null)}
@@ -130,10 +190,11 @@ export function ShopBannerSettings() {
 }
 
 function PlacementCard({
-  place, banner, open, onOpen, onClose, onSaved,
+  place, banner, anchors, open, onOpen, onClose, onSaved,
 }: {
   place: Placement
   banner: ShopBannerMeta | null
+  anchors: string[]
   open: boolean
   onOpen: () => void
   onClose: () => void
@@ -281,6 +342,11 @@ function PlacementCard({
             value={draft.href}
             onChange={(e) => setDraft((d) => ({ ...d, href: e.target.value }))}
           />
+
+          {/* A warning rather than a validation error — see `anchorWarning`. */}
+          {anchorWarning(draft.href, anchors) && (
+            <Note tone="attention">{anchorWarning(draft.href, anchors)}</Note>
+          )}
 
           <Input
             label="What the picture shows"
