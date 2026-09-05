@@ -85,6 +85,25 @@ export function ProductTile({
         width: fill ? undefined : size,
         height: fill ? undefined : size,
         /*
+          Rounded by default, at a radius proportional to the tile.
+
+          Every photo in the app is a hard-cornered white square against a dark
+          surface, which is the single sharpest edge on any screen it appears
+          on — a 30px thumbnail in the reveal's order list reads as a sticker
+          somebody pasted on rather than as part of the row. A proportional
+          radius keeps a 30px chip and a 320px card looking like the same
+          object at two sizes, where one fixed value makes the small one look
+          square and the large one look like a lozenge.
+
+          Only in fixed-size mode. In `fill` mode `size` is the width the image
+          PIPELINE is asked for (320 for a shelf card), not the width the tile
+          draws at — scaling a radius off it would put a 58px curve on the
+          bottom corners of a product card whose top two are set to the card
+          radius. Those callers set their own, which is right: a photo that
+          meets the top of its card has to match the card, not a rule.
+        */
+        borderRadius: fill ? undefined : Math.max(6, Math.round(size * 0.18)),
+        /*
           One white panel, every photo, every size.
 
           This is the belt to the pipeline's braces: the route already pads each
