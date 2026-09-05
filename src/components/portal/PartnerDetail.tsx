@@ -290,7 +290,17 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
         setError(d.error ?? 'Could not create a link.')
         return
       }
-      setLink(`${window.location.origin}/partner/set-password?token=${encodeURIComponent(d.token)}`)
+      /*
+        `/partner/claim`, not `/partner/set-password`.
+
+        One link, whatever state the partner is in. If they have a starter
+        waiting it opens on the agreement — the shortest true path to what the
+        outreach message promised, with no password in front of it. If they have
+        not, or have already claimed, that page offers setting a password, which
+        is what this link used to do. A founder never has to work out which of
+        two links to send, and cannot send the wrong one.
+      */
+      setLink(`${window.location.origin}/partner/claim?token=${encodeURIComponent(d.token)}`)
     } catch {
       setError('Could not reach the hub.')
     } finally {
@@ -309,7 +319,10 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
             {error}
           </p>
         )}
-        <Note>Send it to them yourself. It works once and expires in 7 days.</Note>
+        <Note>
+          Send it to them yourself. It expires in 7 days, and opens straight on their agreement — they do not
+          need a password to claim their stack.
+        </Note>
       </div>
     )
   }

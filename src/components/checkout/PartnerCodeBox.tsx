@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import type { RedeemChannel } from '@/lib/partners/redeem'
 import type { FounderCodeKind } from '@/lib/founder-codes/types'
+import { readStarterCode } from '@/lib/partner-starter/handoff'
 
 const GREEN = '#34d399'
 const ACCENT = '#00D4FF'
@@ -106,8 +107,14 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
    */
   const [fromLink, setFromLink] = useState(false)
 
+  /**
+   * `silent` means "nobody typed this" — used for both automatic sources, so
+   * neither shouts about a code the visitor never entered. `trusted` separates
+   * the two: a starter carried across from our own signing page in this tab is
+   * applied, one sitting in a thirty-day cookie anybody can set is not.
+   */
   const check = useCallback(
-    async (code: string, silent = false) => {
+    async (code: string, silent = false, trusted = false) => {
       if (!code.trim()) return
       setChecking(true)
       if (!silent) setError(null)
@@ -134,7 +141,7 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
           That is exactly the "silently, weeks later, on the wrong basket"
           failure the founder codes are kept out of cookies to avoid.
         */
-        if (d.ok && d.starter === true && silent) return
+        if (d.ok && d.starter === true && silent && !trusted) return
         if (d.ok) {
           onChange({
             code: d.code,
@@ -168,6 +175,18 @@ export function PartnerCodeBox({ subtotal, channel = 'quiz', applied, onChange }
   useEffect(() => {
     if (triedReferral || applied) return
     setTriedReferral(true)
+    /*
+      A starter this tab is carrying wins over a referral cookie, and there is
+      no contest to be had: the starter is a decision the partner made moments
+      ago on our own page, and the cookie is whatever link they last followed.
+      Applying the cookie instead would put a partner's free stack behind a 25%
+      discount they did not ask for.
+    */
+    const carried = readStarterCode()
+    if (carried) {
+      void check(carried, true, true)
+      return
+    }
     const ref = cookieValue(REFERRAL_COOKIE)
     if (ref) void check(ref, true)
   }, [triedReferral, applied, check])

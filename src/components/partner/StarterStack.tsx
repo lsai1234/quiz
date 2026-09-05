@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Note } from '@/components/system'
+import { carryStarterCode } from '@/lib/partner-starter/handoff'
 import type { Deliverable, StarterState } from '@/lib/partner-starter/types'
 
 interface Starter {
@@ -47,7 +48,25 @@ const day = (iso: string) =>
  * "your free stack" panel teaches everybody to ignore the place the real offer
  * eventually appears.
  */
-export function StarterStack() {
+interface Props {
+  /**
+   * An invite token, when this is being read by somebody with no account yet.
+   *
+   * The same panel serves both doors deliberately. A partner who taps the link
+   * in a DM and one who signs in later are reading the same offer and signing
+   * the same document; two components would be two places for that document to
+   * drift.
+   *
+   * With a token it talks to `/api/partner/claim`, which authenticates on the
+   * token; without one, to `/api/partner/starter`, which uses the session.
+   */
+  token?: string
+}
+
+export function StarterStack({ token }: Props = {}) {
+  const endpoint = token ? `/api/partner/claim?token=${encodeURIComponent(token)}` : '/api/partner/starter'
+  const postTo = token ? '/api/partner/claim' : '/api/partner/starter'
+
   const [starter, setStarter] = useState<Starter | null>(null)
   const [agreement, setAgreement] = useState<Agreement | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -59,7 +78,7 @@ export function StarterStack() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    fetch('/api/partner/starter', { cache: 'no-store' })
+    fetch(endpoint, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('unauthorised'))))
       .then((d: { starter: Starter | null; agreement?: Agreement }) => {
         setStarter(d.starter)
@@ -71,7 +90,7 @@ export function StarterStack() {
            is noise. */
       })
       .finally(() => setLoaded(true))
-  }, [])
+  }, [endpoint])
 
   if (!loaded || !starter || !agreement) return null
 
@@ -80,10 +99,10 @@ export function StarterStack() {
     setBusy(true)
     setError(null)
     try {
-      const res = await fetch('/api/partner/starter', {
+      const res = await fetch(postTo, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signedName: name, handle, version: agreement.version }),
+        body: JSON.stringify({ signedName: name, handle, version: agreement.version, token }),
       })
       const data: { ok?: boolean; code?: string; signedAt?: string; error?: string; staleVersion?: boolean } =
         await res.json()
@@ -137,8 +156,9 @@ export function StarterStack() {
       {signed ? (
         <div style={{ marginTop: 'var(--space-4)' }}>
           <Note tone="positive">
-            Signed {agreement.signedAt ? day(agreement.signedAt) : ''} as {agreement.signedName}. Here is your
-            code — take the quiz, then enter it in the discount box on your results.
+            Signed{agreement.signedAt ? ` ${day(agreement.signedAt)}` : ''}
+            {agreement.signedName ? ` as ${agreement.signedName}` : ''}. Take the quiz and your stack comes out
+            free — the code goes with you, so there is nothing to type. It is here too, in case you want it.
           </Note>
           <div className="flex items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
             <code
@@ -177,8 +197,36 @@ export function StarterStack() {
               {copied ? 'Copied' : 'Copy'}
             </Button>
           </div>
+          {token && (
+            <p
+              style={{
+                fontSize: 'var(--text-micro)',
+                lineHeight: 'var(--leading-snug)',
+                color: 'var(--ink-3)',
+                marginTop: 'var(--space-3)',
+              }}
+            >
+              You are signed in on this device. When you want to check what you have earned, set a password at{' '}
+              <a href={`/partner/set-password?token=${encodeURIComponent(token)}`} style={{ color: 'var(--accent)' }}>
+                partner settings
+              </a>{' '}
+              — no rush, and you do not need one to claim your stack.
+            </p>
+          )}
+
           <div style={{ marginTop: 'var(--space-3)' }}>
-            <Button size="sm" iconRight="arrow-right" onClick={() => { window.location.href = '/' }}>
+            {/* The code goes WITH them. It is on screen above, and copying it
+                across a ninety-second quiz was the last manual step in the
+                journey and the only one that could strand somebody holding a
+                stack they could not spend. */}
+            <Button
+              size="sm"
+              iconRight="arrow-right"
+              onClick={() => {
+                if (starter?.code) carryStarterCode(starter.code)
+                window.location.href = '/'
+              }}
+            >
               Take the quiz
             </Button>
           </div>

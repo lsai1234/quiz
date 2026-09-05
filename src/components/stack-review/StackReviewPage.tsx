@@ -27,6 +27,7 @@ import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
+import { clearStarterCode } from '@/lib/partner-starter/handoff'
 import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { receiptItemsFromSlots } from '@/lib/receipt/build'
@@ -436,6 +437,19 @@ export function StackReviewPage() {
     ? { label: `${partnerCode.founderLabel ?? 'Starter stack'}` }
     : null
   const stickyTotal = starterStack ? 0 : stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
+
+  /*
+    The starter is spent, so the tab stops carrying it.
+
+    Not cleared when it is APPLIED: a refresh restarts the quiz (the blueprint
+    is deliberately not persisted), and a partner made to redo the quiz must not
+    also have to go back to their account for the code. Once an order exists,
+    though, keeping it would auto-apply a used code to their next stack and
+    refuse it — a confusing end to a journey that has just worked.
+  */
+  useEffect(() => {
+    if (checkoutState.status === 'mock-complete') clearStarterCode()
+  }, [checkoutState.status])
   /*
    * ── The bar gets out of the receipt's way ────────────────────────────────
    *
