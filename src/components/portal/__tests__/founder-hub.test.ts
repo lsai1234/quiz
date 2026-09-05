@@ -107,6 +107,10 @@ describe('the Founders Hub', () => {
     // And again in `ShopBannerSettings`, for the same reason: a hidden file
     // input behind the Choose-artwork Button.
     'src/components/portal/ShopBannerSettings.tsx': ['input'],
+    // And in `VariantNameRepairPanel`, behind the catalogue-CSV Button. Same
+    // pattern as the three above: `hidden`, never focusable, and the Button is
+    // the control that is labelled and reachable.
+    'src/components/portal/VariantNameRepairPanel.tsx': ['input'],
   } as const
 
   it.each(FILES)('%s builds its controls from the primitives', (file) => {

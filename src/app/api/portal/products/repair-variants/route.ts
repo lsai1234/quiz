@@ -11,6 +11,7 @@ import {
 } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { variantLabels, looksLikeSku } from '@/lib/supplier/variant-labels'
+import { indexPowerBodyCsv, looksLikePowerBodyCsv } from '@/lib/supplier/powerbody-csv'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 /**
@@ -27,9 +28,20 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
  * imported from now on. This is the pass for everything already in the shop.
  *
  * ── Why it is a button and not a migration ──────────────────────────────────
- * It talks to PowerBody, so it takes as long as their API takes and can fail
+ * It may talk to PowerBody, so it can take as long as their API takes and fail
  * halfway. A migration that does that blocks a deploy on a third party being
  * up. Run from the Hub it can be repeated, watched, and read afterwards.
+ *
+ * ── Two sources, the offline one first ──────────────────────────────────────
+ * Naming a flavour through the API is one detail call per SKU, and sixty of
+ * those rate-limit, time out, or answer for a code that has since moved — which
+ * is exactly what happened, and why this can be handed PowerBody's dropshipping
+ * catalogue export instead. That file has every SKU they sell, is a megabyte,
+ * and cannot fail halfway. When a CSV is supplied it answers first and the API
+ * is asked only for whatever it does not cover.
+ *
+ * A supplier that will not answer is therefore no longer fatal: if the CSV
+ * named anything at all, that work is kept.
  *
  * ── What it will not touch ──────────────────────────────────────────────────
  * Only variant titles that still LOOK like supplier codes, and only where
@@ -95,32 +107,54 @@ function relabel(
   return { product: { ...product, variants }, fixed, unresolved }
 }
 
-/** Ask PowerBody for the name of every SKU given, as far as it will answer. */
-async function fetchNames(skus: string[]): Promise<Map<string, string>> {
+/**
+ * The name of every SKU given, as far as anything will answer.
+ *
+ * The CSV goes first because it cannot fail. The API is then asked only about
+ * what is left, and its failure is reported rather than thrown — a supplier
+ * that is down must not throw away names the file already gave us.
+ */
+async function fetchNames(
+  skus: string[],
+  csv: string | null,
+): Promise<{ names: Map<string, string>; apiError: string | null }> {
   const names = new Map<string, string>()
-  if (skus.length === 0) return names
+  if (skus.length === 0) return { names, apiError: null }
 
-  const supplier = await getSupplier()
-  const indexed = await indexedProductIds(skus)
-  const ids = skus.map((s) => indexed.get(s)?.productId).filter((id): id is string => Boolean(id))
-
-  if (ids.length > 0) {
-    const byId = await supplier.getProductsById(ids)
-    // Verified against the SKU we asked about: an index entry that has moved
-    // would otherwise put another product's name on our variant.
-    for (const p of byId) {
-      if (skus.includes(p.sku) && p.name) names.set(p.sku, p.name)
+  if (csv) {
+    const rows = indexPowerBodyCsv(csv)
+    for (const sku of skus) {
+      const row = rows.get(sku)
+      if (row?.name) names.set(sku, row.name)
     }
   }
 
-  // Anything the index could not resolve is worth one feed lookup.
   const missing = skus.filter((s) => !names.has(s))
-  if (missing.length > 0) {
-    const bySku = await supplier.getProductsBySku(missing)
-    for (const p of bySku) if (p.name) names.set(p.sku, p.name)
-  }
+  if (missing.length === 0) return { names, apiError: null }
 
-  return names
+  try {
+    const supplier = await getSupplier()
+    const indexed = await indexedProductIds(missing)
+    const ids = missing.map((s) => indexed.get(s)?.productId).filter((id): id is string => Boolean(id))
+
+    if (ids.length > 0) {
+      const byId = await supplier.getProductsById(ids)
+      // Verified against the SKU we asked about: an index entry that has moved
+      // would otherwise put another product's name on our variant.
+      for (const p of byId) {
+        if (missing.includes(p.sku) && p.name) names.set(p.sku, p.name)
+      }
+    }
+
+    const stillMissing = missing.filter((s) => !names.has(s))
+    if (stillMissing.length > 0) {
+      const bySku = await supplier.getProductsBySku(stillMissing)
+      for (const p of bySku) if (p.name) names.set(p.sku, p.name)
+    }
+    return { names, apiError: null }
+  } catch (err) {
+    return { names, apiError: err instanceof Error ? err.message : 'PowerBody could not be reached.' }
+  }
 }
 
 /**
@@ -159,8 +193,32 @@ export async function GET() {
   })
 }
 
-export async function POST() {
+/** 12MB: the catalogue export is about one, and JSON-encoding it adds a little. */
+const MAX_BODY = 12 * 1024 * 1024
+
+export async function POST(request: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // The body is optional — no CSV means the API-only path, as before.
+  let csv: string | null = null
+  const raw = await request.text().catch(() => '')
+  if (raw.length > MAX_BODY) {
+    return NextResponse.json({ error: 'That file is too large.' }, { status: 413 })
+  }
+  if (raw.trim()) {
+    try {
+      const body = JSON.parse(raw) as { csv?: string }
+      csv = typeof body.csv === 'string' && body.csv.trim() ? body.csv : null
+    } catch {
+      return NextResponse.json({ error: 'Malformed request.' }, { status: 400 })
+    }
+  }
+  if (csv && !looksLikePowerBodyCsv(csv)) {
+    return NextResponse.json(
+      { error: "That does not look like PowerBody's catalogue export. It starts with a `sku;` header." },
+      { status: 400 },
+    )
+  }
 
   const affected = await candidates()
   if (affected.length === 0) {
@@ -168,12 +226,13 @@ export async function POST() {
   }
 
   const skus = [...new Set(affected.flatMap(brokenSkus))]
-  let names: Map<string, string>
-  try {
-    names = await fetchNames(skus)
-  } catch (err) {
+  const { names, apiError } = await fetchNames(skus, csv)
+
+  // Only a total failure is worth refusing: if anything was named, the run is
+  // worth keeping and what is left is reported per product.
+  if (names.size === 0) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'PowerBody could not be reached.' },
+      { error: apiError ?? 'No names could be found for any of those SKUs.' },
       { status: 502 },
     )
   }
@@ -210,6 +269,8 @@ export async function POST() {
     total: repaired.length,
     variants: repaired.reduce((n, r) => n + Object.keys(r.fixed).length, 0),
     unresolved: repaired.reduce((n, r) => n + r.unresolved.length, 0),
+    source: csv ? 'csv' : 'api',
+    ...(apiError ? { apiError } : {}),
     repaired,
   })
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { Button, Note } from '@/components/system'
 
@@ -44,6 +44,8 @@ export function VariantNameRepairPanel() {
   const [repaired, setRepaired] = useState<Repair[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
   const load = useCallback(() => {
     fetch('/api/portal/products/repair-variants')
@@ -55,13 +57,19 @@ export function VariantNameRepairPanel() {
 
   useEffect(load, [load])
 
-  async function run() {
+  async function run(csv?: string) {
     setBusy(true)
     setError(null)
     setDone(null)
+    setNote(null)
     setRepaired(null)
     try {
-      const res = await fetch('/api/portal/products/repair-variants', { method: 'POST' })
+      const res = await fetch('/api/portal/products/repair-variants', {
+        method: 'POST',
+        ...(csv
+          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv }) }
+          : {}),
+      })
       const d = await res.json().catch(() => ({}))
       if (!res.ok || d.ok === false) {
         setError(d.error ?? 'Could not reach PowerBody to read the flavour names.')
@@ -70,16 +78,30 @@ export function VariantNameRepairPanel() {
       setRepaired(d.repaired ?? [])
       setDone(
         d.variants > 0
-          ? `${d.variants} flavour${d.variants === 1 ? '' : 's'} named across ${d.total} product${d.total === 1 ? '' : 's'}.` +
-              (d.unresolved > 0 ? ` ${d.unresolved} still have no name at PowerBody.` : '')
+          ? `${d.variants} flavour${d.variants === 1 ? '' : 's'} named across ${d.total} product${d.total === 1 ? '' : 's'}` +
+              (d.source === 'csv' ? ', from the catalogue file.' : '.') +
+              (d.unresolved > 0 ? ` ${d.unresolved} could not be found and still show their code.` : '')
           : (d.message ?? 'Nothing needed changing.'),
       )
+      // Reported but not fatal: the file may have covered everything anyway.
+      if (d.apiError) setNote(`PowerBody's API did not answer (${d.apiError}), so only the file was used.`)
       // The shop, the product page and the variant picker all read these.
       invalidateCatalogue()
       load()
     } finally {
       setBusy(false)
     }
+  }
+
+  async function chooseCsv(file: File | undefined) {
+    if (!file) return
+    setError(null)
+    const text = await file.text().catch(() => null)
+    if (!text) {
+      setError('That file could not be read.')
+      return
+    }
+    await run(text)
   }
 
   if (!loaded || !scan) return null
@@ -119,18 +141,36 @@ export function VariantNameRepairPanel() {
           </p>
         </div>
         {!clean && (
-          <Button size="sm" loading={busy} disabled={busy} onClick={run}>
-            Fix flavour names
-          </Button>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              hidden
+              onChange={(e) => void chooseCsv(e.target.files?.[0])}
+            />
+            <Button size="sm" loading={busy} disabled={busy} onClick={() => fileRef.current?.click()}>
+              Use catalogue CSV
+            </Button>
+            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run()}>
+              Try PowerBody API
+            </Button>
+          </div>
         )}
       </div>
 
       {!clean && !busy && (
         <Note tone="attention">
           Anything imported before flavour lookups were fixed only ever had its FIRST flavour named — the rest
-          show their supplier code in the picker. This reads the real names from PowerBody and puts them back.
-          It only touches labels that still look like codes, so anything you have renamed by hand is left alone,
-          and it is safe to re-run.
+          show their supplier code. It only touches labels that still look like codes, so anything you have
+          renamed by hand is left alone, and it is safe to re-run.
+          <br />
+          <br />
+          <strong>Use catalogue CSV</strong> is the reliable one: download the dropshipping catalogue from
+          PowerBody (the file starting <code>sku;manufacturer_name;name</code>) and pick it here. It holds every
+          SKU they sell, so nothing has to be fetched one at a time and nothing can time out halfway.{' '}
+          <strong>Try PowerBody API</strong> looks each code up live instead, which is slower and is what fails
+          when their API is busy.
         </Note>
       )}
 
@@ -145,6 +185,8 @@ export function VariantNameRepairPanel() {
           {done}
         </Note>
       )}
+
+      {note && !error && <Note tone="attention">{note}</Note>}
 
       {!clean && !busy && scan.products.length > 0 && !repaired && (
         <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
