@@ -303,3 +303,67 @@ describe('per-flavour stock', () => {
     expect(notes.some((n) => n.includes('1 of 2 flavours are not in the crawled product list'))).toBe(true)
   })
 })
+
+/**
+ * Flavour NAMES, which is a different lookup from flavour stock.
+ *
+ * Import resolved every flavour's stock through the feed index but only ever
+ * fetched the DETAIL for a row's main SKU — and the name lives on the detail
+ * call. So a six-flavour product went live with one real name and five raw
+ * codes in its picker: "P45757" where "Orange" belongs.
+ */
+describe('per-flavour names', () => {
+  const gel = (f: string) => `Endurance Breathe Isotonic Energy Gel, ${f} - 20 x 60g`
+
+  it('labels each flavour by what makes it different from its siblings', () => {
+    const row = { ...BASE_ROW, sku: 'P1', name: gel('Blackcurrant'), variantSkus: ['P1', 'P2', 'P3'] }
+    const facts = new Map([
+      ['P1', { qty: 5, name: gel('Blackcurrant') }],
+      ['P2', { qty: 5, name: gel('Orange') }],
+      ['P3', { qty: 5, name: gel('Lemon') }],
+    ])
+
+    const { product } = rosterRowToProduct(row, null, facts)
+
+    expect(product.variants.map((v) => v.title)).toEqual(['Blackcurrant', 'Orange', 'Lemon'])
+    expect(product.variants.map((v) => v.flavour)).toEqual(['Blackcurrant', 'Orange', 'Lemon'])
+  })
+
+  /* The exact regression: everything but the first flavour was its own code. */
+  it('no longer titles the other flavours with their SKU codes', () => {
+    const row = { ...BASE_ROW, sku: 'P1', name: gel('Blackcurrant'), variantSkus: ['P1', 'P2', 'P3'] }
+    const facts = new Map([
+      ['P1', { qty: 5, name: gel('Blackcurrant') }],
+      ['P2', { qty: 5, name: gel('Orange') }],
+      ['P3', { qty: 5, name: gel('Lemon') }],
+    ])
+
+    const { product } = rosterRowToProduct(row, null, facts)
+
+    expect(product.variants.map((v) => v.title)).not.toContain('P2')
+    expect(product.variants.map((v) => v.title)).not.toContain('P3')
+  })
+
+  it('falls back to the code, and says so, when PowerBody has no name', () => {
+    const row = { ...BASE_ROW, sku: 'P1', name: gel('Blackcurrant'), variantSkus: ['P1', 'P2'] }
+    const facts = new Map([
+      ['P1', { qty: 5, name: gel('Blackcurrant') }],
+      ['P2', { qty: 5 }],
+    ])
+
+    const { product, notes } = rosterRowToProduct(row, null, facts)
+
+    expect(product.variants[1].title).toBe('P2')
+    expect(product.variants[1].flavour).toBeNull()
+    expect(notes.some((n) => n.includes('showing their code'))).toBe(true)
+  })
+
+  it('leaves a single-variant product without a flavour at all', () => {
+    // Nothing distinguishes it, so there is no flavour to name.
+    const { product } = rosterRowToProduct({ ...BASE_ROW, sku: 'P1', variantSkus: ['P1'] }, SUPPLIER)
+
+    expect(product.variants).toHaveLength(1)
+    expect(product.variants[0].flavour).toBeNull()
+    expect(product.variants[0].title).toBe(SUPPLIER.name)
+  })
+})

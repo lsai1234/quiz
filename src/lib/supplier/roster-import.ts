@@ -23,6 +23,7 @@ import type { SupplierProduct } from './types'
 import type { RosterRow } from './roster-csv'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import { rhythmForSwap, classifySupplierProduct } from './mapping'
+import { variantLabels } from './variant-labels'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -49,6 +50,15 @@ export interface RosterImportResult {
 export interface VariantFacts {
   /** Units PowerBody held for this exact SKU when the index was crawled. */
   qty: number
+  /**
+   * PowerBody's own full name for this exact SKU.
+   *
+   * Absent until the detail call reaches the SKU. Without it a flavour has no
+   * label but its code, which is precisely the bug this field exists to fix:
+   * import used to look up only a row's MAIN sku, so a six-flavour product
+   * arrived with one real name and five raw codes in its picker.
+   */
+  name?: string | null
 }
 
 /**
@@ -122,6 +132,18 @@ export function rosterRowToProduct(
   // orderable. Prices are shared because a flavour of one tub costs one price;
   // a different SIZE is a different product and must not be listed here.
   const variantSkus = row.variantSkus.length > 0 ? row.variantSkus : [row.sku]
+  /*
+    Labels are worked out across the whole set at once, because a flavour is
+    only identifiable by what the siblings do NOT have in common — see
+    `variant-labels`. The row's own SKU carries the main supplier name, which
+    is the one name we always have.
+  */
+  const labels = variantLabels(
+    variantSkus.map((sku) => ({
+      sku,
+      name: sku === row.sku ? (supplier?.name ?? row.name) : (variantFacts?.get(sku)?.name ?? null),
+    })),
+  )
   const variants: CatalogueVariant[] = variantSkus.map((sku, index) => {
     // Per-SKU stock when the crawl reached this flavour; the parent's otherwise.
     // Falling back rather than defaulting to zero is deliberate: an unknown
@@ -130,10 +152,17 @@ export function rosterRowToProduct(
     // corrects it either way.
     const facts = variantFacts?.get(sku)
     const units = facts ? facts.qty : stock
+    const label = labels[index]
     return {
       id: variantSkus.length === 1 ? id : `${id}-${slugify(sku)}`,
-      title: index === 0 ? row.name : sku,
-      flavour: null,
+      title: label.label,
+      /*
+        The label IS the flavour when there is more than one sibling: it is
+        whatever distinguishes this SKU from the others, which for a merged
+        product is the flavour by construction. A single-variant product has
+        nothing to distinguish, so it has no flavour either.
+      */
+      flavour: variantSkus.length > 1 && label.named ? label.label : null,
       size: null,
       price: sellPrice,
       compareAtPrice: rrp,
@@ -142,6 +171,20 @@ export function rosterRowToProduct(
       sku,
     }
   })
+  /*
+    Say which flavours are still showing a code. It is the one import fault a
+    founder cannot diagnose from the review screen — "P45757" looks like data
+    we chose rather than a lookup that did not land.
+  */
+  const unlabelled = labels.filter((l) => !l.named)
+  if (unlabelled.length > 0 && variantSkus.length > 1) {
+    notes.push(
+      `${unlabelled.length} of ${variantSkus.length} flavours have no name from PowerBody and are ` +
+        `showing their code (${unlabelled.slice(0, 4).map((l) => l.sku).join(', ')}` +
+        `${unlabelled.length > 4 ? '…' : ''}). Run “Fix flavour names” once the feed index has them.`,
+    )
+  }
+
   const unknownVariants = variantSkus.filter((sku) => variantFacts && !variantFacts.has(sku))
   if (variantFacts && unknownVariants.length > 0) {
     notes.push(

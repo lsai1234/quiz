@@ -3,6 +3,7 @@ import { SupplierIndexBuilder } from '@/components/portal/SupplierIndexBuilder'
 import { SupplierImport } from '@/components/portal/SupplierImport'
 import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
 import { DescriptionCleanupPanel } from '@/components/portal/DescriptionCleanupPanel'
+import { VariantNameRepairPanel } from '@/components/portal/VariantNameRepairPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,10 @@ export default function SupplierPage() {
           the sync panel because both are about products already here, above the
           three panels that bring new ones in. */}
       <DescriptionCleanupPanel />
+
+      {/* Flavours that came in as bare SKU codes, from before import looked up
+          anything but a row's main SKU. Also about products already here. */}
+      <VariantNameRepairPanel />
 
       {/* Crawled first, because the roster import resolves every code through
           it — see SupplierIndexBuilder. */}

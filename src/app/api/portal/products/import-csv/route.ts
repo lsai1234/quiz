@@ -89,21 +89,41 @@ export async function POST(req: Request) {
     const everySku = [...new Set(slice.flatMap((r) => [r.sku, ...r.variantSkus]))]
     const indexed = await indexedProductIds(everySku)
 
-    const variantFacts = new Map<string, { qty: number }>()
+    const variantFacts = new Map<string, { qty: number; name?: string | null }>()
     for (const [sku, hit] of indexed) variantFacts.set(sku, { qty: hit.qty })
 
     let found: Awaited<ReturnType<typeof supplier.getProductsBySku>> = []
     let lookupError: string | null = null
 
-    // Detail for the main SKUs we have ids for — no paging, no deadline.
-    const mainIds = mainSkus.map((sku) => indexed.get(sku)?.productId).filter((id): id is string => Boolean(id))
-    if (mainIds.length > 0) {
+    /*
+      Detail for EVERY SKU we have an id for, flavours included — not just the
+      row's main one.
+
+      This used to fetch `mainIds` alone, which is where six-flavour products
+      came in with one real name and five raw codes in the picker: the index
+      gave every flavour its stock, so they were all orderable, but nothing
+      ever asked PowerBody what any of them were CALLED. The names only exist
+      on the detail call.
+
+      It costs one more id-lookup per flavour, and an id-lookup needs no paging
+      and cannot time out — the expensive half of a supplier call is finding
+      the id, and the index already did that.
+    */
+    const everyId = everySku.map((sku) => indexed.get(sku)?.productId).filter((id): id is string => Boolean(id))
+    if (everyId.length > 0) {
       try {
-        const byId = await supplier.getProductsById(mainIds)
+        const byId = await supplier.getProductsById(everyId)
         // Verified, not assumed: an index entry that now answers for a
         // different SKU has moved, and trusting it imports another brand's
         // product under our code.
-        found = byId.filter((p) => mainSkus.includes(p.sku))
+        const verified = byId.filter((p) => everySku.includes(p.sku))
+        for (const p of verified) {
+          const held = variantFacts.get(p.sku)
+          variantFacts.set(p.sku, { qty: held?.qty ?? p.stock ?? 0, name: p.name })
+        }
+        // The row-level lookup still only wants the MAIN skus: a flavour is a
+        // variant of a product, not a product of its own on our side.
+        found = verified.filter((p) => mainSkus.includes(p.sku))
       } catch (err) {
         lookupError = err instanceof Error ? err.message : 'PowerBody could not be reached.'
       }
@@ -153,7 +173,10 @@ export async function POST(req: Request) {
       imported: pending.length,
       nextOffset,
       enriched: results.filter((r) => r.enriched).length,
-      fromIndex: mainIds.length,
+      // How many ROWS the index answered for without a feed walk. Counted over
+      // the main SKUs only: the flavour lookups are a detail of those rows, not
+      // rows of their own, and counting them would inflate this past the batch.
+      fromIndex: mainSkus.filter((sku) => indexed.has(sku)).length,
       results,
       // Parse warnings belong to the whole file, so they are sent once with the
       // first slice rather than repeated on every batch.
