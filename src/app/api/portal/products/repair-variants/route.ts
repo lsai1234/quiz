@@ -78,27 +78,37 @@ function brokenSkus(product: CatalogueProduct): string[] {
  */
 function relabel(
   product: CatalogueProduct,
-  names: Map<string, string>,
+  names: Map<string, SupplierName>,
+  force: boolean,
 ): { product: CatalogueProduct; fixed: Record<string, string>; unresolved: string[] } | null {
+  /* Which variants this run is allowed to touch. */
+  const rewritable = (v: CatalogueVariant) => force || looksLikeSku(v.title)
+
   const labels = variantLabels(
-    product.variants.map((v) => ({
-      sku: v.sku ?? v.id,
-      // A title that is not a code is a name somebody is happy with — feed it
-      // back in so it takes part in working out the common prefix, and so it
-      // survives untouched.
-      name: looksLikeSku(v.title) ? (names.get(v.sku ?? '') ?? null) : v.title,
-    })),
+    product.variants.map((v) => {
+      const found = names.get(v.sku ?? '')
+      return {
+        sku: v.sku ?? v.id,
+        // A title we are not rewriting is a name somebody is happy with — feed
+        // it back in so it takes part in working out the common prefix, and so
+        // it survives untouched.
+        name: rewritable(v) ? (found?.name ?? null) : v.title,
+        flavour: rewritable(v) ? (found?.flavour ?? null) : null,
+      }
+    }),
   )
 
   const fixed: Record<string, string> = {}
   const unresolved: string[] = []
   const variants: CatalogueVariant[] = product.variants.map((v, i) => {
     const label = labels[i]
-    if (!looksLikeSku(v.title)) return v
+    if (!rewritable(v)) return v
     if (!label.named) {
       unresolved.push(v.sku ?? v.id)
       return v
     }
+    // Nothing to report when the label it would write is the one already there.
+    if (v.title === label.label && v.flavour === label.label) return v
     fixed[v.sku ?? v.id] = label.label
     return { ...v, title: label.label, flavour: label.label }
   })
@@ -107,8 +117,15 @@ function relabel(
   return { product: { ...product, variants }, fixed, unresolved }
 }
 
+/** What a source knows about one SKU. */
+interface SupplierName {
+  name: string
+  /** The supplier's own flavour field. Present far less often than the name. */
+  flavour: string | null
+}
+
 /**
- * The name of every SKU given, as far as anything will answer.
+ * What every SKU given is called, as far as anything will answer.
  *
  * The CSV goes first because it cannot fail. The API is then asked only about
  * what is left, and its failure is reported rather than thrown — a supplier
@@ -117,15 +134,18 @@ function relabel(
 async function fetchNames(
   skus: string[],
   csv: string | null,
-): Promise<{ names: Map<string, string>; apiError: string | null }> {
-  const names = new Map<string, string>()
+): Promise<{ names: Map<string, SupplierName>; apiError: string | null }> {
+  const names = new Map<string, SupplierName>()
   if (skus.length === 0) return { names, apiError: null }
 
   if (csv) {
     const rows = indexPowerBodyCsv(csv)
     for (const sku of skus) {
       const row = rows.get(sku)
-      if (row?.name) names.set(sku, row.name)
+      // The flavour field travels with the name. It is blank more often than
+      // not, but where it is set it is the shortest true label there is — see
+      // `variantLabels`.
+      if (row?.name) names.set(sku, { name: row.name, flavour: row.flavour })
     }
   }
 
@@ -142,14 +162,14 @@ async function fetchNames(
       // Verified against the SKU we asked about: an index entry that has moved
       // would otherwise put another product's name on our variant.
       for (const p of byId) {
-        if (missing.includes(p.sku) && p.name) names.set(p.sku, p.name)
+        if (missing.includes(p.sku) && p.name) names.set(p.sku, { name: p.name, flavour: null })
       }
     }
 
     const stillMissing = missing.filter((s) => !names.has(s))
     if (stillMissing.length > 0) {
       const bySku = await supplier.getProductsBySku(stillMissing)
-      for (const p of bySku) if (p.name) names.set(p.sku, p.name)
+      for (const p of bySku) if (p.name) names.set(p.sku, { name: p.name, flavour: null })
     }
     return { names, apiError: null }
   } catch (err) {
@@ -165,7 +185,7 @@ async function fetchNames(
  * would leave the shop exactly as broken as it is now, which is the half that
  * customers can see.
  */
-async function candidates(): Promise<CatalogueProduct[]> {
+async function candidates(force = false): Promise<CatalogueProduct[]> {
   await syncPortalRuntime()
   const [imported, resolved, overrides] = await Promise.all([
     getImportedProducts(),
@@ -175,7 +195,9 @@ async function candidates(): Promise<CatalogueProduct[]> {
   const byId = new Map<string, CatalogueProduct>()
   for (const p of resolved.products) byId.set(p.id, p)
   for (const p of imported) byId.set(p.id, { ...p, ...(overrides[p.id] ?? {}) } as CatalogueProduct)
-  return [...byId.values()].filter((p) => brokenSkus(p).length > 0)
+  return [...byId.values()].filter((p) =>
+    force ? p.variants.length > 1 && p.variants.some((v) => v.sku) : brokenSkus(p).length > 0,
+  )
 }
 
 export async function GET() {
@@ -201,14 +223,29 @@ export async function POST(request: Request) {
 
   // The body is optional — no CSV means the API-only path, as before.
   let csv: string | null = null
+  /*
+    Force rewrites EVERY variant of a multi-variant product from the source,
+    not just the ones still showing a code.
+
+    It exists because the first repair could only work from names, and a
+    product merged from two of a brand's lines has siblings with almost nothing
+    in common — so the diff kept nearly the whole string and the picker filled
+    with sixty-character labels. Those are no longer codes, so the narrow pass
+    will never look at them again.
+
+    It is a separate, explicitly labelled action because it overwrites labels
+    somebody may have typed. The narrow pass remains the default.
+  */
+  let force = false
   const raw = await request.text().catch(() => '')
   if (raw.length > MAX_BODY) {
     return NextResponse.json({ error: 'That file is too large.' }, { status: 413 })
   }
   if (raw.trim()) {
     try {
-      const body = JSON.parse(raw) as { csv?: string }
+      const body = JSON.parse(raw) as { csv?: string; force?: boolean }
       csv = typeof body.csv === 'string' && body.csv.trim() ? body.csv : null
+      force = body.force === true
     } catch {
       return NextResponse.json({ error: 'Malformed request.' }, { status: 400 })
     }
@@ -220,12 +257,18 @@ export async function POST(request: Request) {
     )
   }
 
-  const affected = await candidates()
+  const affected = await candidates(force)
   if (affected.length === 0) {
     return NextResponse.json({ ok: true, repaired: [], total: 0, message: 'Every flavour already has a name.' })
   }
 
-  const skus = [...new Set(affected.flatMap(brokenSkus))]
+  const skus = [
+    ...new Set(
+      affected.flatMap((p) =>
+        force ? p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)) : brokenSkus(p),
+      ),
+    ),
+  ]
   const { names, apiError } = await fetchNames(skus, csv)
 
   // Only a total failure is worth refusing: if anything was named, the run is
@@ -241,7 +284,7 @@ export async function POST(request: Request) {
   const repaired: Repair[] = []
 
   for (const product of affected) {
-    const result = relabel(product, names)
+    const result = relabel(product, names, force)
     if (!result) continue
 
     /*

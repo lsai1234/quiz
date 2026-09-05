@@ -129,6 +129,73 @@ describe('variantLabels', () => {
   })
 })
 
+/**
+ * The supplier's own flavour field, where they filled it in.
+ *
+ * The diff is an inference; this is the answer. It matters most on exactly the
+ * products the diff handles worst — a product merged from two of a brand's
+ * lines, whose siblings share almost no words, where the diff can only return
+ * most of the string and the picker fills with sixty-character labels.
+ */
+describe('variantLabels with a supplied flavour', () => {
+  it('uses the supplier flavour in preference to anything derived', () => {
+    const out = variantLabels([
+      { sku: 'A', name: 'Endurance Breathe Isotonic Energy Gel, Cola - 20 x 60g', flavour: 'Cola' },
+      { sku: 'B', name: 'Endurance Energy Isotonic Energy Gel, Vimto - 20 x 60g', flavour: 'Vimto' },
+    ])
+    expect(out.map((v) => v.label)).toEqual(['Cola', 'Vimto'])
+    expect(out.every((v) => v.named)).toBe(true)
+  })
+
+  /* The real case from the shop: two product lines merged into one picker. */
+  it('rescues a set whose names share almost nothing', () => {
+    const names = [
+      'Endurance Breathe Isotonic Energy Gel',
+      'Breathe Isotonic Energy Gel, Cola - 20 x 60g',
+      'Energy Isotonic Energy Gel, Orange - 20 x 60g',
+    ]
+    const derived = variantLabels(names.map((name, i) => ({ sku: `S${i}`, name })))
+    // Without flavours the diff can only strip one shared word, so every label
+    // stays long — which is what the picker actually looked like.
+    expect(derived.some((v) => v.label.length > 30)).toBe(true)
+
+    const given = variantLabels([
+      { sku: 'S0', name: names[0], flavour: 'Blackcurrant' },
+      { sku: 'S1', name: names[1], flavour: 'Cola' },
+      { sku: 'S2', name: names[2], flavour: 'Orange' },
+    ])
+    expect(given.map((v) => v.label)).toEqual(['Blackcurrant', 'Cola', 'Orange'])
+  })
+
+  /*
+    A flavour must not join the comparison set. "Cola" alongside two long
+    names shares no words with them, so it would drag the common prefix to
+    nothing and make the OTHER two labels longer than they need to be.
+  */
+  it('does not let a supplied flavour lengthen the labels it derives', () => {
+    const out = variantLabels([
+      { sku: 'A', name: 'Whey Protein, Vanilla 1kg', flavour: 'Vanilla' },
+      { sku: 'B', name: 'Whey Protein, Chocolate 1kg' },
+      { sku: 'C', name: 'Whey Protein, Strawberry 1kg' },
+    ])
+    expect(out.map((v) => v.label)).toEqual(['Vanilla', 'Chocolate', 'Strawberry'])
+  })
+
+  it('ignores a flavour field that is blank or whitespace, as the export writes it', () => {
+    const out = variantLabels([
+      { sku: 'A', name: 'Creatine HCl, Fruit Punch - 75g', flavour: ' ' },
+      { sku: 'B', name: 'Creatine HCl, Lemon Lime - 76g', flavour: '' },
+    ])
+    expect(out.map((v) => v.label)).toEqual(['Fruit Punch - 75g', 'Lemon Lime - 76g'])
+  })
+
+  it('falls back to the code when there is neither a name nor a flavour', () => {
+    const out = variantLabels([{ sku: 'P1', flavour: 'Cola' }, { sku: 'P2' }])
+    expect(out.map((v) => v.label)).toEqual(['Cola', 'P2'])
+    expect(out.map((v) => v.named)).toEqual([true, false])
+  })
+})
+
 describe('looksLikeSku', () => {
   it('recognises the codes the broken import left behind', () => {
     for (const t of ['P50744', 'P42987', 'P45757', '123456', 'AB12345']) {

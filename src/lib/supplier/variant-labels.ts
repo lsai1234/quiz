@@ -48,6 +48,21 @@ export interface VariantNameInput {
   sku: string
   /** The supplier's own full name for this exact SKU, when we have it. */
   name?: string | null
+  /**
+   * The supplier's own flavour field, when they filled it in.
+   *
+   * Used in preference to anything derived, because it is the answer rather
+   * than an inference from one. It is blank on more than half of PowerBody's
+   * rows — including rows whose name plainly carries a flavour — so it cannot
+   * be the only source, but where it IS set it beats diffing every time.
+   *
+   * The difference is not cosmetic. A product merged from two of a brand's
+   * lines ("Endurance Breathe" and "Endurance Energy") has almost nothing in
+   * common between its siblings' names, so the diff keeps nearly the whole
+   * string and the picker fills with sixty-character labels. The flavour field
+   * says "Cola" and is done.
+   */
+  flavour?: string | null
 }
 
 export interface VariantLabel {
@@ -71,6 +86,31 @@ export interface VariantLabel {
  * code — the honest placeholder, and the thing the repair pass looks for.
  */
 export function variantLabels(inputs: VariantNameInput[]): VariantLabel[] {
+  /*
+    A supplied flavour short-circuits everything: it is already the shortest
+    true label for that SKU. Only the rest are diffed against each other, and
+    they are diffed among THEMSELVES — mixing a "Cola" into the comparison set
+    would drag the common prefix to nothing and lengthen every other label.
+  */
+  const given = new Map<string, string>()
+  for (const i of inputs) {
+    const f = (i.flavour ?? '').trim()
+    if (f) given.set(i.sku, f)
+  }
+
+  const rest = inputs.filter((i) => !given.has(i.sku))
+  const derived = rest.length > 0 ? deriveLabels(rest) : []
+  const byDerived = new Map(derived.map((d) => [d.sku, d]))
+
+  return inputs.map((i) => {
+    const f = given.get(i.sku)
+    if (f) return { sku: i.sku, label: f, named: true }
+    return byDerived.get(i.sku) ?? { sku: i.sku, label: i.sku, named: false }
+  })
+}
+
+/** The diff, for the SKUs the supplier gave no flavour for. */
+function deriveLabels(inputs: VariantNameInput[]): VariantLabel[] {
   const named = inputs.filter((i) => (i.name ?? '').trim().length > 0)
 
   // Nothing to compare against: one named sibling keeps its whole name, and an

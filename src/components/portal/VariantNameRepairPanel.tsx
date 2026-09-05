@@ -57,7 +57,7 @@ export function VariantNameRepairPanel() {
 
   useEffect(load, [load])
 
-  async function run(csv?: string) {
+  async function run(csv?: string, force = false) {
     setBusy(true)
     setError(null)
     setDone(null)
@@ -66,8 +66,8 @@ export function VariantNameRepairPanel() {
     try {
       const res = await fetch('/api/portal/products/repair-variants', {
         method: 'POST',
-        ...(csv
-          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv }) }
+        ...(csv || force
+          ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv, force }) }
           : {}),
       })
       const d = await res.json().catch(() => ({}))
@@ -93,6 +93,9 @@ export function VariantNameRepairPanel() {
     }
   }
 
+  /** Which button opened the picker — the narrow pass, or the full rewrite. */
+  const forceRef = useRef(false)
+
   async function chooseCsv(file: File | undefined) {
     if (!file) return
     setError(null)
@@ -101,15 +104,19 @@ export function VariantNameRepairPanel() {
       setError('That file could not be read.')
       return
     }
-    await run(text)
+    await run(text, forceRef.current)
+  }
+
+  function pickCsv(force: boolean) {
+    forceRef.current = force
+    // Cleared so choosing the same file twice still fires a change event.
+    if (fileRef.current) fileRef.current.value = ''
+    fileRef.current?.click()
   }
 
   if (!loaded || !scan) return null
 
   const clean = scan.total === 0
-  // Nothing to say when it is clean and nothing was just run — the panel would
-  // be a permanent reminder of a fixed bug.
-  if (clean && !done) return null
 
   return (
     <section
@@ -136,27 +143,32 @@ export function VariantNameRepairPanel() {
           </h2>
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
             {clean
-              ? 'Every flavour has a name.'
+              ? 'Every flavour has a name. Re-label from the catalogue if any of them read as whole product names.'
               : `${scan.variants} flavour${scan.variants === 1 ? '' : 's'} across ${scan.total} product${scan.total === 1 ? '' : 's'} are showing a SKU code instead of a name.`}
           </p>
         </div>
-        {!clean && (
-          <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv"
-              hidden
-              onChange={(e) => void chooseCsv(e.target.files?.[0])}
-            />
-            <Button size="sm" loading={busy} disabled={busy} onClick={() => fileRef.current?.click()}>
-              Use catalogue CSV
-            </Button>
-            <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run()}>
-              Try PowerBody API
-            </Button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            hidden
+            onChange={(e) => void chooseCsv(e.target.files?.[0])}
+          />
+          {!clean && (
+            <>
+              <Button size="sm" loading={busy} disabled={busy} onClick={() => pickCsv(false)}>
+                Use catalogue CSV
+              </Button>
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => void run()}>
+                Try PowerBody API
+              </Button>
+            </>
+          )}
+          <Button size="sm" variant="ghost" disabled={busy} onClick={() => pickCsv(true)}>
+            Re-label all from CSV
+          </Button>
+        </div>
       </div>
 
       {!clean && !busy && (
@@ -171,6 +183,16 @@ export function VariantNameRepairPanel() {
           SKU they sell, so nothing has to be fetched one at a time and nothing can time out halfway.{' '}
           <strong>Try PowerBody API</strong> looks each code up live instead, which is slower and is what fails
           when their API is busy.
+        </Note>
+      )}
+
+      {!busy && (
+        <Note tone="info">
+          <strong>Re-label all from CSV</strong> rewrites every flavour of every multi-variant product, not just
+          the ones showing a code. Use it when the labels read as whole product names — the catalogue&rsquo;s own
+          flavour column gives &ldquo;Cola&rdquo; where working it out from the names could only manage
+          &ldquo;Breathe Isotonic Energy Gel, Cola - 20 x 60g&rdquo;. It overwrites anything you have renamed by
+          hand, which is why it is separate.
         </Note>
       )}
 

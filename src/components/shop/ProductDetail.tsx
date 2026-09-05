@@ -100,10 +100,28 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
       {showVariantPicker && (
         <section>
           <p className="sf-label" style={{ marginBottom: 'var(--space-3)' }}>Flavour &amp; size</p>
-          <div className="flex flex-col gap-1.5">
+          {/*
+            A row is a grid, not a flex row with two ends.
+
+            It was `justify-between` with the label on one side and a stock
+            note and a price on the other, which works only while every label
+            is short. Give it a real supplier name and the label wraps to two
+            lines, the stock note concertinas into a three-line column, and no
+            two rows are the same height — which is exactly what a flavour list
+            looked like.
+
+            Three columns instead: the label takes whatever is left and
+            truncates rather than wrapping, and the stock and price columns
+            keep their own width so prices line up down the list whatever the
+            names are doing. `title` carries the full label for the one in ten
+            that is genuinely too long to show.
+          */}
+          <div className="flex flex-col" style={{ gap: 'var(--space-1)' }}>
             {product.variants.map((v) => {
               const isSelected = v.id === variant?.id
               const vStock = variantStock(v)
+              const label = variantLabel(v)
+              const low = v.available && vStock.count != null && vStock.count < 5
               return (
                 <button
                   key={v.id}
@@ -111,25 +129,47 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
                   disabled={!v.available}
                   aria-pressed={isSelected}
                   data-interactive
-                  className="w-full flex items-center justify-between text-left"
+                  title={label}
+                  className="w-full grid items-center text-left"
                   style={{
+                    gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+                    columnGap: 'var(--space-3)',
                     minHeight: 52,
                     padding: '0 var(--space-4)',
                     borderRadius: 'var(--r-control)',
-                    border: 'none',
+                    /* The selected row is named by an accent edge rather than
+                       by being a slightly lighter grey. On a dark shelf the
+                       old pair of surfaces were a few per cent apart, which is
+                       not a state anybody can see at a glance. */
+                    border: `1px solid ${isSelected ? 'var(--accent)' : 'transparent'}`,
                     background: isSelected ? 'var(--surface-hi)' : 'var(--surface)',
                     color: isSelected ? 'var(--text)' : 'var(--text-dim)',
-                    opacity: v.available ? 1 : 0.5,
+                    opacity: v.available ? 1 : 0.45,
                     cursor: v.available ? 'pointer' : 'not-allowed' }}
                 >
-                  <span className="sf-body">{variantLabel(v)}</span>
-                  <span className="flex items-center" style={{ gap: 'var(--space-3)' }}>
-                    {!v.available ? (
-                      <span className="sf-meta">{product.restockingSoon ? 'Back in stock soon' : 'Sold out'}</span>
-                    ) : vStock.count != null && vStock.count < 5 ? (
-                      <span className="sf-meta">Only <span className="sf-num">{vStock.count}</span> left</span>
-                    ) : null}
-                    <span className="sf-num sf-body" style={{ color: 'var(--text)' }}>{formatGBP(v.price)}</span>
+                  <span
+                    className="sf-body block truncate"
+                    style={{ color: isSelected ? 'var(--text)' : undefined }}
+                  >
+                    {label}
+                  </span>
+
+                  {/* One column, one word. "Only 2 left" wrapped to three lines
+                      in a column sized by the longest price; "2 left" does not
+                      wrap at any width this list is drawn at. */}
+                  <span className="sf-meta whitespace-nowrap" style={{ color: low ? 'var(--text-dim)' : 'var(--text-dim)' }}>
+                    {!v.available
+                      ? (product.restockingSoon ? 'Back soon' : 'Sold out')
+                      : low
+                        ? <><span className="sf-tnum">{vStock.count}</span> left</>
+                        : null}
+                  </span>
+
+                  <span
+                    className="sf-body sf-tnum whitespace-nowrap text-right"
+                    style={{ color: 'var(--text)' }}
+                  >
+                    {formatGBP(v.price)}
                   </span>
                 </button>
               )
