@@ -23,6 +23,81 @@ interface Agreement {
 }
 
 const money = (n: number) => `£${n.toFixed(2)}`
+
+/**
+ * Their referral link.
+ *
+ * Built from the browser's own origin rather than a configured base URL, so it
+ * is right on every environment without one more thing to set — the same way
+ * the dashboard's `ShareLink` builds it.
+ */
+function shareLink(code: string): string {
+  return typeof window === 'undefined' ? `/?ref=${code}` : `${window.location.origin}/?ref=${code}`
+}
+
+/**
+ * A value with a Copy button — the code, and the link.
+ *
+ * One component rather than three copies of the same twenty lines, and one
+ * place where "copied" is announced. `navigator.clipboard` is blocked in plenty
+ * of contexts, so the field is selectable either way and the failure is silent
+ * rather than a red box about something that does not matter.
+ */
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <div style={{ marginTop: 'var(--space-3)' }}>
+      <p
+        style={{
+          fontSize: 'var(--text-micro)',
+          fontWeight: 'var(--weight-strong)',
+          letterSpacing: 'var(--tracking-eyebrow)',
+          textTransform: 'uppercase',
+          color: 'var(--ink-3)',
+          marginBottom: 'var(--space-1)',
+        }}
+      >
+        {label}
+      </p>
+      <div className="flex items-center" style={{ gap: 'var(--space-2)' }}>
+        <code
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: 'var(--space-3)',
+            borderRadius: 'var(--r-control)',
+            background: 'var(--surface-2)',
+            border: '1px solid var(--edge)',
+            fontFamily: 'var(--font-mono, monospace)',
+            fontSize: 'var(--text-body-sm)',
+            color: 'var(--ink-1)',
+            overflowX: 'auto',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {value}
+        </code>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => {
+            navigator.clipboard
+              ?.writeText(value)
+              .then(() => {
+                setCopied(true)
+                setTimeout(() => setCopied(false), 2000)
+              })
+              .catch(() => {
+                /* clipboard blocked — the field is selectable, which is the fallback */
+              })
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+    </div>
+  )
+}
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
@@ -68,6 +143,7 @@ export function StarterStack({ token }: Props = {}) {
   const postTo = token ? '/api/partner/claim' : '/api/partner/starter'
 
   const [starter, setStarter] = useState<Starter | null>(null)
+  const [partnerCode, setPartnerCode] = useState<string | null>(null)
   const [agreement, setAgreement] = useState<Agreement | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [name, setName] = useState('')
@@ -75,14 +151,14 @@ export function StarterStack({ token }: Props = {}) {
   const [agreed, setAgreed] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetch(endpoint, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('unauthorised'))))
-      .then((d: { starter: Starter | null; agreement?: Agreement }) => {
+      .then((d: { starter: Starter | null; agreement?: Agreement; partnerCode?: string | null }) => {
         setStarter(d.starter)
         setAgreement(d.agreement ?? null)
+        setPartnerCode(d.partnerCode ?? null)
       })
       .catch(() => {
         /* The panel simply does not appear. Nothing else on the page depends
@@ -160,43 +236,82 @@ export function StarterStack({ token }: Props = {}) {
             {agreement.signedName ? ` as ${agreement.signedName}` : ''}. Take the quiz and your stack comes out
             free — the code goes with you, so there is nothing to type. It is here too, in case you want it.
           </Note>
-          <div className="flex items-center" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
-            <code
-              style={{
-                flex: 1,
-                minWidth: 0,
-                padding: 'var(--space-3)',
-                borderRadius: 'var(--r-control)',
-                background: 'var(--surface-2)',
-                border: '1px solid var(--edge)',
-                fontFamily: 'var(--font-mono, monospace)',
-                fontSize: 'var(--text-body-sm)',
-                letterSpacing: 'var(--tracking-eyebrow)',
-                color: 'var(--ink-1)',
-                overflowX: 'auto',
-              }}
-            >
-              {starter.code}
-            </code>
+          {starter.code && <CopyRow label="Your starter code" value={starter.code} />}
+
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            {/* The code goes WITH them. Copying it across a ninety-second quiz
+                was the last manual step in the journey and the only one that
+                could strand somebody holding a stack they could not spend. */}
             <Button
               size="sm"
-              variant="secondary"
+              iconRight="arrow-right"
               onClick={() => {
-                if (!starter.code) return
-                navigator.clipboard
-                  ?.writeText(starter.code)
-                  .then(() => {
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 2000)
-                  })
-                  .catch(() => {
-                    /* clipboard blocked — the code is selectable, which is the fallback */
-                  })
+                if (starter?.code) carryStarterCode(starter.code)
+                window.location.href = '/'
               }}
             >
-              {copied ? 'Copied' : 'Copy'}
+              Take the quiz
             </Button>
           </div>
+
+          {/*
+            ── The job they have just agreed to do ─────────────────────────────
+            Their own code and their own link, at the moment they signed up to
+            post both. The journey used to end on "here is your free stack" and
+            go quiet about the work — leaving somebody who had just promised a
+            TikTok and two stories with nothing to put in them, and no idea the
+            assets existed one tab away.
+          */}
+          {partnerCode && (
+            <div
+              style={{
+                marginTop: 'var(--space-5)',
+                paddingTop: 'var(--space-4)',
+                borderTop: '1px solid var(--edge)',
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 'var(--text-body-sm)',
+                  fontWeight: 'var(--weight-display)',
+                  fontFamily: 'var(--font-display)',
+                  color: 'var(--ink-1)',
+                }}
+              >
+                What to post
+              </p>
+              <p
+                style={{
+                  fontSize: 'var(--text-meta)',
+                  lineHeight: 'var(--leading-snug)',
+                  color: 'var(--ink-3)',
+                  marginTop: 'var(--space-1)',
+                }}
+              >
+                Your followers get 25% off with this code, and anyone who arrives on your link is credited to
+                you for 30 days — whether or not they remember to type it.
+              </p>
+
+              <CopyRow label="Your code" value={partnerCode} />
+              <CopyRow label="Your link" value={shareLink(partnerCode)} />
+
+              <p
+                style={{
+                  fontSize: 'var(--text-micro)',
+                  lineHeight: 'var(--leading-snug)',
+                  color: 'var(--ink-3)',
+                  marginTop: 'var(--space-3)',
+                }}
+              >
+                Ready-made story and post images, with your code already on them, are under{' '}
+                <a href="/partner" style={{ color: 'var(--accent)' }}>
+                  Your assets
+                </a>
+                .
+              </p>
+            </div>
+          )}
+
           {token && (
             <p
               style={{
@@ -213,23 +328,6 @@ export function StarterStack({ token }: Props = {}) {
               — no rush, and you do not need one to claim your stack.
             </p>
           )}
-
-          <div style={{ marginTop: 'var(--space-3)' }}>
-            {/* The code goes WITH them. It is on screen above, and copying it
-                across a ninety-second quiz was the last manual step in the
-                journey and the only one that could strand somebody holding a
-                stack they could not spend. */}
-            <Button
-              size="sm"
-              iconRight="arrow-right"
-              onClick={() => {
-                if (starter?.code) carryStarterCode(starter.code)
-                window.location.href = '/'
-              }}
-            >
-              Take the quiz
-            </Button>
-          </div>
         </div>
       ) : (
         <div style={{ marginTop: 'var(--space-4)' }}>

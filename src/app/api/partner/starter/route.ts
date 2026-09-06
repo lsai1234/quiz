@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSessionPartner } from '@/lib/partners/auth'
 import { requestMetadata } from '@/lib/legal/consent'
 import { listStartersForPartner, getAgreement } from '@/lib/partner-starter/repo'
-import { agreementFor, signAgreement } from '@/lib/partner-starter/sign'
+import { NO_CODE_YET, agreementFor, signAgreement } from '@/lib/partner-starter/sign'
 import { starterState, starterTierLabel } from '@/lib/partner-starter/rules'
 import { PARTNER_DELIVERABLES } from '@/lib/partner-starter/agreement'
 
@@ -34,11 +34,21 @@ export async function GET() {
   })
   if (!starter) return NextResponse.json({ starter: null })
 
-  const { text, version } = await agreementFor(partner, starter)
+  const { text, version, context } = await agreementFor(partner, starter)
   const state = starterState(starter)
   const agreement = starter.agreementId ? await getAgreement(starter.agreementId) : null
 
   return NextResponse.json({
+    /*
+      Their own 25% code, handed back with the starter.
+
+      Not an afterthought: the moment they finish signing is the moment they
+      have agreed to post a code and a link, and the journey used to end there
+      without ever showing them either. Taken from `agreementFor` rather than
+      looked up again, so the code on screen is the one the document they just
+      signed actually names.
+    */
+    partnerCode: context.partnerCode === NO_CODE_YET ? null : context.partnerCode,
     starter: {
       // The CODE ITSELF is only sent once it can actually be used. Before the
       // agreement is signed it buys nothing, and putting it on screen anyway

@@ -35,13 +35,18 @@ export function hashAgreement(text: string): string {
   return createHash('sha256').update(text, 'utf8').digest('hex')
 }
 
+/** No code on the account yet — the normal path cannot produce this. */
+export const NO_CODE_YET = '(to be issued)'
+
 /**
  * The document for this partner and this starter, as they will read it.
  *
  * The partner's own code goes in the text because the agreement is about what
  * they will post, and what they post carries that code. A partner with no code
  * yet reads a placeholder rather than an empty gap — the commercial terms are
- * the same either way, and the code is issued alongside the starter in practice.
+ * the same either way, and in practice `createPartner` mints the code, the
+ * opening terms and the account in one call, so it is live before the link is
+ * ever sent.
  */
 export async function agreementFor(partner: Partner, starter: PartnerStarter): Promise<{
   version: string
@@ -51,7 +56,7 @@ export async function agreementFor(partner: Partner, starter: PartnerStarter): P
   const codes: PartnerCode[] = await listCodes(partner.id).catch(() => [])
   const context: AgreementContext = {
     partnerName: partner.name,
-    partnerCode: codes.find((c) => c.status === 'active')?.code ?? codes[0]?.code ?? '(to be issued)',
+    partnerCode: codes.find((c) => c.status === 'active')?.code ?? codes[0]?.code ?? NO_CODE_YET,
     tier: starter.tier,
     goodsCap: formatGBP(starter.goodsCap),
     expiresAt: starter.expiresAt,

@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { partnerForInvite, startPartnerSession } from '@/lib/partners/auth'
 import { requestMetadata } from '@/lib/legal/consent'
 import { listStartersForPartner } from '@/lib/partner-starter/repo'
-import { agreementFor, signAgreement } from '@/lib/partner-starter/sign'
+import { NO_CODE_YET, agreementFor, signAgreement } from '@/lib/partner-starter/sign'
 import { starterState, starterTierLabel } from '@/lib/partner-starter/rules'
 import { PARTNER_DELIVERABLES } from '@/lib/partner-starter/agreement'
 
@@ -62,11 +62,14 @@ export async function GET(req: Request) {
   if (!found || !found.starter) return NextResponse.json({ starter: null })
 
   const { partner, starter } = found
-  const { text, version } = await agreementFor(partner, starter)
+  const { text, version, context } = await agreementFor(partner, starter)
   const state = starterState(starter)
 
   return NextResponse.json({
     partnerName: partner.name,
+    /* See the note in `/api/partner/starter` — the code they just agreed to
+       post, handed back so the journey does not end without it. */
+    partnerCode: context.partnerCode === NO_CODE_YET ? null : context.partnerCode,
     starter: {
       code: state === 'ready' ? starter.code : null,
       tier: starter.tier,

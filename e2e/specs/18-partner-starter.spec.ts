@@ -38,6 +38,8 @@ function seed(label: string) {
   const suffix = `${label}${random}`
   const id = `ptnr_e2e_${suffix}`
   const code = `PS-${random.padEnd(8, 'X').slice(0, 8)}`
+  /* `SARAH` + the rate — what `suggestCode` builds, at the 25% the programme runs on. */
+  const publicCode = `SARAH${random.slice(0, 4)}25`
   const at = new Date().toISOString()
   const starterExpiry = new Date(Date.now() + 21 * 86_400_000).toISOString()
   const inviteExpiry = new Date(Date.now() + 7 * 86_400_000).toISOString()
@@ -66,6 +68,22 @@ function seed(label: string) {
     at,
   )
 
+  /*
+    Their public code, minted alongside the account in the real flow
+    (`createPartner` makes the record, the code and the opening terms in one
+    call). Seeded here because the panel is supposed to hand it back the moment
+    they sign — that is the thing they have just agreed to post.
+  */
+  db.prepare(
+    `INSERT INTO partner_codes (code, partner_id, discount_pct, terms, status, created_at)
+     VALUES (?, ?, '0.25', ?, 'active', ?)`,
+  ).run(
+    publicCode,
+    id,
+    JSON.stringify({ firstOrderOnly: true, maxUses: null, uses: 0, startsAt: null, endsAt: null, minSpend: null }),
+    at,
+  )
+
   db.prepare(
     `INSERT INTO partner_starters (code, partner_id, tier, goods_cap, note, created_by, created_at, expires_at,
        agreement_id, claim_token, claimed_at, used_at, order_id, revoked_at)
@@ -78,7 +96,7 @@ function seed(label: string) {
   ).run(hash, id, inviteExpiry, at)
 
   db.close()
-  return { id, code, token: raw }
+  return { id, code, publicCode, token: raw }
 }
 
 function read(code: string) {
@@ -94,7 +112,7 @@ function read(code: string) {
 }
 
 test('a partner claims their stack from a link, with no account and nothing to type', async ({ page }) => {
-  const { code, token } = seed('claim')
+  const { code, publicCode, token } = seed('claim')
 
   // ── The link ──────────────────────────────────────────────────────────────
   await page.goto(`/partner/claim?token=${encodeURIComponent(token)}`)
@@ -124,6 +142,17 @@ test('a partner claims their stack from a link, with no account and nothing to t
   expect(signed.agreement?.signed_name).toBe('Alex Morgan')
   expect(signed.agreement?.handle).toBe('@alexmoves')
   expect(String(signed.agreement?.doc_hash)).toHaveLength(64)
+
+  /*
+    ── The job, handed over at the moment they agree to it ───────────────────
+    They have just promised a TikTok and two stories carrying a code and a
+    link. The journey used to end on "here is your free stack" and go quiet
+    about both, leaving somebody with nothing to put in the posts they had
+    signed up to make.
+  */
+  await expect(page.getByText(publicCode).first()).toBeVisible()
+  await expect(page.getByText(new RegExp(`/\\?ref=${publicCode}`))).toBeVisible()
+  await expect(page.getByRole('link', { name: /your assets/i })).toBeVisible()
 
   // ── The quiz ──────────────────────────────────────────────────────────────
   await page.getByRole('button', { name: /take the quiz/i }).click()

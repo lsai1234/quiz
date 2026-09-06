@@ -86,7 +86,7 @@ function forgetReferral(): void {
  * here is advisory: every checkout re-validates server-side, because between
  * this call and the payment a code can be paused or capped out.
  *
- * A code arriving on a partner's link (`?ref=SARAH20`, banked into a cookie by
+ * A code arriving on a partner's link (`?ref=SARAH25`, banked into a cookie by
  * the middleware) is applied automatically on first render. That is the whole
  * point of the link — the gap between following it and typing a code back in at
  * checkout is where attribution goes missing, and a partner who brought the
