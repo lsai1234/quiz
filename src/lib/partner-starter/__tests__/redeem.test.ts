@@ -85,7 +85,6 @@ describe('the agreement gate', () => {
     const served = partnerAgreementText({
       partnerName: partner.name,
       partnerCode: '(to be issued)',
-      tier: starter.tier,
       goodsCap: gbp(starter.goodsCap),
       expiresAt: starter.expiresAt,
     })

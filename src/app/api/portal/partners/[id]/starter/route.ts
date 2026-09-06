@@ -5,7 +5,7 @@ import { getHubUser } from '@/lib/auth/session'
 import { getPartnerRecord } from '@/lib/partners'
 import { createStarter, listStartersForPartner, revokeStarter } from '@/lib/partner-starter/repo'
 import { getAgreement } from '@/lib/partner-starter/repo'
-import { STARTER_GOODS_CAP, STARTER_TIERS, starterState } from '@/lib/partner-starter/rules'
+import { STARTER_GOODS_CAP, starterState } from '@/lib/partner-starter/rules'
 import type { StarterTier } from '@/lib/partner-starter/types'
 
 export const dynamic = 'force-dynamic'
@@ -49,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const partner = await getPartnerRecord(id)
   if (!partner) return NextResponse.json({ error: 'No such partner.' }, { status: 404 })
 
-  let body: { tier?: unknown; note?: unknown; goodsCap?: unknown; revoke?: unknown }
+  let body: { note?: unknown; goodsCap?: unknown; revoke?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -61,10 +61,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ starters: await rows(id) })
   }
 
-  const tier = body.tier as StarterTier
-  if (!STARTER_TIERS.includes(tier)) {
-    return NextResponse.json({ error: 'Pick Essentials or Balanced.' }, { status: 400 })
-  }
+  /*
+    The depth is no longer chosen here — the partner picks Essentials or
+    Balanced on their own reveal. The column stays on the row (dropping one is
+    the schema change SQLite is awkward about, and an unread string costs
+    nothing) and every new starter takes the same default, so nothing reads it
+    as a constraint any more.
+  */
+  const tier: StarterTier = 'performance'
 
   /*
     One live starter per partner. Two is not a bigger gift, it is a second free

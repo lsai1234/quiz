@@ -7,8 +7,6 @@ import type { Deliverable, StarterState } from '@/lib/partner-starter/types'
 
 interface Starter {
   code: string | null
-  tier: string
-  tierLabel: string
   goodsCap: number
   expiresAt: string
   state: StarterState
@@ -212,7 +210,7 @@ export function StarterStack({ token }: Props = {}) {
               color: 'var(--ink-1)',
             }}
           >
-            Your {starter.tierLabel} stack, on us
+            Your stack, on us
           </h2>
           <p
             style={{
@@ -222,9 +220,9 @@ export function StarterStack({ token }: Props = {}) {
               marginTop: 'var(--space-1)',
             }}
           >
-            Take the quiz and it builds you a stack — Essentials or Balanced, up to {money(starter.goodsCap)}{' '}
-            of products, delivery included. Nothing to pay and no card needed. Yours until{' '}
-            {day(starter.expiresAt)}.
+            Take the quiz and it builds you two — Essentials and Balanced. Pick either; both come in under{' '}
+            {money(starter.goodsCap)} of products, delivery included. Nothing to pay and no card needed. Yours
+            until {day(starter.expiresAt)}.
           </p>
         </div>
         <Badge tone={signed ? 'positive' : 'neutral'}>{signed ? 'Ready' : 'Sign to unlock'}</Badge>

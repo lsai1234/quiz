@@ -170,7 +170,9 @@ test('a partner claims their stack from a link, with no account and nothing to t
   await page.goto(`/partner/claim?token=${encodeURIComponent(token)}`)
 
   // What they were promised, and what they are being asked for. Not a password.
-  await expect(page.getByText(/your balanced stack, on us/i)).toBeVisible()
+  await expect(page.getByText(/your stack, on us/i)).toBeVisible()
+  // The depth is the PARTNER's choice on the reveal, so nothing here names one.
+  await expect(page.getByText(/your balanced stack|your essentials stack/i)).toHaveCount(0)
   // `.first()` because the ask appears twice on purpose: once in the summary
   // list, and once inside the agreement itself. Both are meant to be there.
   await expect(page.getByText(/one tiktok in launch week/i).first()).toBeVisible()

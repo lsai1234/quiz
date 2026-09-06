@@ -57,7 +57,6 @@ export async function agreementFor(partner: Partner, starter: PartnerStarter): P
   const context: AgreementContext = {
     partnerName: partner.name,
     partnerCode: codes.find((c) => c.status === 'active')?.code ?? codes[0]?.code ?? NO_CODE_YET,
-    tier: starter.tier,
     goodsCap: formatGBP(starter.goodsCap),
     expiresAt: starter.expiresAt,
   }

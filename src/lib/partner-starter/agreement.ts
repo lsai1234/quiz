@@ -17,11 +17,18 @@
  *
  * Pure. No crypto here — hashing is server-side, in `sign.ts`.
  */
-import type { Deliverable, StarterTier } from './types'
-import { starterTierLabel } from './rules'
+import type { Deliverable } from './types'
 
-/** Bump — never edit — when the wording changes. */
-export const PARTNER_AGREEMENT_VERSION = '2026-09-1'
+/**
+ * Bump — never edit — when the wording changes.
+ *
+ * `-2` drops the named depth. The document used to promise "one Balanced
+ * stack", chosen by whoever issued it; the partner now picks between Essentials
+ * and Balanced on the reveal, so naming one at signing time promised something
+ * the journey does not do. Signatures already made keep pointing at `-1`, which
+ * is what an append-only version is for.
+ */
+export const PARTNER_AGREEMENT_VERSION = '2026-09-2'
 
 /**
  * What we are asking for, in the words the partner reads and signs.
@@ -57,8 +64,7 @@ export interface AgreementContext {
   partnerName: string
   /** Their code — the one their followers type, not the starter code. */
   partnerCode: string
-  tier: StarterTier
-  /** The ceiling on the goods, already formatted (e.g. "£140"). */
+  /** The ceiling on the goods, already formatted (e.g. "£100"). */
   goodsCap: string
   /** ISO date the starter dies. */
   expiresAt: string
@@ -85,12 +91,12 @@ export function partnerAgreementText(ctx: AgreementContext): string {
     '',
     'WHAT WE GIVE YOU',
     '',
-    `1. One ${starterTierLabel(ctx.tier)} stack, free. You take the quiz, it builds you a stack, and your`,
-    `   starter code takes the whole order — products and delivery — to £0.00. Nothing is taken`,
-    `   from a card, because there is nothing to take.`,
-    `2. It covers up to ${ctx.goodsCap} of products. If the stack you build comes to more than that, you can`,
-    '   drop something or buy the difference on a normal order.',
-    '3. One order, once. The code is spent when the order is placed, and it expires on',
+    '1. One stack, free — Essentials or Balanced, whichever you prefer. You take the quiz, it builds',
+    '   you both, you pick one, and the whole order — products and delivery — comes to £0.00.',
+    '   Nothing is taken from a card, because there is nothing to take.',
+    `2. Either one comes to at most ${ctx.goodsCap} of products, so you are never asked to choose between`,
+    '   the stack you want and the one that fits.',
+    '3. One order, once. It is spent when the order is placed, and the offer expires on',
     `   ${expires}.`,
     '',
     'WHAT YOU AGREE TO POST',

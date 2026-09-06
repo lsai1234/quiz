@@ -3,7 +3,7 @@ import { partnerForInvite, startPartnerSession } from '@/lib/partners/auth'
 import { requestMetadata } from '@/lib/legal/consent'
 import { listStartersForPartner } from '@/lib/partner-starter/repo'
 import { NO_CODE_YET, agreementFor, signAgreement } from '@/lib/partner-starter/sign'
-import { starterState, starterTierLabel } from '@/lib/partner-starter/rules'
+import { starterState } from '@/lib/partner-starter/rules'
 import { PARTNER_DELIVERABLES } from '@/lib/partner-starter/agreement'
 
 export const dynamic = 'force-dynamic'
@@ -73,7 +73,6 @@ export async function GET(req: Request) {
     starter: {
       code: state === 'ready' ? starter.code : null,
       tier: starter.tier,
-      tierLabel: starterTierLabel(starter.tier),
       goodsCap: starter.goodsCap,
       expiresAt: starter.expiresAt,
       state,

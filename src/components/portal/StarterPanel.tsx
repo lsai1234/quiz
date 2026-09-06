@@ -1,9 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Badge, Button, Card, Select, Input } from '@/components/system'
-import { STARTER_TIERS, starterTierLabel } from '@/lib/partner-starter/rules'
-import type { PartnerAgreement, PartnerStarter, StarterState, StarterTier } from '@/lib/partner-starter/types'
+import { Badge, Button, Card, Input } from '@/components/system'
+import type { PartnerAgreement, PartnerStarter, StarterState } from '@/lib/partner-starter/types'
 
 const money = (n: number) => `£${n.toFixed(2)}`
 const day = (iso: string) =>
@@ -51,7 +50,6 @@ const STATE_LABEL: Record<StarterState, string> = {
  */
 export function StarterPanel({ partnerId }: { partnerId: string }) {
   const [rows, setRows] = useState<Row[] | null>(null)
-  const [tier, setTier] = useState<StarterTier>('performance')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -99,7 +97,8 @@ export function StarterPanel({ partnerId }: { partnerId: string }) {
       </h3>
       <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)', marginBottom: 'var(--space-3)' }}>
         Issuing a starter does not give anything away on its own. It appears in their account with the
-        agreement attached, and only starts working once they have signed it. One live starter at a time.
+        agreement attached, and only starts working once they have signed it. They choose Essentials or
+        Balanced themselves when they take the quiz. One live starter at a time.
       </p>
 
       {error && (
@@ -113,17 +112,12 @@ export function StarterPanel({ partnerId }: { partnerId: string }) {
       )}
 
       <div style={{ display: 'grid', gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}>
-        <Select
-          label="Depth"
-          value={tier}
-          onChange={(e) => setTier(e.target.value as StarterTier)}
-        >
-          {STARTER_TIERS.map((t) => (
-            <option key={t} value={t}>
-              {starterTierLabel(t)}
-            </option>
-          ))}
-        </Select>
+        {/*
+          No depth to choose. The PARTNER picks Essentials or Balanced on their
+          own reveal — offering the same choice here made two people responsible
+          for one decision, and whichever of them was overruled had been told
+          something untrue.
+        */}
         <Input
           label="Note"
           value={note}
@@ -132,7 +126,7 @@ export function StarterPanel({ partnerId }: { partnerId: string }) {
           hint="Why this was issued. Yours only — the partner never sees it."
         />
         <div>
-          <Button loading={busy} onClick={() => post({ tier, note })}>
+          <Button loading={busy} onClick={() => post({ note })}>
             Issue a starter
           </Button>
         </div>
@@ -151,7 +145,7 @@ export function StarterPanel({ partnerId }: { partnerId: string }) {
                   {row.code}
                 </p>
                 <p style={{ fontSize: 'var(--text-micro)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
-                  {starterTierLabel(row.tier)} · up to {money(row.goodsCap)} · expires {day(row.expiresAt)}
+                  Up to {money(row.goodsCap)} · expires {day(row.expiresAt)}
                   {row.note ? ` · ${row.note}` : ''}
                 </p>
                 {row.agreement && (
