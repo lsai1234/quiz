@@ -166,7 +166,64 @@ export function StarterStack({ token }: Props = {}) {
       .finally(() => setLoaded(true))
   }, [endpoint])
 
-  if (!loaded || !starter || !agreement) return null
+  if (!loaded) return null
+
+  /*
+    Nothing to claim.
+
+    On the dashboard (no token) this renders nothing at all — most partners have
+    no starter waiting at any given moment, and a permanent empty "your free
+    stack" panel teaches everybody to ignore the place the real offer appears.
+
+    On the CLAIM page it has to say something. That page is a link somebody was
+    sent, and when the link no longer resolves — expired after seven days, the
+    stack already claimed, the partner account removed — the page rendered as a
+    logo and one stray line about setting a password. It looked broken, which is
+    the worst way to tell somebody their link is old.
+
+    Deliberately vague about WHICH of those it was: the endpoint gives one answer
+    to all of them on purpose, because the difference is only useful to somebody
+    trying links. What it can do is say what to do next.
+  */
+  if (!starter || !agreement) {
+    if (!token) return null
+    return (
+      <Card as="section" solid className="mb-4">
+        <h2
+          style={{
+            fontSize: 'var(--text-body-sm)',
+            fontWeight: 'var(--weight-display)',
+            fontFamily: 'var(--font-display)',
+            color: 'var(--ink-1)',
+          }}
+        >
+          This link isn’t active any more
+        </h2>
+        <p
+          style={{
+            fontSize: 'var(--text-meta)',
+            lineHeight: 'var(--leading-snug)',
+            color: 'var(--ink-3)',
+            marginTop: 'var(--space-2)',
+          }}
+        >
+          Either it has expired, or the stack on it has already been claimed. If you have an account with us,
+          you can still get into it — otherwise send us a message and we will sort you out a new link.
+        </p>
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => {
+              window.location.href = `/partner/set-password?token=${encodeURIComponent(token)}`
+            }}
+          >
+            Set a password
+          </Button>
+        </div>
+      </Card>
+    )
+  }
 
   async function sign() {
     if (!starter || !agreement) return

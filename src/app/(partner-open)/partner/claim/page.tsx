@@ -41,21 +41,17 @@ export default async function ClaimPage({
       >
         CHRGD <span style={{ color: 'var(--accent)' }}>Partners</span>
       </p>
-      <StarterStack token={token} />
       {/*
-        The fallback is rendered rather than redirected to, because whether
-        there is anything to claim is only known on the client after the fetch —
-        and a redirect that fires on a slow answer would bounce somebody off the
-        page they were sent. `StarterStack` renders nothing when there is
-        nothing, so this is what is left.
+        `StarterStack` owns the empty state as well as the offer, because it is
+        the only thing here that knows which one applies — the answer arrives
+        from a fetch after this page has rendered.
+
+        This page used to carry a permanent "already claimed? set a password"
+        line underneath instead. Under a live offer it was noise, and when the
+        link had expired it was the entire page: a logo and a stray sentence,
+        which reads as broken rather than as old.
       */}
-      <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)' }}>
-        Already claimed your stack, or here to get back into your account?{' '}
-        <a href={`/partner/set-password?token=${encodeURIComponent(token)}`} style={{ color: 'var(--accent)' }}>
-          Set a password
-        </a>
-        .
-      </p>
+      <StarterStack token={token} />
     </main>
   )
 }

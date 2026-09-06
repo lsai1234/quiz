@@ -123,6 +123,49 @@ describe('deleting a partner', () => {
   })
 })
 
+/**
+ * Deleting a partner puts everything back to before they existed.
+ *
+ * Not just the email — the whole ability to start again. A founder deleting a
+ * test partner and re-adding them must get a clean slate: a new account, a new
+ * starter, unsigned, claimable. Anything of the old partner's that survived
+ * would be a stack somebody could not claim, or one they could claim twice.
+ */
+describe('deleting a partner resets their stack', () => {
+  it('lets the same email be re-added and claim all over again', async () => {
+    const address = email()
+    const first = await createPartner({ email: address, name: 'Round One' })
+    const db = await getEngine()
+    const at = new Date().toISOString()
+    const expires = new Date(Date.now() + 86_400_000).toISOString()
+    // Signed AND spent — the furthest-gone state a starter can be in.
+    await db.run(
+      `INSERT INTO partner_starters (code, partner_id, tier, goods_cap, note, created_by, created_at, expires_at,
+         agreement_id, claim_token, claimed_at, used_at, order_id, revoked_at)
+       VALUES ('PS-ROUNDONE', ?, 'performance', 100, NULL, NULL, ?, ?, 'ag_r1', 'tok', ?, ?, 'ord_r1', NULL)`,
+      [first.id, at, expires, at, at],
+    )
+    await db.run(
+      `INSERT INTO partner_agreements (id, partner_id, code, version, doc_hash, signed_name, handle,
+         deliverables, ip, user_agent, signed_at)
+       VALUES ('ag_r1', ?, 'PS-ROUNDONE', 'v1', 'h', 'Round One', NULL, '[]', NULL, NULL, ?)`,
+      [first.id, at],
+    )
+
+    expect((await deletePartner(first.id)).ok).toBe(true)
+
+    // Nothing of theirs is left to get in the way.
+    for (const table of ['partner_starters', 'partner_agreements']) {
+      expect(await db.all(`SELECT 1 FROM ${table} WHERE partner_id = ?`, [first.id])).toHaveLength(0)
+    }
+
+    // And the same person can be set up from scratch.
+    const second = await createPartner({ email: address, name: 'Round Two' })
+    expect(second.id).not.toBe(first.id)
+    expect(await db.all('SELECT 1 FROM partner_starters WHERE partner_id = ?', [second.id])).toHaveLength(0)
+  })
+})
+
 describe('deleting an order', () => {
   it('removes it outright', async () => {
     const order = await anOrder({ status: 'pending_payment' })
