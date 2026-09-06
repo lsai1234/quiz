@@ -188,7 +188,14 @@ test('a partner claims their stack from a link, with no account and nothing to t
   await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: /sign and unlock/i }).click()
 
-  await expect(page.getByText(/press the button and take the quiz/i)).toBeVisible({ timeout: 15_000 })
+  /*
+    Signed, and the page says so rather than asking again. Step one is ticked
+    with who signed it; step two is now the live one. A partner coming back to
+    this link must never meet the signing form a second time — the server does
+    not even send them the document.
+  */
+  await expect(page.getByText(/signed .* as alex morgan/i)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: /sign and unlock/i })).toHaveCount(0)
   await expect(page.getByText(code)).toHaveCount(0)
 
   // Recorded, and recorded as what the SERVER served — the hash is the point of
