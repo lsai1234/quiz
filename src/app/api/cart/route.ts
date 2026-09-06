@@ -18,6 +18,7 @@ import {
   claimStarterForCheckout,
   markStarterUsed,
   releaseStarter,
+  starterForSession,
 } from '@/lib/partner-starter/redeem'
 import { priceStarterOrder, starterDeliveryOptions } from '@/lib/partner-starter/rules'
 import { deliveryOptions } from '@/lib/pricing/delivery'
@@ -166,12 +167,29 @@ export async function POST(req: Request) {
    * against a named partner, a signed agreement, a channel and a value cap, and
    * anything it refuses is refused with a reason that names the fix.
    */
-  const claimingStarter = body.claimStarter === true
+  /**
+   * Is there really a claim here?
+   *
+   * Asked BEFORE the address is demanded, and that order is the whole point.
+   * The first version required an address the moment the request SAID it was a
+   * claim — so an ordinary shopper carrying a stale flag, or a partner whose
+   * session had lapsed, was refused for a delivery address they were never
+   * asked for and had no form to give. A dead end, on a checkout that should
+   * simply have charged them.
+   *
+   * `starterForSession` is advisory: it resolves who is asking from their
+   * session cookie and takes nothing. Only once it says yes is an address
+   * required, and only then is the claim actually taken.
+   */
+  const available = body.claimStarter === true ? await starterForSession({ channel }) : null
+  if (available && !available.ok) {
+    return NextResponse.json({ error: available.reason, codeRejected: true }, { status: 400 })
+  }
 
   /**
-   * Where a free stack is going — required, and validated here.
+   * Where a free stack is going — required once, and only for a real claim.
    *
-   * ── Why this is not optional ──────────────────────────────────────────────
+   * ── Why it is required at all ─────────────────────────────────────────────
    * Every other journey collects the address at Stripe. A £0.00 order never
    * reaches Stripe, so nothing asks — and the first version of this shipped
    * that way: every claimed order was raised with `shippingAddress: null` and
@@ -188,7 +206,7 @@ export async function POST(req: Request) {
    * verification code to.
    */
   let starterAddress: SupplierAddress | null = null
-  if (claimingStarter) {
+  if (available?.ok) {
     try {
       starterAddress = normaliseShippingAddress((body.shippingAddress ?? {}) as SupplierAddress)
     } catch (err) {
@@ -200,7 +218,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const starterClaim = claimingStarter
+  const starterClaim = available?.ok
     ? await claimStarterForCheckout({
         channel,
         // The list value, not what is being charged — which is zero by

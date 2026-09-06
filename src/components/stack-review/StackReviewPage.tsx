@@ -171,14 +171,32 @@ function StackTierSelector({
                     appears, on the line where every card keeps its one-off, at
                     the size every card keeps it.
                   */}
+                  {/*
+                    "Monthly unavailable" is a REFUSAL, and it only makes sense
+                    where a subscription was on the table and this depth cannot
+                    reach it. Where no subscription is on offer at all — a
+                    partner's free stack — it announces the absence of something
+                    never offered, on the one screen where the only decision is
+                    which of two boxes to take. There, the price is simply the
+                    price.
+                  */}
+                  {!oneOffOnly && (
+                    <div
+                      className="text-[11px] font-bold uppercase tracking-wide mt-1.5 leading-tight"
+                      style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+                    >
+                      Monthly unavailable
+                    </div>
+                  )}
                   <div
-                    className="text-[11px] font-bold uppercase tracking-wide mt-1.5 leading-tight"
-                    style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-display)' }}
+                    className={oneOffOnly ? 'text-sm font-black mt-1.5 leading-none' : 'text-[10px] mt-1 leading-tight'}
+                    style={{
+                      color: 'var(--color-text)',
+                      ...(oneOffOnly ? { fontFamily: 'var(--font-display)' } : {}),
+                    }}
                   >
-                    Monthly unavailable
-                  </div>
-                  <div className="text-[10px] mt-1 leading-tight" style={{ color: 'var(--color-text)' }}>
-                    {formatGBP(oneOff)} one-off
+                    {formatGBP(oneOff)}
+                    {oneOffOnly ? '' : ' one-off'}
                   </div>
                 </>
               )}
@@ -479,8 +497,9 @@ export function StackReviewPage() {
       checkout(activeBlueprint, products, starterPlanType ?? planType, answers, {
         ...subOpts,
         deliveryAddress: deliveryAddress ?? null,
+        claimingStarter: claiming,
       }),
-    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts],
+    [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts, claiming],
   )
 
   /*

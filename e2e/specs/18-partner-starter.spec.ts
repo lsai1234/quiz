@@ -237,8 +237,34 @@ test('a partner claims their stack from a link, with no account and nothing to t
   // free long after the starter itself had expired.
   await expect(page.getByRole('button', { name: /start subscription/i })).toHaveCount(0)
 
-  // ── The order ─────────────────────────────────────────────────────────────
+  /*
+    ── Where it is going ─────────────────────────────────────────────────────
+    A free order never reaches Stripe, which is where every other journey
+    collects an address. Without this step the box is raised with nowhere to go
+    and the fulfilment queue holds it as unshippable — which is exactly how the
+    first version of this journey shipped.
+  */
   await page.getByRole('button', { name: /place my free order/i }).first().click()
+
+  /*
+    Scoped to the FORM, not `.last()`.
+
+    The sticky checkout bar is portalled to the end of the document, so it —
+    not the form's submit — is the last "Place my free order" in the DOM.
+    Clicking that just reopens the form it is already looking at, which is a
+    test that watches nothing happen and then blames the feature.
+  */
+  const form = page.locator('form', { hasText: /where shall we send it/i })
+  await expect(form).toBeVisible()
+  await form.getByLabel(/full name/i).fill('Alex Morgan')
+  await form.getByLabel('Address', { exact: true }).fill('12 Example Street')
+  await form.getByLabel(/town or city/i).fill('Manchester')
+  await form.getByLabel(/postcode/i).fill('M1 2AB')
+  await form.getByLabel(/^email$/i).fill('alex@example.invalid')
+
+  const submit = form.getByRole('button', { name: /place my free order/i })
+  await expect(submit).toBeEnabled()
+  await submit.click()
 
   /*
     The real success heading, not a loose regex.

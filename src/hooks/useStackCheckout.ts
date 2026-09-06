@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
-import { isClaimingStarter } from '@/lib/partner-starter/handoff'
 import type { SupplierAddress } from '@/lib/supplier/types'
 import {
   validateCheckout,
@@ -189,6 +188,19 @@ export function useStackCheckout() {
          * fulfilment queue holds it as unshippable.
          */
         deliveryAddress?: SupplierAddress | null
+        /**
+         * Whether this checkout is a partner's confirmed claim.
+         *
+         * The CONFIRMED state, from `/api/partner/claimable` — deliberately not
+         * the `sessionStorage` flag, which this hook used to read for itself.
+         * The flag is a raw intent that survives a lapsed session, so reading it
+         * here made an ordinary shopper's checkout announce itself as a claim
+         * and get refused for a delivery address they were never asked for.
+         *
+         * The server re-resolves whose claim it is regardless; this only says
+         * which of the two things the page believes it is doing.
+         */
+        claimingStarter?: boolean
       } = {},
     ) => {
       setState({ status: 'loading' })
@@ -254,7 +266,7 @@ export function useStackCheckout() {
               so this only says which of their two possible intents the checkout
               is serving.
             */
-            claimStarter: isClaimingStarter(),
+            claimStarter: subOpts.claimingStarter === true,
             // Collected in the page, because a free order never reaches the
             // Stripe form that normally asks for it.
             shippingAddress: subOpts.deliveryAddress ?? null,
