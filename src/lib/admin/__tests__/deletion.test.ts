@@ -7,7 +7,13 @@
  * database, and deleting our row changes none of it — it only means nobody here
  * can see what happened.
  */
-import { createPartner, insertCommission, listCommissions, getPartner } from '@/lib/partners/repo'
+import { insertCommission, listCommissions, getPartner } from '@/lib/partners/repo'
+// The FULL creation — account, code, opening terms and starter — which is what a
+// founder pressing "Add partner" actually runs. `repo.createPartner` makes the
+// row alone, and testing against that would miss the thing that broke.
+import { createPartner as createPartnerRecord } from '@/lib/partners'
+import { listStartersForPartner } from '@/lib/partner-starter/repo'
+import { starterState } from '@/lib/partner-starter/rules'
 import { createOrderFromCheckout } from '@/lib/orders/service'
 import { getOrder } from '@/lib/orders/repo'
 import { getEngine } from '@/lib/db/engine'
@@ -21,6 +27,10 @@ import {
 
 let n = 0
 const email = () => `p${n++}-${Math.random().toString(36).slice(2)}@example.invalid`
+
+/** The account itself, out of the record the full creation returns. */
+const createPartner = async (input: { email: string; name: string }) =>
+  (await createPartnerRecord(input)).partner
 
 const line = { sku: 'X', productId: 'p', title: 'Creatine', variantTitle: null, quantity: 1, unitPrice: 20, supplierCost: 9 }
 
@@ -132,6 +142,32 @@ describe('deleting a partner', () => {
  * would be a stack somebody could not claim, or one they could claim twice.
  */
 describe('deleting a partner resets their stack', () => {
+  /*
+    The founder's actual steps, in order, and the state that broke.
+
+    Delete a partner, re-add them with the same email and code, send them their
+    link — and the partner could not claim, because a re-added account came back
+    with no starter on it and the claim page told them the link had expired. The
+    link was fine. There was nothing on it, and nothing said so.
+
+    Creating a partner now issues the starter with the account, which is what
+    makes "add a partner" mean "they can claim a stack".
+  */
+  it('re-adding the same email gives them a claimable stack straight away', async () => {
+    const address = email()
+    const first = await createPartner({ email: address, name: 'Round One' })
+    expect((await deletePartner(first.id)).ok).toBe(true)
+
+    const second = await createPartner({ email: address, name: 'Round One' })
+    const starters = await listStartersForPartner(second.id)
+
+    expect(starters).toHaveLength(1)
+    expect(starterState(starters[0])).toBe('unsigned')
+    expect(starters[0].goodsCap).toBe(100)
+    // Their own, not the deleted account's.
+    expect(starters[0].partnerId).toBe(second.id)
+  })
+
   it('lets the same email be re-added and claim all over again', async () => {
     const address = email()
     const first = await createPartner({ email: address, name: 'Round One' })
@@ -159,10 +195,17 @@ describe('deleting a partner resets their stack', () => {
       expect(await db.all(`SELECT 1 FROM ${table} WHERE partner_id = ?`, [first.id])).toHaveLength(0)
     }
 
-    // And the same person can be set up from scratch.
+    /*
+      And the same person can be set up from scratch — with a stack waiting.
+
+      This asserted ZERO starters when it was written, which was the bug rather
+      than the requirement: a re-added partner came back with nothing to claim
+      and a link that told them it had expired.
+    */
     const second = await createPartner({ email: address, name: 'Round Two' })
     expect(second.id).not.toBe(first.id)
-    expect(await db.all('SELECT 1 FROM partner_starters WHERE partner_id = ?', [second.id])).toHaveLength(0)
+    const fresh = await db.all('SELECT 1 FROM partner_starters WHERE partner_id = ?', [second.id])
+    expect(fresh).toHaveLength(1)
   })
 })
 

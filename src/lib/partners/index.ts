@@ -53,6 +53,34 @@ export async function createPartner(input: {
 
   const opening = await repo.addTerms({ ...defaultTerms(), partnerId: partner.id, createdBy: input.createdBy ?? null })
 
+  /*
+    Their free stack, issued with the account.
+
+    A partner is somebody we have chosen and are offering a stack to — that is
+    what the outreach message says — so "add a partner" should mean they can
+    claim one, not that a founder now has a second step to remember.
+
+    It was that second step, and the gap showed up the first time somebody
+    deleted a partner and re-added them with the same email: the account came
+    back, the code came back, the link resolved, and the claim page told them it
+    had expired. The link was fine. There was simply nothing on it.
+
+    Issuing gives nothing away on its own — a starter buys nothing until the
+    partner has signed the agreement (see `lib/partner-starter`) — which is what
+    makes it safe to do here rather than a decision to defer. A founder who does
+    not want it can revoke it in one tap.
+
+    Non-fatal on purpose: a partner without a starter is recoverable in the hub,
+    and failing the whole creation over it would lose the account, the code and
+    the terms as well.
+  */
+  try {
+    const { createStarter } = await import('@/lib/partner-starter/repo')
+    await createStarter({ partnerId: partner.id, tier: 'performance', createdBy: input.createdBy ?? null })
+  } catch (err) {
+    console.error('[partners] could not issue the starter stack:', err)
+  }
+
   return { partner, codes: [created], terms: opening, termsHistory: [opening] }
 }
 

@@ -142,6 +142,8 @@ export function StarterStack({ token }: Props = {}) {
 
   const [starter, setStarter] = useState<Starter | null>(null)
   const [partnerCode, setPartnerCode] = useState<string | null>(null)
+  /** `dead` — the link no longer resolves. `live` — it does, but has nothing on it. */
+  const [link, setLink] = useState<'dead' | 'live'>('dead')
   const [agreement, setAgreement] = useState<Agreement | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [name, setName] = useState('')
@@ -153,11 +155,19 @@ export function StarterStack({ token }: Props = {}) {
   useEffect(() => {
     fetch(endpoint, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('unauthorised'))))
-      .then((d: { starter: Starter | null; agreement?: Agreement; partnerCode?: string | null }) => {
-        setStarter(d.starter)
-        setAgreement(d.agreement ?? null)
-        setPartnerCode(d.partnerCode ?? null)
-      })
+      .then(
+        (d: {
+          starter: Starter | null
+          agreement?: Agreement
+          partnerCode?: string | null
+          link?: 'dead' | 'live'
+        }) => {
+          setStarter(d.starter)
+          setAgreement(d.agreement ?? null)
+          setPartnerCode(d.partnerCode ?? null)
+          setLink(d.link ?? 'dead')
+        },
+      )
       .catch(() => {
         /* The panel simply does not appear. Nothing else on the page depends
            on it, and an error box about a stack they may not have been offered
@@ -197,7 +207,7 @@ export function StarterStack({ token }: Props = {}) {
             color: 'var(--ink-1)',
           }}
         >
-          This link isn’t active any more
+          {link === 'live' ? 'Your stack isn’t ready yet' : 'This link isn’t active any more'}
         </h2>
         <p
           style={{
@@ -207,8 +217,11 @@ export function StarterStack({ token }: Props = {}) {
             marginTop: 'var(--space-2)',
           }}
         >
-          Either it has expired, or the stack on it has already been claimed. If you have an account with us,
-          you can still get into it — otherwise send us a message and we will sort you out a new link.
+          {link === 'live'
+            ? /* Their link is fine — there is simply nothing on it. Saying "expired"
+                 here sent people to ask for a new link they already had. */
+              'Your link works, but there is no stack waiting on it just now. Give us a shout and we will get one on there for you.'
+            : 'Either it has expired, or the stack on it has already been claimed. If you have an account with us, you can still get into it — otherwise send us a message and we will sort you out a new link.'}
         </p>
         <div style={{ marginTop: 'var(--space-4)' }}>
           <Button

@@ -56,16 +56,30 @@ async function resolve(token: string | null) {
 export async function GET(req: Request) {
   const token = new URL(req.url).searchParams.get('token')
   const found = await resolve(token)
-  // One answer for a bad token, an expired one, a suspended partner and one
-  // with nothing to claim. Which of those it was is only useful to somebody
-  // trying links, and the page has one thing to say either way.
-  if (!found || !found.starter) return NextResponse.json({ starter: null })
+
+  /*
+    One answer for a bad token, an expired one and a suspended partner: which of
+    those it was is only useful to somebody trying links.
+
+    A LIVE link with nothing on it is a different thing, and it is safe to say
+    so — anybody asking already holds a working token for that partner, so there
+    is nothing left to enumerate. It matters because the page said "this link
+    has expired or the stack has been claimed" to a partner whose link was
+    perfectly good and simply had no starter on it yet. That is the state a
+    founder lands in the moment they re-add somebody, and being told the wrong
+    reason sends them looking in the wrong place.
+  */
+  if (!found) return NextResponse.json({ link: 'dead', starter: null })
+  if (!found.starter) {
+    return NextResponse.json({ link: 'live', partnerName: found.partner.name, starter: null })
+  }
 
   const { partner, starter } = found
   const { text, version, context } = await agreementFor(partner, starter)
   const state = starterState(starter)
 
   return NextResponse.json({
+    link: 'live',
     partnerName: partner.name,
     /* See the note in `/api/partner/starter` — the code they just agreed to
        post, handed back so the journey does not end without it. */
