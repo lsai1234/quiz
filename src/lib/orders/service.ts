@@ -547,7 +547,19 @@ function oneLineAddress(a: SupplierAddress): string {
  * and the postcode — so the check belongs here, where a person is looking at
  * the form and can actually supply the missing one.
  */
-function normaliseShippingAddress(input: SupplierAddress): SupplierAddress {
+/**
+ * Clean a delivery address, or say what is wrong with it.
+ *
+ * Exported because there are now two ways an address reaches an order — a
+ * founder typing one into the hub, and a partner typing one into their own
+ * free-stack checkout — and they must be judged identically. An address good
+ * enough for one and not the other is an order that looks fine until the day
+ * somebody tries to send it.
+ *
+ * Throws rather than returning a result, because every caller's answer to a bad
+ * address is the same: stop, and say this sentence.
+ */
+export function normaliseShippingAddress(input: SupplierAddress): SupplierAddress {
   const text = (v: string | null | undefined) => (v ?? '').trim()
   const name = text(input.name)
   const line1 = text(input.line1)

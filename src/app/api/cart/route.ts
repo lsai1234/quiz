@@ -3,7 +3,7 @@ import { getPaymentSource } from '@/lib/payments'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { getHubUser } from '@/lib/auth/session'
 import { getSubscription } from '@/lib/db/hub-data'
-import { createOrderFromCheckout, newOrderId } from '@/lib/orders/service'
+import { createOrderFromCheckout, newOrderId, normaliseShippingAddress } from '@/lib/orders/service'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import { formatGBP, getPricingConfig, priceOneOffLines, unitCostOf } from '@/lib/stack-blueprint/pricing'
 import { redeemPartnerCode, recordCodeUse } from '@/lib/partners/redeem'
@@ -22,6 +22,7 @@ import {
 import { priceStarterOrder, starterDeliveryOptions } from '@/lib/partner-starter/rules'
 import { deliveryOptions } from '@/lib/pricing/delivery'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
+import type { SupplierAddress } from '@/lib/supplier/types'
 import type { OrderChannel, OrderLine } from '@/lib/orders/types'
 
 /**
@@ -55,7 +56,12 @@ function originFrom(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  let body: { lines?: unknown; partnerCode?: unknown; claimStarter?: unknown }
+  let body: {
+    lines?: unknown
+    partnerCode?: unknown
+    claimStarter?: unknown
+    shippingAddress?: unknown
+  }
   try {
     body = await req.json()
   } catch {
@@ -161,6 +167,39 @@ export async function POST(req: Request) {
    * anything it refuses is refused with a reason that names the fix.
    */
   const claimingStarter = body.claimStarter === true
+
+  /**
+   * Where a free stack is going — required, and validated here.
+   *
+   * ── Why this is not optional ──────────────────────────────────────────────
+   * Every other journey collects the address at Stripe. A £0.00 order never
+   * reaches Stripe, so nothing asks — and the first version of this shipped
+   * that way: every claimed order was raised with `shippingAddress: null` and
+   * `email: null`, which the fulfilment queue holds as unshippable
+   * (`isBlocked`). The box had nowhere to go and the only way to send it was to
+   * chase the partner by hand.
+   *
+   * ── Why the same function the hub uses ────────────────────────────────────
+   * `normaliseShippingAddress` is what a founder's typed address goes through.
+   * An address good enough for one entry point and not the other is an order
+   * that looks fine until the day somebody tries to send it. It also enforces
+   * the two rules that are easy to miss and expensive to discover: PowerBody
+   * ship within the UK only, and a courier needs a phone or an email to send a
+   * verification code to.
+   */
+  let starterAddress: SupplierAddress | null = null
+  if (claimingStarter) {
+    try {
+      starterAddress = normaliseShippingAddress((body.shippingAddress ?? {}) as SupplierAddress)
+    } catch (err) {
+      // The message names the missing field, so it is the one to show.
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : 'That delivery address will not work.' },
+        { status: 400 },
+      )
+    }
+  }
+
   const starterClaim = claimingStarter
     ? await claimStarterForCheckout({
         channel,
@@ -341,7 +380,18 @@ export async function POST(req: Request) {
    * code would mean the answer disappeared the day the code was tidied up.
    */
   const starterFields = starter
-    ? { starterCode: starter.starter.code, starterPartnerId: starter.starter.partnerId }
+    ? {
+        starterCode: starter.starter.code,
+        starterPartnerId: starter.starter.partnerId,
+        shippingAddress: starterAddress,
+        /*
+          The recipient's email, onto the ORDER as well as the address.
+          `order.email` is what the confirmation is sent to and what the hub
+          searches by; without it a claimed order is a box with a destination
+          and no way to tell anybody it is coming.
+        */
+        email: starterAddress?.email ?? null,
+      }
     : {}
 
   /**

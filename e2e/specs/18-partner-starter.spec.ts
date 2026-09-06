@@ -125,15 +125,30 @@ function signIn(partnerId: string): string {
 }
 
 /** The newest order in the database, for asserting what was actually charged. */
-function lastOrder(): { total: number; starterCode: string | null } | null {
+function lastOrder(): {
+  total: number
+  starterCode: string | null
+  email: string | null
+  address: { line1?: string; postcode?: string } | null
+} | null {
   const db = new Database(DB)
   const row = db.prepare('SELECT data FROM orders ORDER BY created_at DESC LIMIT 1').get() as
     | { data: string }
     | undefined
   db.close()
   if (!row) return null
-  const parsed = JSON.parse(row.data) as { total: number; starterCode?: string | null }
-  return { total: parsed.total, starterCode: parsed.starterCode ?? null }
+  const parsed = JSON.parse(row.data) as {
+    total: number
+    starterCode?: string | null
+    email?: string | null
+    shippingAddress?: { line1?: string; postcode?: string } | null
+  }
+  return {
+    total: parsed.total,
+    starterCode: parsed.starterCode ?? null,
+    email: parsed.email ?? null,
+    address: parsed.shippingAddress ?? null,
+  }
 }
 
 function read(code: string) {
@@ -239,6 +254,15 @@ test('a partner claims their stack from a link, with no account and nothing to t
   // just before it — the two are close enough to race on a slow machine.
   await expect.poll(() => read(code).row?.used_at, { timeout: 15_000 }).not.toBeNull()
   expect(read(code).row?.order_id).not.toBeNull()
+
+  // The box has somewhere to go and somebody to tell. Without both, the
+  // fulfilment queue treats the order as blocked and nothing can be sent — and
+  // that is exactly how the first version of this journey shipped.
+  const placed = lastOrder()
+  expect(placed?.total).toBe(0)
+  expect(placed?.address?.line1).toBe('12 Example Street')
+  expect(placed?.address?.postcode).toBe('M1 2AB')
+  expect(placed?.email).toBe('alex@example.invalid')
 })
 
 /**

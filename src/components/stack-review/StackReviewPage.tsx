@@ -28,6 +28,8 @@ import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
 import { clearClaim, isClaimingStarter } from '@/lib/partner-starter/handoff'
+import { StarterDeliveryForm } from './StarterDeliveryForm'
+import type { SupplierAddress } from '@/lib/supplier/types'
 import {
   STARTER_GOODS_CAP,
   STARTER_MIN_STEP,
@@ -68,12 +70,21 @@ const GOAL_LABEL: Partial<Record<Goal, string>> = {
  * folds the rest rather than showing the same stack twice.
  */
 function StackTierSelector({
-  tiers, current, minMonthly, onChange,
+  tiers, current, minMonthly, oneOffOnly = false, onChange,
 }: {
   tiers: TierPlan[]
   current: StackLevel
   /** The monthly floor a subscription has to clear to be offerable at all. */
   minMonthly: number
+  /**
+   * Show the one-off price alone, with no monthly figure.
+   *
+   * For a partner's free stack, which is one box and never a plan. Leading with
+   * "£45/mo · Subscription" on a depth nobody in this journey can subscribe to
+   * advertises a product that is not for sale on this screen — and puts the
+   * wrong number in front of the one decision they are actually making.
+   */
+  oneOffOnly?: boolean
   onChange: (level: StackLevel) => void
 }) {
   return (
@@ -88,7 +99,7 @@ function StackTierSelector({
           const active = current === level
           // A subscription this small cannot be placed, so this depth has no
           // monthly price to advertise. Same floor the plan tab enforces.
-          const canSub = monthly > 0 && monthly >= minMonthly
+          const canSub = !oneOffOnly && monthly > 0 && monthly >= minMonthly
           return (
             <button
               key={level}
@@ -453,17 +464,37 @@ export function StackReviewPage() {
     which knows nothing about starters and would put a partner onto a paid
     recurring plan.
   */
-  const handleCheckout = useCallback(
-    () =>
-      checkout(
-        activeBlueprint,
-        products,
-        starterPlanType ?? planType,
-        answers,
-        subOpts,
-      ),
+  /*
+    A claim asks for an address before it orders.
+
+    Every other journey collects one at Stripe. A free order never gets there,
+    so if this step did not exist the box would be raised with nowhere to go —
+    which is exactly how the first version shipped, and every claimed order sat
+    in the fulfilment queue unshippable.
+  */
+  const [addressOpen, setAddressOpen] = useState(false)
+
+  const placeOrder = useCallback(
+    (deliveryAddress?: SupplierAddress | null) =>
+      checkout(activeBlueprint, products, starterPlanType ?? planType, answers, {
+        ...subOpts,
+        deliveryAddress: deliveryAddress ?? null,
+      }),
     [checkout, activeBlueprint, products, starterPlanType, planType, answers, subOpts],
   )
+
+  /*
+    One button, two meanings. For a claim it opens the address form; for
+    everybody else it is the checkout it has always been — they give their
+    address to Stripe on the next screen.
+  */
+  const handleCheckout = useCallback(() => {
+    if (claiming) {
+      setAddressOpen(true)
+      return
+    }
+    void placeOrder()
+  }, [claiming, placeOrder])
 
   // Shared top-trumps axes for the deck — the user's own goals, so every card
   // compares on the same footing.
@@ -725,6 +756,7 @@ export function StackReviewPage() {
               tiers={tierPlans}
               current={activeLevel}
               minMonthly={getPricingConfig().minSubscriptionMonthly}
+              oneOffOnly={claiming}
               onChange={setStackLevel}
             />
           </div>
@@ -814,6 +846,19 @@ export function StackReviewPage() {
             isLoading={checkoutState.status === 'loading'}
             onCtaRef={setCtaEl}
           />
+
+          {/* The one form in the whole claim journey, and only for a claim. */}
+          {claiming && addressOpen && (
+            <StarterDeliveryForm
+              busy={checkoutState.status === 'loading'}
+              error={checkoutState.status === 'error' ? checkoutState.messages[0] : null}
+              onCancel={() => {
+                setAddressOpen(false)
+                resetCheckout()
+              }}
+              onSubmit={(address) => void placeOrder(address)}
+            />
+          )}
 
           {/*
             Delivery detail and quantities.

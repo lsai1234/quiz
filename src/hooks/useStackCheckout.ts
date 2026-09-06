@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { isClaimingStarter } from '@/lib/partner-starter/handoff'
+import type { SupplierAddress } from '@/lib/supplier/types'
 import {
   validateCheckout,
   validationErrorMessage,
@@ -179,6 +180,15 @@ export function useStackCheckout() {
         partnerCode?: string | null
         /** Its rate, for the displayed totals only. The server decides the real one. */
         partnerDiscountPct?: number | null
+        /**
+         * Where a free stack is going.
+         *
+         * One-off claims only. Every other journey collects the address at
+         * Stripe, which is why none of them pass this — but a £0.00 order never
+         * reaches Stripe, so without it the box has nowhere to go and the
+         * fulfilment queue holds it as unshippable.
+         */
+        deliveryAddress?: SupplierAddress | null
       } = {},
     ) => {
       setState({ status: 'loading' })
@@ -245,6 +255,9 @@ export function useStackCheckout() {
               is serving.
             */
             claimStarter: isClaimingStarter(),
+            // Collected in the page, because a free order never reaches the
+            // Stripe form that normally asks for it.
+            shippingAddress: subOpts.deliveryAddress ?? null,
           }),
         })
         const data: { checkoutUrl?: string; mock?: boolean; error?: string } | null =
