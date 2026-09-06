@@ -6,7 +6,6 @@ import { markClaimingStarter } from '@/lib/partner-starter/handoff'
 import type { Deliverable, StarterState } from '@/lib/partner-starter/types'
 
 interface Starter {
-  code: string | null
   goodsCap: number
   expiresAt: string
   state: StarterState
@@ -16,8 +15,32 @@ interface Agreement {
   version: string
   text: string
   deliverables: Deliverable[]
-  signedAt: string | null
-  signedName: string | null
+}
+
+/** What they signed, once they have. */
+interface Signature {
+  at: string
+  name: string
+  handle: string | null
+}
+
+/** Their order, in the four words a partner cares about. */
+interface OrderStatus {
+  reference: string
+  placedAt: string
+  stage: string
+}
+
+interface Payload {
+  link?: 'dead' | 'live'
+  linkExpiresAt?: string
+  partnerName?: string
+  partnerCode?: string | null
+  hasPassword?: boolean
+  starter: Starter | null
+  signed?: Signature | null
+  order?: OrderStatus | null
+  agreement?: Agreement | null
 }
 
 const money = (n: number) => `£${n.toFixed(2)}`
@@ -99,36 +122,104 @@ function CopyRow({ label, value }: { label: string; value: string }) {
 const day = (iso: string) =>
   new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
 
+
 /**
- * A partner's own stack, free — and the agreement that turns it on.
+ * How long is left on this link, in words somebody can act on.
  *
- * ── Why the signature is here and not in an email ───────────────────────────
- * Because the free box and the promise it is given for are the same
- * transaction, and separating them makes one of the two optional. A code sent
- * by email is spendable the moment it arrives; an agreement emailed alongside
- * it is a PDF somebody means to get round to. Here the code does not exist on
- * screen until the name is typed, which is the smallest possible version of
- * "signed first".
- *
- * ── Why the whole agreement is on the page ──────────────────────────────────
- * Not a link, not a modal, not a scroll box with a tick under it. It is a page
- * of plain text and it is short on purpose — a document nobody read is weak
- * evidence whatever it says, and the ones people actually read are the ones
- * that fit on the screen they are already looking at.
- *
- * ── Why it renders nothing when there is no starter ─────────────────────────
- * Most partners will not have one at any given moment, and a permanent empty
- * "your free stack" panel teaches everybody to ignore the place the real offer
- * eventually appears.
+ * Days while there are days, hours once there are not, and "less than an hour"
+ * at the end rather than a number that rounds to zero while the link still
+ * works. The point is to prompt, not to be a clock.
  */
+function timeLeft(iso: string, now = Date.now()): string | null {
+  const ms = new Date(iso).getTime() - now
+  if (!Number.isFinite(ms) || ms <= 0) return null
+  const hours = Math.floor(ms / 3_600_000)
+  if (hours >= 48) return `${Math.floor(hours / 24)} days left`
+  if (hours >= 1) return `${hours} hour${hours === 1 ? '' : 's'} left`
+  return 'less than an hour left'
+}
+
+/** One line of the checklist. The tick is the whole point of the thing. */
+function Step({
+  n,
+  title,
+  done,
+  locked,
+  children,
+}: {
+  n: number
+  title: string
+  done?: boolean
+  locked?: boolean
+  children?: React.ReactNode
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: 'var(--space-3)',
+        paddingTop: 'var(--space-4)',
+        opacity: locked ? 0.5 : 1,
+      }}
+    >
+      <div
+        aria-hidden
+        style={{
+          flexShrink: 0,
+          width: 24,
+          height: 24,
+          borderRadius: 'var(--r-pill, 999px)',
+          display: 'grid',
+          placeItems: 'center',
+          fontSize: 'var(--text-micro)',
+          fontWeight: 'var(--weight-strong)',
+          background: done ? 'var(--tone-positive)' : 'var(--surface-2)',
+          color: done ? 'var(--ink-on-accent)' : 'var(--ink-3)',
+          border: done ? 'none' : '1px solid var(--edge)',
+        }}
+      >
+        {done ? '✓' : n}
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p
+          style={{
+            fontSize: 'var(--text-body-sm)',
+            fontWeight: 'var(--weight-strong)',
+            color: 'var(--ink-1)',
+            textDecoration: done ? 'line-through' : undefined,
+          }}
+        >
+          {title}
+        </p>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/** Quieter text under a step. */
+function StepNote({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      style={{
+        fontSize: 'var(--text-meta)',
+        lineHeight: 'var(--leading-snug)',
+        color: 'var(--ink-3)',
+        marginTop: 'var(--space-1)',
+      }}
+    >
+      {children}
+    </p>
+  )
+}
+
 interface Props {
   /**
    * An invite token, when this is being read by somebody with no account yet.
    *
    * The same panel serves both doors deliberately. A partner who taps the link
-   * in a DM and one who signs in later are reading the same offer and signing
-   * the same document; two components would be two places for that document to
-   * drift.
+   * in a DM and one who signs in later are looking at the same three things;
+   * two components would be two places for them to drift.
    *
    * With a token it talks to `/api/partner/claim`, which authenticates on the
    * token; without one, to `/api/partner/starter`, which uses the session.
@@ -136,15 +227,36 @@ interface Props {
   token?: string
 }
 
+/**
+ * A partner's stack: what they have, and what is left to do.
+ *
+ * ── Why this is a checklist and not a form ──────────────────────────────────
+ * It was a form, and a form only knows one state: the thing it wants. So a
+ * partner who had signed, claimed and ordered came back to their own link and
+ * met the signing page again — or, once the starter was spent, a page telling
+ * them there was no stack waiting. They had done everything, and the only screen
+ * that was theirs said neither of those things back to them.
+ *
+ * The link is the one URL a partner keeps, so it has to be a place rather than a
+ * step. Three things, in the order they happen, each showing its own state:
+ * sign, claim, and get into the account. What is done is ticked and stays
+ * ticked; what is next is the only thing asking for anything.
+ *
+ * ── Why the countdown is on step three ──────────────────────────────────────
+ * The link expires, and everything they can still do with it goes at the same
+ * moment. Setting a password is the one act that outlives it — do it and they
+ * have an account; leave it and a week later they are messaging us for a new
+ * link. A date they can see is the difference between those two.
+ *
+ * ── Why the agreement is only fetched when unsigned ─────────────────────────
+ * The server sends the document only when there is something to sign, so this
+ * screen cannot ask a second time even by mistake. See `/api/partner/claim`.
+ */
 export function StarterStack({ token }: Props = {}) {
   const endpoint = token ? `/api/partner/claim?token=${encodeURIComponent(token)}` : '/api/partner/starter'
   const postTo = token ? '/api/partner/claim' : '/api/partner/starter'
 
-  const [starter, setStarter] = useState<Starter | null>(null)
-  const [partnerCode, setPartnerCode] = useState<string | null>(null)
-  /** `dead` — the link no longer resolves. `live` — it does, but has nothing on it. */
-  const [link, setLink] = useState<'dead' | 'live'>('dead')
-  const [agreement, setAgreement] = useState<Agreement | null>(null)
+  const [data, setData] = useState<Payload | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [name, setName] = useState('')
   const [handle, setHandle] = useState('')
@@ -155,110 +267,38 @@ export function StarterStack({ token }: Props = {}) {
   useEffect(() => {
     fetch(endpoint, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('unauthorised'))))
-      .then(
-        (d: {
-          starter: Starter | null
-          agreement?: Agreement
-          partnerCode?: string | null
-          link?: 'dead' | 'live'
-        }) => {
-          setStarter(d.starter)
-          setAgreement(d.agreement ?? null)
-          setPartnerCode(d.partnerCode ?? null)
-          setLink(d.link ?? 'dead')
-        },
-      )
+      .then((d: Payload) => setData(d))
       .catch(() => {
-        /* The panel simply does not appear. Nothing else on the page depends
-           on it, and an error box about a stack they may not have been offered
-           is noise. */
+        /* The panel does not appear. Nothing else on the page depends on it,
+           and an error box about a stack they may not have been offered is
+           noise. */
       })
       .finally(() => setLoaded(true))
   }, [endpoint])
 
-  if (!loaded) return null
-
-  /*
-    Nothing to claim.
-
-    On the dashboard (no token) this renders nothing at all — most partners have
-    no starter waiting at any given moment, and a permanent empty "your free
-    stack" panel teaches everybody to ignore the place the real offer appears.
-
-    On the CLAIM page it has to say something. That page is a link somebody was
-    sent, and when the link no longer resolves — expired after seven days, the
-    stack already claimed, the partner account removed — the page rendered as a
-    logo and one stray line about setting a password. It looked broken, which is
-    the worst way to tell somebody their link is old.
-
-    Deliberately vague about WHICH of those it was: the endpoint gives one answer
-    to all of them on purpose, because the difference is only useful to somebody
-    trying links. What it can do is say what to do next.
-  */
-  if (!starter || !agreement) {
-    if (!token) return null
-    return (
-      <Card as="section" solid className="mb-4">
-        <h2
-          style={{
-            fontSize: 'var(--text-body-sm)',
-            fontWeight: 'var(--weight-display)',
-            fontFamily: 'var(--font-display)',
-            color: 'var(--ink-1)',
-          }}
-        >
-          {link === 'live' ? 'Your stack isn’t ready yet' : 'This link isn’t active any more'}
-        </h2>
-        <p
-          style={{
-            fontSize: 'var(--text-meta)',
-            lineHeight: 'var(--leading-snug)',
-            color: 'var(--ink-3)',
-            marginTop: 'var(--space-2)',
-          }}
-        >
-          {link === 'live'
-            ? /* Their link is fine — there is simply nothing on it. Saying "expired"
-                 here sent people to ask for a new link they already had. */
-              'Your link works, but there is no stack waiting on it just now. Give us a shout and we will get one on there for you.'
-            : 'Either it has expired, or the stack on it has already been claimed. If you have an account with us, you can still get into it — otherwise send us a message and we will sort you out a new link.'}
-        </p>
-        <div style={{ marginTop: 'var(--space-4)' }}>
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={() => {
-              window.location.href = `/partner/set-password?token=${encodeURIComponent(token)}`
-            }}
-          >
-            Set a password
-          </Button>
-        </div>
-      </Card>
-    )
-  }
-
   async function sign() {
-    if (!starter || !agreement) return
+    if (!data?.agreement) return
     setBusy(true)
     setError(null)
     try {
       const res = await fetch(postTo, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signedName: name, handle, version: agreement.version, token }),
+        body: JSON.stringify({ signedName: name, handle, version: data.agreement.version, token }),
       })
-      const data: { ok?: boolean; code?: string; signedAt?: string; error?: string; staleVersion?: boolean } =
-        await res.json()
-      if (!res.ok || !data.ok) {
-        setError(data.error ?? 'That didn’t go through. Try again.')
+      const body: { ok?: boolean; error?: string; staleVersion?: boolean } = await res.json()
+      if (!res.ok || !body.ok) {
+        setError(body.error ?? 'That didn’t go through. Try again.')
         // The wording changed under them. Reloading is the honest fix: what
         // they are looking at is not what they would be signing.
-        if (data.staleVersion) setTimeout(() => window.location.reload(), 2500)
+        if (body.staleVersion) setTimeout(() => window.location.reload(), 2500)
         return
       }
-      setStarter({ ...starter, code: data.code ?? null, state: 'ready' })
-      setAgreement({ ...agreement, signedAt: data.signedAt ?? new Date().toISOString(), signedName: name })
+      // Re-read rather than patch: the server now knows things this screen
+      // does not — whether a session was opened, what the code is — and one
+      // source of truth beats two that agree until they do not.
+      const fresh = await fetch(endpoint, { cache: 'no-store' }).then((r) => r.json())
+      setData(fresh as Payload)
     } catch {
       setError('Couldn’t reach us just then. Try again.')
     } finally {
@@ -266,222 +306,267 @@ export function StarterStack({ token }: Props = {}) {
     }
   }
 
-  const signed = starter.state === 'ready'
+  if (!loaded) return null
+
+  /*
+    A link that no longer resolves. On the dashboard (no token) there is no link
+    to be dead, so this cannot be reached there.
+  */
+  if (data?.link === 'dead') {
+    if (!token) return null
+    return (
+      <Card as="section" solid className="mb-4">
+        <h2 style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+          This link isn’t active any more
+        </h2>
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
+          Links last a week, and are spent once a password has been set with one. If you already have an
+          account you can sign in — otherwise send us a message and we will sort you out a new one.
+        </p>
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          <Button size="sm" variant="secondary" onClick={() => { window.location.href = '/partner' }}>
+            Sign in
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  const starter = data?.starter ?? null
+
+  /*
+    A live link with nothing on it. Worth saying out loud rather than guessing
+    at "expired": this is what a partner sees the moment they are re-added
+    before a stack has been issued, and being told the wrong reason sends
+    everybody looking in the wrong place.
+  */
+  if (!starter) {
+    if (!token) return null
+    return (
+      <Card as="section" solid className="mb-4">
+        <h2 style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+          Your stack isn’t ready yet
+        </h2>
+        <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-2)' }}>
+          Your link works, but there is no stack waiting on it just now. Give us a shout and we will get one
+          on there for you.
+        </p>
+      </Card>
+    )
+  }
+
+  const signed = data?.signed ?? null
+  const order = data?.order ?? null
+  const claimed = starter.state === 'used' || !!order
+  const partnerCode = data?.partnerCode ?? null
+  const left = data?.linkExpiresAt ? timeLeft(data.linkExpiresAt) : null
 
   return (
     <Card as="section" solid className="mb-4">
       <div className="flex items-start justify-between" style={{ gap: 'var(--space-3)' }}>
         <div style={{ minWidth: 0 }}>
-          <h2
-            style={{
-              fontSize: 'var(--text-body-sm)',
-              fontWeight: 'var(--weight-display)',
-              fontFamily: 'var(--font-display)',
-              color: 'var(--ink-1)',
-            }}
-          >
+          <h2 style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
             Your stack, on us
           </h2>
-          <p
-            style={{
-              fontSize: 'var(--text-meta)',
-              lineHeight: 'var(--leading-snug)',
-              color: 'var(--ink-3)',
-              marginTop: 'var(--space-1)',
-            }}
-          >
-            Take the quiz and it builds you two — Essentials and Balanced. Pick either; both come in under{' '}
-            {money(starter.goodsCap)} of products, delivery included. Nothing to pay and no card needed. Yours
-            until {day(starter.expiresAt)}.
+          <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+            {claimed
+              ? 'Claimed. Here is where it is up to, and what to post.'
+              : `Essentials or Balanced, both under ${money(starter.goodsCap)} of products, delivery included. Nothing to pay and no card needed.`}
           </p>
         </div>
-        <Badge tone={signed ? 'positive' : 'neutral'}>{signed ? 'Ready' : 'Sign to unlock'}</Badge>
+        <Badge tone={claimed ? 'positive' : signed ? 'accent' : 'neutral'}>
+          {claimed ? 'Done' : signed ? 'Ready' : 'Sign to unlock'}
+        </Badge>
       </div>
 
-      {signed ? (
-        <div style={{ marginTop: 'var(--space-4)' }}>
-          <Note tone="positive">
-            Signed{agreement.signedAt ? ` ${day(agreement.signedAt)}` : ''}
-            {agreement.signedName ? ` as ${agreement.signedName}` : ''}. Press the button and take the quiz —
-            it builds your stack and the whole thing comes out free. No code, no card.
-          </Note>
-          <div style={{ marginTop: 'var(--space-3)' }}>
-            {/* No code, anywhere. The button IS the claim: it marks this tab
-                as a claim and the checkout resolves who that is from their
-                session. A partner receiving a gift should not have to do
-                admin to accept it. */}
-            <Button
-              size="sm"
-              iconRight="arrow-right"
-              onClick={() => {
-                markClaimingStarter()
-                window.location.href = '/'
-              }}
-            >
-              Claim my free stack
-            </Button>
-          </div>
+      {/* ── Step 1 ── */}
+      <Step n={1} title="Sign the agreement" done={!!signed}>
+        {signed ? (
+          <StepNote>
+            Signed {day(signed.at)} as {signed.name}
+            {signed.handle ? ` (${signed.handle})` : ''}.
+          </StepNote>
+        ) : (
+          <SignForm
+            agreement={data?.agreement ?? null}
+            name={name}
+            handle={handle}
+            agreed={agreed}
+            busy={busy}
+            error={error}
+            onName={setName}
+            onHandle={setHandle}
+            onAgreed={setAgreed}
+            onSign={sign}
+          />
+        )}
+      </Step>
 
-          {/*
-            ── The job they have just agreed to do ─────────────────────────────
-            Their own code and their own link, at the moment they signed up to
-            post both. The journey used to end on "here is your free stack" and
-            go quiet about the work — leaving somebody who had just promised a
-            TikTok and two stories with nothing to put in them, and no idea the
-            assets existed one tab away.
-          */}
-          {partnerCode && (
-            <div
-              style={{
-                marginTop: 'var(--space-5)',
-                paddingTop: 'var(--space-4)',
-                borderTop: '1px solid var(--edge)',
-              }}
-            >
-              <p
-                style={{
-                  fontSize: 'var(--text-body-sm)',
-                  fontWeight: 'var(--weight-display)',
-                  fontFamily: 'var(--font-display)',
-                  color: 'var(--ink-1)',
-                }}
-              >
-                What to post
-              </p>
-              <p
-                style={{
-                  fontSize: 'var(--text-meta)',
-                  lineHeight: 'var(--leading-snug)',
-                  color: 'var(--ink-3)',
-                  marginTop: 'var(--space-1)',
-                }}
-              >
-                Your followers get 25% off with this code, and anyone who arrives on your link is credited to
-                you for 30 days — whether or not they remember to type it.
-              </p>
-
-              <CopyRow label="Your code" value={partnerCode} />
-              <CopyRow label="Your link" value={shareLink(partnerCode)} />
-
-              <p
-                style={{
-                  fontSize: 'var(--text-micro)',
-                  lineHeight: 'var(--leading-snug)',
-                  color: 'var(--ink-3)',
-                  marginTop: 'var(--space-3)',
-                }}
-              >
-                Ready-made story and post images, with your code already on them, are under{' '}
-                <a href="/partner" style={{ color: 'var(--accent)' }}>
-                  Your assets
-                </a>
-                .
-              </p>
+      {/* ── Step 2 ── */}
+      <Step n={2} title="Take the quiz and claim your stack" done={claimed} locked={!signed}>
+        {claimed && order ? (
+          <>
+            <StepNote>
+              {order.reference} · placed {day(order.placedAt)}
+            </StepNote>
+            <div style={{ marginTop: 'var(--space-2)' }}>
+              <Badge tone={order.stage === 'Cancelled' ? 'critical' : 'accent'}>{order.stage}</Badge>
             </div>
-          )}
-
-          {token && (
-            <p
-              style={{
-                fontSize: 'var(--text-micro)',
-                lineHeight: 'var(--leading-snug)',
-                color: 'var(--ink-3)',
-                marginTop: 'var(--space-3)',
-              }}
-            >
-              You are signed in on this device. When you want to check what you have earned, set a password at{' '}
-              <a href={`/partner/set-password?token=${encodeURIComponent(token)}`} style={{ color: 'var(--accent)' }}>
-                partner settings
-              </a>{' '}
-              — no rush, and you do not need one to claim your stack.
-            </p>
-          )}
-        </div>
-      ) : (
-        <div style={{ marginTop: 'var(--space-4)' }}>
-          <p
-            style={{
-              fontSize: 'var(--text-micro)',
-              fontWeight: 'var(--weight-strong)',
-              letterSpacing: 'var(--tracking-eyebrow)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-              marginBottom: 'var(--space-2)',
-            }}
-          >
-            What you’re agreeing to
-          </p>
-          <ul style={{ display: 'grid', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
-            {agreement.deliverables.map((d) => (
-              <li
-                key={d.id}
-                style={{
-                  fontSize: 'var(--text-meta)',
-                  lineHeight: 'var(--leading-snug)',
-                  color: 'var(--ink-2)',
-                }}
-              >
-                {d.text}
-              </li>
-            ))}
-          </ul>
-
-          {/* The document itself, in full. Scrollable rather than truncated —
-              a "read more" on the thing being signed is the one place a fold
-              is not acceptable. */}
-          <pre
-            style={{
-              maxHeight: '18rem',
-              overflowY: 'auto',
-              padding: 'var(--space-3)',
-              borderRadius: 'var(--r-card)',
-              background: 'var(--surface-2)',
-              border: '1px solid var(--edge)',
-              fontSize: 'var(--text-micro)',
-              lineHeight: 'var(--leading-relaxed)',
-              color: 'var(--ink-2)',
-              whiteSpace: 'pre-wrap',
-              fontFamily: 'var(--font-mono, monospace)',
-            }}
-          >
-            {agreement.text}
-          </pre>
-
-          <div style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
-            <Input
-              label="Your full name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Alex Morgan"
-              autoComplete="name"
-            />
-            <Input
-              label="Where you'll post"
-              value={handle}
-              onChange={(e) => setHandle(e.target.value)}
-              placeholder="@yourhandle"
-              hint="The account the content is going on, so we know where to look for it."
-            />
-            <Checkbox
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              label="I've read the agreement above and I'm signing it."
-            />
-          </div>
-
-          {error && (
+          </>
+        ) : signed ? (
+          <>
+            <StepNote>
+              It builds you Essentials and Balanced — pick either. The whole order comes to £0.00, and there is
+              no code to type.
+            </StepNote>
             <div style={{ marginTop: 'var(--space-3)' }}>
-              <Note tone="critical">{error}</Note>
+              <Button
+                size="sm"
+                iconRight="arrow-right"
+                onClick={() => {
+                  markClaimingStarter()
+                  window.location.href = '/'
+                }}
+              >
+                Claim my free stack
+              </Button>
             </div>
-          )}
+          </>
+        ) : (
+          <StepNote>Sign above and this opens up.</StepNote>
+        )}
+      </Step>
 
-          <div style={{ marginTop: 'var(--space-4)' }}>
-            <Button onClick={sign} loading={busy} disabled={!agreed || name.trim().length < 3}>
-              Sign and unlock my stack
-            </Button>
-          </div>
+      {/* ── Step 3 ── only where there is a link to set one WITH. */}
+      {token && (
+        <Step n={3} title="Set a password" done={data?.hasPassword === true}>
+          {data?.hasPassword ? (
+            <StepNote>Done — you can sign in at any time.</StepNote>
+          ) : (
+            <>
+              <StepNote>
+                So you can get back in to check what you have earned. This link is the only way in until you
+                do{left ? `, and it has ${left}` : ''}.
+              </StepNote>
+              <div style={{ marginTop: 'var(--space-3)' }}>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => {
+                    window.location.href = `/partner/set-password?token=${encodeURIComponent(token)}`
+                  }}
+                >
+                  Set a password
+                </Button>
+              </div>
+            </>
+          )}
+        </Step>
+      )}
+
+      {/*
+        ── The job they signed up for ──────────────────────────────────────────
+        Their own code and link, once there is a signature to have earned them.
+        The journey used to end on "here is your free stack" and go quiet about
+        the work, leaving somebody who had just promised a TikTok and two
+        stories with nothing to put in them.
+      */}
+      {signed && partnerCode && (
+        <div style={{ marginTop: 'var(--space-5)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--edge)' }}>
+          <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
+            What to post
+          </p>
+          <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
+            Your followers get 25% off with this code, and anyone who arrives on your link is credited to you
+            for 30 days — whether or not they remember to type it.
+          </p>
+          <CopyRow label="Your code" value={partnerCode} />
+          <CopyRow label="Your link" value={shareLink(partnerCode)} />
+          <p style={{ fontSize: 'var(--text-micro)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginTop: 'var(--space-3)' }}>
+            Ready-made story and post images, with your code already on them, are under{' '}
+            <a href="/partner" style={{ color: 'var(--accent)' }}>Your assets</a>.
+          </p>
         </div>
       )}
     </Card>
+  )
+}
+
+/** The agreement and the box you put your name in. Step one, and only step one. */
+function SignForm({
+  agreement, name, handle, agreed, busy, error, onName, onHandle, onAgreed, onSign,
+}: {
+  agreement: Agreement | null
+  name: string
+  handle: string
+  agreed: boolean
+  busy: boolean
+  error: string | null
+  onName: (v: string) => void
+  onHandle: (v: string) => void
+  onAgreed: (v: boolean) => void
+  onSign: () => void
+}) {
+  if (!agreement) return <StepNote>Loading the agreement…</StepNote>
+
+  return (
+    <div style={{ marginTop: 'var(--space-3)' }}>
+      <ul style={{ display: 'grid', gap: 'var(--space-2)', marginBottom: 'var(--space-4)' }}>
+        {agreement.deliverables.map((d) => (
+          <li key={d.id} style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-2)' }}>
+            {d.text}
+          </li>
+        ))}
+      </ul>
+
+      {/* The document itself, in full. Scrollable rather than truncated — a
+          "read more" on the thing being signed is the one place a fold is not
+          acceptable. */}
+      <pre
+        style={{
+          maxHeight: '18rem',
+          overflowY: 'auto',
+          padding: 'var(--space-3)',
+          borderRadius: 'var(--r-card)',
+          background: 'var(--surface-2)',
+          border: '1px solid var(--edge)',
+          fontSize: 'var(--text-micro)',
+          lineHeight: 'var(--leading-relaxed)',
+          color: 'var(--ink-2)',
+          whiteSpace: 'pre-wrap',
+          fontFamily: 'var(--font-mono, monospace)',
+        }}
+      >
+        {agreement.text}
+      </pre>
+
+      <div style={{ display: 'grid', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+        <Input label="Your full name" value={name} onChange={(e) => onName(e.target.value)} placeholder="Alex Morgan" autoComplete="name" />
+        <Input
+          label="Where you'll post"
+          value={handle}
+          onChange={(e) => onHandle(e.target.value)}
+          placeholder="@yourhandle"
+          hint="The account the content is going on, so we know where to look for it."
+        />
+        <Checkbox
+          checked={agreed}
+          onChange={(e) => onAgreed(e.target.checked)}
+          label="I've read the agreement above and I'm signing it."
+        />
+      </div>
+
+      {error && (
+        <div style={{ marginTop: 'var(--space-3)' }}>
+          <Note tone="critical">{error}</Note>
+        </div>
+      )}
+
+      <div style={{ marginTop: 'var(--space-4)' }}>
+        <Button onClick={onSign} loading={busy} disabled={!agreed || name.trim().length < 3}>
+          Sign and unlock my stack
+        </Button>
+      </div>
+    </div>
   )
 }

@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
-import { partnerForInvite, startPartnerSession } from '@/lib/partners/auth'
+import { inviteHolder, startPartnerSession } from '@/lib/partners/auth'
+import { getPartnerPasswordHash, listCodes } from '@/lib/partners/repo'
+import { getOrder } from '@/lib/orders/repo'
 import { requestMetadata } from '@/lib/legal/consent'
-import { listStartersForPartner } from '@/lib/partner-starter/repo'
+import { getAgreement, listStartersForPartner } from '@/lib/partner-starter/repo'
 import { NO_CODE_YET, agreementFor, signAgreement } from '@/lib/partner-starter/sign'
 import { starterState } from '@/lib/partner-starter/rules'
 import { PARTNER_DELIVERABLES } from '@/lib/partner-starter/agreement'
@@ -40,17 +42,49 @@ export const dynamic = 'force-dynamic'
  * password whenever they feel like it.
  */
 
+/**
+ * What this partner has, and where they are up to.
+ *
+ * Finds their starter in ANY state, which is the fix for the thing that made
+ * the link useless the moment it had worked: a starter spent on an order was
+ * not matched at all, so somebody who had signed, claimed and ordered came back
+ * to "there is no stack waiting on it just now". They had done everything.
+ */
 async function resolve(token: string | null) {
   if (!token) return null
-  const partner = await partnerForInvite(token)
-  if (!partner) return null
-  if (partner.status === 'suspended') return null
-  const starters = await listStartersForPartner(partner.id)
-  const starter = starters.find((s) => {
-    const state = starterState(s)
-    return state === 'unsigned' || state === 'ready'
-  })
-  return { partner, starter: starter ?? null }
+  const held = await inviteHolder(token)
+  if (!held) return null
+  if (held.partner.status === 'suspended') return null
+
+  const starters = await listStartersForPartner(held.partner.id)
+  // The one they can still act on, else the one they spent.
+  const live = starters.find((s) => ['unsigned', 'ready'].includes(starterState(s)))
+  const spent = starters.find((s) => starterState(s) === 'used')
+  return { partner: held.partner, expiresAt: held.expiresAt, starter: live ?? spent ?? null }
+}
+
+/** What a PARTNER needs to know about the order they claimed — not the hub's view. */
+async function orderFor(orderId: string | null | undefined) {
+  if (!orderId) return null
+  const order = await getOrder(orderId).catch(() => null)
+  if (!order) return null
+  return {
+    reference: order.reference ?? order.id,
+    placedAt: order.createdAt,
+    /*
+      Four words, not nine statuses. Somebody who has ordered wants to know
+      whether it is coming; `submitted_to_supplier` and `supplier_confirmed`
+      are our plumbing and mean the same thing to them.
+    */
+    stage:
+      order.status === 'delivered'
+        ? 'Delivered'
+        : order.status === 'shipped'
+          ? 'On its way'
+          : order.status === 'cancelled' || order.status === 'refunded'
+            ? 'Cancelled'
+            : 'Being packed',
+  }
 }
 
 export async function GET(req: Request) {
@@ -60,38 +94,40 @@ export async function GET(req: Request) {
   /*
     One answer for a bad token, an expired one and a suspended partner: which of
     those it was is only useful to somebody trying links.
-
-    A LIVE link with nothing on it is a different thing, and it is safe to say
-    so — anybody asking already holds a working token for that partner, so there
-    is nothing left to enumerate. It matters because the page said "this link
-    has expired or the stack has been claimed" to a partner whose link was
-    perfectly good and simply had no starter on it yet. That is the state a
-    founder lands in the moment they re-add somebody, and being told the wrong
-    reason sends them looking in the wrong place.
   */
   if (!found) return NextResponse.json({ link: 'dead', starter: null })
-  if (!found.starter) {
-    return NextResponse.json({ link: 'live', partnerName: found.partner.name, starter: null })
-  }
 
-  const { partner, starter } = found
-  const { text, version, context } = await agreementFor(partner, starter)
-  const state = starterState(starter)
+  const { partner, starter, expiresAt } = found
+  const state = starter ? starterState(starter) : null
+  const agreement = starter?.agreementId ? await getAgreement(starter.agreementId) : null
+  const codes = await listCodes(partner.id).catch(() => [])
+  const partnerCode = codes.find((c) => c.status === 'active')?.code ?? codes[0]?.code ?? null
+
+  /*
+    The agreement text is served ONLY when there is something to sign.
+
+    It is two and a half kilobytes, and a partner who signed last week does not
+    need it again — nor should the page have the material to ask them a second
+    time, which is exactly what a returning partner used to meet.
+  */
+  const document = starter && state === 'unsigned' ? await agreementFor(partner, starter) : null
 
   return NextResponse.json({
     link: 'live',
+    /** When this link stops working — the countdown on setting a password. */
+    linkExpiresAt: expiresAt,
     partnerName: partner.name,
-    /* See the note in `/api/partner/starter` — the code they just agreed to
-       post, handed back so the journey does not end without it. */
-    partnerCode: context.partnerCode === NO_CODE_YET ? null : context.partnerCode,
-    starter: {
-      code: state === 'ready' ? starter.code : null,
-      tier: starter.tier,
-      goodsCap: starter.goodsCap,
-      expiresAt: starter.expiresAt,
-      state,
-    },
-    agreement: { version, text, deliverables: PARTNER_DELIVERABLES, signedAt: null, signedName: null },
+    partnerCode,
+    /** Whether they can already get back in without this link. */
+    hasPassword: Boolean(await getPartnerPasswordHash(partner.id).catch(() => null)),
+    starter: starter ? { goodsCap: starter.goodsCap, expiresAt: starter.expiresAt, state } : null,
+    signed: agreement
+      ? { at: agreement.signedAt, name: agreement.signedName, handle: agreement.handle }
+      : null,
+    order: await orderFor(starter?.orderId),
+    agreement: document
+      ? { version: document.version, text: document.text, deliverables: PARTNER_DELIVERABLES }
+      : null,
   })
 }
 

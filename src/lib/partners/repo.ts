@@ -625,13 +625,16 @@ export async function invalidateInvites(partnerId: string, kind: 'invite' | 'res
 /** An unused, unexpired invite, or null. Single-use is enforced by `used_at`. */
 export async function findUsableInvite(
   tokenHash: string,
-): Promise<{ partnerId: string; kind: string } | null> {
+): Promise<{ partnerId: string; kind: string; expiresAt: string } | null> {
   const db = await getEngine()
-  const row = await db.get<{ partner_id: string; kind: string }>(
-    'SELECT partner_id, kind FROM partner_invites WHERE token_hash = ? AND used_at IS NULL AND expires_at >= ?',
+  const row = await db.get<{ partner_id: string; kind: string; expires_at: string }>(
+    'SELECT partner_id, kind, expires_at FROM partner_invites WHERE token_hash = ? AND used_at IS NULL AND expires_at >= ?',
     [tokenHash, now()],
   )
-  return row ? { partnerId: row.partner_id, kind: row.kind } : null
+  // `expires_at` comes back so a screen can COUNT DOWN rather than only find
+  // out at the moment the link stops working. A partner who has a week to set
+  // a password should be able to see the week.
+  return row ? { partnerId: row.partner_id, kind: row.kind, expiresAt: row.expires_at } : null
 }
 
 /**

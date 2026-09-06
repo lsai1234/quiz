@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getSessionPartner } from '@/lib/partners/auth'
 import { requestMetadata } from '@/lib/legal/consent'
 import { listStartersForPartner, getAgreement } from '@/lib/partner-starter/repo'
+import { getOrder } from '@/lib/orders/repo'
 import { NO_CODE_YET, agreementFor, signAgreement } from '@/lib/partner-starter/sign'
 import { starterState } from '@/lib/partner-starter/rules'
 import { PARTNER_DELIVERABLES } from '@/lib/partner-starter/agreement'
@@ -28,15 +29,18 @@ export async function GET() {
   if (!partner) return NextResponse.json({ error: 'Not signed in.' }, { status: 401 })
 
   const starters = await listStartersForPartner(partner.id)
-  const starter = pick(starters, (s) => {
-    const state = starterState(s)
-    return state === 'unsigned' || state === 'ready'
-  })
+  // Anything they can still act on, else the one they spent — the dashboard
+  // panel shows progress, not only an offer.
+  const starter =
+    starters.find((s) => ['unsigned', 'ready'].includes(starterState(s))) ??
+    starters.find((s) => starterState(s) === 'used') ??
+    null
   if (!starter) return NextResponse.json({ starter: null })
 
-  const { text, version, context } = await agreementFor(partner, starter)
   const state = starterState(starter)
   const agreement = starter.agreementId ? await getAgreement(starter.agreementId) : null
+  const { text, version, context } = await agreementFor(partner, starter)
+  const order = starter.orderId ? await getOrder(starter.orderId).catch(() => null) : null
 
   return NextResponse.json({
     /*
@@ -49,24 +53,27 @@ export async function GET() {
       signed actually names.
     */
     partnerCode: context.partnerCode === NO_CODE_YET ? null : context.partnerCode,
-    starter: {
-      // The CODE ITSELF is only sent once it can actually be used. Before the
-      // agreement is signed it buys nothing, and putting it on screen anyway
-      // invites somebody to try it, be refused, and conclude the thing is
-      // broken rather than unsigned.
-      code: state === 'ready' ? starter.code : null,
-      tier: starter.tier,
-      goodsCap: starter.goodsCap,
-      expiresAt: starter.expiresAt,
-      state,
-    },
-    agreement: {
-      version,
-      text,
-      deliverables: PARTNER_DELIVERABLES,
-      signedAt: agreement?.signedAt ?? null,
-      signedName: agreement?.signedName ?? null,
-    },
+    partnerName: partner.name,
+    starter: { goodsCap: starter.goodsCap, expiresAt: starter.expiresAt, state },
+    signed: agreement
+      ? { at: agreement.signedAt, name: agreement.signedName, handle: agreement.handle }
+      : null,
+    order: order
+      ? {
+          reference: order.reference ?? order.id,
+          placedAt: order.createdAt,
+          stage:
+            order.status === 'delivered'
+              ? 'Delivered'
+              : order.status === 'shipped'
+                ? 'On its way'
+                : order.status === 'cancelled' || order.status === 'refunded'
+                  ? 'Cancelled'
+                  : 'Being packed',
+        }
+      : null,
+    // Only when there is something to sign — see the note in `/api/partner/claim`.
+    agreement: state === 'unsigned' ? { version, text, deliverables: PARTNER_DELIVERABLES } : null,
   })
 }
 

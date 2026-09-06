@@ -201,9 +201,24 @@ export type PartnerResetOutcome = 'sent' | 'unknown' | 'throttled' | 'failed' | 
 
 /** Who a link belongs to, without spending it — so a form can greet them by name. */
 export async function partnerForInvite(token: string): Promise<Partner | null> {
+  return (await inviteHolder(token))?.partner ?? null
+}
+
+/**
+ * The same lookup, with the link's own expiry alongside.
+ *
+ * For screens that show what is left of a link rather than only discovering it
+ * has gone. Everything a partner can still do with their link — set a password,
+ * get back into their account — runs out at the same moment, and a countdown is
+ * the difference between acting on that and finding out afterwards.
+ */
+export async function inviteHolder(
+  token: string,
+): Promise<{ partner: Partner; expiresAt: string } | null> {
   const invite = await repo.findUsableInvite(hash(token))
   if (!invite) return null
-  return repo.getPartner(invite.partnerId)
+  const partner = await repo.getPartner(invite.partnerId)
+  return partner ? { partner, expiresAt: invite.expiresAt } : null
 }
 
 export type SetPasswordResult = { ok: true; partner: Partner } | { ok: false; reason: string }
