@@ -1,5 +1,6 @@
 import {
   STARTER_GOODS_CAP,
+  STARTER_TIER_BANDS,
   STARTER_TIERS,
   checkStarter,
   looksLikeStarterCode,
@@ -28,7 +29,7 @@ const base: PartnerStarter = {
   code: 'PS-7K4M2XQP',
   partnerId: 'p_1',
   tier: 'performance',
-  goodsCap: 140,
+  goodsCap: 100,
   note: null,
   createdBy: null,
   createdAt: '2026-09-01T00:00:00.000Z',
@@ -128,20 +129,27 @@ describe('what a starter may be spent on', () => {
   })
 
   it('is capped, and says by how much and against what', () => {
-    expect(starterFits(base, 139.99, gbp).ok).toBe(true)
-    expect(starterFits(base, 140, gbp).ok).toBe(true)
+    expect(starterFits(base, 99.99, gbp).ok).toBe(true)
+    expect(starterFits(base, 100, gbp).ok).toBe(true)
     const over = starterFits(base, 180.4, gbp)
     expect(over.ok).toBe(false)
     if (!over.ok) {
-      expect(over.reason).toContain('£140.00')
+      expect(over.reason).toContain('£100.00')
       expect(over.reason).toContain('£180.40')
-      expect(over.reason).toMatch(/balanced/i)
     }
   })
 
-  it('caps a smaller depth more tightly', () => {
-    expect(STARTER_GOODS_CAP.essentials).toBeLessThan(STARTER_GOODS_CAP.performance)
-    expect(starterFits({ ...base, tier: 'essentials', goodsCap: 90 }, 120, gbp).ok).toBe(false)
+  /*
+    ONE cap for both depths, and the same number the planner builds to. The two
+    used to disagree — a £140 Balanced ceiling banded off a monthly figure — so
+    a partner could be shown a stack the checkout would then refuse.
+  */
+  it('caps both depths at the same number the stack is built to', () => {
+    expect(STARTER_GOODS_CAP).toBe(100)
+    expect(STARTER_TIER_BANDS.performance.max).toBe(STARTER_GOODS_CAP)
+    expect(STARTER_TIER_BANDS.essentials.max).toBeLessThan(STARTER_TIER_BANDS.performance.max)
+    // Contiguous: every price belongs to exactly one depth.
+    expect(STARTER_TIER_BANDS.performance.min).toBe(STARTER_TIER_BANDS.essentials.max)
   })
 
   it('offers Essentials and Balanced, and not Complete', () => {

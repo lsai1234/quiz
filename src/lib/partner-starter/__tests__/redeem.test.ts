@@ -18,7 +18,7 @@ import {
   revokeStarter,
   signStarter,
 } from '../repo'
-import { checkStarterCode, claimStarterForCheckout } from '../redeem'
+import { claimStarterForCheckout, starterForSession } from '../redeem'
 import { agreementFor, hashAgreement, signAgreement, signatureProblem } from '../sign'
 import { PARTNER_AGREEMENT_VERSION, PARTNER_DELIVERABLES, partnerAgreementText } from '../agreement'
 import { starterState } from '../rules'
@@ -48,7 +48,7 @@ describe('issuing', () => {
   it('records the depth, the cap, the note and when it dies', async () => {
     const { starter } = await partnerWithStarter()
     expect(starter.tier).toBe('performance')
-    expect(starter.goodsCap).toBe(140)
+    expect(starter.goodsCap).toBe(100)
     expect(starter.note).toBe('launch cohort')
     expect(new Date(starter.expiresAt).getTime()).toBeGreaterThan(Date.now())
   })
@@ -181,29 +181,59 @@ describe('the single-use lock', () => {
   })
 })
 
-describe('checking one at a checkout', () => {
-  const quiz = { channel: 'quiz' as const, goodsListSubtotal: 100, format: gbp }
+/**
+ * Claiming at the checkout.
+ *
+ * There is no code any more: who is claiming comes from the partner session,
+ * so these drive `getSessionPartner` rather than passing a string around. That
+ * is the security boundary — a browser can say "this is a claim", it cannot say
+ * whose.
+ */
+jest.mock('@/lib/partners/auth', () => ({
+  ...jest.requireActual('@/lib/partners/auth'),
+  getSessionPartner: jest.fn(),
+}))
+const { getSessionPartner } = jest.requireMock('@/lib/partners/auth') as {
+  getSessionPartner: jest.Mock
+}
 
-  it('ignores a string that is not shaped like one of ours, so it can fall through', async () => {
-    expect(await checkStarterCode('SARAH20', { channel: 'quiz' })).toBeNull()
-    expect(await checkStarterCode('FH-FREE-7K4M2XQP', { channel: 'quiz' })).toBeNull()
+describe('claiming at a checkout', () => {
+  const quiz = { channel: 'quiz' as const, goodsListSubtotal: 80, format: gbp }
+
+  afterEach(() => getSessionPartner.mockReset())
+
+  it('does nothing at all for a visitor who is not a partner', async () => {
+    getSessionPartner.mockResolvedValue(null)
+    expect(await claimStarterForCheckout(quiz)).toBeNull()
   })
 
-  it('ignores a well-shaped code we have never issued, rather than confirming the shape', async () => {
-    expect(await checkStarterCode('PS-ZZZZZZZZ', { channel: 'quiz' })).toBeNull()
+  it('does nothing for a partner with no starter — they are just shopping', async () => {
+    const partner = await createPartner({ email: `plain${Math.random()}@example.com`, name: 'Sam Reed' })
+    getSessionPartner.mockResolvedValue(partner)
+    expect(await claimStarterForCheckout(quiz)).toBeNull()
   })
 
   it('claims a signed one on a quiz stack', async () => {
     const { partner, starter } = await partnerWithStarter()
     await sign(partner, starter.code)
-    const claim = await claimStarterForCheckout(starter.code, quiz)
+    getSessionPartner.mockResolvedValue(partner)
+    const claim = await claimStarterForCheckout(quiz)
     expect(claim?.ok).toBe(true)
   })
 
-  it('refuses a basket over the cap, and does NOT spend the code on it', async () => {
+  it('tells an unsigned partner to go and sign, rather than going quiet', async () => {
+    const { partner } = await partnerWithStarter()
+    getSessionPartner.mockResolvedValue(partner)
+    const claim = await claimStarterForCheckout(quiz)
+    expect(claim?.ok).toBe(false)
+    if (claim && !claim.ok) expect(claim.reason).toMatch(/sign/i)
+  })
+
+  it('refuses a basket over the cap, and does NOT spend the starter on it', async () => {
     const { partner, starter } = await partnerWithStarter()
     await sign(partner, starter.code)
-    const claim = await claimStarterForCheckout(starter.code, { ...quiz, goodsListSubtotal: 250 })
+    getSessionPartner.mockResolvedValue(partner)
+    const claim = await claimStarterForCheckout({ ...quiz, goodsListSubtotal: 250 })
     expect(claim?.ok).toBe(false)
     // The important half: it is still there afterwards.
     expect((await getStarter(starter.code))!.claimToken).toBeNull()
@@ -212,31 +242,51 @@ describe('checking one at a checkout', () => {
   it('refuses a subscription outright — a free plan renews free forever', async () => {
     const { partner, starter } = await partnerWithStarter()
     await sign(partner, starter.code)
-    const claim = await claimStarterForCheckout(starter.code, { ...quiz, channel: 'subscription' })
+    getSessionPartner.mockResolvedValue(partner)
+    const claim = await claimStarterForCheckout({ ...quiz, channel: 'subscription' })
     expect(claim?.ok).toBe(false)
     expect((await getStarter(starter.code))!.claimToken).toBeNull()
   })
 
-  it('refuses a suspended partner’s starter', async () => {
+  it('refuses the shop shelf — the offer is the stack the quiz builds', async () => {
+    const { partner, starter } = await partnerWithStarter()
+    await sign(partner, starter.code)
+    getSessionPartner.mockResolvedValue(partner)
+    expect((await claimStarterForCheckout({ ...quiz, channel: 'shop' }))?.ok).toBe(false)
+  })
+
+  /*
+    Spent once, and then SILENT — not refused.
+
+    The difference is the whole reason `starterForSession` returns null rather
+    than a refusal here. A partner is a customer too: once their free stack is
+    taken, their next order has to go through and be charged for like anybody
+    else's. A session that kept refusing would block them from buying; one that
+    kept claiming would be a standing 100% discount.
+  */
+  it('is claimable once, and then stops existing rather than starts refusing', async () => {
+    const { partner, starter } = await partnerWithStarter()
+    await sign(partner, starter.code)
+    getSessionPartner.mockResolvedValue(partner)
+
+    const first = await claimStarterForCheckout(quiz)
+    expect(first?.ok).toBe(true)
+    if (first?.ok) await markStarterUsed(starter.code, first.token, 'ord_1')
+
+    expect(await claimStarterForCheckout(quiz)).toBeNull()
+    expect(await starterForSession({ channel: 'quiz' })).toBeNull()
+  })
+
+  it('refuses a suspended partner', async () => {
     const { partner, starter } = await partnerWithStarter()
     await sign(partner, starter.code)
     await updatePartner(partner.id, { status: 'suspended' })
-    const claim = await claimStarterForCheckout(starter.code, quiz)
-    expect(claim?.ok).toBe(false)
-  })
-
-  /* `invited` is the normal state for somebody claiming one: setting a password
-     and taking your free stack happen in whichever order you get round to. */
-  it('does not refuse a partner who has never signed in', async () => {
-    const { partner, starter } = await partnerWithStarter()
-    await sign(partner, starter.code)
-    const claim = await claimStarterForCheckout(starter.code, quiz)
-    expect(claim?.ok).toBe(true)
+    getSessionPartner.mockResolvedValue({ ...partner, status: 'suspended' })
+    expect((await claimStarterForCheckout(quiz))?.ok).toBe(false)
   })
 
   it('lists a partner’s starters newest first', async () => {
     const { partner } = await partnerWithStarter()
-    const rows = await listStartersForPartner(partner.id)
-    expect(rows).toHaveLength(1)
+    expect(await listStartersForPartner(partner.id)).toHaveLength(1)
   })
 })

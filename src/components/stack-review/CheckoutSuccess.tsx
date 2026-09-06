@@ -71,12 +71,13 @@ export function CheckoutSuccess({ plan, mock, subscription, changePolicy = 'auto
 
       <ReceiptPrinter receipt={receipt} className="w-full mt-7" />
 
-      {mock && (
-        <Note icon="info" className="mt-6 max-w-sm text-left">
-          <strong>Demo mode.</strong> No payment was taken. Add your Stripe keys and switch Payments to
-          live in the Founders Hub to take real {isSub ? 'subscriptions' : 'orders'}.
-        </Note>
-      )}
+      {/*
+        No demo banner here. The receipt is stamped `DEMO — NOT CHARGED`, which
+        is the honest marker and is enough — this said the same thing a third
+        time, in a box under the paper, and the half of it that was not
+        redundant was configuration advice about our own Stripe keys shown at
+        the end of somebody else's checkout.
+      */}
 
       {onBack && (
         <Button variant="secondary" icon="arrow-left" fullWidth={false} onClick={onBack} className="mt-7">

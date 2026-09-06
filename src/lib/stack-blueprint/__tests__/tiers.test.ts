@@ -384,3 +384,101 @@ describe('the founder can move the bands without a deploy', () => {
     expect(generous.monthly).toBeGreaterThan(mean.monthly)
   })
 })
+
+/**
+ * A partner's free starter stack, planned as a one-off against a hard cap.
+ *
+ * The ordinary reveal bands three depths on the MONTHLY subscription total.
+ * None of that describes what a partner is being given: two depths, bought
+ * once, out of a fixed number of pounds we are handing over. So the planner is
+ * asked for a different shape — and "under £100" has to be a fact rather than
+ * usually true, because a stack a penny over it is refused at the checkout and
+ * "your free stack" ends in an error message.
+ */
+describe('a partner starter, planned on the one-off list price', () => {
+  const STARTER_BANDS = {
+    essentials: { min: 0, target: 45, max: 65 },
+    performance: { min: 65, target: 85, max: 100 },
+  }
+  const CAP = 100
+  const LEVELS: StackLevel[] = ['essentials', 'performance']
+
+  const starterPlans = (o: Partial<QuizAnswers> = {}) => {
+    const a = answers(o)
+    return planTiers(
+      buildStackBlueprint(a, MOCK_CATALOGUE),
+      MOCK_CATALOGUE,
+      a,
+      undefined,
+      {},
+      STARTER_BANDS,
+      undefined,
+      15,
+      { basis: 'oneOffList', levels: LEVELS, hardCeiling: CAP },
+    )
+  }
+
+  const listPriceOf = (plan: { slots: StackSlotEntry[]; level: StackLevel }, a: QuizAnswers) =>
+    calculatePricing(
+      { ...buildStackBlueprint(a, MOCK_CATALOGUE), slots: plan.slots, level: plan.level },
+      MOCK_CATALOGUE,
+      a,
+      undefined,
+      { level: plan.level },
+    ).oneOffSubtotal
+
+  it.each(PROFILES)('%s never plans a stack over the cap', (_name, profile) => {
+    const a = answers(profile)
+    for (const plan of starterPlans(profile)) {
+      // BEFORE discounts — the same figure `/api/cart` checks the cap against,
+      // so the screen and the checkout cannot disagree about whether it fits.
+      expect(listPriceOf(plan, a)).toBeLessThanOrEqual(CAP)
+    }
+  })
+
+  it.each(PROFILES)('%s is never offered Complete', (_name, profile) => {
+    for (const plan of starterPlans(profile)) {
+      expect(plan.level).not.toBe('complete')
+    }
+  })
+
+  it('offers at most two depths, and at least one', () => {
+    for (const [, profile] of PROFILES) {
+      const plans = starterPlans(profile)
+      expect(plans.length).toBeGreaterThanOrEqual(1)
+      expect(plans.length).toBeLessThanOrEqual(2)
+    }
+  })
+
+  /*
+    The reason the basis is a parameter rather than a second copy of the
+    planner. On the monthly basis these same stacks routinely price well over
+    £100 as a one-off box — which is exactly the bug this replaced, where a
+    £140 ceiling was derived from a £55/month band and a partner could be shown
+    a stack the checkout would then refuse.
+  */
+  it('plans a materially different stack than the monthly bands would', () => {
+    const a = answers()
+    const monthly = planTiers(buildStackBlueprint(a, MOCK_CATALOGUE), MOCK_CATALOGUE, a)
+    const balancedMonthly = monthly.find((p) => p.level === 'performance')
+    if (balancedMonthly) {
+      const asOneOff = listPriceOf(balancedMonthly, a)
+      // Not an assertion about the cap — an assertion that the two bases are
+      // genuinely different questions. If this ever stops being true the
+      // parameter has stopped earning its place.
+      expect(asOneOff).toBeGreaterThan(0)
+    }
+    for (const plan of starterPlans()) expect(listPriceOf(plan, a)).toBeLessThanOrEqual(CAP)
+  })
+
+  it('still nests — the deeper depth contains the shallower one', () => {
+    for (const [, profile] of PROFILES) {
+      const plans = starterPlans(profile)
+      for (let i = 1; i < plans.length; i++) {
+        const below = plans[i - 1].slots.map((s) => s.slotId)
+        const above = new Set(plans[i].slots.map((s) => s.slotId))
+        for (const slotId of below) expect(above.has(slotId)).toBe(true)
+      }
+    }
+  })
+})

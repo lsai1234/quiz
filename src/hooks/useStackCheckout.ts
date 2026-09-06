@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import { isClaimingStarter } from '@/lib/partner-starter/handoff'
 import {
   validateCheckout,
   validationErrorMessage,
@@ -234,7 +235,17 @@ export function useStackCheckout() {
         const res = await fetch('/api/cart', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ lines: validation.lines, partnerCode: subOpts.partnerCode ?? null }),
+          body: JSON.stringify({
+            lines: validation.lines,
+            partnerCode: subOpts.partnerCode ?? null,
+            /*
+              A partner claiming their free stack. An intent, not a credential:
+              the server resolves WHOSE claim this is from their session cookie,
+              so this only says which of their two possible intents the checkout
+              is serving.
+            */
+            claimStarter: isClaimingStarter(),
+          }),
         })
         const data: { checkoutUrl?: string; mock?: boolean; error?: string } | null =
           await res.json().catch(() => null)

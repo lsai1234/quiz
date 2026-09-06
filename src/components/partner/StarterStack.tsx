@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Note } from '@/components/system'
-import { carryStarterCode } from '@/lib/partner-starter/handoff'
+import { markClaimingStarter } from '@/lib/partner-starter/handoff'
 import type { Deliverable, StarterState } from '@/lib/partner-starter/types'
 
 interface Starter {
@@ -222,8 +222,9 @@ export function StarterStack({ token }: Props = {}) {
               marginTop: 'var(--space-1)',
             }}
           >
-            Take the quiz, build your stack, and this covers it — up to {money(starter.goodsCap)} of products
-            and the delivery. Nothing to pay, no card needed. Yours until {day(starter.expiresAt)}.
+            Take the quiz and it builds you a stack — Essentials or Balanced, up to {money(starter.goodsCap)}{' '}
+            of products, delivery included. Nothing to pay and no card needed. Yours until{' '}
+            {day(starter.expiresAt)}.
           </p>
         </div>
         <Badge tone={signed ? 'positive' : 'neutral'}>{signed ? 'Ready' : 'Sign to unlock'}</Badge>
@@ -233,24 +234,23 @@ export function StarterStack({ token }: Props = {}) {
         <div style={{ marginTop: 'var(--space-4)' }}>
           <Note tone="positive">
             Signed{agreement.signedAt ? ` ${day(agreement.signedAt)}` : ''}
-            {agreement.signedName ? ` as ${agreement.signedName}` : ''}. Take the quiz and your stack comes out
-            free — the code goes with you, so there is nothing to type. It is here too, in case you want it.
+            {agreement.signedName ? ` as ${agreement.signedName}` : ''}. Press the button and take the quiz —
+            it builds your stack and the whole thing comes out free. No code, no card.
           </Note>
-          {starter.code && <CopyRow label="Your starter code" value={starter.code} />}
-
           <div style={{ marginTop: 'var(--space-3)' }}>
-            {/* The code goes WITH them. Copying it across a ninety-second quiz
-                was the last manual step in the journey and the only one that
-                could strand somebody holding a stack they could not spend. */}
+            {/* No code, anywhere. The button IS the claim: it marks this tab
+                as a claim and the checkout resolves who that is from their
+                session. A partner receiving a gift should not have to do
+                admin to accept it. */}
             <Button
               size="sm"
               iconRight="arrow-right"
               onClick={() => {
-                if (starter?.code) carryStarterCode(starter.code)
+                markClaimingStarter()
                 window.location.href = '/'
               }}
             >
-              Take the quiz
+              Claim my free stack
             </Button>
           </div>
 

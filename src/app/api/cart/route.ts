@@ -55,7 +55,7 @@ function originFrom(req: Request): string {
 }
 
 export async function POST(req: Request) {
-  let body: { lines?: unknown; partnerCode?: unknown }
+  let body: { lines?: unknown; partnerCode?: unknown; claimStarter?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -147,26 +147,29 @@ export async function POST(req: Request) {
    * (`releaseFounderCode`).
    */
   /**
-   * A partner's starter stack, before everything — and, like a founder code,
-   * only from what was TYPED.
+   * A partner claiming their starter stack, before everything.
    *
-   * Never from the referral cookie, and here the reason is sharper than it is
-   * for a founder code: the cookie a partner's own link leaves behind belongs to
-   * their FOLLOWERS. A starter that could be redeemed from a cookie would hand a
-   * free box to whoever happened to be carrying one.
+   * ── There is no code here, and that is the design ─────────────────────────
+   * The request carries an INTENT (`claimStarter`) and no identifier at all.
+   * Who is claiming comes from the partner session cookie, which was set when
+   * they signed their agreement and which a browser cannot forge. So the worst
+   * a tampered request can do is claim the starter belonging to the person
+   * already signed in — which is to say, ask for the thing we are giving them.
    *
-   * It is tried first because it is the most specific instrument of the three —
-   * it is checked against a named partner, a signed agreement, a channel and a
-   * value cap, and anything it refuses is refused with a reason the partner can
-   * act on rather than falling through to "we don't recognise that code".
+   * It is tried first because it is the most specific instrument: checked
+   * against a named partner, a signed agreement, a channel and a value cap, and
+   * anything it refuses is refused with a reason that names the fix.
    */
-  const starterClaim = await claimStarterForCheckout(typedCode, {
-    channel,
-    // The list value, not what is being charged — which is zero by
-    // construction and therefore inside every ceiling ever set.
-    goodsListSubtotal: undiscountedSubtotal,
-    format: formatGBP,
-  })
+  const claimingStarter = body.claimStarter === true
+  const starterClaim = claimingStarter
+    ? await claimStarterForCheckout({
+        channel,
+        // The list value, not what is being charged — which is zero by
+        // construction and therefore inside every ceiling ever set.
+        goodsListSubtotal: undiscountedSubtotal,
+        format: formatGBP,
+      })
+    : null
   if (starterClaim && !starterClaim.ok) {
     return NextResponse.json({ error: starterClaim.reason, codeRejected: true }, { status: 400 })
   }

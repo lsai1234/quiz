@@ -189,7 +189,10 @@ describe('the in-page stack checkout receipt', () => {
     })
     expect(receipt.stamp).toBe('Demo — not charged')
     expect(receipt.total).toEqual({ label: 'Order total', value: '£24.00' })
-    expect(receipt.notes.join(' ')).toContain('no payment was taken')
+    // Said ONCE. It used to be stamped, then repeated as a note an inch below,
+    // then repeated again in a banner under the paper. The stamp is the marker
+    // that matters and the one that cannot be missed.
+    expect(receipt.notes.join(' ')).not.toContain('no payment was taken')
   })
 
   it('prints a flat monthly plan as a schedule, with no per-line amounts to mis-add', () => {

@@ -38,7 +38,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   await syncPortalRuntime()
   const { id } = await params
-  return NextResponse.json({ starters: await rows(id), caps: STARTER_GOODS_CAP })
+  return NextResponse.json({ starters: await rows(id), cap: STARTER_GOODS_CAP })
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {

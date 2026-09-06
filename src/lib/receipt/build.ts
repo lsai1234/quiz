@@ -387,9 +387,13 @@ export function receiptFromStackCheckout(input: StackReceiptInput): ReceiptData 
     }
   }
 
-  if (input.mock) {
-    notes.push('Demo mode — no payment was taken and nothing will be dispatched.')
-  }
+  /*
+    No demo NOTE here, deliberately. The stamp two lines above already reads
+    `DEMO — NOT CHARGED`, and a note repeating it printed the same fact twice
+    within an inch of itself — with a third copy in a banner under the paper.
+    The stamp is the honest marker this module is built around; the prose was
+    the redundancy.
+  */
 
   // Never "charged today" on a receipt for a charge that didn't happen.
   const total = isSub && sub

@@ -27,7 +27,13 @@ import { PlanReceipt } from './PlanReceipt'
 import { SubscriptionProtocol } from './SubscriptionProtocol'
 import { ScratchToReveal, scratchRevealAvailable } from './ScratchToReveal'
 import { PartnerCodeBox, type AppliedCode } from '@/components/checkout/PartnerCodeBox'
-import { clearStarterCode } from '@/lib/partner-starter/handoff'
+import { clearClaim, isClaimingStarter } from '@/lib/partner-starter/handoff'
+import {
+  STARTER_GOODS_CAP,
+  STARTER_MIN_STEP,
+  STARTER_TIER_BANDS,
+  STARTER_TIERS,
+} from '@/lib/partner-starter/rules'
 import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJourney'
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { receiptItemsFromSlots } from '@/lib/receipt/build'
@@ -310,8 +316,48 @@ export function StackReviewPage() {
   // A partner's code, once validated. Feeds both the receipt and the checkout,
   // so what is shown and what is charged come from the same number.
   const [partnerCode, setPartnerCode] = useState<AppliedCode | null>(null)
-  /** `'oneoff'` while a starter stack is applied, else nothing to say. */
-  const starterPlanType = partnerCode?.starter ? ('oneoff' as const) : null
+  /**
+   * Whether this visit is a partner claiming their free stack.
+   *
+   * ── Why the server is asked, rather than the flag believed ────────────────
+   * The flag in `sessionStorage` is an INTENT. Anyone can set it, and — the
+   * case that actually matters — a real partner can have set it honestly and
+   * then lost their session: a different device, a cleared cookie, thirty days
+   * gone by. Believing it put £0.00 on screen in front of people the checkout
+   * then charged in full.
+   *
+   * A screen that disagrees with the card is the one failure this journey
+   * cannot have. So the flag only decides whether to ASK; `/api/partner/
+   * claimable` decides the answer, from the session cookie the browser cannot
+   * forge.
+   *
+   * ── Why it starts false ───────────────────────────────────────────────────
+   * Because the wrong direction to be wrong in is the expensive one. Starting
+   * false means a partner sees the ordinary price for a moment and then watches
+   * it drop to zero — a pleasant correction. Starting true means everybody else
+   * sees zero and then watches it climb, which is the surprise that loses an
+   * order.
+   */
+  const [claiming, setClaiming] = useState(false)
+  useEffect(() => {
+    if (!isClaimingStarter()) return
+    let live = true
+    fetch('/api/partner/claimable', { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : { claimable: false }))
+      .then((d: { claimable?: boolean }) => {
+        if (live) setClaiming(d.claimable === true)
+      })
+      .catch(() => {
+        /* Unreachable, so it is not a claim. The ordinary reveal at the
+           ordinary price is the safe answer to a question we could not ask. */
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  /** A starter buys one box, never a plan. */
+  const starterPlanType = claiming ? ('oneoff' as const) : null
 
   // Everything the price depends on EXCEPT the depth — the depth is what the
   // tier planner is deciding, so it can't be an input to it.
@@ -332,9 +378,39 @@ export function StackReviewPage() {
   // the value before the price. Each depth is filled to its own monthly price
   // band (`planTiers`), so Essentials costs about the same whatever the quiz
   // said and the number of products is what varies — not the other way round.
+  /*
+    A claim is planned differently, in three ways that all follow from the same
+    fact: it is a fixed budget spent once, not a monthly price to aim at.
+
+      • TWO DEPTHS. Essentials or Balanced — Complete is not on offer, so it is
+        not planned. Planning it and hiding it would leave the fill carrying
+        products towards a depth nobody can pick.
+      • BANDED ON THE ONE-OFF LIST PRICE, not the monthly subscription total.
+        What the box costs today is the number that matters; a monthly figure
+        describes nothing that is happening.
+      • A HARD CEILING at the cap. Bands are allowed to lose to the product
+        floor, so a band alone cannot promise anything — the ceiling trims after
+        the fill, which is what makes "always under £100" true rather than
+        usually true. A stack over the cap is refused at the checkout, and
+        "your free stack" ending in a shopping puzzle is the one outcome this
+        journey cannot have.
+  */
   const tierPlans = useMemo(
-    () => planTiers(blueprint, products, answers, undefined, priceOpts),
-    [blueprint, products, answers, priceOpts],
+    () =>
+      claiming
+        ? planTiers(
+            blueprint,
+            products,
+            answers,
+            undefined,
+            priceOpts,
+            STARTER_TIER_BANDS,
+            undefined,
+            STARTER_MIN_STEP,
+            { basis: 'oneOffList', levels: STARTER_TIERS, hardCeiling: STARTER_GOODS_CAP },
+          )
+        : planTiers(blueprint, products, answers, undefined, priceOpts),
+    [claiming, blueprint, products, answers, priceOpts],
   )
   // The depth actually on offer for the member's choice: `planTiers` folds
   // depths a small stack can't tell apart, so the stored level may no longer be
@@ -433,9 +509,7 @@ export function StackReviewPage() {
     the button; leaving the list price on it would put the two screens in
     disagreement at exactly the moment that matters.
   */
-  const starterStack = partnerCode?.starter
-    ? { label: `${partnerCode.founderLabel ?? 'Starter stack'}` }
-    : null
+  const starterStack = claiming ? { label: 'Your free starter stack' } : null
   const stickyTotal = starterStack ? 0 : stickyIsSub ? pricing.subscriptionTotal : pricing.oneOffTotal
 
   /*
@@ -448,7 +522,7 @@ export function StackReviewPage() {
     refuse it — a confusing end to a journey that has just worked.
   */
   useEffect(() => {
-    if (checkoutState.status === 'mock-complete') clearStarterCode()
+    if (checkoutState.status === 'mock-complete') clearClaim()
   }, [checkoutState.status])
   /*
    * ── The bar gets out of the receipt's way ────────────────────────────────

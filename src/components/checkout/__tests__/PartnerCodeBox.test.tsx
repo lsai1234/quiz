@@ -25,11 +25,6 @@ const JOHN20 = {
   founderKind: null,
   founderLabel: null,
   founderNote: null,
-  // The box reports all three kinds of code it can hold, so an ordinary
-  // partner code is explicitly neither of the other two rather than silent
-  // about them.
-  starter: false,
-  starterTier: null,
 }
 
 const setCookie = (value: string) => {
@@ -118,60 +113,5 @@ describe('a code applied from a partner’s link', () => {
       rerender(<PartnerCodeBox subtotal={40} applied={JOHN20} onChange={onChange} />)
     })
     expect(screen.queryByText(/applied automatically from a link/i)).not.toBeInTheDocument()
-  })
-})
-
-/**
- * A starter stack must be typed, never picked up from a link.
- *
- * `/api/cart` refuses to resolve one from the referral cookie, but the code
- * reaches the checkout in the request body whichever way the box got it — so
- * the server's rule only holds if the box keeps it.
- *
- * What it protects: a partner opens `/?ref=PS-…`, does not check out, and buys
- * something ordinary three weeks later. Without this the cookie applies their
- * one free stack to that order and spends it.
- */
-describe('a starter stack from a link', () => {
-  const STARTER = {
-    ok: true,
-    code: 'PS-7K4M2XQP',
-    discountPct: 0,
-    starter: true,
-    starterTier: 'performance',
-    label: 'Your Balanced starter stack',
-    note: 'Everything in this stack is free, delivery included.',
-  }
-
-  afterEach(() => {
-    document.cookie = 'partner_ref=; path=/; max-age=0'
-  })
-
-  it('is not applied automatically', async () => {
-    document.cookie = 'partner_ref=PS-7K4M2XQP; path=/'
-    const onChange = jest.fn()
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => STARTER }) as jest.Mock
-
-    render(<PartnerCodeBox subtotal={120} applied={null} onChange={onChange} />)
-
-    // It may well be CHECKED — the box does not know what it is holding until
-    // the server answers. What must not happen is it being applied.
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({ starter: true }))
-  })
-
-  it('is applied when somebody types it', async () => {
-    const user = userEvent.setup()
-    const onChange = jest.fn()
-    global.fetch = jest.fn().mockResolvedValue({ ok: true, json: async () => STARTER }) as jest.Mock
-
-    render(<PartnerCodeBox subtotal={120} applied={null} onChange={onChange} />)
-    await user.click(screen.getByRole('button', { name: /code/i }))
-    await user.type(screen.getByPlaceholderText(/discount code/i), 'PS-7K4M2XQP')
-    await user.click(screen.getByRole('button', { name: /apply/i }))
-
-    await waitFor(() =>
-      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ code: 'PS-7K4M2XQP', starter: true })),
-    )
   })
 })

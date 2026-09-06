@@ -1,66 +1,70 @@
 /**
- * Carrying a starter code from the page that issued it to the checkout that
- * spends it.
+ * Telling the quiz that this visit is a partner claiming their starter stack.
  *
- * ── The step this removes ───────────────────────────────────────────────────
- * A partner finished signing, was shown an eight-character code, and had to get
- * it into a box on a different page with a ninety-second quiz in between. Close
- * the tab, lose the clipboard, take a phone call — and they are back in their
- * account hunting for it. It was the last manual step in the journey and the
- * only one that could strand somebody holding a free stack they could not
- * spend.
+ * ── What this carries, and what it deliberately does not ────────────────────
+ * An INTENT, not a credential. It says "the person in this tab pressed Claim my
+ * free stack a minute ago"; it proves nothing about who they are.
  *
- * ── Why this is not the referral cookie ─────────────────────────────────────
- * A starter is deliberately kept out of `partner_ref`, and this does not
- * quietly put it back. The two are different objects:
+ * Who they are comes from the partner session cookie, which is httpOnly, set
+ * when they signed the agreement, and checked server-side by `/api/cart`. That
+ * split is the whole design: nothing a browser can write decides whether an
+ * order is free.
  *
- *   • `partner_ref` is a THIRTY-DAY cookie, settable by anyone with a URL
- *     (`?ref=…`), read on every visit. A starter in it would apply itself to an
- *     unrelated order weeks later and silently spend a partner's one free box.
- *   • This is `sessionStorage`, written only by our own signing page, to the
- *     one tab that just signed, and gone when that tab closes. It carries a
- *     decision the partner made ten seconds ago across a single navigation.
+ * ── Why the code is gone ────────────────────────────────────────────────────
+ * There used to be a `PS-…` code here, typed into the discount box like any
+ * other. It worked, and it was the wrong shape:
  *
- * That is the distinction the checkout cares about: not "typed versus stored",
- * but "did a person just choose this, in front of us". `PartnerCodeBox` applies
- * a starter from here and refuses one from the cookie for exactly that reason.
+ *   • It made a partner do admin. Read a code, hold it across a ninety-second
+ *     quiz, find the discount box, paste it — four steps to receive a gift.
+ *   • It put a 100%-off string into the world. Single-use and capped, but still
+ *     a thing that could be screenshotted, forwarded and tried.
+ *   • It made the free stack look like a discount, which it is not. A discount
+ *     comes off a price; this replaces the journey.
  *
- * Pure: no DOM at module scope. Both functions guard their own access so this
+ * The link from the portal is now the only door, and pressing the button in it
+ * is the only way to open this flag.
+ *
+ * ── Why `sessionStorage` ────────────────────────────────────────────────────
+ * The intent belongs to this visit. It survives the quiz and a refresh, and
+ * dies with the tab — where a cookie would sit for weeks and quietly turn an
+ * ordinary order into a claim long after they meant it.
+ *
+ * Pure: no DOM at module scope. Every function guards its own access so this
  * can be imported from a server component.
  */
 
-const KEY = 'chrgd.starter-code'
+const KEY = 'chrgd.claiming-starter'
 
-/** Hand the code to the quiz the partner is about to take. */
-export function carryStarterCode(code: string): void {
+/** They pressed the button. This visit is a claim. */
+export function markClaimingStarter(): void {
   try {
-    sessionStorage.setItem(KEY, code)
+    sessionStorage.setItem(KEY, '1')
   } catch {
-    /* Private mode, blocked storage. They still have the code on screen and the
-       box still takes it — this removes a step, it is not load-bearing. */
+    /* Private mode, blocked storage. The quiz runs as an ordinary quiz and the
+       partner is told at the end why their stack is not free, which is a bad
+       day but an honest one. */
   }
 }
 
-/** The code this tab is carrying, or null. */
-export function readStarterCode(): string | null {
+/** Is this visit a claim? */
+export function isClaimingStarter(): boolean {
   try {
-    return sessionStorage.getItem(KEY) || null
+    return sessionStorage.getItem(KEY) === '1'
   } catch {
-    return null
+    return false
   }
 }
 
 /**
  * Forget it.
  *
- * Called when the order is placed, not when the code is applied. A refresh
- * mid-reveal restarts the quiz (the blueprint is deliberately not persisted),
- * and a partner who has to redo the quiz must not also have to go and find
- * their code again. Once it is spent, though, leaving it would re-apply a used
- * code to their next stack and refuse it — a confusing end to a journey that
- * has just worked.
+ * Called when the order is placed, not when the reveal reads it. A refresh
+ * restarts the quiz (the blueprint is deliberately not persisted), and a
+ * partner made to redo the quiz must not silently lose the free stack they
+ * came for. Once it is spent, leaving the flag would make their NEXT quiz look
+ * like a claim and end in a refusal.
  */
-export function clearStarterCode(): void {
+export function clearClaim(): void {
   try {
     sessionStorage.removeItem(KEY)
   } catch {

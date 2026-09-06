@@ -140,7 +140,7 @@ export async function createStarter(input: {
       code,
       partnerId: input.partnerId,
       tier: input.tier,
-      goodsCap: input.goodsCap ?? STARTER_GOODS_CAP[input.tier],
+      goodsCap: input.goodsCap ?? STARTER_GOODS_CAP,
       note: input.note?.trim() || null,
       createdBy: input.createdBy ?? null,
       createdAt: at,

@@ -32,23 +32,48 @@ import type { PartnerStarter, StarterState, StarterTier } from './types'
 export const STARTER_TTL_DAYS = 21
 
 /**
- * The most the goods may list at, per tier (£ inc VAT).
+ * The most a starter's goods may list at (£ inc VAT, before any discount).
  *
- * A GUARD, not a price. The partner picks their own stack out of the quiz, and
- * without a ceiling "your stack, free" is an open basket — one £180 order from
- * a misunderstanding costs more than the campaign earns from that partner.
+ * ONE number for both depths, and it is the same number the stack is BUILT to
+ * — see `STARTER_TIER_BANDS`. That is the point: the planner is given this as a
+ * hard ceiling, so a Balanced starter comes in under it by construction, and
+ * this check is the backstop rather than the thing a partner meets.
  *
- * Set against what the depths actually list at as a one-off box rather than
- * against `TIER_PRICE_BANDS`, which bands the MONTHLY SUBSCRIPTION total: a
- * one-off box holds whole tubs, several of which last more than a month, so a
- * £55/month Balanced stack is a ~£126 box. These sit above that with enough
- * headroom for an expensive pick and well below what a Complete stack lists at,
- * which is the line the programme does not offer.
+ * It was two numbers (£90 / £140) banded off the monthly subscription figure,
+ * which is the wrong basis for a journey that is one-off by construction: a
+ * monthly total describes nothing that is happening here, and £140 was a box we
+ * did not intend to give away.
+ *
+ * Checked against the LIST subtotal, not what is being charged — which is zero
+ * by construction and therefore inside every ceiling ever set.
  */
-export const STARTER_GOODS_CAP: Record<StarterTier, number> = {
-  essentials: 90,
-  performance: 140,
+export const STARTER_GOODS_CAP = 100
+
+/**
+ * What the two depths are built to, in one-off list pounds.
+ *
+ * Read against `oneOffSubtotal` — what the box costs anybody today, before any
+ * discount — rather than the monthly subscription total the ordinary reveal
+ * bands on. A partner's starter never becomes a subscription, so a monthly
+ * figure is not a price it has; and the promise being made is "under £100 of
+ * products", which is a number in the box, not a number per month.
+ *
+ * Contiguous and ending exactly on the cap, so every stack belongs to one depth
+ * and Balanced can use all of what is on offer.
+ */
+export const STARTER_TIER_BANDS: Record<StarterTier, { min: number; target: number; max: number }> = {
+  essentials: { min: 0, target: 45, max: 65 },
+  performance: { min: 65, target: 85, max: STARTER_GOODS_CAP },
 }
+
+/**
+ * The smallest gap between the two depths worth showing as two options (£).
+ *
+ * Bigger than `TIER_MIN_STEP`, which is 5 and is a MONTHLY step. Five pounds
+ * between two boxes you are being given is not a decision; on a one-off basis
+ * the two options have to be visibly different or the choice is theatre.
+ */
+export const STARTER_MIN_STEP = 15
 
 /** The two depths a starter can be issued at, cheapest first. */
 export const STARTER_TIERS: StarterTier[] = ['essentials', 'performance']
@@ -162,8 +187,8 @@ export function starterFits(
   return {
     ok: false,
     reason:
-      `Your ${starterTierLabel(starter.tier)} starter covers up to ${format(starter.goodsCap)} of products, ` +
-      `and this stack comes to ${format(goodsListSubtotal)}. Drop something, or buy the difference on a normal order.`,
+      `Your starter covers up to ${format(starter.goodsCap)} of products, and this stack comes to ` +
+      `${format(goodsListSubtotal)}. Drop something, or buy the difference on a normal order.`,
   }
 }
 

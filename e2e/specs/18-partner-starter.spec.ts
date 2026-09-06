@@ -8,12 +8,15 @@ import { completeQuiz } from '../support/quiz'
  *
  * The journey the programme is sold on: tap a link in a DM, read what you are
  * agreeing to post, put your name at the bottom, take the quiz, and the stack
- * comes out free. No password, no code to copy, no card.
+ * comes out free. No password, no code, no card.
  *
  * Every step of that is a place somebody drops out, so each one is pinned here.
- * The two that matter most are the ones that were removed: a password form in
- * front of a free box, and an eight-character code to carry across a
- * ninety-second quiz.
+ * Three things were removed to get to it, and each has an assertion: a password
+ * form in front of a free box, a code to carry across a ninety-second quiz, and
+ * a Complete depth nobody in this journey can buy.
+ *
+ * The starter code still exists in the database as the row's identity. It must
+ * never reach a screen — a gift is not a discount somebody types.
  */
 
 const DB = process.env.DATABASE_PATH ?? '.data/e2e.db'
@@ -99,6 +102,40 @@ function seed(label: string) {
   return { id, code, publicCode, token: raw }
 }
 
+/**
+ * A live partner session, without going through the signing that normally
+ * creates one — so the "signed in but has NOT signed the agreement" state can
+ * be reached at all. Only the SHA-256 of the token is stored, exactly as
+ * `startPartnerSession` writes it.
+ */
+function signIn(partnerId: string): string {
+  const db = new Database(DB)
+  const raw = `sess-${Math.random().toString(36).slice(2)}`
+  db.prepare(
+    `INSERT INTO partner_sessions (token_hash, partner_id, expires_at, created_at)
+     VALUES (?, ?, ?, ?)`,
+  ).run(
+    createHash('sha256').update(raw).digest('hex'),
+    partnerId,
+    new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    new Date().toISOString(),
+  )
+  db.close()
+  return raw
+}
+
+/** The newest order in the database, for asserting what was actually charged. */
+function lastOrder(): { total: number; starterCode: string | null } | null {
+  const db = new Database(DB)
+  const row = db.prepare('SELECT data FROM orders ORDER BY created_at DESC LIMIT 1').get() as
+    | { data: string }
+    | undefined
+  db.close()
+  if (!row) return null
+  const parsed = JSON.parse(row.data) as { total: number; starterCode?: string | null }
+  return { total: parsed.total, starterCode: parsed.starterCode ?? null }
+}
+
 function read(code: string) {
   const db = new Database(DB)
   const row = db
@@ -124,8 +161,8 @@ test('a partner claims their stack from a link, with no account and nothing to t
   await expect(page.getByText(/one tiktok in launch week/i).first()).toBeVisible()
   await expect(page.getByRole('textbox', { name: /password/i })).toHaveCount(0)
 
-  // The code is NOT on screen yet — it buys nothing until this is signed, and
-  // showing it invites somebody to try it and conclude we are broken.
+  // The code is never on screen, before or after signing. It is the row's
+  // identity, not something a partner is asked to handle.
   await expect(page.getByText(code)).toHaveCount(0)
 
   // ── The signature ─────────────────────────────────────────────────────────
@@ -134,7 +171,8 @@ test('a partner claims their stack from a link, with no account and nothing to t
   await page.getByRole('checkbox').check()
   await page.getByRole('button', { name: /sign and unlock/i }).click()
 
-  await expect(page.getByText(code).first()).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(/press the button and take the quiz/i)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText(code)).toHaveCount(0)
 
   // Recorded, and recorded as what the SERVER served — the hash is the point of
   // the record, and a blank one is a signature against nothing.
@@ -155,24 +193,34 @@ test('a partner claims their stack from a link, with no account and nothing to t
   await expect(page.getByRole('link', { name: /your assets/i })).toBeVisible()
 
   // ── The quiz ──────────────────────────────────────────────────────────────
-  await page.getByRole('button', { name: /take the quiz/i }).click()
+  await page.getByRole('button', { name: /claim my free stack/i }).click()
   await expect(page).toHaveURL(/\/$|\/\?/)
 
   await completeQuiz(page)
 
   /*
-    The code carried itself. This is the step that was removed: they held an
-    eight-character code on one page and had to get it into a box on another,
-    with ninety seconds of quiz in between.
+    The reveal knows this is a claim without being told by the customer. No
+    code was typed and none is on screen — the tab carries an intent and the
+    session says whose.
   */
-  await expect(page.getByText(code).first()).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByText(/starter stack/i).first()).toBeVisible()
+  await expect(page.getByText(/your free starter stack/i).first()).toBeVisible({ timeout: 20_000 })
+  await expect(page.getByText(code)).toHaveCount(0)
 
-  // And the price says so, in both places that state a total. A screen showing
-  // £126 against an order that costs nothing is a receipt that disagrees with
-  // the charge, whichever way it disagrees.
+  // The price says so, in both places that state a total. A screen showing £96
+  // against an order that costs nothing is a receipt that disagrees with the
+  // charge, whichever way it disagrees.
   await expect(page.getByText(/to pay/i).first()).toBeVisible()
   await expect(page.getByRole('button', { name: /place my free order/i }).first()).toBeVisible()
+
+  /*
+    Two depths, never three. Complete is not on offer in this journey, and it
+    is not planned — so the selector must not be showing it.
+  */
+  await expect(page.getByText(/^Complete$/)).toHaveCount(0)
+
+  // And no subscription: a starter buys one box, and a free plan would renew
+  // free long after the starter itself had expired.
+  await expect(page.getByRole('button', { name: /start subscription/i })).toHaveCount(0)
 
   // ── The order ─────────────────────────────────────────────────────────────
   await page.getByRole('button', { name: /place my free order/i }).first().click()
@@ -193,16 +241,71 @@ test('a partner claims their stack from a link, with no account and nothing to t
   expect(read(code).row?.order_id).not.toBeNull()
 })
 
-test('the code buys nothing until it has been signed for', async ({ page }) => {
-  const { code } = seed('unsigned')
+/**
+ * The claim flag is an INTENT, not a credential — and the screen knows it.
+ *
+ * `sessionStorage` is writable by anyone with devtools, and a real partner can
+ * hold the flag honestly while their session has quietly gone (another device,
+ * a cleared cookie, thirty days). So the flag decides whether to ASK, and the
+ * server decides the answer.
+ *
+ * The first version of this shipped without that check, and this test is what
+ * caught it: the reveal showed £0.00 and "Place my free order" to somebody the
+ * checkout then charged £93.99. The money was right and the screen was a lie,
+ * which is the worse half.
+ */
+test('the claim flag alone buys nothing, and promises nothing on screen', async ({ page }) => {
+  const { code } = seed('flagonly')
 
+  await page.goto('/')
+  await page.evaluate(() => sessionStorage.setItem('chrgd.claiming-starter', '1'))
   await completeQuiz(page)
 
-  // Typed by hand, which is the only way in — a starter is deliberately never
-  // picked up from a referral cookie.
-  await page.getByRole('button', { name: /code/i }).first().click()
-  await page.getByPlaceholder(/discount code/i).fill(code)
-  await page.getByRole('button', { name: /apply/i }).click()
+  // No session, so there is no claim — and the screen says the true thing.
+  await expect(page.getByRole('button', { name: /place my free order/i })).toHaveCount(0)
+  await expect(page.getByText(/your free starter stack/i)).toHaveCount(0)
 
-  await expect(page.getByText(/sign your partner agreement/i)).toBeVisible({ timeout: 15_000 })
+  const cta = page.getByRole('button', { name: /continue to checkout|start subscription/i }).first()
+  await cta.scrollIntoViewIfNeeded()
+  await cta.click()
+
+  await expect(page.getByText(/your stack is on its way|you're subscribed/i)).toBeVisible({ timeout: 30_000 })
+
+  // Charged a real price, and nobody's starter spent on it.
+  await expect.poll(() => lastOrder()?.total ?? 0, { timeout: 15_000 }).toBeGreaterThan(0)
+  expect(lastOrder()?.starterCode ?? null).toBeNull()
+  expect(read(code).row?.used_at ?? null).toBeNull()
+})
+
+/**
+ * Signed IN is not signed FOR.
+ *
+ * A partner with a live session and no signed agreement is the state the whole
+ * design turns on: they are identified, the starter exists, and it still buys
+ * nothing. There is no button for them to press — and if they reach the quiz
+ * with the flag set anyway, the server declines to confirm it, so they get the
+ * ordinary reveal at the ordinary price rather than a promise we would break.
+ */
+test('a partner who has not signed the agreement is not shown a free stack', async ({ page }) => {
+  const { id, code, token } = seed('nosign')
+
+  await page.goto(`/partner/claim?token=${encodeURIComponent(token)}`)
+  // The offer is there; the way to take it is not, because nothing is signed.
+  await expect(page.getByText(/sign to unlock/i)).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole('button', { name: /claim my free stack/i })).toHaveCount(0)
+
+  const session = signIn(id)
+  await page.context().addCookies([{ name: 'partner_session', value: session, url: page.url() }])
+
+  await page.goto('/')
+  await page.evaluate(() => sessionStorage.setItem('chrgd.claiming-starter', '1'))
+  await completeQuiz(page)
+
+  // Identified, and still not claimable. The screen promises nothing.
+  await expect(page.getByRole('button', { name: /place my free order/i })).toHaveCount(0)
+  await expect(page.getByText(/your free starter stack/i)).toHaveCount(0)
+
+  // And the starter is untouched, still there to be claimed once they sign.
+  expect(read(code).row?.used_at ?? null).toBeNull()
+  expect(read(code).row?.agreement_id ?? null).toBeNull()
 })

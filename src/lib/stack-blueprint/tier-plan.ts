@@ -49,6 +49,45 @@ import type { StackBlueprint, StackSlotEntry } from './types'
 import { calculatePricing, getPricingConfig, type SubscriptionPlanOptions } from './pricing'
 import { TIER_ORDER, TIER_MIN_STEP } from '@/lib/quiz-core'
 
+/**
+ * Which number the bands are read against.
+ *
+ * `subscription` — the monthly subscription total. The default, and what the
+ * three depths on the reveal are sold on: the bands in `TIER_PRICE_BANDS` are
+ * monthly prices, and the whole tier model is a subscription model.
+ *
+ * `oneOffList` — the undiscounted one-off subtotal: what the box would cost
+ * anybody, today, before any discount is taken off it. For journeys that are
+ * one-off by construction and have a ceiling in pounds rather than a price to
+ * aim at — a partner's free starter stack, which has to come in under a cap we
+ * are giving away, and where a monthly figure describes nothing that is
+ * happening.
+ */
+export type TierBasis = 'subscription' | 'oneOffList'
+
+export interface TierOptions {
+  /** Default `subscription`. */
+  basis?: TierBasis
+  /**
+   * Which depths to plan, in order. Defaults to all three.
+   *
+   * A partner's starter is offered at Essentials or Balanced only, and this is
+   * where that is true — planning Complete and then hiding it would leave the
+   * fill carrying products towards a depth nobody can pick.
+   */
+  levels?: StackLevel[]
+  /**
+   * A ceiling the deepest plan may never cross, in the basis's own units.
+   *
+   * Different from `band.max`, which the fill is allowed to break: the product
+   * floor outranks the price band (a one-product "Essentials" is not a stack),
+   * so a band alone cannot promise anything. This can, because it TRIMS after
+   * the fill rather than steering it — the last thing that runs, and the reason
+   * "always under £100" is a fact rather than an aspiration.
+   */
+  hardCeiling?: number
+}
+
 export interface TierPlan {
   level: StackLevel
   /** The slots this depth includes, in display order. */
@@ -90,22 +129,44 @@ export function planTiers(
   // From the CONFIG, not the constants: `config` already carries any founder
   // override merged over the defaults, so the pricing page moves the bands
   // without a deploy and without a second source of truth.
-  bands = config.tierBands,
+  //
+  // `Partial`, so a caller planning a subset of the depths (`tier.levels`) only
+  // has to describe the ones it is planning. A level with no band is not
+  // planned at all rather than planned against a default that was written for a
+  // different basis entirely.
+  bands: Partial<Record<StackLevel, { min: number; target: number; max: number | null }>> = config.tierBands,
   sizes = config.tierSizes,
   minStep = TIER_MIN_STEP,
+  tier: TierOptions = {},
 ): TierPlan[] {
   const ranked = [...blueprint.slots].sort(byDisplayOrder)
 
   const priceOf = (slots: StackSlotEntry[], level: StackLevel) =>
     calculatePricing({ ...blueprint, slots, level }, catalogue, answers, config, { ...opts, level })
 
+  /*
+    The one number every band, target and step is read against.
+
+    It used to be `subscriptionTotal` in eight places. Naming it once is what
+    lets a one-off journey band on what a box actually costs today rather than
+    on a monthly figure that describes nothing it is doing.
+  */
+  const measure = (slots: StackSlotEntry[], level: StackLevel): number => {
+    const priced = priceOf(slots, level)
+    return tier.basis === 'oneOffList' ? priced.oneOffSubtotal : priced.subscriptionTotal
+  }
+
+  const levels = tier.levels ?? TIER_ORDER
+
   const plans: TierPlan[] = []
   let chosen: StackSlotEntry[] = []
 
-  for (const level of TIER_ORDER) {
+  for (const level of levels) {
     const band = bands[level]
+    // No band, not planned. See the note on the parameter.
+    if (!band) continue
     const size = sizes[level]
-    const picked = [...chosen]
+    let picked = [...chosen]
     const has = (slot: StackSlotEntry) => picked.some((p) => p.slotId === slot.slotId)
 
     // 1. Anchors, and — for the first tier — the top-ranked product, so the
@@ -126,7 +187,7 @@ export function planTiers(
     for (const slot of ranked) {
       if (picked.length >= size.min) break
       if (has(slot)) continue
-      if (band.max != null && priceOf([...picked, slot], level).subscriptionTotal > band.max) continue
+      if (band.max != null && measure([...picked, slot], level) > band.max) continue
       picked.push(slot)
     }
 
@@ -139,7 +200,7 @@ export function planTiers(
       const rest = ranked.filter((slot) => !has(slot))
       if (rest.length === 0) break
       const cheapest = rest.reduce((best, slot) => {
-        const cost = priceOf([...picked, slot], level).subscriptionTotal
+        const cost = measure([...picked, slot], level)
         return best && best.cost <= cost ? best : { slot, cost }
       }, null as { slot: StackSlotEntry; cost: number } | null)
       if (!cheapest) break
@@ -162,8 +223,8 @@ export function planTiers(
     //    ranked below it.
     for (const slot of ranked) {
       if (has(slot) || picked.length >= size.max) continue
-      if (picked.length >= size.min && priceOf(picked, level).subscriptionTotal >= band.target) break
-      if (band.max != null && priceOf([...picked, slot], level).subscriptionTotal > band.max) continue
+      if (picked.length >= size.min && measure(picked, level) >= band.target) break
+      if (band.max != null && measure([...picked, slot], level) > band.max) continue
       picked.push(slot)
     }
 
@@ -179,10 +240,44 @@ export function planTiers(
     if (picked.length === chosen.length && picked.length < ranked.length && picked.length < size.max) {
       const rest = ranked.filter((slot) => !has(slot))
       const cheapest = rest.reduce((best, slot) => {
-        const cost = priceOf([...picked, slot], level).subscriptionTotal
+        const cost = measure([...picked, slot], level)
         return best && best.cost <= cost ? best : { slot, cost }
       }, null as { slot: StackSlotEntry; cost: number } | null)
       if (cheapest) picked.push(cheapest.slot)
+    }
+
+    /*
+      The hard ceiling, applied last.
+
+      Every check above is a band, and a band is allowed to lose: the product
+      floor outranks it (step 2), and step 4 will overshoot the price rather
+      than show two identical rows. That is right for the ordinary reveal, where
+      the band is a price the depth is SOLD at and a few pounds over is a
+      judgement call.
+
+      It is wrong where the ceiling is a promise. A partner's starter covers up
+      to a fixed number of pounds; a stack a penny over it is refused at the
+      checkout, which turns "your stack, free" into an error message and a
+      shopping puzzle. So when a ceiling is given, the most expensive slot goes
+      until the stack fits under it — cheapest-first would strip the small
+      things and leave the one product that broke it.
+
+      Down to one product if it has to. A single-product stack is a poor stack
+      and an unbuyable one is worse.
+    */
+    if (tier.hardCeiling != null) {
+      while (picked.length > 1 && measure(picked, level) > tier.hardCeiling) {
+        const dearest = picked.reduce((worst, slot) => {
+          const without = measure(
+            picked.filter((p) => p.slotId !== slot.slotId),
+            level,
+          )
+          // The slot whose removal saves the most is the dearest one.
+          return worst && worst.without <= without ? worst : { slot, without }
+        }, null as { slot: StackSlotEntry; without: number } | null)
+        if (!dearest) break
+        picked = picked.filter((p) => p.slotId !== dearest.slot.slotId)
+      }
     }
 
     const slots = [...picked].sort(byDisplayOrder)
@@ -210,7 +305,19 @@ export function planTiers(
       prev.slots.length === plan.slots.length &&
       prev.slots.every((slot, i) => slot.slotId === plan.slots[i].slotId)
     if (sameSlots) continue
-    if (prev && plan.monthly - prev.monthly < minStep) shown[shown.length - 1] = plan
+    /*
+      The step is measured in whatever the bands were measured in. On a one-off
+      basis two depths £6 apart in MONTHLY terms are £14 apart in the box, which
+      is a real choice — folding them because a subscription figure nobody is
+      being offered came out close would delete one of the two options a partner
+      is supposed to pick between.
+    */
+    const step = prev
+      ? tier.basis === 'oneOffList'
+        ? plan.oneOff - prev.oneOff
+        : plan.monthly - prev.monthly
+      : Infinity
+    if (step < minStep) shown[shown.length - 1] = plan
     else shown.push(plan)
   }
 
