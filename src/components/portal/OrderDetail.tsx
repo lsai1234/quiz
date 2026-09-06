@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { DangerZone, type DeletionCheck } from './DangerZone'
 import Link from 'next/link'
 import { StatusBadge, statusLabel, formatStamp } from './OrdersList'
 import { Button, Card, Input, Note } from '@/components/system'
@@ -275,6 +276,39 @@ export function OrderDetail({ id }: { id: string }) {
           ))}
         </div>
       </section>
+
+      {/*
+        Last on the page. `reject` marks an order and keeps it; this removes it
+        from the queue and from every total — for the ones a founder will not
+        send and does not want in the numbers. The refusals live in the domain:
+        an order already with PowerBody, or paid for and not refunded, is a fact
+        about the world that deleting our row does not change.
+      */}
+      <DangerZone
+        noun="order"
+        onCheck={async () => {
+          const res = await fetch(`/api/portal/orders/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete-check' }),
+          })
+          const d = await res.json().catch(() => ({}))
+          return (d.check as DeletionCheck) ?? null
+        }}
+        onDelete={async (reason) => {
+          const res = await fetch(`/api/portal/orders/${id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete', note: reason }),
+          })
+          const d = await res.json().catch(() => ({}))
+          return res.ok ? null : (d.error ?? 'That did not work.')
+        }}
+        onDeleted={() => {
+          // There is no order left to look at, so the page cannot stay.
+          window.location.href = BACK_HREF
+        }}
+      />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Badge, Button, Card, Checkbox, Input, Modal, ModalBody, ModalHeader, Select, Tabs, Textarea } from '@/components/system'
 import { describePayout, describeTerms } from '@/lib/partners/terms'
 import { StarterPanel } from './StarterPanel'
+import { DangerZone, type DeletionCheck } from './DangerZone'
 import type {
   CodeTerms,
   PartnerBalance,
@@ -131,6 +132,38 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
                       setting a partner up does both in the same sitting, and
                       the starter's own text quotes the code they just made. */}
                   <StarterPanel partnerId={partner.id} />
+
+                  {/*
+                    Last on the tab, on purpose. Suspending is the answer to
+                    almost every question a founder brings here; this is for a
+                    duplicate, a test account, or somebody who never started, and
+                    it should take a deliberate scroll to reach.
+                  */}
+                  <DangerZone
+                    noun="partner"
+                    onCheck={async () => {
+                      const res = await fetch('/api/portal/partners', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'delete-check', id: partner.id }),
+                      })
+                      const d = await res.json().catch(() => ({}))
+                      return (d.check as DeletionCheck) ?? null
+                    }}
+                    onDelete={async (reason) => {
+                      const res = await fetch('/api/portal/partners', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'delete', id: partner.id, note: reason }),
+                      })
+                      const d = await res.json().catch(() => ({}))
+                      return res.ok ? null : (d.error ?? 'That did not work.')
+                    }}
+                    onDeleted={() => {
+                      onSaved()
+                      onClose()
+                    }}
+                  />
                 </>
               ),
             },

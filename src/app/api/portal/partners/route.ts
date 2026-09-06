@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed, getFounder } from '@/lib/portal/guard'
+import { checkPartnerDeletion, deletePartner } from '@/lib/admin/deletion'
 import { syncPortalRuntime } from '@/lib/portal/store'
 import {
   changeTerms,
@@ -62,8 +63,20 @@ export async function GET() {
 }
 
 interface Body {
-  action?: 'create' | 'status' | 'terms' | 'code' | 'settle' | 'mark-paid' | 'invite' | 'run-payouts'
+  action?:
+    | 'create'
+    | 'status'
+    | 'terms'
+    | 'code'
+    | 'settle'
+    | 'mark-paid'
+    | 'invite'
+    | 'run-payouts'
+    | 'delete-check'
+    | 'delete'
   id?: string
+  /** Why a partner was deleted — kept on the tombstone, not on the partner. */
+  note?: string
   // create
   email?: string
   name?: string
@@ -153,6 +166,34 @@ export async function POST(req: Request) {
           return NextResponse.json({ ok: false, reason: result.reason })
         }
         return NextResponse.json({ ok: true, payout: result, partner: await getPartnerRecord(body.id) })
+      }
+
+      /*
+        What removing this partner would take with them, and whether it may be
+        done at all. Asked before the press, so the confirm can name the
+        consequence rather than daring somebody to find out.
+      */
+      case 'delete-check': {
+        if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+        return NextResponse.json({ check: await checkPartnerDeletion(body.id) })
+      }
+
+      /*
+        Remove a partner outright, freeing their email.
+
+        Not the same act as suspending, which stops their code and keeps the
+        record. This is for a duplicate, a test account, or somebody who never
+        started — and the domain refuses it for anyone whose commission has been
+        invoiced or paid, because that is accounts we told them we would keep.
+      */
+      case 'delete': {
+        if (!body.id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+        const result = await deletePartner(body.id, {
+          by: founder?.email ?? null,
+          reason: typeof body.note === 'string' ? body.note : null,
+        })
+        if (!result.ok) return NextResponse.json({ error: result.reason }, { status: 409 })
+        return NextResponse.json({ ok: true, deleted: result.summary })
       }
 
       case 'invite': {

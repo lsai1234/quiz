@@ -718,6 +718,33 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX partner_agreements_partner ON partner_agreements(partner_id);
   CREATE INDEX partner_agreements_version ON partner_agreements(version);
   `,
+  // v21 — `deletion_log`: what was destroyed, by whom, and what it was.
+  //
+  // Two things in the hub can now be deleted outright rather than only marked
+  // rejected or suspended: an order a founder will not send, and a partner
+  // whose email they want back. Both are irreversible, and an irreversible
+  // action with no trace is the one kind of button that can be pressed twice —
+  // once by mistake and once again looking for the evidence of the mistake.
+  //
+  // `summary` holds a SHORT description of what went, written at delete time:
+  // an order's reference and total, a partner's name and email. Deliberately a
+  // description rather than a copy — a log that preserved the row would be an
+  // undelete pretending to be an audit trail, and would keep the personal data
+  // the deletion was meant to remove. What it answers is "did we delete this,
+  // and what was it", which is what somebody asks six months later.
+  `
+  CREATE TABLE deletion_log (
+    id         TEXT PRIMARY KEY,
+    kind       TEXT NOT NULL,
+    subject_id TEXT NOT NULL,
+    founder    TEXT,
+    reason     TEXT,
+    summary    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX deletion_log_kind ON deletion_log(kind);
+  CREATE INDEX deletion_log_created ON deletion_log(created_at);
+  `,
 ]
 
 /**
