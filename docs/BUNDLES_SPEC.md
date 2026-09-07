@@ -291,3 +291,13 @@ resolve, and the supplier's own error text — including the transport's
 the run rather than making a dozen more requests to be refused by, and a
 non-JSON response is reported as our own timeout rather than as the supplier's
 silence.
+
+**And one product at a time.** The sweep is the tool for "get the whole
+catalogue right"; it is the wrong one for "I am looking at this product and it
+is missing its pictures". Products → Dashboard has a **Multiple variants**
+filter (a second axis, combining with the category chips), and opening a product
+there shows what is actually held per variant — SKU, price, serving count
+(starred when it was scaled from a size rather than told to us), whether the
+picture is its own or the product's, and the per-variant cost — with a **Pull N
+SKUs from PowerBody** button that runs the same work scoped to that product.
+`POST { productId }` on the same route: one code path, so the two cannot drift.

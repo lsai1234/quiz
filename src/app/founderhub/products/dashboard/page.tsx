@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
 import { Badge, Button, Card, Input } from '@/components/system'
+import { ProductVariantsPanel } from '@/components/portal/ProductVariantsPanel'
 
 /** Readiness status → the system's semantic tone. `Badge` owns the colours. */
 const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: 'positive', warn: 'attention', fail: 'critical' }
@@ -20,6 +21,16 @@ export default function DashboardPage() {
   const [source, setSource] = useState<'mock' | 'real'>('mock')
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('all')
+  /*
+    A second axis, not a category.
+
+    Categories are one-of; this is a yes/no about the SHAPE of a product, and
+    the two combine — "multi-variant products in Protein" is the question a
+    founder chasing missing per-flavour data actually asks. It gets its own row
+    so it cannot be mistaken for one more category chip.
+  */
+  const [multiOnly, setMultiOnly] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -37,12 +48,18 @@ export default function DashboardPage() {
     return ['all', ...[...set].sort()]
   }, [rows])
 
+  const multiCount = useMemo(
+    () => (rows ?? []).filter((r) => r.product.variants.length > 1).length,
+    [rows],
+  )
+
   const filtered = useMemo(() => {
     let r = rows ?? []
     if (query) r = r.filter((x) => x.product.title.toLowerCase().includes(query.toLowerCase()))
     if (category !== 'all') r = r.filter((x) => x.product.category === category)
+    if (multiOnly) r = r.filter((x) => x.product.variants.length > 1)
     return r
-  }, [rows, query, category])
+  }, [rows, query, category, multiOnly])
 
   async function remove(id: string) {
     setRemoving(id)
@@ -100,6 +117,20 @@ export default function DashboardPage() {
           placeholder="Search products…"
         />
       </div>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <Button
+          size="sm"
+          variant={multiOnly ? 'primary' : 'secondary'}
+          aria-pressed={multiOnly}
+          onClick={() => setMultiOnly((on) => !on)}
+        >
+          Multiple variants ({multiCount})
+        </Button>
+        <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+          The products whose price, servings and pictures can differ per flavour — open one to see what we hold
+          for each, and to read them from PowerBody.
+        </span>
+      </div>
       <div className="flex flex-wrap gap-2 mb-4">
         {categories.map((c) => (
           <Button
@@ -152,6 +183,28 @@ export default function DashboardPage() {
                   {skus.length > 0 && (
                     <p className="truncate" style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>SKU: {skus.join(', ')}</p>
                   )}
+
+                  {/*
+                    Opening a product is how you see what is held PER VARIANT —
+                    which flavour has its own price, serving count and picture,
+                    and which is still borrowing the product's. Nothing else in
+                    the Hub shows that, and it is the thing that says whether
+                    the pull is worth pressing.
+                  */}
+                  {p.variants.length > 1 && (
+                    <div className="mt-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-expanded={openId === p.id}
+                        aria-label={`${openId === p.id ? 'Hide' : 'Show'} the ${p.variants.length} variants of ${p.title}`}
+                        onClick={() => setOpenId((id) => (id === p.id ? null : p.id))}
+                      >
+                        {openId === p.id ? 'Hide variants' : `${p.variants.length} variants`}
+                      </Button>
+                    </div>
+                  )}
+                  {openId === p.id && <ProductVariantsPanel product={p} onUpdated={load} />}
 
                   {confirmId === p.id ? (
                     <div className="flex gap-2 mt-2">

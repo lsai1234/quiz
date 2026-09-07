@@ -84,11 +84,10 @@ function isMultiSku(product: CatalogueProduct): boolean {
 }
 
 /**
- * Every product with more than one supplier SKU behind it, from both places one
- * can live: still `imported` and awaiting review, or live in the catalogue with
- * its edits held as an override.
+ * Every product, from both places one can live: still `imported` and awaiting
+ * review, or live in the catalogue with its edits held as an override.
  */
-async function candidates(): Promise<CatalogueProduct[]> {
+async function allProducts(): Promise<CatalogueProduct[]> {
   await syncPortalRuntime()
   const [imported, resolved, overrides] = await Promise.all([
     getImportedProducts(),
@@ -98,7 +97,12 @@ async function candidates(): Promise<CatalogueProduct[]> {
   const byId = new Map<string, CatalogueProduct>()
   for (const p of resolved.products) byId.set(p.id, p)
   for (const p of imported) byId.set(p.id, { ...p, ...(overrides[p.id] ?? {}) } as CatalogueProduct)
-  return [...byId.values()].filter(isMultiSku)
+  return [...byId.values()]
+}
+
+/** …narrowed to the ones a sweep is about: more than one supplier SKU behind them. */
+async function candidates(): Promise<CatalogueProduct[]> {
+  return (await allProducts()).filter(isMultiSku)
 }
 
 /** A product whose variants are all at one price is the one worth flagging. */
@@ -246,16 +250,33 @@ export async function POST(request: Request) {
 
   let force = false
   let offset = 0
+  let productId: string | null = null
   const raw = await request.text().catch(() => '')
   if (raw.trim()) {
     try {
-      const body = JSON.parse(raw) as { force?: boolean; offset?: number }
+      const body = JSON.parse(raw) as { force?: boolean; offset?: number; productId?: string }
       force = body.force === true
       const asked = Number(body.offset)
       offset = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : 0
+      productId = typeof body.productId === 'string' && body.productId.trim() ? body.productId.trim() : null
     } catch {
       return NextResponse.json({ error: 'Malformed request.' }, { status: 400 })
     }
+  }
+
+  /*
+    One product, asked for by name.
+
+    The sweep is for the founder who wants the whole catalogue right; this is
+    for the one who is looking at a product and wants THAT one filled in. It is
+    the same work on a set of one — and deliberately not restricted to
+    multi-SKU products, because "does PowerBody know anything else about this?"
+    is a fair question to ask of any product with a supplier code on it.
+  */
+  if (productId) {
+    const product = (await allProducts()).find((p) => p.id === productId)
+    if (!product) return NextResponse.json({ error: `No product with id "${productId}".` }, { status: 404 })
+    return runOn([product], force, { offset: 0, totalProducts: 1, nextOffset: null })
   }
 
   const affected = await candidates()
@@ -268,7 +289,31 @@ export async function POST(request: Request) {
 
   // Measured in SKUs, not products — see `sliceBySkuBudget`.
   const slice = sliceBySkuBudget(affected.slice(offset), SKUS_PER_BATCH)
+  const done = offset + slice.length
+  return runOn(slice, force, {
+    offset,
+    totalProducts: affected.length,
+    // Where the screen picks up, or null when there is nothing left. It always
+    // advances: this batch's products were processed with whatever the supplier
+    // gave, and re-reading them would leave everything after them unreachable.
+    // A batch that learned nothing is the screen's cue to stop, not to retry.
+    nextOffset: done < affected.length ? done : null,
+  })
+}
 
+/**
+ * Read these products' SKUs from PowerBody and write back what changed.
+ *
+ * One code path for both callers: the sweep hands it a batch, the product
+ * screen hands it a set of one. Nothing about the work differs, and having the
+ * single-product pull take a different route through this is how the two would
+ * drift apart.
+ */
+async function runOn(
+  slice: CatalogueProduct[],
+  force: boolean,
+  position: { offset: number; totalProducts: number; nextOffset: number | null },
+) {
   const skus = [
     ...new Set(slice.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))),
   ]
@@ -304,18 +349,12 @@ export async function POST(request: Request) {
     repaired.push({ productId: product.id, title: product.title, changed: result.changed })
   }
 
-  const done = offset + slice.length
   return NextResponse.json({
     ok: true,
-    // This batch.
-    offset,
+    offset: position.offset,
     products: slice.length,
-    totalProducts: affected.length,
-    // Where the screen picks up, or null when there is nothing left. It always
-    // advances: this batch's products were processed with whatever the supplier
-    // gave, and re-reading them would leave everything after them unreachable.
-    // A batch that learned nothing is the screen's cue to stop, not to retry.
-    nextOffset: done < affected.length ? done : null,
+    totalProducts: position.totalProducts,
+    nextOffset: position.nextOffset,
     total: repaired.length,
     variants: repaired.reduce((n, r) => n + Object.keys(r.changed).length, 0),
     report,
