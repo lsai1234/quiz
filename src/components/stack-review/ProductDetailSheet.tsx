@@ -10,6 +10,7 @@ import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { effectOnsetForProduct } from '@/lib/feedback'
 import type { EffectOnset } from '@/lib/catalogue/types'
 import { productFacts, productDietary } from '@/lib/product-facts'
+import { interchangeableVariants } from '@/lib/shop/per-serving'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { IconButton } from '@/components/ui/IconButton'
 import { ProductTile } from './ProductTile'
@@ -102,7 +103,16 @@ export function ProductDetailSheet({
     ?? product?.variants.find((v) => v.available)
     ?? product?.variants[0]
   const price = selectedVariant?.price ?? product?.basePrice ?? 0
-  const showVariantPicker = product && product.variants.length > 1
+  /*
+    Only the variants that are a straight swap for the chosen one — same
+    product, same serving count. A plan has already sized the month and priced
+    it from that count, so offering a 454-serving bag as a "flavour" of a
+    33-serving bottle silently reprices somebody's stack. Other sizes are a
+    decision, and they belong on the product page. See `interchangeableVariants`.
+  */
+  const swappable = product ? interchangeableVariants(product, selectedVariant) : []
+  const otherSizes = product ? product.variants.length - swappable.length : 0
+  const showVariantPicker = product && swappable.length > 1
 
   const dietary = product ? productDietary(product) : []
   const facts = product ? productFacts(product) : []
@@ -253,7 +263,7 @@ export function ProductDetailSheet({
                 Flavour &amp; size
               </p>
               <div className="flex flex-col gap-1.5">
-                {product!.variants.map((v) => {
+                {swappable.map((v) => {
                   const isSelected = (slot.selectedVariantId ?? selectedVariant?.id) === v.id
                   return (
                     <button
@@ -293,6 +303,15 @@ export function ProductDetailSheet({
                   )
                 })}
               </div>
+              {/* Said, not hidden: a picker that quietly drops two of a
+                  product's four options looks like a bug to the one person who
+                  knows the range. */}
+              {otherSizes > 0 && (
+                <p className="text-[11px] mt-2" style={{ color: 'var(--color-muted)' }}>
+                  {otherSizes === 1 ? 'One other size is' : `${otherSizes} other sizes are`} sold on the product
+                  page — a different serving count changes what your plan costs, so it is not a swap.
+                </p>
+              )}
             </section>
           )}
 

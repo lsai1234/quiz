@@ -181,11 +181,38 @@ parallel. Phase 5 → 6 build on the store and each other. Phase 7 last.
 Roughly: **1 & 2 together are one solid session; 3, 4, 5 a session each;
 6 is the largest (one to two sessions); 7 a half-session.**
 
-## Amendment — the package, and its workouts (Sept 2026)
+## Amendment — two records, not one (Sept 2026)
 
-A bundle is now a **package**: one stack, and **one to many workouts**, sold
-under one name with one photograph. Three changes, all backwards compatible
-with what founders have already saved.
+A bundle is two things now, and the relationship between them is one to many.
+
+**A pre-built bundle** is a named stack of products — "Strength", "Fitness" —
+and nothing else: no workout, no story, no landing page. There are two of them.
+They are authored entirely in the Hub (`/founderhub/products/prebuilt`), because
+which products belong together moves with the range and does not belong in a
+deploy, and they are stored apart from the packages that sell them.
+
+**A workout bundle** is what a customer buys: a session, a name, a photograph,
+the copy — and a pointer at one of those stacks. It is what the shop shelf shows
+and what `/bundles/[slug]` renders. Several workout bundles can point at the same
+pre-built bundle, which is the whole reason for the split: a stack used to be
+copied into every package that used it, so a product swapped out of "Strength"
+had to be swapped out of each one by hand.
+
+Resolution happens on read (`composeBundles`): a workout bundle's `blueprint` and
+`addOns` come from its pre-built bundle every time, so nothing can hold a stale
+copy of a stack. An unlinked package resolves to an empty stack — priced at
+nothing, `isBundleSellable` false, hidden from the shop, and readiness says which
+link is missing. The six shipped seeds ship exactly that way: their workouts and
+copy are intact, their products were removed, and each is pointed at a stack in
+the Hub.
+
+Deleting a pre-built bundle is refused while any package still sells it, and the
+error names them.
+
+### The package, and its workouts
+
+The same amendment, still true: a package carries **one to many workouts**, and a
+name and photograph of its own.
 
 1. **`workouts: BundleWorkout[]` replaces `workout`.** A strength package is a
    week of sessions, not one session; the old shape held exactly one because
@@ -207,6 +234,18 @@ with what founders have already saved.
    `lib/shop/categories.ts` — four products, then "Show all N". Bundles are a
    shelf like any other, and a bundle card is the tallest one there is.
 
-The Hub's bundle editor grew a workout list (add, reorder, remove) and a photo
-field with a preview. Readiness counts complete workouts rather than asserting
-one.
+The Hub's workout-bundle editor grew a workout list (add, reorder, remove) and a
+photo field with a preview, and lost its product picker — that moved to the
+pre-built bundle editor, along with the add-ons and the primary goal. Readiness
+counts complete workouts rather than asserting one, and checks the link first.
+
+### One more rule, about variants
+
+A stack may only offer a variant swap **within the same serving count**
+(`interchangeableVariants`). On the shop shelf every size is shown — comparing
+100 capsules against a 454g bag is the job of that page. Inside a plan it is not
+a flavour swap: the plan has sized the month and priced it from the serving
+count, so switching to a variant with a different count silently reprices it.
+Unknown counts stay interchangeable, because most products know their servings
+for the first variant only and treating unknown as different would empty the
+picker for the flavours it exists for.

@@ -11,7 +11,10 @@ import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
 const ITEMS: SubNavItem[] = [
   { href: '/founderhub/products', label: 'Catalogue', exact: true },
   { href: '/founderhub/products/top-25', label: 'Top 25' },
-  { href: '/founderhub/products/bundles', label: 'Bundles' },
+  // The stacks, then the packages that sell them. In that order because that
+  // is the order the work happens in: a workout bundle picks a pre-built one.
+  { href: '/founderhub/products/prebuilt', label: 'Pre-built bundles' },
+  { href: '/founderhub/products/bundles', label: 'Workout bundles' },
   { href: '/founderhub/products/powerbody', label: 'PowerBody' },
   // Sits next to PowerBody because it is the second half of the same job:
   // nothing imported there is on sale until it has been through here.

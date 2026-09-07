@@ -1,4 +1,4 @@
-import type { PrebuiltBundle } from './types'
+import type { ResolvedBundle } from './resolve'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { missingCoreProducts, bundlePriceSummary } from './pricing'
 import { bundleWorkouts } from './resolve'
@@ -29,10 +29,25 @@ function worst(statuses: CheckStatus[]): CheckStatus {
  * Traffic-light readiness for a bundle — mirrors the product readiness model
  * the portal already uses. Overall status is the worst of its checks.
  */
-export function bundleReadiness(bundle: PrebuiltBundle, products: CatalogueProduct[]): BundleReadiness {
+export function bundleReadiness(bundle: ResolvedBundle, products: CatalogueProduct[]): BundleReadiness {
   const checks: ReadinessCheck[] = []
 
-  // 1. Products resolve and are in stock — a bundle can't ship without them.
+  // 1. A pre-built bundle is chosen, and it still exists. Everything
+  //    product-shaped hangs off this: without it the package has no stack, no
+  //    price and nothing to ship.
+  const linked = Boolean(bundle.productBundle)
+  checks.push({
+    id: 'stack',
+    label: linked ? `Stack — ${bundle.productBundle!.name}` : 'No pre-built bundle chosen',
+    status: linked ? 'ok' : 'fail',
+    detail: linked
+      ? undefined
+      : bundle.productBundleSlug
+        ? `"${bundle.productBundleSlug}" no longer exists — pick another.`
+        : 'Pick the pre-built bundle this workout sells.',
+  })
+
+  // 2. Its products resolve and are in stock — a bundle can't ship without them.
   const missing = missingCoreProducts(bundle, products)
   checks.push({
     id: 'products',
@@ -40,7 +55,7 @@ export function bundleReadiness(bundle: PrebuiltBundle, products: CatalogueProdu
     status: bundle.blueprint.slots.length === 0 ? 'fail' : missing.length === 0 ? 'ok' : 'fail',
     detail:
       bundle.blueprint.slots.length === 0
-        ? 'No products in the stack'
+        ? linked ? 'The pre-built bundle has no products in it' : 'No stack to take products from'
         : missing.length > 0
           ? `Unavailable: ${missing.join(', ')}`
           : undefined,
@@ -97,6 +112,6 @@ export function bundleReadiness(bundle: PrebuiltBundle, products: CatalogueProdu
     slug: bundle.slug,
     overall: worst(checks.map((c) => c.status)),
     checks,
-    sellable: missing.length === 0 && bundle.blueprint.slots.length > 0,
+    sellable: linked && missing.length === 0 && bundle.blueprint.slots.length > 0,
   }
 }

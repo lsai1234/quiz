@@ -1,12 +1,11 @@
-import type { PrebuiltBundle } from './types'
-import { bundleBlueprint } from './builders'
+import type { WorkoutBundle } from './types'
 
 // ─── Leg Day Loading ──────────────────────────────────────────────────────────
 // The heavy lower-body session stack. Claim-safe throughout: performance and
 // muscle-maintenance language only, no recovery "healing" or "repair" promises
 // beyond the authorised protein claim.
 
-export const LEG_DAY_LOADING: PrebuiltBundle = {
+export const LEG_DAY_LOADING: WorkoutBundle = {
   slug: 'leg-day-loading',
   name: 'Leg Day Loading',
   tagline: 'Fuel it. Move it. Refuel it.',
@@ -18,63 +17,16 @@ export const LEG_DAY_LOADING: PrebuiltBundle = {
     'leave having done the work.',
   honestyLine: 'No magic numbers on the bar. Just showing up loaded.',
 
-  blueprint: bundleBlueprint({
-    slug: 'leg-day-loading',
-    name: 'Leg Day Loading',
-    summary: 'Pre-workout, creatine and protein — the heavy-session trio, plus a lower-body workout to match.',
-    primaryGoal: 'performance',
-    secondaryGoals: ['muscle', 'energy'],
-    profile: 'Lower-body strength focus — trains hard, refuels properly',
-    estOneOff: 79.97,
-    estSub: 52,
-    cores: [
-      {
-        slotType: 'energy',
-        title: 'Pre-Workout',
-        description: 'Energy and focus into the session',
-        productId: 'chrgd-pre-workout',
-        swapGroup: 'pre-workout-stim',
-        reason:
-          'One scoop 20–30 minutes before you train, for energy and focus going ' +
-          'into the heavy sets. Skip it late in the evening — the caffeine sticks ' +
-          'around for hours.',
-      },
-      {
-        slotType: 'performance',
-        title: 'Performance',
-        description: 'The daily strength base',
-        productId: 'chrgd-creatine',
-        swapGroup: 'creatine',
-        reason:
-          'Creatine increases physical performance in successive bursts of ' +
-          'short-term, high-intensity exercise. Take it every day — not just on ' +
-          'leg day — because it works by staying topped up.',
-      },
-      {
-        slotType: 'protein',
-        title: 'Protein',
-        description: 'Refuel the big sets',
-        productId: 'chrgd-whey-protein',
-        swapGroup: 'protein-whey',
-        reason:
-          'Protein contributes to the growth and maintenance of muscle mass. A ' +
-          'shake after training is the simple way to hit your target on the days ' +
-          'you’ve worked hardest.',
-      },
-    ],
-  }),
+  /*
+    No stack yet.
 
-  addOns: [
-    {
-      slotId: 'leg-day-addon-bcaa',
-      slotType: 'recovery',
-      title: 'Intra-Session',
-      productId: 'chrgd-bcaa',
-      reason:
-        'The optional sip-through-your-session add-on — amino acids and fluid to ' +
-        'keep you going through a long lower-body workout.',
-    },
-  ],
+    The products that used to be written into this file are now a PRE-BUILT
+    BUNDLE — a named stack authored in the Hub and shared by every session that
+    sells it. Point this package at one there; until then it prices at nothing,
+    readiness says so, and the shop leaves it off the shelf rather than showing
+    a package nobody can buy.
+  */
+  productBundleSlug: null,
 
   workouts: [
     {

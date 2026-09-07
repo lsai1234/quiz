@@ -1,19 +1,44 @@
 import { test, expect } from '@playwright/test'
 import { inspect, report } from '../support/inspect'
 import { openShop } from '../support/shop'
+import { sellBundle, unlinkBundle } from '../support/bundles'
 
 /**
  * Bundle landing pages — the third way into a basket, after the quiz and the
- * shop. Each one is a curated stack sold as a unit at a discount.
+ * shop.
+ *
+ * A bundle is two records now: a PRE-BUILT BUNDLE is a named stack of products,
+ * and a WORKOUT BUNDLE is a session plus one of those stacks. The shipped seeds
+ * are workout bundles with no stack chosen — which stack each sells is decided
+ * in the Hub against the live range — so these tests build a stack, point a seed
+ * at it, and then exercise the page a customer would get.
+ *
+ * That is not test scaffolding around the real thing; it IS the real thing.
+ * Nothing reaches the shop shelf until a founder has made that link, and the
+ * first test here is that an unlinked package stays off it.
  */
 
-test('the shop lists bundles and each links to its own page', async ({ page }) => {
+test('a workout bundle with no stack is not on the shelf and does not render', async ({ page }) => {
+  // Unlinked on purpose — the seeds ship this way.
+  await unlinkBundle(page, 'game-day')
+
+  const feed = await (await page.request.get('/api/bundles')).json()
+  const slugs: string[] = (feed.bundles ?? []).map((b: { bundle?: { slug: string } }) => b.bundle?.slug)
+  expect(slugs).not.toContain('game-day')
+
+  // A package with no products cannot be bought, so the page is a 404 rather
+  // than an empty stack with a checkout button on it.
+  const res = await page.goto('/bundles/game-day')
+  expect(res?.status()).toBe(404)
+})
+
+test('once it sells a stack, the shop lists it and the page is complete', async ({ page }) => {
+  await sellBundle(page, 'leg-day-loading')
+
   await openShop(page)
   const bundleLinks = page.locator('a[href^="/bundles/"]')
   expect(await bundleLinks.count()).toBeGreaterThan(0)
-})
 
-test('a bundle page names its contents, its saving and a way to buy', async ({ page }) => {
   await page.goto('/bundles/leg-day-loading')
   await expect(page.getByText('Leg Day Loading').first()).toBeVisible()
 
@@ -29,7 +54,10 @@ test('an unknown bundle slug 404s rather than rendering an empty page', async ({
   expect(res?.status()).toBe(404)
 })
 
-test('every seeded bundle page renders cleanly', async ({ page }) => {
+test('every bundle the feed offers renders cleanly', async ({ page }) => {
+  await sellBundle(page, 'leg-day-loading')
+  await sellBundle(page, 'game-day')
+
   /* The feed wraps each entry: `{ bundles: [{ bundle: {slug,…}, pricing }] }`. */
   const feed = await (await page.request.get('/api/bundles')).json()
   const slugs: string[] = (feed.bundles ?? []).map((b: any) => b.bundle?.slug ?? b.slug).filter(Boolean)

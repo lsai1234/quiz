@@ -18,13 +18,47 @@ import {
   duplicateBundle,
   resetBundlesStore,
 } from '../store'
-import type { PrebuiltBundle } from '../types'
+import {
+  getProductBundles,
+  createProductBundle,
+  editProductBundle,
+  deleteProductBundle,
+  resetProductBundlesStore,
+} from '../store'
+import { assembleProductBundle, emptyProductBundleDraft } from '../assemble'
+import type { ProductBundle, WorkoutBundle } from '../types'
 
 const seed = BIG_NIGHT_BIG_MORNING
 
-function draft(slug: string, name = slug): PrebuiltBundle {
-  return { ...seed, slug, name, blueprint: { ...seed.blueprint, id: `bundle-${slug}`, stackName: name } }
+function draft(slug: string, name = slug): WorkoutBundle {
+  return { ...seed, slug, name }
 }
+
+/** A stack to sell — what the Hub's pre-built bundle editor produces. */
+function stack(slug = 'strength', name = 'Strength'): ProductBundle {
+  return assembleProductBundle(
+    {
+      ...emptyProductBundleDraft(),
+      slug,
+      name,
+      description: 'Three products.',
+      primaryGoal: 'recovery',
+      cores: [
+        { productId: 'chrgd-electrolytes', title: 'Hydration', reason: 'Replace what you sweat.' },
+        { productId: 'chrgd-creatine', title: 'Performance', reason: 'The daily base.' },
+        { productId: 'chrgd-whey-protein', title: 'Protein', reason: 'Refuel.' },
+      ],
+    },
+    MOCK_CATALOGUE,
+  )
+}
+
+const STACK = stack()
+/** A seed pointed at a stack — the only form a customer meets. */
+const sold = (bundle: WorkoutBundle = seed) =>
+  composeBundles([{ ...bundle, productBundleSlug: STACK.slug }], EMPTY_PERSISTED_BUNDLES, [STACK])[0]
+/** A workout bundle that is linked, for the store tests. */
+const linked = (slug: string, name = slug): WorkoutBundle => ({ ...draft(slug, name), productBundleSlug: STACK.slug })
 
 describe('bundle resolution (pure)', () => {
   it('merges a per-slug override onto a seed', () => {
@@ -40,7 +74,7 @@ describe('bundle resolution (pure)', () => {
     for as long as those rows exist.
   */
   it('reads a bundle saved with a single legacy workout as a list of one', () => {
-    const legacy = { ...seed, workouts: [], workout: seed.workouts[0] } as PrebuiltBundle
+    const legacy = { ...seed, workouts: [], workout: seed.workouts[0] } as WorkoutBundle
     expect(bundleWorkouts(legacy)).toEqual([seed.workouts[0]])
     expect(composeBundles([legacy], EMPTY_PERSISTED_BUNDLES)[0].workouts).toHaveLength(1)
   })
@@ -73,7 +107,7 @@ describe('bundle resolution (pure)', () => {
   it('drops removed bundles unless includeRemoved', () => {
     const persisted: PersistedBundles = { ...EMPTY_PERSISTED_BUNDLES, removedSlugs: ['big-night-big-morning'] }
     expect(composeBundles([seed], persisted)).toHaveLength(0)
-    const withRemoved = composeBundles([seed], persisted, { includeRemoved: true })
+    const withRemoved = composeBundles([seed], persisted, [], { includeRemoved: true })
     expect(withRemoved).toHaveLength(1)
     expect(withRemoved[0].removed).toBe(true)
   })
@@ -90,7 +124,7 @@ describe('bundle resolution (pure)', () => {
 
 describe('bundle pricing + readiness (pure)', () => {
   it('prices a bundle live with a sum-of-parts saving', () => {
-    const price = bundlePriceSummary(seed, MOCK_CATALOGUE)
+    const price = bundlePriceSummary(sold(), MOCK_CATALOGUE)
     expect(price.price).toBeGreaterThan(0)
     expect(price.sumOfParts).toBeGreaterThanOrEqual(price.price)
     expect(price.saving).toBeGreaterThan(0)
@@ -99,28 +133,35 @@ describe('bundle pricing + readiness (pure)', () => {
 
   it('flags a bundle with a missing product as unsellable', () => {
     const trimmed = MOCK_CATALOGUE.filter((p) => p.id !== 'chrgd-creatine')
-    expect(missingCoreProducts(seed, trimmed)).toContain('chrgd-creatine')
-    expect(isBundleSellable(seed, trimmed)).toBe(false)
-    expect(isBundleSellable(seed, MOCK_CATALOGUE)).toBe(true)
+    expect(missingCoreProducts(sold(), trimmed)).toContain('chrgd-creatine')
+    expect(isBundleSellable(sold(), trimmed)).toBe(false)
+    expect(isBundleSellable(sold(), MOCK_CATALOGUE)).toBe(true)
   })
 
   it('reports readiness — green for a complete seed', () => {
-    const r = bundleReadiness(seed, MOCK_CATALOGUE)
+    const r = bundleReadiness(sold(), MOCK_CATALOGUE)
     expect(r.sellable).toBe(true)
     expect(r.overall).toBe('ok')
   })
 
   it('readiness fails when a product is unavailable', () => {
     const trimmed = MOCK_CATALOGUE.filter((p) => p.id !== 'chrgd-electrolytes')
-    const r = bundleReadiness(seed, trimmed)
+    const r = bundleReadiness(sold(), trimmed)
     expect(r.sellable).toBe(false)
     expect(r.overall).toBe('fail')
   })
 })
 
 describe('bundle store (database-backed)', () => {
-  beforeEach(async () => { await resetBundlesStore() })
-  afterAll(async () => { await resetBundlesStore() })
+  beforeEach(async () => {
+    await resetBundlesStore()
+    await resetProductBundlesStore()
+    await createProductBundle(STACK)
+  })
+  afterAll(async () => {
+    await resetBundlesStore()
+    await resetProductBundlesStore()
+  })
 
   it('starts from the shipped seeds', async () => {
     const all = await getResolvedBundles()
@@ -161,10 +202,18 @@ describe('bundle store (database-backed)', () => {
   })
 
   it('publishes/unpublishes and hides drafts from the shop feed', async () => {
+    // Pointed at a stack first: a package with no products is not sellable, so
+    // publishing alone cannot put it on the shelf.
+    await editBundle('big-night-big-morning', { productBundleSlug: STACK.slug })
     await setBundlePublished('big-night-big-morning', false)
     expect((await getShopBundles()).find((b) => b.bundle.slug === 'big-night-big-morning')).toBeUndefined()
     await setBundlePublished('big-night-big-morning', true)
     expect((await getShopBundles()).find((b) => b.bundle.slug === 'big-night-big-morning')).toBeDefined()
+  })
+
+  it('keeps an unlinked bundle off the shop shelf however published it is', async () => {
+    await setBundlePublished('big-night-big-morning', true)
+    expect((await getShopBundles()).find((b) => b.bundle.slug === 'big-night-big-morning')).toBeUndefined()
   })
 
   it('reorders bundles', async () => {
@@ -175,16 +224,20 @@ describe('bundle store (database-backed)', () => {
     expect(order.indexOf('z-bundle')).toBeLessThan(order.indexOf('a-bundle'))
   })
 
-  it('duplicates a bundle as an unpublished draft', async () => {
+  it('duplicates a bundle as an unpublished draft that sells the same stack', async () => {
+    await editBundle('big-night-big-morning', { productBundleSlug: STACK.slug })
     await duplicateBundle('big-night-big-morning', 'bnbm-copy', 'BNBM Copy')
     const copy = await getResolvedBundle('bnbm-copy')
     expect(copy?.name).toBe('BNBM Copy')
     expect(copy?.published).toBe(false)
     expect(copy?.custom).toBe(true)
+    // Pointed at the same stack, and wearing its own name on the receipt.
+    expect(copy?.productBundleSlug).toBe(STACK.slug)
     expect(copy?.blueprint.stackName).toBe('BNBM Copy')
   })
 
   it('shop feed prices bundles and portal feed adds readiness', async () => {
+    await editBundle('big-night-big-morning', { productBundleSlug: STACK.slug })
     const shop = await getShopBundles()
     const bnbm = shop.find((b) => b.bundle.slug === 'big-night-big-morning')
     expect(bnbm?.price.price).toBeGreaterThan(0)
@@ -192,5 +245,70 @@ describe('bundle store (database-backed)', () => {
     const portal = await getPortalBundles()
     const pb = portal.bundles.find((b) => b.bundle.slug === 'big-night-big-morning')
     expect(pb?.readiness.overall).toBeDefined()
+  })
+})
+
+describe('pre-built bundles (the stacks)', () => {
+  beforeEach(async () => {
+    await resetBundlesStore()
+    await resetProductBundlesStore()
+  })
+  afterAll(async () => {
+    await resetBundlesStore()
+    await resetProductBundlesStore()
+  })
+
+  it('creates, lists and edits a stack', async () => {
+    await createProductBundle(stack('strength', 'Strength'))
+    expect((await getProductBundles()).map((b) => b.name)).toEqual(['Strength'])
+
+    await editProductBundle('strength', { name: 'Strength & Size' })
+    expect((await getProductBundles())[0].name).toBe('Strength & Size')
+  })
+
+  it('rejects a duplicate reference', async () => {
+    await createProductBundle(stack())
+    await expect(createProductBundle(stack())).rejects.toThrow(/already exists/)
+  })
+
+  it('one stack serves every package pointed at it', async () => {
+    await createProductBundle(stack())
+    await createBundle(linked('monday', 'Monday'))
+    await createBundle(linked('friday', 'Friday'))
+
+    const shop = await getShopBundles()
+    expect(shop.map((b) => b.bundle.slug).sort()).toEqual(['friday', 'monday'])
+    for (const entry of shop) expect(entry.bundle.blueprint.slots).toHaveLength(3)
+  })
+
+  it('a product swapped in the stack changes every package selling it', async () => {
+    await createProductBundle(stack())
+    await createBundle(linked('monday', 'Monday'))
+
+    const swapped = assembleProductBundle(
+      {
+        ...emptyProductBundleDraft(),
+        slug: 'strength',
+        name: 'Strength',
+        primaryGoal: 'recovery',
+        cores: [{ productId: 'chrgd-creatine', title: 'Performance', reason: 'The daily base.' }],
+      },
+      MOCK_CATALOGUE,
+    )
+    await editProductBundle('strength', swapped)
+
+    const monday = await getResolvedBundle('monday')
+    expect(monday?.blueprint.slots.map((s) => s.selectedProductId)).toEqual(['chrgd-creatine'])
+  })
+
+  it('refuses to delete a stack a package is still selling, and names it', async () => {
+    await createProductBundle(stack())
+    await createBundle(linked('monday', 'Monday'))
+
+    await expect(deleteProductBundle('strength')).rejects.toThrow(/Monday/)
+
+    await editBundle('monday', { productBundleSlug: null })
+    await deleteProductBundle('strength')
+    expect(await getProductBundles()).toEqual([])
   })
 })

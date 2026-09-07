@@ -1,4 +1,4 @@
-import type { PrebuiltBundle } from './types'
+import type { ResolvedBundle } from './resolve'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { calculatePricing } from '@/lib/stack-blueprint/pricing'
 
@@ -22,7 +22,7 @@ export interface BundlePriceSummary {
 }
 
 /** Compute a bundle's live price summary against the given catalogue. */
-export function bundlePriceSummary(bundle: PrebuiltBundle, products: CatalogueProduct[]): BundlePriceSummary {
+export function bundlePriceSummary(bundle: ResolvedBundle, products: CatalogueProduct[]): BundlePriceSummary {
   const pricing = calculatePricing(bundle.blueprint, products)
   const saving = Math.round((pricing.oneOffSubtotal - pricing.oneOffTotal) * 100) / 100
   const subscribable = pricing.subscriptionItemCount > 0 && pricing.subscriptionMinOrderMet
@@ -40,7 +40,7 @@ export function bundlePriceSummary(bundle: PrebuiltBundle, products: CataloguePr
  * The core product ids of a bundle that are missing from (or unavailable in) the
  * given catalogue. A bundle with any missing core product should not be sold.
  */
-export function missingCoreProducts(bundle: PrebuiltBundle, products: CatalogueProduct[]): string[] {
+export function missingCoreProducts(bundle: ResolvedBundle, products: CatalogueProduct[]): string[] {
   const byId = new Map(products.map((p) => [p.id, p]))
   const missing: string[] = []
   for (const slot of bundle.blueprint.slots) {
@@ -51,7 +51,15 @@ export function missingCoreProducts(bundle: PrebuiltBundle, products: CatalogueP
   return missing
 }
 
-/** True when every core product resolves and is in stock — the bundle is sellable. */
-export function isBundleSellable(bundle: PrebuiltBundle, products: CatalogueProduct[]): boolean {
+/**
+ * True when the bundle has a stack and every product in it is in stock.
+ *
+ * The empty case is the one that matters now: a workout bundle that points at
+ * no pre-built bundle resolves to an empty stack, and an empty stack has no
+ * missing products — so "nothing is missing" used to mean "sell it". A package
+ * with no products in it is not a thing anybody can buy.
+ */
+export function isBundleSellable(bundle: ResolvedBundle, products: CatalogueProduct[]): boolean {
+  if (bundle.blueprint.slots.length === 0) return false
   return missingCoreProducts(bundle, products).length === 0
 }

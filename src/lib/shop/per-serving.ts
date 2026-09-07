@@ -140,3 +140,41 @@ export function formatPerServing(value: number): string {
   if (pence < 100) return `${pence}p`
   return `£${(pence / 100).toFixed(2)}`
 }
+
+/**
+ * The variants a plan may offer as a straight swap for the one it chose.
+ *
+ * ── Why a plan cannot offer every variant ───────────────────────────────────
+ * On the shop shelf, showing every size is the whole point: a shopper comparing
+ * 100 capsules against a 454g bag is doing the job the page is for. Inside a
+ * quiz stack it is a different question. The plan has already decided how much
+ * of this product a month needs, priced it, and — on subscription — sized the
+ * cadence from the serving count. Switching to a variant with a different count
+ * silently changes all three: the same "flavour" swap that used to move
+ * somebody from Chocolate to Vanilla would now move them from 33 servings to
+ * 454 and quietly reprice their plan.
+ *
+ * So the rule is deliberately narrow: same product, same number of servings.
+ * That is the flavour swap the picker was always for. A different SIZE is a
+ * different decision, and it belongs on the product page where the shopper can
+ * see what it costs per serving.
+ *
+ * ── Unknown counts stay interchangeable ─────────────────────────────────────
+ * Most products know their servings for the first variant only — the rest are
+ * scaled from size, and a flavour has no size to scale. Treating "unknown" as
+ * "different" would empty the picker for exactly the products it works best
+ * for, so a pair is excluded only when both counts are known AND they differ.
+ * Evidence of a difference, never the absence of evidence.
+ */
+export function interchangeableVariants(
+  product: CatalogueProduct,
+  selected: CatalogueVariant | undefined,
+): CatalogueVariant[] {
+  if (!selected) return product.variants
+  const target = servingsForVariant(product, selected)
+  if (target === null) return product.variants
+  return product.variants.filter((v) => {
+    const servings = servingsForVariant(product, v)
+    return servings === null || Math.round(servings) === Math.round(target)
+  })
+}

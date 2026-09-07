@@ -1,12 +1,11 @@
-import type { PrebuiltBundle } from './types'
-import { bundleBlueprint } from './builders'
+import type { WorkoutBundle } from './types'
 
 // ─── Wind-Down Sunday ─────────────────────────────────────────────────────────
 // The low-intensity, recovery-first bundle: gentle movement and an evening
 // routine to set up the week. Claim-safe: greens/omega framed as everyday
 // routine, the night pour as part of a wind-down (no sleep-aid claims).
 
-export const WIND_DOWN_SUNDAY: PrebuiltBundle = {
+export const WIND_DOWN_SUNDAY: WorkoutBundle = {
   slug: 'wind-down-sunday',
   name: 'Wind-Down Sunday',
   tagline: 'Move gently. Reset properly. Start Monday ahead.',
@@ -18,63 +17,16 @@ export const WIND_DOWN_SUNDAY: PrebuiltBundle = {
     'Low effort, high consistency.',
   honestyLine: 'Not a session. A ritual — and the boring weeks are the ones that add up.',
 
-  blueprint: bundleBlueprint({
-    slug: 'wind-down-sunday',
-    name: 'Wind-Down Sunday',
-    summary: 'Super greens, omega-3 and an evening pour — the recovery-first Sunday routine, with mobility to match.',
-    primaryGoal: 'recovery',
-    secondaryGoals: ['gut-health', 'sleep-better'],
-    profile: 'Recovery-focused — values consistency over intensity',
-    estOneOff: 67.97,
-    estSub: 44,
-    cores: [
-      {
-        slotType: 'gut',
-        title: 'Daily Greens',
-        description: 'Part of the everyday routine',
-        productId: 'chrgd-super-greens',
-        swapGroup: 'greens',
-        reason:
-          'A greens blend with added vitamins and minerals, made a fixed part of ' +
-          'your day. Easy to keep up on a slow Sunday and a simple anchor for the ' +
-          'week ahead.',
-      },
-      {
-        slotType: 'health',
-        title: 'Everyday Base',
-        description: 'Your daily health baseline',
-        productId: 'chrgd-omega-3',
-        swapGroup: 'omega-3',
-        reason:
-          'Omega-3 as part of your everyday health routine — one of the quiet, ' +
-          'take-it-daily basics that only works if you’re consistent, which is ' +
-          'what a Sunday ritual is for.',
-      },
-      {
-        slotType: 'sleep',
-        title: 'Evening Pour',
-        description: 'Close the weekend down',
-        productId: 'chrgd-night-pour',
-        swapGroup: 'sleep-support',
-        reason:
-          'A warm evening drink to make winding down a habit rather than an ' +
-          'afterthought — part of a proper routine of screens-down, lights-low ' +
-          'and a consistent bedtime.',
-      },
-    ],
-  }),
+  /*
+    No stack yet.
 
-  addOns: [
-    {
-      slotId: 'wind-down-addon-electrolytes',
-      slotType: 'hydration',
-      title: 'Rehydrate',
-      productId: 'chrgd-electrolytes',
-      reason:
-        'The optional hydration add-on — a serving of electrolytes to top up ' +
-        'your fluids as part of the reset, especially after an active weekend.',
-    },
-  ],
+    The products that used to be written into this file are now a PRE-BUILT
+    BUNDLE — a named stack authored in the Hub and shared by every session that
+    sells it. Point this package at one there; until then it prices at nothing,
+    readiness says so, and the shop leaves it off the shelf rather than showing
+    a package nobody can buy.
+  */
+  productBundleSlug: null,
 
   workouts: [
     {

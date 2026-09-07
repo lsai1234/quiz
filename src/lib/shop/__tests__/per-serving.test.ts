@@ -1,5 +1,5 @@
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
-import { parseSize, servingsForVariant, pricePerServing, formatPerServing } from '../per-serving'
+import { parseSize, servingsForVariant, pricePerServing, formatPerServing, interchangeableVariants } from '../per-serving'
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
   return { id: 'v', title: 'V', flavour: null, size: null, price: 30, compareAtPrice: null, available: true, ...over }
@@ -204,5 +204,55 @@ describe('accessories', () => {
     const v = variant({ id: 'bottle', price: 4.99 })
     const bottle = makeProduct({ swapGroup: 'general', category: 'Accessories', servings: 1, variants: [v] })
     expect(servingsForVariant(bottle, v)).toBeNull()
+  })
+})
+
+describe('what a plan may offer as a swap', () => {
+  it('offers the flavours of one tub, which is what the picker is for', () => {
+    // The common case: one product, several flavours, no per-variant size. Only
+    // the first variant's count is known, and treating "unknown" as "different"
+    // would empty the picker for exactly these.
+    const choc = variant({ id: 'choc' })
+    const vanilla = variant({ id: 'vanilla' })
+    const berry = variant({ id: 'berry' })
+    const whey = makeProduct({ variants: [choc, vanilla, berry] })
+
+    expect(interchangeableVariants(whey, choc).map((v) => v.id)).toEqual(['choc', 'vanilla', 'berry'])
+  })
+
+  it('withholds a variant with a different serving count', () => {
+    // 100 capsules and a 454g bag under one master SKU. A plan has sized the
+    // month and priced it from the count it chose; offering the other as a
+    // flavour swap reprices somebody's stack without saying so.
+    const capsules = variant({ id: 'caps', size: '100 caps', price: 21.99, servings: 33 })
+    const powder = variant({ id: 'powder', size: '454 grams', price: 39.99, servings: 454 })
+    const glycine = makeProduct({ variants: [capsules, powder], servings: 33 })
+
+    expect(interchangeableVariants(glycine, capsules).map((v) => v.id)).toEqual(['caps'])
+    expect(interchangeableVariants(glycine, powder).map((v) => v.id)).toEqual(['powder'])
+  })
+
+  it('withholds a bigger tub of the same thing, counted by size', () => {
+    const small = variant({ id: '1kg', size: '1kg' })
+    const big = variant({ id: '2kg', size: '2kg', price: 50 })
+    const whey = makeProduct({ variants: [small, big], servings: 30 })
+
+    expect(interchangeableVariants(whey, small).map((v) => v.id)).toEqual(['1kg'])
+  })
+
+  it('keeps same-size flavours together while withholding the other size', () => {
+    const choc1 = variant({ id: 'choc-1kg', size: '1kg', servings: 30 })
+    const van1 = variant({ id: 'van-1kg', size: '1kg', servings: 30 })
+    const choc2 = variant({ id: 'choc-2kg', size: '2kg', price: 50, servings: 60 })
+    const whey = makeProduct({ variants: [choc1, van1, choc2], servings: 30 })
+
+    expect(interchangeableVariants(whey, choc1).map((v) => v.id)).toEqual(['choc-1kg', 'van-1kg'])
+  })
+
+  it('offers everything when nothing knows a serving count', () => {
+    const a = variant({ id: 'a' })
+    const b = variant({ id: 'b' })
+    const shaker = makeProduct({ swapGroup: 'accessory', category: 'Accessories', variants: [a, b] })
+    expect(interchangeableVariants(shaker, a)).toHaveLength(2)
   })
 })

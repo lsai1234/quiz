@@ -1,12 +1,11 @@
-import type { PrebuiltBundle } from './types'
-import { bundleBlueprint } from './builders'
+import type { WorkoutBundle } from './types'
 
 // ─── Game Day ─────────────────────────────────────────────────────────────────
 // The team-sport performance stack: hydration for high sweat-rate sports,
 // energy and focus before kick-off, creatine as the daily base. Claim-safe:
 // creatine's authorised performance claim only, hydration framed as a routine.
 
-export const GAME_DAY: PrebuiltBundle = {
+export const GAME_DAY: WorkoutBundle = {
   slug: 'game-day',
   name: 'Game Day',
   tagline: 'Hydrated. Sharp. Ready for kick-off.',
@@ -18,62 +17,16 @@ export const GAME_DAY: PrebuiltBundle = {
     'Turn up ready, not running on empty.',
   honestyLine: 'It won’t win you the game. It’ll make sure you’re not the reason you lost it.',
 
-  blueprint: bundleBlueprint({
-    slug: 'game-day',
-    name: 'Game Day',
-    summary: 'Electrolytes, pre-workout and creatine — the match-day trio, with a speed-and-agility session to match.',
-    primaryGoal: 'hydration',
-    secondaryGoals: ['performance', 'energy'],
-    profile: 'Team-sport athlete — matches and training through the week',
-    estOneOff: 67.97,
-    estSub: 44,
-    cores: [
-      {
-        slotType: 'hydration',
-        title: 'Hydration',
-        description: 'Replace what you sweat',
-        productId: 'chrgd-electrolytes',
-        swapGroup: 'electrolytes',
-        reason:
-          'High sweat-rate sports lose a lot of fluid and electrolytes. A serving ' +
-          'before kick-off and another at half-time keeps your hydration routine ' +
-          'on track through 90 minutes.',
-      },
-      {
-        slotType: 'energy',
-        title: 'Pre-Match',
-        description: 'Energy and focus before you go on',
-        productId: 'chrgd-pre-workout',
-        swapGroup: 'pre-workout-stim',
-        reason:
-          'One scoop 20–30 minutes before kick-off for energy and focus. Take it ' +
-          'earlier for morning games so it’s working when the whistle goes.',
-      },
-      {
-        slotType: 'performance',
-        title: 'Performance',
-        description: 'The daily base for repeated sprints',
-        productId: 'chrgd-creatine',
-        swapGroup: 'creatine',
-        reason:
-          'Creatine increases physical performance in successive bursts of ' +
-          'short-term, high-intensity exercise — exactly the repeated-sprint ' +
-          'pattern of a match. Take it every day, not just on game day.',
-      },
-    ],
-  }),
+  /*
+    No stack yet.
 
-  addOns: [
-    {
-      slotId: 'game-day-addon-omega',
-      slotType: 'health',
-      title: 'Everyday Base',
-      productId: 'chrgd-omega-3',
-      reason:
-        'The optional everyday-health add-on for a busy fixture list — omega-3 ' +
-        'as part of your daily routine across a long season.',
-    },
-  ],
+    The products that used to be written into this file are now a PRE-BUILT
+    BUNDLE — a named stack authored in the Hub and shared by every session that
+    sells it. Point this package at one there; until then it prices at nothing,
+    readiness says so, and the shop leaves it off the shelf rather than showing
+    a package nobody can buy.
+  */
+  productBundleSlug: null,
 
   workouts: [
     {

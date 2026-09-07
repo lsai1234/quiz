@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { founderSessionViaApi, signUpViaApi } from '../support/accounts'
 import { openShop } from '../support/shop'
+import { sellBundle } from '../support/bundles'
 
 /**
  * Visual regression — the pass that catches what words cannot describe.
@@ -73,6 +74,9 @@ test.describe('the storefront', () => {
   })
 
   test('a bundle landing page', async ({ page }) => {
+    // A seeded package ships with no stack, so it has to be put on sale before
+    // there is a page to photograph — see `support/bundles`.
+    await sellBundle(page, 'leg-day-loading')
     await page.goto('/bundles/leg-day-loading')
     await expect(page.getByText('Leg Day Loading').first()).toBeVisible()
     await settle(page)

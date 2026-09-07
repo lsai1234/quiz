@@ -1,18 +1,28 @@
 import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { StackSlot } from '@/lib/catalogue/types'
 
-// ─── Prebuilt bundles ─────────────────────────────────────────────────────────
-// A prebuilt bundle is a curated, creator-led stack with its own landing page:
-// the normal stack checkout plus the content that sells it (the workout, the
-// how-to, the claim-safe story). Unlike quiz stacks it is fixed data — no
-// engine, no personalisation — so it can ship at a permanent URL.
+// ─── Two things, not one ──────────────────────────────────────────────────────
 //
-// Bundles are authored as seed data (`seeds.ts`) and can also be created,
-// edited and removed by founders via the portal, which persists overrides and
-// founder-authored bundles in the database (see `lib/bundles/store.ts`). Prices
-// are never stored on the bundle — they are computed live from the catalogue
-// through `stack-blueprint/pricing`, so a pricing change never leaves a bundle
-// quoting a stale total.
+// A PRE-BUILT BUNDLE is a stack of products with a name — "Strength", "Fitness".
+// There are two of them. It has no workout, no landing page and no story; it is
+// the products, and the reasons they are together.
+//
+// A WORKOUT BUNDLE is what a customer buys: one workout, plus one of the
+// pre-built bundles. It owns the name, the photograph, the copy and the session,
+// and it points at a pre-built bundle for everything product-shaped. It is what
+// the shop shelf shows and what `/bundles/[slug]` renders.
+//
+// The relationship is one to many: one pre-built bundle serves as many workout
+// bundles as there are workouts worth selling. That is the whole reason for the
+// split — a stack was copied into every package that used it, so a product
+// swapped out of "Strength" had to be swapped out of each one by hand.
+//
+// Prices live in neither. They are computed from the catalogue on read
+// (`stack-blueprint/pricing`), so nothing here can quote a stale total.
+//
+// Seeds (`seeds.ts`) ship the workout bundles; pre-built bundles are authored
+// entirely in the Hub, because which products go together is a decision that
+// changes with the range and does not belong in a deploy.
 
 export interface WorkoutExercise {
   name: string
@@ -47,7 +57,29 @@ export interface BundleAddOn {
   reason: string
 }
 
-export interface PrebuiltBundle {
+/**
+ * A pre-built bundle: a named stack of products, and nothing else.
+ *
+ * No workout, no tagline, no landing page — a workout bundle wraps it in those.
+ * Several workout bundles can point at the same one, which is the point: edit
+ * the Strength stack once and every session built on it follows.
+ */
+export interface ProductBundle {
+  /** Stable id, used as the reference from a workout bundle. */
+  slug: string
+  /** What the founder calls this stack — "Strength", "Fitness". */
+  name: string
+  /** One line on what it is for. Shown in the Hub's picker, not to customers. */
+  description: string
+  /** The fixed stack. Built from the chosen products by `assembleProductBundle`. */
+  blueprint: StackBlueprint
+  /** Optional products a visitor can toggle in before checkout. */
+  addOns: BundleAddOn[]
+  /** Lower sorts first in the Hub's list. */
+  displayOrder?: number
+}
+
+export interface WorkoutBundle {
   /** URL segment the bundle lives at, e.g. "big-night-big-morning" */
   slug: string
   /**
@@ -79,16 +111,29 @@ export interface PrebuiltBundle {
   description: string
   /** The cheeky-but-honest positioning line (also keeps claims safe). */
   honestyLine: string
-  /** The fixed stack sold on this page. */
-  blueprint: StackBlueprint
-  addOns: BundleAddOn[]
   /**
-   * The workouts that come with this package — one to many.
+   * The pre-built bundle this package sells.
+   *
+   * The products are not stored here. A workout bundle IS a workout plus one of
+   * the pre-built stacks, so the stack is referenced rather than copied — which
+   * is what lets one stack serve every session built on it.
+   *
+   * Null is a real state, not a broken one: a workout bundle can be written
+   * before anybody has decided which stack it sells. It cannot be published or
+   * bought until it points somewhere (readiness says so, and the shop hides it).
+   */
+  productBundleSlug: string | null
+  /**
+   * The workouts that come with this package.
    *
    * It was exactly one, which is a limit that came from the data shape rather
    * than from anything true: a strength package is a week of sessions, not one
    * session, and the second one had nowhere to live. Ordered — first is the one
    * the page leads with.
+   *
+   * Normally one — a workout bundle is a session and a stack. The list is there
+   * because a package that is a week of training is the same object with three
+   * sessions in it, and the alternative was three packages selling one stack.
    *
    * Empty is allowed and readiness warns about it, the way one missing workout
    * always did.

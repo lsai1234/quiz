@@ -1,5 +1,4 @@
-import type { PrebuiltBundle } from './types'
-import { bundleBlueprint } from './builders'
+import type { WorkoutBundle } from './types'
 
 // ─── Deadline Week ────────────────────────────────────────────────────────────
 // The stack for a flat-out week when training is the thing that keeps you sane.
@@ -7,7 +6,7 @@ import { bundleBlueprint } from './builders'
 // Ashwagandha is framed only as part of an evening routine; the multivitamin and
 // magnesium carry their authorised, general claims.
 
-export const DEADLINE_WEEK: PrebuiltBundle = {
+export const DEADLINE_WEEK: WorkoutBundle = {
   slug: 'deadline-week',
   name: 'Deadline Week',
   tagline: 'Keep the routine. Ride out the week.',
@@ -19,64 +18,16 @@ export const DEADLINE_WEEK: PrebuiltBundle = {
     'you your evening, and an adaptogen as part of a proper wind-down.',
   honestyLine: 'It won’t clear your inbox. It’ll help you keep turning up while you do.',
 
-  blueprint: bundleBlueprint({
-    slug: 'deadline-week',
-    name: 'Deadline Week',
-    summary: 'Multivitamin, stim-free energy and an evening adaptogen — the keep-the-basics-covered stack for a flat-out week.',
-    primaryGoal: 'health',
-    secondaryGoals: ['energy', 'sleep-better'],
-    profile: 'Busy stretch — training is the anchor, not the priority',
-    estOneOff: 63.97,
-    estSub: 41,
-    cores: [
-      {
-        slotType: 'health',
-        title: 'Daily Multivitamin',
-        description: 'Cover the gaps a rushed week leaves',
-        productId: 'chrgd-multivitamin',
-        swapGroup: 'multivitamin',
-        reason:
-          'When meals get skipped and lunch is whatever’s nearest, a daily ' +
-          'multivitamin helps cover the everyday vitamin and mineral gaps so your ' +
-          'baseline doesn’t slide with your schedule.',
-      },
-      {
-        slotType: 'energy',
-        title: 'Stim-Free Pre-Workout',
-        description: 'A quick session that won’t cost your evening',
-        productId: 'chrgd-pre-workout-stim-free',
-        swapGroup: 'pre-workout-stim-free',
-        reason:
-          'A caffeine-free lift so you can squeeze a session in late without it ' +
-          'keeping you up — energy and focus for the workout, nothing lingering ' +
-          'into an already short night.',
-      },
-      {
-        slotType: 'sleep',
-        title: 'Evening Wind-Down',
-        description: 'Round the day off',
-        productId: 'chrgd-ashwagandha',
-        swapGroup: 'adaptogen',
-        reason:
-          'An adaptogen many people reach for during demanding stretches — make ' +
-          'it a fixed part of your evening routine, alongside winding down properly ' +
-          'and a consistent bedtime.',
-      },
-    ],
-  }),
+  /*
+    No stack yet.
 
-  addOns: [
-    {
-      slotId: 'deadline-week-addon-magnesium',
-      slotType: 'sleep',
-      title: 'Night Support',
-      productId: 'chrgd-magnesium',
-      reason:
-        'The optional evening add-on. Magnesium contributes to normal muscle ' +
-        'function and to the reduction of tiredness and fatigue — a simple ' +
-        'addition to your wind-down when the week is heavy.',
-    },
-  ],
+    The products that used to be written into this file are now a PRE-BUILT
+    BUNDLE — a named stack authored in the Hub and shared by every session that
+    sells it. Point this package at one there; until then it prices at nothing,
+    readiness says so, and the shop leaves it off the shelf rather than showing
+    a package nobody can buy.
+  */
+  productBundleSlug: null,
 
   workouts: [
     {

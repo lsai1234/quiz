@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
-import type { PrebuiltBundle } from '@/lib/bundles'
+import type { WorkoutBundle } from '@/lib/bundles'
 import {
   getPortalBundles,
   createBundle,
@@ -23,8 +23,8 @@ export async function GET() {
 }
 
 type Action =
-  | { action: 'create'; bundle: PrebuiltBundle }
-  | { action: 'edit'; slug: string; patch: Partial<PrebuiltBundle> }
+  | { action: 'create'; bundle: WorkoutBundle }
+  | { action: 'edit'; slug: string; patch: Partial<WorkoutBundle> }
   | { action: 'publish'; slug: string; published: boolean }
   | { action: 'reorder'; slugs: string[] }
   | { action: 'remove'; slug: string }

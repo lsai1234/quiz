@@ -1,6 +1,7 @@
 import { test, expect, type Page } from '@playwright/test'
 import { inspect, report } from '../support/inspect'
 import { founderSessionViaApi, signUpViaApi } from '../support/accounts'
+import { sellBundle } from '../support/bundles'
 
 /**
  * Every route, read the way a person reads it.
@@ -18,7 +19,6 @@ import { founderSessionViaApi, signUpViaApi } from '../support/accounts'
 const PUBLIC_ROUTES: Array<{ path: string; name: string; ready?: string }> = [
   { path: '/', name: 'the quiz hero', ready: 'Build your stack' },
   { path: '/shop', name: 'the shop', ready: 'Everything, à la carte' },
-  { path: '/bundles/leg-day-loading', name: 'a bundle landing page' },
   { path: '/myhub', name: 'the My Hub gate', ready: 'Manage your stack' },
   { path: '/founderhub', name: 'the Founders Hub gate', ready: 'Founder sign-in' },
   { path: '/partner', name: 'the Partners Hub gate', ready: 'Partner sign-in' },
@@ -40,7 +40,8 @@ const FOUNDER_ROUTES: Array<{ path: string; name: string }> = [
   { path: '/founderhub/products', name: 'Products' },
   { path: '/founderhub/products/review', name: 'Products → Review' },
   { path: '/founderhub/products/powerbody', name: 'Products → PowerBody' },
-  { path: '/founderhub/products/bundles', name: 'Products → Bundles' },
+  { path: '/founderhub/products/prebuilt', name: 'Products → Pre-built bundles' },
+  { path: '/founderhub/products/bundles', name: 'Products → Workout bundles' },
   { path: '/founderhub/products/coverage', name: 'Products → Coverage' },
   { path: '/founderhub/products/dashboard', name: 'Products → Dashboard' },
   { path: '/founderhub/products/readiness', name: 'Products → Readiness' },
@@ -81,6 +82,19 @@ test.describe('public screens render cleanly', () => {
       expect(report(route.path, findings), report(route.path, findings)).toBe('')
     })
   }
+})
+
+/*
+  A bundle landing page is not a public route until a founder has put it on
+  sale: a seeded package ships with no stack, and an unlinked one 404s on
+  purpose. So it gets its own test rather than a line in PUBLIC_ROUTES.
+*/
+test('a bundle landing page (/bundles/leg-day-loading)', async ({ page }) => {
+  await sellBundle(page, 'leg-day-loading')
+  await page.goto('/bundles/leg-day-loading')
+  await settle(page)
+  const findings = await inspect(page)
+  expect(report('/bundles/leg-day-loading', findings), report('/bundles/leg-day-loading', findings)).toBe('')
 })
 
 test.describe('Founders Hub screens render cleanly', () => {

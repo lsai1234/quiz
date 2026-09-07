@@ -1,11 +1,11 @@
-import type { PrebuiltBundle } from './types'
+import type { WorkoutBundle } from './types'
 
 // ─── Big Night, Big Morning ───────────────────────────────────────────────────
 // The first creator-led prebuilt bundle: the weekend reset stack. All customer
 // copy sticks to authorised-claim-safe language — hydration routine / reset /
 // back on track. Never "cures", "prevents", "detoxes" or "fixes" anything.
 
-export const BIG_NIGHT_BIG_MORNING: PrebuiltBundle = {
+export const BIG_NIGHT_BIG_MORNING: WorkoutBundle = {
   slug: 'big-night-big-morning',
   name: 'Big Night, Big Morning',
   tagline: 'Hydrate. Move. Refuel. Reset.',
@@ -18,92 +18,16 @@ export const BIG_NIGHT_BIG_MORNING: PrebuiltBundle = {
     'Just the essentials for people who still show up.',
   honestyLine: 'Not a hangover cure. Just the get-back-on-track stack.',
 
-  blueprint: {
-    id: 'bundle-big-night-big-morning',
-    stackName: 'Big Night, Big Morning',
-    summary:
-      'The CHRGD weekend reset stack: electrolytes, creatine and protein, ' +
-      'paired with a low-pressure full-body workout you can actually do.',
-    primaryGoal: 'recovery',
-    secondaryGoals: ['hydration', 'performance'],
-    userProfileSummary: 'Weekend reset — social life and training, balanced',
-    slots: [
-      {
-        slotId: 'bnbm-hydration',
-        slotType: 'hydration',
-        title: 'Hydration',
-        description: 'Fluids first — the start of the morning reset',
-        recommendedProductId: 'chrgd-electrolytes',
-        selectedProductId: 'chrgd-electrolytes',
-        selectedVariantId: null,
-        required: true,
-        canRemove: false,
-        canSwap: false,
-        swapGroup: 'electrolytes',
-        reason:
-          'The hero of the stack. A big night can leave you feeling dehydrated, ' +
-          'so getting water and electrolytes in early is the first job of the ' +
-          'morning — mix a serving before training and keep water with you throughout.',
-        confidenceScore: 95,
-        displayOrder: 0,
-      },
-      {
-        slotId: 'bnbm-performance',
-        slotType: 'performance',
-        title: 'Performance',
-        description: 'The daily training non-negotiable',
-        recommendedProductId: 'chrgd-creatine',
-        selectedProductId: 'chrgd-creatine',
-        selectedVariantId: null,
-        required: true,
-        canRemove: false,
-        canSwap: false,
-        swapGroup: 'creatine',
-        reason:
-          'Creatine stays in even after a big social weekend — it increases ' +
-          'physical performance in successive bursts of short-term, high-intensity ' +
-          'exercise, and it only works if you take it daily.',
-        confidenceScore: 90,
-        displayOrder: 1,
-      },
-      {
-        slotId: 'bnbm-protein',
-        slotType: 'protein',
-        title: 'Protein',
-        description: 'Refuel after the session',
-        recommendedProductId: 'chrgd-whey-protein',
-        selectedProductId: 'chrgd-whey-protein',
-        selectedVariantId: null,
-        required: true,
-        canRemove: false,
-        canSwap: false,
-        swapGroup: 'protein-whey',
-        reason:
-          'Low-appetite morning? Protein contributes to the growth and ' +
-          'maintenance of muscle mass — a shake gets it in after the session ' +
-          'without making it complicated.',
-        confidenceScore: 90,
-        displayOrder: 2,
-      },
-    ],
-    estimatedOneOffPrice: 65.67,
-    estimatedSubscriptionPrice: 40.5,
-    savingsSummary: 'Bundle discount applied at checkout',
-    createdAt: '2026-07-06T09:00:00.000Z',
-  },
+  /*
+    No stack yet.
 
-  addOns: [
-    {
-      slotId: 'bnbm-addon-magnesium',
-      slotType: 'sleep',
-      title: 'Evening Reset',
-      productId: 'chrgd-magnesium',
-      reason:
-        'The optional evening add-on. Magnesium contributes to electrolyte ' +
-        'balance and normal muscle function — take it before bed to round off ' +
-        'the reset and set up the week.',
-    },
-  ],
+    The products that used to be written into this file are now a PRE-BUILT
+    BUNDLE — a named stack authored in the Hub and shared by every session that
+    sells it. Point this package at one there; until then it prices at nothing,
+    readiness says so, and the shop leaves it off the shelf rather than showing
+    a package nobody can buy.
+  */
+  productBundleSlug: null,
 
   workouts: [
     {

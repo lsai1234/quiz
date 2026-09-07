@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { BundleWorkout, PrebuiltBundle } from '@/lib/bundles'
-import type { Goal } from '@/lib/types'
+import type { BundleWorkout, ProductBundle } from '@/lib/bundles'
+import type { ResolvedBundle } from '@/lib/bundles/resolve'
 import { bundleSlug } from '@/lib/bundles/resolve'
 import { assembleBundle, bundleToDraft, emptyDraft, EMPTY_WORKOUT, type BundleDraft } from '@/lib/bundles/assemble'
+import { blueprintFor } from '@/lib/bundles/resolve'
 import { bundleReadiness } from '@/lib/bundles/readiness'
 import { calculatePricing, formatGBP } from '@/lib/stack-blueprint/pricing'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
@@ -14,10 +15,9 @@ import { Badge, Button, Card, Input, Modal, ModalBody, ModalHeader, Select, Text
 
 /** Readiness status → the system's semantic tone. The colours live in `Badge`. */
 const TONE = { ok: 'positive', warn: 'attention', fail: 'critical' } as const
-const GOALS: Goal[] = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
 interface Props {
-  initial: PrebuiltBundle | null
+  initial: ResolvedBundle | null
   isNew: boolean
 }
 
@@ -47,8 +47,8 @@ export function BundleEditor({ initial, isNew }: Props) {
   const router = useRouter()
   const [products, setProducts] = useState<CatalogueProduct[]>([])
   const [draft, setDraft] = useState<BundleDraft>(() => (initial ? bundleToDraft(initial) : emptyDraft()))
+  const [stacks, setStacks] = useState<ProductBundle[]>([])
   const [slugTouched, setSlugTouched] = useState(!isNew)
-  const [picker, setPicker] = useState<'core' | 'addon' | null>(null)
   const [preview, setPreview] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -58,6 +58,11 @@ export function BundleEditor({ initial, isNew }: Props) {
       .then((r) => r.json())
       .then((d: { products?: { product: CatalogueProduct }[] }) => setProducts((d.products ?? []).map((p) => p.product)))
       .catch(() => setProducts([]))
+    // The stacks this package can sell. Products are chosen there, not here.
+    fetch('/api/portal/product-bundles')
+      .then((r) => r.json())
+      .then((d: { bundles?: ProductBundle[] }) => setStacks(d.bundles ?? []))
+      .catch(() => setStacks([]))
   }, [])
 
   const set = <K extends keyof BundleDraft>(key: K, value: BundleDraft[K]) => setDraft((d) => ({ ...d, [key]: value }))
@@ -65,17 +70,38 @@ export function BundleEditor({ initial, isNew }: Props) {
   // Auto-slug from the name until the slug is edited directly (new bundles only).
   const onName = (name: string) => setDraft((d) => ({ ...d, name, slug: slugTouched ? d.slug : bundleSlug(name) }))
 
-  const assembled = useMemo(() => assembleBundle(draft, products), [draft, products])
+  /*
+    The package, resolved the way the shop would resolve it — its stack read
+    from the pre-built bundle it points at, never copied into it. Preview,
+    pricing and readiness then run on exactly what a customer would get.
+  */
+  const stack = useMemo(
+    () => stacks.find((s) => s.slug === draft.productBundleSlug) ?? null,
+    [stacks, draft.productBundleSlug],
+  )
+  const assembled = useMemo<ResolvedBundle>(() => {
+    const bundle = assembleBundle(draft)
+    return {
+      ...bundle,
+      productBundle: stack,
+      blueprint: blueprintFor(bundle, stack),
+      addOns: stack?.addOns ?? [],
+      displayOrder: initial?.displayOrder ?? 0,
+      published: draft.published,
+      custom: initial?.custom ?? true,
+      removed: false,
+    }
+  }, [draft, stack, initial])
   const pricing = useMemo(
-    () => (products.length && draft.cores.length ? calculatePricing(assembled.blueprint, products) : null),
-    [assembled, products, draft.cores.length],
+    () => (products.length && assembled.blueprint.slots.length ? calculatePricing(assembled.blueprint, products) : null),
+    [assembled, products],
   )
   const readiness = useMemo(
     () => (products.length ? bundleReadiness(assembled, products) : null),
     [assembled, products],
   )
 
-  const canSave = draft.name.trim() && draft.slug.trim() && draft.cores.length > 0
+  const canSave = Boolean(draft.name.trim() && draft.slug.trim())
   const canPublish = canSave && readiness?.sellable && !!draft.tagline.trim() && !!draft.description.trim() && !!draft.disclaimer.trim()
 
   async function save(publish: boolean) {
@@ -83,7 +109,7 @@ export function BundleEditor({ initial, isNew }: Props) {
     if (publish && !canPublish) { setError('Fix the readiness checks before publishing.'); return }
     setSaving(true)
     setError(null)
-    const bundle = { ...assembleBundle({ ...draft, published: publish }, products) }
+    const bundle = assembleBundle({ ...draft, published: publish })
     const body = isNew
       ? { action: 'create', bundle }
       : { action: 'edit', slug: draft.slug, patch: bundle }
@@ -102,8 +128,6 @@ export function BundleEditor({ initial, isNew }: Props) {
       setSaving(false)
     }
   }
-
-  const chosenIds = new Set([...draft.cores, ...draft.addOns].map((c) => c.productId))
 
   return (
     <div className="space-y-4 pb-24">
@@ -130,7 +154,7 @@ export function BundleEditor({ initial, isNew }: Props) {
             {isNew ? 'New bundle' : `Edit — ${initial?.name}`}
           </h1>
         </div>
-        <Button variant="secondary" size="sm" onClick={() => setPreview(true)} disabled={draft.cores.length === 0}>
+        <Button variant="secondary" size="sm" onClick={() => setPreview(true)} disabled={!stack}>
           Preview
         </Button>
       </div>
@@ -156,7 +180,7 @@ export function BundleEditor({ initial, isNew }: Props) {
               </span>
             </>
           ) : (
-            <span style={{ color: 'var(--ink-3)' }}>Add a product to price the bundle</span>
+            <span style={{ color: 'var(--ink-3)' }}>Choose a pre-built bundle to price this</span>
           )}
         </div>
         {readiness && (
@@ -219,129 +243,80 @@ export function BundleEditor({ initial, isNew }: Props) {
         <Textarea label="Description" value={draft.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="What it's built for…" />
         <Input label="Honesty line" value={draft.honestyLine} onChange={(e) => set('honestyLine', e.target.value)} placeholder="Not a hangover cure. Just the get-back-on-track stack." />
         <Textarea label="Disclaimer" value={draft.disclaimer} onChange={(e) => set('disclaimer', e.target.value)} rows={2} placeholder="Bundle-specific safety note…" />
-        <Select label="Primary goal" value={draft.primaryGoal} onChange={(e) => set('primaryGoal', e.target.value as Goal)}>
-          {GOALS.map((g) => <option key={g} value={g}>{g}</option>)}
-        </Select>
       </Section>
 
-      {/* Stack builder */}
-      <Section title={`Stack — ${draft.cores.length} product${draft.cores.length === 1 ? '' : 's'}`}>
-        {draft.cores.map((core, i) => {
-          const product = products.find((p) => p.id === core.productId)
-          return (
-            // `solid`: these stack up and the section scrolls, and translucency
-            // over a scrolling parent is the expensive case.
-            <Card key={core.productId} solid padding="tight" className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className="truncate"
-                  style={{
-                    fontSize: 'var(--text-body-sm)',
-                    fontWeight: 'var(--weight-strong)',
-                    fontFamily: 'var(--font-display)',
-                    color: 'var(--ink-1)',
-                  }}
-                >
-                  {product?.title ?? core.productId}
-                </p>
-                {/* Named, not drawn. These were bare ↑ ↓ ✕ glyphs, which a
-                    screen reader reads out as arrows with no idea what moves. */}
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="chevron-up"
-                    aria-label={`Move ${product?.title ?? core.productId} up`}
-                    disabled={i === 0}
-                    onClick={() => setDraft((d) => { const c = [...d.cores]; if (i > 0) [c[i - 1], c[i]] = [c[i], c[i - 1]]; return { ...d, cores: c } })}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="chevron-down"
-                    aria-label={`Move ${product?.title ?? core.productId} down`}
-                    disabled={i === draft.cores.length - 1}
-                    onClick={() => setDraft((d) => { const c = [...d.cores]; if (i < c.length - 1) [c[i + 1], c[i]] = [c[i], c[i + 1]]; return { ...d, cores: c } })}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon="trash"
-                    aria-label={`Remove ${product?.title ?? core.productId} from the stack`}
-                    onClick={() => setDraft((d) => ({ ...d, cores: d.cores.filter((_, j) => j !== i) }))}
-                  />
-                </div>
-              </div>
-              <Input
-                label={`Slot label for ${product?.title ?? core.productId}`}
-                compact
-                value={core.title}
-                onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], title: e.target.value }; return { ...d, cores: c } })}
-                placeholder="Slot label, e.g. Hydration"
-                className="w-full"
-              />
-              <Textarea
-                label={`Why ${product?.title ?? core.productId} is in the stack`}
-                value={core.reason}
-                onChange={(e) => setDraft((d) => { const c = [...d.cores]; c[i] = { ...c[i], reason: e.target.value }; return { ...d, cores: c } })}
-                rows={2}
-                placeholder="Why it's in the stack (claim-safe)…"
-              />
-            </Card>
-          )
-        })}
-        <Button variant="secondary" size="sm" icon="plus" fullWidth onClick={() => setPicker('core')}>
-          Add product
-        </Button>
-      </Section>
+      {/*
+        The stack this package sells.
 
-      {/* Add-ons */}
-      <Section title={`Optional add-ons — ${draft.addOns.length}`}>
-        {draft.addOns.map((addon, i) => {
-          const product = products.find((p) => p.id === addon.productId)
-          return (
-            <Card key={addon.productId} solid padding="tight" className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <p
-                  className="truncate"
-                  style={{
-                    fontSize: 'var(--text-body-sm)',
-                    fontWeight: 'var(--weight-strong)',
-                    fontFamily: 'var(--font-display)',
-                    color: 'var(--ink-1)',
-                  }}
-                >
-                  {product?.title ?? addon.productId}
-                </p>
+        Not a product picker. A workout bundle is a session plus one of the
+        pre-built bundles, so the products are chosen once — over in Pre-built
+        bundles — and every package that sells that stack follows it. Copying
+        the products in here is what left a product swapped out of "Strength"
+        still being sold by four packages.
+      */}
+      <Section title="Stack">
+        {stacks.length === 0 ? (
+          <Card tone="attention" padding="tight" className="space-y-2">
+            <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
+              There are no pre-built bundles yet.
+            </p>
+            <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+              A workout bundle sells one of them, so build the stack first — the products, and why they are
+              together. This package can be saved as a draft in the meantime.
+            </p>
+            <Button variant="secondary" size="sm" onClick={() => router.push('/founderhub/products/prebuilt/new')}>
+              Build a pre-built bundle
+            </Button>
+          </Card>
+        ) : (
+          <>
+            <Select
+              label="Pre-built bundle"
+              value={draft.productBundleSlug}
+              onChange={(e) => set('productBundleSlug', e.target.value)}
+              hint="The products, the reasons and the add-ons all come from here."
+            >
+              <option value="">— none chosen —</option>
+              {stacks.map((s) => (
+                <option key={s.slug} value={s.slug}>{s.name}</option>
+              ))}
+            </Select>
+
+            {/* What that choice actually contains, so picking it is not a
+                guess from a name in a dropdown. */}
+            {stack && (
+              <Card solid padding="tight" className="space-y-1">
+                {[...stack.blueprint.slots]
+                  .sort((a, b) => a.displayOrder - b.displayOrder)
+                  .map((slot) => {
+                    const product = products.find((p) => p.id === slot.selectedProductId)
+                    return (
+                      <p
+                        key={slot.slotId}
+                        className="truncate"
+                        style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-2)' }}
+                      >
+                        <span style={{ color: 'var(--ink-3)' }}>{slot.title}</span>{' '}
+                        {product?.title ?? slot.selectedProductId}
+                      </p>
+                    )
+                  })}
+                {stack.addOns.length > 0 && (
+                  <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
+                    + {stack.addOns.length} optional add-on{stack.addOns.length === 1 ? '' : 's'}
+                  </p>
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
-                  icon="trash"
-                  aria-label={`Remove ${product?.title ?? addon.productId} from the add-ons`}
-                  onClick={() => setDraft((d) => ({ ...d, addOns: d.addOns.filter((_, j) => j !== i) }))}
-                />
-              </div>
-              <Input
-                label={`Add-on label for ${product?.title ?? addon.productId}`}
-                compact
-                value={addon.title}
-                onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], title: e.target.value }; return { ...d, addOns: a } })}
-                placeholder="Add-on label, e.g. Evening Reset"
-                className="w-full"
-              />
-              <Textarea
-                label={`Why someone might add ${product?.title ?? addon.productId}`}
-                value={addon.reason}
-                onChange={(e) => setDraft((d) => { const a = [...d.addOns]; a[i] = { ...a[i], reason: e.target.value }; return { ...d, addOns: a } })}
-                rows={2}
-                placeholder="Why someone might add it…"
-              />
-            </Card>
-          )
-        })}
-        <Button variant="ghost" size="sm" icon="plus" fullWidth onClick={() => setPicker('addon')}>
-          Add optional product
-        </Button>
+                  onClick={() => router.push(`/founderhub/products/prebuilt/${stack.slug}`)}
+                >
+                  Edit this stack
+                </Button>
+              </Card>
+            )}
+          </>
+        )}
       </Section>
 
       {/*
@@ -565,23 +540,6 @@ export function BundleEditor({ initial, isNew }: Props) {
         </div>
       </div>
 
-      {/* Product picker */}
-      {picker && (
-        <ProductPicker
-          products={products}
-          disabledIds={chosenIds}
-          onPick={(p) => {
-            setDraft((d) =>
-              picker === 'core'
-                ? { ...d, cores: [...d.cores, { productId: p.id, title: p.category, reason: p.shortReason || '' }] }
-                : { ...d, addOns: [...d.addOns, { productId: p.id, title: p.category, reason: p.shortReason || '' }] },
-            )
-            setPicker(null)
-          }}
-          onClose={() => setPicker(null)}
-        />
-      )}
-
       {/* Full-page preview overlay */}
       {preview && (
         <Modal onClose={() => setPreview(false)} size="lg" label="Bundle preview">
@@ -594,66 +552,5 @@ export function BundleEditor({ initial, isNew }: Props) {
         </Modal>
       )}
     </div>
-  )
-}
-
-// ── Product picker ─────────────────────────────────────────────────────────────
-function ProductPicker({ products, disabledIds, onPick, onClose }: { products: CatalogueProduct[]; disabledIds: Set<string>; onPick: (p: CatalogueProduct) => void; onClose: () => void }) {
-  const [q, setQ] = useState('')
-  const filtered = products.filter((p) => p.title.toLowerCase().includes(q.toLowerCase()) || p.category.toLowerCase().includes(q.toLowerCase()))
-  return (
-    <Modal onClose={onClose} size="md" label="Add a product to this bundle">
-      <div style={{ padding: 'var(--space-4)', borderBottom: '1px solid var(--edge)' }}>
-        <Input
-          label="Search products"
-          autoFocus
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search products…"
-        />
-      </div>
-      <ModalBody>
-          {filtered.map((p) => {
-            const disabled = disabledIds.has(p.id)
-            return (
-              <Button
-                key={p.id}
-                variant="ghost"
-                fullWidth
-                disabled={disabled}
-                onClick={() => onPick(p)}
-                className="justify-between text-left"
-              >
-                <span className="min-w-0">
-                  <span
-                    className="block truncate"
-                    style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}
-                  >
-                    {p.title}
-                  </span>
-                  <span
-                    className="block"
-                    style={{
-                      fontSize: 'var(--text-meta)',
-                      fontWeight: 'var(--weight-body)',
-                      color: 'var(--ink-3)',
-                    }}
-                  >
-                    {p.category} · {p.stackSlots[0]}
-                  </span>
-                </span>
-                <span style={{ fontSize: 'var(--text-meta)', color: 'var(--accent)' }}>
-                  {disabled ? 'Added' : 'Add'}
-                </span>
-              </Button>
-            )
-          })}
-        {filtered.length === 0 && (
-          <p className="text-center" style={{ fontSize: 'var(--text-body)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
-            No products match.
-          </p>
-        )}
-      </ModalBody>
-    </Modal>
   )
 }

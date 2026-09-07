@@ -1,12 +1,11 @@
-import type { PrebuiltBundle } from './types'
-import { bundleBlueprint } from './builders'
+import type { WorkoutBundle } from './types'
 
 // ─── Early Shift ──────────────────────────────────────────────────────────────
 // The 6am-before-work stack. Stim-free energy so the caffeine timing never
 // wrecks the rest of the day, hydration to wake the body up, protein to make
 // breakfast easy. Claim-safe: no "burns fat", no "detox".
 
-export const EARLY_SHIFT: PrebuiltBundle = {
+export const EARLY_SHIFT: WorkoutBundle = {
   slug: 'early-shift',
   name: 'Early Shift',
   tagline: 'Up. Out. Done before work.',
@@ -18,62 +17,16 @@ export const EARLY_SHIFT: PrebuiltBundle = {
     'less thing to think about.',
   honestyLine: 'The hardest rep is the alarm. Everything after is downhill.',
 
-  blueprint: bundleBlueprint({
-    slug: 'early-shift',
-    name: 'Early Shift',
-    summary: 'Stim-free pre-workout, electrolytes and protein — an early session that won’t follow you into the day.',
-    primaryGoal: 'energy',
-    secondaryGoals: ['hydration', 'muscle'],
-    profile: 'Early-morning trainer, fits a session in before work',
-    estOneOff: 74.97,
-    estSub: 48,
-    cores: [
-      {
-        slotType: 'energy',
-        title: 'Stim-Free Pre-Workout',
-        description: 'Energy without the all-day caffeine',
-        productId: 'chrgd-pre-workout-stim-free',
-        swapGroup: 'pre-workout-stim-free',
-        reason:
-          'A caffeine-free lift so you get the focus of a pre-workout at 6am ' +
-          'without stimulants that hang around and disturb your evening — ideal ' +
-          'before an early session.',
-      },
-      {
-        slotType: 'hydration',
-        title: 'Hydration',
-        description: 'Wake the body up',
-        productId: 'chrgd-electrolytes',
-        swapGroup: 'electrolytes',
-        reason:
-          'You wake up mildly dehydrated. A serving of electrolytes first thing ' +
-          'is a simple way to start your hydration routine before you train.',
-      },
-      {
-        slotType: 'protein',
-        title: 'Protein',
-        description: 'Breakfast, sorted',
-        productId: 'chrgd-whey-protein',
-        swapGroup: 'protein-whey',
-        reason:
-          'Protein contributes to the growth and maintenance of muscle mass — a ' +
-          'shake on the way out the door covers it when there’s no time to cook.',
-      },
-    ],
-  }),
+  /*
+    No stack yet.
 
-  addOns: [
-    {
-      slotId: 'early-shift-addon-magnesium',
-      slotType: 'sleep',
-      title: 'Evening Wind-Down',
-      productId: 'chrgd-magnesium',
-      reason:
-        'Early mornings only work if the nights do. Magnesium contributes to ' +
-        'normal muscle function and to the reduction of tiredness and fatigue — ' +
-        'take it in the evening to round the day off.',
-    },
-  ],
+    The products that used to be written into this file are now a PRE-BUILT
+    BUNDLE — a named stack authored in the Hub and shared by every session that
+    sells it. Point this package at one there; until then it prices at nothing,
+    readiness says so, and the shop leaves it off the shelf rather than showing
+    a package nobody can buy.
+  */
+  productBundleSlug: null,
 
   workouts: [
     {

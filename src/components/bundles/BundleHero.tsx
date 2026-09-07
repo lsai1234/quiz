@@ -1,11 +1,11 @@
 'use client'
 
-import type { PrebuiltBundle } from '@/lib/bundles'
+import type { ResolvedBundle } from '@/lib/bundles/resolve'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { bundleWorkouts } from '@/lib/bundles/resolve'
 
 interface Props {
-  bundle: PrebuiltBundle
+  bundle: ResolvedBundle
   productCount: number
   totalPrice: number
 }

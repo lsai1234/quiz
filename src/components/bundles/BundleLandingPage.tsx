@@ -4,7 +4,8 @@ import { Icon } from '@/components/ui/Icon'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
-import type { PrebuiltBundle, BundleAddOn } from '@/lib/bundles'
+import type { BundleAddOn } from '@/lib/bundles'
+import type { ResolvedBundle } from '@/lib/bundles/resolve'
 import type { StackBlueprint, StackSlotEntry } from '@/lib/stack-blueprint'
 import { updateStackSlotVariant, removeOptionalSlot } from '@/lib/stack-blueprint/helpers'
 import { calculatePricing, buildSubscriptionPlan, formatGBP } from '@/lib/stack-blueprint/pricing'
@@ -28,7 +29,7 @@ import { WorkoutSection } from './WorkoutSection'
 import { BundleHowTo } from './BundleHowTo'
 
 interface Props {
-  bundle: PrebuiltBundle
+  bundle: ResolvedBundle
 }
 
 /**

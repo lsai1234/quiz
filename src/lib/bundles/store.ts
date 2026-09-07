@@ -16,7 +16,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { readJson, writeJson } from '@/lib/portal/persist'
 import { SEED_BUNDLES } from './seeds'
-import type { PrebuiltBundle } from './types'
+import type { ProductBundle, WorkoutBundle } from './types'
 import {
   composeBundles,
   EMPTY_PERSISTED_BUNDLES,
@@ -27,6 +27,16 @@ import { bundlePriceSummary, isBundleSellable, type BundlePriceSummary } from '.
 import { bundleReadiness, type BundleReadiness } from './readiness'
 
 const BUNDLES_FILE = 'bundles'
+/*
+  Pre-built bundles are stored apart from the packages that sell them, and ship
+  with no seeds at all.
+
+  Which products belong together is a decision that moves with the range — a
+  product goes out of stock, a better one arrives — and a decision that moves
+  does not belong in a deploy. There are two of them and they are authored in
+  the Hub.
+*/
+const PRODUCT_BUNDLES_FILE = 'product-bundles'
 
 async function loadBundles(): Promise<PersistedBundles> {
   const stored = await readJson<PersistedBundles>(BUNDLES_FILE, EMPTY_PERSISTED_BUNDLES)
@@ -41,6 +51,78 @@ async function saveBundles(state: PersistedBundles): Promise<void> {
   await writeJson(BUNDLES_FILE, state)
 }
 
+async function loadProductBundles(): Promise<ProductBundle[]> {
+  const stored = await readJson<{ bundles: ProductBundle[] }>(PRODUCT_BUNDLES_FILE, { bundles: [] })
+  return stored.bundles ?? []
+}
+
+async function saveProductBundles(bundles: ProductBundle[]): Promise<void> {
+  await writeJson(PRODUCT_BUNDLES_FILE, { bundles })
+}
+
+// ── Pre-built bundles (the product stacks) ────────────────────────────────────
+
+/** Every pre-built bundle, in the founder's order. */
+export async function getProductBundles(): Promise<ProductBundle[]> {
+  const bundles = await loadProductBundles()
+  return [...bundles].sort(
+    (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0) || a.name.localeCompare(b.name),
+  )
+}
+
+export async function getProductBundle(slug: string): Promise<ProductBundle | undefined> {
+  return (await loadProductBundles()).find((b) => b.slug === slug)
+}
+
+/** Create a pre-built bundle. Throws if the slug is taken. */
+export async function createProductBundle(bundle: ProductBundle): Promise<void> {
+  const bundles = await loadProductBundles()
+  if (bundles.some((b) => b.slug === bundle.slug)) {
+    throw new Error(`A pre-built bundle with slug "${bundle.slug}" already exists`)
+  }
+  bundles.push({ ...bundle, displayOrder: bundle.displayOrder ?? bundles.length })
+  await saveProductBundles(bundles)
+}
+
+/** Edit a pre-built bundle in place. `slug` itself cannot be changed here. */
+export async function editProductBundle(slug: string, patch: Partial<ProductBundle>): Promise<void> {
+  const bundles = await loadProductBundles()
+  const idx = bundles.findIndex((b) => b.slug === slug)
+  if (idx === -1) throw new Error(`Pre-built bundle "${slug}" not found`)
+  const { slug: _ignore, ...rest } = patch
+  bundles[idx] = { ...bundles[idx], ...rest }
+  await saveProductBundles(bundles)
+}
+
+/**
+ * Delete a pre-built bundle.
+ *
+ * Refused while a workout bundle still points at it. Deleting it anyway would
+ * empty every package built on it at once, and the packages are the things
+ * customers can see — so the founder is told which ones to re-point first
+ * rather than finding out from the shop.
+ */
+export async function deleteProductBundle(slug: string): Promise<void> {
+  const inUse = (await getResolvedBundles({ includeRemoved: true })).filter(
+    (b) => b.productBundleSlug === slug,
+  )
+  if (inUse.length > 0) {
+    throw new Error(
+      `${inUse.map((b) => b.name).join(', ')} ${inUse.length === 1 ? 'is' : 'are'} still selling this stack. ` +
+        'Point them at another one first.',
+    )
+  }
+  const bundles = await loadProductBundles()
+  await saveProductBundles(bundles.filter((b) => b.slug !== slug))
+}
+
+/** Clear all pre-built bundles (test helper). */
+export async function resetProductBundlesStore(): Promise<void> {
+  await saveProductBundles([])
+}
+
+// ── Workout bundles (the packages) ────────────────────────────────────────────
+
 /** True when a slug belongs to a shipped seed (edited via overrides, never deleted). */
 function isSeedSlug(slug: string): boolean {
   return SEED_BUNDLES.some((s) => s.slug === slug)
@@ -50,8 +132,8 @@ function isSeedSlug(slug: string): boolean {
 
 /** Every bundle in effective form. `includeRemoved` surfaces soft-removed ones. */
 export async function getResolvedBundles(opts: { includeRemoved?: boolean } = {}): Promise<ResolvedBundle[]> {
-  const persisted = await loadBundles()
-  return composeBundles(SEED_BUNDLES, persisted, opts)
+  const [persisted, productBundles] = await Promise.all([loadBundles(), loadProductBundles()])
+  return composeBundles(SEED_BUNDLES, persisted, productBundles, opts)
 }
 
 /** A single resolved bundle by slug (including unpublished/removed). */
@@ -117,7 +199,7 @@ export async function getPortalBundles(): Promise<{ bundles: PortalBundle[]; sou
 // ── Mutations ─────────────────────────────────────────────────────────────────
 
 /** Create a founder-authored bundle. Throws if the slug already exists. */
-export async function createBundle(bundle: PrebuiltBundle): Promise<void> {
+export async function createBundle(bundle: WorkoutBundle): Promise<void> {
   const state = await loadBundles()
   const exists = isSeedSlug(bundle.slug) || state.created.some((b) => b.slug === bundle.slug)
   if (exists) throw new Error(`A bundle with slug "${bundle.slug}" already exists`)
@@ -129,7 +211,7 @@ export async function createBundle(bundle: PrebuiltBundle): Promise<void> {
  * Edit a bundle by slug. Seed bundles record a per-slug override; founder
  * bundles are updated in place. `slug` itself cannot be changed here.
  */
-export async function editBundle(slug: string, patch: Partial<PrebuiltBundle>): Promise<void> {
+export async function editBundle(slug: string, patch: Partial<WorkoutBundle>): Promise<void> {
   const state = await loadBundles()
   const { slug: _ignore, ...rest } = patch
   if (isSeedSlug(slug)) {
@@ -194,13 +276,16 @@ export async function duplicateBundle(slug: string, newSlug: string, newName: st
   const source = await getResolvedBundle(slug)
   if (!source) throw new Error(`Bundle "${slug}" not found`)
   const {
-    displayOrder: _o, published: _p, custom: _c, removed: _r, ...base
+    displayOrder: _o, published: _p, custom: _c, removed: _r,
+    // Resolved, not stored: the copy points at the same pre-built bundle and
+    // resolves its own stack on the next read.
+    blueprint: _b, addOns: _a, productBundle: _pb,
+    ...base
   } = source
-  const copy: PrebuiltBundle = {
+  const copy: WorkoutBundle = {
     ...base,
     slug: newSlug,
     name: newName,
-    blueprint: { ...base.blueprint, id: `bundle-${newSlug}`, stackName: newName },
     published: false, // duplicates start as drafts
     custom: true,
   }

@@ -84,16 +84,18 @@ export default function PortalBundlesPage() {
     <div>
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
-          Bundles
+          Workout bundles
         </h2>
         {/* A link, not a button: it goes somewhere, and someone expecting to
             middle-click it should be able to. */}
         <Link href="/founderhub/products/bundles/new" {...buttonSurface('primary', 'sm')}>
-          New bundle
+          New workout bundle
         </Link>
       </div>
       <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginBottom: 'var(--space-4)' }}>
-        Prebuilt bundles shown in the shop, top to bottom. Reorder, publish, edit or remove them.
+        What the shop sells, top to bottom: a workout, and one of the{' '}
+        <Link href="/founderhub/products/prebuilt" style={{ color: 'var(--accent)' }}>pre-built bundles</Link>{' '}
+        for the products. Reorder, publish, edit or remove them.
       </p>
 
       {error && (
@@ -130,9 +132,13 @@ export default function PortalBundlesPage() {
                         {bundle.custom && <Badge tone="accent">Custom</Badge>}
                       </div>
                       <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
-                        {bundle.seriesName} · {formatGBP(price.price)}
+                        {/* Which stack it sells is the first thing to know: a
+                            package pointing at nothing has no products, no
+                            price and no place on the shelf. */}
+                        {bundle.productBundle ? bundle.productBundle.name : 'No stack chosen'}
+                        {' · '}{formatGBP(price.price)}
                         {price.saving > 0 && ` · save ${formatGBP(price.saving)}`} · {bundle.blueprint.slots.length} products
-                        {!readiness.sellable && ' · product unavailable'}
+                        {bundle.productBundle && !readiness.sellable && ' · product unavailable'}
                       </p>
                     </div>
 
