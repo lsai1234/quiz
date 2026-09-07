@@ -10,7 +10,7 @@ import {
   syncPortalRuntime,
 } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { repriceVariants, type SkuFacts } from '@/lib/supplier/variant-pricing'
+import { repriceVariants, sliceBySkuBudget, type SkuFacts } from '@/lib/supplier/variant-pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 /**
@@ -33,13 +33,24 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
  * The import path is fixed (see `supplier/roster-import`), which only helps
  * products imported from now on. This is the pass for everything already here.
  *
- * ── Two calls, cheapest first ───────────────────────────────────────────────
- * Cost and RRP come from `getStockLevels`, which is the cheap feed read the
- * nightly sync already makes for every SKU we sell. Servings only exist on the
- * per-product detail call (`portion_count`), so those are fetched by id through
- * the crawled index — the same route the flavour-name repair takes. A supplier
- * that will not answer the second call is not fatal: the prices still land, and
- * what is missing is said.
+ * ── One call per SKU, and a batch small enough to finish ────────────────────
+ * Everything this needs — cost, RRP, serving count and picture — is on ONE
+ * call: `getProductInfo`, by product id, through the crawled index. So that is
+ * the only call it makes.
+ *
+ * It used to also read `getStockLevels` for the prices, which sounds cheap and
+ * is not: that is a walk through PowerBody's whole paged feed, 3,000+ products
+ * at fifteen a page, on every run. Two hundred throttled requests to learn
+ * prices the detail call was about to hand over anyway — and it ran BEFORE the
+ * detail calls, so it spent the request's budget and left nothing for the work.
+ *
+ * What is left is still not free. The transport allows two requests in flight
+ * with a minimum gap between starts (see `soap.ts`), which is the rate limiting
+ * — it does not need more. What it needs is less work per request: a hundred
+ * SKUs at two-at-a-time is minutes, and a serverless function has sixty
+ * seconds. So the pass runs in BATCHES of SKUs, the screen drives the loop, and
+ * each request stops early rather than dying if the clock runs down. Nothing is
+ * lost when it stops: every batch writes what it repaired before returning.
  *
  * ── What it will not touch ──────────────────────────────────────────────────
  * By default it re-prices a variant only where the siblings' COSTS actually
@@ -118,48 +129,78 @@ export async function GET() {
   })
 }
 
-/** What the supplier will tell us about these SKUs, cheapest call first. */
-async function fetchFacts(
-  skus: string[],
-): Promise<{ facts: Map<string, SkuFacts>; priceError: string | null; servingsError: string | null }> {
+/** What one run managed, in the terms a founder would ask about. */
+interface RunReport {
+  /** SKUs this batch tried to read. */
+  asked: number
+  /** …of those, how many PowerBody answered for. */
+  answered: number
+  /** …and how many the crawled index has no product id for, so nothing could ask. */
+  unindexed: string[]
+  pricesFound: number
+  servingsFound: number
+  picturesFound: number
+  /** True when the batch took longer than its budget — the supplier is slow. */
+  slow: boolean
+  /** How long the supplier calls took, in ms. */
+  elapsedMs: number
+  /** The supplier's own words, when it refused. */
+  error: string | null
+}
+
+/**
+ * How many SKUs one request asks PowerBody about.
+ *
+ * Each is one throttled `getProductInfo`. At two in flight with a minimum gap
+ * and a real round trip apiece, a dozen is a handful of seconds — comfortably
+ * inside the function's ceiling even if a couple of them are retried through a
+ * rate-limit backoff. The screen sends slices and stitches the results, the
+ * same way the roster import does.
+ */
+const SKUS_PER_BATCH = 12
+
+/**
+ * How long a batch is expected to take.
+ *
+ * Not a timeout — the platform's `maxDuration` is that. This is the line past
+ * which the batch says it was slow, so the screen can tell "PowerBody is
+ * throttling us" from "PowerBody is not answering", which look identical from a
+ * button that has been spinning for a minute.
+ */
+const RUN_BUDGET_MS = 20_000
+
+/** Ask PowerBody about these SKUs — one detail call each, through the index. */
+async function fetchFacts(skus: string[]): Promise<{ facts: Map<string, SkuFacts>; report: RunReport }> {
+  const startedAt = Date.now()
   const facts = new Map<string, SkuFacts>()
-  if (skus.length === 0) return { facts, priceError: null, servingsError: null }
-
-  const supplier = await getSupplier()
-  let priceError: string | null = null
-  let servingsError: string | null = null
-
-  // Cost and RRP: one feed read for every SKU at once, the same call the
-  // nightly sync makes. It cannot time out per product because it is not per
-  // product.
-  try {
-    for (const level of await supplier.getStockLevels(skus)) {
-      facts.set(level.sku, {
-        cost: level.wholesalePrice > 0 ? level.wholesalePrice : null,
-        rrp: level.rrp > 0 ? level.rrp : null,
-        servings: null,
-        name: null,
-        image: null,
-      })
-    }
-  } catch (err) {
-    priceError = err instanceof Error ? err.message : 'PowerBody could not be reached for prices.'
+  const report: RunReport = {
+    asked: skus.length,
+    answered: 0,
+    unindexed: [],
+    pricesFound: 0,
+    servingsFound: 0,
+    picturesFound: 0,
+    slow: false,
+    elapsedMs: 0,
+    error: null,
   }
+  if (skus.length === 0) return { facts, report }
 
-  // Servings: only on the per-product detail call, reached by id through the
-  // crawled index so nothing has to page the feed to find each one.
-  try {
-    const indexed = await indexedProductIds(skus)
-    const ids = skus.map((s) => indexed.get(s)?.productId).filter((id): id is string => Boolean(id))
-    if (ids.length > 0) {
-      const detailed = await supplier.getProductsById(ids)
+  const indexed = await indexedProductIds(skus)
+  // A SKU with no id is not a failure to report as an outage: nothing can be
+  // asked about it until the feed index has been crawled far enough to hold it.
+  report.unindexed = skus.filter((sku) => !indexed.get(sku)?.productId)
+  const ids = skus.map((s) => indexed.get(s)?.productId).filter((id): id is string => Boolean(id))
+
+  if (ids.length > 0) {
+    try {
+      const detailed = await supplierDetail(ids)
       // Verified against the SKU we asked about: an index entry that has moved
-      // would otherwise put another product's serving count on our variant.
+      // would otherwise put another product's price on our variant.
       for (const p of detailed.filter((p) => skus.includes(p.sku))) {
-        const held = facts.get(p.sku)
         facts.set(p.sku, {
-          cost: held?.cost ?? (p.wholesalePrice > 0 ? p.wholesalePrice : null),
-          rrp: held?.rrp ?? (p.rrp > 0 ? p.rrp : null),
+          cost: p.wholesalePrice > 0 ? p.wholesalePrice : null,
+          rrp: p.rrp > 0 ? p.rrp : null,
           servings: p.servings,
           name: p.name || null,
           // The detail call is the only place a picture lives, and it is per
@@ -168,22 +209,50 @@ async function fetchFacts(
           image: p.imageUrl || null,
         })
       }
+    } catch (err) {
+      report.error = err instanceof Error ? err.message : 'PowerBody could not be reached.'
     }
-  } catch (err) {
-    servingsError = err instanceof Error ? err.message : 'PowerBody could not be reached for serving counts.'
   }
 
-  return { facts, priceError, servingsError }
+  /*
+    No fallback to the crawled index's stored price, deliberately.
+
+    The index holds a price because the same rows carried it for free, and its
+    own header states the rule it lives by: a stale entry may cost a wasted
+    call, and must never cost a wrong price. Pricing a shelf off a figure read
+    on some earlier day is exactly that. A SKU the live call could not answer
+    for is left alone and counted as unanswered, which the screen reports —
+    a gap that is visible beats a price that is quietly old.
+  */
+
+  for (const fact of facts.values()) {
+    report.answered += 1
+    if (fact.cost != null) report.pricesFound += 1
+    if (fact.servings != null) report.servingsFound += 1
+    if (fact.image) report.picturesFound += 1
+  }
+  report.elapsedMs = Date.now() - startedAt
+  return { facts, report }
+}
+
+/** The detail call, isolated so the route reads as one step per source. */
+async function supplierDetail(ids: string[]) {
+  const supplier = await getSupplier()
+  return supplier.getProductsById(ids)
 }
 
 export async function POST(request: Request) {
   if (!(await isPortalAuthed())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   let force = false
+  let offset = 0
   const raw = await request.text().catch(() => '')
   if (raw.trim()) {
     try {
-      force = (JSON.parse(raw) as { force?: boolean }).force === true
+      const body = JSON.parse(raw) as { force?: boolean; offset?: number }
+      force = body.force === true
+      const asked = Number(body.offset)
+      offset = Number.isFinite(asked) && asked > 0 ? Math.floor(asked) : 0
     } catch {
       return NextResponse.json({ error: 'Malformed request.' }, { status: 400 })
     }
@@ -191,24 +260,28 @@ export async function POST(request: Request) {
 
   const affected = await candidates()
   if (affected.length === 0) {
-    return NextResponse.json({ ok: true, repaired: [], total: 0, message: 'No product has more than one supplier SKU behind it.' })
+    return NextResponse.json({
+      ok: true, repaired: [], total: 0, totalProducts: 0, nextOffset: null,
+      message: 'No product has more than one supplier SKU behind it.',
+    })
   }
 
+  // Measured in SKUs, not products — see `sliceBySkuBudget`.
+  const slice = sliceBySkuBudget(affected.slice(offset), SKUS_PER_BATCH)
+
   const skus = [
-    ...new Set(affected.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))),
+    ...new Set(slice.flatMap((p) => p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)))),
   ]
-  const { facts, priceError, servingsError } = await fetchFacts(skus)
-  if (facts.size === 0) {
-    return NextResponse.json(
-      { error: priceError ?? servingsError ?? 'PowerBody answered for none of those SKUs.' },
-      { status: 502 },
-    )
-  }
+  const { facts, report } = await fetchFacts(skus)
+  // Informational, not a retry: this batch's slice HAS been processed with
+  // whatever landed, so the run moves on either way. It is the signal the
+  // screen uses to say the supplier is being slow rather than silent.
+  report.slow = report.elapsedMs > RUN_BUDGET_MS
 
   const imported = new Set((await getImportedProducts()).map((p) => p.id))
   const repaired: Repair[] = []
 
-  for (const product of affected) {
+  for (const product of slice) {
     const result = repriceVariants(product, facts, force)
     if (!result) continue
 
@@ -231,12 +304,21 @@ export async function POST(request: Request) {
     repaired.push({ productId: product.id, title: product.title, changed: result.changed })
   }
 
+  const done = offset + slice.length
   return NextResponse.json({
     ok: true,
+    // This batch.
+    offset,
+    products: slice.length,
+    totalProducts: affected.length,
+    // Where the screen picks up, or null when there is nothing left. It always
+    // advances: this batch's products were processed with whatever the supplier
+    // gave, and re-reading them would leave everything after them unreachable.
+    // A batch that learned nothing is the screen's cue to stop, not to retry.
+    nextOffset: done < affected.length ? done : null,
     total: repaired.length,
     variants: repaired.reduce((n, r) => n + Object.keys(r.changed).length, 0),
-    ...(priceError ? { priceError } : {}),
-    ...(servingsError ? { servingsError } : {}),
+    report,
     repaired,
   })
 }

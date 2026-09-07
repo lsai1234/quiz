@@ -129,3 +129,33 @@ export function repriceVariants(
   }
 }
 
+
+/**
+ * As many products as fit in one batch, measured in SKUs.
+ *
+ * A batch is measured in SKUs rather than products because a SKU is what costs
+ * a call: one product with eight flavours is eight requests, and three products
+ * with two apiece is six. Measuring in products makes a batch's cost depend on
+ * which products it happened to contain, which is how a pass that is fine on
+ * Tuesday times out on Wednesday.
+ *
+ * Always returns at least one product. A product with more variants than the
+ * whole budget would otherwise be skipped forever, and blocking the queue on
+ * the one product that most needs repairing is the worst possible reading of a
+ * limit that exists to keep things moving.
+ */
+export function sliceBySkuBudget<T extends { variants: Array<{ sku?: string | null }> }>(
+  products: T[],
+  budget: number,
+): T[] {
+  const slice: T[] = []
+  let count = 0
+  for (const product of products) {
+    const skus = product.variants.filter((v) => v.sku).length
+    if (slice.length > 0 && count + skus > budget) break
+    slice.push(product)
+    count += skus
+    if (count >= budget) break
+  }
+  return slice
+}

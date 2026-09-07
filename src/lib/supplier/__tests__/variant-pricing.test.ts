@@ -1,4 +1,4 @@
-import { repriceVariants, type SkuFacts } from '../variant-pricing'
+import { repriceVariants, sliceBySkuBudget, type SkuFacts } from '../variant-pricing'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
@@ -121,5 +121,38 @@ describe('repriceVariants', () => {
 
     expect(fixed.variants[0].price).toBe(21.99)
     expect(fixed.variants[1].price).toBe(14.99)
+  })
+})
+
+describe('sliceBySkuBudget', () => {
+  const p = (id: string, skus: number) => ({
+    id,
+    variants: Array.from({ length: skus }, (_, i) => ({ sku: `${id}-${i}` })),
+  })
+
+  it('fills a batch by SKU count, not by product count', () => {
+    // Reading a SKU is one throttled call, so eight flavours is eight requests
+    // and three two-flavour products is six. A batch measured in products makes
+    // its own cost depend on which products it happened to contain.
+    const batch = sliceBySkuBudget([p('a', 4), p('b', 4), p('c', 4)], 12)
+    expect(batch.map((x) => x.id)).toEqual(['a', 'b', 'c'])
+
+    const smaller = sliceBySkuBudget([p('a', 8), p('b', 8)], 12)
+    expect(smaller.map((x) => x.id)).toEqual(['a'])
+  })
+
+  it('always takes at least one product, however many variants it has', () => {
+    // Otherwise the product that most needs repairing blocks the queue forever.
+    const batch = sliceBySkuBudget([p('huge', 40), p('next', 2)], 12)
+    expect(batch.map((x) => x.id)).toEqual(['huge'])
+  })
+
+  it('ignores variants with no supplier SKU — nothing is asked about those', () => {
+    const noSkus = { id: 'hand-made', variants: [{ sku: null }, { sku: undefined }] }
+    expect(sliceBySkuBudget([noSkus, p('a', 12)], 12).map((x) => x.id)).toEqual(['hand-made', 'a'])
+  })
+
+  it('is empty when there is nothing left', () => {
+    expect(sliceBySkuBudget([], 12)).toEqual([])
   })
 })

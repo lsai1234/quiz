@@ -271,3 +271,23 @@ back to the product's), the import fills it per SKU, and the Hub's *Variant
 prices, servings & pictures* pass backfills everything already in the shop. A
 picture already set is never overwritten. The shop card, the product page and
 the quiz's detail sheet all follow the chosen variant.
+
+**The pass runs in batches, and says what happened.** Rate limiting itself is
+the transport's job and always has been (`soap.ts`: two requests in flight, a
+minimum gap between starts, retries that honour `Retry-After` and back off up to
+30s). What the pass got wrong was the amount of work in one request: it read
+`getStockLevels` — a walk through PowerBody's whole paged feed, 3,000+ products
+at fifteen a page — and *then* made one detail call per SKU, which on a hundred
+SKUs cannot finish inside a serverless function's sixty seconds. It died, the
+response was not JSON, and the screen fell back to a generic "could not reach
+PowerBody".
+
+Now: the feed walk is gone (the detail call already carries cost and RRP), a
+request handles twelve SKUs, the screen drives the loop, and every batch writes
+what it repaired before returning. Each batch reports SKUs asked and answered,
+prices/servings/pictures found, elapsed time, SKUs the crawled index cannot
+resolve, and the supplier's own error text — including the transport's
+"lower POWERBODY_MAX_CONCURRENT" advice. A batch that answers for nothing stops
+the run rather than making a dozen more requests to be refused by, and a
+non-JSON response is reported as our own timeout rather than as the supplier's
+silence.
