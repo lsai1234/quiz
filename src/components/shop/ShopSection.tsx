@@ -1,7 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { ShopCategory } from '@/lib/shop/categories'
+import { SHELF_PREVIEW_COUNT, type ShopCategory } from '@/lib/shop/categories'
+import { Button } from '@/components/storefront'
 import { ShopProductCard } from './ShopProductCard'
 import { slotVisual } from '@/lib/catalogue/slot-visuals'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
@@ -38,6 +40,18 @@ interface Props {
  */
 export function ShopSection({ section, onOpen, perServing, selectable, selectedIds, onToggleSelect }: Props) {
   const guide = guideFor(section.slug)
+  /*
+    Two rows, then a press.
+
+    A shelf used to run its full length, so a category with fourteen products
+    was seven rows of scrolling before the next heading — and the shelf under
+    it was, for most people, not on the page at all. Four products is enough to
+    see what a category IS; the rest is a question, and the answer is one tap
+    away rather than a thumb away.
+  */
+  const [expanded, setExpanded] = useState(false)
+  const hidden = section.products.length - SHELF_PREVIEW_COUNT
+  const shown = expanded ? section.products : section.products.slice(0, SHELF_PREVIEW_COUNT)
 
   return (
     /*
@@ -107,7 +121,7 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
           gap: 'var(--space-3)',
           padding: '0 var(--space-4)' }}
       >
-        {section.products.map((product) => (
+        {shown.map((product) => (
           <div key={product.id} data-card>
             <ShopProductCard
               product={product}
@@ -120,6 +134,28 @@ export function ShopSection({ section, onOpen, perServing, selectable, selectedI
           </div>
         ))}
       </div>
+
+      {/*
+        Secondary, not primary: opening a shelf is a browsing move, and the
+        one accent object on this screen belongs to the basket. It names what
+        it will show rather than saying "More", because "9 more" is the
+        information — it is the difference between a shelf worth opening and
+        one that is already all there.
+      */}
+      {hidden > 0 && (
+        <div style={{ padding: 'var(--space-3) var(--space-4) 0' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            fullWidth
+            aria-expanded={expanded}
+            aria-controls={`shop-cat-${section.slug}`}
+            onClick={() => setExpanded((open) => !open)}
+          >
+            {expanded ? `Show less ${section.category.toLowerCase()}` : `Show all ${section.products.length} ${section.category.toLowerCase()}`}
+          </Button>
+        </div>
+      )}
     </section>
   )
 }

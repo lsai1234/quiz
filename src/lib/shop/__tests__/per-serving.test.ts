@@ -163,3 +163,46 @@ describe('formatPerServing', () => {
     expect(formatPerServing(1.166)).toBe('£1.17')
   })
 })
+
+describe("a variant's own serving count", () => {
+  it('is used in preference to anything scaled from a sibling', () => {
+    // The glycine: 100 capsules and a 454g bag of the same powder under one
+    // master SKU. No ratio between the two can reach 454 from 33 — their sizes
+    // are not even in the same unit — so the supplier's own count is the only
+    // answer there is.
+    const capsules = variant({ id: 'caps', size: '100 caps', price: 21.99, servings: 33 })
+    const powder = variant({ id: 'powder', size: '454 grams', price: 39.99, servings: 454 })
+    const product = makeProduct({ variants: [capsules, powder], servings: 33 })
+
+    expect(servingsForVariant(product, capsules)).toBe(33)
+    expect(servingsForVariant(product, powder)).toBe(454)
+    // …and the per-serving price follows it: 9p a serving, not £1.27.
+    expect(formatPerServing(pricePerServing(product, powder)!)).toBe('9p')
+  })
+
+  it('falls back to scaling when the supplier never said', () => {
+    const base = variant({ id: 'base', size: '1kg' })
+    const big = variant({ id: 'big', size: '2kg', price: 50 })
+    const product = makeProduct({ variants: [base, big], servings: 30 })
+    expect(servingsForVariant(product, big)).toBe(60)
+  })
+})
+
+describe('accessories', () => {
+  it('have no servings and no per-serving price, whatever the import wrote', () => {
+    // A shaker has no dose. The import used to give it the default 30, which is
+    // what put "30 servings" on the card under a bottle.
+    const v = variant({ id: 'shaker', price: 3.99 })
+    const shaker = makeProduct({
+      swapGroup: 'accessory', category: 'Accessories', stackSlots: [], servings: 30, variants: [v],
+    })
+    expect(servingsForVariant(shaker, v)).toBeNull()
+    expect(pricePerServing(shaker, v)).toBeNull()
+  })
+
+  it('are recognised by category too, for the ones imported before the rule existed', () => {
+    const v = variant({ id: 'bottle', price: 4.99 })
+    const bottle = makeProduct({ swapGroup: 'general', category: 'Accessories', servings: 1, variants: [v] })
+    expect(servingsForVariant(bottle, v)).toBeNull()
+  })
+})

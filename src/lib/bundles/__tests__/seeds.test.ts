@@ -4,6 +4,7 @@ import { calculatePricing, getPricingConfig } from '@/lib/stack-blueprint/pricin
 import { validateCheckout, buildSubscriptionCheckout } from '@/lib/stack-blueprint/checkout'
 import { bundleReadiness } from '../readiness'
 import { isBundleSellable } from '../pricing'
+import { bundleWorkouts } from '@/lib/bundles/resolve'
 
 // Customer-facing copy must never make an unauthorised health claim. This is a
 // blunt guard, not legal review — it catches the obvious offenders across every
@@ -42,8 +43,9 @@ function customerCopy(bundle: (typeof SEED_BUNDLES)[number]): string {
     ...bundle.blueprint.slots.map((s) => `${s.title} ${s.description} ${s.reason}`),
     ...bundle.addOns.map((a) => `${a.title} ${a.reason}`),
     ...bundle.howToUse.map((s) => `${s.title} ${s.detail}`),
-    bundle.workout.intro,
-    bundle.workout.rule,
+    // Every workout, because a package can carry more than one and each one is
+    // customer-facing copy that has to clear the same claim bar.
+    ...bundleWorkouts(bundle).flatMap((w) => [w.intro, w.rule]),
   ].join(' ')
 }
 
@@ -86,11 +88,15 @@ describe('launch bundles', () => {
       }
     })
 
-    it('has a complete workout', () => {
-      expect(bundle.workout.title).toBeTruthy()
-      expect(bundle.workout.exercises.length).toBeGreaterThanOrEqual(4)
-      expect(bundle.workout.warmup).toBeTruthy()
-      expect(bundle.workout.finisher).toBeTruthy()
+    it('has at least one complete workout', () => {
+      const workouts = bundleWorkouts(bundle)
+      expect(workouts.length).toBeGreaterThanOrEqual(1)
+      for (const workout of workouts) {
+        expect(workout.title).toBeTruthy()
+        expect(workout.exercises.length).toBeGreaterThanOrEqual(4)
+        expect(workout.warmup).toBeTruthy()
+        expect(workout.finisher).toBeTruthy()
+      }
     })
 
     it('prices with a bundle discount, and any offered subscription clears the floor', () => {

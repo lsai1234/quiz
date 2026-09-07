@@ -4,8 +4,9 @@ import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
-import { dealInfo } from '@/lib/shop/merchandising'
-import { pricePerServing, formatPerServing } from '@/lib/shop/per-serving'
+import { dealInfo, priceRange } from '@/lib/shop/merchandising'
+import { pricePerServing, formatPerServing, servingsForVariant } from '@/lib/shop/per-serving'
+import { servingsLabel } from '@/lib/catalogue/accessory'
 import { hasRating } from '@/lib/shop/ratings'
 import { useBasket } from '@/lib/basket/store'
 import { track } from '@/lib/analytics/events'
@@ -65,12 +66,41 @@ export function ShopProductCard({
     return () => { if (addTimer.current) clearTimeout(addTimer.current) }
   }, [])
 
-  const variant = product.variants.find((v) => v.available) ?? product.variants[0]
   const { price, rrp, onDeal } = dealInfo(product)
+  /*
+    "From £11.99" when the variants are genuinely different prices.
+
+    The card prices the default variant, which is right while the variants are
+    flavours of one tub. It is not right when a master SKU holds two different
+    things — the glycine sold both as 100 capsules and as 454g of powder — and
+    a single number then quotes whichever happens to be in stock first.
+
+    When they do differ the card follows its own number: the cheapest sellable
+    variant is the one it prices, describes and adds. A card that says "From
+    £11.99" and drops a £20.04 bag in the basket is worse than one that never
+    said "from" at all.
+  */
+  const range = priceRange(product)
+  const cheapest = [...product.variants]
+    .filter((v) => v.available)
+    .sort((a, b) => a.price - b.price)[0]
+  const variant = (range.varies ? cheapest : undefined)
+    ?? product.variants.find((v) => v.available)
+    ?? product.variants[0]
   const soldOut = !variant?.available
+  const headline = range.varies ? range.min : price
 
   const perServ = variant ? pricePerServing(product, variant) : null
-  const spec = [variant?.size, product.servings ? `${product.servings} servings` : null]
+  /*
+    The servings of the VARIANT on the card, never the product's own number.
+
+    An accessory has none at all (`servingsForVariant` says so), which is what
+    put "30 servings" under two shakers and "1 servings" under a third; and a
+    product whose variants are different sizes has a different count per size,
+    so the product-level figure is wrong about every variant but the first.
+  */
+  const servings = variant ? servingsForVariant(product, variant) : null
+  const spec = [variant?.size, servings != null ? servingsLabel(servings) : null]
     .filter(Boolean)
     .join(' · ')
 
@@ -159,8 +189,11 @@ export function ShopProductCard({
 
         {/* Then the price. It is the first NUMBER anyone looks for. */}
         <p className="flex items-baseline" style={{ gap: 'var(--space-2)', paddingRight: 40 }}>
-          <span className="sf-price">{formatGBP(price)}</span>
-          {onDeal && rrp != null && <span className="sf-meta sf-tnum line-through">{formatGBP(rrp)}</span>}
+          <span className="sf-price">
+            {range.varies && <span className="sf-meta">From </span>}
+            {formatGBP(headline)}
+          </span>
+          {!range.varies && onDeal && rrp != null && <span className="sf-meta sf-tnum line-through">{formatGBP(rrp)}</span>}
         </p>
 
         <p className="sf-name sf-clamp-2" style={{ marginTop: 2 }}>{product.title}</p>

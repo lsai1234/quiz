@@ -1,5 +1,6 @@
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { resolveConsumption } from '@/lib/stack-blueprint/pricing'
+import { isAccessory } from '@/lib/catalogue/accessory'
 
 /**
  * What a serving actually costs.
@@ -82,6 +83,18 @@ export function servingsForVariant(
   product: CatalogueProduct,
   variant: CatalogueVariant,
 ): number | null {
+  // A shaker has no dose, so it has no servings — and a scaled "30 servings"
+  // under a bottle is not a rounding error, it is a made-up fact.
+  if (isAccessory(product)) return null
+
+  // The supplier's own count for THIS sku, when we have it. It beats every
+  // inference below: siblings under one master SKU are usually the same tub in
+  // different flavours, but where they are not — 100 vcaps against 454g of the
+  // same powder — no ratio taken from the first variant can reach the second.
+  if (variant.servings != null && Number.isFinite(variant.servings) && variant.servings > 0) {
+    return variant.servings
+  }
+
   const base = product.variants[0]
   if (!base) return null
 

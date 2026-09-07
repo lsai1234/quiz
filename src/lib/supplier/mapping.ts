@@ -84,7 +84,11 @@ const DEFAULT_CLASSIFICATION: Omit<Classification, 'dietaryTags' | 'isReadyToDri
   cadence: 'daily',
 }
 
-function formatsFor(text: string, isRtd: boolean): string[] {
+function formatsFor(text: string, isRtd: boolean, swap?: SwapGroup): string[] {
+  // An accessory has no format in the sense the rest of this means it — it is
+  // not powder, and defaulting it to powder is how a shaker's spec panel came
+  // to read "Format: Powder".
+  if (swap === 'accessory') return ['accessory']
   if (isRtd) return ['liquid']
   if (/caps|capsule|softgel|tablet|\btab\b|tablets/.test(text)) return ['capsule']
   return ['powder']
@@ -161,7 +165,7 @@ export function uniqueProductId(product: CatalogueProduct, existing: CataloguePr
 export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduct {
   const id = slugify(sp.name)
   const c = classifySupplierProduct(sp)
-  const formats = formatsFor(`${sp.category} ${sp.name}`.toLowerCase(), c.isReadyToDrink)
+  const formats = formatsFor(`${sp.category} ${sp.name}`.toLowerCase(), c.isReadyToDrink, c.swapGroup)
   const available = sp.inStock
 
   // OUR price, not their RRP. The shop charges `variant.price` (see
@@ -186,6 +190,10 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           // Keep the supplier SKU on every variant so a product resolves back to
           // one supplier item for stock re-sync.
           sku: sp.sku,
+          // …and its own cost, which for a single-SKU import is the product's
+          // but for anything merged later is not. The margin figures read it,
+          // and the nightly sync keeps it current from here on.
+          cost: sp.wholesalePrice,
         }))
       : [{
           id,
@@ -197,9 +205,21 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
           available,
           inventory: sp.stock,
           sku: sp.sku,
+          cost: sp.wholesalePrice,
         }]
 
-  const servingsPerUnit = sp.servings ?? 30
+  /*
+    An accessory is one unit, not thirty servings.
+
+    The 30 is a sane default for a tub whose serving count the supplier did not
+    send. Applied to a shaker it invents a fact — and it is the fact the card
+    prints, which is how two shakers went on the shelf advertising "30
+    servings". One is the truthful number and the display now hides it anyway
+    (see `catalogue/accessory`), so nothing downstream can size a subscription
+    off a guess about a bottle.
+  */
+  const isAccessoryProduct = c.swapGroup === 'accessory'
+  const servingsPerUnit = isAccessoryProduct ? 1 : sp.servings ?? 30
   const rhythm = rhythmForSwap(c.swapGroup, c.cadence)
 
   return {
@@ -237,7 +257,9 @@ export function supplierProductToCatalogue(sp: SupplierProduct): CatalogueProduc
     weightGrams: sp.weightGrams ?? null,
     vatRate: sp.vatRate ?? null,
     supplierRrp: sp.rrp,
-    subscriptionEligible: true,
+    // Nothing with no dose can be a monthly plan: a shaker a month is not a
+    // subscription, it is a cupboard problem.
+    subscriptionEligible: !isAccessoryProduct,
     subscriptionProductId: null,
     isSubscriptionOnly: false,
     servings: servingsPerUnit,

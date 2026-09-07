@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { parseRosterCsv } from '@/lib/supplier/roster-csv'
-import { rosterRowToProduct } from '@/lib/supplier/roster-import'
+import { rosterRowToProduct, type VariantFacts } from '@/lib/supplier/roster-import'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { asPendingReview, sourcesForImport } from '@/lib/catalogue/review'
 import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
@@ -89,7 +89,16 @@ export async function POST(req: Request) {
     const everySku = [...new Set(slice.flatMap((r) => [r.sku, ...r.variantSkus]))]
     const indexed = await indexedProductIds(everySku)
 
-    const variantFacts = new Map<string, { qty: number; name?: string | null }>()
+    /*
+      What we know per SKU, not per row.
+
+      The crawled index answers for stock; the detail call below adds the name,
+      the cost, the RRP and the serving count. All four are per-SKU facts, and
+      the row-level ones were being used for every sibling — which is why two
+      genuinely different products under one master SKU (100 capsules and a 454g
+      bag of the same powder) went live at one price with one serving count.
+    */
+    const variantFacts = new Map<string, VariantFacts>()
     for (const [sku, hit] of indexed) variantFacts.set(sku, { qty: hit.qty })
 
     let found: Awaited<ReturnType<typeof supplier.getProductsBySku>> = []
@@ -119,7 +128,16 @@ export async function POST(req: Request) {
         const verified = byId.filter((p) => everySku.includes(p.sku))
         for (const p of verified) {
           const held = variantFacts.get(p.sku)
-          variantFacts.set(p.sku, { qty: held?.qty ?? p.stock ?? 0, name: p.name })
+          variantFacts.set(p.sku, {
+            qty: held?.qty ?? p.stock ?? 0,
+            name: p.name,
+            // Their money and their serving count, per SKU. `portion_count` is
+            // the only place a variant's real serving count exists — nothing
+            // can be derived from a sibling's when the two are different sizes.
+            wholesalePrice: p.wholesalePrice,
+            rrp: p.rrp,
+            servings: p.servings,
+          })
         }
         // The row-level lookup still only wants the MAIN skus: a flavour is a
         // variant of a product, not a product of its own on our side.

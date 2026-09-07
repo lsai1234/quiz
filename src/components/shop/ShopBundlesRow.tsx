@@ -1,7 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ShopBundleView } from '@/hooks/useShopBundles'
+import { SHELF_PREVIEW_COUNT } from '@/lib/shop/categories'
+import { Button } from '@/components/storefront'
 import { ShopBundleCard } from './ShopBundleCard'
 
 interface Props {
@@ -11,6 +14,13 @@ interface Props {
 
 /** The bundles shelf: the same two-column grid as every product category. */
 export function ShopBundlesRow({ bundles, products }: Props) {
+  // Capped at two rows like every other shelf — a bundle card is taller than a
+  // product card, so an uncapped bundles row is the one that pushes the whole
+  // catalogue off the first screen.
+  const [expanded, setExpanded] = useState(false)
+  const shown = expanded ? bundles : bundles.slice(0, SHELF_PREVIEW_COUNT)
+  const hidden = bundles.length - SHELF_PREVIEW_COUNT
+
   if (bundles.length === 0) return null
 
   return (
@@ -36,12 +46,27 @@ export function ShopBundlesRow({ bundles, products }: Props) {
           gap: 'var(--space-4)',
           padding: '0 var(--space-4)' }}
       >
-        {bundles.map((view) => (
+        {shown.map((view) => (
           <div key={view.bundle.slug} data-card>
             <ShopBundleCard view={view} products={products} />
           </div>
         ))}
       </div>
+
+      {hidden > 0 && (
+        <div style={{ padding: 'var(--space-3) var(--space-4) 0' }}>
+          <Button
+            variant="secondary"
+            size="sm"
+            fullWidth
+            aria-expanded={expanded}
+            aria-controls="shop-cat-bundles"
+            onClick={() => setExpanded((open) => !open)}
+          >
+            {expanded ? 'Show fewer bundles' : `Show all ${bundles.length} bundles`}
+          </Button>
+        </div>
+      )}
     </section>
   )
 }

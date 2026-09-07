@@ -50,8 +50,28 @@ export interface BundleAddOn {
 export interface PrebuiltBundle {
   /** URL segment the bundle lives at, e.g. "big-night-big-morning" */
   slug: string
-  /** e.g. "Big Night, Big Morning" */
+  /**
+   * What the PACKAGE is called — the stack and its workouts together, which is
+   * the thing that is actually sold and the name the shop puts on the card.
+   *
+   * Not the stack's name and not a workout's name. A bundle is one shelf item
+   * made of two halves, and naming the halves separately is what left the shop
+   * card leading with a series label and a product count.
+   */
   name: string
+  /**
+   * The package's photograph.
+   *
+   * A bundle card used to draw its own picture by stacking the first three
+   * products' cutouts on a lit ground, which is the best a card can do with no
+   * image and reads as three tubs in a row wherever it is put. A bundle is sold
+   * on what it is FOR — the session, the morning, the week — and that is a
+   * photograph, not a shelf of packaging.
+   *
+   * Absent falls back to the product strip, so a bundle without one still has a
+   * card. Set in the Hub.
+   */
+  imageUrl?: string | null
   /** e.g. "Hydrate. Move. Refuel. Reset." */
   tagline: string
   /** The recurring content series this bundle belongs to. */
@@ -62,7 +82,30 @@ export interface PrebuiltBundle {
   /** The fixed stack sold on this page. */
   blueprint: StackBlueprint
   addOns: BundleAddOn[]
-  workout: BundleWorkout
+  /**
+   * The workouts that come with this package — one to many.
+   *
+   * It was exactly one, which is a limit that came from the data shape rather
+   * than from anything true: a strength package is a week of sessions, not one
+   * session, and the second one had nowhere to live. Ordered — first is the one
+   * the page leads with.
+   *
+   * Empty is allowed and readiness warns about it, the way one missing workout
+   * always did.
+   */
+  workouts: BundleWorkout[]
+  /**
+   * The single workout this replaced.
+   *
+   * Still read, never written: every bundle a founder has already saved carries
+   * one, and those live in the database rather than in this repository, so the
+   * field cannot simply be deleted. `bundleWorkouts()` is the only thing that
+   * should look at it — it resolves the two into the list everything else uses,
+   * and `composeBundles` normalises stored bundles on the way in.
+   *
+   * @deprecated Read `workouts` through `bundleWorkouts()`.
+   */
+  workout?: BundleWorkout
   howToUse: BundleHowToStep[]
   /** Bundle-specific disclaimer, shown above the standard supplements fine print. */
   disclaimer: string

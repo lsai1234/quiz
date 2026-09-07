@@ -19,6 +19,25 @@ const CATEGORY_ORDER: string[] = [
   'Menopause Support',
 ]
 
+/**
+ * How much of a shelf the shop shows before you ask for the rest.
+ *
+ * The grid is two columns, and a shelf is capped at two ROWS — four products —
+ * with everything past that behind one press. It is not about the products; it
+ * is about the page. Twenty categories at their full length is a scroll nobody
+ * reaches the bottom of, and the shelf below the one you are reading may as
+ * well not exist: the fifteenth protein is seen by nobody, and neither is
+ * Hydration.
+ *
+ * Four is deliberate rather than round. One row reads as a teaser and makes the
+ * heading do all the work; three is most of a phone screen per category and
+ * puts the next heading back off the bottom. Two rows is the most a shelf can
+ * take and still let a thumb pass several shelves in a flick.
+ */
+export const SHELF_COLUMNS = 2
+export const SHELF_PREVIEW_ROWS = 2
+export const SHELF_PREVIEW_COUNT = SHELF_COLUMNS * SHELF_PREVIEW_ROWS
+
 export interface ShopCategory {
   category: string
   /** URL/DOM-safe slug for the section anchor + nav. */

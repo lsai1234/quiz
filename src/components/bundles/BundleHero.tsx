@@ -2,6 +2,7 @@
 
 import type { PrebuiltBundle } from '@/lib/bundles'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
+import { bundleWorkouts } from '@/lib/bundles/resolve'
 
 interface Props {
   bundle: PrebuiltBundle
@@ -10,8 +11,21 @@ interface Props {
 }
 
 export function BundleHero({ bundle, productCount, totalPrice }: Props) {
+  const workoutCount = bundleWorkouts(bundle).length
   return (
     <div className="px-5 pt-12 pb-8 max-w-lg mx-auto">
+      {/* The package's photograph, when it has one — the same image the shop
+          card leads with, so arriving from the shelf lands somewhere
+          recognisable. */}
+      {bundle.imageUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={bundle.imageUrl}
+          alt=""
+          className="w-full mb-6"
+          style={{ aspectRatio: '16 / 9', objectFit: 'cover', borderRadius: 'var(--radius-card, 16px)' }}
+        />
+      )}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <span
           className="text-[10px] font-bold tracking-[0.25em] uppercase block"
@@ -86,7 +100,7 @@ export function BundleHero({ bundle, productCount, totalPrice }: Props) {
             color: 'var(--color-text-2)',
           }}
         >
-          Workout included
+          {workoutCount > 1 ? `${workoutCount} workouts included` : 'Workout included'}
         </div>
       </div>
 

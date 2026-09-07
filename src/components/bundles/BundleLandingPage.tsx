@@ -21,6 +21,7 @@ import { CheckoutSuccess } from '@/components/stack-review/CheckoutSuccess'
 import { receiptItemsFromSlots } from '@/lib/receipt/build'
 import { AccountGate } from '@/components/auth/AccountGate'
 import { ConsentGate } from '@/components/legal/ConsentGate'
+import { bundleWorkouts } from '@/lib/bundles/resolve'
 import { BundleHero } from './BundleHero'
 import { BundleAddOnCard } from './BundleAddOnCard'
 import { WorkoutSection } from './WorkoutSection'
@@ -145,6 +146,10 @@ export function BundleLandingPage({ bundle }: Props) {
     () => [...blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder),
     [blueprint.slots],
   )
+
+  // One to many, and read through the resolver because a bundle saved before
+  // the change carries a single `workout` instead of the list.
+  const workouts = useMemo(() => bundleWorkouts(bundle), [bundle])
   const statAxes = useMemo(() => selectStatAxes(blueprint, products), [blueprint, products])
   const pricing = calculatePricing(blueprint, products, null, undefined, subOpts)
   const subscriptionPlan = useMemo(
@@ -277,8 +282,23 @@ export function BundleLandingPage({ bundle }: Props) {
         </div>
       )}
 
-      {/* The gym routine that goes with the stack */}
-      <WorkoutSection workout={bundle.workout} seriesName={bundle.seriesName} />
+      {/*
+        The gym routines that go with the stack — one to many.
+
+        A package is a stack and its sessions, and a week of training is more
+        than one session; the page used to render exactly one because the data
+        held exactly one. Numbered only when there is more than one, so a single
+        workout does not become "Workout 1 of 1".
+      */}
+      {workouts.map((workout, i) => (
+        <WorkoutSection
+          key={`${workout.title}-${i}`}
+          workout={workout}
+          seriesName={bundle.seriesName}
+          index={workouts.length > 1 ? i + 1 : undefined}
+          total={workouts.length > 1 ? workouts.length : undefined}
+        />
+      ))}
 
       <BundleHowTo steps={bundle.howToUse} />
 

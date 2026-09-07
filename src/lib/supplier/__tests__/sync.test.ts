@@ -47,6 +47,21 @@ describe('applyStockLevels', () => {
     expect(result.products[0]).toBe(result.products[0])
   })
 
+  it('keeps a per-variant cost current, without inventing one', () => {
+    // Siblings under one master SKU do not all cost the same, so the margin
+    // figures are read off the variant. This job keeps that fact fresh — but a
+    // variant that has never carried one is a backfill for the repair pass, not
+    // a change to report on every product in the catalogue after a deploy.
+    const dearer = applyStockLevels([product()], [level({ wholesalePrice: 12 })])
+    expect(dearer.products[0].variants[0].cost).toBe(12)
+
+    const noCost = product()
+    noCost.variants = noCost.variants.map(({ cost: _drop, ...v }) => v)
+    const untouched = applyStockLevels([noCost], [level()])
+    expect(untouched.updated).toBe(0)
+    expect(untouched.products[0].variants[0].cost).toBeUndefined()
+  })
+
   it('takes a product out of stock when the supplier does', () => {
     const result = applyStockLevels([product()], [level({ stock: 0, inStock: false })])
 

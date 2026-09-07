@@ -116,6 +116,32 @@ export interface CatalogueVariant {
   /** Supplier SKU for this variant — how it maps back to PowerBody. Null when
    *  not tracked (a variant we made up rather than one they carry). */
   sku?: string | null
+  /**
+   * Servings in THIS variant, when the supplier reports them for its own SKU
+   * (`portion_count`).
+   *
+   * The product's `servings` describes one container — in practice the first
+   * variant — and everything else was scaled from it by size. That holds for a
+   * product whose variants are flavours of one tub, and breaks the moment two
+   * genuinely different things share a master SKU: Glycine ships as 100 × 1000mg
+   * vcaps (33 servings) and as 454g of pure powder (454 servings), and scaling
+   * one from the other cannot get there — the sizes are not even in the same
+   * unit. Set per variant, this is the answer rather than an inference from one.
+   *
+   * Absent means "not known for this SKU", and the per-serving maths falls back
+   * to scaling exactly as before.
+   */
+  servings?: number | null
+  /**
+   * What we pay the supplier for THIS variant.
+   *
+   * Same reason as `servings`: siblings under one master SKU are usually the
+   * same product in different flavours and cost the same, but not always — the
+   * 454g glycine costs nearly twice the 100-cap bottle, and pricing both off the
+   * main SKU's cost sells one of them at a loss or the other at a price nobody
+   * pays. Absent falls back to the product's `cost`.
+   */
+  cost?: number | null
 }
 
 // ─── Consumption protocol ─────────────────────────────────────────────────────

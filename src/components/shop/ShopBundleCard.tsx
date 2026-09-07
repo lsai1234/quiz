@@ -5,6 +5,7 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ShopBundleView } from '@/hooks/useShopBundles'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { ProductTile } from '@/components/stack-review/ProductTile'
+import { bundleWorkouts } from '@/lib/bundles/resolve'
 
 interface Props {
   view: ShopBundleView
@@ -22,6 +23,7 @@ export function ShopBundleCard({ view, products }: Props) {
   const { bundle, price } = view
   const byId = new Map(products.map((p) => [p.id, p]))
   const coreSlots = [...bundle.blueprint.slots].sort((a, b) => a.displayOrder - b.displayOrder)
+  const workoutCount = bundleWorkouts(bundle).length
 
   return (
     /*
@@ -38,37 +40,58 @@ export function ShopBundleCard({ view, products }: Props) {
       style={{ background: 'var(--surface)', borderRadius: 'var(--r-card)' }}
     >
       {/*
-        A bundle is a stack, so the stack is the picture: the products it
-        contains, on the same lit ground a single product gets. That is the
-        card's focal point, and it is what a "3 products" line was standing in
-        for before.
+        The package's own photograph when it has one.
+
+        A bundle is sold on what it is FOR — the session, the morning, the week
+        — and that is a picture of the thing, not of the packaging. Without one
+        the card falls back to what it always did: the products it contains, on
+        the same lit ground a single product gets, which is the best a card can
+        do with no image and reads as three tubs in a row.
       */}
-      <div className="relative flex items-end justify-center" style={{ height: 128, gap: 'var(--space-1)', padding: '0 var(--space-4)' }}>
-        <span
-          aria-hidden
-          className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 60% 52% at 50% 62%, rgba(255,255,255,0.06), transparent 70%)' }}
-        />
-        {coreSlots.slice(0, 3).map((slot, i) => {
-          const product = byId.get(slot.selectedProductId)
-          return (
-            <ProductTile
-              key={slot.slotId}
-              imageUrl={product?.imageUrl ?? null}
-              slot={slot.slotType}
-              title=""
-              size={96}
-              style={{ width: 42, height: 92 - Math.abs(1 - i) * 12, position: 'relative' }}
+      <div className="relative flex items-end justify-center" style={{ height: 128, gap: 'var(--space-1)', padding: bundle.imageUrl ? 0 : '0 var(--space-4)' }}>
+        {bundle.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={bundle.imageUrl}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full"
+            style={{ objectFit: 'cover' }}
+          />
+        ) : (
+          <>
+            <span
+              aria-hidden
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse 60% 52% at 50% 62%, rgba(255,255,255,0.06), transparent 70%)' }}
             />
-          )
-        })}
+            {coreSlots.slice(0, 3).map((slot, i) => {
+              const product = byId.get(slot.selectedProductId)
+              return (
+                <ProductTile
+                  key={slot.slotId}
+                  imageUrl={product?.imageUrl ?? null}
+                  slot={slot.slotType}
+                  title=""
+                  size={96}
+                  style={{ width: 42, height: 92 - Math.abs(1 - i) * 12, position: 'relative' }}
+                />
+              )
+            })}
+          </>
+        )}
       </div>
 
       <div className="flex flex-col flex-1" style={{ padding: 'var(--space-3)', gap: 2 }}>
         <p className="sf-label truncate">{bundle.seriesName}</p>
         <p className="sf-price">{formatGBP(price.price)}</p>
         <p className="sf-name sf-clamp-2" style={{ marginTop: 2 }}>{bundle.name}</p>
-        <p className="sf-meta sf-tnum">{coreSlots.length} products</p>
+        {/* What the package IS: the stack and the sessions that come with it.
+            A product count alone described half of it. */}
+        <p className="sf-meta sf-tnum">
+          {coreSlots.length} products
+          {workoutCount > 0 && ` · ${workoutCount} workout${workoutCount === 1 ? '' : 's'}`}
+        </p>
       </div>
 
       <div style={{ padding: '0 var(--space-3) var(--space-3)' }}>

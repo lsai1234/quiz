@@ -1,6 +1,6 @@
 import fs from 'fs'
 import { parseRosterCsv, parseActives } from '@/lib/supplier/roster-csv'
-import { rosterRowToProduct } from '@/lib/supplier/roster-import'
+import { rosterRowToProduct, sizeFromName, type VariantFacts } from '@/lib/supplier/roster-import'
 import type { SupplierProduct } from '@/lib/supplier/types'
 
 const HEADER =
@@ -365,5 +365,97 @@ describe('per-flavour names', () => {
     expect(product.variants).toHaveLength(1)
     expect(product.variants[0].flavour).toBeNull()
     expect(product.variants[0].title).toBe(SUPPLIER.name)
+  })
+})
+
+describe('siblings that are not the same product', () => {
+  /*
+    The glycine. One roster row, two SKUs under it, and they are not flavours of
+    one tub: 100 × 1000mg capsules at £11.12 to us with 33 servings, and 454g of
+    the same powder at £20.04 with 454 servings. Both went live at the capsules'
+    price with the capsules' serving count, so one was sold at a loss and the
+    per-serving figure was out by a factor of fourteen.
+  */
+  const GLYCINE_ROW = row(
+    'P100,NOW,"Glycine, 1000mg - 100 vcaps",general,,,33,300,10,capsule,vegan,False,,glycine 1000mg,True,"P100,P200",Amino',
+  ).rows[0]
+
+  const CAPSULES: SupplierProduct = {
+    ...SUPPLIER, sku: 'P100', name: 'Glycine, 1000mg - 100 vcaps', wholesalePrice: 11.12, rrp: 15.5,
+    servings: 33, stock: 40,
+  }
+
+  const facts = new Map<string, VariantFacts>([
+    ['P100', { qty: 40, name: 'Glycine, 1000mg - 100 vcaps', wholesalePrice: 11.12, rrp: 15.5, servings: 33 }],
+    ['P200', { qty: 12, name: 'Glycine, Pure Powder - 454 grams', wholesalePrice: 20.04, rrp: 26, servings: 454 }],
+  ])
+
+  it('prices every SKU from its own cost, not the row\'s main one', () => {
+    const { product } = rosterRowToProduct(GLYCINE_ROW, CAPSULES, facts)
+    const [caps, powder] = product.variants
+
+    expect(caps.price).toBe(21.99)
+    expect(powder.price).toBe(39.99)
+    expect(caps.cost).toBe(11.12)
+    expect(powder.cost).toBe(20.04)
+    // …and the headline price is the default variant's, not a figure nothing on
+    // the page is sold at.
+    expect(product.basePrice).toBe(caps.price)
+  })
+
+  it('gives every SKU its own serving count and reads its size off the name', () => {
+    const { product } = rosterRowToProduct(GLYCINE_ROW, CAPSULES, facts)
+    const [caps, powder] = product.variants
+
+    expect(caps.servings).toBe(33)
+    expect(powder.servings).toBe(454)
+    expect(powder.size).toBe('454 grams')
+  })
+
+  it('says out loud that the merged SKUs are different things', () => {
+    const { notes } = rosterRowToProduct(GLYCINE_ROW, CAPSULES, facts)
+    expect(notes.some((n) => n.includes('not the same product'))).toBe(true)
+  })
+
+  it('falls back to the row\'s cost for a SKU the lookup never reached', () => {
+    const partial = new Map<string, VariantFacts>([['P100', { qty: 40, wholesalePrice: 11.12, servings: 33 }]])
+    const { product } = rosterRowToProduct(GLYCINE_ROW, CAPSULES, partial)
+
+    expect(product.variants[1].price).toBe(product.variants[0].price)
+    expect(product.variants[1].servings).toBeUndefined()
+  })
+})
+
+describe('an accessory row', () => {
+  const SHAKER_ROW = row('P300,Osavi,Osavi Shaker,accessory,,,,,10,,,False,,,True,P300,A shaker').rows[0]
+  const SHAKER: SupplierProduct = {
+    ...SUPPLIER, sku: 'P300', name: 'Osavi Shaker', category: 'Accessories', wholesalePrice: 1.99,
+    rrp: 4.5, servings: null, stock: 20,
+  }
+
+  it('is one unit, not thirty servings, and has nothing to subscribe to', () => {
+    const { product, notes } = rosterRowToProduct(SHAKER_ROW, SHAKER)
+
+    expect(product.servings).toBe(1)
+    expect(product.subscriptionEligible).toBe(false)
+    expect(product.formats).toEqual(['accessory'])
+    // And no "assumed 30, which sizes the subscription" — there is no
+    // subscription and no serving to assume.
+    expect(notes.some((n) => n.includes('assumed 30'))).toBe(false)
+  })
+})
+
+describe('sizeFromName', () => {
+  it('reads the size a supplier name ends with', () => {
+    expect(sizeFromName('Glycine, Pure Powder - 454 grams')).toBe('454 grams')
+    expect(sizeFromName('Glycine, 1000mg - 100 vcaps')).toBe('100 vcaps')
+    expect(sizeFromName('Whey Protein, Chocolate - 1kg')).toBe('1 kg')
+  })
+
+  it('gives null rather than a guess', () => {
+    expect(sizeFromName(null)).toBeNull()
+    // A dose is not a pack size, and calling it one prices a serving wrongly.
+    expect(sizeFromName('Creatine Monohydrate')).toBeNull()
+    expect(sizeFromName('Magnesium Bisglycinate, Unflavoured')).toBeNull()
   })
 })

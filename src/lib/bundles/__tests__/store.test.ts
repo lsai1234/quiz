@@ -1,6 +1,6 @@
 import { MOCK_CATALOGUE } from '@/lib/catalogue'
 import { BIG_NIGHT_BIG_MORNING } from '..'
-import { composeBundles, mergeBundleOverride, bundleSlug, EMPTY_PERSISTED_BUNDLES, type PersistedBundles } from '../resolve'
+import { composeBundles, mergeBundleOverride, bundleWorkouts, bundleSlug, EMPTY_PERSISTED_BUNDLES, type PersistedBundles } from '../resolve'
 import { bundlePriceSummary, missingCoreProducts, isBundleSellable } from '../pricing'
 import { bundleReadiness } from '../readiness'
 import {
@@ -31,6 +31,31 @@ describe('bundle resolution (pure)', () => {
     const merged = mergeBundleOverride(seed, { tagline: 'New tagline' })
     expect(merged.tagline).toBe('New tagline')
     expect(merged.name).toBe(seed.name)
+  })
+
+  /*
+    A package can carry a week of sessions now, and every bundle saved before
+    that change carries exactly one `workout` — those records live in the
+    database rather than in this repository, so both shapes are real and will be
+    for as long as those rows exist.
+  */
+  it('reads a bundle saved with a single legacy workout as a list of one', () => {
+    const legacy = { ...seed, workouts: [], workout: seed.workouts[0] } as PrebuiltBundle
+    expect(bundleWorkouts(legacy)).toEqual([seed.workouts[0]])
+    expect(composeBundles([legacy], EMPTY_PERSISTED_BUNDLES)[0].workouts).toHaveLength(1)
+  })
+
+  it('lets an override written by the old editor replace the workouts, not lose to them', () => {
+    // Merged naively the base's list survives the spread and the founder's edit
+    // vanishes — the one failure mode of keeping two shapes around.
+    const edited = { ...seed.workouts[0], title: 'Edited session' }
+    const merged = mergeBundleOverride(seed, { workout: edited })
+    expect(merged.workouts.map((w) => w.title)).toEqual(['Edited session'])
+  })
+
+  it('keeps several workouts through a compose', () => {
+    const week = { ...seed, workouts: [seed.workouts[0], { ...seed.workouts[0], title: 'Day two' }] }
+    expect(composeBundles([week], EMPTY_PERSISTED_BUNDLES)[0].workouts).toHaveLength(2)
   })
 
   it('composes seeds + created and sorts by displayOrder', () => {

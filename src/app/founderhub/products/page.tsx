@@ -13,6 +13,19 @@ const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: '
 
 interface Row { product: CatalogueProduct; readiness: ProductReadiness }
 
+/** Title, brand, category, and every variant's label and supplier SKU. */
+function matchesProduct(product: CatalogueProduct, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  const haystack = [
+    product.title,
+    product.brand,
+    product.category,
+    ...product.variants.flatMap((v) => [v.title, v.flavour, v.size, v.sku]),
+  ]
+  return haystack.some((field) => field && field.toLowerCase().includes(q))
+}
+
 export default function ProductsPage() {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [query, setQuery] = useState('')
@@ -30,7 +43,12 @@ export default function ProductsPage() {
   const allProducts = useMemo(() => rows?.map((r) => r.product) ?? [], [rows])
   const filtered = useMemo(() => {
     let r = rows ?? []
-    if (query) r = r.filter((x) => x.product.title.toLowerCase().includes(query.toLowerCase()))
+    // Titles alone were not enough to find a product by. A size that lives as a
+    // VARIANT — "Glycine, Pure Powder - 454 grams" under a product titled
+    // "Glycine, 1000mg - 100 vcaps" — matched nothing, and neither did the SKU
+    // on the PowerBody screen you had just come from. Both are how a founder
+    // actually knows the thing they are looking for.
+    if (query) r = r.filter((x) => matchesProduct(x.product, query))
     if (filter === 'attention') r = r.filter((x) => x.readiness.overall !== 'ok')
     if (filter === 'sub') r = r.filter((x) => x.product.subscriptionEligible)
     return r
@@ -68,7 +86,7 @@ export default function ProductsPage() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search products…"
+          placeholder="Name, brand, flavour or SKU…"
         />
       </div>
       {/* Filters, not tabs: they narrow one list rather than switching between

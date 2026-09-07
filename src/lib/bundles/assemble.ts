@@ -3,6 +3,7 @@ import type { Goal } from '@/lib/types'
 import { calculatePricing } from '@/lib/stack-blueprint/pricing'
 import { bundleBlueprint } from './builders'
 import type { PrebuiltBundle, BundleWorkout, BundleHowToStep, BundleAddOn } from './types'
+import { bundleWorkouts } from './resolve'
 
 /**
  * The editable shape the portal bundle editor works with — a flattened,
@@ -24,7 +25,10 @@ export interface BundleDraft {
   /** Chosen core products, in display order. */
   cores: { productId: string; title: string; reason: string }[]
   addOns: { productId: string; title: string; reason: string }[]
-  workout: BundleWorkout
+  /** The package's own photograph. Empty means the card draws the product strip. */
+  imageUrl: string
+  /** One to many — the sessions that come with the package, in order. */
+  workouts: BundleWorkout[]
   howToUse: BundleHowToStep[]
 }
 
@@ -54,7 +58,8 @@ export function emptyDraft(): BundleDraft {
     primaryGoal: 'health',
     cores: [],
     addOns: [],
-    workout: { ...EMPTY_WORKOUT, exercises: [{ name: '', prescription: '' }] },
+    imageUrl: '',
+    workouts: [{ ...EMPTY_WORKOUT, exercises: [{ name: '', prescription: '' }] }],
     howToUse: [{ title: '', detail: '' }],
   }
 }
@@ -75,7 +80,10 @@ export function bundleToDraft(bundle: PrebuiltBundle): BundleDraft {
     primaryGoal: bundle.blueprint.primaryGoal,
     cores: bundle.blueprint.slots.map((s) => ({ productId: s.selectedProductId, title: s.title, reason: s.reason })),
     addOns: bundle.addOns.map((a) => ({ productId: a.productId, title: a.title, reason: a.reason })),
-    workout: bundle.workout,
+    imageUrl: bundle.imageUrl ?? '',
+    // Through `bundleWorkouts`, because a bundle saved before the editor could
+    // hold more than one still carries a single `workout` and nothing else.
+    workouts: bundleWorkouts(bundle),
     howToUse: bundle.howToUse,
   }
 }
@@ -152,10 +160,16 @@ export function assembleBundle(draft: BundleDraft, products: CatalogueProduct[])
     honestyLine: draft.honestyLine,
     blueprint,
     addOns,
-    workout: {
-      ...draft.workout,
-      exercises: draft.workout.exercises.filter((e) => e.name.trim()),
-    },
+    ...(draft.imageUrl.trim() ? { imageUrl: draft.imageUrl.trim() } : { imageUrl: null }),
+    /*
+      Blank rows are the editor's, not the bundle's: an empty exercise line is
+      what an "Add exercise" press leaves behind until somebody types in it, and
+      an entirely empty workout is a session that was started and abandoned.
+      Neither should reach a page that is trying to sell something.
+    */
+    workouts: draft.workouts
+      .map((w) => ({ ...w, exercises: w.exercises.filter((e) => e.name.trim()) }))
+      .filter((w) => w.title.trim() || w.exercises.length > 0),
     howToUse: draft.howToUse.filter((s) => s.title.trim()),
     disclaimer: draft.disclaimer,
     metaTitle: draft.metaTitle || `${draft.name} | CHRGD`,

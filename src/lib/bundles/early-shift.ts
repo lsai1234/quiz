@@ -75,23 +75,25 @@ export const EARLY_SHIFT: PrebuiltBundle = {
     },
   ],
 
-  workout: {
-    title: 'Express Full Body',
-    intro:
-      'A tight, efficient session for when the clock is against you. Supersets ' +
-      'keep it moving — in and out in 35–40 minutes.',
-    warmup: '4–5 min brisk walk or skipping to raise the heart rate',
-    exercises: [
-      { name: 'Goblet squat', prescription: '3 × 10' },
-      { name: 'Push-up (or dumbbell press)', prescription: '3 × 12' },
-      { name: 'One-arm dumbbell row', prescription: '3 × 10 each side' },
-      { name: 'Kettlebell swing', prescription: '3 × 15' },
-      { name: 'Plank', prescription: '3 × 40 seconds' },
-    ],
-    rule: 'Superset the pairs, short rests, keep the intensity up — it’s a quick one.',
-    finisher: '5 rounds: 20s hard bike / 40s easy',
-    postWorkout: 'Protein shake on the commute, breakfast at your desk.',
-  },
+  workouts: [
+    {
+      title: 'Express Full Body',
+      intro:
+        'A tight, efficient session for when the clock is against you. Supersets ' +
+        'keep it moving — in and out in 35–40 minutes.',
+      warmup: '4–5 min brisk walk or skipping to raise the heart rate',
+      exercises: [
+        { name: 'Goblet squat', prescription: '3 × 10' },
+        { name: 'Push-up (or dumbbell press)', prescription: '3 × 12' },
+        { name: 'One-arm dumbbell row', prescription: '3 × 10 each side' },
+        { name: 'Kettlebell swing', prescription: '3 × 15' },
+        { name: 'Plank', prescription: '3 × 40 seconds' },
+      ],
+      rule: 'Superset the pairs, short rests, keep the intensity up — it’s a quick one.',
+      finisher: '5 rounds: 20s hard bike / 40s easy',
+      postWorkout: 'Protein shake on the commute, breakfast at your desk.',
+    },
+  ],
 
   howToUse: [
     { title: 'Electrolytes first', detail: 'Mix a serving as soon as you’re up — before coffee, before the session.' },

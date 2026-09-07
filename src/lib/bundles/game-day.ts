@@ -75,24 +75,26 @@ export const GAME_DAY: PrebuiltBundle = {
     },
   ],
 
-  workout: {
-    title: 'Speed & Agility',
-    intro:
-      'A pitch-side session for the days between matches: short sprints, changes ' +
-      'of direction and a bit of power. Full recovery between efforts — this is ' +
-      'quality, not conditioning.',
-    warmup: '8–10 min jog, dynamic leg swings and open/close-the-gate drills',
-    exercises: [
-      { name: 'Acceleration sprints (20m)', prescription: '6 × full effort' },
-      { name: 'Lateral shuffle + sprint', prescription: '4 each direction' },
-      { name: '5-10-5 pro agility drill', prescription: '5 reps' },
-      { name: 'Broad jump', prescription: '4 × 3' },
-      { name: 'Nordic hamstring curl', prescription: '3 × 5' },
-    ],
-    rule: 'Walk back and fully recover between sprints. Tired sprinting just teaches you to be slow.',
-    finisher: '3 × 30m strides at 80% to finish loose',
-    postWorkout: 'Electrolytes and water in, protein or a meal within a couple of hours.',
-  },
+  workouts: [
+    {
+      title: 'Speed & Agility',
+      intro:
+        'A pitch-side session for the days between matches: short sprints, changes ' +
+        'of direction and a bit of power. Full recovery between efforts — this is ' +
+        'quality, not conditioning.',
+      warmup: '8–10 min jog, dynamic leg swings and open/close-the-gate drills',
+      exercises: [
+        { name: 'Acceleration sprints (20m)', prescription: '6 × full effort' },
+        { name: 'Lateral shuffle + sprint', prescription: '4 each direction' },
+        { name: '5-10-5 pro agility drill', prescription: '5 reps' },
+        { name: 'Broad jump', prescription: '4 × 3' },
+        { name: 'Nordic hamstring curl', prescription: '3 × 5' },
+      ],
+      rule: 'Walk back and fully recover between sprints. Tired sprinting just teaches you to be slow.',
+      finisher: '3 × 30m strides at 80% to finish loose',
+      postWorkout: 'Electrolytes and water in, protein or a meal within a couple of hours.',
+    },
+  ],
 
   howToUse: [
     { title: 'Electrolytes before & during', detail: 'A serving before kick-off, top up at half-time and keep water on the sideline.' },

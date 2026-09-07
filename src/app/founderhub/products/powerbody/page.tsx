@@ -4,6 +4,7 @@ import { SupplierImport } from '@/components/portal/SupplierImport'
 import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
 import { DescriptionCleanupPanel } from '@/components/portal/DescriptionCleanupPanel'
 import { VariantNameRepairPanel } from '@/components/portal/VariantNameRepairPanel'
+import { VariantPriceRepairPanel } from '@/components/portal/VariantPriceRepairPanel'
 
 export const dynamic = 'force-dynamic'
 
@@ -29,6 +30,11 @@ export default function SupplierPage() {
       {/* Flavours that came in as bare SKU codes, from before import looked up
           anything but a row's main SKU. Also about products already here. */}
       <VariantNameRepairPanel />
+
+      {/* Variants that were all priced from the row's main SKU, and all given
+          its serving count. Same vintage of bug as the flavour names, and the
+          same shape of fix: a pass over what is already here. */}
+      <VariantPriceRepairPanel />
 
       {/* Crawled first, because the roster import resolves every code through
           it — see SupplierIndexBuilder. */}

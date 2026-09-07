@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
-import type { PrebuiltBundle } from '@/lib/bundles'
+import type { BundleWorkout, PrebuiltBundle } from '@/lib/bundles'
 import type { Goal } from '@/lib/types'
 import { bundleSlug } from '@/lib/bundles/resolve'
-import { assembleBundle, bundleToDraft, emptyDraft, type BundleDraft } from '@/lib/bundles/assemble'
+import { assembleBundle, bundleToDraft, emptyDraft, EMPTY_WORKOUT, type BundleDraft } from '@/lib/bundles/assemble'
 import { bundleReadiness } from '@/lib/bundles/readiness'
 import { calculatePricing, formatGBP } from '@/lib/stack-blueprint/pricing'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
@@ -169,6 +169,9 @@ export function BundleEditor({ initial, isNew }: Props) {
       {/* Identity & story */}
       <Section title="Identity & story">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* The PACKAGE's name — the stack and its workouts together. It is
+              what the shop card leads with and what the landing page is
+              titled, not the name of the stack or of any one session. */}
           <Input label="Name" value={draft.name} onChange={(e) => onName(e.target.value)} placeholder="Big Night, Big Morning" />
           <Input
             label="Slug (URL)"
@@ -182,6 +185,36 @@ export function BundleEditor({ initial, isNew }: Props) {
           />
           <Input label="Tagline" value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} placeholder="Hydrate. Move. Refuel. Reset." />
           <Input label="Series name" value={draft.seriesName} onChange={(e) => set('seriesName', e.target.value)} placeholder="Sunday Reset Sessions" />
+        </div>
+        {/*
+          The package's photograph, and the one field on this screen with a
+          preview: an image URL is the field a typo is invisible in, and a
+          bundle card is 128px of the shop's first screen.
+        */}
+        <div className="flex items-start gap-3">
+          <Input
+            label="Photo URL"
+            className="flex-1"
+            value={draft.imageUrl}
+            onChange={(e) => set('imageUrl', e.target.value)}
+            placeholder="https://…"
+            hint="Shown on the shop card and at the top of the bundle page. Without one, the card draws the products instead."
+          />
+          {draft.imageUrl.trim() && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={draft.imageUrl}
+              alt=""
+              style={{
+                width: 72,
+                height: 72,
+                objectFit: 'cover',
+                borderRadius: 'var(--radius-row)',
+                border: '1px solid var(--edge)',
+                marginTop: 'var(--space-5)',
+              }}
+            />
+          )}
         </div>
         <Textarea label="Description" value={draft.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="What it's built for…" />
         <Input label="Honesty line" value={draft.honestyLine} onChange={(e) => set('honestyLine', e.target.value)} placeholder="Not a hangover cure. Just the get-back-on-track stack." />
@@ -311,66 +344,136 @@ export function BundleEditor({ initial, isNew }: Props) {
         </Button>
       </Section>
 
-      {/* Workout */}
-      <Section title="Workout">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input label="Title" value={draft.workout.title} onChange={(e) => set('workout', { ...draft.workout, title: e.target.value })} placeholder="Full Body Reset" />
-          <Input label="Warm-up" value={draft.workout.warmup} onChange={(e) => set('workout', { ...draft.workout, warmup: e.target.value })} placeholder="8–10 min incline walk" />
-        </div>
-        <Textarea label="Intro" value={draft.workout.intro} onChange={(e) => set('workout', { ...draft.workout, intro: e.target.value })} rows={2} />
-        <div>
-          <p
-            style={{
-              fontSize: 'var(--text-micro)',
-              fontWeight: 'var(--weight-strong)',
-              fontFamily: 'var(--font-display)',
-              letterSpacing: 'var(--tracking-eyebrow)',
-              textTransform: 'uppercase',
-              color: 'var(--ink-3)',
-            }}
-          >
-            Exercises
-          </p>
-          <div className="mt-1 space-y-2">
-            {/* Two compact fields and a remove: the row is the record, and a
-                stacked label above each would triple its height. */}
-            {draft.workout.exercises.map((ex, i) => (
-              <div key={i} className="flex gap-2">
-                <Input
-                  label={`Exercise ${i + 1} name`}
-                  compact
-                  className="flex-1"
-                  value={ex.name}
-                  onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })}
-                  placeholder="Goblet squat"
-                />
-                <Input
-                  label={`Exercise ${i + 1} sets and reps`}
-                  compact
-                  className="w-28"
-                  value={ex.prescription}
-                  onChange={(e) => set('workout', { ...draft.workout, exercises: draft.workout.exercises.map((x, j) => j === i ? { ...x, prescription: e.target.value } : x) })}
-                  placeholder="3 × 10"
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon="trash"
-                  aria-label={`Remove exercise ${i + 1}`}
-                  onClick={() => set('workout', { ...draft.workout, exercises: draft.workout.exercises.filter((_, j) => j !== i) })}
-                />
+      {/*
+        Workouts — one to many.
+
+        A package is a stack AND its sessions, and a week of training is more
+        than one session; the editor held exactly one because the bundle did.
+        Each session is its own card so the fields of one cannot be mistaken for
+        the fields of another, and they are ordered — the landing page leads
+        with the first.
+      */}
+      <Section title={`Workouts — ${draft.workouts.length}`}>
+        {draft.workouts.map((workout, w) => {
+          /* One updater, so every field below reads the same way and none of
+             them can rebuild the array slightly differently. */
+          const patch = (next: Partial<BundleWorkout>) =>
+            setDraft((d) => ({
+              ...d,
+              workouts: d.workouts.map((x, j) => (j === w ? { ...x, ...next } : x)),
+            }))
+          const label = workout.title.trim() || `Workout ${w + 1}`
+          return (
+            <Card key={w} solid padding="tight" className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p
+                  className="truncate"
+                  style={{
+                    fontSize: 'var(--text-body-sm)',
+                    fontWeight: 'var(--weight-strong)',
+                    fontFamily: 'var(--font-display)',
+                    color: 'var(--ink-1)',
+                  }}
+                >
+                  {label}
+                </p>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="chevron-up"
+                    aria-label={`Move ${label} up`}
+                    disabled={w === 0}
+                    onClick={() => setDraft((d) => { const x = [...d.workouts]; if (w > 0) [x[w - 1], x[w]] = [x[w], x[w - 1]]; return { ...d, workouts: x } })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="chevron-down"
+                    aria-label={`Move ${label} down`}
+                    disabled={w === draft.workouts.length - 1}
+                    onClick={() => setDraft((d) => { const x = [...d.workouts]; if (w < x.length - 1) [x[w + 1], x[w]] = [x[w], x[w + 1]]; return { ...d, workouts: x } })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="trash"
+                    aria-label={`Remove ${label}`}
+                    onClick={() => setDraft((d) => ({ ...d, workouts: d.workouts.filter((_, j) => j !== w) }))}
+                  />
+                </div>
               </div>
-            ))}
-            <Button variant="ghost" size="sm" icon="plus" onClick={() => set('workout', { ...draft.workout, exercises: [...draft.workout.exercises, { name: '', prescription: '' }] })}>
-              Add exercise
-            </Button>
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Input label="Finisher" value={draft.workout.finisher} onChange={(e) => set('workout', { ...draft.workout, finisher: e.target.value })} />
-          <Input label="Post-workout" value={draft.workout.postWorkout} onChange={(e) => set('workout', { ...draft.workout, postWorkout: e.target.value })} />
-        </div>
-        <Input label="The rule (intensity)" value={draft.workout.rule} onChange={(e) => set('workout', { ...draft.workout, rule: e.target.value })} placeholder="Leave 2–3 reps in the tank." />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label={`${label} — title`} value={workout.title} onChange={(e) => patch({ title: e.target.value })} placeholder="Full Body Reset" />
+                <Input label={`${label} — warm-up`} value={workout.warmup} onChange={(e) => patch({ warmup: e.target.value })} placeholder="8–10 min incline walk" />
+              </div>
+              <Textarea label={`${label} — intro`} value={workout.intro} onChange={(e) => patch({ intro: e.target.value })} rows={2} />
+              <div>
+                <p
+                  style={{
+                    fontSize: 'var(--text-micro)',
+                    fontWeight: 'var(--weight-strong)',
+                    fontFamily: 'var(--font-display)',
+                    letterSpacing: 'var(--tracking-eyebrow)',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-3)',
+                  }}
+                >
+                  Exercises
+                </p>
+                <div className="mt-1 space-y-2">
+                  {/* Two compact fields and a remove: the row is the record, and a
+                      stacked label above each would triple its height. */}
+                  {workout.exercises.map((ex, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input
+                        label={`${label} — exercise ${i + 1} name`}
+                        compact
+                        className="flex-1"
+                        value={ex.name}
+                        onChange={(e) => patch({ exercises: workout.exercises.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })}
+                        placeholder="Goblet squat"
+                      />
+                      <Input
+                        label={`${label} — exercise ${i + 1} sets and reps`}
+                        compact
+                        className="w-28"
+                        value={ex.prescription}
+                        onChange={(e) => patch({ exercises: workout.exercises.map((x, j) => j === i ? { ...x, prescription: e.target.value } : x) })}
+                        placeholder="3 × 10"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon="trash"
+                        aria-label={`Remove ${label} exercise ${i + 1}`}
+                        onClick={() => patch({ exercises: workout.exercises.filter((_, j) => j !== i) })}
+                      />
+                    </div>
+                  ))}
+                  <Button variant="ghost" size="sm" icon="plus" onClick={() => patch({ exercises: [...workout.exercises, { name: '', prescription: '' }] })}>
+                    Add exercise
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input label={`${label} — finisher`} value={workout.finisher} onChange={(e) => patch({ finisher: e.target.value })} />
+                <Input label={`${label} — post-workout`} value={workout.postWorkout} onChange={(e) => patch({ postWorkout: e.target.value })} />
+              </div>
+              <Input label={`${label} — the rule (intensity)`} value={workout.rule} onChange={(e) => patch({ rule: e.target.value })} placeholder="Leave 2–3 reps in the tank." />
+            </Card>
+          )
+        })}
+        <Button
+          variant="secondary"
+          size="sm"
+          icon="plus"
+          fullWidth
+          onClick={() => setDraft((d) => ({ ...d, workouts: [...d.workouts, { ...EMPTY_WORKOUT, exercises: [{ name: '', prescription: '' }] }] }))}
+        >
+          Add workout
+        </Button>
       </Section>
 
       {/* How to use */}

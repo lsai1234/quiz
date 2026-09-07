@@ -5,6 +5,9 @@ import type { BundleWorkout } from '@/lib/bundles'
 interface Props {
   workout: BundleWorkout
   seriesName: string
+  /** Position in a package that has more than one session. Omitted when it has one. */
+  index?: number
+  total?: number
 }
 
 function PhaseLabel({ children }: { children: React.ReactNode }) {
@@ -18,14 +21,14 @@ function PhaseLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function WorkoutSection({ workout, seriesName }: Props) {
+export function WorkoutSection({ workout, seriesName, index, total }: Props) {
   return (
     <div className="px-5 pt-8 max-w-lg mx-auto">
       <p
         className="text-[10px] font-bold tracking-widest uppercase mb-4"
         style={{ fontFamily: 'var(--font-display)', color: 'var(--color-muted)' }}
       >
-        The workout — {seriesName}
+        {index && total ? `Workout ${index} of ${total}` : 'The workout'} — {seriesName}
       </p>
 
       <div

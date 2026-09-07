@@ -1,6 +1,7 @@
 import type { PrebuiltBundle } from './types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { missingCoreProducts, bundlePriceSummary } from './pricing'
+import { bundleWorkouts } from './resolve'
 
 export type CheckStatus = 'ok' | 'warn' | 'fail'
 
@@ -54,13 +55,21 @@ export function bundleReadiness(bundle: PrebuiltBundle, products: CatalogueProdu
     detail: price.price > 0 ? undefined : 'Total is £0 — check the products',
   })
 
-  // 3. Workout present — the whole point of a bundle vs a plain stack.
-  const hasWorkout = !!bundle.workout?.title && bundle.workout.exercises.length > 0
+  // 3. At least one workout — the whole point of a package vs a plain stack.
+  //    More than one is normal now (a strength package is a week of sessions),
+  //    so this counts them and names the ones that are still empty.
+  const workouts = bundleWorkouts(bundle)
+  const complete = workouts.filter((w) => !!w.title?.trim() && w.exercises.length > 0)
   checks.push({
     id: 'workout',
-    label: 'Workout attached',
-    status: hasWorkout ? 'ok' : 'warn',
-    detail: hasWorkout ? undefined : 'No workout exercises set',
+    label: complete.length > 1 ? `${complete.length} workouts attached` : 'Workout attached',
+    status: complete.length > 0 ? 'ok' : 'warn',
+    detail:
+      complete.length > 0
+        ? workouts.length > complete.length
+          ? `${workouts.length - complete.length} with no exercises set`
+          : undefined
+        : 'No workout exercises set',
   })
 
   // 4. Story & claim-safety copy present.

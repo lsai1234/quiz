@@ -5,6 +5,7 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { formatGBP, PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
 import { productFacts, productDietary } from '@/lib/product-facts'
+import { isAccessory } from '@/lib/catalogue/accessory'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import { Badge } from '@/components/storefront'
 
@@ -49,7 +50,10 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
   const subscribePct = Math.round(PRICING_CONFIG.subscriptionDiscount * 100)
   const monthlyPrice = price * (1 - PRICING_CONFIG.subscriptionDiscount)
 
-  const facts = productFacts(product)
+  // The facts of the variant on screen, not of the product: 100 vcaps and a
+  // 454g bag of the same powder are 33 servings and 454, and one number cannot
+  // be right under both.
+  const facts = productFacts(product, variant)
   const dietary = productDietary(product)
   const showVariantPicker = product.variants.length > 1
 
@@ -66,7 +70,9 @@ export function ProductDetailBody({ product, variant, onSelectVariant, className
         <p className="sf-body" style={{ color: 'var(--text-dim)', whiteSpace: 'pre-line' }}>{product.description}</p>
       </section>
 
-      {product.subscriptionEligible && (
+      {/* Never on an accessory. A monthly shaker is not a plan, it is a
+          cupboard full of shakers — and the offer reads as one we would honour. */}
+      {product.subscriptionEligible && !isAccessory(product) && (
         <Link
           href="/"
           data-interactive

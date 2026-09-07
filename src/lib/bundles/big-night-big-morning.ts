@@ -105,25 +105,27 @@ export const BIG_NIGHT_BIG_MORNING: PrebuiltBundle = {
     },
   ],
 
-  workout: {
-    title: 'Full Body Reset',
-    intro:
-      'A low-barrier, saveable session for when you feel rough but still want ' +
-      'to do something. Nothing heroic — no ego lifting, no maxing out. Save it ' +
-      'for your next Sunday reset.',
-    warmup: '8–10 min incline walk or easy bike',
-    exercises: [
-      { name: 'Goblet squat', prescription: '3 × 10' },
-      { name: 'Dumbbell bench press', prescription: '3 × 8' },
-      { name: 'Lat pulldown', prescription: '3 × 10' },
-      { name: 'Romanian deadlift', prescription: '3 × 8' },
-      { name: 'Cable row', prescription: '2 × 12' },
-      { name: 'Farmer carries', prescription: '3 × 30 seconds' },
-    ],
-    rule: 'Leave 2–3 reps in the tank on every set. No maxing out today.',
-    finisher: '5–8 min easy bike or walk',
-    postWorkout: 'Protein shake now, proper meal later.',
-  },
+  workouts: [
+    {
+      title: 'Full Body Reset',
+      intro:
+        'A low-barrier, saveable session for when you feel rough but still want ' +
+        'to do something. Nothing heroic — no ego lifting, no maxing out. Save it ' +
+        'for your next Sunday reset.',
+      warmup: '8–10 min incline walk or easy bike',
+      exercises: [
+        { name: 'Goblet squat', prescription: '3 × 10' },
+        { name: 'Dumbbell bench press', prescription: '3 × 8' },
+        { name: 'Lat pulldown', prescription: '3 × 10' },
+        { name: 'Romanian deadlift', prescription: '3 × 8' },
+        { name: 'Cable row', prescription: '2 × 12' },
+        { name: 'Farmer carries', prescription: '3 × 30 seconds' },
+      ],
+      rule: 'Leave 2–3 reps in the tank on every set. No maxing out today.',
+      finisher: '5–8 min easy bike or walk',
+      postWorkout: 'Protein shake now, proper meal later.',
+    },
+  ],
 
   howToUse: [
     { title: 'Wake up, water first', detail: 'Before coffee, before anything — get a big glass of water in.' },

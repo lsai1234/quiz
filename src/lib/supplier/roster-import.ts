@@ -59,6 +59,44 @@ export interface VariantFacts {
    * arrived with one real name and five raw codes in its picker.
    */
   name?: string | null
+  /**
+   * What PowerBody charge us for THIS sku.
+   *
+   * Siblings under one master SKU are normally the same tub in different
+   * flavours and cost the same to the penny, so pricing them all off the row's
+   * main SKU was right often enough to look right. It is wrong the moment the
+   * siblings are different things: glycine is sold as 100 × 1000mg vcaps and as
+   * 454g of the same powder, and the bag costs nearly twice the bottle — so
+   * both went on the shelf at the bottle's price.
+   *
+   * Absent falls back to the main SKU's cost, which is the old behaviour.
+   */
+  wholesalePrice?: number | null
+  /** The supplier's RRP for this sku — the was-price on this variant. */
+  rrp?: number | null
+  /**
+   * Servings in this sku (`portion_count`). 33 for the capsules, 454 for the
+   * powder: not something any ratio between the two could have produced, since
+   * their sizes are not even in the same unit.
+   */
+  servings?: number | null
+}
+
+/**
+ * The size a supplier name carries at its end — "…- 454 grams", "…- 100 vcaps".
+ *
+ * Only for the variant's `size` field, which is a LABEL: it is what separates
+ * two rows in the picker when the flavour column is empty, and it is what the
+ * per-serving maths falls back to scaling by when nothing knows the real count.
+ * A name it cannot read gives null rather than a guess — an invented size is a
+ * per-serving price that is confidently wrong.
+ */
+export function sizeFromName(name: string | null | undefined): string | null {
+  if (!name) return null
+  const match = name.match(
+    /(\d[\d.]*)\s*(kg|g|grams?|ml|l|litres?|caps?|capsules?|vcaps?|softgels?|tablets?|tabs?|servings?|sachets?|bars?)\b\s*$/i,
+  )
+  return match ? `${match[1]} ${match[2]}`.trim() : null
 }
 
 /**
@@ -124,13 +162,37 @@ export function rosterRowToProduct(
     notes.push('Swap group is "general", which fails readiness: no alternatives and no targeted scoring.')
   }
 
-  const formats = row.formats.length > 0 ? row.formats : classified.isReadyToDrink ? ['liquid'] : ['powder']
-  const servings = row.servings && row.servings > 0 ? row.servings : 30
-  if (!row.servings) notes.push('No serving count on the row — assumed 30, which sizes the subscription.')
+  /*
+    An accessory is one unit and has no dose, so it has no format in the sense
+    the rest of this means it, no serving count, and nothing to subscribe to.
+    Left on the defaults it arrives as a powder with thirty servings and a
+    monthly plan — which is exactly how three shakers reached the shelf
+    advertising servings they do not have.
+  */
+  const accessory = row.swapGroup === 'accessory'
+  const formats = row.formats.length > 0 ? row.formats : accessory ? ['accessory'] : classified.isReadyToDrink ? ['liquid'] : ['powder']
+  // The sheet's judgement first, then what PowerBody actually report for the
+  // main SKU (`portion_count`), and only then the assumption — a real number
+  // from the supplier beats a 30 we made up.
+  const servings = accessory
+    ? 1
+    : row.servings && row.servings > 0
+      ? row.servings
+      : supplier?.servings && supplier.servings > 0
+        ? supplier.servings
+        : 30
+  if (!accessory && !row.servings && !(supplier?.servings && supplier.servings > 0)) {
+    notes.push('No serving count on the row or from PowerBody — assumed 30, which sizes the subscription.')
+  }
 
   // One variant per flavour SKU, each keeping its own code so every one stays
-  // orderable. Prices are shared because a flavour of one tub costs one price;
-  // a different SIZE is a different product and must not be listed here.
+  // orderable — and each priced from its OWN cost where PowerBody answered for
+  // it. The rule used to be that siblings share a price, on the reasoning that
+  // a flavour of one tub costs one price. That is true of flavours and false of
+  // everything else somebody puts under one master SKU, and the sheet cannot be
+  // relied on to only ever hold flavours: the glycine row merged 100 capsules
+  // with a 454g bag, and both went live at the capsules' price and the
+  // capsules' serving count.
   const variantSkus = row.variantSkus.length > 0 ? row.variantSkus : [row.sku]
   /*
     Labels are worked out across the whole set at once, because a flavour is
@@ -153,6 +215,12 @@ export function rosterRowToProduct(
     const facts = variantFacts?.get(sku)
     const units = facts ? facts.qty : stock
     const label = labels[index]
+    // This SKU's own money, falling back to the row's when the lookup did not
+    // reach it — never a guess, always either its own figure or the main one.
+    const variantCost = facts?.wholesalePrice != null && facts.wholesalePrice > 0 ? facts.wholesalePrice : cost
+    const variantPrice = variantCost > 0 ? listPriceFor(variantCost) : sellPrice
+    const variantRrp = facts?.rrp != null && facts.rrp > 0 ? facts.rrp : rrp
+    const variantServings = facts?.servings != null && facts.servings > 0 ? facts.servings : null
     return {
       id: variantSkus.length === 1 ? id : `${id}-${slugify(sku)}`,
       title: label.label,
@@ -163,12 +231,14 @@ export function rosterRowToProduct(
         nothing to distinguish, so it has no flavour either.
       */
       flavour: variantSkus.length > 1 && label.named ? label.label : null,
-      size: null,
-      price: sellPrice,
-      compareAtPrice: rrp,
+      size: sizeFromName(facts?.name ?? (sku === row.sku ? supplier?.name : null)),
+      price: variantPrice,
+      compareAtPrice: variantRrp,
       available: units > 0,
       inventory: facts ? facts.qty : index === 0 ? stock : null,
       sku,
+      ...(variantServings !== null ? { servings: variantServings } : {}),
+      ...(variantCost > 0 ? { cost: variantCost } : {}),
     }
   })
   /*
@@ -195,11 +265,32 @@ export function rosterRowToProduct(
   }
   if (variantSkus.length > 1) {
     notes.push(
-      `${variantSkus.length} flavours merged into one product. Confirm they are flavours of the same size — ` +
-        'a different size has its own cost, servings and weight and must stay separate.',
+      `${variantSkus.length} SKUs merged into one product. Each keeps its own price, servings and stock, so ` +
+        'a different size is priced honestly — check the weight, which is still the main SKU\'s.',
+    )
+  }
+  /*
+    The one thing a founder cannot see from a list of flavour names: these
+    siblings are not the same thing. Different prices or different serving
+    counts under one master SKU means the sheet merged two products, which is
+    allowed now and is worth saying out loud — it is the difference between
+    "Glycine, 6 flavours" and "Glycine, capsules or a bag of powder".
+  */
+  const distinctPrices = new Set(variants.map((v) => v.price))
+  const distinctServings = new Set(variants.map((v) => v.servings ?? servings))
+  if (variantSkus.length > 1 && (distinctPrices.size > 1 || distinctServings.size > 1)) {
+    notes.push(
+      'These SKUs are not the same product: ' +
+        [
+          distinctPrices.size > 1 ? `${distinctPrices.size} different prices` : null,
+          distinctServings.size > 1 ? `${distinctServings.size} different serving counts` : null,
+        ].filter(Boolean).join(' and ') +
+        '. They are listed as sizes with their own price each — split them into separate products if they ' +
+        'should not share a page.',
     )
   }
 
+  const defaultVariant = variants.find((v) => v.available) ?? variants[0]
   const rhythm = rhythmForSwap(row.swapGroup, classified.cadence)
 
   const product: CatalogueProduct = {
@@ -214,14 +305,20 @@ export function rosterRowToProduct(
     dietaryTags: row.dietaryTags,
     formats,
     variants,
-    defaultVariantId: variants.find((v) => v.available)?.id ?? variants[0]?.id ?? null,
-    basePrice: sellPrice,
-    compareAtPrice: rrp,
+    defaultVariantId: defaultVariant?.id ?? null,
+    // The default VARIANT's price, which is only the main SKU's while they all
+    // cost the same. `basePrice` is what the quiz and every summary quote, and
+    // quoting a price no variant on the page is sold at is the shape of the
+    // bug this file just fixed.
+    basePrice: defaultVariant?.price ?? sellPrice,
+    compareAtPrice: defaultVariant?.compareAtPrice ?? rrp,
     cost,
     weightGrams: row.weightGrams ?? supplier?.weightGrams ?? null,
     vatRate: supplier?.vatRate ?? null,
     supplierRrp: rrp,
-    subscriptionEligible: row.subscriptionEligible,
+    // An accessory can be bought as often as somebody likes; it cannot be a
+    // monthly plan, because there is no month's worth of it.
+    subscriptionEligible: row.subscriptionEligible && !accessory,
     subscriptionProductId: null,
     isSubscriptionOnly: false,
     servings,
@@ -256,7 +353,7 @@ export function rosterRowToProduct(
     ],
   }
 
-  if (servings > 35 && row.subscriptionEligible) {
+  if (servings > 35 && row.subscriptionEligible && !accessory) {
     notes.push(
       `${servings} servings is more than a month, so it cannot subscribe as itself — map a monthly refill.`,
     )

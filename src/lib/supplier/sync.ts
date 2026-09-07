@@ -110,8 +110,33 @@ export function applyStockLevels(
     const variants = product.variants.map((variant) => {
       const level = variant.sku ? bySku.get(variant.sku) : undefined
       if (!level) return variant
-      if (variant.available === level.inStock && variant.inventory === level.stock) return variant
-      return { ...variant, available: level.inStock, inventory: level.stock }
+      /*
+        Per-variant cost, kept current alongside stock.
+
+        Not a repricing — retail is a decision this job never makes (see the
+        header). It is the FACT the margin figures are read off, and siblings
+        under one master SKU do not all cost the same: the 454g glycine costs
+        nearly twice the 100-cap bottle, so a single product-level cost makes a
+        loss-making variant look profitable.
+      */
+      /* Only where a per-variant cost is already recorded: this job keeps facts
+         current, and filling one in for the first time is a backfill — that is
+         the repair pass's job (`supplier/variant-pricing`), and doing it here
+         would report every product in the catalogue as "changed" on the first
+         run after a deploy. */
+      const cost =
+        variant.cost != null && level.wholesalePrice > 0 ? round(level.wholesalePrice) : null
+      const same =
+        variant.available === level.inStock &&
+        variant.inventory === level.stock &&
+        (cost === null || variant.cost === cost)
+      if (same) return variant
+      return {
+        ...variant,
+        available: level.inStock,
+        inventory: level.stock,
+        ...(cost !== null ? { cost } : {}),
+      }
     })
 
     // Cost comes from the cheapest matching line: with one SKU (the normal case)

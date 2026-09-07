@@ -180,3 +180,33 @@ and Phase 4 (shop row) both need Phase 2 and can run in either order or in
 parallel. Phase 5 → 6 build on the store and each other. Phase 7 last.
 Roughly: **1 & 2 together are one solid session; 3, 4, 5 a session each;
 6 is the largest (one to two sessions); 7 a half-session.**
+
+## Amendment — the package, and its workouts (Sept 2026)
+
+A bundle is now a **package**: one stack, and **one to many workouts**, sold
+under one name with one photograph. Three changes, all backwards compatible
+with what founders have already saved.
+
+1. **`workouts: BundleWorkout[]` replaces `workout`.** A strength package is a
+   week of sessions, not one session; the old shape held exactly one because
+   the data did. Every bundle saved before this carries the single `workout`
+   and those records live in the database, so both shapes are real:
+   `bundleWorkouts()` in `lib/bundles/resolve.ts` is the only thing that reads
+   the old field, `composeBundles` normalises on the way in, and an override
+   written by the old editor replaces the list rather than losing to it.
+   The landing page renders each session, numbered only when there is more
+   than one.
+
+2. **`imageUrl` — the package's photograph.** The card drew its own picture by
+   stacking the first three products' cutouts, which is the best a card can do
+   with no image and reads as three tubs in a row. A package is sold on what it
+   is FOR, so the Hub takes a photo and the shop card and the landing page hero
+   both lead with it. Without one, the product strip is still the fallback.
+
+3. **The shop caps every shelf at two rows.** `SHELF_PREVIEW_COUNT` in
+   `lib/shop/categories.ts` — four products, then "Show all N". Bundles are a
+   shelf like any other, and a bundle card is the tallest one there is.
+
+The Hub's bundle editor grew a workout list (add, reorder, remove) and a photo
+field with a preview. Readiness counts complete workouts rather than asserting
+one.

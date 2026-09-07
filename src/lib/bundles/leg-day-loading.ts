@@ -76,24 +76,26 @@ export const LEG_DAY_LOADING: PrebuiltBundle = {
     },
   ],
 
-  workout: {
-    title: 'Heavy Lower',
-    intro:
-      'A straightforward strength session built around the squat and hinge. ' +
-      'Progress the top sets when they move well; keep the accessories honest.',
-    warmup: '6–8 min bike, then 2 light ramp-up sets of the first lift',
-    exercises: [
-      { name: 'Back squat', prescription: '4 × 5' },
-      { name: 'Romanian deadlift', prescription: '3 × 8' },
-      { name: 'Bulgarian split squat', prescription: '3 × 10 each leg' },
-      { name: 'Leg press', prescription: '3 × 12' },
-      { name: 'Seated calf raise', prescription: '4 × 15' },
-      { name: 'Hanging knee raise', prescription: '3 × 12' },
-    ],
-    rule: 'Two hard sets beat five sloppy ones. Stop each set with clean reps left.',
-    finisher: '90-second sled push or carry, ×3',
-    postWorkout: 'Protein shake within the hour, then a real meal.',
-  },
+  workouts: [
+    {
+      title: 'Heavy Lower',
+      intro:
+        'A straightforward strength session built around the squat and hinge. ' +
+        'Progress the top sets when they move well; keep the accessories honest.',
+      warmup: '6–8 min bike, then 2 light ramp-up sets of the first lift',
+      exercises: [
+        { name: 'Back squat', prescription: '4 × 5' },
+        { name: 'Romanian deadlift', prescription: '3 × 8' },
+        { name: 'Bulgarian split squat', prescription: '3 × 10 each leg' },
+        { name: 'Leg press', prescription: '3 × 12' },
+        { name: 'Seated calf raise', prescription: '4 × 15' },
+        { name: 'Hanging knee raise', prescription: '3 × 12' },
+      ],
+      rule: 'Two hard sets beat five sloppy ones. Stop each set with clean reps left.',
+      finisher: '90-second sled push or carry, ×3',
+      postWorkout: 'Protein shake within the hour, then a real meal.',
+    },
+  ],
 
   howToUse: [
     { title: 'Pre-workout, 20 min out', detail: 'One scoop with water before you leave. Not after 4pm if you train late.' },

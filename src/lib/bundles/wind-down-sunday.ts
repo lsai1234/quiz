@@ -76,23 +76,25 @@ export const WIND_DOWN_SUNDAY: PrebuiltBundle = {
     },
   ],
 
-  workout: {
-    title: 'Mobility & Reset',
-    intro:
-      'Not a workout so much as a reset — gentle mobility and a walk to loosen ' +
-      'off and feel human again. Take it slow; there’s nothing to chase here.',
-    warmup: '5-minute easy walk to warm up',
-    exercises: [
-      { name: 'Cat-cow', prescription: '2 × 10 slow reps' },
-      { name: 'World’s greatest stretch', prescription: '2 × 5 each side' },
-      { name: '90/90 hip switches', prescription: '2 × 8 each side' },
-      { name: 'Thoracic rotations', prescription: '2 × 8 each side' },
-      { name: 'Dead hang', prescription: '3 × 20–30 seconds' },
-    ],
-    rule: 'Ease into every position — never force a stretch. This should feel good, not hard.',
-    finisher: '20–30 minute easy walk outside',
-    postWorkout: 'A greens drink, a good meal, and an early wind-down.',
-  },
+  workouts: [
+    {
+      title: 'Mobility & Reset',
+      intro:
+        'Not a workout so much as a reset — gentle mobility and a walk to loosen ' +
+        'off and feel human again. Take it slow; there’s nothing to chase here.',
+      warmup: '5-minute easy walk to warm up',
+      exercises: [
+        { name: 'Cat-cow', prescription: '2 × 10 slow reps' },
+        { name: 'World’s greatest stretch', prescription: '2 × 5 each side' },
+        { name: '90/90 hip switches', prescription: '2 × 8 each side' },
+        { name: 'Thoracic rotations', prescription: '2 × 8 each side' },
+        { name: 'Dead hang', prescription: '3 × 20–30 seconds' },
+      ],
+      rule: 'Ease into every position — never force a stretch. This should feel good, not hard.',
+      finisher: '20–30 minute easy walk outside',
+      postWorkout: 'A greens drink, a good meal, and an early wind-down.',
+    },
+  ],
 
   howToUse: [
     { title: 'Greens in the morning', detail: 'Mix a serving with water first thing — the anchor for the day.' },

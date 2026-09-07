@@ -61,6 +61,29 @@ export function dealInfo(product: CatalogueProduct): DealInfo {
   return { price, rrp, onDeal, pct }
 }
 
+/**
+ * What the sellable variants of a product cost, low to high.
+ *
+ * Only interesting when they DIFFER, which they normally do not: a product's
+ * variants are usually flavours of one tub at one price. Where a master SKU
+ * holds two genuinely different things — 100 capsules and a 454g bag of the
+ * same powder — a card showing one price is telling half the truth, and the
+ * half it picks is whichever variant happens to be available first. `varies`
+ * is what earns the "From" in front of the number.
+ *
+ * Sold-out variants are excluded: a price nobody can pay is not a price the
+ * shelf should quote.
+ */
+export function priceRange(product: CatalogueProduct): { min: number; max: number; varies: boolean } {
+  const prices = product.variants.filter((v) => v.available).map((v) => v.price)
+  const usable = prices.length > 0 ? prices : product.variants.map((v) => v.price)
+  if (usable.length === 0) return { min: product.basePrice, max: product.basePrice, varies: false }
+  const min = Math.min(...usable)
+  const max = Math.max(...usable)
+  // A penny apart is a rounding artefact, not a range worth a word on a card.
+  return { min, max, varies: max - min >= 0.01 }
+}
+
 /** Products currently on deal, biggest saving first. */
 export function dealsProducts(products: CatalogueProduct[]): CatalogueProduct[] {
   return products

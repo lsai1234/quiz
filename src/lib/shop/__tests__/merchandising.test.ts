@@ -1,4 +1,4 @@
-import { dealInfo, dealsProducts, maxDealPct, productBadge, defaultVariant, variantStock, demoInventory, LOW_STOCK_THRESHOLD } from '../merchandising'
+import { dealInfo, dealsProducts, maxDealPct, productBadge, defaultVariant, variantStock, demoInventory, priceRange, LOW_STOCK_THRESHOLD } from '../merchandising'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
@@ -97,5 +97,33 @@ describe('demoInventory', () => {
     const counts = Array.from({ length: 40 }, (_, i) => demoInventory(`variant-${i}`))
     expect(counts.some((c) => c <= LOW_STOCK_THRESHOLD)).toBe(true)
     expect(counts.some((c) => c > LOW_STOCK_THRESHOLD)).toBe(true)
+  })
+})
+
+describe('priceRange', () => {
+  it('says nothing varies when the variants are flavours of one tub', () => {
+    const whey = makeProduct({ variants: [variant({ id: 'a' }), variant({ id: 'b' })] })
+    expect(priceRange(whey)).toEqual({ min: 30, max: 30, varies: false })
+  })
+
+  it('spots a master SKU holding two genuinely different things', () => {
+    // The glycine: 100 capsules and a 454g bag. A card showing one price is
+    // quoting whichever variant happens to be available first.
+    const glycine = makeProduct({
+      variants: [variant({ id: 'caps', price: 21.99 }), variant({ id: 'powder', price: 39.99 })],
+    })
+    expect(priceRange(glycine)).toEqual({ min: 21.99, max: 39.99, varies: true })
+  })
+
+  it('ignores sold-out variants — a price nobody can pay is not a price', () => {
+    const p = makeProduct({
+      variants: [variant({ id: 'cheap', price: 9.99, available: false }), variant({ id: 'sold', price: 30 })],
+    })
+    expect(priceRange(p)).toEqual({ min: 30, max: 30, varies: false })
+  })
+
+  it('does not call a penny a range', () => {
+    const p = makeProduct({ variants: [variant({ id: 'a', price: 30 }), variant({ id: 'b', price: 30.004 })] })
+    expect(priceRange(p).varies).toBe(false)
   })
 })

@@ -31,6 +31,7 @@ export async function openShop(page: Page): Promise<void> {
  * itself rather than a sheet locator.
  */
 export async function openProductSheet(page: Page, productName: string) {
+  await revealShelves(page, productName)
   const card = page.locator('[data-card]').filter({ hasText: productName }).first()
   await card.scrollIntoViewIfNeeded()
   await card.getByRole('link').first().click()
@@ -48,6 +49,28 @@ export async function addProductToBasket(page: Page, productName: string): Promi
   // Back to the shelf, the way a shopper would.
   await page.goBack()
   await expect(page.locator('[data-card]').first()).toBeVisible({ timeout: 20_000 })
+}
+
+/**
+ * Open the shelves far enough to see a named product.
+ *
+ * A shelf shows two rows and keeps the rest behind "Show all", so a product
+ * past the fourth in its category is not on the page until somebody asks for
+ * it — which is exactly what a shopper does, and what a test looking for it by
+ * name has to do too. No-ops when the product is already visible.
+ */
+export async function revealShelves(page: Page, productName: string): Promise<void> {
+  const card = page.locator('[data-card]').filter({ hasText: productName })
+  if (await card.count()) return
+
+  const more = page.getByRole('button', { name: /^Show all \d+ / })
+  for (let i = await more.count(); i > 0; i--) {
+    const button = more.first()
+    if (!(await button.count())) break
+    await button.scrollIntoViewIfNeeded()
+    await button.click()
+    if (await card.count()) return
+  }
 }
 
 /** Dismiss whatever sheet is open. */
