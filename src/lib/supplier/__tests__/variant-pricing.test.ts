@@ -23,8 +23,8 @@ function product(over: Partial<CatalogueProduct> = {}): CatalogueProduct {
 
 /** What PowerBody actually say about the two glycine SKUs. */
 const FACTS = new Map<string, SkuFacts>([
-  ['P100', { cost: 11.12, rrp: 15.5, servings: 33, name: 'Glycine, 1000mg - 100 vcaps' }],
-  ['P200', { cost: 20.04, rrp: 26, servings: 454, name: 'Glycine, Pure Powder - 454 grams' }],
+  ['P100', { cost: 11.12, rrp: 15.5, servings: 33, name: 'Glycine, 1000mg - 100 vcaps', image: 'https://pb/caps.jpg' }],
+  ['P200', { cost: 20.04, rrp: 26, servings: 454, name: 'Glycine, Pure Powder - 454 grams', image: 'https://pb/powder.jpg' }],
 ])
 
 describe('repriceVariants', () => {
@@ -46,6 +46,24 @@ describe('repriceVariants', () => {
     expect(fixed.variants[0].servings).toBe(33)
     expect(fixed.variants[1].servings).toBe(454)
     expect(fixed.variants[1].size).toBe('454 grams')
+  })
+
+  it('gives each variant the supplier\'s own picture, and never replaces one', () => {
+    // PowerBody hold one photograph per product id, and every flavour is its
+    // own product at their end — so the per-flavour pictures have always
+    // existed and the shop was showing the main SKU's for all of them.
+    const { product: fixed } = repriceVariants(product(), FACTS, false)!
+    expect(fixed.variants.map((v) => v.imageUrl)).toEqual(['https://pb/caps.jpg', 'https://pb/powder.jpg'])
+
+    // A picture a founder chose is not the supplier's to overwrite.
+    const chosen = product({
+      variants: [
+        variant({ id: 'caps', sku: 'P100', imageUrl: 'https://ours/better.jpg' }),
+        variant({ id: 'powder', sku: 'P200' }),
+      ],
+    })
+    const { product: kept } = repriceVariants(chosen, FACTS, true)!
+    expect(kept.variants[0].imageUrl).toBe('https://ours/better.jpg')
   })
 
   it('leaves a product somebody has priced by hand alone', () => {
@@ -73,14 +91,14 @@ describe('repriceVariants', () => {
 
   it('leaves siblings that genuinely are flavours of one tub exactly as they are', () => {
     const flavours = new Map<string, SkuFacts>([
-      ['P100', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Chocolate - 1kg' }],
-      ['P200', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Vanilla - 1kg' }],
+      ['P100', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Chocolate - 1kg', image: 'https://pb/choc.jpg' }],
+      ['P200', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Vanilla - 1kg', image: 'https://pb/van.jpg' }],
     ])
     const whey = product({
       servings: 30,
       variants: [
-        variant({ id: 'choc', sku: 'P100', price: 21.99, servings: 30, cost: 11.12, size: '1 kg' }),
-        variant({ id: 'van', sku: 'P200', price: 21.99, servings: 30, cost: 11.12, size: '1 kg' }),
+        variant({ id: 'choc', sku: 'P100', price: 21.99, servings: 30, cost: 11.12, size: '1 kg', imageUrl: 'https://pb/choc.jpg' }),
+        variant({ id: 'van', sku: 'P200', price: 21.99, servings: 30, cost: 11.12, size: '1 kg', imageUrl: 'https://pb/van.jpg' }),
       ],
     })
 

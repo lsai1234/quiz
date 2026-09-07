@@ -10,6 +10,7 @@ interface Candidate {
   variants: number
   onePrice: boolean
   servingsKnown: number
+  picturesKnown: number
 }
 
 interface Scan {
@@ -118,13 +119,14 @@ export function VariantPriceRepairPanel() {
               color: 'var(--ink-1)',
             }}
           >
-            Variant prices &amp; servings
+            Variant prices, servings &amp; pictures
           </h2>
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
             {scan.total === 0
               ? 'No product has more than one supplier SKU behind it.'
               : `${scan.total} product${scan.total === 1 ? '' : 's'} merge more than one supplier SKU. ` +
-                `${suspect.length} of them show every variant at the same price.`}
+                `${suspect.length} of them show every variant at the same price, and ` +
+                `${scan.products.filter((p) => p.picturesKnown === 0).length} have no per-flavour pictures yet.`}
           </p>
         </div>
         {scan.total > 0 && (
@@ -149,7 +151,10 @@ export function VariantPriceRepairPanel() {
           <strong>Fix mispriced variants</strong> only touches products whose SKUs actually cost different amounts
           and are still showing one shelf price, which is the exact signature of that bug; a product you have
           priced by hand already has variants that differ, so it is left alone. Serving counts and costs are read
-          from PowerBody either way — those are facts, not decisions. It is safe to re-run.
+          from PowerBody either way — those are facts, not decisions. So is the photograph: PowerBody hold one
+          per SKU and a flavour is its own SKU at their end, so a six-flavour product has six real pictures and
+          the shop was showing one of them six times. A picture already set is never replaced. It is safe to
+          re-run.
           <br />
           <br />
           <strong>Re-price all from cost</strong> rewrites every variant of every multi-SKU product back to
@@ -197,7 +202,8 @@ export function VariantPriceRepairPanel() {
                 {c.title}
               </p>
               <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-                {c.variants} variants · {c.servingsKnown} with their own serving count
+                {c.variants} variants · {c.servingsKnown} with their own serving count ·{' '}
+                {c.picturesKnown} with their own picture
               </p>
             </div>
           ))}

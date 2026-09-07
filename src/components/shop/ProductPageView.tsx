@@ -90,7 +90,10 @@ export function ProductPageView({ product, sellableKeys }: Props) {
 
         {/* Full width, flush, on the page's own ground. */}
         <ProductTile
-          imageUrl={product.imageUrl}
+          // Follows the chosen variant: a flavour picker that changes the price
+          // and not the picture is the shape of a page showing one photograph
+          // for six different tubs.
+          imageUrl={variant?.imageUrl ?? product.imageUrl}
           slot={product.stackSlots[0]}
           title={product.title}
           size={640}

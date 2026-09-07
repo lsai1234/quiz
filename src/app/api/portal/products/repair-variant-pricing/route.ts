@@ -110,6 +110,9 @@ export async function GET() {
       onePrice: looksMispriced(p),
       // Whether anything knows this variant's own serving count yet.
       servingsKnown: p.variants.filter((v) => v.servings != null).length,
+      // …and its own picture. A product showing one photograph across six
+      // flavours is the visible half of the same gap.
+      picturesKnown: p.variants.filter((v) => v.imageUrl).length,
     })),
     total: affected.length,
   })
@@ -136,6 +139,7 @@ async function fetchFacts(
         rrp: level.rrp > 0 ? level.rrp : null,
         servings: null,
         name: null,
+        image: null,
       })
     }
   } catch (err) {
@@ -158,6 +162,10 @@ async function fetchFacts(
           rrp: held?.rrp ?? (p.rrp > 0 ? p.rrp : null),
           servings: p.servings,
           name: p.name || null,
+          // The detail call is the only place a picture lives, and it is per
+          // product id — which at PowerBody means per SKU, so this is a
+          // per-flavour photograph rather than the product's.
+          image: p.imageUrl || null,
         })
       }
     }

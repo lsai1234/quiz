@@ -745,6 +745,39 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX deletion_log_kind ON deletion_log(kind);
   CREATE INDEX deletion_log_created ON deletion_log(created_at);
   `,
+
+  // v22 — `founder_images`: pictures a founder uploads rather than links to.
+  //
+  // Everything with a photograph on it took a URL, which assumes the picture is
+  // already on the internet somewhere. For a supplier's product that is true —
+  // PowerBody host their own — and for a bundle it is not: the photograph of a
+  // session is one somebody took, and "upload it to a host first, then paste the
+  // link" is a step that means the bundle ships without a picture.
+  //
+  // Bytes in the column, like `share_card_art` and `shop_banners`, and for the
+  // same reason: a handful of images against a blob store that is a second
+  // system to operate, authenticate and have go down. `id` is a namespaced key
+  // ("bundle:leg-day-loading"), so one table serves every surface that grows an
+  // uploader rather than a table per surface.
+  //
+  // `version` is a content hash and it goes in the image URL, so replacing a
+  // picture invalidates its cache without touching any other row.
+  //
+  // `IF NOT EXISTS`, for the reason v18 gives: SQLite runs these outside a
+  // transaction, and a half-applied migration that cannot be retried wedges the
+  // engine for every caller.
+  `
+  CREATE TABLE IF NOT EXISTS founder_images (
+    id         TEXT PRIMARY KEY,
+    mime       TEXT NOT NULL,
+    data       TEXT NOT NULL,
+    width      INTEGER NOT NULL,
+    height     INTEGER NOT NULL,
+    bytes      INTEGER NOT NULL,
+    version    TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  `,
 ]
 
 /**

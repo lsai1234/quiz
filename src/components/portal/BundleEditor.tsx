@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { BundleWorkout, ProductBundle } from '@/lib/bundles'
@@ -12,6 +12,7 @@ import { bundleReadiness } from '@/lib/bundles/readiness'
 import { calculatePricing, formatGBP } from '@/lib/stack-blueprint/pricing'
 import { BundleLandingPage } from '@/components/bundles/BundleLandingPage'
 import { Badge, Button, Card, Input, Modal, ModalBody, ModalHeader, Select, Textarea } from '@/components/system'
+import { ImageField } from './ImageField'
 
 /** Readiness status → the system's semantic tone. The colours live in `Badge`. */
 const TONE = { ok: 'positive', warn: 'attention', fail: 'critical' } as const
@@ -66,6 +67,17 @@ export function BundleEditor({ initial, isNew }: Props) {
   }, [])
 
   const set = <K extends keyof BundleDraft>(key: K, value: BundleDraft[K]) => setDraft((d) => ({ ...d, [key]: value }))
+
+  /*
+    Where an uploaded photo is stored.
+
+    The slug once there is one, and a stable scratch id before that — a new
+    bundle is named after the picture is chosen as often as before it, and two
+    people starting a bundle at once must not write to the same key. The record
+    keeps the returned URL either way, so the key never has to be guessed again.
+  */
+  const scratch = useRef(`draft-${Math.random().toString(36).slice(2, 10)}`)
+  const imageId = `bundle:${draft.slug || scratch.current}`
 
   // Auto-slug from the name until the slug is edited directly (new bundles only).
   const onName = (name: string) => setDraft((d) => ({ ...d, name, slug: slugTouched ? d.slug : bundleSlug(name) }))
@@ -211,35 +223,19 @@ export function BundleEditor({ initial, isNew }: Props) {
           <Input label="Series name" value={draft.seriesName} onChange={(e) => set('seriesName', e.target.value)} placeholder="Sunday Reset Sessions" />
         </div>
         {/*
-          The package's photograph, and the one field on this screen with a
-          preview: an image URL is the field a typo is invisible in, and a
-          bundle card is 128px of the shop's first screen.
+          The package's photograph — a file or a link.
+
+          A URL alone assumed the picture was already on the internet, which is
+          true of a supplier's product shot and false of a photograph somebody
+          took of a session. See `ImageField`.
         */}
-        <div className="flex items-start gap-3">
-          <Input
-            label="Photo URL"
-            className="flex-1"
-            value={draft.imageUrl}
-            onChange={(e) => set('imageUrl', e.target.value)}
-            placeholder="https://…"
-            hint="Shown on the shop card and at the top of the bundle page. Without one, the card draws the products instead."
-          />
-          {draft.imageUrl.trim() && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={draft.imageUrl}
-              alt=""
-              style={{
-                width: 72,
-                height: 72,
-                objectFit: 'cover',
-                borderRadius: 'var(--radius-row)',
-                border: '1px solid var(--edge)',
-                marginTop: 'var(--space-5)',
-              }}
-            />
-          )}
-        </div>
+        <ImageField
+          id={imageId}
+          label="Photo"
+          value={draft.imageUrl}
+          onChange={(url) => set('imageUrl', url)}
+          hint="Shown on the shop card and at the top of the bundle page. Without one, the card draws the products instead."
+        />
         <Textarea label="Description" value={draft.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="What it's built for…" />
         <Input label="Honesty line" value={draft.honestyLine} onChange={(e) => set('honestyLine', e.target.value)} placeholder="Not a hangover cure. Just the get-back-on-track stack." />
         <Textarea label="Disclaimer" value={draft.disclaimer} onChange={(e) => set('disclaimer', e.target.value)} rows={2} placeholder="Bundle-specific safety note…" />

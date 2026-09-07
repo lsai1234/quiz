@@ -137,6 +137,10 @@ export async function POST(req: Request) {
             wholesalePrice: p.wholesalePrice,
             rrp: p.rrp,
             servings: p.servings,
+            // One picture per SKU: at PowerBody every flavour is its own
+            // product, so the photographs are already per-flavour and we were
+            // showing the main SKU's for all of them.
+            imageUrl: p.imageUrl,
           })
         }
         // The row-level lookup still only wants the MAIN skus: a flavour is a

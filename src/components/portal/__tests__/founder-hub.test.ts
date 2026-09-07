@@ -111,6 +111,10 @@ describe('the Founders Hub', () => {
     // pattern as the three above: `hidden`, never focusable, and the Button is
     // the control that is labelled and reachable.
     'src/components/portal/VariantNameRepairPanel.tsx': ['input'],
+    // And in `ImageField`, behind its Upload-a-file Button — the same hidden
+    // file input, for the same reason: a native file picker has no other way to
+    // be opened, and the Button is the labelled, focusable control.
+    'src/components/portal/ImageField.tsx': ['input'],
   } as const
 
   it.each(FILES)('%s builds its controls from the primitives', (file) => {

@@ -249,3 +249,25 @@ count, so switching to a variant with a different count silently reprices it.
 Unknown counts stay interchangeable, because most products know their servings
 for the first variant only and treating unknown as different would empty the
 picker for the flavours it exists for.
+
+## Amendment — pictures (Sept 2026)
+
+**A bundle photo can be uploaded, not only linked.** A URL field assumes the
+picture is already on the internet, which is true of a supplier's product shot
+and false of a photograph of a session. `ImageField` takes a file, resizes it in
+the browser (long edge capped at 1600, JPEG q0.85), posts it to
+`/api/portal/images`, and writes the returned URL into the same field — so
+nothing downstream knows which way the picture arrived. Storage is
+`founder_images` (migration v22), keyed `"<kind>:<slug>"`, bytes in the column
+like `share_card_art` and `shop_banners`; served publicly at `/api/images/[id]`
+and cache-busted by a content hash in `?v=`.
+
+**Variant photographs come from PowerBody, one per SKU.** Their `image` lives on
+`getProductInfo`, which is per product id — and at PowerBody every flavour and
+size is its own product with its own SKU. So the per-flavour pictures have
+always existed; import kept only the row's main SKU's, because that was the only
+detail call it made. `CatalogueVariant.imageUrl` now holds each one (absent falls
+back to the product's), the import fills it per SKU, and the Hub's *Variant
+prices, servings & pictures* pass backfills everything already in the shop. A
+picture already set is never overwritten. The shop card, the product page and
+the quiz's detail sheet all follow the chosen variant.

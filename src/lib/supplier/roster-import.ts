@@ -80,6 +80,14 @@ export interface VariantFacts {
    * their sizes are not even in the same unit.
    */
   servings?: number | null
+  /**
+   * This SKU's own photograph.
+   *
+   * PowerBody hold one per product id, and every flavour is its own product at
+   * their end — so the pictures exist, one per flavour, and import kept only
+   * the row's main one because that was the only detail call it made.
+   */
+  imageUrl?: string | null
 }
 
 /**
@@ -237,6 +245,9 @@ export function rosterRowToProduct(
       available: units > 0,
       inventory: facts ? facts.qty : index === 0 ? stock : null,
       sku,
+      // Its own picture when PowerBody sent one for this SKU. Absent falls back
+      // to the product's, which is what every variant used to show.
+      ...(facts?.imageUrl ? { imageUrl: facts.imageUrl } : {}),
       ...(variantServings !== null ? { servings: variantServings } : {}),
       ...(variantCost > 0 ? { cost: variantCost } : {}),
     }

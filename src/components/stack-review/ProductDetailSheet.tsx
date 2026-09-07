@@ -138,7 +138,7 @@ export function ProductDetailSheet({
 
         {/* Header — product hero */}
         <div className="px-5 pt-2 pb-4 flex items-start gap-4 flex-shrink-0 border-b border-[var(--color-border)]">
-          <ProductTile imageUrl={product?.imageUrl} slot={slot.slotType} title={product?.title} size={92} />
+          <ProductTile imageUrl={selectedVariant?.imageUrl ?? product?.imageUrl} slot={slot.slotType} title={product?.title} size={92} />
           <div className="flex-1 min-w-0 pt-0.5">
             <span
               className="inline-block px-2 py-0.5 rounded-full text-[9px] font-bold tracking-widest uppercase mb-1.5"

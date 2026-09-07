@@ -28,6 +28,15 @@ export interface SkuFacts {
   rrp: number | null
   servings: number | null
   name: string | null
+  /**
+   * This SKU's own photograph.
+   *
+   * PowerBody hold one per product id and every flavour is its own product at
+   * their end, so the per-flavour pictures have always existed — import just
+   * never asked for any but the main SKU's, and six flavours went live showing
+   * one photograph six times.
+   */
+  image?: string | null
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
@@ -84,6 +93,14 @@ export function repriceVariants(
     if (!next.size) {
       const size = sizeFromName(fact.name)
       if (size) next = { ...next, size }
+    }
+
+    // Its own picture. Only filled in, never overwritten: a founder who has
+    // pointed a variant at a better photograph than the supplier's should not
+    // have it replaced by a repair pass.
+    if (!next.imageUrl && fact.image) {
+      notes.push('picture')
+      next = { ...next, imageUrl: fact.image }
     }
 
     if (next === variant) return variant

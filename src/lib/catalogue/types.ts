@@ -133,6 +133,19 @@ export interface CatalogueVariant {
    */
   servings?: number | null
   /**
+   * This variant's own photograph.
+   *
+   * PowerBody hold one picture per SKU, and a flavour is its own SKU at their
+   * end — so a six-flavour product has six real photographs and we were showing
+   * one of them six times. The import used to keep only the main SKU's, because
+   * that was the only detail call it made.
+   *
+   * Absent falls back to the product's `imageUrl`, which is right for a product
+   * whose siblings genuinely share a shot, and for anything imported before this
+   * existed.
+   */
+  imageUrl?: string | null
+  /**
    * What we pay the supplier for THIS variant.
    *
    * Same reason as `servings`: siblings under one master SKU are usually the
