@@ -129,3 +129,84 @@ describe('one product’s variants', () => {
     expect(screen.getByText(/No supplier codes on this product/)).toBeInTheDocument()
   })
 })
+
+describe('naming a product by hand', () => {
+  /*
+    The escape hatch. The supplier-driven repair works from what PowerBody call
+    each SKU, which is right by default and not always enough — their names
+    disagree, a SKU is missing from the feed, the diff produces something nobody
+    would write. This is the founder saying which one is the product.
+  */
+  const MUDDLED = product({
+    title: 'Hydration+, Blue Raspberry - 240 grams',
+    variants: [
+      variant({ id: 'a', sku: 'P48633', title: 'Hydration+' }),
+      variant({ id: 'b', sku: 'P48636', title: 'Hydration+, Lemon & Lime - 240 grams' }),
+    ],
+  })
+
+  it('promotes a flavour row to the product name in one press', async () => {
+    render(<ProductVariantsPanel product={MUDDLED} />)
+
+    await userEvent.click(screen.getByRole('button', { name: /Use “Hydration\+” as the product name/ }))
+    expect(screen.getByLabelText('Product name')).toHaveValue('Hydration+')
+  })
+
+  it('saves the product name and the flavour labels together', async () => {
+    reply({ ok: true })
+    render(<ProductVariantsPanel product={MUDDLED} />)
+
+    await userEvent.clear(screen.getByLabelText('Product name'))
+    await userEvent.type(screen.getByLabelText('Product name'), 'Hydration+')
+    await userEvent.clear(screen.getByLabelText('Name for P48633'))
+    await userEvent.type(screen.getByLabelText('Name for P48633'), 'Blue Raspberry')
+    await userEvent.click(screen.getByRole('button', { name: 'Save names' }))
+
+    await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(url).toBe('/api/portal/products')
+    const body = JSON.parse(init.body)
+    expect(body.id).toBe('glycine')
+    expect(body.patch.title).toBe('Hydration+')
+    // The label and the flavour move together: the shop's picker reads
+    // `flavour`, so setting one and not the other names it two different things.
+    expect(body.patch.variants[0]).toMatchObject({ title: 'Blue Raspberry', flavour: 'Blue Raspberry' })
+    // …and an untouched row keeps exactly what it had.
+    expect(body.patch.variants[1]).toMatchObject({ title: 'Hydration+, Lemon & Lime - 240 grams' })
+    // The handle is never in the patch — it is the product's URL.
+    expect(body.patch).not.toHaveProperty('handle')
+  })
+
+  it('offers what the flavours share, and nothing when they share nothing', () => {
+    const { unmount } = render(<ProductVariantsPanel product={MUDDLED} />)
+    expect(screen.getByRole('button', { name: 'Use “Hydration+”' })).toBeInTheDocument()
+    unmount()
+
+    const unrelated = product({
+      title: 'CHRGD Hydration',
+      variants: [
+        variant({ id: 'a', sku: 'P1', title: 'Blue Raspberry' }),
+        variant({ id: 'b', sku: 'P2', title: 'Lemon & Lime' }),
+      ],
+    })
+    render(<ProductVariantsPanel product={unrelated} />)
+    // The suggestion chip only — the per-row "…as the product name" buttons
+    // are a different control and are always there.
+    expect(screen.queryByRole('button', { name: /^Use “[^”]+”$/ })).not.toBeInTheDocument()
+  })
+
+  it('has nothing to save until something is edited', () => {
+    render(<ProductVariantsPanel product={MUDDLED} />)
+    expect(screen.getByRole('button', { name: 'Save names' })).toBeDisabled()
+  })
+
+  it('offers to promote only the rows that would change something', async () => {
+    render(<ProductVariantsPanel product={MUDDLED} />)
+    // Both rows differ from the title to begin with.
+    expect(screen.getAllByRole('button', { name: /as the product name$/ })).toHaveLength(2)
+
+    await userEvent.click(screen.getByRole('button', { name: /Use “Hydration\+” as the product name/ }))
+    // …and the row that is now the product name stops offering to become it.
+    expect(screen.getAllByRole('button', { name: /as the product name$/ })).toHaveLength(1)
+  })
+})
