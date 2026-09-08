@@ -604,7 +604,6 @@ describe('one press for “this is the master, the rest are flavours”', () => 
           defaultVariantId: 'a',
           basePrice: 14.99,
           imageUrl: null,
-          servings: null,
           variants: [
             variant({ id: 'a', sku: 'P1', title: 'Caramel Chaos', flavour: 'Caramel Chaos' }),
             variant({ id: 'b', sku: 'P2', title: 'Fudged Up', flavour: 'Fudged Up' }),

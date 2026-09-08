@@ -89,8 +89,6 @@ describe('“this SKU is the master, the rest are flavours”', () => {
       ],
       basePrice: 35.99,
       imageUrl: null,
-      servings: null,
-      cost: null,
       compareAtPrice: null,
     })
     expect(applyTree(done, 'a')).toBeNull()

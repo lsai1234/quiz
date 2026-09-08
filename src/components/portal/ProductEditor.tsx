@@ -5,6 +5,7 @@ import { Button, Card, Input, Modal, ModalBody, ModalFooter, ModalHeader, Select
 import { STACK_SLOTS, SLOT_LABELS, type StackSlot } from '@/lib/catalogue/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { deriveShortName, SHORT_NAME_MAX } from '@/lib/catalogue/short-name'
+import { spreadServings, servingsAppliesTo } from '@/lib/catalogue/servings'
 
 const GOALS = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
@@ -44,6 +45,21 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
       recommendationBasis: d.recommendationBasis, effectOnset: d.effectOnset, recommendationPriority: d.recommendationPriority, marginPriority: d.marginPriority,
       isCoreEligible: d.isCoreEligible, isBoosterEligible: d.isBoosterEligible, cost: d.cost,
     }
+
+    /*
+      The serving count has to land where the shop READS it.
+
+      `product.servings` is not that place once a SKU carries its own count —
+      the shop shows the selected SKU's, which is right, and which is why a
+      founder could type 20 here, watch it save, and see 12 on the shelf for
+      ever. `spreadServings` writes it onto the SKUs that ARE this unit: the
+      master and every sibling of the same size. A different size is a
+      different unit of sale and keeps its own.
+    */
+    if (d.servings !== product.servings) {
+      const variants = spreadServings(product, d.servings)
+      if (variants) patch.variants = variants
+    }
     const res = await fetch('/api/portal/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: d.id, patch }) })
     const data = await res.json()
     setSaving(false)
@@ -62,7 +78,19 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
       className="w-24"
       type="number"
       value={value ?? 0}
-      onChange={(e) => onChange(parseFloat(e.target.value))}
+      /*
+        An empty box is a zero, not a NaN.
+
+        `parseFloat('')` is NaN, which React refuses to render as a value and
+        which `JSON.stringify` turns into `null` on the way to the server — so
+        clearing a field to retype it wrote a null into the catalogue. Every one
+        of these boxes is a count or an amount, and none of them has a
+        meaningful NaN.
+      */
+      onChange={(e) => {
+        const n = parseFloat(e.target.value)
+        onChange(Number.isFinite(n) ? n : 0)
+      }}
     />
   )
   // The same On/Off button the pricing rules use. This was a sliding switch —
@@ -133,7 +161,16 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
           {/* Subscription */}
           <Group title="Subscription">
             <Row label="Offer on subscription">{toggle('Offer on subscription', d.subscriptionEligible, (b) => set({ subscriptionEligible: b }))}</Row>
-            <Row label="Servings per unit" help="How many servings one unit/container holds at the normal dose.">{numInput('Servings per unit', d.servings, (n) => set({ servings: n }))}</Row>
+            <Row
+              label="Servings per unit"
+              help={
+                servingsAppliesTo(product) > 1
+                  ? `How many servings one unit holds at the normal dose. Applies to the ${servingsAppliesTo(product)} SKUs of this size — a SKU of a different size keeps its own.`
+                  : 'How many servings one unit/container holds at the normal dose.'
+              }
+            >
+              {numInput('Servings per unit', d.servings, (n) => set({ servings: n }))}
+            </Row>
             <Row label="How it’s taken">
               <Select
                 label="How it’s taken"
