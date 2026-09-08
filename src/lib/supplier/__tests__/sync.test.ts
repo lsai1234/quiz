@@ -2,6 +2,7 @@ import { applyStockLevels } from '@/lib/supplier/sync'
 import { supplierProductToCatalogue } from '@/lib/supplier/mapping'
 import type { SupplierProduct } from '@/lib/supplier/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
+import { masterVariant } from '@/lib/catalogue/master'
 
 const BASE: SupplierProduct = {
   sku: 'PB-1',
@@ -129,7 +130,7 @@ describe('applyStockLevels', () => {
     expect(applyStockLevels([noSku], [level()]).missing).toEqual([])
   })
 
-  it('moves the default variant off one that just went out of stock', () => {
+  it('keeps the chosen master when it goes out of stock, and reads past it', () => {
     const multi = product({ flavours: ['Chocolate', 'Vanilla'] })
     multi.variants = multi.variants.map((v, i) => ({ ...v, sku: i === 0 ? 'PB-CHOC' : 'PB-VAN' }))
     multi.defaultVariantId = multi.variants[0].id
@@ -139,8 +140,13 @@ describe('applyStockLevels', () => {
       level({ sku: 'PB-VAN', stock: 8, inStock: true }),
     ])
 
-    // Otherwise the product page opens preselected on something unbuyable.
-    expect(result.products[0].defaultVariantId).toBe(multi.variants[1].id)
+    // The master is a decision somebody made in the Hub; a stock level is a
+    // fact about today. This used to overwrite the first with the second, and
+    // nothing put it back when the flavour returned.
+    expect(result.products[0].defaultVariantId).toBe(multi.variants[0].id)
+    // …and the page still opens on something buyable, because the fallback
+    // happens when the master is READ.
+    expect(masterVariant(result.products[0])?.id).toBe(multi.variants[1].id)
   })
 
   it('keeps the default variant when it is still buyable', () => {

@@ -1,13 +1,12 @@
 import type { CatalogueProduct } from './types'
+import { masterVariant } from './master'
 
 /**
- * The flavour/size shown by default for a product: its own chosen default when
- * that variant still exists, else the first available one, else the first
- * listed. Falls back to the product id so callers always have a usable key.
+ * The flavour/size shown by default for a product: its MASTER — the SKU a
+ * founder chose in the Hub — with `masterVariant`'s fallbacks when that variant
+ * is sold out or gone. Falls back to the product id so callers always have a
+ * usable key.
  */
 export function defaultVariantId(product: CatalogueProduct): string {
-  if (product.defaultVariantId && product.variants.some((v) => v.id === product.defaultVariantId)) {
-    return product.defaultVariantId
-  }
-  return (product.variants.find((v) => v.available) ?? product.variants[0])?.id ?? product.id
+  return masterVariant(product)?.id ?? product.id
 }

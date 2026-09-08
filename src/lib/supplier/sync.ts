@@ -181,13 +181,18 @@ export function applyStockLevels(
     return {
       ...product,
       variants,
-      // `defaultVariantId` points at a variant a customer can actually buy;
-      // leaving it on one that just went out of stock is how a product page
-      // opens preselected on something unbuyable.
-      defaultVariantId:
-        variants.find((v) => v.id === product.defaultVariantId && v.available)?.id ??
-        variants.find((v) => v.available)?.id ??
-        product.defaultVariantId,
+      /*
+        `defaultVariantId` is left exactly as it is — it is the product's MASTER,
+        which somebody chose in the Hub.
+
+        This used to move it onto a buyable variant whenever the chosen one went
+        out of stock, so that a product page did not open preselected on
+        something nobody can add. That part is still true and is now done where
+        it belongs: `masterVariant` falls back at READ time, so the page opens on
+        something buyable and the stored choice is still there when the flavour
+        comes back. Writing the fallback down instead spends a decision on a
+        stock level, and nothing restores it.
+      */
       ...(costChanged ? { cost } : {}),
       ...(rrpChanged ? { supplierRrp } : {}),
     }

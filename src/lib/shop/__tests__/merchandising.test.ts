@@ -25,6 +25,17 @@ describe('defaultVariant', () => {
     const p = makeProduct({ variants: [variant({ id: 'a', available: false })] })
     expect(defaultVariant(p)?.id).toBe('a')
   })
+  it('prices against the chosen master, not whichever variant is listed first', () => {
+    // A card used to quote whatever import happened to list first. Where the
+    // SKUs are genuinely different things — 100 capsules and a 454g bag — that
+    // is a shelf price chosen by accident and unmovable.
+    const p = makeProduct({
+      defaultVariantId: 'powder',
+      variants: [variant({ id: 'caps', price: 14.99 }), variant({ id: 'powder', price: 39.99 })],
+    })
+    expect(defaultVariant(p)?.id).toBe('powder')
+    expect(dealInfo(p).price).toBe(39.99)
+  })
 })
 
 describe('dealInfo', () => {

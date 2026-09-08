@@ -5,7 +5,8 @@ import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { servingsForVariant } from '@/lib/shop/per-serving'
 import { commonProductName } from '@/lib/supplier/variant-labels'
-import { Button, Input, Note } from '@/components/system'
+import { masterVariant, masterPatch } from '@/lib/catalogue/master'
+import { Badge, Button, Input, Note } from '@/components/system'
 
 interface Props {
   product: CatalogueProduct
@@ -66,6 +67,18 @@ function known(product: CatalogueProduct, variant: CatalogueVariant): string {
  * A typed name is a founder decision, so it is stored as an override and no
  * later pull will overwrite it. The HANDLE is never touched: it is the
  * product's URL, and every link anyone has to it.
+ *
+ * ── And which SKU is the master ─────────────────────────────────────────────
+ * PowerBody sell a seven-flavour product as seven SKUs, one of which is the
+ * listing the other six hang off. Import merged them into one product and kept
+ * whichever SKU the roster had in its main column — so a product could go live
+ * wearing the wrong flavour's photograph, price and serving count, with no way
+ * back short of re-importing it.
+ *
+ * Every row here says whether it is the master, and any row can be made it. The
+ * shelf price, the picture, the cost the margin is read off and the serving
+ * count all follow — see `masterPatch`. The product's NAME does not: a master
+ * is still one flavour, and naming a product after it is the bug above.
  */
 export function ProductVariantsPanel({ product, onUpdated }: Props) {
   const [busy, setBusy] = useState(false)
@@ -78,6 +91,16 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
   // every keystroke would write a dozen half-names to the shop.
   const [title, setTitle] = useState(product.title)
   const [labels, setLabels] = useState<string[]>(() => product.variants.map((v) => v.title))
+  /*
+    Which SKU is the master, staged like the names are.
+
+    Seeded from `masterVariant` rather than from `defaultVariantId` directly, so
+    the badge shows the SKU the shop is ACTUALLY presenting — a product whose
+    stored master is sold out is being shown as another flavour, and a screen
+    that badged the sold-out one would be telling a founder something the shop
+    is not doing.
+  */
+  const [masterId, setMasterId] = useState<string | null>(() => masterVariant(product)?.id ?? null)
   const [saving, setSaving] = useState(false)
 
   const withSkus = product.variants.filter((v) => v.sku).length
@@ -88,19 +111,34 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
     screen, and the founder is the one who knows whether it reads like a product.
   */
   const suggestion = commonProductName(labels)
-  const edited = title !== product.title || labels.some((l, i) => l !== product.variants[i].title)
+  const renamed = title !== product.title || labels.some((l, i) => l !== product.variants[i].title)
+  const remastered = masterId != null && masterId !== (masterVariant(product)?.id ?? null)
+  const edited = renamed || remastered
 
-  async function saveNames() {
+  async function save() {
     setSaving(true)
     setError(null)
     setDone(null)
     try {
+      /*
+        Both edits in one write, because they are one thought: "this row is the
+        product, that row is the master". Two saves would leave a founder who
+        pressed once with half of it done.
+
+        `masterPatch` carries the product-level facts that follow the master —
+        price, RRP, picture, cost, servings — and is only sent when the founder
+        actually picked a different SKU. Saving a NAME must not quietly rewrite
+        a product's shelf price because the master it was already showing had
+        never been written down.
+      */
+      const master = remastered && masterId ? masterPatch(product, masterId) : null
       const res = await fetch('/api/portal/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: product.id,
           patch: {
+            ...(master ?? {}),
             title: title.trim() || product.title,
             // The label and the flavour move together: the shop's picker reads
             // `flavour` and falls back to `title`, so setting one and not the
@@ -114,10 +152,14 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
       })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(body.error ?? `Could not save those names (HTTP ${res.status}).`)
+        setError(body.error ?? `Could not save that (HTTP ${res.status}).`)
         return
       }
-      setDone('Names saved. A pull from PowerBody will not overwrite them.')
+      setDone(
+        master
+          ? 'Saved. The shop now shows this product as its master SKU — its price, picture and serving count.'
+          : 'Names saved. A pull from PowerBody will not overwrite them.',
+      )
       invalidateCatalogue()
       onUpdated?.(product)
     } catch {
@@ -223,16 +265,38 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
               each carrying a dead button is most of a phone screen spent on an
               action that is not available.
             */}
-            {(labels[i] ?? '').trim() && (labels[i] ?? '').trim() !== title.trim() && (
-              <Button
-                variant="ghost"
-                size="sm"
-                aria-label={`Use “${labels[i]}” as the product name`}
-                onClick={() => setTitle(labels[i])}
-              >
-                Use as the product name
-              </Button>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {(labels[i] ?? '').trim() && (labels[i] ?? '').trim() !== title.trim() && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Use “${labels[i]}” as the product name`}
+                  onClick={() => setTitle(labels[i])}
+                >
+                  Use as the product name
+                </Button>
+              )}
+              {/*
+                Which of these SKUs the product IS.
+
+                A badge on the one, an action on the rest — the same shape as
+                the promote button above, and for the same reason: eight rows
+                each carrying a disabled control is most of a phone screen spent
+                saying "not this one".
+              */}
+              {masterId === v.id ? (
+                <Badge tone="accent">Master SKU</Badge>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Make ${v.sku ?? v.title} the master SKU`}
+                  onClick={() => setMasterId(v.id)}
+                >
+                  Make this the master
+                </Button>
+              )}
+            </div>
             {/* Wraps rather than truncates: this line is four short facts, and
                 losing the last one to an ellipsis loses the one that says
                 whether the picture is the flavour's own. */}
@@ -266,13 +330,15 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
         )}
       </div>
       <div className="flex items-center gap-2 flex-wrap">
-        <Button size="sm" variant="primary" loading={saving} disabled={saving || !edited} onClick={() => void saveNames()}>
-          Save names
+        <Button size="sm" variant="primary" loading={saving} disabled={saving || !edited} onClick={() => void save()}>
+          Save changes
         </Button>
         <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
-          {edited
-            ? 'Saved as your own wording — no pull from PowerBody will overwrite it. The web address does not change.'
-            : 'Edit the product name or any flavour above, or promote a flavour to the product name.'}
+          {remastered
+            ? 'The shop will show this product at the master’s price, picture and serving count. Its name is unchanged.'
+            : renamed
+              ? 'Saved as your own wording — no pull from PowerBody will overwrite it. The web address does not change.'
+              : 'Edit any name above, promote a flavour to the product name, or choose which SKU is the master.'}
         </span>
       </div>
 

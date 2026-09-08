@@ -5,6 +5,7 @@ import Link from 'next/link'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { formatGBP } from '@/lib/stack-blueprint/pricing'
 import { variantStock } from '@/lib/shop/merchandising'
+import { masterVariant } from '@/lib/catalogue/master'
 import { track } from '@/lib/analytics/events'
 import { useBasket } from '@/lib/basket/store'
 import { ShopPageHeader } from './ShopPageHeader'
@@ -46,15 +47,13 @@ interface Props {
 export function ProductPageView({ product, sellableKeys }: Props) {
   const add = useBasket((s) => s.add)
   const lines = useBasket((s) => s.lines)
-  const [variantId, setVariantId] = useState<string>(
-    () => (product.variants.find((v) => v.available) ?? product.variants[0])?.id ?? '',
-  )
+  // Opens on the product's MASTER — the SKU chosen in the Hub — not on whichever
+  // variant import happened to list first.
+  const [variantId, setVariantId] = useState<string>(() => masterVariant(product)?.id ?? '')
   const [qty, setQty] = useState(1)
   const [justAdded, setJustAdded] = useState(false)
 
-  const variant = product.variants.find((v) => v.id === variantId)
-    ?? product.variants.find((v) => v.available)
-    ?? product.variants[0]
+  const variant = product.variants.find((v) => v.id === variantId) ?? masterVariant(product)
   const price = variant?.price ?? product.basePrice
   const rrp = variant?.compareAtPrice ?? product.compareAtPrice
   const onDeal = rrp != null && rrp > price

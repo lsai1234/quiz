@@ -160,7 +160,7 @@ describe('naming a product by hand', () => {
     await userEvent.type(screen.getByLabelText('Product name'), 'Hydration+')
     await userEvent.clear(screen.getByLabelText('Name for P48633'))
     await userEvent.type(screen.getByLabelText('Name for P48633'), 'Blue Raspberry')
-    await userEvent.click(screen.getByRole('button', { name: 'Save names' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
     await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
@@ -197,7 +197,7 @@ describe('naming a product by hand', () => {
 
   it('has nothing to save until something is edited', () => {
     render(<ProductVariantsPanel product={MUDDLED} />)
-    expect(screen.getByRole('button', { name: 'Save names' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   })
 
   it('offers to promote only the rows that would change something', async () => {
@@ -208,5 +208,92 @@ describe('naming a product by hand', () => {
     await userEvent.click(screen.getByRole('button', { name: /Use “Hydration\+” as the product name/ }))
     // …and the row that is now the product name stops offering to become it.
     expect(screen.getAllByRole('button', { name: /as the product name$/ })).toHaveLength(1)
+  })
+})
+
+describe('choosing which SKU is the master', () => {
+  /*
+    PowerBody sell one product as several SKUs, one of which is the listing the
+    others hang off. Import kept whichever the roster had in its main column, so
+    a product could go live wearing the wrong flavour's photograph, price and
+    serving count — and nothing could move it.
+  */
+  const SEVEN = product({
+    defaultVariantId: 'caps',
+    basePrice: 14.99,
+    servings: 33,
+    variants: [
+      variant({ id: 'caps', sku: 'P100', title: '100 vcaps', price: 14.99, servings: 33 }),
+      variant({ id: 'powder', sku: 'P200', title: 'Pure Powder', price: 39.99, servings: 454, imageUrl: 'https://pb/powder.jpg', cost: 24.5 }),
+    ],
+  })
+
+  it('badges the one the shop presents, and offers the rest', () => {
+    render(<ProductVariantsPanel product={SEVEN} />)
+    expect(screen.getByText('Master SKU')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Make P200 the master SKU' })).toBeInTheDocument()
+    // The master's own row does not offer to become what it already is.
+    expect(screen.queryByRole('button', { name: 'Make P100 the master SKU' })).not.toBeInTheDocument()
+  })
+
+  it('badges the variant actually on the shelf when the stored master is sold out', () => {
+    // A stored master that is sold out is not what the shop is showing, and a
+    // badge on it would describe something that is not happening.
+    render(
+      <ProductVariantsPanel
+        product={product({
+          defaultVariantId: 'caps',
+          variants: [
+            variant({ id: 'caps', sku: 'P100', title: '100 vcaps', available: false }),
+            variant({ id: 'powder', sku: 'P200', title: 'Pure Powder' }),
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Make P100 the master SKU' })).toBeInTheDocument()
+  })
+
+  it('moves the price, picture, cost and serving count onto the chosen SKU', async () => {
+    reply({ ok: true })
+    render(<ProductVariantsPanel product={SEVEN} />)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Make P200 the master SKU' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(screen.getByText(/The shop now shows this product/)).toBeInTheDocument())
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body.patch).toMatchObject({
+      defaultVariantId: 'powder',
+      basePrice: 39.99,
+      servings: 454,
+      cost: 24.5,
+      imageUrl: 'https://pb/powder.jpg',
+    })
+    // The name is NOT the master's. A master SKU is still one flavour, and
+    // naming the product after it is the bug this screen exists to undo.
+    expect(body.patch.title).toBe('Glycine')
+  })
+
+  it('does not touch the shelf price when only a name was edited', async () => {
+    // The master a product is ALREADY showing may never have been written
+    // down. Saving a name is not the moment to pin it, and certainly not the
+    // moment to move basePrice onto whichever variant was listed first.
+    reply({ ok: true })
+    render(<ProductVariantsPanel product={SEVEN} />)
+    await userEvent.clear(screen.getByLabelText('Name for P100'))
+    await userEvent.type(screen.getByLabelText('Name for P100'), 'Capsules')
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body.patch).not.toHaveProperty('basePrice')
+    expect(body.patch).not.toHaveProperty('defaultVariantId')
+  })
+
+  it('has something to save the moment a different SKU is chosen', async () => {
+    render(<ProductVariantsPanel product={SEVEN} />)
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Make P200 the master SKU' }))
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
   })
 })

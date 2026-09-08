@@ -1,4 +1,5 @@
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
+import { masterVariant } from '@/lib/catalogue/master'
 import { hashString } from './ratings'
 
 /**
@@ -7,9 +8,17 @@ import { hashString } from './ratings'
  * and quiz agree on what's "popular" or "best value".
  */
 
-/** The variant a card/section prices against — first available, else the first. */
+/**
+ * The variant a card/section prices against: the product's MASTER.
+ *
+ * It used to be "the first available one", which is the order the variants
+ * happen to sit in — so a product whose SKUs cost different things (100 capsules
+ * and a 454g bag of the same powder) was priced on the shelf by an accident of
+ * import order, and no amount of editing could move it. `masterVariant` reads
+ * the founder's choice and keeps the same availability fallbacks.
+ */
 export function defaultVariant(product: CatalogueProduct): CatalogueVariant | undefined {
-  return product.variants.find((v) => v.available) ?? product.variants[0]
+  return masterVariant(product)
 }
 
 // ─── Availability & low stock ───────────────────────────────────────────────────
