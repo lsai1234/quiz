@@ -1,4 +1,4 @@
-import { variantLabels, looksLikeSku, commonProductName, titleFromSiblings } from '../variant-labels'
+import { variantLabels, looksLikeSku, commonProductName, titleFromSiblings, nameSwap, withoutProductName } from '../variant-labels'
 
 /**
  * Flavour labels, derived by comparing siblings against each other.
@@ -289,5 +289,66 @@ describe('titleFromSiblings', () => {
 
   it('says nothing when the title is already the shared name', () => {
     expect(titleFromSiblings('Hydration+', NAMES)).toBeNull()
+  })
+})
+
+describe('putting the two ends back the right way round', () => {
+  /*
+    What import leaves behind when it takes a row's main SKU's name for the
+    whole product:
+
+      Vegan Protein, Banana - 500 grams        ← the product, named after a flavour
+        ├ Vegan Protein                        ← the product's name, on a row
+        ├ Vegan Protein, Chocolate-Cinnamon - 500 grams
+        └ Protein, Forest Fruit - 500 grams
+
+    The siblings share no opening word at all here, so `commonProductName` finds
+    nothing and the supplier-driven repair has nothing to say. These two strings
+    are enough on their own.
+  */
+  it('moves the product name up and the flavour down, in one answer', () => {
+    expect(nameSwap('Vegan Protein, Banana - 500 grams', 'Vegan Protein', '500 grams')).toEqual({
+      title: 'Vegan Protein',
+      label: 'Banana',
+    })
+  })
+
+  it('leaves the size on the row that has none of its own', () => {
+    // The picker prints the size beside the label, so a label carrying it too
+    // says the same thing twice — but only where we KNOW the size.
+    expect(nameSwap('Vegan Protein, Banana - 500 grams', 'Vegan Protein', null)).toEqual({
+      title: 'Vegan Protein',
+      label: 'Banana - 500 grams',
+    })
+  })
+
+  it('says nothing when the title does not open with this row', () => {
+    expect(nameSwap('CHRGD Hydration', 'Blue Raspberry')).toBeNull()
+    // Nothing left to move down: the two are the same name.
+    expect(nameSwap('Vegan Protein', 'Vegan Protein')).toBeNull()
+    expect(nameSwap('Vegan Protein', '')).toBeNull()
+  })
+
+  it('will not break a word in half', () => {
+    // "Whey" opens "Wheyless Protein" as characters and not as words, and the
+    // flavour it would invent is "less".
+    expect(nameSwap('Wheyless Protein', 'Whey')).toBeNull()
+  })
+})
+
+describe('taking the product name off a flavour label', () => {
+  it('leaves the flavour, and the size where the row has none', () => {
+    expect(withoutProductName('Vegan Protein, Chocolate-Cinnamon - 500 grams', 'Vegan Protein', '500 grams'))
+      .toBe('Chocolate-Cinnamon')
+    expect(withoutProductName('Vegan Protein, Vanilla Cookie - 500 grams', 'Vegan Protein'))
+      .toBe('Vanilla Cookie - 500 grams')
+  })
+
+  it('leaves a label that was named some other way exactly as it is', () => {
+    // The half-repaired row: it is missing the "Vegan", so it is not the
+    // product's name plus a flavour and nothing may be assumed about it.
+    expect(withoutProductName('Protein, Forest Fruit - 500 grams', 'Vegan Protein'))
+      .toBe('Protein, Forest Fruit - 500 grams')
+    expect(withoutProductName('Banana', 'Vegan Protein')).toBe('Banana')
   })
 })

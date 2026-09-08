@@ -148,7 +148,9 @@ describe('naming a product by hand', () => {
   it('promotes a flavour row to the product name in one press', async () => {
     render(<ProductVariantsPanel product={MUDDLED} />)
 
-    await userEvent.click(screen.getByRole('button', { name: /Use “Hydration\+” as the product name/ }))
+    // The row wearing the product's name gets the swap rather than the plain
+    // copy — see "the two ends the wrong way round" below.
+    await userEvent.click(screen.getByRole('button', { name: /^Make “Hydration\+” the product name/ }))
     expect(screen.getByLabelText('Product name')).toHaveValue('Hydration+')
   })
 
@@ -202,12 +204,17 @@ describe('naming a product by hand', () => {
 
   it('offers to promote only the rows that would change something', async () => {
     render(<ProductVariantsPanel product={MUDDLED} />)
-    // Both rows differ from the title to begin with.
-    expect(screen.getAllByRole('button', { name: /as the product name$/ })).toHaveLength(2)
-
-    await userEvent.click(screen.getByRole('button', { name: /Use “Hydration\+” as the product name/ }))
-    // …and the row that is now the product name stops offering to become it.
+    // One row is wearing the product's name and is offered the swap; the other
+    // is a flavour like any other and is offered the plain copy.
+    expect(screen.getAllByRole('button', { name: /^Make “.+” the product name/ })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: /as the product name$/ })).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /^Make “Hydration\+” the product name/ }))
+    // …and with the two ends the right way round there is nothing left to swap.
+    // Both rows are now flavours differing from the title, so both offer the
+    // ordinary copy — which is what a row that is merely a flavour should get.
+    expect(screen.queryAllByRole('button', { name: /^Make “.+” the product name/ })).toHaveLength(0)
+    expect(screen.getAllByRole('button', { name: /as the product name$/ })).toHaveLength(2)
   })
 })
 
@@ -295,5 +302,71 @@ describe('choosing which SKU is the master', () => {
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Make P200 the master SKU' }))
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
+  })
+})
+
+describe('the two ends the wrong way round', () => {
+  /*
+    The shape a real import left behind, and the one the supplier-driven repair
+    cannot touch: the siblings share no opening word ("Vegan Protein, …" beside
+    "Protein, …"), so there is nothing for `commonProductName` to find.
+
+      Vegan Protein, Banana - 500 grams        ← the product
+        ├ Vegan Protein                        ← the product's name, on a row
+        ├ Vegan Protein, Chocolate-Cinnamon - 500 grams
+        └ Protein, Forest Fruit - 500 grams
+  */
+  const SWAPPED = product({
+    title: 'Vegan Protein, Banana - 500 grams',
+    variants: [
+      variant({ id: 'a', sku: 'P37828', title: 'Vegan Protein', size: '500 grams' }),
+      variant({ id: 'b', sku: 'P36120', title: 'Vegan Protein, Chocolate-Cinnamon - 500 grams', size: '500 grams' }),
+      variant({ id: 'c', sku: 'P36122', title: 'Protein, Forest Fruit - 500 grams', size: '500 grams' }),
+    ],
+  })
+
+  it('puts both ends back in one press', async () => {
+    render(<ProductVariantsPanel product={SWAPPED} />)
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Make “Vegan Protein” the product name and call this row “Banana”' }),
+    )
+    expect(screen.getByLabelText('Product name')).toHaveValue('Vegan Protein')
+    // …and the row stops wearing the product's name, which is the half a plain
+    // copy leaves behind: a picker offering a flavour called "Vegan Protein".
+    expect(screen.getByLabelText('Name for P37828')).toHaveValue('Banana')
+  })
+
+  it('offers the swap only on the row the title is carrying', () => {
+    render(<ProductVariantsPanel product={SWAPPED} />)
+    expect(screen.getAllByRole('button', { name: /^Make “.+” the product name/ })).toHaveLength(1)
+    // The others still offer the plain copy.
+    expect(screen.getByRole('button', { name: /Use “Protein, Forest Fruit - 500 grams” as the product name/ })).toBeInTheDocument()
+  })
+
+  it('takes the product name off the flavours that are wearing it', async () => {
+    render(<ProductVariantsPanel product={SWAPPED} />)
+    await userEvent.click(screen.getByRole('button', { name: /the product name and call this row/ }))
+
+    // Two rows now start with "Vegan Protein": the chocolate one, and nothing
+    // else — the forest fruit row is missing the "Vegan" and is left alone.
+    await userEvent.click(screen.getByRole('button', { name: 'Take “Vegan Protein” off 1 flavour name' }))
+    expect(screen.getByLabelText('Name for P36120')).toHaveValue('Chocolate-Cinnamon')
+    expect(screen.getByLabelText('Name for P36122')).toHaveValue('Protein, Forest Fruit - 500 grams')
+  })
+
+  it('saves the flavour and the title together, and never the handle', async () => {
+    reply({ ok: true })
+    render(<ProductVariantsPanel product={SWAPPED} />)
+    await userEvent.click(screen.getByRole('button', { name: /the product name and call this row/ }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body.patch.title).toBe('Vegan Protein')
+    // The shop's picker reads `flavour` and falls back to `title` — a row whose
+    // flavour is still the old full name reads as it always did.
+    expect(body.patch.variants[0]).toMatchObject({ title: 'Banana', flavour: 'Banana' })
+    expect(body.patch).not.toHaveProperty('handle')
   })
 })

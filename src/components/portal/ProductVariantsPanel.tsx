@@ -4,7 +4,7 @@ import { useState } from 'react'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { servingsForVariant } from '@/lib/shop/per-serving'
-import { commonProductName } from '@/lib/supplier/variant-labels'
+import { commonProductName, nameSwap, withoutProductName } from '@/lib/supplier/variant-labels'
 import { masterVariant, masterPatch } from '@/lib/catalogue/master'
 import { Badge, Button, Input, Note } from '@/components/system'
 
@@ -111,6 +111,27 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
     screen, and the founder is the one who knows whether it reads like a product.
   */
   const suggestion = commonProductName(labels)
+  /*
+    Rows still carrying the product's name in front of their flavour.
+
+    Once the title is right, "Vegan Protein, Chocolate-Cinnamon - 500 grams"
+    under a product called "Vegan Protein" is the product's name printed twice
+    and the flavour once — in a picker six rows deep, where the words that
+    differ are the last two. Offered as one press because it is provable from
+    the strings: a label that starts with the product's name has the product's
+    name on it.
+  */
+  /*
+    Per row: is the product's title this row's label plus something more?
+
+    That is the signature of the mix-up and it is provable from the two strings
+    alone — no supplier call, and no need for the siblings to agree with each
+    other. `titleFromSiblings` works from what every sibling shares, which finds
+    nothing on a half-repaired product ("Vegan Protein, …" beside "Protein, …"
+    share no opening word), and this is exactly that product.
+  */
+  const swaps = product.variants.map((v, i) => nameSwap(title, labels[i] ?? '', v.size))
+  const trimmable = product.variants.filter((v, i) => withoutProductName(labels[i] ?? '', title, v.size) !== (labels[i] ?? '').trim()).length
   const renamed = title !== product.title || labels.some((l, i) => l !== product.variants[i].title)
   const remastered = masterId != null && masterId !== (masterVariant(product)?.id ?? null)
   const edited = renamed || remastered
@@ -266,15 +287,41 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
               action that is not available.
             */}
             <div className="flex items-center gap-2 flex-wrap">
-              {(labels[i] ?? '').trim() && (labels[i] ?? '').trim() !== title.trim() && (
+              {swaps[i] ? (
+                /*
+                  The two ends are the wrong way round on THIS row, and both are
+                  put back at once.
+
+                  Copying the label up to the title is half of it, and the half
+                  that still looks wrong in the shop: the product and one of its
+                  flavours are then both called "Vegan Protein", and the picker
+                  offers a flavour by the product's name. What the title was
+                  carrying that this row was not — "Banana" — is the flavour,
+                  and it belongs here.
+                */
                 <Button
                   variant="ghost"
                   size="sm"
-                  aria-label={`Use “${labels[i]}” as the product name`}
-                  onClick={() => setTitle(labels[i])}
+                  aria-label={`Make “${swaps[i]!.title}” the product name and call this row “${swaps[i]!.label}”`}
+                  onClick={() => {
+                    const swap = swaps[i]!
+                    setTitle(swap.title)
+                    setLabels((all) => all.map((l, j) => (j === i ? swap.label : l)))
+                  }}
                 >
-                  Use as the product name
+                  This row is the product name
                 </Button>
+              ) : (
+                (labels[i] ?? '').trim() && (labels[i] ?? '').trim() !== title.trim() && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Use “${labels[i]}” as the product name`}
+                    onClick={() => setTitle(labels[i])}
+                  >
+                    Use as the product name
+                  </Button>
+                )
               )}
               {/*
                 Which of these SKUs the product IS.
@@ -329,6 +376,19 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
           </Button>
         )}
       </div>
+      {trimmable > 0 && (
+        <div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              setLabels((all) => all.map((l, i) => withoutProductName(l, title, product.variants[i].size)))
+            }
+          >
+            Take “{title.trim()}” off {trimmable} flavour name{trimmable === 1 ? '' : 's'}
+          </Button>
+        </div>
+      )}
       <div className="flex items-center gap-2 flex-wrap">
         <Button size="sm" variant="primary" loading={saving} disabled={saving || !edited} onClick={() => void save()}>
           Save changes

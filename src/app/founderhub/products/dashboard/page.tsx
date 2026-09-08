@@ -13,7 +13,18 @@ interface Row { product: CatalogueProduct; readiness: ProductReadiness }
 
 function priceLabel(p: CatalogueProduct): string {
   const base = `£${p.basePrice.toFixed(2)}`
-  return p.compareAtPrice ? `${base}  (was £${p.compareAtPrice.toFixed(2)})` : base
+  /*
+    "was" only when it actually was more.
+
+    PowerBody's RRP comes back below our shelf price often enough to matter —
+    it is their recommended price, not a price this shop ever charged — and
+    "£23.99 (was £14.90)" reads as a price rise nobody made. The shop already
+    refuses to draw a saving that is not one (`dealInfo`); the hub was the one
+    place still printing it.
+  */
+  return p.compareAtPrice && p.compareAtPrice > p.basePrice
+    ? `${base}  (was £${p.compareAtPrice.toFixed(2)})`
+    : base
 }
 
 export default function DashboardPage() {

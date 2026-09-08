@@ -254,3 +254,91 @@ export function titleFromSiblings(current: string, names: string[]): string | nu
   if (!names.some((n) => (n ?? '').trim().toLowerCase() === now.toLowerCase())) return null
   return common
 }
+
+/**
+ * Take an opening off the front of a name, and a size off the end.
+ *
+ * The shared half of the two corrections below. Case-insensitive, because
+ * PowerBody's own capitalisation varies between a product and its flavours, and
+ * word-boundaried, because "Vegan" must not be lifted off "Vegan Protein" as
+ * though the rest were a flavour called "Protein".
+ *
+ * Null when the opening is not there, or when taking it off would leave nothing
+ * — a row cannot be relabelled with an empty string.
+ */
+function splitOff(text: string, opening: string, size?: string | null): string | null {
+  const t = (text ?? '').trim()
+  const open = (opening ?? '').trim()
+  if (!open || open.length >= t.length) return null
+  if (t.slice(0, open.length).toLowerCase() !== open.toLowerCase()) return null
+  // The next character has to end a word: otherwise "Whey" comes off
+  // "Wheyless" and the label becomes "less".
+  if (/[\p{L}\p{N}]/u.test(t[open.length])) return null
+
+  let rest = tidy(t.slice(open.length))
+  /*
+    …and the size off the end, when the variant knows its own.
+
+    "Banana - 500 grams" and "500 grams" are the same fact printed twice: the
+    picker already prints the size beside the label. What is left is the flavour
+    and only the flavour, which is the whole point of a flavour label.
+  */
+  const sz = (size ?? '').trim()
+  if (sz && rest.length > sz.length && rest.slice(-sz.length).toLowerCase() === sz.toLowerCase()) {
+    rest = tidy(rest.slice(0, -sz.length))
+  }
+  return rest || null
+}
+
+/**
+ * Undo the swap: this ROW is the product, and the product is wearing this row's
+ * flavour.
+ *
+ * ── What it fixes ───────────────────────────────────────────────────────────
+ * The damage import leaves when it takes a row's MAIN sku's name for the whole
+ * product, and both ends end up on the wrong one:
+ *
+ *   Vegan Protein, Banana - 500 grams          ← the product, named after a flavour
+ *     ├ Vegan Protein                          ← the product's name, on a row
+ *     ├ Vegan Protein, Chocolate-Cinnamon …
+ *     └ Protein, Forest Fruit - 500 grams
+ *
+ * Copying the row's label up to the title is only half of it, and the half that
+ * still looks wrong in the shop: the product and one of its flavours are then
+ * both called "Vegan Protein", and the picker offers a flavour by the product's
+ * name. The other half is what the title was carrying that the row was not —
+ * "Banana" — which belongs on the row.
+ *
+ * ── Why it needs no supplier call and no siblings ───────────────────────────
+ * `titleFromSiblings` works out the product's name from what every sibling
+ * shares, which is right when the labels are consistent and finds nothing when
+ * they are not — and a half-repaired product is exactly where they are not
+ * ("Vegan Protein, …" beside "Protein, …" share no opening word at all). This
+ * needs only the two strings on screen: the product's title starts with this
+ * row's label, so the row is wearing the product's name and the title is
+ * carrying this row's flavour. Both are provable from the pair.
+ *
+ * Null when the title does not open with this label, which is the ordinary
+ * case and means there is nothing to swap.
+ */
+export function nameSwap(
+  title: string,
+  label: string,
+  size?: string | null,
+): { title: string; label: string } | null {
+  const flavour = splitOff(title, label, size)
+  if (!flavour) return null
+  return { title: (label ?? '').trim(), label: flavour }
+}
+
+/**
+ * A flavour label with the product's name taken off the front.
+ *
+ * "Vegan Protein, Chocolate-Cinnamon - 500 grams" under a product called "Vegan
+ * Protein" is the product's name printed twice and a flavour once. Returns the
+ * label unchanged when it does not start with the product's name, so a row that
+ * was named some other way is left exactly as it is.
+ */
+export function withoutProductName(label: string, title: string, size?: string | null): string {
+  return splitOff(label, title, size) ?? (label ?? '').trim()
+}
