@@ -10,7 +10,12 @@ import {
   syncPortalRuntime,
 } from '@/lib/portal/store'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
-import { variantLabels, looksLikeSku } from '@/lib/supplier/variant-labels'
+import {
+  relabel,
+  brokenSkus,
+  titleLooksLikeAFlavour,
+  type SupplierName,
+} from '@/lib/supplier/variant-naming'
 import { indexPowerBodyCsv, looksLikePowerBodyCsv } from '@/lib/supplier/powerbody-csv'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
@@ -60,68 +65,8 @@ interface Repair {
   fixed: Record<string, string>
   /** SKUs still showing a code, because PowerBody had no name for them. */
   unresolved: string[]
-}
-
-/** The variants of a product that still carry a raw code as their title. */
-function brokenSkus(product: CatalogueProduct): string[] {
-  if (product.variants.length < 2) return []
-  return product.variants
-    .filter((v) => v.sku && looksLikeSku(v.title))
-    .map((v) => v.sku as string)
-}
-
-/**
- * Re-label a product's variants from supplier names, keeping everything else.
- *
- * Returns null when nothing changed, so a caller can skip the write rather than
- * rewriting a hundred identical rows.
- */
-function relabel(
-  product: CatalogueProduct,
-  names: Map<string, SupplierName>,
-  force: boolean,
-): { product: CatalogueProduct; fixed: Record<string, string>; unresolved: string[] } | null {
-  /* Which variants this run is allowed to touch. */
-  const rewritable = (v: CatalogueVariant) => force || looksLikeSku(v.title)
-
-  const labels = variantLabels(
-    product.variants.map((v) => {
-      const found = names.get(v.sku ?? '')
-      return {
-        sku: v.sku ?? v.id,
-        // A title we are not rewriting is a name somebody is happy with — feed
-        // it back in so it takes part in working out the common prefix, and so
-        // it survives untouched.
-        name: rewritable(v) ? (found?.name ?? null) : v.title,
-        flavour: rewritable(v) ? (found?.flavour ?? null) : null,
-      }
-    }),
-  )
-
-  const fixed: Record<string, string> = {}
-  const unresolved: string[] = []
-  const variants: CatalogueVariant[] = product.variants.map((v, i) => {
-    const label = labels[i]
-    if (!rewritable(v)) return v
-    if (!label.named) {
-      unresolved.push(v.sku ?? v.id)
-      return v
-    }
-    // Nothing to report when the label it would write is the one already there.
-    if (v.title === label.label && v.flavour === label.label) return v
-    fixed[v.sku ?? v.id] = label.label
-    return { ...v, title: label.label, flavour: label.label }
-  })
-
-  if (Object.keys(fixed).length === 0) return null
-  return { product: { ...product, variants }, fixed, unresolved }
-}
-
-/** What a source knows about one SKU. */
-interface SupplierName {
-  name: string
-  /** The supplier's own flavour field. Present far less often than the name. */
-  flavour: string | null
+  /** Set when the PRODUCT was renamed out of one of its own flavours' names. */
+  renamedTo?: string
 }
 
 /**
@@ -196,7 +141,11 @@ async function candidates(force = false): Promise<CatalogueProduct[]> {
   for (const p of resolved.products) byId.set(p.id, p)
   for (const p of imported) byId.set(p.id, { ...p, ...(overrides[p.id] ?? {}) } as CatalogueProduct)
   return [...byId.values()].filter((p) =>
-    force ? p.variants.length > 1 && p.variants.some((v) => v.sku) : brokenSkus(p).length > 0,
+    force
+      ? p.variants.length > 1 && p.variants.some((v) => v.sku)
+      : // Either a flavour still showing its code, or a product named after one
+        // of its own flavours — both are fixed from the same set of names.
+        brokenSkus(p).length > 0 || titleLooksLikeAFlavour(p),
   )
 }
 
@@ -209,9 +158,14 @@ export async function GET() {
       productId: p.id,
       title: p.title,
       skus: brokenSkus(p),
+      // A product whose title looks like one of its own flavours. Nothing to do
+      // with unnamed SKUs, and the same pass fixes it, so the screen counts it
+      // separately rather than reporting "0 flavours" and looking clean.
+      namedAfterAFlavour: titleLooksLikeAFlavour(p),
     })),
     total: affected.length,
     variants: affected.reduce((n, p) => n + brokenSkus(p).length, 0),
+    misnamed: affected.filter(titleLooksLikeAFlavour).length,
   })
 }
 
@@ -259,7 +213,10 @@ export async function POST(request: Request) {
 
   const affected = await candidates(force)
   if (affected.length === 0) {
-    return NextResponse.json({ ok: true, repaired: [], total: 0, message: 'Every flavour already has a name.' })
+    return NextResponse.json({
+      ok: true, repaired: [], total: 0, variants: 0, renamed: 0,
+      message: 'Every flavour has a name, and no product is named after one of its flavours.',
+    })
   }
 
   const skus = [
@@ -296,7 +253,11 @@ export async function POST(request: Request) {
     if (imported.has(product.id)) {
       await saveImportedProduct(result.product)
     } else {
-      await setProductOverride(product.id, { variants: result.product.variants })
+      await setProductOverride(product.id, {
+        variants: result.product.variants,
+        // Only when it changed, and never the handle with it.
+        ...(result.renamedTo ? { title: result.renamedTo } : {}),
+      })
     }
 
     repaired.push({
@@ -304,6 +265,7 @@ export async function POST(request: Request) {
       title: product.title,
       fixed: result.fixed,
       unresolved: result.unresolved,
+      ...(result.renamedTo ? { renamedTo: result.renamedTo } : {}),
     })
   }
 
@@ -311,6 +273,7 @@ export async function POST(request: Request) {
     ok: true,
     total: repaired.length,
     variants: repaired.reduce((n, r) => n + Object.keys(r.fixed).length, 0),
+    renamed: repaired.filter((r) => r.renamedTo).length,
     unresolved: repaired.reduce((n, r) => n + r.unresolved.length, 0),
     source: csv ? 'csv' : 'api',
     ...(apiError ? { apiError } : {}),

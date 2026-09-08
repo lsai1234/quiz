@@ -23,7 +23,7 @@ import type { SupplierProduct } from './types'
 import type { RosterRow } from './roster-csv'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import { rhythmForSwap, classifySupplierProduct } from './mapping'
-import { variantLabels } from './variant-labels'
+import { variantLabels, commonProductName } from './variant-labels'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -208,12 +208,22 @@ export function rosterRowToProduct(
     `variant-labels`. The row's own SKU carries the main supplier name, which
     is the one name we always have.
   */
-  const labels = variantLabels(
-    variantSkus.map((sku) => ({
-      sku,
-      name: sku === row.sku ? (supplier?.name ?? row.name) : (variantFacts?.get(sku)?.name ?? null),
-    })),
+  const siblingNames = variantSkus.map((sku) =>
+    sku === row.sku ? (supplier?.name ?? row.name) : (variantFacts?.get(sku)?.name ?? null),
   )
+  const labels = variantLabels(
+    variantSkus.map((sku, i) => ({ sku, name: siblingNames[i] })),
+  )
+  /*
+    The product is what the siblings SHARE; a flavour is what tells them apart.
+
+    Both come out of one comparison, and only half of it was being used: the
+    title was the row's MAIN sku's name, and a main sku is one flavour of the
+    product. So a four-flavour hydration powder went on the shelf called
+    "Hydration+, Blue Raspberry - 240 grams" with "Hydration+" listed under it
+    as one of its flavours — the two ends swapped over.
+  */
+  const sharedName = commonProductName(siblingNames.filter((n): n is string => Boolean(n)))
   const variants: CatalogueVariant[] = variantSkus.map((sku, index) => {
     // Per-SKU stock when the crawl reached this flavour; the parent's otherwise.
     // Falling back rather than defaulting to zero is deliberate: an unknown
@@ -306,7 +316,9 @@ export function rosterRowToProduct(
 
   const product: CatalogueProduct = {
     id,
-    title: supplier?.name || row.name,
+    // The shared name when the siblings have one; the main SKU's otherwise,
+    // which is right for a product that genuinely has a single SKU.
+    title: sharedName || supplier?.name || row.name,
     handle: id,
     description: supplier?.description ?? '',
     imageUrl: supplier?.imageUrl ?? null,

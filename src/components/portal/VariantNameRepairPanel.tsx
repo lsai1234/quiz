@@ -8,12 +8,14 @@ interface Candidate {
   productId: string
   title: string
   skus: string[]
+  namedAfterAFlavour?: boolean
 }
 
 interface Scan {
   products: Candidate[]
   total: number
   variants: number
+  misnamed?: number
 }
 
 interface Repair {
@@ -21,6 +23,7 @@ interface Repair {
   title: string
   fixed: Record<string, string>
   unresolved: string[]
+  renamedTo?: string
 }
 
 /**
@@ -77,10 +80,19 @@ export function VariantNameRepairPanel() {
       }
       setRepaired(d.repaired ?? [])
       setDone(
-        d.variants > 0
-          ? `${d.variants} flavour${d.variants === 1 ? '' : 's'} named across ${d.total} product${d.total === 1 ? '' : 's'}` +
-              (d.source === 'csv' ? ', from the catalogue file.' : '.') +
-              (d.unresolved > 0 ? ` ${d.unresolved} could not be found and still show their code.` : '')
+        d.variants > 0 || d.renamed > 0
+          ? [
+              d.variants > 0
+                ? `${d.variants} flavour${d.variants === 1 ? '' : 's'} named across ${d.total} product${d.total === 1 ? '' : 's'}` +
+                  (d.source === 'csv' ? ', from the catalogue file.' : '.')
+                : null,
+              d.renamed > 0
+                ? `${d.renamed} product${d.renamed === 1 ? '' : 's'} renamed off a flavour and onto the name the flavours share.`
+                : null,
+              d.unresolved > 0 ? `${d.unresolved} could not be found and still show their code.` : null,
+            ]
+              .filter(Boolean)
+              .join(' ')
           : (d.message ?? 'Nothing needed changing.'),
       )
       // Reported but not fatal: the file may have covered everything anyway.
@@ -144,7 +156,16 @@ export function VariantNameRepairPanel() {
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
             {clean
               ? 'Every flavour has a name. Re-label from the catalogue if any of them read as whole product names.'
-              : `${scan.variants} flavour${scan.variants === 1 ? '' : 's'} across ${scan.total} product${scan.total === 1 ? '' : 's'} are showing a SKU code instead of a name.`}
+              : [
+                  scan.variants > 0
+                    ? `${scan.variants} flavour${scan.variants === 1 ? '' : 's'} are showing a SKU code instead of a name.`
+                    : null,
+                  scan.misnamed
+                    ? `${scan.misnamed} product${scan.misnamed === 1 ? "'s title looks like one of its own flavours." : "s' titles look like one of their own flavours."}`
+                    : null,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -176,6 +197,13 @@ export function VariantNameRepairPanel() {
           Anything imported before flavour lookups were fixed only ever had its FIRST flavour named — the rest
           show their supplier code. It only touches labels that still look like codes, so anything you have
           renamed by hand is left alone, and it is safe to re-run.
+          <br />
+          <br />
+          It also fixes the other end of the same mix-up: a product named after one of its own flavours.
+          Import took the row&rsquo;s MAIN SKU&rsquo;s name for the whole product, and a main SKU is a
+          flavour — so &ldquo;Hydration+, Blue Raspberry - 240 grams&rdquo; became the product with
+          &ldquo;Hydration+&rdquo; listed under it as a flavour. The product is renamed to what its flavours
+          share; a title you wrote yourself is never touched, and the web address never changes.
           <br />
           <br />
           <strong>Use catalogue CSV</strong> is the reliable one: download the dropshipping catalogue from
@@ -236,8 +264,14 @@ export function VariantNameRepairPanel() {
                 {c.title}
               </p>
               <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-                {c.skus.length} unnamed: {c.skus.slice(0, 6).join(', ')}
-                {c.skus.length > 6 ? '…' : ''}
+                {c.skus.length > 0 && (
+                  <>
+                    {c.skus.length} unnamed: {c.skus.slice(0, 6).join(', ')}
+                    {c.skus.length > 6 ? '…' : ''}
+                  </>
+                )}
+                {c.skus.length > 0 && c.namedAfterAFlavour ? ' · ' : ''}
+                {c.namedAfterAFlavour ? 'title looks like one of its own flavours' : ''}
               </p>
             </div>
           ))}
@@ -275,6 +309,9 @@ export function VariantNameRepairPanel() {
             >
               <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-strong)', color: 'var(--ink-1)' }}>
                 {r.title}
+                {r.renamedTo && (
+                  <span style={{ fontWeight: 'var(--weight-body)', color: 'var(--ink-2)' }}> → {r.renamedTo}</span>
+                )}
               </p>
               <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-2)', lineHeight: 'var(--leading-snug)' }}>
                 {Object.entries(r.fixed).map(([sku, label]) => `${sku} → ${label}`).join(' · ')}

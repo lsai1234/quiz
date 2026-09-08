@@ -1,4 +1,4 @@
-import { variantLabels, looksLikeSku } from '../variant-labels'
+import { variantLabels, looksLikeSku, commonProductName, titleFromSiblings } from '../variant-labels'
 
 /**
  * Flavour labels, derived by comparing siblings against each other.
@@ -226,5 +226,68 @@ describe('looksLikeSku', () => {
     expect(looksLikeSku(null)).toBe(false)
     expect(looksLikeSku(undefined)).toBe(false)
     expect(looksLikeSku('')).toBe(false)
+  })
+})
+
+describe('commonProductName', () => {
+  /*
+    The two ends of one comparison. `variantLabels` keeps what differs — the
+    flavour. This keeps what they share — the product. Until it existed, an
+    import took the main SKU's whole name for the product, so the shelf showed
+    "Hydration+, Blue Raspberry - 240 grams" with "Hydration+" listed under it
+    as a flavour: the two ends swapped.
+  */
+  const HYDRATION = [
+    'Hydration+, Blue Raspberry - 240 grams',
+    'Hydration+, Lemon & Lime - 240 grams',
+    'Hydration+, Strawberry Raspberry - 240 grams',
+    'Hydration+, Tropical Vibes - 240 grams',
+  ]
+
+  it('names the product from what every flavour shares', () => {
+    expect(commonProductName(HYDRATION)).toBe('Hydration+')
+  })
+
+  it('keeps whole words — a character-wise prefix would invent one', () => {
+    // "Blackcurrant" and "Blackberry" share five characters and no word.
+    expect(commonProductName(['Energy Gel, Blackcurrant', 'Energy Gel, Blackberry'])).toBe('Energy Gel')
+  })
+
+  it('works where the siblings are sizes rather than flavours', () => {
+    expect(commonProductName(['Glycine, 1000mg - 100 vcaps', 'Glycine, Pure Powder - 454 grams'])).toBe('Glycine')
+  })
+
+  it('refuses a shared opening too short to be a product', () => {
+    // Two names that happen to start with the same word are not two versions of
+    // one thing, and "The" is not a name. The inputs are always one product's
+    // siblings in practice; this is the backstop for when they are not.
+    expect(commonProductName(['The Whey, Chocolate', 'The Creatine, Unflavoured'])).toBeNull()
+  })
+
+  it('has nothing to say about one name, or none', () => {
+    expect(commonProductName(['Whey Protein, Banana'])).toBeNull()
+    expect(commonProductName([])).toBeNull()
+    expect(commonProductName(['Whey, Banana', 'Creatine, Unflavoured'])).toBeNull()
+  })
+})
+
+describe('titleFromSiblings', () => {
+  const NAMES = [
+    'Hydration+, Blue Raspberry - 240 grams',
+    'Hydration+, Lemon & Lime - 240 grams',
+  ]
+
+  it('renames a product that is really one of its own flavours', () => {
+    expect(titleFromSiblings('Hydration+, Blue Raspberry - 240 grams', NAMES)).toBe('Hydration+')
+  })
+
+  it('leaves a title somebody wrote alone', () => {
+    // The expensive mistake here is overwriting a human's wording, so the rule
+    // is narrow: only a title that IS one of the supplier's names is replaced.
+    expect(titleFromSiblings('CHRGD Hydration', NAMES)).toBeNull()
+  })
+
+  it('says nothing when the title is already the shared name', () => {
+    expect(titleFromSiblings('Hydration+', NAMES)).toBeNull()
   })
 })

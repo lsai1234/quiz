@@ -112,8 +112,17 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
   }
 
   return (
-    <div style={{ display: 'grid', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-      <div style={{ display: 'grid', gap: 'var(--space-1)' }}>
+    /*
+      `minmax(0, 1fr)`, not `1fr`, and it is the whole fix.
+
+      A grid track's default minimum is `auto` — the item's max-content width —
+      so a row holding a sixty-character supplier name refuses to shrink and
+      pushes itself out through the side of the product card. On a phone that is
+      a variant list overhanging the card it belongs to. The same clamp the shop
+      shelves use, for the same reason.
+    */
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 'var(--space-1)' }}>
         {product.variants.map((v) => (
           <div
             key={v.id}
@@ -122,11 +131,16 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
               border: '1px solid var(--edge)',
               borderRadius: 'var(--radius-row)',
               padding: 'var(--space-2) var(--space-3)',
+              minWidth: 0,
             }}
           >
+            {/* `min-w-0` on the truncating cell for the same reason: a flex
+                child's minimum width is its content, so `truncate` cannot
+                shrink it without this. */}
             <div className="flex items-baseline justify-between gap-2">
               <span
-                className="truncate"
+                className="truncate min-w-0 flex-1"
+                title={v.title}
                 style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}
               >
                 {v.title}
@@ -135,7 +149,10 @@ export function ProductVariantsPanel({ product, onUpdated }: Props) {
                 £{v.price.toFixed(2)}
               </span>
             </div>
-            <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+            {/* Wraps rather than truncates: this line is four short facts, and
+                losing the last one to an ellipsis loses the one that says
+                whether the picture is the flavour's own. */}
+            <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', overflowWrap: 'anywhere' }}>
               {v.sku ?? 'no SKU'} · {known(product, v)}
               {changed?.[v.sku ?? ''] ? ` · just now: ${changed[v.sku ?? '']}` : ''}
             </p>

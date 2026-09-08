@@ -175,3 +175,82 @@ export function looksLikeSku(title: string | null | undefined): boolean {
   if (!title) return false
   return /^[A-Z]{0,3}\d{3,}[A-Z]?$/i.test(title.trim())
 }
+
+/**
+ * What a set of sibling names have in common — the PRODUCT's name.
+ *
+ * ── The other half of the diff ──────────────────────────────────────────────
+ * `variantLabels` keeps what differs between siblings, because that is the
+ * flavour. This keeps what they SHARE, because that is the product, and until
+ * now nothing did: an import took the row's MAIN sku's name for the whole
+ * product, and a main sku is one flavour of it. So the shop shelf carried
+ *
+ *   Hydration+, Blue Raspberry - 240 grams
+ *     ├ Hydration+                              ← the product's name, on a variant
+ *     ├ Hydration+, Lemon & Lime - 240 grams
+ *     └ Hydration+, Tropical Vibes - 240 grams
+ *
+ * — a product named after one of its flavours, with four flavours under it. The
+ * two ends were swapped, and both come out of the same comparison: "Hydration+"
+ * is what they all start with, and everything after it is what tells them apart.
+ *
+ * Whole words only, for the reason the module header gives: a character-wise
+ * prefix over "Blackcurrant" and "Blackberry" is "Black".
+ *
+ * Null when there is nothing worth calling a name — fewer than two names to
+ * compare, no shared opening, or a shared opening too short to be one ("The").
+ *
+ * The inputs are the sibling names of ONE product, so they share its name by
+ * construction; the length bar is a backstop for the case where they do not,
+ * and a product genuinely called "Gel" simply keeps the title it already has.
+ */
+export function commonProductName(names: string[]): string | null {
+  const usable = names.map((n) => (n ?? '').trim()).filter((n) => n.length > 0)
+  if (usable.length < 2) return null
+
+  /*
+    Words compared with their trailing punctuation ignored.
+
+    "Hydration+" and "Hydration+, Lemon & Lime" are the same product, and an
+    exact token compare says they share nothing at all — the comma is the only
+    difference in the first word. That case is not hypothetical: it is what a
+    half-repaired product looks like, where one variant has been relabelled and
+    the rest still carry their full supplier names.
+  */
+  const tokenised = usable.map((n) => words(n))
+  const same = (a: string, b: string) => tidy(a).toLowerCase() === tidy(b).toLowerCase()
+  let prefix = 0
+  const shortest = Math.min(...tokenised.map((t) => t.length))
+  while (prefix < shortest && tokenised.every((t) => same(t[prefix], tokenised[0][prefix]))) {
+    prefix++
+  }
+  if (prefix === 0) return null
+
+  const common = tidy(tokenised[0].slice(0, prefix).join(' '))
+  // Four characters, which is where a name starts and an article stops: "The"
+  // and "2" are two names that happen to open the same way, not a product two
+  // things are versions of.
+  return common.length >= 4 ? common : null
+}
+
+/**
+ * A better title for a product whose name is really one of its flavours, or
+ * null to leave it exactly as it is.
+ *
+ * Deliberately narrow, because a title is the most visible field there is and a
+ * repair pass that rewrites one somebody chose is worse than the bug. It only
+ * acts when the current title IS one of the sibling names in full — the
+ * signature of "the main sku's name became the product's" — and only when the
+ * siblings share something shorter to be called.
+ */
+export function titleFromSiblings(current: string, names: string[]): string | null {
+  const common = commonProductName(names)
+  if (!common) return null
+
+  const now = (current ?? '').trim()
+  if (now === '' || now === common) return null
+  // A hand-written title is not one of the supplier's names, so this leaves it
+  // alone — the one case where doing nothing is certainly right.
+  if (!names.some((n) => (n ?? '').trim().toLowerCase() === now.toLowerCase())) return null
+  return common
+}
