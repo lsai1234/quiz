@@ -514,3 +514,104 @@ describe('two products sharing a page', () => {
     expect(screen.getByRole('button', { name: /Move 2 SKUs into their own product/ })).toBeDisabled()
   })
 })
+
+describe('one press for “this is the master, the rest are flavours”', () => {
+  /*
+    The Grenade bars as they went live. Choosing the master and fixing the names
+    were two gestures, and they are not two facts: once the master is named, the
+    title is plainly carrying that row's flavour and every other row is plainly
+    repeating the product's name.
+  */
+  const BARS = product({
+    title: 'Protein Bars, Caramel Chaos - 12 x 60g',
+    defaultVariantId: 'a',
+    variants: [
+      variant({ id: 'a', sku: 'P24068', title: 'Protein Bars', size: '60 g' }),
+      variant({ id: 'b', sku: 'P51981', title: 'Protein Bars, Chocolate Chip Cookie Dough - 12 x 60g', size: '60 g' }),
+      variant({ id: 'c', sku: 'P51982', title: 'Bars, Dark Chocolate Mint - 12 x 60g', size: '60 g' }),
+    ],
+  })
+
+  it('shows what it would do before it does it', () => {
+    render(<ProductTree product={BARS} />)
+    expect(screen.getByText('Apply this tree')).toBeInTheDocument()
+    expect(screen.getByText(/The product becomes/)).toHaveTextContent('Protein Bars')
+    // The preview rows read "<sku>: <new name> (was "<old name>")", built from
+    // several elements, so they are read off the list rather than matched whole.
+    const rows = screen.getAllByRole('listitem').map((li) => li.textContent)
+    expect(rows).toEqual([
+      'P24068: Caramel Chaos (was “Protein Bars”)',
+      'P51981: Chocolate Chip Cookie Dough (was “Protein Bars, Chocolate Chip Cookie Dough - 12 x 60g”)',
+      'P51982: Bars, Dark Chocolate Mint (was “Bars, Dark Chocolate Mint - 12 x 60g”)',
+    ])
+  })
+
+  it('applies the master and the names in one write', async () => {
+    reply({ ok: true })
+    render(<ProductTree product={BARS} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    await waitFor(() => expect(screen.getByText(/Applied\./)).toBeInTheDocument())
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(url).toBe('/api/portal/products')
+    const body = JSON.parse(init.body)
+    expect(body.patch.title).toBe('Protein Bars')
+    expect(body.patch.variants.map((v: { title: string }) => v.title)).toEqual([
+      'Caramel Chaos',
+      'Chocolate Chip Cookie Dough',
+      'Bars, Dark Chocolate Mint',
+    ])
+    expect(body.patch).not.toHaveProperty('handle')
+  })
+
+  it('leaves the boxes showing what was applied, not what was replaced', async () => {
+    // The page's inputs are seeded once, so a server refresh alone would leave
+    // a founder reading the names that have just been overwritten.
+    reply({ ok: true })
+    render(<ProductTree product={BARS} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Product name' })).toHaveValue('Protein Bars'))
+    expect(screen.getByLabelText('Name for P24068')).toHaveValue('Caramel Chaos')
+    // …and with the tree applied there is nothing left to apply.
+    expect(screen.queryByText('Apply this tree')).not.toBeInTheDocument()
+  })
+
+  it('re-reads the plan when a different SKU is made the master', async () => {
+    reply({ ok: true })
+    render(<ProductTree product={BARS} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Make P51982 the master SKU' }))
+
+    /*
+      The naming fix is unchanged — the title is carrying a flavour whoever the
+      master is, and the row wearing the product's name is still P24068. What
+      moves is which SKU the product is priced and pictured from.
+    */
+    expect(screen.getByText(/The product becomes/)).toHaveTextContent('Protein Bars')
+    await userEvent.click(screen.getByRole('button', { name: 'Apply' }))
+
+    await waitFor(() => expect(screen.getByText(/Applied\./)).toBeInTheDocument())
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body.patch.defaultVariantId).toBe('c')
+    expect(body.patch.title).toBe('Protein Bars')
+  })
+
+  it('offers nothing to apply on a product that is already right', () => {
+    render(
+      <ProductTree
+        product={product({
+          title: 'Protein Bars',
+          defaultVariantId: 'a',
+          basePrice: 14.99,
+          imageUrl: null,
+          servings: null,
+          variants: [
+            variant({ id: 'a', sku: 'P1', title: 'Caramel Chaos', flavour: 'Caramel Chaos' }),
+            variant({ id: 'b', sku: 'P2', title: 'Fudged Up', flavour: 'Fudged Up' }),
+          ],
+        })}
+      />,
+    )
+    expect(screen.queryByText('Apply this tree')).not.toBeInTheDocument()
+  })
+})

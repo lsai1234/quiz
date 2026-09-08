@@ -265,19 +265,22 @@ export interface SupplierName {
  */
 export function putNamesRightWayRound(
   product: CatalogueProduct,
+  /**
+   * The SKU the founder has just said is the master, when they are saying it.
+   *
+   * It is the best anchor there is, and better than anything inferable: the
+   * title came from the master's own supplier name, so where two rows could
+   * both be the one wearing it, the master is the one it came from. Absent —
+   * a sweep, or an import — the stored master is used instead.
+   */
+  masterId?: string | null,
 ): { title: string; variants: CatalogueVariant[]; swapped: string | null } | null {
   if (product.variants.length < 2) return null
 
-  /*
-    Which row is wearing the product's name.
-
-    The master first when it is one of them. It usually is — it is the SKU whose
-    supplier name became the title — and where two rows both open the title, the
-    one the product presents itself as is the one the title came from.
-  */
+  /* Which row is wearing the product's name. */
+  const anchor = masterId ?? product.defaultVariantId
   const candidates = product.variants.filter((v) => nameSwap(product.title, v.title, v.size))
-  const wearer =
-    candidates.find((v) => v.id === product.defaultVariantId) ?? candidates[0] ?? null
+  const wearer = candidates.find((v) => v.id === anchor) ?? candidates[0] ?? null
   const swap = wearer ? nameSwap(product.title, wearer.title, wearer.size) : null
 
   const title = swap ? swap.title : product.title.trim()

@@ -8,6 +8,7 @@ import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { servingsForVariant } from '@/lib/shop/per-serving'
 import { commonProductName, nameSwap, withoutProductName } from '@/lib/supplier/variant-labels'
 import { masterVariant, masterPatch } from '@/lib/catalogue/master'
+import { applyTree } from '@/lib/catalogue/tree'
 import { skuGroups, mixedSizes } from '@/lib/catalogue/split'
 import { Badge, Button, Card, Checkbox, Input, Note, buttonSurface } from '@/components/system'
 
@@ -106,6 +107,7 @@ export function ProductTree({ product }: Props) {
   const [changed, setChanged] = useState<Record<string, string> | null>(null)
   const [saving, setSaving] = useState(false)
   const [splitting, setSplitting] = useState(false)
+  const [applying, setApplying] = useState(false)
 
   const [title, setTitle] = useState(product.title)
   const [labels, setLabels] = useState<string[]>(() => product.variants.map((v) => v.title))
@@ -140,6 +142,27 @@ export function ProductTree({ product }: Props) {
   const renamed = title !== product.title || labels.some((l, i) => l !== product.variants[i].title)
   const remastered = masterId != null && masterId !== (masterVariant(product)?.id ?? null)
   const edited = renamed || remastered
+
+  /*
+    What "this one is the master, the rest are flavours" would do to the names.
+
+    Computed against what is ON SCREEN — the staged labels and title — not the
+    stored product, so a founder who has typed something keeps it, and so the
+    preview is of the thing they are actually looking at.
+  */
+  const staged: CatalogueProduct = {
+    ...product,
+    title,
+    variants: product.variants.map((v, i) => ({ ...v, title: (labels[i] ?? '').trim() || v.title })),
+  }
+  const plan = masterId ? applyTree(staged, masterId) : null
+  const planTitle = plan?.title ?? title
+  const planLabels = plan?.variants
+  const planChanges = planLabels
+    ? staged.variants
+        .map((v, i) => ({ sku: v.sku ?? v.id, from: v.title, to: planLabels[i].title }))
+        .filter((c) => c.from !== c.to)
+    : []
 
   const master = product.variants.find((v) => v.id === masterId)
   const flavours = product.variants.filter((v) => v.id !== masterId)
@@ -235,6 +258,46 @@ export function ProductTree({ product }: Props) {
       setError('Unable to reach the server.')
     } finally {
       setSplitting(false)
+    }
+  }
+
+  /**
+   * Set the tree: this SKU is the master, the rest are flavours, and the names
+   * follow from that.
+   *
+   * One request and one write, because it is one decision — see `applyTree`.
+   * The staged state is moved to what was applied, since the page's own inputs
+   * are seeded once and a server refresh alone would leave the boxes showing
+   * the names that have just been replaced.
+   */
+  async function apply() {
+    if (!plan) return
+    setApplying(true)
+    setError(null)
+    setDone(null)
+    try {
+      const res = await fetch('/api/portal/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id, patch: plan }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(body.error ?? `Could not apply that (HTTP ${res.status}).`)
+        return
+      }
+      if (plan.title) setTitle(plan.title)
+      if (plan.variants) setLabels(plan.variants.map((v) => v.title))
+      setMasterId(plan.defaultVariantId ?? masterId)
+      setDone(
+        `Applied. The shop shows “${planTitle}”, priced and pictured from the master, with ${flavours.length} flavour${flavours.length === 1 ? '' : 's'} under it.`,
+      )
+      invalidateCatalogue()
+      router.refresh()
+    } catch {
+      setError('Unable to reach the server.')
+    } finally {
+      setApplying(false)
     }
   }
 
@@ -534,6 +597,48 @@ export function ProductTree({ product }: Props) {
           </>
         )}
       </div>
+
+      {/*
+        What the tree would become, and the one press that makes it so.
+
+        Shown rather than described. This rewrites the product's name and every
+        flavour's, which is the most visible thing on the shelf, and a founder
+        working through fifteen products should be able to see the answer before
+        they take it rather than pressing and checking the shop.
+      */}
+      {plan && (
+        <Card elevation={2} tone="accent" className="space-y-2">
+          <p style={EYEBROW}>Apply this tree</p>
+          {planTitle !== title && (
+            <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
+              The product becomes <strong>{planTitle}</strong>{' '}
+              <span style={{ color: 'var(--ink-3)' }}>(was “{title}”)</span>
+            </p>
+          )}
+          {planChanges.length > 0 && (
+            <ul style={{ display: 'grid', gap: 'var(--space-1)', margin: 0, padding: 0, listStyle: 'none' }}>
+              {planChanges.map((c) => (
+                <li key={c.sku} style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', overflowWrap: 'anywhere' }}>
+                  {c.sku}: <span style={{ color: 'var(--ink-2)' }}>{c.to}</span> (was “{c.from}”)
+                </li>
+              ))}
+            </ul>
+          )}
+          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+            The master gives the product its price, photograph, cost and serving count. Names come from what the
+            SKUs share — the product&rsquo;s name comes off the front of each flavour, and the pack size they all
+            repeat comes off the end. The web address does not change.
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="primary" loading={applying} disabled={applying} onClick={() => void apply()}>
+              Apply
+            </Button>
+            <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+              Or type the names yourself above and press Save changes.
+            </span>
+          </div>
+        </Card>
+      )}
 
       {moving.size > 0 && (
         <Card elevation={2} tone={movingAll ? 'critical' : 'attention'} className="space-y-2">
