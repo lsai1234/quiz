@@ -9,6 +9,7 @@ import { servingsForVariant } from '@/lib/shop/per-serving'
 import { commonProductName, nameSwap, withoutProductName } from '@/lib/supplier/variant-labels'
 import { masterVariant, masterPatch } from '@/lib/catalogue/master'
 import { applyTree } from '@/lib/catalogue/tree'
+import { liveServings } from '@/lib/catalogue/servings'
 import { skuGroups, mixedSizes } from '@/lib/catalogue/split'
 import { Badge, Button, Card, Checkbox, Input, Note, buttonSurface } from '@/components/system'
 
@@ -506,7 +507,10 @@ export function ProductTree({ product }: Props) {
             />
             <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
               £{product.basePrice.toFixed(2)}
-              {product.servings ? ` · ${product.servings} servings` : ''} · {product.category} · /product/
+              {/* The master's count, which is the one on the shelf — not
+                  `product.servings`, which the shop stops reading the moment a
+                  SKU has its own. */}
+              {liveServings(product) ? ` · ${liveServings(product)} servings` : ''} · {product.category} · /product/
               {product.handle}
             </p>
           </div>

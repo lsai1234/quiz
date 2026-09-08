@@ -5,7 +5,7 @@ import { Button, Card, Input, Modal, ModalBody, ModalFooter, ModalHeader, Select
 import { STACK_SLOTS, SLOT_LABELS, type StackSlot } from '@/lib/catalogue/types'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { deriveShortName, SHORT_NAME_MAX } from '@/lib/catalogue/short-name'
-import { spreadServings, servingsAppliesTo } from '@/lib/catalogue/servings'
+import { spreadServings, servingsAppliesTo, liveServings } from '@/lib/catalogue/servings'
 
 const GOALS = ['muscle', 'energy', 'performance', 'hydration', 'recovery', 'health', 'cutting', 'bulking', 'sleep-better', 'less-stress', 'focus', 'immune', 'skin-hair-nails', 'menopause', 'gut-health']
 
@@ -17,7 +17,23 @@ interface Props {
 }
 
 export function ProductEditor({ product, allProducts, onClose, onSaved }: Props) {
-  const [d, setD] = useState<CatalogueProduct>({ ...product, consumption: product.consumption ? { ...product.consumption } : undefined })
+  /*
+    The serving count is seeded from what the SHOP shows, not from
+    `product.servings`.
+
+    They are different fields once a SKU carries its own count, and showing the
+    one the shop ignores is what made the previous fix unreachable: a product
+    whose SKUs said 12 and whose product-level field said 20 opened this box on
+    20, so typing 20 changed nothing, so nothing was written, and the shelf kept
+    saying 12. A box showing a number nothing uses cannot be corrected, because
+    there is nothing visibly wrong with it.
+  */
+  const live = liveServings(product)
+  const [d, setD] = useState<CatalogueProduct>({
+    ...product,
+    servings: live,
+    consumption: product.consumption ? { ...product.consumption } : undefined,
+  })
   const [saving, setSaving] = useState(false)
   const [suggesting, setSuggesting] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -56,7 +72,7 @@ export function ProductEditor({ product, allProducts, onClose, onSaved }: Props)
       master and every sibling of the same size. A different size is a
       different unit of sale and keeps its own.
     */
-    if (d.servings !== product.servings) {
+    if (d.servings !== live) {
       const variants = spreadServings(product, d.servings)
       if (variants) patch.variants = variants
     }

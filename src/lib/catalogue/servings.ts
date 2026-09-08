@@ -50,6 +50,25 @@ export function spreadServings(
   return variants.some((v, i) => v !== product.variants[i]) ? variants : null
 }
 
+/**
+ * The serving count the SHOP is showing for this product.
+ *
+ * The master SKU's own count when it has one, and the product-level number
+ * otherwise — the same precedence `servingsForVariant` uses, because this is
+ * the figure on the shelf and there is no second opinion worth showing.
+ *
+ * The Hub's editor seeds from this and compares against it. Seeding from
+ * `product.servings` instead is what made the last fix unreachable: on a
+ * product whose SKUs said 12 and whose product-level field said 20, the box
+ * opened on 20, so typing 20 changed nothing, so nothing was written, and the
+ * shelf kept saying 12 for ever. A field that shows a number the shop does not
+ * use cannot be corrected, because there is nothing visibly wrong with it.
+ */
+export function liveServings(product: CatalogueProduct): number {
+  const own = masterVariant(product)?.servings
+  return own != null && Number.isFinite(own) && own > 0 ? own : product.servings
+}
+
 /** How many SKUs a product-level serving count would apply to. */
 export function servingsAppliesTo(product: CatalogueProduct): number {
   const master = masterVariant(product)
