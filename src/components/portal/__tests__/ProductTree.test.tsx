@@ -7,7 +7,8 @@ jest.mock('@/hooks/useCatalogueProducts', () => ({ invalidateCatalogue: jest.fn(
 // The page is server-rendered; the tree asks the router to re-read it after a
 // write. There is no router in jsdom, and what it does is not what these assert.
 const refresh = jest.fn()
-jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }))
+const push = jest.fn()
+jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh, push }) }))
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
   return { id: 'v', title: 'V', flavour: null, size: null, price: 14.99, compareAtPrice: null, available: true, ...over }
@@ -48,8 +49,8 @@ describe('one product’s variants', () => {
     // The one with its own facts, and the one with none of them: no serving
     // count of its own, no size to scale one from, and no picture but the
     // product's. That row is precisely what the pull is for.
-    expect(screen.getByText(/P100 · 33 servings · own picture · cost £11\.12/)).toBeInTheDocument()
-    expect(screen.getByText(/P200 · no servings · product picture · no cost/)).toBeInTheDocument()
+    expect(screen.getByText(/P100 · no size · 33 servings · own picture · cost £11\.12/)).toBeInTheDocument()
+    expect(screen.getByText(/P200 · no size · no servings · product picture · no cost/)).toBeInTheDocument()
   })
 
   it('marks a serving count that was scaled from the size rather than told to us', () => {
@@ -66,7 +67,7 @@ describe('one product’s variants', () => {
         })}
       />,
     )
-    expect(screen.getByText(/P2 · 60 servings\*/)).toBeInTheDocument()
+    expect(screen.getByText(/P2 · 2kg · 60 servings\*/)).toBeInTheDocument()
   })
 
   it('pulls this product alone, and reports what changed per SKU', async () => {
@@ -399,8 +400,8 @@ describe('the shape on screen', () => {
 
   it('says how many hang off it, and calls them what they are', () => {
     render(<ProductTree product={SEVEN_ISH} />)
-    expect(screen.getByText('The SKU this product is')).toBeInTheDocument()
-    expect(screen.getByText('2 more SKUs, sold as flavours of it')).toBeInTheDocument()
+    expect(screen.getByText('The master SKU')).toBeInTheDocument()
+    expect(screen.getByText('2 flavours')).toBeInTheDocument()
   })
 
   it('re-draws the tree the moment a different SKU is made the master', async () => {
@@ -448,5 +449,68 @@ describe('the shape on screen', () => {
     )
     expect(screen.getByText(/P1 · .* · sold out/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Make P1 the master SKU' })).toBeInTheDocument()
+  })
+})
+
+describe('two products sharing a page', () => {
+  /*
+    The case that started all this: one PowerBody master SKU hanging a tub of
+    capsules and a bag of powder off it. Merged, they shared a page, a
+    photograph and whichever of the two prices the master happened to have.
+  */
+  const GLYCINE = product({
+    title: 'Glycine',
+    defaultVariantId: 'caps',
+    variants: [
+      variant({ id: 'caps', sku: 'P100', title: '100 vcaps', size: '100 caps', price: 14.99 }),
+      variant({ id: 'powder', sku: 'P200', title: 'Pure Powder', size: '454 grams', price: 39.99 }),
+    ],
+  })
+
+  const FLAVOURS = product({
+    title: 'Vegan Protein',
+    variants: [
+      variant({ id: 'a', sku: 'P1', title: 'Banana', size: '500 grams' }),
+      variant({ id: 'b', sku: 'P2', title: 'Chocolate', size: '500 grams' }),
+    ],
+  })
+
+  it('says which sizes it holds, with the figures', () => {
+    render(<ProductTree product={GLYCINE} />)
+    expect(screen.getByText(/2 SKUs are 2 different sizes: 1 × 100 caps, 1 × 454 grams/)).toBeInTheDocument()
+  })
+
+  it('says nothing at all about a product that is only flavours', () => {
+    render(<ProductTree product={FLAVOURS} />)
+    expect(screen.queryByText(/different sizes/)).not.toBeInTheDocument()
+  })
+
+  it('ticks the odd size for you', async () => {
+    render(<ProductTree product={GLYCINE} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Tick the 1 × 454 grams' }))
+    expect(screen.getByRole('checkbox', { name: 'Move P200 to its own product' })).toBeChecked()
+    expect(screen.getByText('1 SKU ticked to move out.')).toBeInTheDocument()
+  })
+
+  it('moves the ticked SKUs out and lands on the new product', async () => {
+    reply({ ok: true, moved: { id: 'glycine-p200', title: 'Glycine — 454 grams', skus: 1 }, kept: { id: 'glycine', skus: 1 } })
+    render(<ProductTree product={GLYCINE} />)
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Move P200 to its own product' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Move 1 SKU into their own product' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/founderhub/products/dashboard/glycine-p200'))
+    const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
+    expect(url).toBe('/api/portal/products/split')
+    expect(JSON.parse(init.body)).toEqual({ id: 'glycine', variantIds: ['powder'] })
+  })
+
+  it('will not move every SKU out, which is not a split', async () => {
+    render(<ProductTree product={GLYCINE} />)
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Move P100 to its own product' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Move P200 to its own product' }))
+
+    expect(screen.getByText(/leave at least one behind/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Move 2 SKUs into their own product/ })).toBeDisabled()
   })
 })

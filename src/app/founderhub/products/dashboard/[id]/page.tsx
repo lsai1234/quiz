@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { clearPersistCache } from '@/lib/portal/persist'
 import { ProductTree } from '@/components/portal/ProductTree'
 
 /**
@@ -24,8 +25,25 @@ interface PageProps {
 
 export default async function ProductPage({ params }: PageProps) {
   const { id } = await params
-  const { products } = await getResolvedCatalogue()
-  const product = products.find((p) => p.id === id)
+  let { products } = await getResolvedCatalogue()
+  let product = products.find((p) => p.id === id)
+
+  /*
+    A miss is worth a second look before it becomes a 404.
+
+    Persisted reads are cached for five seconds so a hot path does not hit the
+    database per request — which means a product created a moment ago can be
+    invisible to a page rendered immediately afterwards. That is exactly this
+    page: splitting a product ends by navigating to the one just created, and a
+    "page not found" for something that plainly exists is the worst answer we
+    could give. Dropping the cache costs one read, and only on the miss.
+  */
+  if (!product) {
+    clearPersistCache()
+    products = (await getResolvedCatalogue()).products
+    product = products.find((p) => p.id === id)
+  }
+
   if (!product) notFound()
   return <ProductTree product={product} />
 }

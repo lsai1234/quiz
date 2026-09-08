@@ -3,6 +3,7 @@ import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { parseRosterCsv } from '@/lib/supplier/roster-csv'
 import { rosterRowToProduct, type VariantFacts } from '@/lib/supplier/roster-import'
+import { splitBySize } from '@/lib/catalogue/split'
 import { uniqueProductId } from '@/lib/supplier/mapping'
 import { asPendingReview, sourcesForImport } from '@/lib/catalogue/review'
 import { addImportedProducts, getImportedProducts, syncPortalRuntime } from '@/lib/portal/store'
@@ -176,13 +177,41 @@ export async function POST(req: Request) {
       // The product id travels with the product. It is the expensive half of
       // every later call, and it never changes.
       const supplierProductId = bySku.get(row.sku)?.productId ?? indexed.get(row.sku)?.productId ?? null
-      const stored = asPendingReview(
-        { ...product, id, handle: id, ...(supplierProductId ? { supplierProductId: String(supplierProductId) } : {}) },
-        sourcesForImport(enriched ? [] : ['imageUrl', 'description', 'category'], false),
-      )
-      taken.push(stored)
-      pending.push(stored)
-      results.push({ sku: row.sku, id, title: product.title, enriched, notes })
+      const built = { ...product, id, handle: id, ...(supplierProductId ? { supplierProductId: String(supplierProductId) } : {}) }
+
+      /*
+        One product per UNIT OF SALE, not one per roster row.
+
+        A row lists a main SKU and everything hanging off it, and their sheet
+        hangs more than flavours off one master: the glycine row merged 100
+        capsules with a 454g bag, and both went live on one page at one price
+        with one photograph. Six flavours of a 500g bag are one product; a tub
+        of capsules and a bag of powder are two, and a customer chooses between
+        them rather than picking one from a flavour list.
+
+        `splitBySize` is the same rule the founder applies by hand on a product
+        that is already in the shop — see `catalogue/split` — so onboarding and
+        repair cannot drift apart. The group holding the row's main SKU keeps
+        the id and the URL; the others are lifted out beside it.
+      */
+      const units = splitBySize(built, taken.map((p) => p.id))
+      const rowNotes = units.length > 1
+        ? [
+            ...notes,
+            `These SKUs are ${units.length} different sizes, so they were imported as ${units.length} products ` +
+              `(${units.map((u) => u.title).join('; ')}). Merge them back by hand if they really do belong on one page.`,
+          ]
+        : notes
+
+      for (const unit of units) {
+        const stored = asPendingReview(
+          unit,
+          sourcesForImport(enriched ? [] : ['imageUrl', 'description', 'category'], false),
+        )
+        taken.push(stored)
+        pending.push(stored)
+      }
+      results.push({ sku: row.sku, id, title: product.title, enriched, notes: rowNotes })
     }
 
     await addImportedProducts(pending)

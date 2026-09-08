@@ -8,7 +8,8 @@ import { invalidateCatalogue } from '@/hooks/useCatalogueProducts'
 import { servingsForVariant } from '@/lib/shop/per-serving'
 import { commonProductName, nameSwap, withoutProductName } from '@/lib/supplier/variant-labels'
 import { masterVariant, masterPatch } from '@/lib/catalogue/master'
-import { Badge, Button, Card, Input, Note, buttonSurface } from '@/components/system'
+import { skuGroups, mixedSizes } from '@/lib/catalogue/split'
+import { Badge, Button, Card, Checkbox, Input, Note, buttonSurface } from '@/components/system'
 
 interface Props {
   product: CatalogueProduct
@@ -26,10 +27,12 @@ interface RunReport {
   error: string | null
 }
 
-/** What we hold for one SKU, in the columns that decide whether to pull. */
+/** What we hold for one SKU, in the columns that decide what to do about it. */
 function known(product: CatalogueProduct, variant: CatalogueVariant): string {
   const servings = servingsForVariant(product, variant)
   return [
+    variant.sku ?? 'no SKU',
+    (variant.size ?? '').trim() || 'no size',
     variant.servings != null
       ? `${variant.servings} servings`
       : servings != null
@@ -37,43 +40,55 @@ function known(product: CatalogueProduct, variant: CatalogueVariant): string {
         : 'no servings',
     variant.imageUrl ? 'own picture' : 'product picture',
     variant.cost != null ? `cost £${variant.cost.toFixed(2)}` : 'no cost',
+    ...(variant.available ? [] : ['sold out']),
   ].join(' · ')
 }
 
+const EYEBROW = {
+  fontSize: 'var(--text-micro)',
+  letterSpacing: 'var(--tracking-eyebrow)',
+  color: 'var(--ink-3)',
+  textTransform: 'uppercase',
+} as const
+
 /**
- * One product, drawn as what it actually is: a product, the SKU it presents
- * itself as, and the SKUs hanging off that one.
+ * One product, drawn as what it actually is — and taken apart when it is really
+ * two products sharing a page.
  *
- * ── Why a tree, and why a page of its own ───────────────────────────────────
- * PowerBody sell a seven-flavour product as seven SKUs, one of which is the
- * listing the other six hang off. Import merged them into one product and kept
- * that arrangement implicitly — the row's main SKU gave the product its
- * picture, price and serving count, everything else became "a variant", and
- * nothing recorded which was which or let anybody change it.
+ * ── The two things that were one thing ──────────────────────────────────────
+ * A PowerBody row lists a main SKU and everything hanging off it, and import
+ * merged the lot into one product with variants. But their sheet hangs two
+ * different kinds of thing off a master SKU, and only one of them is a variant
+ * of anything:
  *
- * The flat list this replaces could say which SKU was the master, in a badge,
- * and that is not the same as showing the shape. Seven equal rows with one
- * chip on the second of them is a list with an annotation; the founder's
- * question — "which one IS this product, and what hangs off it?" — is a
- * question about a hierarchy, and it is answered by drawing the hierarchy.
+ *   FLAVOURS      six 500g bags that differ only in flavour   → one product
+ *   UNITS OF SALE 100 capsules beside a 454g bag              → two products
  *
- * So: the product at the top with the name it goes on the shelf under, the
- * master beneath it carrying the facts that describe one unit, and the rest
- * beneath that as flavours. Roles are moved by pressing the role you want.
+ * Merged, the second kind shares a page, a photograph and ONE of the two
+ * prices — whichever SKU happened to be the master. So this screen does two
+ * jobs: it says which SKU the product presents itself as, and it lets the SKUs
+ * that were never flavours be moved onto pages of their own.
+ *
+ * ── Saying which is which, out loud ─────────────────────────────────────────
+ * The badge was not enough. "Master SKU" on the second of seven equal rows is
+ * an annotation on a list, and a founder reading it still has to work out what
+ * follows from it. So the product card carries the master's photograph, price
+ * and serving count and names the SKU they came from, the master sits alone
+ * under a heading that says what it is for, and the flavours sit under a
+ * heading that says they share the page. Nothing about the arrangement needs
+ * explaining afterwards.
  *
  * ── What the master decides, and what it does not ───────────────────────────
  * Decides: the shelf price, the photograph, the cost the margin is read off,
- * and the serving count. Does not decide: the product's NAME. A master SKU is
+ * the serving count. Does not decide: the product's NAME. A master SKU is
  * still one flavour, and naming a product after it is the bug that put
- * "Vegan Protein, Banana - 500 grams" on a six-flavour product. Naming is the
- * other pair of controls here, and it is deliberately separate.
+ * "Vegan Protein, Banana - 500 grams" on a six-flavour product.
  *
  * ── Nothing saves until Save ────────────────────────────────────────────────
- * Every control below stages a change. A name is a sentence somebody is
- * part-way through typing, and a swap is usually followed by a trim; saving on
- * each of those would write half-finished names to a live shop. What is typed
- * is stored as a founder override, so no later pull from PowerBody overwrites
- * it, and the HANDLE never moves — it is the product's URL.
+ * Naming and the master are staged; a name is a sentence somebody is part-way
+ * through typing. Moving SKUs out is not staged — it is a structural change to
+ * two products, so it is its own action with its own confirmation, and it
+ * takes you to the new product afterwards.
  */
 export function ProductTree({ product }: Props) {
   /*
@@ -90,6 +105,7 @@ export function ProductTree({ product }: Props) {
   const [done, setDone] = useState<string | null>(null)
   const [changed, setChanged] = useState<Record<string, string> | null>(null)
   const [saving, setSaving] = useState(false)
+  const [splitting, setSplitting] = useState(false)
 
   const [title, setTitle] = useState(product.title)
   const [labels, setLabels] = useState<string[]>(() => product.variants.map((v) => v.title))
@@ -102,13 +118,15 @@ export function ProductTree({ product }: Props) {
     would describe something that is not happening.
   */
   const [masterId, setMasterId] = useState<string | null>(() => masterVariant(product)?.id ?? null)
+  /** SKUs ticked to be moved onto a product of their own. */
+  const [moving, setMoving] = useState<Set<string>>(() => new Set())
 
   const withSkus = product.variants.filter((v) => v.sku).length
   const suggestion = commonProductName(labels)
   /*
     Per row: is the product's title this row's label plus something more?
 
-    The signature of the mix-up, provable from the two strings alone — no
+    The signature of the name mix-up, provable from the two strings alone — no
     supplier call, and no need for the siblings to agree with each other.
     `titleFromSiblings` works from what every sibling shares, which finds
     nothing on a half-repaired product ("Vegan Protein, …" beside "Protein, …"
@@ -124,8 +142,15 @@ export function ProductTree({ product }: Props) {
   const edited = renamed || remastered
 
   const master = product.variants.find((v) => v.id === masterId)
-  const others = product.variants.filter((v) => v.id !== masterId)
+  const flavours = product.variants.filter((v) => v.id !== masterId)
   const indexOf = (v: CatalogueVariant) => product.variants.findIndex((x) => x.id === v.id)
+
+  // The sizes this product actually holds. More than one is the evidence that
+  // it is two products, and the sentence that says so needs the figures.
+  const groups = skuGroups(product)
+  const mixed = mixedSizes(product)
+  const strangers = mixed ? groups.filter((g) => g !== groups[0]) : []
+  const movingAll = moving.size >= product.variants.length
 
   async function save() {
     setSaving(true)
@@ -180,6 +205,39 @@ export function ProductTree({ product }: Props) {
     }
   }
 
+  /**
+   * Move the ticked SKUs onto a product of their own.
+   *
+   * Not staged with the names: it rewrites two products, and it changes what is
+   * on this page underneath the founder. It ends by going to the new product,
+   * which is where the next thing to do is — naming it, and checking the
+   * description it inherited still describes it.
+   */
+  async function split() {
+    setSplitting(true)
+    setError(null)
+    setDone(null)
+    try {
+      const res = await fetch('/api/portal/products/split', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: product.id, variantIds: [...moving] }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(body.error ?? `Could not split that product (HTTP ${res.status}).`)
+        return
+      }
+      invalidateCatalogue()
+      router.push(`/founderhub/products/dashboard/${body.moved.id}`)
+      router.refresh()
+    } catch {
+      setError('Unable to reach the server.')
+    } finally {
+      setSplitting(false)
+    }
+  }
+
   async function pull() {
     setBusy(true)
     setError(null)
@@ -231,8 +289,16 @@ export function ProductTree({ product }: Props) {
     }
   }
 
+  const tick = (id: string, on: boolean) =>
+    setMoving((all) => {
+      const next = new Set(all)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+
   /*
-    One SKU in the tree: its role, its name, and what we hold for it.
+    One SKU in the tree.
 
     A function that is CALLED, not a nested component. A component declared
     inside a render is a new type on every render, so React unmounts and
@@ -269,6 +335,11 @@ export function ProductTree({ product }: Props) {
             </span>
           </div>
 
+          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', overflowWrap: 'anywhere' }}>
+            {known(product, v)}
+            {changed?.[v.sku ?? ''] ? ` · just now: ${changed[v.sku ?? '']}` : ''}
+          </p>
+
           <div className="flex items-center gap-2 flex-wrap">
             {isMaster ? (
               <Badge tone="accent">Master SKU</Badge>
@@ -284,11 +355,11 @@ export function ProductTree({ product }: Props) {
             )}
             {swap ? (
               /*
-                The two ends are the wrong way round on THIS row, and both go
-                back at once. Copying the label up to the title is half of it,
-                and the half that still looks wrong in the shop: the product and
-                one of its flavours are then both called "Vegan Protein", and
-                the picker offers a flavour by the product's name.
+                The two ends of the NAME are the wrong way round on this row,
+                and both go back at once. Copying the label up to the title is
+                half of it, and the half that still looks wrong in the shop: the
+                product and one of its flavours are then both called "Vegan
+                Protein", and the picker offers a flavour by the product's name.
               */
               <Button
                 variant="ghost"
@@ -314,16 +385,22 @@ export function ProductTree({ product }: Props) {
                 </Button>
               )
             )}
-          </div>
+            {/*
+              Labelled on screen, and named per row for a screen reader.
 
-          {/* Wraps rather than truncates: four short facts, and losing the last
-              one to an ellipsis loses the one saying whether the picture is
-              this flavour's own. */}
-          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)', overflowWrap: 'anywhere' }}>
-            {v.sku ?? 'no SKU'} · {known(product, v)}
-            {v.available ? '' : ' · sold out'}
-            {changed?.[v.sku ?? ''] ? ` · just now: ${changed[v.sku ?? '']}` : ''}
-          </p>
+              A bare tick box beside a SKU is a control whose meaning you have
+              to guess, on the one screen whose whole problem was that nothing
+              said what anything was. `aria-label` wins over the visible text
+              as the accessible name, so eight boxes all reading "Move out" are
+              still eight distinct controls in a screen reader's list.
+            */}
+            <Checkbox
+              label="Move out"
+              aria-label={`Move ${v.sku ?? v.title} to its own product`}
+              checked={moving.has(v.id)}
+              onChange={(e) => tick(v.id, e.target.checked)}
+            />
+          </div>
         </Card>
       </div>
     )
@@ -336,29 +413,48 @@ export function ProductTree({ product }: Props) {
       </Link>
 
       {/*
-        The product itself — the root of the tree.
-
-        Its name is first because it is what the shelf shows and it is the
-        thing that was wrong: a product wearing one of its flavours' names.
-        Everything below it is a flavour of this.
+        The product itself — the root of the tree, wearing what the master gives
+        it. The photograph and the price are here rather than only in the shop
+        because they are the whole consequence of the choice below: seeing the
+        capsules' photo above a list of powders is the fastest way to know the
+        master is wrong.
       */}
       <Card elevation={2} className="space-y-3">
-        <div className="flex items-end gap-2 flex-wrap">
-          <Input
-            label="Product name"
-            compact
-            className="flex-1 min-w-0"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
+        <p style={EYEBROW}>The product — what the shop sells</p>
+        <div className="flex gap-3">
+          <div
+            className="w-16 h-16 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center"
+            style={{ background: 'var(--surface-2)', border: '1px solid var(--edge)' }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {product.imageUrl ? (
+              <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" />
+            ) : (
+              <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>No image</span>
+            )}
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            <Input
+              label="Product name"
+              compact
+              className="w-full"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+              £{product.basePrice.toFixed(2)}
+              {product.servings ? ` · ${product.servings} servings` : ''} · {product.category} · /product/
+              {product.handle}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
           {suggestion && suggestion !== title.trim() && (
             <Button variant="ghost" size="sm" onClick={() => setTitle(suggestion)}>
               Use “{suggestion}”
             </Button>
           )}
-        </div>
-        {trimmable > 0 && (
-          <div>
+          {trimmable > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -368,52 +464,103 @@ export function ProductTree({ product }: Props) {
             >
               Take “{title.trim()}” off {trimmable} flavour name{trimmable === 1 ? '' : 's'}
             </Button>
-          </div>
-        )}
-        <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
-          {product.category} · /product/{product.handle} · {product.variants.length} SKU
-          {product.variants.length === 1 ? '' : 's'}
-        </p>
+          )}
+        </div>
       </Card>
 
+      {/*
+        The evidence that this is two products, with the figures in it.
+
+        Not a rule that fires: a founder is the one who knows whether their
+        "20 x 60g" and "12 x 60g" gels are one product or two. This says what
+        the sizes are and ticks the odd ones for them.
+      */}
+      {mixed && (
+        <Note tone="attention">
+          <p>
+            These {product.variants.length} SKUs are {groups.length} different sizes:{' '}
+            {groups.map((g) => `${g.variants.length} × ${g.label}`).join(', ')}. A different size is a different
+            unit of sale — its own price, its own photograph, its own serving count — so it usually belongs on a
+            page of its own rather than in this one’s flavour list.
+          </p>
+          {/*
+            One button per size, not one for "everything that is not the main
+            size". Three sizes are THREE products, and ticking two of them
+            together would move them onto one page — the same merge, one level
+            down. A split moves one unit of sale at a time.
+          */}
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            {strangers.map((g) => (
+              <Button
+                key={g.key}
+                variant="secondary"
+                size="sm"
+                onClick={() => setMoving(new Set(g.variants.map((v) => v.id)))}
+              >
+                Tick the {g.variants.length} × {g.label}
+              </Button>
+            ))}
+          </div>
+        </Note>
+      )}
+
       {/* The tree. One rail, the master hanging off it first, the flavours
-          under that — the shape the founder is trying to see. */}
+          under that — the shape a founder is trying to see. */}
       <div style={{ borderLeft: '1px solid var(--edge)', paddingLeft: 'var(--space-2)' }} className="space-y-2">
-        <p
-          style={{
-            fontSize: 'var(--text-micro)',
-            letterSpacing: 'var(--tracking-eyebrow)',
-            color: 'var(--ink-3)',
-            textTransform: 'uppercase',
-          }}
-        >
-          The SKU this product is
-        </p>
+        <div>
+          <p style={EYEBROW}>The master SKU</p>
+          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+            The product above shows this SKU’s price, photograph and serving count, and its page opens on it.
+          </p>
+        </div>
         {master ? (
           node(master, true)
         ) : (
           <Note tone="attention">This product has no SKUs, so there is nothing to be the master.</Note>
         )}
 
-        {others.length > 0 && (
+        {flavours.length > 0 && (
           <>
-            <p
-              style={{
-                fontSize: 'var(--text-micro)',
-                letterSpacing: 'var(--tracking-eyebrow)',
-                color: 'var(--ink-3)',
-                textTransform: 'uppercase',
-                paddingTop: 'var(--space-2)',
-              }}
-            >
-              {others.length} more SKU{others.length === 1 ? '' : 's'}, sold as flavours of it
-            </p>
-            <div className="space-y-2">
-              {others.map((v) => node(v, false))}
+            <div style={{ paddingTop: 'var(--space-2)' }}>
+              <p style={EYEBROW}>
+                {flavours.length} flavour{flavours.length === 1 ? '' : 's'}
+              </p>
+              <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+                Sold on the same page, chosen from the picker. Anything here that is not simply another flavour of
+                the same tub should be moved out.
+              </p>
             </div>
+            <div className="space-y-2">{flavours.map((v) => node(v, false))}</div>
           </>
         )}
       </div>
+
+      {moving.size > 0 && (
+        <Card elevation={2} tone={movingAll ? 'critical' : 'attention'} className="space-y-2">
+          <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
+            {moving.size} SKU{moving.size === 1 ? '' : 's'} ticked to move out.
+          </p>
+          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
+            {movingAll
+              ? 'Every SKU is ticked, which is not a split — leave at least one behind.'
+              : 'They get a product of their own: their own page, price, photograph and serving count, taking the description and category from this one. You will land on it to give it a name.'}
+          </p>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              size="sm"
+              variant="primary"
+              loading={splitting}
+              disabled={splitting || movingAll}
+              onClick={() => void split()}
+            >
+              Move {moving.size} SKU{moving.size === 1 ? '' : 's'} into their own product
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setMoving(new Set())}>
+              Clear
+            </Button>
+          </div>
+        </Card>
+      )}
 
       <Card elevation={1} className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
@@ -425,7 +572,7 @@ export function ProductTree({ product }: Props) {
               ? 'The shop will take the price, picture and serving count from the master. The product’s name is unchanged.'
               : renamed
                 ? 'Saved as your own wording — no pull from PowerBody will overwrite it. The web address does not change.'
-                : 'Rename anything above, or press a role to move it.'}
+                : 'Rename anything above, or press a role to move it. Moving SKUs out is its own action.'}
           </span>
         </div>
 
@@ -436,7 +583,7 @@ export function ProductTree({ product }: Props) {
           <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
             {withSkus === 0
               ? 'No supplier codes on this product, so there is nothing to ask about.'
-              : 'Reads each SKU’s own price, serving count and picture. A price you set by hand is left alone. A serving count marked * was scaled from the size rather than told to us.'}
+              : 'Reads each SKU’s own price, size, serving count and picture. A price you set by hand is left alone. A serving count marked * was scaled from the size rather than told to us.'}
           </span>
         </div>
 
