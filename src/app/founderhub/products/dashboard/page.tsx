@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { ProductReadiness, CheckStatus } from '@/lib/portal/readiness'
-import { Badge, Button, Card, Input } from '@/components/system'
-import { ProductVariantsPanel } from '@/components/portal/ProductVariantsPanel'
+import Link from 'next/link'
+import { Badge, Button, Card, Input, buttonSurface } from '@/components/system'
 
 /** Readiness status → the system's semantic tone. `Badge` owns the colours. */
 const TONE: Record<CheckStatus, 'positive' | 'attention' | 'critical'> = { ok: 'positive', warn: 'attention', fail: 'critical' }
@@ -41,7 +41,6 @@ export default function DashboardPage() {
     so it cannot be mistaken for one more category chip.
   */
   const [multiOnly, setMultiOnly] = useState(false)
-  const [openId, setOpenId] = useState<string | null>(null)
   const [removing, setRemoving] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -196,26 +195,26 @@ export default function DashboardPage() {
                   )}
 
                   {/*
-                    Opening a product is how you see what is held PER VARIANT —
-                    which flavour has its own price, serving count and picture,
-                    and which is still borrowing the product's. Nothing else in
-                    the Hub shows that, and it is the thing that says whether
-                    the pull is worth pressing.
+                    Opening a product goes to a page of its own rather than
+                    unfolding here.
+
+                    What is on the other side is a TREE — the product, the SKU
+                    it presents itself as, and the SKUs hanging off that one —
+                    and a tree does not fit inside a card in a two-column grid.
+                    It is also the screen a founder stays on for a few minutes
+                    renaming things, which is a page's job and not a card's.
                   */}
                   {p.variants.length > 1 && (
                     <div className="mt-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        aria-expanded={openId === p.id}
-                        aria-label={`${openId === p.id ? 'Hide' : 'Show'} the ${p.variants.length} variants of ${p.title}`}
-                        onClick={() => setOpenId((id) => (id === p.id ? null : p.id))}
+                      <Link
+                        href={`/founderhub/products/dashboard/${p.id}`}
+                        aria-label={`Open the ${p.variants.length} SKUs of ${p.title}`}
+                        {...buttonSurface('ghost', 'sm')}
                       >
-                        {openId === p.id ? 'Hide variants' : `${p.variants.length} variants`}
-                      </Button>
+                        {p.variants.length} SKUs ›
+                      </Link>
                     </div>
                   )}
-                  {openId === p.id && <ProductVariantsPanel product={p} onUpdated={load} />}
 
                   {confirmId === p.id ? (
                     <div className="flex gap-2 mt-2">

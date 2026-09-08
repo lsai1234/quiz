@@ -1,9 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
-import { ProductVariantsPanel } from '../ProductVariantsPanel'
+import { ProductTree } from '../ProductTree'
 
 jest.mock('@/hooks/useCatalogueProducts', () => ({ invalidateCatalogue: jest.fn() }))
+// The page is server-rendered; the tree asks the router to re-read it after a
+// write. There is no router in jsdom, and what it does is not what these assert.
+const refresh = jest.fn()
+jest.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }))
 
 function variant(over: Partial<CatalogueVariant> = {}): CatalogueVariant {
   return { id: 'v', title: 'V', flavour: null, size: null, price: 14.99, compareAtPrice: null, available: true, ...over }
@@ -31,7 +35,7 @@ function reply(body: unknown, { ok = true, status = 200 } = {}) {
 describe('one product’s variants', () => {
   it('says what is held for each variant, and what is still borrowed from the product', () => {
     render(
-      <ProductVariantsPanel
+      <ProductTree
         product={product({
           variants: [
             variant({ id: 'caps', title: '100 vcaps', sku: 'P100', servings: 33, imageUrl: 'https://pb/caps.jpg', cost: 11.12 }),
@@ -52,7 +56,7 @@ describe('one product’s variants', () => {
     // A star, because it is our inference from "1kg vs 2kg" and not PowerBody's
     // number — and it is the one the pull replaces with a real figure.
     render(
-      <ProductVariantsPanel
+      <ProductTree
         product={product({
           servings: 30,
           variants: [
@@ -72,10 +76,10 @@ describe('one product’s variants', () => {
       report: { asked: 2, answered: 2, unindexed: [], pricesFound: 2, servingsFound: 2, picturesFound: 2, slow: false, elapsedMs: 900, error: null },
     })
 
-    render(<ProductVariantsPanel product={product()} />)
+    render(<ProductTree product={product()} />)
     await userEvent.click(screen.getByRole('button', { name: /Pull 2 SKUs/ }))
 
-    await waitFor(() => expect(screen.getByText('1 variant updated.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/1 SKU updated/)).toBeInTheDocument())
     // Scoped to the product on screen — not the whole catalogue sweep.
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
     expect(body).toEqual({ productId: 'glycine' })
@@ -89,7 +93,7 @@ describe('one product’s variants', () => {
       report: { asked: 2, answered: 2, unindexed: [], pricesFound: 2, servingsFound: 2, picturesFound: 2, slow: false, elapsedMs: 800, error: null },
     })
 
-    render(<ProductVariantsPanel product={product()} />)
+    render(<ProductTree product={product()} />)
     await userEvent.click(screen.getByRole('button', { name: /Pull 2 SKUs/ }))
     await waitFor(() => expect(screen.getByText(/Nothing changed/)).toBeInTheDocument())
   })
@@ -101,7 +105,7 @@ describe('one product’s variants', () => {
       report: { asked: 2, answered: 1, unindexed: ['P200'], pricesFound: 1, servingsFound: 1, picturesFound: 1, slow: false, elapsedMs: 800, error: null },
     })
 
-    render(<ProductVariantsPanel product={product()} />)
+    render(<ProductTree product={product()} />)
     await userEvent.click(screen.getByRole('button', { name: /Pull 2 SKUs/ }))
     await waitFor(() => expect(screen.getByText(/answered for 1 of 2 SKUs/)).toBeInTheDocument())
     expect(screen.getByText(/P200 is not in the crawled product list/)).toBeInTheDocument()
@@ -114,14 +118,14 @@ describe('one product’s variants', () => {
       ok: false, status: 504, json: async () => { throw new Error('not json') },
     }) as unknown as typeof fetch
 
-    render(<ProductVariantsPanel product={product()} />)
+    render(<ProductTree product={product()} />)
     await userEvent.click(screen.getByRole('button', { name: /Pull 2 SKUs/ }))
     await waitFor(() => expect(screen.getByText(/ran out of time \(HTTP 504\)/)).toBeInTheDocument())
   })
 
   it('offers nothing to press when no variant carries a supplier code', () => {
     render(
-      <ProductVariantsPanel
+      <ProductTree
         product={product({ variants: [variant({ id: 'a', sku: null }), variant({ id: 'b', sku: null })] })}
       />,
     )
@@ -146,7 +150,7 @@ describe('naming a product by hand', () => {
   })
 
   it('promotes a flavour row to the product name in one press', async () => {
-    render(<ProductVariantsPanel product={MUDDLED} />)
+    render(<ProductTree product={MUDDLED} />)
 
     // The row wearing the product's name gets the swap rather than the plain
     // copy — see "the two ends the wrong way round" below.
@@ -156,7 +160,7 @@ describe('naming a product by hand', () => {
 
   it('saves the product name and the flavour labels together', async () => {
     reply({ ok: true })
-    render(<ProductVariantsPanel product={MUDDLED} />)
+    render(<ProductTree product={MUDDLED} />)
 
     await userEvent.clear(screen.getByLabelText('Product name'))
     await userEvent.type(screen.getByLabelText('Product name'), 'Hydration+')
@@ -164,7 +168,7 @@ describe('naming a product by hand', () => {
     await userEvent.type(screen.getByLabelText('Name for P48633'), 'Blue Raspberry')
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/will not overwrite those names/)).toBeInTheDocument())
     const [url, init] = (global.fetch as jest.Mock).mock.calls[0]
     expect(url).toBe('/api/portal/products')
     const body = JSON.parse(init.body)
@@ -180,7 +184,7 @@ describe('naming a product by hand', () => {
   })
 
   it('offers what the flavours share, and nothing when they share nothing', () => {
-    const { unmount } = render(<ProductVariantsPanel product={MUDDLED} />)
+    const { unmount } = render(<ProductTree product={MUDDLED} />)
     expect(screen.getByRole('button', { name: 'Use “Hydration+”' })).toBeInTheDocument()
     unmount()
 
@@ -191,19 +195,19 @@ describe('naming a product by hand', () => {
         variant({ id: 'b', sku: 'P2', title: 'Lemon & Lime' }),
       ],
     })
-    render(<ProductVariantsPanel product={unrelated} />)
+    render(<ProductTree product={unrelated} />)
     // The suggestion chip only — the per-row "…as the product name" buttons
     // are a different control and are always there.
     expect(screen.queryByRole('button', { name: /^Use “[^”]+”$/ })).not.toBeInTheDocument()
   })
 
   it('has nothing to save until something is edited', () => {
-    render(<ProductVariantsPanel product={MUDDLED} />)
+    render(<ProductTree product={MUDDLED} />)
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
   })
 
   it('offers to promote only the rows that would change something', async () => {
-    render(<ProductVariantsPanel product={MUDDLED} />)
+    render(<ProductTree product={MUDDLED} />)
     // One row is wearing the product's name and is offered the swap; the other
     // is a flavour like any other and is offered the plain copy.
     expect(screen.getAllByRole('button', { name: /^Make “.+” the product name/ })).toHaveLength(1)
@@ -236,7 +240,7 @@ describe('choosing which SKU is the master', () => {
   })
 
   it('badges the one the shop presents, and offers the rest', () => {
-    render(<ProductVariantsPanel product={SEVEN} />)
+    render(<ProductTree product={SEVEN} />)
     expect(screen.getByText('Master SKU')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Make P200 the master SKU' })).toBeInTheDocument()
     // The master's own row does not offer to become what it already is.
@@ -247,7 +251,7 @@ describe('choosing which SKU is the master', () => {
     // A stored master that is sold out is not what the shop is showing, and a
     // badge on it would describe something that is not happening.
     render(
-      <ProductVariantsPanel
+      <ProductTree
         product={product({
           defaultVariantId: 'caps',
           variants: [
@@ -262,12 +266,12 @@ describe('choosing which SKU is the master', () => {
 
   it('moves the price, picture, cost and serving count onto the chosen SKU', async () => {
     reply({ ok: true })
-    render(<ProductVariantsPanel product={SEVEN} />)
+    render(<ProductTree product={SEVEN} />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Make P200 the master SKU' }))
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await waitFor(() => expect(screen.getByText(/The shop now shows this product/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/now takes this product/)).toBeInTheDocument())
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
     expect(body.patch).toMatchObject({
       defaultVariantId: 'powder',
@@ -286,19 +290,19 @@ describe('choosing which SKU is the master', () => {
     // down. Saving a name is not the moment to pin it, and certainly not the
     // moment to move basePrice onto whichever variant was listed first.
     reply({ ok: true })
-    render(<ProductVariantsPanel product={SEVEN} />)
+    render(<ProductTree product={SEVEN} />)
     await userEvent.clear(screen.getByLabelText('Name for P100'))
     await userEvent.type(screen.getByLabelText('Name for P100'), 'Capsules')
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/will not overwrite those names/)).toBeInTheDocument())
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
     expect(body.patch).not.toHaveProperty('basePrice')
     expect(body.patch).not.toHaveProperty('defaultVariantId')
   })
 
   it('has something to save the moment a different SKU is chosen', async () => {
-    render(<ProductVariantsPanel product={SEVEN} />)
+    render(<ProductTree product={SEVEN} />)
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'Make P200 the master SKU' }))
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled()
@@ -326,7 +330,7 @@ describe('the two ends the wrong way round', () => {
   })
 
   it('puts both ends back in one press', async () => {
-    render(<ProductVariantsPanel product={SWAPPED} />)
+    render(<ProductTree product={SWAPPED} />)
 
     await userEvent.click(
       screen.getByRole('button', { name: 'Make “Vegan Protein” the product name and call this row “Banana”' }),
@@ -338,14 +342,14 @@ describe('the two ends the wrong way round', () => {
   })
 
   it('offers the swap only on the row the title is carrying', () => {
-    render(<ProductVariantsPanel product={SWAPPED} />)
+    render(<ProductTree product={SWAPPED} />)
     expect(screen.getAllByRole('button', { name: /^Make “.+” the product name/ })).toHaveLength(1)
     // The others still offer the plain copy.
     expect(screen.getByRole('button', { name: /Use “Protein, Forest Fruit - 500 grams” as the product name/ })).toBeInTheDocument()
   })
 
   it('takes the product name off the flavours that are wearing it', async () => {
-    render(<ProductVariantsPanel product={SWAPPED} />)
+    render(<ProductTree product={SWAPPED} />)
     await userEvent.click(screen.getByRole('button', { name: /the product name and call this row/ }))
 
     // Two rows now start with "Vegan Protein": the chocolate one, and nothing
@@ -357,16 +361,92 @@ describe('the two ends the wrong way round', () => {
 
   it('saves the flavour and the title together, and never the handle', async () => {
     reply({ ok: true })
-    render(<ProductVariantsPanel product={SWAPPED} />)
+    render(<ProductTree product={SWAPPED} />)
     await userEvent.click(screen.getByRole('button', { name: /the product name and call this row/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    await waitFor(() => expect(screen.getByText(/Names saved/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/will not overwrite those names/)).toBeInTheDocument())
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
     expect(body.patch.title).toBe('Vegan Protein')
     // The shop's picker reads `flavour` and falls back to `title` — a row whose
     // flavour is still the old full name reads as it always did.
     expect(body.patch.variants[0]).toMatchObject({ title: 'Banana', flavour: 'Banana' })
     expect(body.patch).not.toHaveProperty('handle')
+  })
+})
+
+describe('the shape on screen', () => {
+  /*
+    The point of the page. A flat list can SAY which SKU is the master, in a
+    badge, and that is not the same as showing which one the product is and
+    what hangs off it — the founder's question is about a hierarchy.
+  */
+  const SEVEN_ISH = product({
+    defaultVariantId: 'c',
+    variants: [
+      variant({ id: 'a', sku: 'P1', title: 'Banana' }),
+      variant({ id: 'b', sku: 'P2', title: 'Chocolate' }),
+      variant({ id: 'c', sku: 'P3', title: 'Vanilla' }),
+    ],
+  })
+
+  it('draws the master first, whatever order the SKUs are stored in', () => {
+    render(<ProductTree product={SEVEN_ISH} />)
+    const names = screen.getAllByRole('textbox').map((el) => (el as HTMLInputElement).value)
+    // The product's own name field, then the master, then the rest in order.
+    expect(names).toEqual(['Glycine', 'Vanilla', 'Banana', 'Chocolate'])
+  })
+
+  it('says how many hang off it, and calls them what they are', () => {
+    render(<ProductTree product={SEVEN_ISH} />)
+    expect(screen.getByText('The SKU this product is')).toBeInTheDocument()
+    expect(screen.getByText('2 more SKUs, sold as flavours of it')).toBeInTheDocument()
+  })
+
+  it('re-draws the tree the moment a different SKU is made the master', async () => {
+    render(<ProductTree product={SEVEN_ISH} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Make P1 the master SKU' }))
+
+    const names = screen.getAllByRole('textbox').map((el) => (el as HTMLInputElement).value)
+    expect(names).toEqual(['Glycine', 'Banana', 'Chocolate', 'Vanilla'])
+    // …and the SKU that WAS the master is now offered as one of the flavours.
+    expect(screen.getByRole('button', { name: 'Make P3 the master SKU' })).toBeInTheDocument()
+  })
+
+  it('asks the server to re-read the product once a write lands', async () => {
+    // The page is server-rendered, so a save is only finished when the server
+    // has re-read it — that is what turns Save back off and what puts a pull's
+    // new figures into the tree without anybody reloading.
+    reply({ ok: true })
+    render(<ProductTree product={SEVEN_ISH} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Make P1 the master SKU' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+  })
+
+  it('leads back to the dashboard', () => {
+    render(<ProductTree product={SEVEN_ISH} />)
+    expect(screen.getByRole('link', { name: /Back to the dashboard/ })).toHaveAttribute(
+      'href',
+      '/founderhub/products/dashboard',
+    )
+  })
+
+  it('says a sold-out SKU is sold out, without moving it off the master', () => {
+    // The stored master is still the stored master; the tree draws what the
+    // shop is showing, which is the first buyable one.
+    render(
+      <ProductTree
+        product={product({
+          defaultVariantId: 'a',
+          variants: [
+            variant({ id: 'a', sku: 'P1', title: 'Banana', available: false }),
+            variant({ id: 'b', sku: 'P2', title: 'Chocolate' }),
+          ],
+        })}
+      />,
+    )
+    expect(screen.getByText(/P1 · .* · sold out/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Make P1 the master SKU' })).toBeInTheDocument()
   })
 })
