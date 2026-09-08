@@ -1,4 +1,11 @@
-import { relabel, titleLooksLikeAFlavour, type SupplierName } from '../variant-naming'
+import {
+  relabel,
+  titleLooksLikeAFlavour,
+  variantWearingTheProductName,
+  namingLooksWrong,
+  skusToAsk,
+  type SupplierName,
+} from '../variant-naming'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
 
 /**
@@ -91,5 +98,71 @@ describe('titleLooksLikeAFlavour', () => {
     // One SKU: its name IS the product's name, and correctly so.
     const single = product({ variants: [variant({ id: 'a', sku: 'P1', title: 'Hydration+, Blue Raspberry - 240 grams' })] })
     expect(titleLooksLikeAFlavour(single)).toBe(false)
+  })
+})
+
+/**
+ * The product as it actually stood in the shop, from the Hub screenshot.
+ *
+ * Four SKUs. The product is named after the main one; the main one's ROW is
+ * named after the product; the other three still carry their full supplier
+ * names. Nothing here looks like a SKU code, which is what the narrow pass used
+ * to key on — so it asked the supplier about nothing, compared the muddled
+ * titles with themselves, found them consistent and reported nothing to do.
+ */
+const HYDRATION = product({
+  title: 'Hydration+, Blue Raspberry - 240 grams',
+  variants: [
+    variant({ id: 'a', sku: 'P48633', title: 'Hydration+' }),
+    variant({ id: 'b', sku: 'P48636', title: 'Hydration+, Lemon & Lime - 240 grams' }),
+    variant({ id: 'c', sku: 'P48637', title: 'Hydration+, Strawberry Raspberry - 240 grams' }),
+    variant({ id: 'd', sku: 'P48638', title: 'Hydration+, Tropical Vibes - 240 grams' }),
+  ],
+})
+
+const HYDRATION_NAMES = new Map<string, SupplierName>([
+  ['P48633', { name: 'Hydration+, Blue Raspberry - 240 grams', flavour: null }],
+  ['P48636', { name: 'Hydration+, Lemon & Lime - 240 grams', flavour: null }],
+  ['P48637', { name: 'Hydration+, Strawberry Raspberry - 240 grams', flavour: null }],
+  ['P48638', { name: 'Hydration+, Tropical Vibes - 240 grams', flavour: null }],
+])
+
+describe('the product from the shop', () => {
+  it('is asked about in full, not just for the SKUs showing a code', () => {
+    // The bug that made the pass a no-op: none of these look like codes, so the
+    // run fetched nothing and had only the muddled titles to compare.
+    expect(skusToAsk(HYDRATION, false)).toEqual(['P48633', 'P48636', 'P48637', 'P48638'])
+    expect(namingLooksWrong(HYDRATION)).toBe(true)
+    expect(variantWearingTheProductName(HYDRATION)).toBe(true)
+  })
+
+  it('comes out of one narrow pass with the two ends the right way round', () => {
+    const result = relabel(HYDRATION, HYDRATION_NAMES, false)!
+
+    expect(result.renamedTo).toBe('Hydration+')
+    expect(result.product.variants.map((v) => v.title)).toEqual([
+      'Blue Raspberry', 'Lemon & Lime', 'Strawberry Raspberry', 'Tropical Vibes',
+    ])
+    // The flavour is the flavour, on the field the shop's picker reads.
+    expect(result.product.variants.map((v) => v.flavour)).toEqual([
+      'Blue Raspberry', 'Lemon & Lime', 'Strawberry Raspberry', 'Tropical Vibes',
+    ])
+  })
+
+  it('leaves a label somebody typed by hand, even in the same product', () => {
+    const edited = {
+      ...HYDRATION,
+      variants: HYDRATION.variants.map((v, i) => (i === 1 ? { ...v, title: 'Lemon Lime (house name)' } : v)),
+    }
+    const result = relabel(edited, HYDRATION_NAMES, false)!
+
+    expect(result.product.variants[1].title).toBe('Lemon Lime (house name)')
+    // …and the rest are still put right.
+    expect(result.product.variants[0].title).toBe('Blue Raspberry')
+  })
+
+  it('is idempotent — a second press finds nothing left to do', () => {
+    const once = relabel(HYDRATION, HYDRATION_NAMES, false)!
+    expect(relabel(once.product, HYDRATION_NAMES, false)).toBeNull()
   })
 })

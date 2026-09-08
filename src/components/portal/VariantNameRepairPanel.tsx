@@ -9,6 +9,7 @@ interface Candidate {
   title: string
   skus: string[]
   namedAfterAFlavour?: boolean
+  flavourWearingTheName?: boolean
 }
 
 interface Scan {
@@ -161,7 +162,7 @@ export function VariantNameRepairPanel() {
                     ? `${scan.variants} flavour${scan.variants === 1 ? '' : 's'} are showing a SKU code instead of a name.`
                     : null,
                   scan.misnamed
-                    ? `${scan.misnamed} product${scan.misnamed === 1 ? "'s title looks like one of its own flavours." : "s' titles look like one of their own flavours."}`
+                    ? `${scan.misnamed} product${scan.misnamed === 1 ? ' has' : 's have'} the product name and a flavour name the wrong way round.`
                     : null,
                 ]
                   .filter(Boolean)
@@ -199,11 +200,12 @@ export function VariantNameRepairPanel() {
           renamed by hand is left alone, and it is safe to re-run.
           <br />
           <br />
-          It also fixes the other end of the same mix-up: a product named after one of its own flavours.
-          Import took the row&rsquo;s MAIN SKU&rsquo;s name for the whole product, and a main SKU is a
-          flavour — so &ldquo;Hydration+, Blue Raspberry - 240 grams&rdquo; became the product with
-          &ldquo;Hydration+&rdquo; listed under it as a flavour. The product is renamed to what its flavours
-          share; a title you wrote yourself is never touched, and the web address never changes.
+          It also fixes the mix-up at the other end, in both directions: import took the row&rsquo;s MAIN
+          SKU&rsquo;s name for the whole product, and a main SKU is a flavour — so &ldquo;Hydration+, Blue
+          Raspberry - 240 grams&rdquo; became the product, with &ldquo;Hydration+&rdquo; listed under it as
+          one of its flavours. The product is renamed to what its flavours share, and a flavour row wearing
+          that shared name is relabelled with the flavour that tells it apart. A label or a title you wrote
+          yourself is never touched, and the web address never changes.
           <br />
           <br />
           <strong>Use catalogue CSV</strong> is the reliable one: download the dropshipping catalogue from
@@ -270,8 +272,13 @@ export function VariantNameRepairPanel() {
                     {c.skus.length > 6 ? '…' : ''}
                   </>
                 )}
-                {c.skus.length > 0 && c.namedAfterAFlavour ? ' · ' : ''}
-                {c.namedAfterAFlavour ? 'title looks like one of its own flavours' : ''}
+                {c.skus.length > 0 && (c.namedAfterAFlavour || c.flavourWearingTheName) ? ' · ' : ''}
+                {[
+                  c.namedAfterAFlavour ? 'title looks like one of its own flavours' : null,
+                  c.flavourWearingTheName ? 'a flavour is wearing the product’s name' : null,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
               </p>
             </div>
           ))}

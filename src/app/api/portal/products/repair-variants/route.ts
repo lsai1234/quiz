@@ -13,7 +13,10 @@ import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import {
   relabel,
   brokenSkus,
+  namingLooksWrong,
   titleLooksLikeAFlavour,
+  variantWearingTheProductName,
+  skusToAsk,
   type SupplierName,
 } from '@/lib/supplier/variant-naming'
 import { indexPowerBodyCsv, looksLikePowerBodyCsv } from '@/lib/supplier/powerbody-csv'
@@ -143,9 +146,9 @@ async function candidates(force = false): Promise<CatalogueProduct[]> {
   return [...byId.values()].filter((p) =>
     force
       ? p.variants.length > 1 && p.variants.some((v) => v.sku)
-      : // Either a flavour still showing its code, or a product named after one
-        // of its own flavours — both are fixed from the same set of names.
-        brokenSkus(p).length > 0 || titleLooksLikeAFlavour(p),
+      : // A flavour still showing its code, or either end of the name mix-up —
+        // all three are fixed from the same set of supplier names.
+        brokenSkus(p).length > 0 || namingLooksWrong(p),
   )
 }
 
@@ -162,10 +165,12 @@ export async function GET() {
       // with unnamed SKUs, and the same pass fixes it, so the screen counts it
       // separately rather than reporting "0 flavours" and looking clean.
       namedAfterAFlavour: titleLooksLikeAFlavour(p),
+      // …and the other way round: a flavour row wearing the product's name.
+      flavourWearingTheName: variantWearingTheProductName(p),
     })),
     total: affected.length,
     variants: affected.reduce((n, p) => n + brokenSkus(p).length, 0),
-    misnamed: affected.filter(titleLooksLikeAFlavour).length,
+    misnamed: affected.filter(namingLooksWrong).length,
   })
 }
 
@@ -219,13 +224,9 @@ export async function POST(request: Request) {
     })
   }
 
-  const skus = [
-    ...new Set(
-      affected.flatMap((p) =>
-        force ? p.variants.map((v) => v.sku).filter((s): s is string => Boolean(s)) : brokenSkus(p),
-      ),
-    ),
-  ]
+  // Every SKU the run needs a name for — see `skusToAsk`. A product with
+  // muddled names needs all of its own, not only the ones showing a code.
+  const skus = [...new Set(affected.flatMap((p) => skusToAsk(p, force)))]
   const { names, apiError } = await fetchNames(skus, csv)
 
   // Only a total failure is worth refusing: if anything was named, the run is

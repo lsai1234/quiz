@@ -51,6 +51,52 @@ export function titleLooksLikeAFlavour(product: CatalogueProduct): boolean {
   return title.toLowerCase().startsWith(shared.toLowerCase()) && title.length > shared.length
 }
 
+/**
+ * Is one of the VARIANTS wearing the product's name?
+ *
+ * The other face of the same mix-up, and the one in front of you on the shelf:
+ *
+ *   Hydration+, Blue Raspberry - 240 grams
+ *     ├ Hydration+                          ← this
+ *     ├ Hydration+, Lemon & Lime - 240 grams
+ *     └ Hydration+, Tropical Vibes - 240 grams
+ *
+ * "Hydration+" is what every flavour shares, so it cannot be what tells one
+ * flavour from another. A variant labelled with it is not a flavour label at
+ * all — it is the product's name that ended up on a row — and that is provable
+ * from the labels alone, with no supplier call and no judgement.
+ */
+export function variantWearingTheProductName(product: CatalogueProduct): boolean {
+  if (product.variants.length < 2) return false
+  const shared = commonProductName(product.variants.map((v) => v.title))
+  const title = product.title.trim().toLowerCase()
+  return product.variants.some((v) => {
+    const label = v.title.trim().toLowerCase()
+    return (shared !== null && label === shared.toLowerCase()) || label === title
+  })
+}
+
+/** Either end of the mix-up: the product wearing a flavour, or the reverse. */
+export function namingLooksWrong(product: CatalogueProduct): boolean {
+  return titleLooksLikeAFlavour(product) || variantWearingTheProductName(product)
+}
+
+/**
+ * The SKUs a repair run has to ask the supplier about.
+ *
+ * Not just the ones showing a code. A product whose NAMES are muddled — the
+ * title is a flavour, or a flavour is the title — can only be untangled by
+ * comparing what the supplier calls every one of its SKUs, so all of them are
+ * asked about. Getting this wrong was silent and total: the pass listed the
+ * product, fetched nothing, compared the muddled titles with themselves, found
+ * them consistent, and reported that there was nothing to do.
+ */
+export function skusToAsk(product: CatalogueProduct, force: boolean): string[] {
+  const all = product.variants.map((v) => v.sku).filter((s): s is string => Boolean(s))
+  if (force || namingLooksWrong(product)) return all
+  return brokenSkus(product)
+}
+
 /** The variants of a product that still carry a raw code as their title. */
 export function brokenSkus(product: CatalogueProduct): string[] {
   if (product.variants.length < 2) return []
@@ -70,18 +116,53 @@ export function relabel(
   names: Map<string, SupplierName>,
   force: boolean,
 ): { product: CatalogueProduct; fixed: Record<string, string>; unresolved: string[]; renamedTo?: string } | null {
-  /* Which variants this run is allowed to touch. */
-  const rewritable = (v: CatalogueVariant) => force || looksLikeSku(v.title)
+  /*
+    Which variants this run is allowed to touch.
 
+    Three things are provably not a label anybody chose, and each is safe to
+    overwrite without `force`:
+
+      · a raw supplier code, "P45757" — the original bug;
+      · the supplier's own full name for that SKU, which is what a variant
+        carries when nothing has ever shortened it;
+      · the name every sibling shares, which cannot tell one flavour from
+        another and is therefore the PRODUCT's name sitting on a row.
+
+    Anything else is somebody's wording and is left alone — that is what makes
+    the narrow pass safe to press, and it is the reason `force` still exists for
+    the labels a person genuinely typed.
+  */
+  // Read from the supplier's names where we have them: a sibling somebody has
+  // renamed by hand must not decide what the rest of them share.
+  const shared = commonProductName(
+    product.variants.map((v) => names.get(v.sku ?? '')?.name ?? v.title),
+  )
+  const rewritable = (v: CatalogueVariant) => {
+    if (force || looksLikeSku(v.title)) return true
+    const label = v.title.trim()
+    if (shared && label.toLowerCase() === shared.toLowerCase()) return true
+    return label === (names.get(v.sku ?? '')?.name ?? '').trim()
+  }
+
+  /*
+    The diff runs over the SUPPLIER's names wherever we have them, whatever we
+    then decide to write.
+
+    It used to feed a kept label back in so it took part in working out the
+    common prefix — which was right when names were only ever fetched for the
+    SKUs showing a code, and is wrong now that a muddled product is asked about
+    in full. One hand-named sibling ("Lemon Lime (house name)") shares nothing
+    with "Hydration+, Tropical Vibes - 240 grams", so it dragged the common
+    prefix to nothing and every OTHER flavour came out as its whole
+    sixty-character name. Comparing the supplier's own set keeps the labels
+    coherent; the write guard below is what keeps the founder's wording.
+  */
   const labels = variantLabels(
     product.variants.map((v) => {
       const found = names.get(v.sku ?? '')
       return {
         sku: v.sku ?? v.id,
-        // A title we are not rewriting is a name somebody is happy with — feed
-        // it back in so it takes part in working out the common prefix, and so
-        // it survives untouched.
-        name: rewritable(v) ? (found?.name ?? null) : v.title,
+        name: found?.name ?? v.title,
         flavour: rewritable(v) ? (found?.flavour ?? null) : null,
       }
     }),
@@ -118,6 +199,9 @@ export function relabel(
   const renamedTo =
     titleFromSiblings(
       product.title,
+      // The supplier's names where we have them, and the current labels where
+      // we do not — the same fallback the labels use, so both halves of the
+      // repair are reading the same set of names.
       product.variants.map((v) => names.get(v.sku ?? '')?.name ?? v.title),
     ) ?? undefined
 
