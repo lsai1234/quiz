@@ -40,6 +40,7 @@ import {
   type PricingConfig,
 } from '@/lib/stack-blueprint/pricing'
 import { normaliseRoster } from './top-products'
+import { spreadServings } from '@/lib/catalogue/servings'
 import { readJson, writeJson } from './persist'
 
 export type ProductOverrides = Record<string, Partial<CatalogueProduct>>
@@ -337,5 +338,29 @@ export function applyProductOverrides(
   overrides: ProductOverrides,
 ): CatalogueProduct[] {
   if (Object.keys(overrides).length === 0) return products
-  return products.map((p) => (overrides[p.id] ? { ...p, ...overrides[p.id] } : p))
+  return products.map((p) => {
+    const override = overrides[p.id]
+    if (!override) return p
+    const merged = { ...p, ...override }
+
+    /*
+      A serving count a founder typed beats the supplier's.
+
+      The merge is shallow, and `servings` is a PRODUCT field while the shop
+      reads the SELECTED SKU's own count (`servingsForVariant`) — so an override
+      saying 20 sat on top of variants saying 12 and the shelf went on saying 12
+      for ever. The founder's number was in the database, correct, and ignored.
+
+      Spread at COMPOSE rather than at save, so it is one rule in one place and
+      so every product already carrying a founder's number is right the moment
+      this ships — nobody has to go back and retype fifteen products.
+
+      Only the SKUs of the master's size, because that is the unit the number
+      describes: 100 capsules beside a 454g bag are 33 servings and 454, and
+      those keep their own (see `catalogue/split`).
+    */
+    if (override.servings === undefined) return merged
+    const variants = spreadServings(merged, merged.servings)
+    return variants ? { ...merged, variants } : merged
+  })
 }

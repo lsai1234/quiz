@@ -50,6 +50,60 @@ describe('product overrides store', () => {
     await clearProductOverride('a')
     expect(applyProductOverrides(base, await getProductOverrides())[0].cost).toBe(10)
   })
+
+  /*
+    The merge is shallow, and `servings` is a PRODUCT field while the shop reads
+    the SELECTED SKU's own count. So an override saying 20 sat on top of
+    variants saying 12 and the shelf went on saying 12 — the founder's number
+    was in the database, correct, and ignored.
+  */
+  it('lets a founder’s serving count beat the supplier’s per-SKU one', async () => {
+    const bars = makeProduct({
+      id: 'bars',
+      servings: 12,
+      variants: [
+        { id: 'a', title: 'Black Biscuit', flavour: null, size: '60 g', price: 42.99, compareAtPrice: null, available: true, sku: 'P1', servings: 12 },
+        { id: 'b', title: 'Fudged Up', flavour: null, size: '60 g', price: 42.99, compareAtPrice: null, available: true, sku: 'P2', servings: 12 },
+      ],
+    })
+    await setProductOverride('bars', { servings: 20 })
+
+    const [out] = applyProductOverrides([bars], await getProductOverrides())
+    expect(out.servings).toBe(20)
+    expect(out.variants.map((v) => v.servings)).toEqual([20, 20])
+    await clearProductOverride('bars')
+  })
+
+  it('leaves a SKU of a different size to its own count', async () => {
+    // 100 capsules and a 454g bag are 33 servings and 454 — the one case a
+    // product-level number cannot describe.
+    const glycine = makeProduct({
+      id: 'glycine',
+      defaultVariantId: 'caps',
+      variants: [
+        { id: 'caps', title: '100 vcaps', flavour: null, size: '100 caps', price: 14.99, compareAtPrice: null, available: true, sku: 'P1', servings: 33 },
+        { id: 'powder', title: 'Pure Powder', flavour: null, size: '454 grams', price: 39.99, compareAtPrice: null, available: true, sku: 'P2', servings: 454 },
+      ],
+    })
+    await setProductOverride('glycine', { servings: 100 })
+
+    const [out] = applyProductOverrides([glycine], await getProductOverrides())
+    expect(out.variants.map((v) => v.servings)).toEqual([100, 454])
+    await clearProductOverride('glycine')
+  })
+
+  it('leaves the SKUs alone when the override says nothing about servings', async () => {
+    const bars = makeProduct({
+      id: 'quiet',
+      variants: [
+        { id: 'a', title: 'A', flavour: null, size: '60 g', price: 42.99, compareAtPrice: null, available: true, sku: 'P1', servings: 12 },
+      ],
+    })
+    await setProductOverride('quiet', { cost: 5 })
+    const [out] = applyProductOverrides([bars], await getProductOverrides())
+    expect(out.variants[0].servings).toBe(12)
+    await clearProductOverride('quiet')
+  })
 })
 
 describe('data-source setting', () => {

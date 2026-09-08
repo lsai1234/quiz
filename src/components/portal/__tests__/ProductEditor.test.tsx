@@ -29,64 +29,50 @@ function reply(body: unknown, { ok = true, status = 200 } = {}) {
 
 describe('editing a product’s serving count', () => {
   /*
-    The bug this covers: "Servings per unit" wrote `product.servings`, and the
+    The bug behind these: "Servings per unit" writes `product.servings`, and the
     shop reads the selected SKU's own count. A founder typed 20, watched it
-    save, and saw 12 on the shelf for ever — an edit that appears to work.
+    save, and saw 12 on the shelf.
+
+    The fix is NOT here — it is in `applyProductOverrides`, which now lets a
+    founder's number beat the supplier's per-SKU one when the catalogue is
+    composed. That is deliberate: one rule in one place, and every product
+    already carrying a founder's number came right without anybody retyping it.
+    This editor's job is only to send the number.
   */
-  it('carries the number onto the SKUs the shop reads', async () => {
+  it('shows the founder’s number and sends it', async () => {
     reply({ ok: true })
-    render(<ProductEditor product={product()} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
+    render(<ProductEditor product={product({ servings: 20 })} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
+    expect(screen.getByLabelText('Servings per unit')).toHaveValue(20)
 
     const field = screen.getByLabelText('Servings per unit')
     await userEvent.clear(field)
-    await userEvent.type(field, '20')
+    await userEvent.type(field, '25')
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalled())
     const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
-    expect(body.patch.servings).toBe(20)
-    expect(body.patch.variants.map((v: { servings: number }) => v.servings)).toEqual([20, 20])
-  })
-
-  it('shows the number the SHOP is showing, not the one nothing reads', async () => {
-    /*
-      The Chunky Protein Bar after the first attempt at this fix: an earlier
-      save had put 20 into `product.servings`, the SKUs still said 12, and the
-      shelf said 12. The box opened on 20 — so typing 20 changed nothing, so
-      nothing was written, and it stayed wrong. A field showing a number the
-      shop does not use cannot be corrected; there is nothing visibly wrong
-      with it.
-    */
-    reply({ ok: true })
-    const stuck = product({ servings: 20 }) // variants still say 12
-    render(<ProductEditor product={stuck} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
-    expect(screen.getByLabelText('Servings per unit')).toHaveValue(12)
-
-    const field = screen.getByLabelText('Servings per unit')
-    await userEvent.clear(field)
-    await userEvent.type(field, '20')
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
-    expect(body.patch.variants.map((v: { servings: number }) => v.servings)).toEqual([20, 20])
-  })
-
-  it('says how many SKUs it will apply to', () => {
-    render(<ProductEditor product={product()} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
-    expect(screen.getByText(/Applies to the 2 SKUs of this size/)).toBeInTheDocument()
-  })
-
-  it('leaves the SKUs alone when the number was not touched', async () => {
-    // Every save posts `servings`, so "did it change" is the only honest test —
-    // otherwise opening a product and pressing Save rewrites its variants. The
-    // comparison is against what the shop shows, which is what the box shows.
-    reply({ ok: true })
-    render(<ProductEditor product={product()} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
-    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body.patch.servings).toBe(25)
+    // The variants are not rewritten from here. Composing does that, so a save
+    // for some other reason cannot quietly restate every SKU's serving count.
     expect(body.patch).not.toHaveProperty('variants')
+  })
+
+  it('says what the number covers', () => {
+    render(<ProductEditor product={product()} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
+    expect(screen.getByText(/what the shop shows for the 2 SKUs of this size/)).toBeInTheDocument()
+  })
+
+  it('turns an emptied box into a zero, not a NaN', async () => {
+    // `parseFloat('')` is NaN, which React will not render and which
+    // `JSON.stringify` sends as null — so clearing a field to retype it wrote a
+    // null into the catalogue.
+    reply({ ok: true })
+    render(<ProductEditor product={product()} allProducts={[]} onClose={jest.fn()} onSaved={jest.fn()} />)
+    await userEvent.clear(screen.getByLabelText('Servings per unit'))
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalled())
+    const body = JSON.parse((global.fetch as jest.Mock).mock.calls[0][1].body)
+    expect(body.patch.servings).toBe(0)
   })
 })
