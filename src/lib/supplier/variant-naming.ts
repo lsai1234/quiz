@@ -18,7 +18,16 @@
  * repair-variants`) fetches the names and this decides what to do with them.
  */
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
-import { variantLabels, looksLikeSku, titleFromSiblings, commonProductName } from './variant-labels'
+import {
+  variantLabels,
+  looksLikeSku,
+  titleFromSiblings,
+  commonProductName,
+  nameSwap,
+  withoutProductName,
+  sharedPackSuffix,
+  withoutPackSuffix,
+} from './variant-labels'
 
 /** What a source knows about one SKU. */
 export interface SupplierName {
@@ -219,4 +228,94 @@ export interface SupplierName {
   name: string
   /** The supplier's own flavour field. Present far less often than the name. */
   flavour: string | null
+}
+
+/**
+ * Put a product's name and its flavours' names the right way round, from what
+ * we already hold.
+ *
+ * ── Why this is not the repair above ────────────────────────────────────────
+ * `relabel` asks PowerBody what each SKU is called and works from the answer.
+ * That is right when the labels are missing or wrong, and it is useless for the
+ * damage that is left AFTER a good import: names that are all present, all
+ * correct as supplier names, and on the wrong rows.
+ *
+ *   Protein Bars, Caramel Chaos - 12 x 60g       ← the product
+ *     ├ Protein Bars                             ← the product's name, on a row
+ *     ├ Bars, Chocolate Chip Cookie Dough - …
+ *     └ Protein Bars, Dark Chocolate Mint - …
+ *
+ * Nothing needs fetching to see that. The product's title opens with one of its
+ * own rows' labels and then keeps going, so that row is wearing the product's
+ * name and the title is carrying that row's flavour. Both halves are provable
+ * from strings we hold, which is why this needs no network, cannot half-fail,
+ * and can be run over the whole catalogue in one press.
+ *
+ * Two corrections, in order:
+ *   1. the SWAP — the row wearing the name gives it up, and takes back the
+ *      flavour the title was carrying;
+ *   2. the TRIM — every other row that repeats the product's name loses it,
+ *      because "Protein Bars, Dark Chocolate Mint" under a product called
+ *      "Protein Bars" is the product's name printed twice and the flavour once.
+ *
+ * The trim runs whether or not the swap did: a product that was already named
+ * correctly can still have rows repeating it.
+ *
+ * Null when there is nothing to do, so a sweep can skip the write.
+ */
+export function putNamesRightWayRound(
+  product: CatalogueProduct,
+): { title: string; variants: CatalogueVariant[]; swapped: string | null } | null {
+  if (product.variants.length < 2) return null
+
+  /*
+    Which row is wearing the product's name.
+
+    The master first when it is one of them. It usually is — it is the SKU whose
+    supplier name became the title — and where two rows both open the title, the
+    one the product presents itself as is the one the title came from.
+  */
+  const candidates = product.variants.filter((v) => nameSwap(product.title, v.title, v.size))
+  const wearer =
+    candidates.find((v) => v.id === product.defaultVariantId) ?? candidates[0] ?? null
+  const swap = wearer ? nameSwap(product.title, wearer.title, wearer.size) : null
+
+  const title = swap ? swap.title : product.title.trim()
+
+  const trimmed = product.variants.map((v) =>
+    v.id === wearer?.id && swap ? swap.label : withoutProductName(v.title, title, v.size),
+  )
+  /*
+    …and the same argument applied to the other end.
+
+    PowerBody's names routinely still carry the pack size after the flavour —
+    "Caramel Chaos - 12 x 60g", "Fudged Up - 12 x 60g" — which every sibling
+    shares and which therefore cannot tell one from another. It is printed
+    beside the label anyway.
+
+    Narrow on purpose: only a numeric pack spec after a spaced dash, and only
+    when every label carries the SAME one. See `sharedPackSuffix` for what
+    happens if you generalise this to "whatever they all end with".
+  */
+  const tail = sharedPackSuffix(trimmed)
+
+  const variants = product.variants.map((v, i) => {
+    const label = tail ? withoutPackSuffix(trimmed[i], tail) : trimmed[i]
+    /*
+      Untouched means UNTOUCHED, `flavour` included.
+
+      A row still showing its raw code has `flavour: null` on purpose — it is
+      the honest "we were never told", and it is what the supplier-driven
+      repair looks for. Stamping the code into `flavour` because this pass
+      happened to walk past would hide it from the pass that can fix it.
+    */
+    if (label === v.title) return v
+    // The label and the flavour move together: the shop's picker reads
+    // `flavour` and falls back to `title`, so setting one and not the other is
+    // how a product ends up named two different things.
+    return { ...v, title: label, flavour: label }
+  })
+
+  const changed = title !== product.title || variants.some((v, i) => v !== product.variants[i])
+  return changed ? { title, variants, swapped: swap ? (wearer?.sku ?? wearer?.id ?? null) : null } : null
 }

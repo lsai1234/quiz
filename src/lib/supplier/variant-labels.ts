@@ -342,3 +342,57 @@ export function nameSwap(
 export function withoutProductName(label: string, title: string, size?: string | null): string {
   return splitOff(label, title, size) ?? (label ?? '').trim()
 }
+
+/**
+ * The pack size every sibling label ends with — "12 x 60g" — or null.
+ *
+ * ── Why this is not the mirror of `commonProductName` ───────────────────────
+ * It was, first, and a shared ENDING is far weaker evidence than a shared
+ * opening. "Caramel Chaos" beside "Fudged Up Caramel Chaos" share "Caramel
+ * Chaos" at the end, and that shared run is the flavour itself: stripping it
+ * leaves "Caramel" and "Fudged Up Caramel". A prefix diff cannot make that
+ * mistake, because a product's name legitimately opens its flavours' names;
+ * nothing makes the end of a name safe to remove just because it repeats.
+ *
+ * So this looks for one specific shape instead of anything that happens to
+ * repeat: a final segment, cut at a spaced dash, identical across every label,
+ * carrying a digit.
+ *
+ *   Caramel Chaos - 12 x 60g          → "12 x 60g"
+ *   Fudged Up - 12 x 60g              → "12 x 60g"     ✓ strip it
+ *
+ *   Caramel Chaos - 12 x 60g          → "12 x 60g"
+ *   Fudged Up - 6 x 60g               → "6 x 60g"      ✗ different packs, so
+ *                                                        the pack is part of
+ *                                                        what tells them apart
+ *
+ * The dash must have spaces around it, which is what keeps "Chocolate-Cinnamon"
+ * whole, and the digit is what keeps this to pack sizes rather than to any
+ * phrase a brand happens to end all its flavours with.
+ */
+export function sharedPackSuffix(names: string[]): string | null {
+  const usable = names.map((n) => (n ?? '').trim()).filter((n) => n.length > 0)
+  if (usable.length < 2) return null
+
+  const tails = usable.map((n) => {
+    const parts = n.split(/\s[-–—]\s/)
+    if (parts.length < 2) return null
+    const tail = parts[parts.length - 1].trim()
+    // Something has to be left in front of it, and it has to be a pack rather
+    // than a word: a digit is the cheap, honest test for that.
+    return parts.slice(0, -1).join(' ').trim() && /\d/.test(tail) ? tail : null
+  })
+
+  const first = tails[0]
+  if (!first) return null
+  return tails.every((t) => t !== null && t.toLowerCase() === first.toLowerCase()) ? first : null
+}
+
+/** A label with its pack suffix taken off, or unchanged when it has none. */
+export function withoutPackSuffix(label: string, suffix: string): string {
+  const l = (label ?? '').trim()
+  const t = (suffix ?? '').trim()
+  if (!t || l.length <= t.length) return l
+  if (l.slice(-t.length).toLowerCase() !== t.toLowerCase()) return l
+  return tidy(l.slice(0, -t.length)) || l
+}

@@ -3,6 +3,7 @@ import { SupplierIndexBuilder } from '@/components/portal/SupplierIndexBuilder'
 import { SupplierImport } from '@/components/portal/SupplierImport'
 import { SupplierSyncPanel } from '@/components/portal/SupplierSyncPanel'
 import { DescriptionCleanupPanel } from '@/components/portal/DescriptionCleanupPanel'
+import { NameOrderRepairPanel } from '@/components/portal/NameOrderRepairPanel'
 import { VariantNameRepairPanel } from '@/components/portal/VariantNameRepairPanel'
 import { VariantPriceRepairPanel } from '@/components/portal/VariantPriceRepairPanel'
 
@@ -26,6 +27,12 @@ export default function SupplierPage() {
           the sync panel because both are about products already here, above the
           three panels that bring new ones in. */}
       <DescriptionCleanupPanel />
+
+      {/* Products wearing one of their own flavours' names. First of the two
+          name panels because it needs nothing from PowerBody — it reads the
+          names we already hold — so it is the one to press before deciding
+          whether anything still has to be fetched. */}
+      <NameOrderRepairPanel />
 
       {/* Flavours that came in as bare SKU codes, from before import looked up
           anything but a row's main SKU. Also about products already here. */}

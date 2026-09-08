@@ -116,7 +116,7 @@ export function ProductPageView({ product, sellableKeys }: Props) {
           the grid as well, which is the shape of a scarcity badge whether or
           not the number behind it is true.
         */}
-        {stock.count != null && stock.count < 5 && (
+        {stock.count != null && stock.count > 0 && stock.count < 5 && (
           <p className="sf-meta" style={{ marginTop: 'var(--space-3)' }}>
             Only <span className="sf-num">{stock.count}</span> left
           </p>

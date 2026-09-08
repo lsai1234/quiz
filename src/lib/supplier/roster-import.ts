@@ -24,6 +24,7 @@ import type { RosterRow } from './roster-csv'
 import { listPriceFor } from '@/lib/pricing/list-price'
 import { rhythmForSwap, classifySupplierProduct } from './mapping'
 import { variantLabels, commonProductName } from './variant-labels'
+import { putNamesRightWayRound } from './variant-naming'
 
 function slugify(s: string): string {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
@@ -382,5 +383,33 @@ export function rosterRowToProduct(
     )
   }
 
-  return { product, enriched: Boolean(supplier), notes }
+  /*
+    Last: put the two ends of the naming the right way round.
+
+    `sharedName` is what the siblings have in common, and it finds nothing when
+    their supplier names are inconsistent — "Protein Bars, Caramel Chaos - 12 x
+    60g" beside "Bars, Chocolate Chip Cookie Dough - 12 x 60g" share no opening
+    word at all. The title then falls back to the MAIN sku's name, which is one
+    flavour of the product, and the product goes live named after it with its
+    own name sitting underneath as a flavour.
+
+    `putNamesRightWayRound` sees that from the strings alone: the title opens
+    with one of the rows and keeps going, so that row is wearing the name and
+    the title is carrying that row's flavour. It is the same correction the
+    founder presses on a product already in the shop, applied here so it does
+    not have to be.
+  */
+  const righted = putNamesRightWayRound(product)
+  if (righted) {
+    notes.push(
+      `Imported as “${product.title}”, which is one of its own flavours — renamed to ` +
+        `“${righted.title}” from what the flavours have in common. Check it reads like a product.`,
+    )
+  }
+
+  return {
+    product: righted ? { ...product, title: righted.title, variants: righted.variants } : product,
+    enriched: Boolean(supplier),
+    notes,
+  }
 }

@@ -4,6 +4,7 @@ import {
   variantWearingTheProductName,
   namingLooksWrong,
   skusToAsk,
+  putNamesRightWayRound,
   type SupplierName,
 } from '../variant-naming'
 import type { CatalogueProduct, CatalogueVariant } from '@/lib/catalogue/types'
@@ -164,5 +165,147 @@ describe('the product from the shop', () => {
   it('is idempotent — a second press finds nothing left to do', () => {
     const once = relabel(HYDRATION, HYDRATION_NAMES, false)!
     expect(relabel(once.product, HYDRATION_NAMES, false)).toBeNull()
+  })
+})
+
+describe('putting both ends right from what we already hold', () => {
+  /*
+    The Grenade bars, as they actually went live: every name present, every one
+    a correct supplier name, and on the wrong rows. There is nothing to fetch —
+    the title opens with one of its own rows and then keeps going.
+  */
+  const BARS = product({
+    title: 'Protein Bars, Caramel Chaos - 12 x 60g',
+    variants: [
+      variant({ id: 'a', sku: 'P24068', title: 'Protein Bars', size: '60 g' }),
+      variant({ id: 'b', sku: 'P51981', title: 'Protein Bars, Chocolate Chip Cookie Dough - 12 x 60g', size: '60 g' }),
+      variant({ id: 'c', sku: 'P51982', title: 'Bars, Dark Chocolate Mint - 12 x 60g', size: '60 g' }),
+    ],
+    defaultVariantId: 'a',
+  })
+
+  it('swaps the two ends and trims the rest, with no supplier call', () => {
+    const out = putNamesRightWayRound(BARS)!
+    expect(out.title).toBe('Protein Bars')
+    // The row that was wearing the product's name takes back the flavour the
+    // title was carrying — and the pack size every sibling repeats comes off
+    // the end, because a run they all share cannot tell them apart.
+    expect(out.variants[0]).toMatchObject({ title: 'Caramel Chaos', flavour: 'Caramel Chaos' })
+    // …the row repeating the product's name loses the repetition…
+    expect(out.variants[1].title).toBe('Chocolate Chip Cookie Dough')
+    // …and the row named some other way keeps its own wording, minus that
+    // same shared ending.
+    expect(out.variants[2].title).toBe('Bars, Dark Chocolate Mint')
+    expect(out.swapped).toBe('P24068')
+  })
+
+  it('trims even when the product was already named correctly', () => {
+    const out = putNamesRightWayRound(
+      product({
+        title: 'Protein Bars',
+        variants: [
+          variant({ id: 'a', sku: 'P1', title: 'Protein Bars, Caramel Chaos - 12 x 60g' }),
+          variant({ id: 'b', sku: 'P2', title: 'Fudged Up' }),
+        ],
+      }),
+    )!
+    expect(out.title).toBe('Protein Bars')
+    expect(out.swapped).toBeNull()
+    expect(out.variants[0].title).toBe('Caramel Chaos - 12 x 60g')
+    expect(out.variants[1].title).toBe('Fudged Up')
+  })
+
+  it('prefers the master when two rows both open the title', () => {
+    // The title came from the master's supplier name, so where two rows could
+    // be the one wearing it, the master is the one it came from.
+    const out = putNamesRightWayRound(
+      product({
+        title: 'Whey Protein Professional, Banana',
+        defaultVariantId: 'b',
+        variants: [
+          variant({ id: 'a', sku: 'P1', title: 'Whey' }),
+          variant({ id: 'b', sku: 'P2', title: 'Whey Protein Professional' }),
+        ],
+      }),
+    )!
+    expect(out.title).toBe('Whey Protein Professional')
+    expect(out.swapped).toBe('P2')
+  })
+
+  it('leaves a row still showing its code alone, flavour included', () => {
+    // `flavour: null` is the honest "we were never told", and it is what the
+    // supplier-driven repair looks for. Stamping the code into it would hide
+    // the row from the pass that can actually fix it.
+    const out = putNamesRightWayRound(
+      product({
+        title: 'Hydration+, Blue Raspberry - 240 grams',
+        variants: [
+          variant({ id: 'a', sku: 'P1', title: 'Hydration+' }),
+          variant({ id: 'b', sku: 'P2', title: 'P45757' }),
+        ],
+      }),
+    )!
+    expect(out.variants[1]).toMatchObject({ title: 'P45757', flavour: null })
+  })
+
+  it('says nothing about a product that is already right', () => {
+    expect(
+      putNamesRightWayRound(
+        product({
+          title: 'Hydration+',
+          variants: [
+            variant({ id: 'a', sku: 'P1', title: 'Blue Raspberry', flavour: 'Blue Raspberry' }),
+            variant({ id: 'b', sku: 'P2', title: 'Lemon & Lime', flavour: 'Lemon & Lime' }),
+          ],
+        }),
+      ),
+    ).toBeNull()
+    // …and has nothing to compare on a product with one SKU.
+    expect(putNamesRightWayRound(product({ variants: [variant({ id: 'a', title: 'Hydration+' })] }))).toBeNull()
+  })
+})
+
+describe('the pack size they all end with', () => {
+  it('comes off, because it cannot tell one flavour from another', () => {
+    const out = putNamesRightWayRound(
+      product({
+        title: 'Protein Bars',
+        variants: [
+          variant({ id: 'a', sku: 'P1', title: 'Caramel Chaos - 12 x 60g' }),
+          variant({ id: 'b', sku: 'P2', title: 'Fudged Up - 12 x 60g' }),
+        ],
+      }),
+    )!
+    expect(out.variants.map((v) => v.title)).toEqual(['Caramel Chaos', 'Fudged Up'])
+  })
+
+  it('stays on when the packs differ', () => {
+    // Then the pack IS part of what tells them apart, which is the whole test.
+    expect(
+      putNamesRightWayRound(
+        product({
+          title: 'Protein Bars',
+          variants: [
+            variant({ id: 'a', sku: 'P1', title: 'Caramel Chaos - 12 x 60g' }),
+            variant({ id: 'b', sku: 'P2', title: 'Fudged Up - 6 x 60g' }),
+          ],
+        }),
+      ),
+    ).toBeNull()
+  })
+
+  it('will not take the flavour off the end of a flavour', () => {
+    // The trap a generic "strip whatever they all end with" walks into: these
+    // two share "Caramel Chaos" at the end, and that shared run IS the flavour.
+    const out = putNamesRightWayRound(
+      product({
+        title: 'Protein Bars',
+        variants: [
+          variant({ id: 'a', sku: 'P1', title: 'Caramel Chaos' }),
+          variant({ id: 'b', sku: 'P2', title: 'Fudged Up Caramel Chaos' }),
+        ],
+      }),
+    )
+    expect(out).toBeNull()
   })
 })
