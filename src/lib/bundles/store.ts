@@ -97,7 +97,7 @@ export async function editProductBundle(slug: string, patch: Partial<ProductBund
 /**
  * Delete a pre-built bundle.
  *
- * Refused while a workout bundle still points at it. Deleting it anyway would
+ * Refused while a session stack still points at it. Deleting it anyway would
  * empty every package built on it at once, and the packages are the things
  * customers can see — so the founder is told which ones to re-point first
  * rather than finding out from the shop.
@@ -121,7 +121,7 @@ export async function resetProductBundlesStore(): Promise<void> {
   await saveProductBundles([])
 }
 
-// ── Workout bundles (the packages) ────────────────────────────────────────────
+// ── Session stacks (the packages) ────────────────────────────────────────────
 
 /** True when a slug belongs to a shipped seed (edited via overrides, never deleted). */
 function isSeedSlug(slug: string): boolean {

@@ -191,14 +191,14 @@ They are authored entirely in the Hub (`/founderhub/products/prebuilt`), because
 which products belong together moves with the range and does not belong in a
 deploy, and they are stored apart from the packages that sell them.
 
-**A workout bundle** is what a customer buys: a session, a name, a photograph,
+**A session stack** is what a customer buys: a session, a name, a photograph,
 the copy — and a pointer at one of those stacks. It is what the shop shelf shows
-and what `/bundles/[slug]` renders. Several workout bundles can point at the same
+and what `/bundles/[slug]` renders. Several session stacks can point at the same
 pre-built bundle, which is the whole reason for the split: a stack used to be
 copied into every package that used it, so a product swapped out of "Strength"
 had to be swapped out of each one by hand.
 
-Resolution happens on read (`composeBundles`): a workout bundle's `blueprint` and
+Resolution happens on read (`composeBundles`): a session stack's `blueprint` and
 `addOns` come from its pre-built bundle every time, so nothing can hold a stale
 copy of a stack. An unlinked package resolves to an empty stack — priced at
 nothing, `isBundleSellable` false, hidden from the shop, and readiness says which

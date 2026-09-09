@@ -5,8 +5,8 @@ import { founderSessionViaApi } from './accounts'
  * Putting a bundle on sale.
  *
  * A bundle is two records: a PRE-BUILT BUNDLE is a named stack of products, and
- * a WORKOUT BUNDLE is a session plus one of those stacks. The shipped seeds are
- * workout bundles with no stack chosen — which stack each one sells is decided
+ * a SESSION STACK is a session plus one of those stacks. The shipped seeds are
+ * session stacks with no pre-built bundle chosen — which one each sells is decided
  * in the Hub against the live range, not in the repository — so a test that
  * wants a buyable bundle page has to make that link first, exactly as a founder
  * would.
@@ -70,7 +70,7 @@ export async function ensureStack(page: Page): Promise<void> {
   }
 }
 
-/** Point a workout bundle at that stack and publish it. */
+/** Point a session stack at that pre-built bundle and publish it. */
 export async function sellBundle(page: Page, slug: string): Promise<void> {
   await founderSessionViaApi(page)
   await ensureStack(page)
@@ -80,7 +80,7 @@ export async function sellBundle(page: Page, slug: string): Promise<void> {
   expect(res.ok(), `linking ${slug} failed: ${await res.text()}`).toBe(true)
 }
 
-/** Take a workout bundle off sale by unlinking it, the way a seed ships. */
+/** Take a session stack off sale by unlinking it, the way a seed ships. */
 export async function unlinkBundle(page: Page, slug: string): Promise<void> {
   await founderSessionViaApi(page)
   const res = await page.request.post('/api/portal/bundles', {

@@ -371,7 +371,7 @@ export function ShopShell() {
   )
 
   const bundlesNav: ShopCategory | null =
-    filteredBundles.length > 0 ? { category: 'Bundles', slug: 'bundles', products: [] } : null
+    filteredBundles.length > 0 ? { category: 'Session stacks', slug: 'bundles', products: [] } : null
 
   const navCategories = [
     ...(bundlesNav ? [bundlesNav] : []),

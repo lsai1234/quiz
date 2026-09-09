@@ -14,7 +14,7 @@ import { calculatePricing } from '@/lib/stack-blueprint/pricing'
 export const dynamic = 'force-dynamic'
 
 /**
- * Pre-built bundles — the named product stacks a workout bundle sells.
+ * Pre-built bundles — the named product stacks that session stacks sell.
  *
  * Separate from `/api/portal/bundles` because they are separate things: this
  * one owns products, that one owns a session and a story. The split is what
@@ -90,7 +90,7 @@ export async function POST(req: Request) {
 /**
  * Delete a stack.
  *
- * Refused while a workout bundle still sells it — the store says which ones, so
+ * Refused while a session stack still sells it — the store says which ones, so
  * the founder re-points those rather than finding out from an empty shop shelf.
  */
 export async function DELETE(req: Request) {

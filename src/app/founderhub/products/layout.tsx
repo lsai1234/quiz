@@ -6,15 +6,15 @@ import { SubNav, type SubNavItem } from '@/components/portal/SubNav'
  * These used to be seven separate top-level destinations, which made the range
  * feel like seven unrelated jobs. They are all the same job: get the catalogue
  * right. Sourcing it (PowerBody), describing it (Catalogue, Top 25), checking it
- * (Readiness, Coverage) and packaging it (Bundles) belong together.
+ * (Readiness, Coverage) and packaging it (Session stacks) belong together.
  */
 const ITEMS: SubNavItem[] = [
   { href: '/founderhub/products', label: 'Catalogue', exact: true },
   { href: '/founderhub/products/top-25', label: 'Top 25' },
   // The stacks, then the packages that sell them. In that order because that
-  // is the order the work happens in: a workout bundle picks a pre-built one.
+  // is the order the work happens in: a session stack picks a pre-built one.
   { href: '/founderhub/products/prebuilt', label: 'Pre-built bundles' },
-  { href: '/founderhub/products/bundles', label: 'Workout bundles' },
+  { href: '/founderhub/products/bundles', label: 'Session stacks' },
   { href: '/founderhub/products/powerbody', label: 'PowerBody' },
   // Sits next to PowerBody because it is the second half of the same job:
   // nothing imported there is on sale until it has been through here.

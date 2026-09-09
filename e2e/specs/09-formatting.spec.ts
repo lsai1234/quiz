@@ -41,7 +41,7 @@ const FOUNDER_ROUTES: Array<{ path: string; name: string }> = [
   { path: '/founderhub/products/review', name: 'Products → Review' },
   { path: '/founderhub/products/powerbody', name: 'Products → PowerBody' },
   { path: '/founderhub/products/prebuilt', name: 'Products → Pre-built bundles' },
-  { path: '/founderhub/products/bundles', name: 'Products → Workout bundles' },
+  { path: '/founderhub/products/bundles', name: 'Products → Session stacks' },
   { path: '/founderhub/products/coverage', name: 'Products → Coverage' },
   { path: '/founderhub/products/dashboard', name: 'Products → Dashboard' },
   { path: '/founderhub/products/readiness', name: 'Products → Readiness' },

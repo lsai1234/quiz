@@ -250,7 +250,7 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
 
       <p style={{ fontSize: 'var(--text-meta)', lineHeight: 'var(--leading-snug)', color: 'var(--ink-3)', marginBottom: 'var(--space-3)' }}>
         {suggested && !code.trim() ? <>Their code will be <strong className="text-[var(--ink-1)]">{suggested}</strong>. </> : null}
-        It takes that much off the regular price of stacks, curated bundles and subscriptions — replacing the
+        It takes that much off the regular price of quiz stacks, session stacks and subscriptions — replacing the
         bundle deal or the first month of Subscribe &amp; Save, not stacking on top — and does nothing on
         single products from the shop.{' '}
         They start on the standard deal — {describeTerms({

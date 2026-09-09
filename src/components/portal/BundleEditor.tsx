@@ -72,9 +72,10 @@ export function BundleEditor({ initial, isNew }: Props) {
     Where an uploaded photo is stored.
 
     The slug once there is one, and a stable scratch id before that — a new
-    bundle is named after the picture is chosen as often as before it, and two
-    people starting a bundle at once must not write to the same key. The record
-    keeps the returned URL either way, so the key never has to be guessed again.
+    stack is named after the picture is chosen as often as before it, and two
+    people starting a session stack at once must not write to the same key. The
+    record keeps the returned URL either way, so the key never has to be guessed
+    again.
   */
   const scratch = useRef(`draft-${Math.random().toString(36).slice(2, 10)}`)
   const imageId = `bundle:${draft.slug || scratch.current}`
@@ -151,7 +152,7 @@ export function BundleEditor({ initial, isNew }: Props) {
             icon="arrow-left"
             onClick={() => router.push('/founderhub/products/bundles')}
           >
-            Bundles
+            Session stacks
           </Button>
           <h1
             style={{
@@ -163,7 +164,7 @@ export function BundleEditor({ initial, isNew }: Props) {
               marginTop: 'var(--space-1)',
             }}
           >
-            {isNew ? 'New bundle' : `Edit — ${initial?.name}`}
+            {isNew ? 'New session stack' : `Edit — ${initial?.name}`}
           </h1>
         </div>
         <Button variant="secondary" size="sm" onClick={() => setPreview(true)} disabled={!stack}>
@@ -214,9 +215,9 @@ export function BundleEditor({ initial, isNew }: Props) {
             value={draft.slug}
             onChange={(e) => { setSlugTouched(true); set('slug', bundleSlug(e.target.value)) }}
             disabled={!isNew}
-            // The URL is the bundle's identity once it is live: changing it
+            // The URL is the stack's identity once it is live: changing it
             // breaks every link anyone has to it.
-            hint={isNew ? 'Set once. It cannot be changed after saving.' : 'Fixed — the bundle is already at this address.'}
+            hint={isNew ? 'Set once. It cannot be changed after saving.' : 'Fixed — the session stack is already at this address.'}
             placeholder="big-night-big-morning"
           />
           <Input label="Tagline" value={draft.tagline} onChange={(e) => set('tagline', e.target.value)} placeholder="Hydrate. Move. Refuel. Reset." />
@@ -234,17 +235,17 @@ export function BundleEditor({ initial, isNew }: Props) {
           label="Photo"
           value={draft.imageUrl}
           onChange={(url) => set('imageUrl', url)}
-          hint="Shown on the shop card and at the top of the bundle page. Without one, the card draws the products instead."
+          hint="Shown on the shop card and at the top of the session stack page. Without one, the card draws the products instead."
         />
         <Textarea label="Description" value={draft.description} onChange={(e) => set('description', e.target.value)} rows={3} placeholder="What it's built for…" />
         <Input label="Honesty line" value={draft.honestyLine} onChange={(e) => set('honestyLine', e.target.value)} placeholder="Not a hangover cure. Just the get-back-on-track stack." />
-        <Textarea label="Disclaimer" value={draft.disclaimer} onChange={(e) => set('disclaimer', e.target.value)} rows={2} placeholder="Bundle-specific safety note…" />
+        <Textarea label="Disclaimer" value={draft.disclaimer} onChange={(e) => set('disclaimer', e.target.value)} rows={2} placeholder="Safety note for this session stack…" />
       </Section>
 
       {/*
         The stack this package sells.
 
-        Not a product picker. A workout bundle is a session plus one of the
+        Not a product picker. A session stack is a session plus one of the
         pre-built bundles, so the products are chosen once — over in Pre-built
         bundles — and every package that sells that stack follows it. Copying
         the products in here is what left a product swapped out of "Strength"
@@ -257,8 +258,8 @@ export function BundleEditor({ initial, isNew }: Props) {
               There are no pre-built bundles yet.
             </p>
             <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-              A workout bundle sells one of them, so build the stack first — the products, and why they are
-              together. This package can be saved as a draft in the meantime.
+              A session stack sells one of them, so build the pre-built bundle first — the products, and why
+              they are together. This package can be saved as a draft in the meantime.
             </p>
             <Button variant="secondary" size="sm" onClick={() => router.push('/founderhub/products/prebuilt/new')}>
               Build a pre-built bundle
@@ -319,9 +320,9 @@ export function BundleEditor({ initial, isNew }: Props) {
         Workouts — one to many.
 
         A package is a stack AND its sessions, and a week of training is more
-        than one session; the editor held exactly one because the bundle did.
-        Each session is its own card so the fields of one cannot be mistaken for
-        the fields of another, and they are ordered — the landing page leads
+        than one session; the editor held exactly one because the session stack
+        did. Each session is its own card so the fields of one cannot be mistaken
+        for the fields of another, and they are ordered — the landing page leads
         with the first.
       */}
       <Section title={`Workouts — ${draft.workouts.length}`}>
@@ -538,7 +539,7 @@ export function BundleEditor({ initial, isNew }: Props) {
 
       {/* Full-page preview overlay */}
       {preview && (
-        <Modal onClose={() => setPreview(false)} size="lg" label="Bundle preview">
+        <Modal onClose={() => setPreview(false)} size="lg" label="Session stack preview">
           <ModalHeader title="Preview" subtitle="Not saved — this is what the page would look like." />
           {/* `padding="none"`: the landing page brings its own layout, and a
               modal's inset around a full page reads as a frame around a frame. */}

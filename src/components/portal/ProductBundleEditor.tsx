@@ -45,8 +45,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * Building a pre-built bundle: the products, and why they are together.
  *
  * It is deliberately short. There is no tagline, no honesty line, no photograph
- * and no SEO — a pre-built bundle is never a page. It is the stack that workout
- * bundles sell, and everything a customer reads belongs to those.
+ * and no SEO — a pre-built bundle is never a page. It is the stack that session
+ * stacks sell, and everything a customer reads belongs to those.
  *
  * The one thing worth saying twice: editing this changes every package built on
  * it, which is the reason it exists. The header says so, with the count.
@@ -152,7 +152,7 @@ export function ProductBundleEditor({ initial, isNew }: Props) {
       {usedBy.length > 0 && (
         <Card tone="attention" padding="tight">
           <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>
-            {usedBy.length} workout bundle{usedBy.length === 1 ? '' : 's'} sell this stack: {usedBy.join(', ')}.
+            {usedBy.length} session stack{usedBy.length === 1 ? '' : 's'} sell this: {usedBy.join(', ')}.
           </p>
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
             A change here changes what every one of them ships. That is the point of a pre-built bundle — it is
@@ -184,7 +184,7 @@ export function ProductBundleEditor({ initial, isNew }: Props) {
             value={draft.slug}
             onChange={(e) => { setSlugTouched(true); set('slug', bundleSlug(e.target.value)) }}
             disabled={!isNew}
-            hint={isNew ? 'Set once. Workout bundles point at it by this.' : 'Fixed — workout bundles point at it.'}
+            hint={isNew ? 'Set once. Session stacks point at it by this.' : 'Fixed — session stacks point at it.'}
             placeholder="strength"
           />
         </div>

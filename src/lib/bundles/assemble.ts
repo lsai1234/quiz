@@ -11,7 +11,7 @@ import { bundleWorkouts } from './resolve'
  * back into records.
  *
  * They are separate because the two things are separate: a pre-built bundle is
- * products and the reasons they are together; a workout bundle is a session, a
+ * products and the reasons they are together; a session stack is a session, a
  * name, a photograph and a pointer at one of those stacks. One form asking for
  * both is what made every package carry its own copy of a stack.
  */
@@ -103,7 +103,7 @@ export function assembleProductBundle(draft: ProductBundleDraft, products: Catal
   return { slug: draft.slug, name: draft.name, description: draft.description, blueprint, addOns }
 }
 
-// ── The workout bundle: a session, a story, and a stack to sell ───────────────
+// ── The session stack: a session, a story, and a stack to sell ───────────────
 
 export interface BundleDraft {
   slug: string
@@ -135,7 +135,7 @@ export const EMPTY_WORKOUT: BundleWorkout = {
   postWorkout: '',
 }
 
-/** A blank draft to start a new workout bundle from. */
+/** A blank draft to start a new session stack from. */
 export function emptyDraft(): BundleDraft {
   return {
     slug: '',
@@ -155,7 +155,7 @@ export function emptyDraft(): BundleDraft {
   }
 }
 
-/** Turn an existing workout bundle into an editable draft. */
+/** Turn an existing session stack into an editable draft. */
 export function bundleToDraft(bundle: WorkoutBundle): BundleDraft {
   return {
     slug: bundle.slug,
@@ -178,7 +178,7 @@ export function bundleToDraft(bundle: WorkoutBundle): BundleDraft {
 }
 
 /**
- * Assemble a workout bundle from a draft.
+ * Assemble a session stack from a draft.
  *
  * No products pass through here. The stack is the pre-built bundle's, resolved
  * on read (`composeBundles`), so this cannot leave a stale copy of one behind —

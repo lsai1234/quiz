@@ -12,7 +12,7 @@ interface Props {
   products: CatalogueProduct[]
 }
 
-/** The bundles shelf: the same two-column grid as every product category. */
+/** The session stacks shelf: the same two-column grid as every product category. */
 export function ShopBundlesRow({ bundles, products }: Props) {
   // Capped at two rows like every other shelf — a bundle card is taller than a
   // product card, so an uncapped bundles row is the one that pushes the whole
@@ -33,9 +33,9 @@ export function ShopBundlesRow({ bundles, products }: Props) {
     */
     <section className="sf-shelf" id="shop-cat-bundles" style={{ scrollMarginTop: 88, paddingTop: 'var(--space-8)' }}>
       <div className="flex items-baseline justify-between" style={{ padding: '0 var(--space-4)', marginBottom: 'var(--space-4)', gap: 'var(--space-3)' }}>
-        <h2 className="sf-title min-w-0" style={{ color: 'var(--text)' }}>Bundles</h2>
+        <h2 className="sf-title min-w-0" style={{ color: 'var(--text)' }}>Session stacks</h2>
         <span className="sf-meta flex-shrink-0">
-          <span className="sf-num">{bundles.length}</span> bundle{bundles.length !== 1 ? 's' : ''}
+          <span className="sf-num">{bundles.length}</span> stack{bundles.length !== 1 ? 's' : ''}
         </span>
       </div>
 
@@ -63,7 +63,7 @@ export function ShopBundlesRow({ bundles, products }: Props) {
             aria-controls="shop-cat-bundles"
             onClick={() => setExpanded((open) => !open)}
           >
-            {expanded ? 'Show fewer bundles' : `Show all ${bundles.length} bundles`}
+            {expanded ? 'Show fewer session stacks' : `Show all ${bundles.length} session stacks`}
           </Button>
         </div>
       )}

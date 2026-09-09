@@ -54,7 +54,7 @@ export function missingCoreProducts(bundle: ResolvedBundle, products: CatalogueP
 /**
  * True when the bundle has a stack and every product in it is in stock.
  *
- * The empty case is the one that matters now: a workout bundle that points at
+ * The empty case is the one that matters now: a session stack that points at
  * no pre-built bundle resolves to an empty stack, and an empty stack has no
  * missing products — so "nothing is missing" used to mean "sell it". A package
  * with no products in it is not a thing anybody can buy.

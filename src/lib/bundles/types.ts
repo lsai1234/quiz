@@ -7,7 +7,7 @@ import type { StackSlot } from '@/lib/catalogue/types'
 // There are two of them. It has no workout, no landing page and no story; it is
 // the products, and the reasons they are together.
 //
-// A WORKOUT BUNDLE is what a customer buys: one workout, plus one of the
+// A SESSION STACK is what a customer buys: one workout, plus one of the
 // pre-built bundles. It owns the name, the photograph, the copy and the session,
 // and it points at a pre-built bundle for everything product-shaped. It is what
 // the shop shelf shows and what `/bundles/[slug]` renders.
@@ -20,7 +20,7 @@ import type { StackSlot } from '@/lib/catalogue/types'
 // Prices live in neither. They are computed from the catalogue on read
 // (`stack-blueprint/pricing`), so nothing here can quote a stale total.
 //
-// Seeds (`seeds.ts`) ship the workout bundles; pre-built bundles are authored
+// Seeds (`seeds.ts`) ship the session stacks; pre-built bundles are authored
 // entirely in the Hub, because which products go together is a decision that
 // changes with the range and does not belong in a deploy.
 
@@ -60,12 +60,12 @@ export interface BundleAddOn {
 /**
  * A pre-built bundle: a named stack of products, and nothing else.
  *
- * No workout, no tagline, no landing page — a workout bundle wraps it in those.
- * Several workout bundles can point at the same one, which is the point: edit
+ * No workout, no tagline, no landing page — a session stack wraps it in those.
+ * Several session stacks can point at the same one, which is the point: edit
  * the Strength stack once and every session built on it follows.
  */
 export interface ProductBundle {
-  /** Stable id, used as the reference from a workout bundle. */
+  /** Stable id, used as the reference from a session stack. */
   slug: string
   /** What the founder calls this stack — "Strength", "Fitness". */
   name: string
@@ -114,11 +114,11 @@ export interface WorkoutBundle {
   /**
    * The pre-built bundle this package sells.
    *
-   * The products are not stored here. A workout bundle IS a workout plus one of
+   * The products are not stored here. A session stack IS a workout plus one of
    * the pre-built stacks, so the stack is referenced rather than copied — which
    * is what lets one stack serve every session built on it.
    *
-   * Null is a real state, not a broken one: a workout bundle can be written
+   * Null is a real state, not a broken one: a session stack can be written
    * before anybody has decided which stack it sells. It cannot be published or
    * bought until it points somewhere (readiness says so, and the shop hides it).
    */
@@ -131,7 +131,7 @@ export interface WorkoutBundle {
    * session, and the second one had nowhere to live. Ordered — first is the one
    * the page leads with.
    *
-   * Normally one — a workout bundle is a session and a stack. The list is there
+   * Normally one — a session stack is a session and a pre-built bundle. The list is there
    * because a package that is a week of training is the same object with three
    * sessions in it, and the alternative was three packages selling one stack.
    *

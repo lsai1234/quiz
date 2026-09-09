@@ -57,7 +57,7 @@ const STACK = stack()
 /** A seed pointed at a stack — the only form a customer meets. */
 const sold = (bundle: WorkoutBundle = seed) =>
   composeBundles([{ ...bundle, productBundleSlug: STACK.slug }], EMPTY_PERSISTED_BUNDLES, [STACK])[0]
-/** A workout bundle that is linked, for the store tests. */
+/** A session stack that is linked, for the store tests. */
 const linked = (slug: string, name = slug): WorkoutBundle => ({ ...draft(slug, name), productBundleSlug: STACK.slug })
 
 describe('bundle resolution (pure)', () => {

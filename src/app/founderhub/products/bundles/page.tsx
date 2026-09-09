@@ -84,12 +84,12 @@ export default function PortalBundlesPage() {
     <div>
       <div className="flex items-center justify-between gap-3 mb-1">
         <h2 style={{ fontSize: 'var(--text-title)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)' }}>
-          Workout bundles
+          Session stacks
         </h2>
         {/* A link, not a button: it goes somewhere, and someone expecting to
             middle-click it should be able to. */}
         <Link href="/founderhub/products/bundles/new" {...buttonSurface('primary', 'sm')}>
-          New workout bundle
+          New session stack
         </Link>
       </div>
       <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginBottom: 'var(--space-4)' }}>
@@ -142,7 +142,7 @@ export default function PortalBundlesPage() {
                       </p>
                     </div>
 
-                    {/* Reorder. Named per bundle: a page of twenty rows all
+                    {/* Reorder. Named per stack: a page of twenty rows all
                         offering "Move up" is a list nobody can navigate. */}
                     <div className="flex flex-col gap-1 shrink-0">
                       <Button
@@ -232,11 +232,11 @@ export default function PortalBundlesPage() {
           })}
           {visible.length === 0 && (
             <p className="text-center" style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-3)', padding: 'var(--space-8) 0' }}>
-              No bundles yet.
+              No session stacks yet.
             </p>
           )}
 
-          {/* Removed bundles — restorable */}
+          {/* Removed session stacks — restorable */}
           {removed.length > 0 && (
             <div className="mt-6">
               <p style={{ fontSize: 'var(--text-micro)', fontWeight: 'var(--weight-strong)', fontFamily: 'var(--font-display)', letterSpacing: 'var(--tracking-eyebrow)', textTransform: 'uppercase', color: 'var(--ink-3)', marginBottom: 'var(--space-2)' }}>

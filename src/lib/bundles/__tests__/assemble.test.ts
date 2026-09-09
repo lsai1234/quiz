@@ -28,7 +28,7 @@ function strengthStack(): ProductBundle {
   return assembleProductBundle(draft, MOCK_CATALOGUE)
 }
 
-/** Resolve a workout bundle the way every read path does. */
+/** Resolve a session stack the way every read path does. */
 function resolve(bundle: ReturnType<typeof assembleBundle>, stacks: ProductBundle[]) {
   return composeBundles([], { ...EMPTY_PERSISTED_BUNDLES, created: [bundle] }, stacks)[0]
 }
@@ -56,7 +56,7 @@ describe('assembling a pre-built bundle', () => {
   })
 })
 
-describe('assembling a workout bundle', () => {
+describe('assembling a session stack', () => {
   it('stores a pointer to the stack, never a copy of it', () => {
     const draft = emptyDraft()
     draft.slug = 'leg-day'

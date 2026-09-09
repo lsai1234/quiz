@@ -177,7 +177,7 @@ export function BundleLandingPage({ bundle }: Props) {
   if (catalogueLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]" style={{ background: 'var(--color-bg)' }}>
-        <p className="text-[var(--color-muted)] text-sm">Loading the bundle…</p>
+        <p className="text-[var(--color-muted)] text-sm">Loading the session stack…</p>
       </div>
     )
   }

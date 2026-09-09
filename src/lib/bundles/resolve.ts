@@ -33,7 +33,7 @@ export function normaliseBundle(bundle: WorkoutBundle): WorkoutBundle {
  * founder-authored bundles appended, minus any soft-removed slugs.
  */
 export interface PersistedBundles {
-  /** Founder-authored workout bundles (full records). */
+  /** Founder-authored session stacks (full records). */
   created: WorkoutBundle[]
   /** Partial edits keyed by slug — applied to seeds (and created bundles). */
   overrides: Record<string, Partial<WorkoutBundle>>
@@ -44,7 +44,7 @@ export interface PersistedBundles {
 export const EMPTY_PERSISTED_BUNDLES: PersistedBundles = { created: [], overrides: {}, removedSlugs: [] }
 
 /**
- * A workout bundle resolved to what it actually sells.
+ * A session stack resolved to what it actually sells.
  *
  * `blueprint` and `addOns` are NOT stored on the bundle — they come from the
  * pre-built bundle it points at, resolved here on every read. That is what

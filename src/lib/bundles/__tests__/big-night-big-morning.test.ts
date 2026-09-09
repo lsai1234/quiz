@@ -10,7 +10,7 @@ import type { ProductBundle } from '../types'
 /**
  * The weekend-reset package.
  *
- * It is a workout bundle: a session, a story and a photograph. Its products
+ * It is a session stack: a session, a story and a photograph. Its products
  * come from whichever pre-built bundle it is pointed at in the Hub — the stack
  * that used to be written into this file is now a record of its own, shared by
  * every package that sells it. So the checkout and pricing tests here run

@@ -88,14 +88,14 @@ function BundleBody({ nudge }: { nudge: Extract<BasketNudge, { kind: 'bundle' }>
     <>
       <p className="text-xs font-medium leading-snug" style={{ color: 'var(--text)' }}>
         {nudge.saving > 0
-          ? `${nudge.name} — ${formatGBP(nudge.saving)} less as a bundle`
+          ? `${nudge.name} — ${formatGBP(nudge.saving)} less as a session stack`
           : `${nudge.have} of the ${total} in the ${nudge.name}`}
         <span aria-hidden> →</span>
       </p>
       <p className="text-[11px] leading-snug mt-0.5" style={{ color: 'var(--text-dim)' }}>
         {nudge.saving > 0
-          ? `You have ${nudge.have} of its ${total}. Bundles are bought on their own page.`
-          : `Add ${missingList} for the full stack. Bundles are bought on their own page.`}
+          ? `You have ${nudge.have} of its ${total}. Session stacks are bought on their own page.`
+          : `Add ${missingList} for the full stack. Session stacks are bought on their own page.`}
       </p>
     </>
   )

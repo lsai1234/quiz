@@ -18,7 +18,7 @@ interface Usage {
  * Pre-built bundles — the stacks, on their own screen.
  *
  * There are two of them and there is no landing page for either: a pre-built
- * bundle is products and the reasons they are together, and a workout bundle
+ * bundle is products and the reasons they are together, and a session stack
  * wraps one in a name, a photograph and a session. Keeping them apart is what
  * lets one stack serve every package built on it — edit Strength once and every
  * session selling it ships the new stack.
@@ -73,7 +73,7 @@ export default function PrebuiltBundlesPage() {
             Pre-built bundles
           </h2>
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
-            The stacks. A workout bundle sells one of these, so a product changed here changes every package
+            The stacks. A session stack sells one of these, so a product changed here changes every package
             that sells it.
           </p>
         </div>
@@ -94,8 +94,8 @@ export default function PrebuiltBundlesPage() {
         <Card elevation={1} className="space-y-2">
           <p style={{ fontSize: 'var(--text-body-sm)', color: 'var(--ink-1)' }}>No stacks yet.</p>
           <p style={{ fontSize: 'var(--text-meta)', color: 'var(--ink-3)' }}>
-            Build the two you sell — one around strength, one around fitness — and then point each workout
-            bundle at whichever it belongs to. Until a package points at a stack it has no products, so the
+            Build the two you sell — one around strength, one around fitness — and then point each session
+            stack at whichever it belongs to. Until a package points at a stack it has no products, so the
             shop leaves it off the shelf.
           </p>
         </Card>
@@ -123,7 +123,7 @@ export default function PrebuiltBundlesPage() {
                       {use ? ` · ${formatGBP(use.price)}` : ''}
                       {use && use.usedBy.length > 0
                         ? ` · sold by ${use.usedBy.join(', ')}`
-                        : ' · not sold by any workout bundle yet'}
+                        : ' · not sold by any session stack yet'}
                     </span>
                   </Link>
                   <Button

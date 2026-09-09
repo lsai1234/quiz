@@ -3,10 +3,10 @@ import { openShop, addProductToBasket, openBasket, basketCount, openProductSheet
 import { inspect, report } from '../support/inspect'
 
 test.describe('the shop', () => {
-  test('lists products, categories and bundles', async ({ page }) => {
+  test('lists products, categories and session stacks', async ({ page }) => {
     await openShop(page)
     await expect(page.getByRole('button', { name: 'Protein', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Bundles', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Session stacks', exact: true })).toBeVisible()
     // The mock catalogue is the whole shop in this mode, so it must not be empty.
     expect(await page.getByText(/£\d+\.\d{2}/).count()).toBeGreaterThan(5)
   })
@@ -197,9 +197,9 @@ test.describe('the shop', () => {
     await expect(page.getByText('Recent', { exact: true })).toBeHidden()
   })
 
-  test('a basket that is nearly a bundle says so, without promising the basket a bundle price', async ({ page }) => {
+  test('a basket that is nearly a session stack says so, without promising the basket a stack price', async ({ page }) => {
     await openShop(page)
-    // Two of the three core products in the Early Shift bundle.
+    // Two of the three core products in the Early Shift session stack.
     await addProductToBasket(page, 'CHRGD Whey Protein')
     await addProductToBasket(page, 'CHRGD Electrolyte Mix')
 
@@ -207,25 +207,25 @@ test.describe('the shop', () => {
     await expect(nudge).toBeVisible({ timeout: 10_000 })
     await expect(nudge).toHaveAttribute('href', /^\/bundles\//)
 
-    // The honesty constraint: a bundle is a separate checkout, so the nudge may
-    // never read as "add this to your basket and save". And it only quotes a
-    // price when the bundle genuinely beats the same products through the
-    // basket — the £50+ tier the basket already earns is not a bundle saving.
+    // The honesty constraint: a session stack is a separate checkout, so the
+    // nudge may never read as "add this to your basket and save". And it only
+    // quotes a price when the stack genuinely beats the same products through
+    // the basket — the £50+ tier the basket already earns is not a stack saving.
     const text = (await nudge.textContent()) ?? ''
     expect(text).not.toMatch(/add to basket/i)
     expect(text).not.toMatch(/£0\.00/)
-    if (/less as a bundle/i.test(text)) {
+    if (/less as a session stack/i.test(text)) {
       expect(text).toMatch(/You have \d+ of its \d+/)
     } else {
       expect(text).toMatch(/\d+ of the \d+ in the/i)
     }
   })
 
-  test('a basket with nothing near a bundle gets the delivery ladder instead', async ({ page }) => {
+  test('a basket with nothing near a session stack gets the delivery ladder instead', async ({ page }) => {
     await openShop(page)
     await addProductToBasket(page, 'CHRGD Whey Protein')
     // One product is a long way under the free-delivery line, and holding one of
-    // a three-product bundle is an advert rather than a near-miss.
+    // a three-product session stack is an advert rather than a near-miss.
     await expect(page.getByText(/from free delivery/i).first()).toBeVisible({ timeout: 10_000 })
   })
 

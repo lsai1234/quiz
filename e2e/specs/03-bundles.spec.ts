@@ -8,8 +8,8 @@ import { sellBundle, unlinkBundle } from '../support/bundles'
  * shop.
  *
  * A bundle is two records now: a PRE-BUILT BUNDLE is a named stack of products,
- * and a WORKOUT BUNDLE is a session plus one of those stacks. The shipped seeds
- * are workout bundles with no stack chosen — which stack each sells is decided
+ * and a SESSION STACK is a session plus one of those stacks. The shipped seeds
+ * are session stacks with no pre-built bundle chosen — which one each sells is decided
  * in the Hub against the live range — so these tests build a stack, point a seed
  * at it, and then exercise the page a customer would get.
  *
@@ -18,7 +18,7 @@ import { sellBundle, unlinkBundle } from '../support/bundles'
  * first test here is that an unlinked package stays off it.
  */
 
-test('a workout bundle with no stack is not on the shelf and does not render', async ({ page }) => {
+test('a session stack with no pre-built bundle is not on the shelf and does not render', async ({ page }) => {
   // Unlinked on purpose — the seeds ship this way.
   await unlinkBundle(page, 'game-day')
 

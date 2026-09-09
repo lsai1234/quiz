@@ -14,7 +14,7 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params
   const bundle = await getResolvedBundle(slug)
-  if (!bundle) return { title: 'Bundle — CHRGD' }
+  if (!bundle) return { title: 'Session stack — CHRGD' }
   return {
     title: bundle.metaTitle || `${bundle.name} | CHRGD`,
     description: bundle.metaDescription,

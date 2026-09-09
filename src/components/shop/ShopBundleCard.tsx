@@ -107,7 +107,7 @@ export function ShopBundleCard({ view, products }: Props) {
             background: 'var(--surface-hi)',
             color: 'var(--text)' }}
         >
-          View bundle
+          View session stack
         </span>
       </div>
     </Link>

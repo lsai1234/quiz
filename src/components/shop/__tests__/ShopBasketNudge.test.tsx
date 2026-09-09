@@ -31,13 +31,13 @@ const BUNDLE: BasketNudge = {
 
 const DELIVERY: BasketNudge = { kind: 'delivery', key: 'delivery', remaining: 4.2, threshold: 100 }
 
-/** The common case: a bundle priced at exactly what its parts cost in the basket. */
+/** The common case: a session stack priced at exactly what its parts cost in the basket. */
 const NO_EDGE: BasketNudge = { ...BUNDLE, saving: 0 }
 
-describe('a bundle nudge', () => {
-  it('names the bundle and what it saves against the parts', () => {
+describe('a session stack nudge', () => {
+  it('names the stack and what it saves against the parts', () => {
     render(<ShopBasketNudge nudge={BUNDLE} onAct={() => {}} onDismiss={() => {}} />)
-    expect(screen.getByText(/Recovery Stack — £6\.40 less as a bundle/)).toBeInTheDocument()
+    expect(screen.getByText(/Recovery Stack — £6\.40 less as a session stack/)).toBeInTheDocument()
   })
 
   it('says how much of it the basket already has', () => {
@@ -46,33 +46,33 @@ describe('a bundle nudge', () => {
   })
 
   /**
-   * The honesty constraint, pinned. A bundle checks out through a different path
-   * from the shop basket: adding the missing product to the basket would NOT get
-   * the bundle price, and buying the bundle does NOT empty the basket. Copy that
+   * The honesty constraint, pinned. A session stack checks out through a different
+   * path from the shop basket: adding the missing product to the basket would NOT
+   * get the stack price, and buying the stack does NOT empty the basket. Copy that
    * implied either would be a lie at the till.
    */
   it('never promises the basket a saving the basket will not give', () => {
     render(<ShopBasketNudge nudge={BUNDLE} onAct={() => {}} onDismiss={() => {}} />)
     const text = screen.getByRole('link').textContent ?? ''
     expect(text).not.toMatch(/add to basket/i)
-    expect(text).toMatch(/less as a bundle/i)
+    expect(text).toMatch(/less as a session stack/i)
   })
 
-  it('says that bundles are bought separately', () => {
+  it('says that session stacks are bought separately', () => {
     render(<ShopBasketNudge nudge={BUNDLE} onAct={() => {}} onDismiss={() => {}} />)
     expect(screen.getByText(/bought on their own page/i)).toBeInTheDocument()
   })
 
   /**
-   * The saving is the bundle against the same products through the basket, after
+   * The saving is the stack against the same products through the basket, after
    * the basket's own tier discount — so it is often zero, and "£0.00 less as a
-   * bundle" would be absurd while a non-zero-looking claim would be advertising
-   * the tier the shopper already earns.
+   * session stack" would be absurd while a non-zero-looking claim would be
+   * advertising the tier the shopper already earns.
    */
-  it('leads on what the bundle IS when there is no price edge', () => {
+  it('leads on what the stack IS when there is no price edge', () => {
     render(<ShopBasketNudge nudge={NO_EDGE} onAct={() => {}} onDismiss={() => {}} />)
     expect(screen.getByText(/2 of the 3 in the Recovery Stack/)).toBeInTheDocument()
-    expect(screen.queryByText(/less as a bundle/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/less as a session stack/)).not.toBeInTheDocument()
     expect(screen.queryByText(/£0\.00/)).not.toBeInTheDocument()
   })
 

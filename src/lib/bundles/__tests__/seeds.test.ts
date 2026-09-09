@@ -11,7 +11,7 @@ import type { ProductBundle } from '../types'
 /**
  * A stack to sell, standing in for one a founder builds in the Hub.
  *
- * The seeds ship with no products: a workout bundle is a session plus one of
+ * The seeds ship with no products: a session stack is a session plus one of
  * the pre-built bundles, and which stack each session sells is a decision made
  * in the Hub against the live range, not in this repository. So every test that
  * needs a price or a checkout resolves the seed against this one first — that
