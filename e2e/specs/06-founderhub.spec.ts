@@ -154,6 +154,67 @@ test.describe('orders', () => {
   })
 })
 
+test.describe('pricing a product by hand', () => {
+  /**
+   * The shop's prices are computed — supplier cost × the markup, rounded down
+   * to .99 — and a founder sometimes knows better for one product. This is that
+   * exception, end to end: open the product, read what it costs us, type a
+   * price, and see it on the shelf.
+   *
+   * It puts the price back afterwards. The mock catalogue is what every other
+   * spec and the shop's visual baseline are measured against, and a test that
+   * leaves a product at £99.99 breaks them from a distance.
+   */
+  test('a founder opens a product, sets its price, and the shop charges it', async ({ page }) => {
+    await founderSessionViaApi(page)
+    await page.goto('/founderhub/products/dashboard')
+    await page.getByLabel('Search products').fill('Whey Protein')
+
+    // Every product opens now, not only the ones with several SKUs to sort out.
+    await page.getByRole('link', { name: /CHRGD Whey Protein/ }).first().click()
+    await expect(page.getByText(/what it costs us, and what we charge/i)).toBeVisible({ timeout: 20_000 })
+
+    // The panel is a table of money on a dense screen, so it gets the same
+    // reading the rest of the hub gets: nothing clipped, no raw id, no mojibake.
+    const findings = await inspect(page)
+    expect(report('the product page', findings), report('the product page', findings)).toBe('')
+
+    const box = page.getByLabel(/^Our price for /).first()
+    const was = await box.inputValue()
+    expect(was, 'the panel opened with no price in it').toMatch(/^\d+\.\d{2}$/)
+
+    try {
+      await box.fill('99.99')
+      await page.getByRole('button', { name: /^Set our price for / }).first().click()
+      await expect(page.getByText(/is £99\.99 until you change it/)).toBeVisible({ timeout: 20_000 })
+
+      // The shelf, not just the screen that set it. This is the master SKU, so
+      // the product's own price moved with it.
+      const { products } = await (await page.request.get('/api/catalogue')).json()
+      const whey = products.find((p: { title: string }) => p.title === 'CHRGD Whey Protein')
+      expect(whey.basePrice).toBe(99.99)
+
+      // …and the list says which prices are somebody's rather than the rule's.
+      await page.goto('/founderhub/products/dashboard')
+      await page.getByLabel('Search products').fill('Whey Protein')
+      await expect(page.getByText(/£99\.99.*your price/).first()).toBeVisible({ timeout: 20_000 })
+    } finally {
+      await page.request.post('/api/portal/products/price', {
+        data: { productId: 'chrgd-whey-protein', variantId: 'chrgd-whey-choc-1kg', price: Number(was) },
+      })
+    }
+  })
+
+  test('the price API refuses a nonsense price rather than putting it on the shelf', async ({ page }) => {
+    await founderSessionViaApi(page)
+    const res = await page.request.post('/api/portal/products/price', {
+      data: { productId: 'chrgd-whey-protein', variantId: 'chrgd-whey-choc-1kg', price: 0 },
+    })
+    expect(res.status()).toBe(400)
+    expect((await res.json()).error).toMatch(/above £0/)
+  })
+})
+
 test.describe('settings', () => {
   /**
    * Settings is an index of topics, each opening its own page — five unrelated

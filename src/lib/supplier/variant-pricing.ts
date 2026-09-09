@@ -70,7 +70,19 @@ export function repriceVariants(
     let next = variant
     const notes: string[] = []
 
-    if (reprice && fact.cost != null && fact.cost > 0) {
+    /*
+      A price somebody typed is a decision, and `force` does not overrule it.
+
+      `force` means "re-price every variant from its own cost", which is the
+      right hammer for a product nobody has priced by hand and the wrong one for
+      the product a founder priced against the market last week. The way off a
+      manual price is the button that set it (`catalogue/price`), not a sweep
+      that happens to pass over it. The cost below is still recorded either way:
+      it is a fact, and the margin figures are read off it.
+    */
+    const priced = variant.priceSource === 'founder'
+
+    if (reprice && !priced && fact.cost != null && fact.cost > 0) {
       const price = listPriceFor(fact.cost)
       const rrp = fact.rrp != null && fact.rrp > price ? round(fact.rrp) : next.compareAtPrice
       if (price !== next.price) notes.push(`£${next.price.toFixed(2)} → £${price.toFixed(2)}`)

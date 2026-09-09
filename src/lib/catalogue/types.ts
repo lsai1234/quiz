@@ -155,6 +155,18 @@ export interface CatalogueVariant {
    * pays. Absent falls back to the product's `cost`.
    */
   cost?: number | null
+  /**
+   * Where this SKU's price came from.
+   *
+   * Absent — and so for everything priced before this existed — means our own
+   * rule: what the supplier charges us, marked up and rounded down to .99 (see
+   * `pricing/list-price`). `'founder'` means somebody typed it on the product
+   * screen because they knew something the rule does not, and it is then left
+   * alone by every supplier pull, including a forced one. An override a sweep
+   * can quietly undo is not an override — `catalogue/price` is where both
+   * halves of that live.
+   */
+  priceSource?: 'rule' | 'founder' | null
 }
 
 // ─── Consumption protocol ─────────────────────────────────────────────────────

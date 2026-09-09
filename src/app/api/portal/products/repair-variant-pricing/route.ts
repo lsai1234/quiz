@@ -2,14 +2,7 @@ import { NextResponse } from 'next/server'
 import { isPortalAuthed } from '@/lib/portal/guard'
 import { getSupplier } from '@/lib/supplier'
 import { indexedProductIds } from '@/lib/portal/supplier-index'
-import {
-  getImportedProducts,
-  saveImportedProduct,
-  getProductOverrides,
-  setProductOverride,
-  syncPortalRuntime,
-} from '@/lib/portal/store'
-import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
+import { allEditableProducts, saveProductEdit } from '@/lib/portal/editable-products'
 import { repriceVariants, sliceBySkuBudget, type SkuFacts } from '@/lib/supplier/variant-pricing'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -59,6 +52,10 @@ import type { CatalogueProduct } from '@/lib/catalogue/types'
  * already differ, so it is left alone. `force` re-prices every variant of every
  * multi-SKU product from its own cost, which is the deliberate, separate action.
  *
+ * A price a founder set on the product screen is left alone by both — see
+ * `catalogue/price`. It is an override, and a sweep that undid it would make it
+ * something else.
+ *
  * Servings and cost are FACTS, not decisions, so they are written wherever the
  * supplier answered — except on accessories, which have no dose and no servings
  * to be right about.
@@ -83,26 +80,9 @@ function isMultiSku(product: CatalogueProduct): boolean {
   return skus.size > 1
 }
 
-/**
- * Every product, from both places one can live: still `imported` and awaiting
- * review, or live in the catalogue with its edits held as an override.
- */
-async function allProducts(): Promise<CatalogueProduct[]> {
-  await syncPortalRuntime()
-  const [imported, resolved, overrides] = await Promise.all([
-    getImportedProducts(),
-    getResolvedCatalogue(),
-    getProductOverrides(),
-  ])
-  const byId = new Map<string, CatalogueProduct>()
-  for (const p of resolved.products) byId.set(p.id, p)
-  for (const p of imported) byId.set(p.id, { ...p, ...(overrides[p.id] ?? {}) } as CatalogueProduct)
-  return [...byId.values()]
-}
-
 /** …narrowed to the ones a sweep is about: more than one supplier SKU behind them. */
 async function candidates(): Promise<CatalogueProduct[]> {
-  return (await allProducts()).filter(isMultiSku)
+  return (await allEditableProducts()).filter(isMultiSku)
 }
 
 /** A product whose variants are all at one price is the one worth flagging. */
@@ -274,7 +254,7 @@ export async function POST(request: Request) {
     is a fair question to ask of any product with a supplier code on it.
   */
   if (productId) {
-    const product = (await allProducts()).find((p) => p.id === productId)
+    const product = (await allEditableProducts()).find((p) => p.id === productId)
     if (!product) return NextResponse.json({ error: `No product with id "${productId}".` }, { status: 404 })
     return runOn([product], force, { offset: 0, totalProducts: 1, nextOffset: null })
   }
@@ -323,28 +303,19 @@ async function runOn(
   // screen uses to say the supplier is being slow rather than silent.
   report.slow = report.elapsedMs > RUN_BUDGET_MS
 
-  const imported = new Set((await getImportedProducts()).map((p) => p.id))
   const repaired: Repair[] = []
 
   for (const product of slice) {
     const result = repriceVariants(product, facts, force)
     if (!result) continue
 
-    /*
-      Written back the way that product is stored. An imported product is ours
-      to rewrite whole; a live one is edited through an override, because the
-      base product is regenerated from the feed and a direct write would be
-      lost on the next sync.
-    */
-    if (imported.has(product.id)) {
-      await saveImportedProduct(result.product)
-    } else {
-      await setProductOverride(product.id, {
-        variants: result.product.variants,
-        basePrice: result.product.basePrice,
-        compareAtPrice: result.product.compareAtPrice,
-      })
-    }
+    // Written back the way that product is stored — imported records whole,
+    // live ones as an override. See `portal/editable-products`.
+    await saveProductEdit(result.product, {
+      variants: result.product.variants,
+      basePrice: result.product.basePrice,
+      compareAtPrice: result.product.compareAtPrice,
+    })
 
     repaired.push({ productId: product.id, title: product.title, changed: result.changed })
   }

@@ -22,9 +22,13 @@ function priceLabel(p: CatalogueProduct): string {
     refuses to draw a saving that is not one (`dealInfo`); the hub was the one
     place still printing it.
   */
-  return p.compareAtPrice && p.compareAtPrice > p.basePrice
-    ? `${base}  (was £${p.compareAtPrice.toFixed(2)})`
-    : base
+  const was =
+    p.compareAtPrice && p.compareAtPrice > p.basePrice ? `  (was £${p.compareAtPrice.toFixed(2)})` : ''
+  // Which prices are somebody's rather than the rule's, visible from the list:
+  // a founder scanning for the ones they set by hand should not have to open
+  // fifteen products to find them.
+  const mine = p.variants.some((v) => v.priceSource === 'founder') ? ' · your price' : ''
+  return `${base}${was}${mine}`
 }
 
 export default function DashboardPage() {
@@ -204,17 +208,29 @@ export default function DashboardPage() {
                     It is also the screen a founder stays on for a few minutes
                     renaming things, which is a page's job and not a card's.
                   */}
-                  {p.variants.length > 1 && (
-                    <div className="mt-2">
-                      <Link
-                        href={`/founderhub/products/dashboard/${p.id}`}
-                        aria-label={`Open the ${p.variants.length} SKUs of ${p.title}`}
-                        {...buttonSurface('ghost', 'sm')}
-                      >
-                        {p.variants.length} SKUs ›
-                      </Link>
-                    </div>
-                  )}
+                  {/*
+                    Every product opens, not only the ones with SKUs to sort out.
+
+                    This used to be shown for multi-SKU products alone, because
+                    the page was for taking a merged product apart. The page
+                    also holds the PRICE now — what the supplier charges us, what
+                    our rule makes of it, and the box for setting our own — and a
+                    one-flavour product needs pricing exactly as much as a
+                    six-flavour one. There was no way into it at all.
+                  */}
+                  <div className="mt-2">
+                    <Link
+                      href={`/founderhub/products/dashboard/${p.id}`}
+                      aria-label={
+                        p.variants.length > 1
+                          ? `Open the ${p.variants.length} SKUs of ${p.title}`
+                          : `Open ${p.title}`
+                      }
+                      {...buttonSurface('ghost', 'sm')}
+                    >
+                      {p.variants.length > 1 ? `${p.variants.length} SKUs ›` : 'Open ›'}
+                    </Link>
+                  </div>
 
                   {confirmId === p.id ? (
                     <div className="flex gap-2 mt-2">

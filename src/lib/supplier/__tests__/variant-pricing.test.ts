@@ -89,6 +89,28 @@ describe('repriceVariants', () => {
     expect(fixed.variants.map((v) => v.price)).toEqual([21.99, 39.99])
   })
 
+  it('leaves a price a founder set alone, even when forced', () => {
+    /*
+      The difference between "already at different prices" above and this: that
+      one is inferred from the shape of the data and `force` overrules it, this
+      one is recorded because somebody typed the price on the product screen.
+      An override a sweep can undo is not an override.
+    */
+    const chosen = product({
+      variants: [
+        variant({ id: 'caps', sku: 'P100', price: 18, priceSource: 'founder' }),
+        variant({ id: 'powder', sku: 'P200' }),
+      ],
+    })
+    const { product: fixed } = repriceVariants(chosen, FACTS, true)!
+
+    expect(fixed.variants[0].price).toBe(18)
+    // The cost still lands: it is a fact, and the margin figures are read off
+    // it — a manual price is exactly where knowing the cost matters most.
+    expect(fixed.variants[0].cost).toBe(11.12)
+    expect(fixed.variants[1].price).toBe(39.99)
+  })
+
   it('leaves siblings that genuinely are flavours of one tub exactly as they are', () => {
     const flavours = new Map<string, SkuFacts>([
       ['P100', { cost: 11.12, rrp: 15.5, servings: 30, name: 'Whey, Chocolate - 1kg', image: 'https://pb/choc.jpg' }],

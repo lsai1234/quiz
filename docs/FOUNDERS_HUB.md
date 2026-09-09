@@ -37,7 +37,7 @@ navigation. It is now seven, with two of them carrying a sub-nav:
 | --- | --- | --- |
 | **Dashboard** | `/founderhub` | The business at a glance (see §4). |
 | **Commerce** | `/founderhub/commerce` | Review queue · Single orders · Subscriptions · Financials |
-| **Products** | `/founderhub/products` | Catalogue · Top 25 · Bundles · PowerBody · Dashboard · Readiness · Coverage |
+| **Products** | `/founderhub/products` | Catalogue · Top 25 · Pre-built bundles · Session stacks · PowerBody · Dashboard · Readiness · Coverage |
 | **Pricing** | `/founderhub/pricing` | Every pricing rule, in one place (see §2). |
 | **Requires action** | `/founderhub/actions` | Product changes on live subscriptions. |
 | **Emails** | `/founderhub/emails` | The outbox. |
@@ -253,6 +253,34 @@ worst case, side by side. One worst-case figure tells you whether a price is
 safe; three tell you what you are pricing into.
 
 Prices round **up** to the penny — rounding a floor down puts you under it.
+
+### Pricing one product by hand
+
+Every shelf price is computed — `listPriceFor`: what PowerBody charge us × the
+markup, rounded down to .99 — and that is the policy for a catalogue nobody can
+price product by product. It is not always right for the one product in front of
+you: a line every customer can price-check in ten seconds, a loss leader, a cost
+that jumped between orders.
+
+`/founderhub/products/dashboard/[id]` is where that exception is made. Open any
+product (every product opens now, not only the ones with several SKUs) and the
+**Price** panel shows, per SKU: what PowerBody charge us, their RRP, what the
+rule makes of that cost, and a box for our own price.
+
+- The price is set **per SKU**, and the product's `basePrice` follows only its
+  **master** — a flavour nobody opens on does not reprice the card.
+- A price typed here is written as `priceSource: 'founder'` on the variant,
+  which is what makes **every supplier pull leave it alone, including a forced
+  one**. An override a sweep can undo is not an override.
+- **Use the rule price** is the way back: it re-computes from the supplier cost
+  and drops the mark. It is refused when nothing knows the cost, because there
+  is then no rule price to return to — pull from PowerBody first.
+- A price below what we pay is flagged where it is set, not discovered later in
+  the margin report.
+
+The rules are in `lib/catalogue/price.ts` (pure), the write is
+`POST /api/portal/products/price`, and the panel is
+`components/portal/ProductPricing.tsx`.
 
 ---
 

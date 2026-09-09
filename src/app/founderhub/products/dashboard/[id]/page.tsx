@@ -1,7 +1,10 @@
 import { notFound } from 'next/navigation'
 import { getResolvedCatalogue } from '@/lib/catalogue/resolve'
 import { clearPersistCache } from '@/lib/portal/persist'
+import { priceRows } from '@/lib/catalogue/price'
+import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { ProductTree } from '@/components/portal/ProductTree'
+import { ProductPricing } from '@/components/portal/ProductPricing'
 
 /**
  * One product, on its own page.
@@ -45,5 +48,25 @@ export default async function ProductPage({ params }: PageProps) {
   }
 
   if (!product) notFound()
-  return <ProductTree product={product} />
+
+  /*
+    The prices are worked out HERE rather than in the panel.
+
+    The markup the rule runs at is a founder-editable setting, hydrated from the
+    database by the catalogue read above (`syncPortalRuntime`). A browser holds
+    the defaults, so a panel that computed "the rule says £29.99" for itself
+    would quote a multiplier the shop has not used since somebody changed it.
+  */
+  const config = getPricingConfig()
+  return (
+    <div className="space-y-4" style={{ maxWidth: 'var(--modal-lg)' }}>
+      <ProductTree product={product} />
+      <ProductPricing
+        productId={product.id}
+        basePrice={product.basePrice}
+        rows={priceRows(product, config)}
+        markupOnCost={config.listPricing.markupOnCost}
+      />
+    </div>
+  )
 }

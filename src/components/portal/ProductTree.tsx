@@ -692,7 +692,7 @@ export function ProductTree({ product }: Props) {
           <span style={{ fontSize: 'var(--text-micro)', color: 'var(--ink-3)' }}>
             {withSkus === 0
               ? 'No supplier codes on this product, so there is nothing to ask about.'
-              : 'Reads each SKU’s own price, size, serving count and picture. A price you set by hand is left alone. A serving count marked * was scaled from the size rather than told to us.'}
+              : 'Reads each SKU’s own price, size, serving count and picture — what they charge us lands under Price below. A price you set by hand is left alone. A serving count marked * was scaled from the size rather than told to us.'}
           </span>
         </div>
 
