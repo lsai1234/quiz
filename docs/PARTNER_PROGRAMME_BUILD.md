@@ -505,11 +505,20 @@ affiliate afterwards, like every other part of a deal.
 `/api/portal/partners` decides which link a founder is handed (`action:
 'invite'` returns a `path`), from the record rather than from the screen: a
 founder cannot send an affiliate to a page about a free box nobody promised
-them. `/partner/join` reads the link without spending it (`/api/partner/join`),
-shows the code and the rate **before** asking for a password, and then posts to
-the shared `/api/partner/set-password` — one implementation of "burn the link,
-write the password, start a session" for both programmes. A link belonging to
-an influencer is redirected to `/partner/claim`, intact.
+them. `/partner/join` reads the link without spending it (`GET
+/api/partner/join`), shows the code and the rate **before** asking for
+anything, and a link belonging to an influencer is redirected to
+`/partner/claim`, intact.
+
+The sign-up itself settles **email and password together** (`POST
+/api/partner/join`). The email is what they sign in with, and the founder typed
+it from a DM, a call or a guess — so it is pre-filled and correctable, and
+finding out it was wrong at the sign-in screen, locked out of an account that
+is already earning, is the failure that avoids. The POST checks the address is
+free **before** spending the token (a clash must not leave somebody signed up,
+unable to correct it, holding a dead link), then hands the password to
+`setPasswordWithToken` — still the one implementation of "burn the link, write
+the password, drop old sessions" for both programmes.
 
 ### Where the kind is read
 

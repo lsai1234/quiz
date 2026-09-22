@@ -115,18 +115,29 @@ export async function listPartners(): Promise<Partner[]> {
 
 export async function updatePartner(
   id: string,
-  patch: { name?: string; status?: PartnerStatus; data?: PartnerData },
+  patch: { name?: string; email?: string; status?: PartnerStatus; data?: PartnerData },
 ): Promise<void> {
   const existing = await getPartner(id)
   if (!existing) return
   const db = await getEngine()
-  await db.run('UPDATE partners SET name = ?, status = ?, data = ?, updated_at = ? WHERE id = ?', [
-    patch.name ?? existing.name,
-    patch.status ?? existing.status,
-    JSON.stringify(patch.data ?? existing.data),
-    now(),
-    id,
-  ])
+  /*
+    The email is the account's identity — it is what they sign in with and how
+    a founder reaches them — so it is normalised the same way `createPartner`
+    normalises it. Two rows differing only in case would be two accounts to the
+    unique index and one to every human looking at them.
+  */
+  const email = patch.email?.trim().toLowerCase() || existing.email
+  await db.run(
+    'UPDATE partners SET name = ?, email = ?, status = ?, data = ?, updated_at = ? WHERE id = ?',
+    [
+      patch.name ?? existing.name,
+      email,
+      patch.status ?? existing.status,
+      JSON.stringify(patch.data ?? existing.data),
+      now(),
+      id,
+    ],
+  )
 }
 
 /** Store a password hash and move an invited partner to active. */

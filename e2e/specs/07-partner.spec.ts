@@ -181,6 +181,10 @@ test.describe('an affiliate', () => {
     await expect(page.getByText(/20% off for anyone who uses it/)).toBeVisible()
     await expect(page.getByText(/you earn 12% of every order it brings in/)).toBeVisible()
 
+    // The email they will sign in with, pre-filled from the account so it is a
+    // glance rather than a field — and correctable, because the founder typed it.
+    await expect(page.getByLabel('Email')).toHaveValue(affiliate.email)
+
     const findings = await inspect(page)
     expect(report('/partner/join', findings), report('/partner/join', findings)).toBe('')
 
@@ -202,6 +206,48 @@ test.describe('an affiliate', () => {
     // And the link is spent, like any other first sign-in.
     const reuse = await page.request.get(`/api/partner/set-password?token=${encodeURIComponent(affiliate.token)}`)
     expect(reuse.status()).toBe(404)
+  })
+
+  test('signs in afterwards with the email and password they chose', async ({ page }) => {
+    const affiliate = await inviteAffiliate(page)
+    // The founder typed an address from a DM. This one corrects it, which is
+    // the whole reason the field is on the form rather than just on screen.
+    const theirs = `corrected-${Date.now().toString(36)}@e2e.test`
+
+    await page.goto(affiliate.path)
+    await expect(page.getByLabel('Email')).toHaveValue(affiliate.email, { timeout: 20_000 })
+    await page.getByLabel('Email').fill(theirs)
+    await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await page.getByLabel('Confirm password').fill(PASSWORD)
+    await page.getByRole('button', { name: /Set my password/ }).click()
+    await expect(page.getByRole('heading', { name: /What you’re owed/ })).toBeVisible({ timeout: 20_000 })
+
+    // Signed out and back in on the address they gave, not the one we guessed.
+    await page.request.post('/api/partner/logout')
+    await page.goto('/partner')
+    await page.getByLabel(/email/i).fill(theirs)
+    await page.getByLabel(/password/i).fill(PASSWORD)
+    await page.getByRole('button', { name: /Sign in/ }).click()
+    await expect(page.getByRole('heading', { name: /What you’re owed/ })).toBeVisible({ timeout: 20_000 })
+  })
+
+  test('cannot take an email another account already holds', async ({ page }) => {
+    // Refused BEFORE the link is spent, so somebody who picks a taken address
+    // is not left signed up, unable to correct it, holding a dead link.
+    const taken = await inviteAffiliate(page)
+    const affiliate = await inviteAffiliate(page)
+
+    const res = await page.request.post('/api/partner/join', {
+      data: { token: affiliate.token, email: taken.email, password: PASSWORD },
+    })
+    expect(res.status()).toBe(409)
+    expect((await res.json()).error).toMatch(/already an account/i)
+
+    // Their own link still works.
+    const ok = await page.request.post('/api/partner/join', {
+      data: { token: affiliate.token, email: affiliate.email, password: PASSWORD },
+    })
+    expect(ok.status()).toBe(200)
   })
 
   test('cannot be created without a sensible commission', async ({ page }) => {

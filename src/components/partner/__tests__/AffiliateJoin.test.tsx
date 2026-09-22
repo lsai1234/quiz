@@ -14,6 +14,7 @@ const LIVE = {
   link: 'live',
   kind: 'affiliate',
   name: 'Alex Reed',
+  email: 'alex@example.com',
   linkExpiresAt: '2026-10-01T00:00:00.000Z',
   hasPassword: false,
   code: { code: 'ALEX20', discountPct: 0.2 },
@@ -25,9 +26,10 @@ const LIVE = {
 
 /** Answers the join read, then whatever the password POST is given. */
 function serve(lookup: unknown, post: { ok?: boolean; body?: unknown } = {}) {
-  const fetchMock = jest.fn(async (url: string, init?: { body?: string }) => {
-    void init
-    if (String(url).startsWith('/api/partner/join')) {
+  const fetchMock = jest.fn(async (url: string, init?: { method?: string; body?: string }) => {
+    // The read and the write are the same path; the method is what tells them
+    // apart, exactly as it does on the server.
+    if (String(url).startsWith('/api/partner/join') && init?.method !== 'POST') {
       return { ok: true, status: 200, json: async () => lookup }
     }
     return { ok: post.ok ?? true, status: post.ok === false ? 400 : 200, json: async () => post.body ?? { ok: true } }
@@ -49,11 +51,18 @@ describe('an affiliate opening their link', () => {
     expect(screen.getByText(/Welcome, Alex/)).toBeInTheDocument()
   })
 
-  it('sets the password through the one endpoint that sets passwords', async () => {
-    // Not its own implementation of "burn the link, write the password, start a
-    // session" — the shared route, so the two programmes cannot drift apart.
-    // Landing on `/partner` afterwards is a real page load, which only a
-    // browser can prove: see the affiliate journey in `07-partner.spec.ts`.
+  it('pre-fills the email the account is on, and says what it is for', async () => {
+    serve(LIVE)
+    render(<AffiliateJoin />)
+
+    await waitFor(() => expect(screen.getByLabelText('Email')).toHaveValue('alex@example.com'))
+    expect(screen.getByText('This is what you’ll sign in with.')).toBeInTheDocument()
+  })
+
+  it('sends the email and the password together', async () => {
+    // One decision — "this account is mine, and this is how I get back into
+    // it" — so one request. Landing on `/partner` afterwards is a real page
+    // load, which only a browser can prove: see `07-partner.spec.ts`.
     const fetchMock = serve(LIVE)
     render(<AffiliateJoin />)
     await screen.findByText('ALEX20')
@@ -63,13 +72,68 @@ describe('an affiliate opening their link', () => {
     await userEvent.click(screen.getByRole('button', { name: /Set my password/ }))
 
     await waitFor(() =>
-      expect(fetchMock.mock.calls.some(([url]) => url === '/api/partner/set-password')).toBe(true),
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
     )
-    const post = fetchMock.mock.calls.find(([url]) => url === '/api/partner/set-password')!
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
+    expect(post[0]).toBe('/api/partner/join')
     expect(JSON.parse(post[1]?.body ?? '{}')).toEqual({
       token: 'tok_123',
+      email: 'alex@example.com',
       password: 'a-long-enough-one',
     })
+  })
+
+  it('sends the email they corrected rather than the one we guessed', async () => {
+    // The founder typed it from a DM or a call. Being locked out of an account
+    // that is already earning, because of somebody else's typo, is the failure
+    // this field exists to stop.
+    const fetchMock = serve(LIVE)
+    render(<AffiliateJoin />)
+    await screen.findByText('ALEX20')
+
+    await userEvent.clear(screen.getByLabelText('Email'))
+    await userEvent.type(screen.getByLabelText('Email'), 'alex.reed@gmail.com')
+    await userEvent.type(screen.getByLabelText('Password'), 'a-long-enough-one')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'a-long-enough-one')
+    await userEvent.click(screen.getByRole('button', { name: /Set my password/ }))
+
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(true),
+    )
+    const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!
+    expect(JSON.parse(post[1]?.body ?? '{}').email).toBe('alex.reed@gmail.com')
+  })
+
+  it('will not submit without an email that looks like one', async () => {
+    serve(LIVE)
+    render(<AffiliateJoin />)
+    await screen.findByText('ALEX20')
+
+    await userEvent.type(screen.getByLabelText('Password'), 'a-long-enough-one')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'a-long-enough-one')
+    expect(screen.getByRole('button', { name: /Set my password/ })).toBeEnabled()
+
+    await userEvent.clear(screen.getByLabelText('Email'))
+    expect(screen.getByRole('button', { name: /Set my password/ })).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText('Email'), 'alex@')
+    expect(screen.getByText('That does not look like an email address.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Set my password/ })).toBeDisabled()
+  })
+
+  it('shows the server\'s words when the email is already on another account', async () => {
+    serve(LIVE, {
+      ok: false,
+      body: { error: 'There is already an account on that email. Use another, or ask us to merge them.' },
+    })
+    render(<AffiliateJoin />)
+    await screen.findByText('ALEX20')
+
+    await userEvent.type(screen.getByLabelText('Password'), 'a-long-enough-one')
+    await userEvent.type(screen.getByLabelText('Confirm password'), 'a-long-enough-one')
+    await userEvent.click(screen.getByRole('button', { name: /Set my password/ }))
+
+    expect(await screen.findByText(/already an account on that email/)).toBeInTheDocument()
   })
 
   it('will not submit a password that is too short or mistyped', async () => {

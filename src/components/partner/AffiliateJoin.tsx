@@ -8,6 +8,7 @@ interface Joining {
   link: 'live' | 'dead'
   kind?: 'influencer' | 'affiliate'
   name?: string
+  email?: string
   linkExpiresAt?: string
   hasPassword?: boolean
   code?: { code: string; discountPct: number } | null
@@ -23,8 +24,16 @@ const pct = (n: number) => `${Math.round(n * 100)}%`
  * An affiliate is signed up for two things: a code to pass on, and a rate on
  * what it brings in. So the first thing they see is those two things, in the
  * numbers that are actually on their account — not a welcome paragraph that
- * could say anything, and not an agreement, because there isn't one. Then a
- * password, which is the only thing they have to do.
+ * could say anything, and not an agreement, because there isn't one. Then the
+ * two things that make the account theirs: the email they will sign in with,
+ * and a password.
+ *
+ * ── Why the email is on the form at all ─────────────────────────────────────
+ * The founder typed it when they made the account, from a DM or a call or a
+ * guess, and the person opening the link may never have seen it. Showing it is
+ * how they learn what they sign in with; letting them correct it is how
+ * somebody avoids being locked out of an account that is already earning. It
+ * is pre-filled, so for most people it is one glance rather than a field.
  *
  * ── Why it shows the deal before asking for anything ────────────────────────
  * The link arrives in a DM from someone they may have spoken to once. "Set a
@@ -44,6 +53,13 @@ export function AffiliateJoin() {
   const token = params.get('token') ?? ''
 
   const [data, setData] = useState<Joining | null>(null)
+  /*
+    Seeded from the lookup once it lands, and only while the box is untouched —
+    a `useState` initialiser cannot, because the answer arrives after the first
+    render and somebody may have started typing by then.
+  */
+  const [email, setEmail] = useState('')
+  const [emailTouched, setEmailTouched] = useState(false)
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -66,13 +82,18 @@ export function AffiliateJoin() {
           return
         }
         setData(d)
+        if (!emailTouched) setEmail(d.email ?? '')
       })
       .catch(() => setError('Could not reach us — check your connection and try again.'))
   }, [token, router])
 
   const tooShort = password.length > 0 && password.length < 10
   const mismatch = confirm.length > 0 && confirm !== password
-  const valid = password.length >= 10 && confirm === password
+  /* Shape only. Whether an address receives mail is not a thing a form knows,
+     and a stricter pattern refuses real addresses to look thorough. */
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+  const badEmail = email.trim().length > 0 && !emailOk
+  const valid = emailOk && password.length >= 10 && confirm === password
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -81,14 +102,17 @@ export function AffiliateJoin() {
     setError(null)
     try {
       /*
-        The shared endpoint, not one of this page's own. It burns the link
-        before writing, drops every session the account held, and starts a new
-        one — three steps that must stay in one place for both programmes.
+        Email and password together, in one request.
+
+        They are one decision — "this account is mine, and this is how I get
+        back into it" — and splitting them means a sign-up that can half-fail.
+        The route still hands the password to `setPasswordWithToken`, which is
+        the one place that burns a link and writes a password.
       */
-      const res = await fetch('/api/partner/set-password', {
+      const res = await fetch('/api/partner/join', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, password }),
+        body: JSON.stringify({ token, email: email.trim(), password }),
       })
       const d = await res.json().catch(() => ({}))
       if (res.ok) {
@@ -153,7 +177,7 @@ export function AffiliateJoin() {
         <p className="text-xs text-[var(--ink-3)] mb-5 leading-snug">
           {data.hasPassword
             ? 'Your account is already set up — signing in again sets a new password.'
-            : 'Your code is live. Pick a password and it’s all yours.'}
+            : 'Your code is live. Confirm your email, pick a password, and it’s all yours.'}
         </p>
       </div>
 
@@ -185,11 +209,22 @@ export function AffiliateJoin() {
 
       <form onSubmit={submit} className="w-full space-y-3">
         <Input
+          label="Email"
+          type="email"
+          autoComplete="email"
+          placeholder="you@example.com"
+          hint="This is what you’ll sign in with."
+          error={badEmail ? 'That does not look like an email address.' : undefined}
+          value={email}
+          onChange={(e) => { setEmailTouched(true); setEmail(e.target.value); setError(null) }}
+        />
+        {/* Labelled, not placeholder-only. Three fields is a form rather than
+            a single box, and a placeholder disappears the moment somebody
+            types — which is exactly when they want to check what they are in. */}
+        <Input
           label="Password"
-          hideLabel
           type="password"
           autoComplete="new-password"
-          placeholder="Pick a password"
           hint="At least 10 characters."
           error={tooShort ? 'At least 10 characters.' : undefined}
           value={password}
@@ -197,10 +232,8 @@ export function AffiliateJoin() {
         />
         <Input
           label="Confirm password"
-          hideLabel
           type="password"
           autoComplete="new-password"
-          placeholder="Type it again"
           error={mismatch ? 'Those don’t match.' : undefined}
           value={confirm}
           onChange={(e) => { setConfirm(e.target.value); setError(null) }}
