@@ -8,13 +8,13 @@
  * Server-only.
  */
 import { defaultCodeTerms, suggestCode, normaliseCode } from './codes'
-import { canTakeEffect, defaultTerms, sortedHistory, termsInForce } from './terms'
+import { canTakeEffect, defaultTerms, flatTerms, sortedHistory, termsInForce } from './terms'
 import * as repo from './repo'
-import type { CodeTerms, Partner, PartnerRecord, PartnerStatus, PartnerTerms } from './types'
+import type { CodeTerms, Partner, PartnerKind, PartnerRecord, PartnerStatus, PartnerTerms } from './types'
 
 export * from './types'
 export { normaliseCode, suggestCode, checkCode, defaultCodeTerms, isExpired } from './codes'
-export { describeTerms, describePayout, termsInForce, sortedHistory } from './terms'
+export { describeTerms, describePayout, flatTerms, termsInForce, sortedHistory } from './terms'
 
 /**
  * Create a partner, their first code and their opening terms in one go.
@@ -26,8 +26,20 @@ export { describeTerms, describePayout, termsInForce, sortedHistory } from './te
 export async function createPartner(input: {
   email: string
   name: string
+  /**
+   * Which programme. Defaults to the original one, so every existing caller —
+   * and every existing test — means what it meant before affiliates existed.
+   */
+  kind?: PartnerKind
   /** 0–1. Defaults to the programme-wide follower discount. */
   discountPct?: number
+  /**
+   * An affiliate's single rate (0–1), on everything their code brings in.
+   *
+   * Only read for an affiliate: an influencer's deal is two rates and a window,
+   * which is the standard deal rather than something typed on a create form.
+   */
+  commissionPct?: number
   /** Override the generated code. */
   code?: string
   createdBy?: string
@@ -36,9 +48,11 @@ export async function createPartner(input: {
   if (existing) throw new Error(`A partner already exists for ${input.email}.`)
 
   const { getPricingConfig } = await import('@/lib/stack-blueprint/pricing')
-  const discountPct = input.discountPct ?? getPricingConfig().partners.codeDiscountPct
+  const config = getPricingConfig()
+  const kind: PartnerKind = input.kind ?? 'influencer'
+  const discountPct = input.discountPct ?? config.partners.codeDiscountPct
 
-  const partner = await repo.createPartner({ email: input.email, name: input.name })
+  const partner = await repo.createPartner({ email: input.email, name: input.name, kind })
 
   const taken = (await repo.listAllCodes()).map((c) => c.code)
   const code = input.code ? normaliseCode(input.code) : suggestCode(input.name, discountPct, taken)
@@ -51,7 +65,13 @@ export async function createPartner(input: {
     terms: defaultCodeTerms(),
   })
 
-  const opening = await repo.addTerms({ ...defaultTerms(), partnerId: partner.id, createdBy: input.createdBy ?? null })
+  const opening = await repo.addTerms({
+    ...(kind === 'affiliate'
+      ? flatTerms(input.commissionPct ?? config.partners.firstOrderPct, config)
+      : defaultTerms(config)),
+    partnerId: partner.id,
+    createdBy: input.createdBy ?? null,
+  })
 
   /*
     Their free stack, issued with the account.
@@ -70,15 +90,22 @@ export async function createPartner(input: {
     makes it safe to do here rather than a decision to defer. A founder who does
     not want it can revoke it in one tap.
 
+    An AFFILIATE gets none of this, which is most of what the word means: a code
+    and a rate, no free stack and no agreement to sign for one. Issuing a
+    starter they were never offered would put an unclaimed box on their hub and
+    a deliverables agreement in front of somebody who signed up to share a code.
+
     Non-fatal on purpose: a partner without a starter is recoverable in the hub,
     and failing the whole creation over it would lose the account, the code and
     the terms as well.
   */
-  try {
-    const { createStarter } = await import('@/lib/partner-starter/repo')
-    await createStarter({ partnerId: partner.id, tier: 'performance', createdBy: input.createdBy ?? null })
-  } catch (err) {
-    console.error('[partners] could not issue the starter stack:', err)
+  if (kind === 'influencer') {
+    try {
+      const { createStarter } = await import('@/lib/partner-starter/repo')
+      await createStarter({ partnerId: partner.id, tier: 'performance', createdBy: input.createdBy ?? null })
+    } catch (err) {
+      console.error('[partners] could not issue the starter stack:', err)
+    }
   }
 
   return { partner, codes: [created], terms: opening, termsHistory: [opening] }

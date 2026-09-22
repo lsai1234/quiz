@@ -78,7 +78,10 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
 
   return (
     <Modal onClose={onClose} size="lg" label={`${partner.name} — partner`}>
-      <ModalHeader title={partner.name} subtitle={`${partner.status} · ${partner.email}`} />
+      <ModalHeader
+        title={partner.name}
+        subtitle={`${partner.kind === 'affiliate' ? 'affiliate' : 'partner'} · ${partner.status} · ${partner.email}`}
+      />
       <ModalBody>
         {/* Announced when they appear: both report the outcome of an action the
             founder just took, and neither used to be. */}
@@ -118,6 +121,7 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
                     status={partner.status}
                     busy={busy}
                     partnerId={partner.id}
+                    affiliate={partner.kind === 'affiliate'}
                     onStatus={(status) => post({ action: 'status', status }, status === 'suspended' ? 'Suspended — their code stops working now.' : 'Reinstated.')}
                   />
                   {codes.map((code) => (
@@ -130,8 +134,12 @@ export function PartnerDetail({ record, onClose, onSaved }: Props) {
                   ))}
                   {/* Under the code rather than in a tab of its own: a founder
                       setting a partner up does both in the same sitting, and
-                      the starter's own text quotes the code they just made. */}
-                  <StarterPanel partnerId={partner.id} />
+                      the starter's own text quotes the code they just made.
+
+                      Not for an affiliate. They were offered a code and a rate,
+                      not a free stack, and a panel offering to issue one is a
+                      button that turns their sign-up into somebody else's. */}
+                  {partner.kind !== 'affiliate' && <StarterPanel partnerId={partner.id} />}
 
                   {/*
                     Last on the tab, on purpose. Suspending is the answer to
@@ -259,11 +267,13 @@ function AccountPanel({
   status,
   busy,
   partnerId,
+  affiliate,
   onStatus,
 }: {
   status: PartnerRecord['partner']['status']
   busy: boolean
   partnerId: string
+  affiliate: boolean
   onStatus: (s: 'active' | 'suspended') => void
 }) {
   return (
@@ -290,7 +300,7 @@ function AccountPanel({
           </Button>
         )}
       </div>
-      <InviteLink partnerId={partnerId} isNew={status === 'invited'} />
+      <InviteLink partnerId={partnerId} isNew={status === 'invited'} affiliate={affiliate} />
     </Group>
   )
 }
@@ -303,7 +313,7 @@ function AccountPanel({
  * it means issuing another, which is the right trade: an invite that could be
  * looked up later would be a standing key to somebody's account.
  */
-function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean }) {
+function InviteLink({ partnerId, isNew, affiliate }: { partnerId: string; isNew: boolean; affiliate: boolean }) {
   const [link, setLink] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -324,16 +334,16 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
         return
       }
       /*
-        `/partner/claim`, not `/partner/set-password`.
+        The path comes from the server, which is the only place that knows which
+        programme this account is on.
 
-        One link, whatever state the partner is in. If they have a starter
-        waiting it opens on the agreement — the shortest true path to what the
-        outreach message promised, with no password in front of it. If they have
-        not, or have already claimed, that page offers setting a password, which
-        is what this link used to do. A founder never has to work out which of
-        two links to send, and cannot send the wrong one.
+        A partner's link opens on `/partner/claim` — the agreement for the stack
+        they were offered, with no password in front of it. An affiliate's opens
+        on `/partner/join`, which is their code, their rate and a password,
+        because there is no stack and nothing to sign. A founder never has to
+        work out which to send, and cannot send the wrong one.
       */
-      setLink(`${window.location.origin}/partner/claim?token=${encodeURIComponent(d.token)}`)
+      setLink(`${window.location.origin}${d.path}`)
     } catch {
       setError('Could not reach the hub.')
     } finally {
@@ -353,8 +363,9 @@ function InviteLink({ partnerId, isNew }: { partnerId: string; isNew: boolean })
           </p>
         )}
         <Note>
-          Send it to them yourself. It expires in 7 days, and opens straight on their agreement — they do not
-          need a password to claim their stack.
+          {affiliate
+            ? 'Send it to them yourself. It expires in 7 days, and opens on their code, their rate and a box to pick a password — that is the whole sign-up.'
+            : 'Send it to them yourself. It expires in 7 days, and opens straight on their agreement — they do not need a password to claim their stack.'}
         </Note>
       </div>
     )

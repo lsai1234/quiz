@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Badge, Button, Card, Ground, Input } from '@/components/system'
 import { StarterStack } from './StarterStack'
+import { describeTerms } from '@/lib/partners/terms'
 import type { PartnerDashboard as Data } from '@/lib/partners/dashboard'
 
 const money = (n: number) => `£${n.toFixed(2)}`
@@ -488,9 +489,11 @@ function TermsTab({ data }: { data: Data }) {
                   </span>
                 )}
               </div>
-              <p className="text-[11px] text-[var(--ink-2)] leading-snug">
-                {pct(t.firstOrderPct)} on a first order, then {pct(t.renewalPct)} of every renewal for {t.renewalMonths} months.
-              </p>
+              {/* The same sentence the panel above uses, so a partner comparing
+                  their current deal with the one before it is comparing like
+                  with like — and so an affiliate's single rate does not read
+                  here as two rates that happen to match. */}
+              <p className="text-[11px] text-[var(--ink-2)] leading-snug">{describeTerms(t)}</p>
               {t.note && <p className="text-[11px] text-[var(--ink-3)] italic leading-snug mt-1.5">“{t.note}”</p>}
             </div>
           ))}

@@ -10,6 +10,7 @@ import {
   setPartnerStatus,
   updateCodeTerms,
   type CodeTerms,
+  type PartnerKind,
   type PartnerStatus,
   type PayoutTerms,
 } from '@/lib/partners'
@@ -80,7 +81,11 @@ interface Body {
   // create
   email?: string
   name?: string
+  /** Which programme. Omitted means the original one. */
+  kind?: PartnerKind
   discountPct?: number
+  /** An affiliate's single commission rate (0–1). Ignored for an influencer. */
+  commissionPct?: number
   code?: string
   // status
   status?: PartnerStatus
@@ -122,10 +127,28 @@ export async function POST(req: Request) {
         if (!body.email?.trim() || !body.name?.trim()) {
           return NextResponse.json({ error: 'A name and an email are both needed.' }, { status: 400 })
         }
+        const kind: PartnerKind = body.kind === 'affiliate' ? 'affiliate' : 'influencer'
+        /*
+          An affiliate's whole deal is one number, so it is worth refusing a
+          silly one here rather than writing terms nobody meant. Zero is
+          refused too: an affiliate earning nothing is not a deal, it is a
+          mistake that only shows up when they ask where their money is.
+        */
+        if (kind === 'affiliate') {
+          const rate = body.commissionPct
+          if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0 || rate > 0.5) {
+            return NextResponse.json(
+              { error: 'Give a commission between 0% and 50%.' },
+              { status: 400 },
+            )
+          }
+        }
         const record = await createPartner({
           email: body.email,
           name: body.name,
+          kind,
           discountPct: body.discountPct,
+          commissionPct: body.commissionPct,
           code: body.code,
           createdBy: founder?.email,
         })
@@ -203,8 +226,21 @@ export async function POST(req: Request) {
         // Returned once, in readable form, and never recoverable afterwards —
         // only reissued. The store keeps a hash, so nobody including us can
         // read an outstanding invite back out of the database.
-        const token = await createInviteToken(body.id, record.partner.status === 'invited' ? 'invite' : 'reset')
-        return NextResponse.json({ ok: true, token, kind: record.partner.status === 'invited' ? 'invite' : 'reset' })
+        const first = record.partner.status === 'invited'
+        const token = await createInviteToken(body.id, first ? 'invite' : 'reset')
+        /*
+          Which door the link opens is decided HERE, from the record, rather
+          than by the screen that shows the link. The two programmes have
+          different front doors — an influencer's opens on the agreement for the
+          stack they were offered, an affiliate's on a first sign-in — and a
+          founder who sent the wrong one would be sending somebody to a page
+          about a free box they were never promised.
+        */
+        const path =
+          record.partner.kind === 'affiliate'
+            ? `/partner/join?token=${encodeURIComponent(token)}`
+            : `/partner/claim?token=${encodeURIComponent(token)}`
+        return NextResponse.json({ ok: true, token, path, kind: first ? 'invite' : 'reset' })
       }
 
       case 'run-payouts': {

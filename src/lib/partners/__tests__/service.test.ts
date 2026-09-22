@@ -24,6 +24,55 @@ describe('creating a partner', () => {
     expect(record.termsHistory).toHaveLength(1)
   })
 
+  it('puts an affiliate on one rate, on everything their code brings in', async () => {
+    const record = await createPartner({
+      email: 'affiliate@example.com',
+      name: 'Alex Reed',
+      kind: 'affiliate',
+      discountPct: 0.2,
+      commissionPct: 0.12,
+    })
+
+    expect(record.partner.kind).toBe('affiliate')
+    // One rate: an affiliate is paid for the sale, whichever sale it is.
+    expect(record.terms.firstOrderPct).toBe(0.12)
+    expect(record.terms.renewalPct).toBe(0.12)
+    // …but not forever. A rate with no end is a revenue share rather than a
+    // referral fee, whoever is being paid — see `partners.renewalMonths`.
+    expect(record.terms.renewalMonths).toBe(PRICING_CONFIG.partners.renewalMonths)
+    expect(record.codes[0].discountPct).toBe(0.2)
+  })
+
+  it('issues an affiliate no free stack, because nobody offered them one', async () => {
+    const { listStartersForPartner } = await import('@/lib/partner-starter/repo')
+
+    const affiliate = await createPartner({
+      email: 'nostack@example.com',
+      name: 'Nina Stack',
+      kind: 'affiliate',
+      commissionPct: 0.1,
+    })
+    expect(await listStartersForPartner(affiliate.partner.id)).toHaveLength(0)
+
+    // The original programme still does, which is the half of this that a
+    // refactor could silently break.
+    const influencer = await createPartner({ email: 'stack@example.com', name: 'Ivy Stack' })
+    expect(await listStartersForPartner(influencer.partner.id)).toHaveLength(1)
+  })
+
+  it('reads an affiliate back as one', async () => {
+    // The kind is stored, not inferred from the shape of the deal: two equal
+    // rates are a coincidence an influencer's terms can also have.
+    const created = await createPartner({
+      email: 'readback@example.com',
+      name: 'Rita Back',
+      kind: 'affiliate',
+      commissionPct: 0.1,
+    })
+    const read = await getPartnerRecord(created.partner.id)
+    expect(read?.partner.kind).toBe('affiliate')
+  })
+
   it('refuses a second partner on the same email', async () => {
     await createPartner({ email: 'dup@example.com', name: 'First' })
     await expect(createPartner({ email: 'dup@example.com', name: 'Second' })).rejects.toThrow(/already exists/)

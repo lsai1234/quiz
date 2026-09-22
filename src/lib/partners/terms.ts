@@ -27,6 +27,34 @@ export function defaultTerms(config = getPricingConfig()): Omit<PartnerTerms, 'i
 }
 
 /**
+ * The terms an AFFILIATE starts on: one rate, on everything their code brings.
+ *
+ * The influencer deal splits the rate because it is paying for two different
+ * things — an introduction, then a share of the subscription that followed.
+ * An affiliate is paid for the sale, whichever sale it is, so both rates are
+ * the one the founder set and the deal is a sentence: "you earn X% of every
+ * order your code brings in".
+ *
+ * `renewalMonths` is NOT flattened to forever. A rate that never stops is a
+ * standing revenue share rather than a referral fee — the reasoning is in
+ * `PRICING_CONFIG.partners.renewalMonths`, and it applies whoever is being paid.
+ * It is the programme default here and editable per affiliate afterwards, like
+ * every other part of a deal.
+ */
+export function flatTerms(
+  commissionPct: number,
+  config = getPricingConfig(),
+): Omit<PartnerTerms, 'id' | 'partnerId' | 'createdAt'> {
+  const rate = Math.min(1, Math.max(0, commissionPct))
+  return {
+    ...defaultTerms(config),
+    firstOrderPct: rate,
+    renewalPct: rate,
+    note: 'Standard affiliate terms.',
+  }
+}
+
+/**
  * The row in force at `at` — the latest one that has actually taken effect.
  *
  * Future-dated rows are deliberately not returned: a rate agreed to start next
@@ -87,6 +115,21 @@ export function canTakeEffect(
  */
 export function describeTerms(terms: Pick<PartnerTerms, 'firstOrderPct' | 'renewalPct' | 'renewalMonths'>): string {
   const pct = (n: number) => `${Math.round(n * 100)}%`
+  /*
+    One sentence when there is one rate.
+
+    An affiliate earns the same percentage whichever order it is, and reading
+    "20% on a first order, then 20% of every renewal" makes a reader look for
+    the difference between the two halves. Keyed on the rates actually being
+    equal rather than on the programme, so it stays true for an influencer whose
+    deal happens to have been levelled up to one rate.
+  */
+  if (terms.firstOrderPct === terms.renewalPct) {
+    return (
+      `${pct(terms.firstOrderPct)} of the net on every order your code brings in, ` +
+      `including renewals for ${terms.renewalMonths} months from signup.`
+    )
+  }
   return (
     `${pct(terms.firstOrderPct)} of the net on a first order, then ${pct(terms.renewalPct)} of every renewal ` +
     `for ${terms.renewalMonths} months from signup.`

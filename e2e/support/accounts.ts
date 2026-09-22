@@ -87,13 +87,32 @@ export async function founderSessionViaApi(page: Page): Promise<void> {
  * Needs a founder session on the same page first — partner creation is a hub
  * action, which is the point: a partner cannot exist without one.
  */
-export async function createPartner(page: Page, opts: { name?: string; discountPct?: number; code?: string } = {}) {
+export async function createPartner(
+  page: Page,
+  opts: {
+    name?: string
+    discountPct?: number
+    code?: string
+    /** Which programme. Omitted means the original influencer one. */
+    kind?: 'influencer' | 'affiliate'
+    /** An affiliate's single rate (0–1); required for one, ignored otherwise. */
+    commissionPct?: number
+  } = {},
+) {
   /* Unique by default: the code is derived from the name, and two partners
      asking for the same stem come back without one. */
   const name = opts.name ?? `E2E Partner ${Math.random().toString(36).slice(2, 7)}`
   const email = `partner-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}@e2e.test`
   const res = await page.request.post('/api/portal/partners', {
-    data: { action: 'create', name, email, discountPct: opts.discountPct, code: opts.code },
+    data: {
+      action: 'create',
+      name,
+      email,
+      kind: opts.kind,
+      discountPct: opts.discountPct,
+      commissionPct: opts.commissionPct,
+      code: opts.code,
+    },
   })
   expect(res.status(), `partner create failed: ${await res.text()}`).toBe(200)
   /* The hub answers with the partner, the code it minted and the terms it
@@ -101,7 +120,7 @@ export async function createPartner(page: Page, opts: { name?: string; discountP
      `{ ok, partner }` and the record itself is `{ partner, codes, terms }`. */
   const { partner: record } = (await res.json()) as {
     partner: {
-      partner: { id: string; status: string }
+      partner: { id: string; status: string; kind: string }
       codes: Array<{ code: string; discountPct: number }>
       terms: Record<string, unknown>
     }

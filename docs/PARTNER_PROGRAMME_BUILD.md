@@ -473,6 +473,54 @@ that no longer exists.
 
 ---
 
+## 2B. Affiliates — the second programme (built)
+
+**Status: built.** Migration v23 adds `partners.kind` (`influencer` |
+`affiliate`), nullable and backfilled — every row that existed when it ran
+predates the affiliate programme, so `influencer` is the truthful value as well
+as the safe one.
+
+### What differs, and what does not
+
+Everything downstream of the account is shared: the same codes table, the same
+commission ledger, the same payout runs, the same `/partner` hub, the same
+suspension and deletion rules. The money works the same way for both, and two
+of everything would mean settling up in two places every month.
+
+Three things differ, all at the two ends of the relationship:
+
+| | Influencer | Affiliate |
+|---|---|---|
+| **The deal** | `partners.firstOrderPct` on a first order, `renewalPct` on renewals | one rate the founder types, on both — `flatTerms()` |
+| **On creation** | a starter stack is issued (`partner-starter`) | nothing; they were offered a code, not a box |
+| **Front door** | `/partner/claim` — the agreement for the stack | `/partner/join` — code, rate, and a password |
+
+`renewalMonths` is **not** flattened to forever for an affiliate. A rate that
+never stops is a revenue share rather than a referral fee — §1's reasoning
+applies whoever is being paid — so it is the programme default and editable per
+affiliate afterwards, like every other part of a deal.
+
+### The front doors
+
+`/api/portal/partners` decides which link a founder is handed (`action:
+'invite'` returns a `path`), from the record rather than from the screen: a
+founder cannot send an affiliate to a page about a free box nobody promised
+them. `/partner/join` reads the link without spending it (`/api/partner/join`),
+shows the code and the rate **before** asking for a password, and then posts to
+the shared `/api/partner/set-password` — one implementation of "burn the link,
+write the password, start a session" for both programmes. A link belonging to
+an influencer is redirected to `/partner/claim`, intact.
+
+### Where the kind is read
+
+Deliberately few places: `createPartner` (which terms, whether to issue a
+starter), the invite path above, the hub's list badge, the detail dialog (no
+starter panel for an affiliate), and nothing in the ledger at all. The wording a
+partner reads keys off the **rates being equal**, not off the kind — so an
+influencer whose deal is levelled to one rate reads the same honest sentence.
+
+---
+
 ## 3. Phases
 
 Each phase is shippable and useful on its own. Phases 1 and 5 are internal, so

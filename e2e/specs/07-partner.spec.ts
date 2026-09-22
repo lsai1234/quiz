@@ -123,3 +123,99 @@ test.describe('the portal', () => {
     }
   })
 })
+
+/**
+ * Affiliates — the light programme.
+ *
+ * Same hub, same codes, same ledger. What differs is the deal (one rate, on
+ * everything their code brings in), the fact that no free stack is issued, and
+ * the front door: a first sign-in rather than an agreement to claim a box with.
+ */
+test.describe('an affiliate', () => {
+  /** Create one and get the link the hub would hand a founder to send on. */
+  async function inviteAffiliate(page: import('@playwright/test').Page, commissionPct = 0.12) {
+    await founderSessionViaApi(page)
+    const affiliate = await createPartner(page, {
+      name: `Affiliate ${Date.now().toString(36)}`,
+      kind: 'affiliate',
+      commissionPct,
+      discountPct: 0.2,
+    })
+    const res = await page.request.post('/api/portal/partners', {
+      data: { action: 'invite', id: affiliate.partner.id },
+    })
+    expect(res.status(), `invite failed: ${await res.text()}`).toBe(200)
+    const { token, path } = await res.json()
+    return { ...affiliate, token, path }
+  }
+
+  test('is created on one rate, with no stack to claim', async ({ page }) => {
+    const affiliate = await inviteAffiliate(page, 0.12)
+
+    expect(affiliate.partner.kind).toBe('affiliate')
+    // One rate, both halves of the deal — they are paid for the sale, whichever
+    // sale it is.
+    expect(affiliate.terms.firstOrderPct).toBe(0.12)
+    expect(affiliate.terms.renewalPct).toBe(0.12)
+
+    // And nothing was issued for them to sign for: the starter endpoint is the
+    // one an influencer's front door reads.
+    const claim = await page.request.get(`/api/partner/claim?token=${encodeURIComponent(affiliate.token)}`)
+    expect((await claim.json()).starter).toBeNull()
+  })
+
+  test('is sent to their own front door, not the agreement', async ({ page }) => {
+    const affiliate = await inviteAffiliate(page)
+    // The hub decides which door from the record, so a founder cannot send the
+    // wrong one.
+    expect(affiliate.path).toContain('/partner/join?token=')
+  })
+
+  test('signs in from the link, sees the deal, and lands in their hub', async ({ page }) => {
+    const affiliate = await inviteAffiliate(page, 0.12)
+    await page.goto(affiliate.path)
+
+    // The deal before the credential: their code, what it takes off, and what
+    // they earn — in the numbers actually on the account.
+    await expect(page.getByText(affiliate.code!, { exact: true })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/20% off for anyone who uses it/)).toBeVisible()
+    await expect(page.getByText(/you earn 12% of every order it brings in/)).toBeVisible()
+
+    const findings = await inspect(page)
+    expect(report('/partner/join', findings), report('/partner/join', findings)).toBe('')
+
+    await page.getByLabel('Password', { exact: true }).fill(PASSWORD)
+    await page.getByLabel('Confirm password').fill(PASSWORD)
+    await page.getByRole('button', { name: /Set my password/ }).click()
+
+    // Straight into the hub, signed in, with their own numbers on screen.
+    await expect(page.getByRole('heading', { name: /What you’re owed/ })).toBeVisible({ timeout: 20_000 })
+    await page.getByRole('button', { name: 'Your deal' }).click()
+    /* Twice on the tab, deliberately: what they are on now, and the same
+       sentence in the dated history underneath it. `.first()` rather than a
+       narrower selector — that the two agree word for word is the point. */
+    await expect(page.getByText(/12% of the net on every order your code brings in/).first()).toBeVisible()
+
+    // Nothing to claim: the hub shows an affiliate no free stack.
+    await expect(page.getByText(/free stack/i)).toBeHidden()
+
+    // And the link is spent, like any other first sign-in.
+    const reuse = await page.request.get(`/api/partner/set-password?token=${encodeURIComponent(affiliate.token)}`)
+    expect(reuse.status()).toBe(404)
+  })
+
+  test('cannot be created without a sensible commission', async ({ page }) => {
+    await founderSessionViaApi(page)
+    const res = await page.request.post('/api/portal/partners', {
+      data: {
+        action: 'create',
+        kind: 'affiliate',
+        name: 'No Rate',
+        email: `norate-${Date.now().toString(36)}@e2e.test`,
+        discountPct: 0.2,
+      },
+    })
+    expect(res.status()).toBe(400)
+    expect((await res.json()).error).toMatch(/commission/i)
+  })
+})

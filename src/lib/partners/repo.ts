@@ -18,6 +18,7 @@ import type {
   PartnerCode,
   PartnerCommission,
   PartnerData,
+  PartnerKind,
   PartnerPayout,
   PartnerStatus,
   PartnerTerms,
@@ -37,6 +38,8 @@ interface PartnerRow {
   email: string
   name: string
   password_hash: string | null
+  /** Null on every row written before the affiliate programme existed. */
+  kind: string | null
   status: string
   data: string
   created_at: string
@@ -54,6 +57,9 @@ function toPartner(row: PartnerRow): Partner {
     id: row.id,
     email: row.email,
     name: row.name,
+    // Anything that is not the affiliate programme is the original one,
+    // including a row from before the column existed — see migration v23.
+    kind: row.kind === 'affiliate' ? 'affiliate' : 'influencer',
     status: row.status as PartnerStatus,
     data,
     createdAt: row.created_at,
@@ -64,6 +70,7 @@ function toPartner(row: PartnerRow): Partner {
 export async function createPartner(input: {
   email: string
   name: string
+  kind?: PartnerKind
   data?: PartnerData
 }): Promise<Partner> {
   const db = await getEngine()
@@ -72,6 +79,7 @@ export async function createPartner(input: {
     id: newId('ptnr'),
     email: input.email.trim().toLowerCase(),
     name: input.name.trim(),
+    kind: input.kind ?? 'influencer',
     // No password yet — they set one from an invite. `invited` is what tells
     // the hub they have never signed in.
     status: 'invited',
@@ -80,9 +88,9 @@ export async function createPartner(input: {
     updatedAt: at,
   }
   await db.run(
-    `INSERT INTO partners (id, email, name, password_hash, status, data, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [partner.id, partner.email, partner.name, null, partner.status, JSON.stringify(partner.data), at, at],
+    `INSERT INTO partners (id, email, name, password_hash, kind, status, data, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [partner.id, partner.email, partner.name, null, partner.kind, partner.status, JSON.stringify(partner.data), at, at],
   )
   return partner
 }

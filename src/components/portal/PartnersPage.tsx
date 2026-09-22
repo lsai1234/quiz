@@ -5,7 +5,7 @@ import { PartnerDetail } from './PartnerDetail'
 import { suggestCode } from '@/lib/partners/codes'
 import { describeTerms } from '@/lib/partners/terms'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
-import type { PartnerRecord } from '@/lib/partners/types'
+import type { PartnerKind, PartnerRecord } from '@/lib/partners/types'
 import type { PartnerPerformance } from '@/lib/partners/performance'
 import type { PartnerBalance } from '@/lib/partners/types'
 import { Badge, Button, Card, Input } from '@/components/system'
@@ -47,7 +47,7 @@ export function PartnersPage() {
   const [records, setRecords] = useState<PartnerRecord[] | null>(null)
   const [performance, setPerformance] = useState<PerfRow[]>([])
   const [open, setOpen] = useState<string | null>(null)
-  const [creating, setCreating] = useState(false)
+  const [creating, setCreating] = useState<PartnerKind | null>(null)
   const [query, setQuery] = useState('')
 
   const load = useCallback(async () => {
@@ -79,23 +79,44 @@ export function PartnersPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-end gap-3 mb-3">
-        <Button
-          size="sm"
-          variant={creating ? 'secondary' : 'primary'}
-          icon={creating ? undefined : 'plus'}
-          aria-expanded={creating}
-          onClick={() => setCreating((c) => !c)}
-        >
-          {creating ? 'Cancel' : 'New partner'}
-        </Button>
+      {/*
+        Two buttons, not one button and a choice inside the form.
+
+        They are different jobs with different consequences — one issues a free
+        stack and an agreement to sign, the other issues a code and a rate — and
+        which one a founder is doing is the first thing they know, before any
+        field. A single "New" that revealed the difference three fields in is
+        how somebody sends a box to a person who was never offered one.
+      */}
+      <div className="flex items-center justify-end gap-2 mb-3">
+        {creating ? (
+          /*
+            One button while a form is open, not two with one of them saying
+            "Cancel". Side by side, "Cancel" and "New partner" do not say which
+            of the two the cancel belongs to — and the answer mattered, because
+            one of them issues a free stack.
+          */
+          <Button size="sm" variant="secondary" onClick={() => setCreating(null)}>
+            Cancel
+          </Button>
+        ) : (
+          <>
+            <Button size="sm" variant="secondary" icon="plus" onClick={() => setCreating('affiliate')}>
+              New affiliate
+            </Button>
+            <Button size="sm" variant="primary" icon="plus" onClick={() => setCreating('influencer')}>
+              New partner
+            </Button>
+          </>
+        )}
       </div>
       {creating && (
         <CreatePartner
+          kind={creating}
           taken={taken}
           onCreated={async (id) => {
             await load()
-            setCreating(false)
+            setCreating(null)
             setOpen(id)
           }}
         />
@@ -146,6 +167,10 @@ export function PartnersPage() {
                         {r.partner.name}
                       </span>
                       {code && <Badge tone="accent">{code.code}</Badge>}
+                      {/* Named only where it differs. Everything without this
+                          badge is the original programme, which is what the
+                          screen is called and what most rows are. */}
+                      {r.partner.kind === 'affiliate' && <Badge tone="info">Affiliate</Badge>}
                     </span>
                     <span className="block truncate" style={{ fontSize: 'var(--text-meta)', fontWeight: 'var(--weight-body)', color: 'var(--ink-3)', marginTop: 'var(--space-1)' }}>
                       {code ? `${Math.round(code.discountPct * 100)}% off` : 'no code'} · {describeTerms(r.terms)}
@@ -192,10 +217,27 @@ export function PartnersPage() {
   )
 }
 
-function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: string) => void }) {
+/**
+ * Creating either kind of account.
+ *
+ * One form, because the account, the code and the discount are the same three
+ * questions for both. What differs is the DEAL: a partner goes on the standard
+ * two-rate influencer terms and gets a free stack to claim, and an affiliate
+ * goes on one rate the founder types here and gets neither.
+ */
+function CreatePartner({ kind, taken, onCreated }: { kind: PartnerKind; taken: string[]; onCreated: (id: string) => void }) {
+  const affiliate = kind === 'affiliate'
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [discount, setDiscount] = useState(String(Math.round(PRICING_CONFIG.partners.codeDiscountPct * 100)))
+  /*
+    Seeded from the programme's first-order rate rather than left blank.
+
+    It is the number the business already pays for an introduction, so it is the
+    honest starting point — and a blank field on the one setting that decides
+    what somebody earns is an invitation to type anything.
+  */
+  const [commission, setCommission] = useState(String(Math.round(PRICING_CONFIG.partners.firstOrderPct * 100)))
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -216,15 +258,17 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'create',
+          kind,
           name,
           email,
           discountPct: (Number(discount) || 0) / 100,
+          ...(affiliate ? { commissionPct: (Number(commission) || 0) / 100 } : {}),
           code: code.trim() || undefined,
         }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(d.error ?? 'Could not create that partner.')
+        setError(d.error ?? `Could not create that ${affiliate ? 'affiliate' : 'partner'}.`)
         return
       }
       onCreated(d.partner.partner.id)
@@ -238,13 +282,24 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
   return (
     <Card elevation={2} className="mb-4">
       <p style={{ fontSize: 'var(--text-body-sm)', fontWeight: 'var(--weight-display)', fontFamily: 'var(--font-display)', color: 'var(--ink-1)', marginBottom: 'var(--space-3)' }}>
-        New partner
+        {affiliate ? 'New affiliate' : 'New partner'}
       </p>
 
       <div className="grid grid-cols-2 gap-3 mb-3">
         <Input label="Name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="Sarah Jones" />
         <Input label="Email" required type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="sarah@example.com" />
         <Input label="Follower discount" suffix="%" align="right" inputMode="decimal" value={discount} onChange={(e) => setDiscount(e.target.value)} />
+        {affiliate && (
+          <Input
+            label="Their commission"
+            suffix="%"
+            align="right"
+            inputMode="decimal"
+            value={commission}
+            onChange={(e) => setCommission(e.target.value)}
+            hint="Of the net on every order their code brings in."
+          />
+        )}
         <Input label="Code" value={code} onChange={(e) => setCode(e.target.value)} placeholder={suggested || 'auto'} />
       </div>
 
@@ -253,11 +308,21 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
         It takes that much off the regular price of quiz stacks, session stacks and subscriptions — replacing the
         bundle deal or the first month of Subscribe &amp; Save, not stacking on top — and does nothing on
         single products from the shop.{' '}
-        They start on the standard deal — {describeTerms({
-          firstOrderPct: PRICING_CONFIG.partners.firstOrderPct,
-          renewalPct: PRICING_CONFIG.partners.renewalPct,
-          renewalMonths: PRICING_CONFIG.partners.renewalMonths,
-        })} Change it per partner once they exist.
+        {affiliate ? (
+          <>
+            They earn {Math.round(Number(commission) || 0)}% of the net on every order it brings in, renewals
+            included, for {PRICING_CONFIG.partners.renewalMonths} months from signup. No free stack and nothing
+            to sign — the link you get next is their sign-in.
+          </>
+        ) : (
+          <>
+            They start on the standard deal — {describeTerms({
+              firstOrderPct: PRICING_CONFIG.partners.firstOrderPct,
+              renewalPct: PRICING_CONFIG.partners.renewalPct,
+              renewalMonths: PRICING_CONFIG.partners.renewalMonths,
+            })} Change it per partner once they exist.
+          </>
+        )}
       </p>
 
       {error && (
@@ -271,7 +336,7 @@ function CreatePartner({ taken, onCreated }: { taken: string[]; onCreated: (id: 
       )}
 
       <Button variant="primary" size="sm" loading={busy} disabled={!name.trim() || !email.trim()} onClick={create}>
-        Create partner & code
+        {affiliate ? 'Create affiliate & code' : 'Create partner & code'}
       </Button>
     </Card>
   )

@@ -778,6 +778,29 @@ export const MIGRATIONS: string[] = [
     updated_at TEXT NOT NULL
   );
   `,
+
+  // v23 — `partners.kind`: which programme an account is on.
+  //
+  // There are two now. An INFLUENCER is the original: chosen, sent a free
+  // stack, signs an agreement with deliverables in it, and earns one rate on a
+  // first order and a smaller one on renewals. An AFFILIATE is the light one —
+  // a code and a single commission rate on everything it brings in, no stack,
+  // no agreement, no deliverables.
+  //
+  // A column rather than a key in `data`, because it decides behaviour rather
+  // than describing the person: whether creation issues a free stack, which
+  // sign-up link a founder sends, and what the partner's own hub says they are
+  // on. A fact that changes what the code does belongs where it can be queried
+  // and constrained.
+  //
+  // Nullable and backfilled, the way `orders.mode` was: every row that exists
+  // when this runs predates the affiliate programme by definition, so
+  // 'influencer' is the truthful value as well as the safe one.
+  `
+  ALTER TABLE partners ADD COLUMN kind TEXT;
+  UPDATE partners SET kind = 'influencer' WHERE kind IS NULL;
+  CREATE INDEX partners_kind ON partners(kind);
+  `,
 ]
 
 /**

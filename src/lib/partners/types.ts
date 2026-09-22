@@ -10,6 +10,26 @@
  * negotiates, a single global rate stops being able to describe the programme.
  */
 
+/**
+ * Which programme an account is on.
+ *
+ * ── Two, because they are two different deals ───────────────────────────────
+ * An INFLUENCER is the original partner: somebody we chose, sent a free stack
+ * to, who signed an agreement with deliverables in it, and who earns one rate
+ * on a member's first order and a smaller one on their renewals.
+ *
+ * An AFFILIATE is the light version, and it is most of the people who want to
+ * work with us. They get a code to pass on and one commission rate on
+ * everything it brings in. No stack, no agreement, no deliverables, and a
+ * sign-up that is a link and a password rather than a document to read.
+ *
+ * Everything downstream of the account is shared — the same codes, the same
+ * commission ledger, the same payout runs, the same hub — because the money
+ * works the same way for both. What the kind decides is what happens at the
+ * two ends: what creating one issues, and what the person is told they are on.
+ */
+export type PartnerKind = 'influencer' | 'affiliate'
+
 export type PartnerStatus =
   /** Created, not yet signed in — no password set. */
   | 'invited'
@@ -21,6 +41,8 @@ export interface Partner {
   id: string
   email: string
   name: string
+  /** Which programme they are on. Anything stored before this existed is an influencer. */
+  kind: PartnerKind
   status: PartnerStatus
   /** Free-form: socials, payout details, internal notes. */
   data: PartnerData

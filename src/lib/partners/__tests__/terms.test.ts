@@ -1,4 +1,4 @@
-import { canTakeEffect, defaultTerms, describePayout, describeTerms, sortedHistory, termsInForce } from '@/lib/partners/terms'
+import { canTakeEffect, defaultTerms, describePayout, describeTerms, flatTerms, sortedHistory, termsInForce } from '@/lib/partners/terms'
 import { PRICING_CONFIG } from '@/lib/stack-blueprint/pricing'
 import type { PartnerTerms } from '@/lib/partners/types'
 
@@ -79,10 +79,42 @@ describe('canTakeEffect', () => {
   })
 })
 
+describe('an affiliate\'s terms', () => {
+  it('are the founder\'s rate on both halves of the deal', () => {
+    const t = flatTerms(0.12)
+    expect(t.firstOrderPct).toBe(0.12)
+    expect(t.renewalPct).toBe(0.12)
+    // Not a lifetime rate: the renewal window is the programme's, for the
+    // reason `PRICING_CONFIG.partners.renewalMonths` gives.
+    expect(t.renewalMonths).toBe(PRICING_CONFIG.partners.renewalMonths)
+    expect(t.note).toMatch(/affiliate/i)
+  })
+
+  it('clamp a rate that is not a rate', () => {
+    expect(flatTerms(1.4).firstOrderPct).toBe(1)
+    expect(flatTerms(-0.2).firstOrderPct).toBe(0)
+  })
+
+  it('keep the programme\'s payout arrangements', () => {
+    // How they are paid is not part of what makes them an affiliate — the
+    // cadence, the minimum and the self-billing are the same machinery.
+    expect(flatTerms(0.12).payout).toEqual(defaultTerms().payout)
+  })
+})
+
 describe('the wording a partner reads', () => {
   it('states the deal in whole sentences', () => {
     expect(describeTerms(terms('2026-01-01T00:00:00.000Z'))).toBe(
       '15% of the net on a first order, then 5% of every renewal for 6 months from signup.',
+    )
+  })
+
+  it('states one rate as one sentence', () => {
+    // An affiliate earns the same percentage whichever order it is, and
+    // "20% on a first order, then 20% of every renewal" makes a reader hunt for
+    // a difference between the halves that is not there.
+    expect(describeTerms(terms('2026-01-01T00:00:00.000Z', { firstOrderPct: 0.2, renewalPct: 0.2 }))).toBe(
+      '20% of the net on every order your code brings in, including renewals for 6 months from signup.',
     )
   })
 

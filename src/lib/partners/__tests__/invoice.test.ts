@@ -28,6 +28,7 @@ const partner: Partner = {
   id: 'ptnr_1',
   email: 'sarah@example.com',
   name: 'Sarah Jones',
+  kind: 'influencer',
   status: 'active',
   data: {},
   createdAt: '2026-01-01T00:00:00.000Z',
