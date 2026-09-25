@@ -119,6 +119,9 @@
   --amp-leading-tight: 1.2;
   --amp-tracking-question: 0.005em;
   --amp-tracking-data: 0.16em;
+  /* The data line in the top bar, where it shares a 360px row with Back and
+     the battery. */
+  --amp-tracking-data-tight: 0.06em;
 
   --amp-weight-regular: 400;
   --amp-weight-medium: 500;

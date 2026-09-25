@@ -152,7 +152,8 @@ describe('the consult components', () => {
   })
 
   it.each(FILES)('%s takes its timing from the motion presets', (file) => {
-    const source = code(readFileSync(file, 'utf8'))
+    // References to the preset variables (`var(--amp-ease-out)`) are the point.
+    const source = code(readFileSync(file, 'utf8')).replace(/var\(--[a-z0-9-]+\)/g, 'TOKEN')
     expect(source).not.toMatch(/cubic-bezier\(/)
     // A duration is a number, `ms` or `s`, then the end of the value. Keyed on
     // what follows so an SVG path's `s` command (`20s-7`) is not mistaken for one.
