@@ -23,7 +23,7 @@ describe('H3 stop & signpost screens', () => {
     pressNext()
     expect(heading()).toHaveTextContent('Let’s pause here')
     expect(screen.getByRole('status')).toHaveTextContent(/midwife, GP or pharmacist/)
-    expect(screen.queryByText(/Everything's in/)).toBeNull()
+    expect(screen.queryByText(/charge profile/i)).toBeNull()
   })
 
   it('pauses for a kidney or liver condition and points to a GP', () => {

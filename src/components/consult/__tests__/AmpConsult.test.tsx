@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { AmpConsult } from '../AmpConsult'
 import { SCENES } from '@/lib/consult/flow'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { chooseRoute, heading, pickFirstOptionAndNext } from './drive'
 
 beforeEach(() => {
@@ -19,7 +20,7 @@ describe('AmpConsult', () => {
 
   it('clicks through every scene to the end on scripted answers', () => {
     const onComplete = jest.fn()
-    render(<AmpConsult onComplete={onComplete} />)
+    render(<AmpConsult onComplete={onComplete} loadProducts={async () => MOCK_CATALOGUE} />)
     chooseRoute()
     const seen: string[] = []
     for (let i = 0; i < 12; i++) {
@@ -28,7 +29,7 @@ describe('AmpConsult', () => {
     }
     expect(seen).toEqual(SCENES.map((s) => s.copy.question))
     expect(onComplete).toHaveBeenCalledTimes(1)
-    expect(heading()).toHaveTextContent("Everything's in")
+    expect(heading()).toHaveTextContent('Your charge profile')
   })
 
   it('moves focus to the new question on a scene change', () => {
@@ -142,9 +143,9 @@ describe('Amp', () => {
     expect(screen.getByRole('img', { name: 'Amp, calm' })).toBeInTheDocument()
   })
 
-  it('is charged once everything is in', () => {
-    render(<AmpConsult />)
+  it('is charged once everything is in', async () => {
+    render(<AmpConsult loadProducts={async () => MOCK_CATALOGUE} />)
     for (let i = 0; i < 12; i++) pickFirstOptionAndNext()
-    expect(screen.getByRole('img', { name: 'Amp, charged' })).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: 'Amp, charged' }, { timeout: 5000 })).toBeInTheDocument()
   })
 })

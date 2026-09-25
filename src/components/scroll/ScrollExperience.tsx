@@ -147,7 +147,14 @@ export function ScrollExperience() {
             reducedMotion={reducedMotion}
           />
         )}
-        {act === 2 && consult && <AmpConsult onExit={() => { setConsult(false); goTo(1) }} />}
+        {act === 2 && consult && (
+          <AmpConsult
+            onExit={() => { setConsult(false); goTo(1) }}
+            // The consult has already loaded the results page's data into the
+            // store (and run its own analysis), so it goes straight to the reveal.
+            onHandoff={() => goTo(4)}
+          />
+        )}
         {act === 2 && !consult && (useV2
           ? <QuizV2 onComplete={() => goTo(3)} reducedMotion={reducedMotion} />
           : <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />)}

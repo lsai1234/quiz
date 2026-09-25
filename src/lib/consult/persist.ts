@@ -58,8 +58,10 @@ function session(): Storage | null {
 export function forStorage(state: FlowState): FlowState {
   // The consent goes with the answers it covered: both are asked again.
   const answers = { ...state.answers, circuit: null, healthConsent: null }
-  // If they were on the circuit check or past it, resume on the circuit check.
-  const past = state.sceneId === 'circuit' || state.phase !== 'scenes'
+  // A finished consult stays finished (H10 reopens its review). Otherwise, if
+  // they were on the circuit check or past it, resume on the circuit check.
+  if (state.phase === 'done') return { ...state, answers }
+  const past = state.sceneId === 'circuit' || (state.phase !== 'scenes' && state.phase !== 'intro')
   return {
     ...state,
     answers,
@@ -121,10 +123,12 @@ export function isSameSession(consultId: string): boolean {
 /** Whether this tab has a consult in progress — the hero uses it to reopen the consult on refresh. */
 export function hasActiveConsultSession(): boolean {
   const saved = loadConsult()
-  return Boolean(saved && isSameSession(saved.consultId))
+  // A finished consult is not "in progress": a refresh on the results page
+  // shouldn't drop them back into the scenes.
+  return Boolean(isResumable(saved) && isSameSession(saved.consultId))
 }
 
 /** Worth offering to resume: they got past the first scene. */
 export function isResumable(state: FlowState | null): state is FlowState {
-  return Boolean(state && state.history.length > 0)
+  return Boolean(state && state.history.length > 0 && state.phase !== 'done')
 }

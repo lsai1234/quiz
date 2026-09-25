@@ -25,6 +25,9 @@ import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
 import { NextButton, QuietLink, Tile } from './controls'
 import { SceneRenderer } from './scenes/registry'
+import { Analysis } from './Analysis'
+import type { ResultsBundle } from '@/lib/consult/results'
+import type { CatalogueProduct } from '@/lib/catalogue/types'
 
 /**
  * The Amp Consult, end to end.
@@ -40,11 +43,18 @@ interface Props {
   onExit?: () => void
   /** Called once the consult has finished collecting (after the circuit check). */
   onComplete?: (state: FlowState) => void
+  /**
+   * Called with "See my stacks": the results page's data is already in the
+   * store (`applyToResultsPage`), so the caller only has to open it.
+   */
+  onHandoff?: (bundle: ResultsBundle) => void
   /** Start from a known state — the workshop and tests use this. Disables saving. */
   initial?: FlowState
+  /** Where the catalogue comes from. Defaults to the shop's. */
+  loadProducts?: () => Promise<CatalogueProduct[]>
 }
 
-export function AmpConsult({ onExit, onComplete, initial }: Props) {
+export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProducts }: Props) {
   const persist = !initial
   const [state, dispatch] = useReducer(flowReducer, undefined, () => initial ?? initialFlow(newConsultId(), Date.now()))
   /** `checking` until the saved consult has been read; `offer` while the resume prompt is up. */
@@ -156,16 +166,17 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
     )
   }
 
-  if (state.phase !== 'scenes') {
+  if (state.phase === 'analysis' || state.phase === 'done') {
     return (
       <ConsultRoot>
-        <Finished
+        <Analysis
           state={state}
-          onRestart={() => {
-            clearConsult()
-            dispatch({ type: 'reset', consultId: newConsultId(), now: Date.now() })
+          loadProducts={loadProducts}
+          onBack={() => dispatch({ type: 'jump', sceneId: 'review' })}
+          onDone={(bundle) => {
+            dispatch({ type: 'phase', phase: 'done' })
+            onHandoff?.(bundle)
           }}
-          onBack={() => dispatch({ type: 'jump', sceneId: 'circuit' })}
         />
       </ConsultRoot>
     )
@@ -401,29 +412,6 @@ function ResumePrompt({ saved, onResume, onFresh }: { saved: FlowState; onResume
       </p>
       <NextButton onClick={onResume}>Resume</NextButton>
       <QuietLink onClick={onFresh}>Start fresh</QuietLink>
-    </div>
-  )
-}
-
-/** Stand-in for the analysis and handoff until level 3 builds them. */
-function Finished({ state, onRestart, onBack }: { state: FlowState; onRestart: () => void; onBack: () => void }) {
-  return (
-    <div
-      className="mx-auto flex flex-col justify-center"
-      style={{ maxWidth: 'var(--amp-column)', minHeight: 'var(--app-height, 100dvh)', padding: 'var(--amp-space-8) var(--amp-gutter)', gap: 'var(--amp-space-4)' }}
-    >
-      <Amp state="charged" size="md" />
-      <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
-        {state.consultId}
-      </p>
-      <h1 className="uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', lineHeight: 'var(--amp-leading-question)' }}>
-        Everything&apos;s in
-      </h1>
-      <p style={{ color: 'var(--amp-ink-2)' }}>
-        All your answers are collected. The analysis and charge-up come next in the build.
-      </p>
-      <NextButton onClick={onRestart}>Start again</NextButton>
-      <QuietLink onClick={onBack}>Back to the circuit check</QuietLink>
     </div>
   )
 }

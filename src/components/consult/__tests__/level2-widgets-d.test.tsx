@@ -5,6 +5,7 @@ import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { SceneRenderer } from '../scenes/registry'
 import { toggleShelf } from '../scenes/ShelfCheck'
 import { AmpConsult } from '../AmpConsult'
+import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { chooseRoute, heading, pickFirstOptionAndNext } from './drive'
 
 function Harness({ id, start = {}, spy }: { id: string; start?: Partial<ConsultAnswers>; spy?: (a: ConsultAnswers) => void }) {
@@ -148,11 +149,11 @@ describe('C13 speed run or deep charge', () => {
   })
 
   it('clicks through a whole speed run', () => {
-    render(<AmpConsult />)
+    render(<AmpConsult loadProducts={async () => MOCK_CATALOGUE} />)
     chooseRoute('Speed run')
     const total = visibleScenes({ ...EMPTY_ANSWERS, route: 'speed' }).length
     expect(screen.getByText(`1/${total} · Goals`)).toBeInTheDocument()
     for (let i = 0; i < total; i++) pickFirstOptionAndNext()
-    expect(heading()).toHaveTextContent("Everything's in")
+    expect(heading()).toHaveTextContent('Your charge profile')
   })
 })
