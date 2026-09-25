@@ -8,6 +8,9 @@ import { ReviewScene } from './ReviewScene'
 import { GoalTiles } from './GoalTiles'
 import { AgeWheel } from './AgeWheel'
 import { TrainingWeek } from './TrainingWeek'
+import { ChargeDial } from './ChargeDial'
+import { SleepWindow } from './SleepWindow'
+import { SunArc } from './SunArc'
 
 /**
  * The scene registry (build C1).
@@ -50,6 +53,9 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'goal-tiles': { component: GoalTiles, writes: ['goals'] },
   'age-wheel': { component: AgeWheel, writes: ['age', 'sex'] },
   'training-week': { component: TrainingWeek, writes: ['week'] },
+  'charge-dial': { component: ChargeDial, writes: ['energy'] },
+  'sleep-window': { component: SleepWindow, writes: ['sleep'] },
+  'sun-arc': { component: SunArc, writes: ['daylight'] },
   review: { component: Review, writes: [] },
 }
 

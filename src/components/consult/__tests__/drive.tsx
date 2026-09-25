@@ -29,6 +29,16 @@ export function answerCurrentScene(): void {
     case 'training-week':
       fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
       return
+    case 'charge-dial':
+      fireEvent.keyDown(screen.getByRole('slider', { name: 'Afternoon energy' }), { key: 'Home' })
+      return
+    case 'sleep-window':
+      fireEvent.keyDown(screen.getByRole('slider', { name: 'Bedtime' }), { key: 'ArrowRight' })
+      fireEvent.click(screen.getByRole('radio', { name: 'OK' }))
+      return
+    case 'sun-arc':
+      fireEvent.click(screen.getByRole('radio', { name: 'Hardly ever' }))
+      return
     case 'review':
       return
   }

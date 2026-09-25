@@ -57,12 +57,8 @@ export function reactionTo(scene: SceneId, a: ConsultAnswers): string {
       if (n <= 4) return `${WORDS[n]} a week, solid.`
       return `${WORDS[n]} a week. Serious.`
     }
-    case 'energy': {
-      if (a.energy === null) return ''
-      if (a.energy <= 3) return 'Running low. Heard.'
-      if (a.energy <= 6) return 'Middling. Noted.'
-      return 'Charged up. Nice.'
-    }
+    case 'energy':
+      return a.energy === null ? '' : `Energy ${a.energy}/10. Noted.`
     case 'sleep': {
       if (!a.sleep) return ''
       const h = sleepHours(a.sleep)

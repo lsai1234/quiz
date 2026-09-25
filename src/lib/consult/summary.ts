@@ -51,9 +51,9 @@ export const DAY_LABEL: Record<DayType, string> = {
 }
 
 export const QUALITY_LABEL: Record<SleepQuality, string> = {
-  broken: 'Broken',
+  restful: 'Great',
   ok: 'OK',
-  restful: 'Restful',
+  broken: 'Restless',
 }
 
 export const DAYLIGHT_LABEL: Record<Daylight, string> = {
