@@ -6,11 +6,15 @@ import {
   COPY_MODEL,
   COPY_SYSTEM_PROMPT,
   NEVER_AI,
+  REACT_SAFE,
   buildCopyPrompt,
   copySchema,
   validateSceneCopy,
 } from '@/lib/consult/ai/copy'
 import { EMPTY_ANSWERS, type ConsultAnswers, type SceneId } from '@/lib/consult/types'
+import { rateLimiter } from '@/lib/consult/ai/guard'
+
+const overLimit = rateLimiter(120, 60_000)
 
 /**
  * POST /api/consult/copy — Amp's words for one scene (builds V1, V2).
@@ -55,12 +59,14 @@ function answersFrom(raw: unknown): ConsultAnswers {
     sleep: r.sleep && typeof r.sleep === 'object' ? r.sleep : null,
     caffeine: r.caffeine && typeof r.caffeine === 'object' ? r.caffeine : null,
     comfort: r.comfort === true,
+    daylight: typeof r.daylight === 'string' ? r.daylight : null,
     route: r.route === 'speed' ? 'speed' : 'deep',
   } as ConsultAnswers
 }
 
 export async function POST(req: Request) {
-  let body: { sceneId?: unknown; answers?: unknown }
+  if (overLimit()) return NextResponse.json(FALLBACK, { status: 429 })
+  let body: { sceneId?: unknown; answers?: unknown; previous?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -74,6 +80,7 @@ export async function POST(req: Request) {
 
   const answers = answersFrom(body.answers)
   const scene = resolveSceneDef(sceneId as SceneId, answers)
+  const previous = typeof body.previous === 'string' && REACT_SAFE.includes(body.previous as SceneId) ? (body.previous as SceneId) : null
 
   try {
     const completion = await client.chat.completions.create(
@@ -81,11 +88,11 @@ export async function POST(req: Request) {
         model: COPY_MODEL,
         messages: [
           { role: 'system', content: COPY_SYSTEM_PROMPT },
-          { role: 'user', content: buildCopyPrompt(scene, answers) },
+          { role: 'user', content: buildCopyPrompt(scene, answers, previous) },
         ],
         response_format: {
           type: 'json_schema',
-          json_schema: { name: 'amp_scene_copy', strict: true, schema: copySchema(scene) },
+          json_schema: { name: 'amp_scene_copy', strict: true, schema: copySchema(scene, Boolean(previous)) },
         },
         max_tokens: 300,
         temperature: 0.6,

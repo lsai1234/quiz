@@ -61,6 +61,7 @@ export function forStorage(state: FlowState): FlowState {
   // A finished consult stays finished (H10 reopens its review). Otherwise, if
   // they were on the circuit check or past it, resume on the circuit check.
   if (state.phase === 'done') return { ...state, answers }
+  if (state.phase === 'stop' && state.sceneId !== 'circuit') return { ...state, answers, phase: 'scenes' }
   const past = state.sceneId === 'circuit' || (state.phase !== 'scenes' && state.phase !== 'intro')
   return {
     ...state,

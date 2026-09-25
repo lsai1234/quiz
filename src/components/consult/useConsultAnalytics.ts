@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { consultFunnel } from '@/lib/analytics/consult'
-import { circuitOutcome } from '@/lib/consult/circuit'
+import { stopReason } from '@/lib/consult/circuit'
 import { visibleScenes, type FlowState } from '@/lib/consult/flow'
 import type { SceneId } from '@/lib/consult/types'
 
@@ -55,8 +55,7 @@ export function useConsultAnalytics(state: FlowState, enabled: boolean) {
         complete(prev)
         consultFunnel.complete({ route, msTotal: now - state.startedAt })
       } else if (state.phase === 'stop') {
-        const outcome = circuitOutcome(state.answers)
-        consultFunnel.stop({ reason: outcome.kind === 'stop' ? outcome.reason : 'declined' })
+        consultFunnel.stop({ reason: stopReason(state.answers) ?? 'declined' })
       }
     }
     last.current = { phase: state.phase, sceneId: state.sceneId, at: now, interactions: 0 }

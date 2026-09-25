@@ -36,7 +36,7 @@ export type Ingredient =
   /** Anything the catalogue flags as interaction-prone with prescription medicine. */
   | 'rx-interaction'
 
-export type StopReason = 'pregnancy' | 'kidney-liver' | 'declined'
+export type StopReason = 'pregnancy' | 'kidney-liver' | 'declined' | 'under-18'
 
 export type CircuitOutcome =
   | { kind: 'stop'; reason: StopReason }
@@ -100,6 +100,16 @@ export function circuitOutcome(a: Pick<ConsultAnswers, 'circuit' | 'healthConsen
   }
 }
 
+/**
+ * Why a stopped consult stopped: the 18+ gate on "about you" (V5), or the
+ * circuit check.
+ */
+export function stopReason(a: Pick<ConsultAnswers, 'age' | 'circuit' | 'healthConsent'>): StopReason | null {
+  if (a.age === 'under-18') return 'under-18'
+  const o = circuitOutcome(a)
+  return o.kind === 'stop' ? o.reason : null
+}
+
 /** The words on each stop screen. Calm, kind, and pointing somewhere useful. */
 export const STOP_COPY: Record<StopReason, { title: string; body: string; who: string }> = {
   pregnancy: {
@@ -113,6 +123,11 @@ export const STOP_COPY: Record<StopReason, { title: string; body: string; who: s
     body:
       'Thanks for telling me. With a kidney or liver condition, supplements need a proper look first, so I won’t suggest a stack.',
     who: 'Your GP is the right person to ask about what’s safe for you.',
+  },
+  'under-18': {
+    title: 'Come back at 18',
+    body: 'CHRGD is for adults, so I can’t build you a stack. Nothing you’ve told me has been kept.',
+    who: 'If you’re thinking about supplements, a pharmacist or your GP is the best person to talk to.',
   },
   declined: {
     title: 'That’s completely fine',

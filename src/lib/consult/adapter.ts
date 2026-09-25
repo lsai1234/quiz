@@ -52,6 +52,7 @@ export const GOAL_TO_QUIZ: Record<ConsultGoal, Goal> = {
 }
 
 const AGE_TO_QUIZ: Record<AgeBand, AgeBracket> = {
+  'under-18': '16-24',
   '18-24': '16-24',
   '25-34': '25-34',
   '35-44': '35-44',

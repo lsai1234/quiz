@@ -16,7 +16,7 @@ import {
 } from '@/lib/consult/flow'
 import { DURATION } from '@/lib/consult/motion'
 import { reactionTo } from '@/lib/consult/reactions'
-import { STOP_COPY, circuitOutcome } from '@/lib/consult/circuit'
+import { STOP_COPY, stopReason } from '@/lib/consult/circuit'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
 import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult/session'
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
@@ -29,6 +29,7 @@ import { SceneRenderer } from './scenes/registry'
 import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
 import { useAiCopy } from './useAiCopy'
+import { TellAmpMore } from './TellAmpMore'
 import { useQuizArmState } from '@/lib/experiments/client'
 import { consultFunnel } from '@/lib/analytics/consult'
 import type { ResultsBundle } from '@/lib/consult/results'
@@ -74,6 +75,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const [boot, setBoot] = useState<'checking' | 'offer' | 'ready'>(persist && !reopened ? 'checking' : 'ready')
   const [offered, setOffered] = useState<FlowState | null>(null)
   const [watching, setWatching] = useState<number | null>(null)
+  /** "Tell Amp more" is open (V3), and whether Amp is reading what was typed. */
+  const [telling, setTelling] = useState(false)
+  const [thinking, setThinking] = useState(false)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
@@ -137,7 +141,8 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const order = visibleScenes(state.answers)
   const index = order.indexOf(state.sceneId) + 1
   const previous = state.history[state.history.length - 1]
-  const reaction = previous ? reactionTo(previous, state.answers) : ''
+  // Amp's line about the last answer: the AI's (V4) when it has one, else the script's.
+  const reaction = scene.copy.react ?? (previous ? reactionTo(previous, state.answers) : '')
   const ready = isAnswered(state.sceneId, state.answers)
 
   const interact = (lean: number) => {
@@ -173,14 +178,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
 
   if (state.phase === 'stop') {
-    const outcome = circuitOutcome(state.answers)
+    const reason = stopReason(state.answers) ?? 'declined'
     return (
       <ConsultRoot mode="calm" comfort={state.answers.comfort}>
         <SceneStage sceneKey="stop" direction={state.direction} headingRef={headingRef}>
           <StopScreen
-            reason={outcome.kind === 'stop' ? outcome.reason : 'declined'}
+            reason={reason}
             headingRef={headingRef}
-            onChange={() => dispatch({ type: 'jump', sceneId: 'circuit' })}
+            onChange={() => dispatch({ type: 'jump', sceneId: reason === 'under-18' ? 'about' : 'circuit' })}
             onExit={onExit}
           />
         </SceneStage>
@@ -207,7 +212,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
 
   const mode = scene.mode ?? 'charge'
-  const ampState: AmpState = mode === 'calm' ? 'calm' : watching !== null ? 'watching' : 'idle'
+  const ampState: AmpState = mode === 'calm' ? 'calm' : thinking ? 'thinking' : watching !== null ? 'watching' : 'idle'
   const nextLabel = state.returnTo ? 'Back to review' : scene.copy.next ?? 'Next'
 
   return (
@@ -233,7 +238,12 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           }
           footer={
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
-              {mode !== 'calm' && <QuietLink icon="spark">Tell Amp more</QuietLink>}
+              {/* Only with the AI layer on: with it off there's nobody to read it (V6). */}
+              {mode !== 'calm' && consultAi && (
+                <QuietLink icon="spark" onClick={() => setTelling(true)}>
+                  Tell Amp more
+                </QuietLink>
+              )}
               <QuietLink
                 icon="comfort"
                 aria-pressed={state.answers.comfort}
@@ -268,6 +278,20 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           />
         </SceneShell>
       </SceneStage>
+      {telling && (
+        <TellAmpMore
+          scene={scene}
+          onThinking={setThinking}
+          onClose={() => {
+            setTelling(false)
+            setThinking(false)
+          }}
+          onAdd={(pick) => {
+            dispatch({ type: 'pick', pick })
+            noteInteraction()
+          }}
+        />
+      )}
     </ConsultRoot>
   )
 }
@@ -303,7 +327,7 @@ function StopScreen({
       }}
     >
       <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)', paddingTop: 'var(--amp-space-3)' }}>
-        Circuit check · paused
+        {reason === 'under-18' ? 'About you · paused' : 'Circuit check · paused'}
       </p>
       <div className="flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
         <Amp state="calm" />
@@ -343,7 +367,7 @@ function StopScreen({
           </a>
         ) : null}
         <QuietLink icon="back" onClick={onChange}>
-          {reason === 'declined' ? 'Back to the circuit check' : 'I tapped something by mistake'}
+          {reason === 'declined' ? 'Back to the circuit check' : reason === 'under-18' ? 'I picked the wrong age' : 'I tapped something by mistake'}
         </QuietLink>
         {onExit && <QuietLink onClick={onExit}>Back to the start</QuietLink>}
       </div>

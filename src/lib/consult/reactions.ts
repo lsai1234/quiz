@@ -19,6 +19,7 @@ const GOAL_WORDS: Record<ConsultGoal, string> = {
 }
 
 const AGE_WORDS: Record<AgeBand, string> = {
+  'under-18': 'Under 18',
   '18-24': '18–24',
   '25-34': '25–34',
   '35-44': '35–44',

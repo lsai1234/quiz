@@ -18,12 +18,12 @@ import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
 
 const key = (scene: SceneId, answers: ConsultAnswers) => `${scene}|${summariseForCopy(answers)}`
 
-export async function fetchSceneCopy(scene: SceneDef, answers: ConsultAnswers, signal?: AbortSignal): Promise<AiSceneCopy | null> {
+export async function fetchSceneCopy(scene: SceneDef, answers: ConsultAnswers, previous?: SceneId | null, signal?: AbortSignal): Promise<AiSceneCopy | null> {
   try {
     const res = await fetch('/api/consult/copy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sceneId: scene.id, answers }),
+      body: JSON.stringify({ sceneId: scene.id, answers, previous: previous ?? null }),
       // `AbortSignal.timeout` is recent; without it there's no client-side cap,
       // and the server's own budget still ends the request.
       signal: signal ?? (typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(COPY_BUDGET_MS) : undefined),
@@ -52,7 +52,8 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
     if (cache.current.has(k) || inflight.current.has(k)) return
     inflight.current.add(k)
     const scene = resolveSceneDef(next, state.answers)
-    void fetcher(scene, state.answers).then((copy) => {
+    // The scene being answered now is the one the next scene reacts to (V4).
+    void fetcher(scene, state.answers, state.sceneId).then((copy) => {
       inflight.current.delete(k)
       cache.current.set(k, copy)
     })
@@ -68,7 +69,7 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
       }
       const ai = visit.current.copy
       if (!ai || NEVER_AI.includes(scene.id)) return scene
-      return { ...scene, copy: { ...scene.copy, question: ai.question, hint: ai.hint, labels: ai.labels } }
+      return { ...scene, copy: { ...scene.copy, question: ai.question, hint: ai.hint, labels: ai.labels, react: ai.react } }
     },
     [enabled, state.answers],
   )

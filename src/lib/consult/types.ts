@@ -27,7 +27,8 @@ export type SectionId = 'you' | 'move' | 'rest' | 'fuel' | 'body' | 'check'
 
 export type ConsultGoal = 'performance' | 'energy' | 'sleep' | 'focus' | 'ageing' | 'allround'
 
-export type AgeBand = '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65-plus'
+/** `under-18` exists only to stop the consult: CHRGD is for adults (the 18+ gate, V5). */
+export type AgeBand = 'under-18' | '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65-plus'
 
 export type Sex = 'female' | 'male' | 'unsaid'
 

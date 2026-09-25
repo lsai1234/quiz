@@ -85,7 +85,7 @@ describe('C3 age wheel', () => {
   it('lists every band, none picked until touched', () => {
     render(<Harness id="about" />)
     const options = screen.getAllByRole('option')
-    expect(options.map((o) => o.textContent)).toEqual(['18–24', '25–34', '35–44', '45–54', '55–64', '65+'])
+    expect(options.map((o) => o.textContent)).toEqual(['Under 18', '18–24', '25–34', '35–44', '45–54', '55–64', '65+'])
     expect(options.every((o) => o.getAttribute('aria-selected') === 'false')).toBe(true)
   })
 
@@ -104,12 +104,12 @@ describe('C3 age wheel', () => {
 
   it('steps with the keyboard arrows, and stops at the ends', () => {
     const spy = jest.fn()
-    render(<Harness id="about" start={{ age: '18-24' }} spy={spy} />)
+    render(<Harness id="about" start={{ age: 'under-18' }} spy={spy} />)
     const wheel = screen.getByRole('listbox', { name: 'Age band' })
     fireEvent.keyDown(wheel, { key: 'ArrowUp' })
     expect(spy).not.toHaveBeenCalled()
     fireEvent.keyDown(wheel, { key: 'ArrowDown' })
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ age: '25-34' }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ age: '18-24' }))
     fireEvent.keyDown(wheel, { key: 'End' })
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ age: '65-plus' }))
   })

@@ -203,6 +203,7 @@ function score(product: CatalogueProduct, needs: Needs): Omit<Candidate, 'ingred
 }
 
 export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[]): EngineResult {
+  if (a.age === 'under-18') throw new Error('Stack engine called for an under-18 consult')
   const outcome = circuitOutcome(a)
   if (outcome.kind === 'stop') {
     // Belt and braces: the flow never calls the engine after a stop.

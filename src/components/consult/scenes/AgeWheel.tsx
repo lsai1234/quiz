@@ -21,8 +21,11 @@ import type { SceneProps } from './registry'
  * answer, no spinning required.
  */
 
-export const AGE_BANDS: AgeBand[] = ['18-24', '25-34', '35-44', '45-54', '55-64', '65-plus']
+export const AGE_BANDS: AgeBand[] = ['under-18', '18-24', '25-34', '35-44', '45-54', '55-64', '65-plus']
 const SEXES: Sex[] = ['female', 'male', 'unsaid']
+
+/** Where the drum rests before it's touched: 25–34, the most common band. */
+const START = AGE_BANDS.indexOf('25-34')
 
 /** Rows visible in the drum; the middle one is the frame. */
 const VISIBLE = 5
@@ -49,7 +52,7 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
 
   // Start with the answer in the frame (or the second band, unpicked).
   useEffect(() => {
-    scrollToIndex(index >= 0 ? index : 1, false)
+    scrollToIndex(index >= 0 ? index : START, false)
     // Only on mount: afterwards the scroll position *is* the source of truth.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -76,7 +79,7 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    const from = index >= 0 ? index : 1
+    const from = index >= 0 ? index : START
     let to = from
     if (e.key === 'ArrowDown') to = from + 1
     else if (e.key === 'ArrowUp') to = from - 1

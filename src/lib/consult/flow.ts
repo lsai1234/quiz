@@ -13,6 +13,7 @@
 
 import SCRIPT from './scenes.json'
 import { circuitOutcome } from './circuit'
+import { pickToPatch, type Pick } from './ai/understand'
 import {
   EMPTY_ANSWERS,
   type ConsultAnswers,
@@ -52,6 +53,8 @@ export interface SceneCopy {
   next?: string
   /** AI-written option sub-lines, by key (V2). Never set by the script. */
   labels?: Record<string, string>
+  /** Amp's AI-written reaction to the answer before this scene (V4). */
+  react?: string
 }
 
 /**
@@ -259,6 +262,8 @@ export type FlowAction =
   | { type: 'route'; route: Route }
   /** "I'd rather not answer these" on the circuit check: a stop, with nothing kept. */
   | { type: 'decline' }
+  /** A "Tell Amp more" card added (V3), merged into the latest answers. */
+  | { type: 'pick'; pick: Pick }
 
 export function newConsultId(): string {
   const bytes =
@@ -320,7 +325,12 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           direction: 'forward',
         }
       }
-      // The circuit check is the only scene that can end the consult (H3).
+      // The 18+ gate (V5): an under-18 answer ends the consult at "about you",
+      // before a single health question.
+      if (state.sceneId === 'about' && state.answers.age === 'under-18') {
+        return { ...state, phase: 'stop', direction: 'forward' }
+      }
+      // The circuit check is the only other scene that can end the consult (H3).
       if (state.sceneId === 'circuit' && circuitOutcome(state.answers).kind === 'stop') {
         return { ...state, phase: 'stop', direction: 'forward' }
       }
@@ -333,6 +343,9 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       const answers = { ...state.answers, route: action.route }
       return { ...state, answers, phase: 'scenes', sceneId: visibleScenes(answers)[0], direction: 'forward' }
     }
+
+    case 'pick':
+      return { ...state, answers: { ...state.answers, ...pickToPatch(action.pick, state.answers, state.sceneId) } }
 
     case 'decline':
       return {
