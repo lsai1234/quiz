@@ -11,6 +11,7 @@ import { Act3Analysis } from './Act3Analysis'
 import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
 import { AmpConsult } from '@/components/consult/AmpConsult'
+import { hasActiveConsultSession } from '@/lib/consult/persist'
 
 type Act = 1 | 2 | 3 | 4 | 5
 
@@ -79,6 +80,19 @@ export function ScrollExperience() {
       offering to pick the quiz up, which is the right failure: a reveal drawn
       from an empty blueprint would be a page of nothing.
     */
+    /*
+      A refresh mid-consult goes straight back into it. The consult reads its
+      own save and lands on the same scene; this only has to skip the hero.
+      Same tab only — someone returning another day gets the hero, and the
+      consult offers to resume once they choose it.
+    */
+    if (window.location.hash !== STACK_RETURN_HASH && hasActiveConsultSession()) {
+      setConsult(true)
+      setAct(2)
+      setAnimKey((k) => k + 1)
+      return
+    }
+
     if (window.location.hash === STACK_RETURN_HASH) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       if (useQuizStore.getState().stackBlueprint) {

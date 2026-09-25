@@ -34,6 +34,8 @@ export const DURATION = {
   scene: 480,
   /** The charge-up at the end. The only full-screen animation. */
   chargeUp: 2600,
+  /** How long Amp keeps watching after the last touch. */
+  watch: 900,
 } as const
 
 /** Everything that is not a spring: colour changes and fades. */
@@ -146,3 +148,25 @@ export function haptic(kind: HapticKind): void {
     // Ignored: a missing tick is not worth an error.
   }
 }
+
+/* ── Amp's moods ────────────────────────────────────────────────────────── */
+
+export type AmpState = 'idle' | 'watching' | 'thinking' | 'reading' | 'calm' | 'charged'
+
+/**
+ * The placeholder Amp's animation per state (S10). Keyframes live in
+ * `consult.css`; timing hangs off the same duration variables as everything
+ * else, so reduced motion stills him too. Watching and calm are poses, not
+ * loops: watching leans (set inline), calm is simply still.
+ */
+export const AMP_ANIMATION: Record<AmpState, string | undefined> = {
+  idle: 'amp-breathe calc(var(--amp-duration-charge) * 1.6) ease-in-out infinite',
+  watching: undefined,
+  thinking: 'amp-flicker calc(var(--amp-duration-charge) / 2) linear infinite',
+  reading: undefined,
+  calm: undefined,
+  charged: 'amp-burst var(--amp-duration-scene) var(--amp-spring) both',
+}
+
+/** The scan line across Amp while he reads an upload. */
+export const AMP_SCAN = 'amp-scan var(--amp-duration-charge) linear infinite'

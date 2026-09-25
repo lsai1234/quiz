@@ -29,13 +29,13 @@ interface Props {
 
 export function SceneStage({ sceneKey, direction, headingRef, children }: Props) {
   const reduced = useReducedMotion()
-  const first = useRef(true)
+  // The scene last arrived at. Compared rather than a "first render" flag, so
+  // React's development double-run of effects doesn't count as navigating.
+  const arrived = useRef(sceneKey)
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false
-      return
-    }
+    if (arrived.current === sceneKey) return
+    arrived.current = sceneKey
     window.scrollTo({ top: 0 })
     headingRef.current?.focus({ preventScroll: true })
   }, [sceneKey, headingRef])

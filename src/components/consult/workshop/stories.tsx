@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { SceneShell } from '../SceneShell'
 import { ChargeMeter, type MeterSection } from '../ChargeMeter'
 import { NextButton, QuietLink } from '../controls'
+import { Amp, type AmpState } from '../Amp'
 
 /**
  * The workshop's stories: each renders one piece of the consult on its own,
@@ -78,7 +79,25 @@ function MeterStory() {
   )
 }
 
+const AMP_STATES: AmpState[] = ['idle', 'watching', 'thinking', 'reading', 'calm', 'charged']
+
+function AmpStory() {
+  return (
+    <div className="grid grid-cols-3" style={{ gap: 'var(--amp-space-6)', padding: 'var(--amp-space-10) var(--amp-gutter)' }}>
+      {AMP_STATES.map((state) => (
+        <div key={state} className="flex flex-col items-center" style={{ gap: 'var(--amp-space-2)' }}>
+          <Amp state={state} size="md" lean={state === 'watching' ? 1 : 0} />
+          <span className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-2)' }}>
+            {state}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
+  { id: 'amp', title: 'Amp', render: () => <AmpStory /> },
 ]

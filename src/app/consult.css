@@ -256,7 +256,9 @@
   transform: scale(var(--amp-press-scale));
 }
 
-.amp-consult :focus-visible {
+/* Not on things focused by script (the question, when a scene arrives): that
+   focus is for screen readers, and a ring around a heading reads as a bug. */
+.amp-consult :focus-visible:not([tabindex='-1']) {
   outline: none;
   box-shadow: var(--amp-focus);
 }
