@@ -61,5 +61,7 @@ export async function GET() {
       consultRollout,
       parseConsultArm(jar.get(CONSULT_ARM_COOKIE)?.value),
     ),
+    /** Whether the consult asks the AI layer for Amp's words (level 4). */
+    consultAi: consultRollout.ai,
   })
 }

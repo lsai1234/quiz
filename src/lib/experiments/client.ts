@@ -27,6 +27,8 @@ interface ArmState {
   budget: QuizExperimentConfig['budget']
   /** What the hero offers (H11). `both` until the server says otherwise — the rollout's default. */
   heroOffer: HeroOffer
+  /** Whether the consult's words come from the AI layer. Off until the server says on. */
+  consultAi: boolean
 }
 
 let state: ArmState = {
@@ -35,6 +37,7 @@ let state: ArmState = {
   aiSteer: DEFAULT_QUIZ_EXPERIMENT.aiSteer,
   budget: DEFAULT_QUIZ_EXPERIMENT.budget,
   heroOffer: 'both',
+  consultAi: false,
 }
 
 const listeners = new Set<() => void>()
@@ -69,6 +72,7 @@ const SERVER_SNAPSHOT: ArmState = {
   aiSteer: DEFAULT_QUIZ_EXPERIMENT.aiSteer,
   budget: DEFAULT_QUIZ_EXPERIMENT.budget,
   heroOffer: 'both',
+  consultAi: false,
 }
 
 export function useQuizArmState(): ArmState {

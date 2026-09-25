@@ -46,7 +46,7 @@ export function promoteGoal(goals: ConsultGoal[], goal: ConsultGoal): ConsultGoa
   return next
 }
 
-export function GoalTiles({ answers, onAnswer }: SceneProps) {
+export function GoalTiles({ scene, answers, onAnswer }: SceneProps) {
   const goals = answers.goals
   const [full, setFull] = useState(false)
 
@@ -66,7 +66,7 @@ export function GoalTiles({ answers, onAnswer }: SceneProps) {
               key={g.id}
               icon={g.icon}
               label={GOAL_LABEL[g.id]}
-              sub={g.sub}
+              sub={scene.copy.labels?.[g.id] ?? g.sub}
               selected={rank >= 0}
               badge={rank >= 0 ? rank + 1 : undefined}
               onSelect={() => tap(g.id)}

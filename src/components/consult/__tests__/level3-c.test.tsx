@@ -33,7 +33,7 @@ beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
   jest.useFakeTimers()
-  global.fetch = jest.fn(async () => new Response('{}', { status: 200 })) as typeof fetch
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({}) }) as unknown as Response) as typeof fetch
 })
 
 afterEach(() => {

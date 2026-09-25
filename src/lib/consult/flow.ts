@@ -50,6 +50,8 @@ export interface SceneCopy {
   question: string
   hint?: string
   next?: string
+  /** AI-written option sub-lines, by key (V2). Never set by the script. */
+  labels?: Record<string, string>
 }
 
 /**
@@ -89,6 +91,11 @@ export interface SceneDef {
   detail?: boolean
   /** The scripted stand-in used until a scene's widget is built. */
   placeholder?: { multi?: boolean; options: PlaceholderOption[] }
+  /**
+   * Option keys the AI may write sub-lines for (V2). The widget shows
+   * `copy.labels[key]` when present and its own sub-line otherwise.
+   */
+  aiLabels?: string[]
 }
 
 export interface SectionDef {

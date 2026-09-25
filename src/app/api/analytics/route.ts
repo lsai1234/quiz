@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { SHOP_EVENTS, QUIZ_EVENTS, type AnalyticsEvent, type EventProps } from '@/lib/analytics/events'
+import { SHOP_EVENTS, QUIZ_EVENTS, CONSULT_EVENTS, type AnalyticsEvent, type EventProps } from '@/lib/analytics/events'
 import { recordEvent } from '@/lib/analytics/repo'
 
 /**
@@ -17,7 +17,7 @@ import { recordEvent } from '@/lib/analytics/repo'
  * be able to break a checkout.
  */
 
-const KNOWN = new Set<string>([...SHOP_EVENTS, ...QUIZ_EVENTS])
+const KNOWN = new Set<string>([...SHOP_EVENTS, ...QUIZ_EVENTS, ...CONSULT_EVENTS])
 
 export async function POST(req: Request) {
   let body: { event?: unknown; props?: unknown; session?: unknown; path?: unknown; ts?: unknown }

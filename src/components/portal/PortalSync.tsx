@@ -29,6 +29,7 @@ export function PortalSync() {
         quizAiSteer?: boolean
         quizBudget?: QuizExperimentConfig['budget']
         heroOffer?: unknown
+        consultAi?: unknown
       }) => {
         if (data.dataSourceMode) setDataSourceOverride(data.dataSourceMode)
         if (data.pricingOverrides) setPricingOverrides(data.pricingOverrides)
@@ -38,6 +39,7 @@ export function PortalSync() {
             ...(typeof data.quizAiSteer === 'boolean' ? { aiSteer: data.quizAiSteer } : {}),
             ...(data.quizBudget ? { budget: data.quizBudget } : {}),
             ...(isHeroOffer(data.heroOffer) ? { heroOffer: data.heroOffer } : {}),
+            ...(typeof data.consultAi === 'boolean' ? { consultAi: data.consultAi } : {}),
           })
         }
       })

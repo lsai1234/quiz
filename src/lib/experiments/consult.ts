@@ -36,9 +36,15 @@ export interface ConsultRollout {
   mode: ConsultMode
   /** Percentage of visitors shown the consult alone in `split` mode. 0–100. */
   split: number
+  /**
+   * Whether Amp's words come from the AI layer (level 4). Off by default: the
+   * consult is complete on its scripted copy, and turning this on is the
+   * moment it starts costing money per consult.
+   */
+  ai: boolean
 }
 
-export const DEFAULT_CONSULT_ROLLOUT: ConsultRollout = { mode: 'option', split: 50 }
+export const DEFAULT_CONSULT_ROLLOUT: ConsultRollout = { mode: 'option', split: 50, ai: false }
 
 /** Cookie pinning the consult arm outright, set from `?consultArm=`. */
 export const CONSULT_ARM_COOKIE = 'chrgd_consult_arm'
@@ -72,7 +78,11 @@ export function normaliseConsultRollout(raw: unknown): ConsultRollout {
   if (!raw || typeof raw !== 'object') return DEFAULT_CONSULT_ROLLOUT
   const r = raw as Record<string, unknown>
   const mode = r.mode === 'off' || r.mode === 'option' || r.mode === 'split' || r.mode === 'all' ? r.mode : DEFAULT_CONSULT_ROLLOUT.mode
-  return { mode, split: clampSplit(typeof r.split === 'number' ? r.split : DEFAULT_CONSULT_ROLLOUT.split) }
+  return {
+    mode,
+    split: clampSplit(typeof r.split === 'number' ? r.split : DEFAULT_CONSULT_ROLLOUT.split),
+    ai: typeof r.ai === 'boolean' ? r.ai : DEFAULT_CONSULT_ROLLOUT.ai,
+  }
 }
 
 export function parseConsultArm(raw: string | null | undefined): ConsultArm | null {

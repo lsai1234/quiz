@@ -27,6 +27,10 @@ import { SceneStage } from './SceneStage'
 import { NextButton, QuietLink, Tile } from './controls'
 import { SceneRenderer } from './scenes/registry'
 import { Analysis } from './Analysis'
+import { useConsultAnalytics } from './useConsultAnalytics'
+import { useAiCopy } from './useAiCopy'
+import { useQuizArmState } from '@/lib/experiments/client'
+import { consultFunnel } from '@/lib/analytics/consult'
 import type { ResultsBundle } from '@/lib/consult/results'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 
@@ -100,6 +104,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     if (watchTimer.current) clearTimeout(watchTimer.current)
   }, [])
 
+  // The funnel (H12). Not for the workshop or tests that start from a fixed state.
+  const { noteInteraction } = useConsultAnalytics(state, persist && boot === 'ready')
+
+  // Amp's words (V1/V2): only when switched on in the hub, and never for a
+  // fixed-state run (the workshop, tests).
+  const { consultAi } = useQuizArmState()
+  const { words } = useAiCopy(state, consultAi && persist)
+
   if (boot === 'checking') return <ConsultRoot>{null}</ConsultRoot>
 
   if (boot === 'offer' && offered) {
@@ -121,7 +133,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     )
   }
 
-  const scene = resolveSceneDef(state.sceneId, state.answers)
+  const scene = words(resolveSceneDef(state.sceneId, state.answers))
   const order = visibleScenes(state.answers)
   const index = order.indexOf(state.sceneId) + 1
   const previous = state.history[state.history.length - 1]
@@ -135,6 +147,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
   const answer = (patch: Partial<ConsultAnswers>) => {
     dispatch({ type: 'answer', patch })
+    noteInteraction()
     interact(0)
   }
   const next = () => {
@@ -185,6 +198,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           onDone={(bundle) => {
             dispatch({ type: 'phase', phase: 'done' })
             rememberFinished(state)
+            consultFunnel.handoff({ route: state.answers.route ?? 'deep', stackSize: bundle.payload.tiers.complete.length })
             onHandoff?.(bundle)
           }}
         />
@@ -220,7 +234,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           footer={
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
               {mode !== 'calm' && <QuietLink icon="spark">Tell Amp more</QuietLink>}
-              <QuietLink icon="comfort" aria-pressed={state.answers.comfort} onClick={() => answer({ comfort: !state.answers.comfort, comfortOffered: true })}>
+              <QuietLink
+                icon="comfort"
+                aria-pressed={state.answers.comfort}
+                onClick={() => {
+                  consultFunnel.comfort({ on: !state.answers.comfort, via: 'toggle' })
+                  answer({ comfort: !state.answers.comfort, comfortOffered: true })
+                }}
+              >
                 {state.answers.comfort ? 'Standard size' : 'Bigger text'}
               </QuietLink>
             </div>
@@ -228,7 +249,10 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
         >
           {offerComfort(state.answers, state.sceneId) && (
             <ComfortOffer
-              onYes={() => answer({ comfort: true, comfortOffered: true })}
+              onYes={() => {
+                consultFunnel.comfort({ on: true, via: 'offer' })
+                answer({ comfort: true, comfortOffered: true })
+              }}
               onNo={() => answer({ comfortOffered: true })}
             />
           )}

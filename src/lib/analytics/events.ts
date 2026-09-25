@@ -123,6 +123,27 @@ export const QUIZ_EVENTS = [
 export type QuizEvent = (typeof QUIZ_EVENTS)[number]
 
 /**
+ * The Amp Consult's funnel (build H12). Its own names rather than the quiz's,
+ * so the two funnels can sit side by side in the hub without one leaking into
+ * the other. The results page, checkout and purchase events are shared — both
+ * front doors lead to the same page — which is what makes consult → results →
+ * subscription comparable with the quiz.
+ */
+export const CONSULT_EVENTS = [
+  'consult_start',
+  'consult_scene_view',
+  'consult_scene_complete',
+  'consult_scene_back',
+  'consult_comfort',
+  'consult_stop',
+  'consult_complete',
+  'consult_handoff',
+  'consult_abandon',
+] as const
+
+export type ConsultEvent = (typeof CONSULT_EVENTS)[number]
+
+/**
  * The share card funnel.
  *
  * `share_method` is the one that matters. The share ladder falls from the native
@@ -142,7 +163,7 @@ export const SHARE_EVENTS = [
 export type ShareEvent = (typeof SHARE_EVENTS)[number]
 
 /** Every event the client may emit. */
-export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent
+export type AnalyticsEvent = ShopEvent | QuizEvent | ShareEvent | ConsultEvent
 
 export type EventProps = Record<string, string | number | boolean | undefined>
 
@@ -256,7 +277,9 @@ export function track(event: AnalyticsEvent, props: EventProps = {}): void {
     if (typeof navigator.sendBeacon === 'function') {
       navigator.sendBeacon('/api/analytics', new Blob([body], { type: 'application/json' }))
     } else {
-      void fetch('/api/analytics', { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true })
+      // Caught: a failed beacon must not surface as an unhandled rejection,
+      // which the error reporter would log as a crash.
+      void fetch('/api/analytics', { method: 'POST', body, headers: { 'Content-Type': 'application/json' }, keepalive: true }).catch(() => {})
     }
     if (process.env.NODE_ENV !== 'production') console.debug('[analytics]', event, props)
   } catch {
