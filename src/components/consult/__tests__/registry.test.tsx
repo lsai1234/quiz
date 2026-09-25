@@ -41,7 +41,7 @@ describe('the scene registry', () => {
         onEdit={() => undefined}
       />,
     )
-    screen.getByRole('button', { name: 'Focus' }).click()
+    screen.getByRole('button', { name: /^Focus/ }).click()
     expect(onAnswer).toHaveBeenCalledWith({ goals: ['focus'] })
   })
 })

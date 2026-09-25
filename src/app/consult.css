@@ -178,6 +178,15 @@
   --amp-text-data: 0.8125rem;
 }
 
+/* A scroller whose position is the control (the age wheel): no scrollbar. */
+.amp-no-scrollbar {
+  scrollbar-width: none;
+}
+
+.amp-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* ══ Motion ══════════════════════════════════════════════════════════════════
    Keyframes only. Timing comes from the variables `motion.ts` sets. */
 

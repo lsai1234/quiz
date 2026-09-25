@@ -5,6 +5,9 @@ import type { SceneDef } from '@/lib/consult/flow'
 import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
 import { PlaceholderScene } from './PlaceholderScene'
 import { ReviewScene } from './ReviewScene'
+import { GoalTiles } from './GoalTiles'
+import { AgeWheel } from './AgeWheel'
+import { TrainingWeek } from './TrainingWeek'
 
 /**
  * The scene registry (build C1).
@@ -44,6 +47,9 @@ function Review({ order, answers, onEdit }: SceneProps) {
 
 /** What each interaction type is drawn with. Unregistered types fall back to the scripted placeholder. */
 export const SCENE_REGISTRY: Record<string, SceneEntry> = {
+  'goal-tiles': { component: GoalTiles, writes: ['goals'] },
+  'age-wheel': { component: AgeWheel, writes: ['age', 'sex'] },
+  'training-week': { component: TrainingWeek, writes: ['week'] },
   review: { component: Review, writes: [] },
 }
 

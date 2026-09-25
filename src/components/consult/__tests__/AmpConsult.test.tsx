@@ -1,18 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { AmpConsult } from '../AmpConsult'
 import { SCENES } from '@/lib/consult/flow'
-
-function heading() {
-  return screen.getByRole('heading', { level: 1 })
-}
-
-function pickFirstOptionAndNext() {
-  const scene = SCENES.find((s) => s.copy.question === heading().textContent)
-  const first = scene?.placeholder?.options[0]
-  if (first) fireEvent.click(screen.getByRole(scene.placeholder!.multi ? 'button' : 'radio', { name: first.label }))
-  const next = screen.getAllByRole('button').find((b) => /^(Next|Looks right|Continue|Back to review)$/.test(b.textContent ?? ''))!
-  fireEvent.click(next)
-}
+import { heading, pickFirstOptionAndNext } from './drive'
 
 beforeEach(() => {
   localStorage.clear()
@@ -88,7 +77,7 @@ describe('save & resume', () => {
     render(<AmpConsult />)
     expect(heading()).toHaveTextContent('Map your training week')
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
-    expect(screen.getByRole('radio', { name: '18–24' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('option', { name: '18–24' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('offers to resume when coming back in a new tab', () => {
@@ -112,12 +101,12 @@ describe('save & resume', () => {
     render(<AmpConsult />)
     fireEvent.click(screen.getByRole('button', { name: 'Start fresh' }))
     expect(heading()).toHaveTextContent('What are you after?')
-    expect(screen.getByRole('button', { name: 'Performance' })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByRole('button', { name: /^Performance/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('does not offer to resume a consult that never got past the first scene', () => {
     const first = render(<AmpConsult />)
-    fireEvent.click(screen.getByRole('button', { name: 'Energy' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
     first.unmount()
     sessionStorage.clear()
     render(<AmpConsult />)
@@ -133,7 +122,7 @@ describe('Amp', () => {
 
   it('watches as you answer', () => {
     render(<AmpConsult />)
-    fireEvent.click(screen.getByRole('button', { name: 'Energy' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
     expect(screen.getByRole('img', { name: 'Amp, watching' })).toBeInTheDocument()
   })
 

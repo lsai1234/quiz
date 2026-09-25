@@ -137,7 +137,7 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
 export const NUDGES: Record<SceneId, string> = {
   goals: 'Pick at least one goal.',
   about: 'Pick your age and one option below.',
-  training: 'Tap your days, or leave them all as rest.',
+  training: 'Tap the days you train, or No training right now.',
   energy: 'Fill the battery to where you usually are.',
   sleep: 'Set your window, then how well you sleep.',
   daylight: 'Move the sun to how often you get outside.',
