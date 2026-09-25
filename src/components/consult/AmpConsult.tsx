@@ -8,6 +8,7 @@ import {
   initialFlow,
   isAnswered,
   newConsultId,
+  resolveSceneDef,
   sceneDef,
   sectionProgress,
   visibleScenes,
@@ -16,12 +17,12 @@ import {
 import { DURATION } from '@/lib/consult/motion'
 import { reactionTo } from '@/lib/consult/reactions'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
-import type { ConsultAnswers, SceneId, SectionId } from '@/lib/consult/types'
+import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
-import { NextButton, QuietLink } from './controls'
+import { NextButton, QuietLink, Tile } from './controls'
 import { SceneRenderer } from './scenes/registry'
 
 /**
@@ -100,7 +101,7 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
     )
   }
 
-  const scene = sceneDef(state.sceneId)
+  const scene = resolveSceneDef(state.sceneId, state.answers)
   const order = visibleScenes(state.answers)
   const index = order.indexOf(state.sceneId) + 1
   const previous = state.history[state.history.length - 1]
@@ -121,12 +122,22 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
     dispatch({ type: 'next' })
     if (after.phase === 'analysis') onComplete?.(after)
   }
-  const back = () => (state.history.length > 0 ? dispatch({ type: 'back' }) : onExit?.())
+  const back = () => (state.history.length > 0 || state.answers.route ? dispatch({ type: 'back' }) : onExit?.())
   const jumpToSection = (section: string) => {
     const target = firstSceneIn(section as SectionId, state.answers)
     if (target) dispatch({ type: 'jump', sceneId: target })
   }
   const editFromReview = (id: SceneId) => dispatch({ type: 'jump', sceneId: id, returnTo: 'review' })
+
+  if (state.phase === 'intro') {
+    return (
+      <ConsultRoot>
+        <SceneStage sceneKey="intro" direction={state.direction} headingRef={headingRef}>
+          <RouteChoice headingRef={headingRef} onPick={(route) => dispatch({ type: 'route', route })} onBack={onExit} />
+        </SceneStage>
+      </ConsultRoot>
+    )
+  }
 
   if (state.phase !== 'scenes') {
     return (
@@ -182,6 +193,49 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
         </SceneShell>
       </SceneStage>
     </ConsultRoot>
+  )
+}
+
+/**
+ * Speed run or deep charge (build C13). The choice at the start: about a
+ * minute with the scenes that matter most, or the full set.
+ */
+function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) => void; onBack?: () => void; headingRef: React.Ref<HTMLHeadingElement> }) {
+  return (
+    <div
+      className="mx-auto flex flex-col"
+      style={{
+        maxWidth: 'var(--amp-column)',
+        minHeight: 'var(--app-height, 100dvh)',
+        padding: 'max(var(--amp-space-4), env(safe-area-inset-top)) var(--amp-gutter) max(var(--amp-space-5), env(safe-area-inset-bottom))',
+        gap: 'var(--amp-space-4)',
+      }}
+    >
+      <div className="flex items-center" style={{ minHeight: 'calc(var(--amp-space-8) + var(--amp-space-1))' }}>
+        {onBack && <QuietLink icon="back" onClick={onBack}>Back</QuietLink>}
+      </div>
+      <div className="flex flex-1 flex-col justify-center" style={{ gap: 'var(--amp-space-4)' }}>
+        <Amp state="idle" size="md" />
+        <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
+          I&apos;m Amp. Let&apos;s charge you up.
+        </p>
+        <h1
+          ref={headingRef}
+          tabIndex={-1}
+          className="uppercase"
+          style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', lineHeight: 'var(--amp-leading-question)', outline: 'none' }}
+        >
+          How much time have you got?
+        </h1>
+        <p style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)' }}>
+          Nothing gets decided until I&apos;ve got the full picture and you&apos;ve checked it.
+        </p>
+        <div role="radiogroup" aria-label="Route" className="flex flex-col" style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-2)' }}>
+          <Tile kind="radio" layout="row" icon="bolt" label="Speed run" sub="About a minute · the essentials" selected={false} onSelect={() => onPick('speed')} />
+          <Tile kind="radio" layout="row" icon="battery" label="Deep charge" sub="A few minutes · the full picture" selected={false} onSelect={() => onPick('deep')} />
+        </div>
+      </div>
+    </div>
   )
 }
 

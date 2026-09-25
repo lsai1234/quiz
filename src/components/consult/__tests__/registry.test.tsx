@@ -14,13 +14,21 @@ describe('the scene registry', () => {
     expect(resolveScene(unbuilt).component).toBe(PlaceholderScene)
   })
 
-  it('lets each scene write exactly what its scripted answers set, and nothing more', () => {
+  it('lets each scene write what its scripted answers set', () => {
     for (const scene of SCENES.filter((s) => s.placeholder)) {
       const { writes } = resolveScene(scene)
-      const touched = new Set(
-        scene.placeholder!.options.flatMap((o) => (o.set ? Object.keys(o.set) : o.toggle ? [o.toggle[0]] : [])),
-      )
-      expect([...touched].sort()).toEqual([...writes].sort())
+      const touched = scene.placeholder!.options.flatMap((o) => (o.set ? Object.keys(o.set) : o.toggle ? [o.toggle[0]] : []))
+      for (const key of touched) expect(writes).toContain(key)
+    }
+  })
+
+  it('never lets two scenes write the same answer', () => {
+    const owners = new Map<string, string>()
+    for (const scene of SCENES) {
+      for (const key of resolveScene(scene).writes) {
+        expect({ key, owner: owners.get(key) ?? scene.id }).toEqual({ key, owner: scene.id })
+        owners.set(key, scene.id)
+      }
     }
   })
 

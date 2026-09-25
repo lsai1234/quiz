@@ -14,6 +14,7 @@ import { SunArc } from './SunArc'
 import { CupCounter } from './CupCounter'
 import { PlatePicker } from './PlatePicker'
 import { BodyMap } from './BodyMap'
+import { ShelfCheck } from './ShelfCheck'
 
 /**
  * The scene registry (build C1).
@@ -55,13 +56,14 @@ function Review({ order, answers, onEdit }: SceneProps) {
 export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'goal-tiles': { component: GoalTiles, writes: ['goals'] },
   'age-wheel': { component: AgeWheel, writes: ['age', 'sex'] },
-  'training-week': { component: TrainingWeek, writes: ['week'] },
+  'training-week': { component: TrainingWeek, writes: ['week', 'intensity'] },
   'charge-dial': { component: ChargeDial, writes: ['energy'] },
   'sleep-window': { component: SleepWindow, writes: ['sleep'] },
   'sun-arc': { component: SunArc, writes: ['daylight'] },
   'cup-counter': { component: CupCounter, writes: ['caffeine'] },
   'plate-picker': { component: PlatePicker, writes: ['plate'] },
   'body-map': { component: BodyMap, writes: ['body'] },
+  'shelf-check': { component: ShelfCheck, writes: ['shelf'] },
   review: { component: Review, writes: [] },
 }
 

@@ -17,7 +17,7 @@ beforeEach(() => {
 })
 
 function advancedTo(sceneId: string): FlowState {
-  let s = initialFlow('c_abc', 0)
+  let s = initialFlow('c_abc', 0, { route: 'deep' })
   for (let guard = 0; guard < 20 && s.sceneId !== sceneId && s.phase === 'scenes'; guard++) {
     const def = SCENES.find((d) => d.id === s.sceneId)!
     if (def.placeholder) s = flowReducer(s, { type: 'answer', patch: applyPlaceholder(def.placeholder.options[0], s.answers) })

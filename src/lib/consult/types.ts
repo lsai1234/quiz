@@ -65,6 +65,9 @@ export type CircuitFlag = 'pregnancy' | 'blood-thinners' | 'other-prescription' 
 /** Speed run (fewer scenes, about a minute) or deep charge (everything). */
 export type Route = 'speed' | 'deep'
 
+/** How hard most sessions feel. Asked on the training week for performance goals. */
+export type Intensity = 'easy' | 'steady' | 'hard'
+
 export interface SleepAnswer {
   /** Minutes past midnight. A bedtime before midnight is stored as-is (e.g. 23:00 → 1380). */
   bed: number
@@ -92,6 +95,8 @@ export interface ConsultAnswers {
   sex: Sex | null
   /** Monday first; seven entries once answered. */
   week: DayType[] | null
+  /** Only asked when performance is a goal (the training week's detail). */
+  intensity: Intensity | null
   /** Afternoon energy, 1–10. */
   energy: number | null
   sleep: SleepAnswer | null
@@ -113,6 +118,7 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   age: null,
   sex: null,
   week: null,
+  intensity: null,
   energy: null,
   sleep: null,
   daylight: null,

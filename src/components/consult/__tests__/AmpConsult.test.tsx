@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { AmpConsult } from '../AmpConsult'
 import { SCENES } from '@/lib/consult/flow'
-import { heading, pickFirstOptionAndNext } from './drive'
+import { chooseRoute, heading, pickFirstOptionAndNext } from './drive'
 
 beforeEach(() => {
   localStorage.clear()
@@ -9,8 +9,10 @@ beforeEach(() => {
 })
 
 describe('AmpConsult', () => {
-  it('opens on the goals scene', () => {
+  it('opens on the route choice, then the goals scene', () => {
     render(<AmpConsult />)
+    expect(heading()).toHaveTextContent('How much time have you got?')
+    chooseRoute()
     expect(heading()).toHaveTextContent('What are you after?')
     expect(screen.getByText('1/12 · Goals')).toBeInTheDocument()
   })
@@ -18,6 +20,7 @@ describe('AmpConsult', () => {
   it('clicks through every scene to the end on scripted answers', () => {
     const onComplete = jest.fn()
     render(<AmpConsult onComplete={onComplete} />)
+    chooseRoute()
     const seen: string[] = []
     for (let i = 0; i < 12; i++) {
       seen.push(heading().textContent ?? '')
@@ -50,9 +53,13 @@ describe('AmpConsult', () => {
     expect(heading()).toHaveTextContent('What are you after?')
   })
 
-  it('backs out of the first scene to wherever it came from', () => {
+  it('backs out of the first scene to the route choice, and from there to wherever it came from', () => {
     const onExit = jest.fn()
     render(<AmpConsult onExit={onExit} />)
+    chooseRoute()
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }))
+    expect(heading()).toHaveTextContent('How much time have you got?')
+    expect(onExit).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(onExit).toHaveBeenCalled()
   })
@@ -100,17 +107,19 @@ describe('save & resume', () => {
 
     render(<AmpConsult />)
     fireEvent.click(screen.getByRole('button', { name: 'Start fresh' }))
+    chooseRoute()
     expect(heading()).toHaveTextContent('What are you after?')
     expect(screen.getByRole('button', { name: /^Performance/ })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('does not offer to resume a consult that never got past the first scene', () => {
     const first = render(<AmpConsult />)
+    chooseRoute()
     fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
     first.unmount()
     sessionStorage.clear()
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('What are you after?')
+    expect(heading()).not.toHaveTextContent('Pick up where you left off?')
   })
 })
 
@@ -122,6 +131,7 @@ describe('Amp', () => {
 
   it('watches as you answer', () => {
     render(<AmpConsult />)
+    chooseRoute()
     fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
     expect(screen.getByRole('img', { name: 'Amp, watching' })).toBeInTheDocument()
   })

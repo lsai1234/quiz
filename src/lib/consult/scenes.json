@@ -1,12 +1,30 @@
 {
-  "version": 1,
+  "version": 2,
   "sections": [
-    { "id": "you", "label": "You" },
-    { "id": "move", "label": "Move" },
-    { "id": "rest", "label": "Rest" },
-    { "id": "fuel", "label": "Fuel" },
-    { "id": "body", "label": "Body" },
-    { "id": "check", "label": "Check" }
+    {
+      "id": "you",
+      "label": "You"
+    },
+    {
+      "id": "move",
+      "label": "Move"
+    },
+    {
+      "id": "rest",
+      "label": "Rest"
+    },
+    {
+      "id": "fuel",
+      "label": "Fuel"
+    },
+    {
+      "id": "body",
+      "label": "Body"
+    },
+    {
+      "id": "check",
+      "label": "Check"
+    }
   ],
   "scenes": [
     {
@@ -22,12 +40,48 @@
       "placeholder": {
         "multi": true,
         "options": [
-          { "label": "Performance", "toggle": ["goals", "performance"] },
-          { "label": "Energy", "toggle": ["goals", "energy"] },
-          { "label": "Sleep & recovery", "toggle": ["goals", "sleep"] },
-          { "label": "Focus", "toggle": ["goals", "focus"] },
-          { "label": "Healthy ageing", "toggle": ["goals", "ageing"] },
-          { "label": "All-round health", "toggle": ["goals", "allround"] }
+          {
+            "label": "Performance",
+            "toggle": [
+              "goals",
+              "performance"
+            ]
+          },
+          {
+            "label": "Energy",
+            "toggle": [
+              "goals",
+              "energy"
+            ]
+          },
+          {
+            "label": "Sleep & recovery",
+            "toggle": [
+              "goals",
+              "sleep"
+            ]
+          },
+          {
+            "label": "Focus",
+            "toggle": [
+              "goals",
+              "focus"
+            ]
+          },
+          {
+            "label": "Healthy ageing",
+            "toggle": [
+              "goals",
+              "ageing"
+            ]
+          },
+          {
+            "label": "All-round health",
+            "toggle": [
+              "goals",
+              "allround"
+            ]
+          }
         ]
       }
     },
@@ -43,12 +97,48 @@
       },
       "placeholder": {
         "options": [
-          { "label": "18–24", "set": { "age": "18-24", "sex": "unsaid" } },
-          { "label": "25–34", "set": { "age": "25-34", "sex": "unsaid" } },
-          { "label": "35–44", "set": { "age": "35-44", "sex": "unsaid" } },
-          { "label": "45–54", "set": { "age": "45-54", "sex": "unsaid" } },
-          { "label": "55–64", "set": { "age": "55-64", "sex": "unsaid" } },
-          { "label": "65+", "set": { "age": "65-plus", "sex": "unsaid" } }
+          {
+            "label": "18–24",
+            "set": {
+              "age": "18-24",
+              "sex": "unsaid"
+            }
+          },
+          {
+            "label": "25–34",
+            "set": {
+              "age": "25-34",
+              "sex": "unsaid"
+            }
+          },
+          {
+            "label": "35–44",
+            "set": {
+              "age": "35-44",
+              "sex": "unsaid"
+            }
+          },
+          {
+            "label": "45–54",
+            "set": {
+              "age": "45-54",
+              "sex": "unsaid"
+            }
+          },
+          {
+            "label": "55–64",
+            "set": {
+              "age": "55-64",
+              "sex": "unsaid"
+            }
+          },
+          {
+            "label": "65+",
+            "set": {
+              "age": "65-plus",
+              "sex": "unsaid"
+            }
+          }
         ]
       }
     },
@@ -64,12 +154,77 @@
       },
       "placeholder": {
         "options": [
-          { "label": "Mostly resting", "set": { "week": ["rest", "rest", "rest", "rest", "rest", "rest", "rest"] } },
-          { "label": "Two gym days", "set": { "week": ["gym", "rest", "rest", "gym", "rest", "rest", "rest"] } },
-          { "label": "Four mixed sessions", "set": { "week": ["gym", "cardio", "rest", "gym", "rest", "sport", "rest"] } },
-          { "label": "Six days on", "set": { "week": ["gym", "cardio", "gym", "cardio", "gym", "sport", "rest"] } }
+          {
+            "label": "Mostly resting",
+            "set": {
+              "week": [
+                "rest",
+                "rest",
+                "rest",
+                "rest",
+                "rest",
+                "rest",
+                "rest"
+              ]
+            }
+          },
+          {
+            "label": "Two gym days",
+            "set": {
+              "week": [
+                "gym",
+                "rest",
+                "rest",
+                "gym",
+                "rest",
+                "rest",
+                "rest"
+              ]
+            }
+          },
+          {
+            "label": "Four mixed sessions",
+            "set": {
+              "week": [
+                "gym",
+                "cardio",
+                "rest",
+                "gym",
+                "rest",
+                "sport",
+                "rest"
+              ]
+            }
+          },
+          {
+            "label": "Six days on",
+            "set": {
+              "week": [
+                "gym",
+                "cardio",
+                "gym",
+                "cardio",
+                "gym",
+                "sport",
+                "rest"
+              ]
+            }
+          }
         ]
-      }
+      },
+      "variants": [
+        {
+          "id": "performance",
+          "when": {
+            "answer": "goals",
+            "includes": "performance"
+          },
+          "detail": true,
+          "copy": {
+            "hint": "Tap a day to cycle through rest, gym, cardio and sport. Then how hard most sessions feel."
+          }
+        }
+      ]
     },
     {
       "id": "energy",
@@ -83,9 +238,24 @@
       },
       "placeholder": {
         "options": [
-          { "label": "Pretty flat", "set": { "energy": 3 } },
-          { "label": "Middling", "set": { "energy": 5 } },
-          { "label": "Charged", "set": { "energy": 8 } }
+          {
+            "label": "Pretty flat",
+            "set": {
+              "energy": 3
+            }
+          },
+          {
+            "label": "Middling",
+            "set": {
+              "energy": 5
+            }
+          },
+          {
+            "label": "Charged",
+            "set": {
+              "energy": 8
+            }
+          }
         ]
       }
     },
@@ -101,11 +271,50 @@
       },
       "placeholder": {
         "options": [
-          { "label": "Short and broken", "set": { "sleep": { "bed": 1410, "wake": 360, "quality": "broken" } } },
-          { "label": "About seven, OK", "set": { "sleep": { "bed": 1380, "wake": 390, "quality": "ok" } } },
-          { "label": "Eight or more, restful", "set": { "sleep": { "bed": 1350, "wake": 420, "quality": "restful" } } }
+          {
+            "label": "Short and broken",
+            "set": {
+              "sleep": {
+                "bed": 1410,
+                "wake": 360,
+                "quality": "broken"
+              }
+            }
+          },
+          {
+            "label": "About seven, OK",
+            "set": {
+              "sleep": {
+                "bed": 1380,
+                "wake": 390,
+                "quality": "ok"
+              }
+            }
+          },
+          {
+            "label": "Eight or more, restful",
+            "set": {
+              "sleep": {
+                "bed": 1350,
+                "wake": 420,
+                "quality": "restful"
+              }
+            }
+          }
         ]
-      }
+      },
+      "variants": [
+        {
+          "id": "sleep-goal",
+          "when": {
+            "answer": "goals",
+            "includes": "sleep"
+          },
+          "copy": {
+            "hint": "Sleep's one of your goals, so drag to a normal night, not a good one."
+          }
+        }
+      ]
     },
     {
       "id": "daylight",
@@ -119,10 +328,30 @@
       },
       "placeholder": {
         "options": [
-          { "label": "Hardly ever", "set": { "daylight": "hardly" } },
-          { "label": "Some days", "set": { "daylight": "some" } },
-          { "label": "Most days", "set": { "daylight": "most" } },
-          { "label": "Every day", "set": { "daylight": "daily" } }
+          {
+            "label": "Hardly ever",
+            "set": {
+              "daylight": "hardly"
+            }
+          },
+          {
+            "label": "Some days",
+            "set": {
+              "daylight": "some"
+            }
+          },
+          {
+            "label": "Most days",
+            "set": {
+              "daylight": "most"
+            }
+          },
+          {
+            "label": "Every day",
+            "set": {
+              "daylight": "daily"
+            }
+          }
         ]
       }
     },
@@ -138,9 +367,36 @@
       },
       "placeholder": {
         "options": [
-          { "label": "None", "set": { "caffeine": { "coffee": 0, "tea": 0, "energy": 0 } } },
-          { "label": "A couple of coffees", "set": { "caffeine": { "coffee": 2, "tea": 0, "energy": 0 } } },
-          { "label": "Four or more", "set": { "caffeine": { "coffee": 3, "tea": 0, "energy": 1 } } }
+          {
+            "label": "None",
+            "set": {
+              "caffeine": {
+                "coffee": 0,
+                "tea": 0,
+                "energy": 0
+              }
+            }
+          },
+          {
+            "label": "A couple of coffees",
+            "set": {
+              "caffeine": {
+                "coffee": 2,
+                "tea": 0,
+                "energy": 0
+              }
+            }
+          },
+          {
+            "label": "Four or more",
+            "set": {
+              "caffeine": {
+                "coffee": 3,
+                "tea": 0,
+                "energy": 1
+              }
+            }
+          }
         ]
       }
     },
@@ -156,9 +412,44 @@
       },
       "placeholder": {
         "options": [
-          { "label": "Mixed, with oily fish", "set": { "plate": ["oily-fish", "poultry", "eggs", "dairy", "greens", "fruit", "wholegrains"] } },
-          { "label": "Mixed, no fish", "set": { "plate": ["red-meat", "poultry", "eggs", "dairy", "fruit"] } },
-          { "label": "Fully plant-based", "set": { "plate": ["beans", "greens", "fruit", "nuts", "wholegrains"] } }
+          {
+            "label": "Mixed, with oily fish",
+            "set": {
+              "plate": [
+                "oily-fish",
+                "poultry",
+                "eggs",
+                "dairy",
+                "greens",
+                "fruit",
+                "wholegrains"
+              ]
+            }
+          },
+          {
+            "label": "Mixed, no fish",
+            "set": {
+              "plate": [
+                "red-meat",
+                "poultry",
+                "eggs",
+                "dairy",
+                "fruit"
+              ]
+            }
+          },
+          {
+            "label": "Fully plant-based",
+            "set": {
+              "plate": [
+                "beans",
+                "greens",
+                "fruit",
+                "nuts",
+                "wholegrains"
+              ]
+            }
+          }
         ]
       }
     },
@@ -174,11 +465,72 @@
       },
       "placeholder": {
         "options": [
-          { "label": "All good", "set": { "body": [] } },
-          { "label": "Knees and lower back", "set": { "body": ["knees", "lower-back"] } },
-          { "label": "Neck and shoulders", "set": { "body": ["neck", "shoulders"] } }
+          {
+            "label": "All good",
+            "set": {
+              "body": []
+            }
+          },
+          {
+            "label": "Knees and lower back",
+            "set": {
+              "body": [
+                "knees",
+                "lower-back"
+              ]
+            }
+          },
+          {
+            "label": "Neck and shoulders",
+            "set": {
+              "body": [
+                "neck",
+                "shoulders"
+              ]
+            }
+          }
         ]
-      }
+      },
+      "speedRunWhen": {
+        "any": [
+          {
+            "answer": "goals",
+            "includes": "ageing"
+          },
+          {
+            "answer": "age",
+            "in": [
+              "55-64",
+              "65-plus"
+            ]
+          }
+        ]
+      },
+      "variants": [
+        {
+          "id": "ageing",
+          "when": {
+            "any": [
+              {
+                "answer": "goals",
+                "includes": "ageing"
+              },
+              {
+                "answer": "age",
+                "in": [
+                  "55-64",
+                  "65-plus"
+                ]
+              }
+            ]
+          },
+          "emphasis": true,
+          "copy": {
+            "question": "Which joints need looking after?",
+            "hint": "Tap any that feel stiff or sore. Leave it blank if they're all good."
+          }
+        }
+      ]
     },
     {
       "id": "shelf",
@@ -192,9 +544,29 @@
       },
       "placeholder": {
         "options": [
-          { "label": "Nothing yet", "set": { "shelf": [] } },
-          { "label": "A multivitamin", "set": { "shelf": ["multivitamin"] } },
-          { "label": "Creatine and protein", "set": { "shelf": ["creatine", "protein"] } }
+          {
+            "label": "Nothing yet",
+            "set": {
+              "shelf": []
+            }
+          },
+          {
+            "label": "A multivitamin",
+            "set": {
+              "shelf": [
+                "multivitamin"
+              ]
+            }
+          },
+          {
+            "label": "Creatine and protein",
+            "set": {
+              "shelf": [
+                "creatine",
+                "protein"
+              ]
+            }
+          }
         ]
       }
     },
@@ -224,9 +596,37 @@
       },
       "placeholder": {
         "options": [
-          { "label": "None of these", "set": { "circuit": { "flags": [], "none": true } } },
-          { "label": "Blood-thinning medicine", "set": { "circuit": { "flags": ["blood-thinners"], "none": false } } },
-          { "label": "Pregnant, breastfeeding or trying", "set": { "circuit": { "flags": ["pregnancy"], "none": false } } }
+          {
+            "label": "None of these",
+            "set": {
+              "circuit": {
+                "flags": [],
+                "none": true
+              }
+            }
+          },
+          {
+            "label": "Blood-thinning medicine",
+            "set": {
+              "circuit": {
+                "flags": [
+                  "blood-thinners"
+                ],
+                "none": false
+              }
+            }
+          },
+          {
+            "label": "Pregnant, breastfeeding or trying",
+            "set": {
+              "circuit": {
+                "flags": [
+                  "pregnancy"
+                ],
+                "none": false
+              }
+            }
+          }
         ]
       }
     }

@@ -15,7 +15,15 @@ export function currentScene() {
   return SCENES.find((s) => s.copy.question === heading().textContent)
 }
 
+export const ROUTE_QUESTION = 'How much time have you got?'
+
+/** On the route choice, take the deep charge (every scene). */
+export function chooseRoute(route: 'Deep charge' | 'Speed run' = 'Deep charge'): void {
+  if (heading().textContent === ROUTE_QUESTION) fireEvent.click(screen.getByRole('radio', { name: new RegExp(`^${route}`) }))
+}
+
 export function answerCurrentScene(): void {
+  if (heading().textContent === ROUTE_QUESTION) return chooseRoute()
   const scene = currentScene()
   if (!scene) return
   switch (scene.interaction) {
@@ -28,6 +36,12 @@ export function answerCurrentScene(): void {
       return
     case 'training-week':
       fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
+      if (screen.queryByRole('radiogroup', { name: 'How hard do most sessions feel?' })) {
+        fireEvent.click(screen.getByRole('radio', { name: 'Steady' }))
+      }
+      return
+    case 'shelf-check':
+      fireEvent.click(screen.getByRole('button', { name: 'Nothing yet' }))
       return
     case 'charge-dial':
       fireEvent.keyDown(screen.getByRole('slider', { name: 'Afternoon energy' }), { key: 'Home' })
@@ -60,6 +74,7 @@ export function pressNext(): void {
 }
 
 export function pickFirstOptionAndNext(): void {
+  chooseRoute()
   answerCurrentScene()
   pressNext()
 }

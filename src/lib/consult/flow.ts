@@ -15,6 +15,7 @@ import SCRIPT from './scenes.json'
 import {
   EMPTY_ANSWERS,
   type ConsultAnswers,
+  type Route,
   type SceneId,
   type SectionId,
 } from './types'
@@ -44,6 +45,26 @@ export interface PlaceholderOption {
   toggle?: [keyof ConsultAnswers, string]
 }
 
+export interface SceneCopy {
+  question: string
+  hint?: string
+  next?: string
+}
+
+/**
+ * A scene adapted to the person (build C12). The first variant whose `when`
+ * holds is merged over the scene: new words, and flags the widget reads —
+ * `emphasis` (this scene matters more for them) and `detail` (ask the extra
+ * question). The interaction itself never changes.
+ */
+export interface SceneVariant {
+  id: string
+  when: Condition
+  copy?: Partial<SceneCopy>
+  emphasis?: boolean
+  detail?: boolean
+}
+
 export interface SceneDef {
   id: SceneId
   section: SectionId
@@ -53,11 +74,18 @@ export interface SceneDef {
   interaction: string
   /** Included on the speed-run route. */
   speedRun: boolean
+  /** On a speed run, included anyway when this holds (e.g. the body map for healthy ageing). */
+  speedRunWhen?: Condition
   /** Shown only when this holds. Absent means always. */
   when?: Condition
   /** `calm` for the circuit check. */
   mode?: 'charge' | 'calm'
-  copy: { question: string; hint?: string; next?: string }
+  copy: SceneCopy
+  variants?: SceneVariant[]
+  /** Set on a resolved scene: which variant applied. */
+  variant?: string
+  emphasis?: boolean
+  detail?: boolean
   /** The scripted stand-in used until a scene's widget is built. */
   placeholder?: { multi?: boolean; options: PlaceholderOption[] }
 }
@@ -96,9 +124,23 @@ export function holds(condition: Condition | undefined, answers: ConsultAnswers)
 /** The scenes this person will see, in order, given what they've said so far. */
 export function visibleScenes(answers: ConsultAnswers): SceneId[] {
   return SCENES.filter((s) => {
-    if (answers.route === 'speed' && !s.speedRun) return false
+    if (answers.route === 'speed' && !s.speedRun && !(s.speedRunWhen && holds(s.speedRunWhen, answers))) return false
     return holds(s.when, answers)
   }).map((s) => s.id)
+}
+
+/** A scene as this person sees it: its first matching variant merged in. */
+export function resolveSceneDef(id: SceneId, answers: ConsultAnswers): SceneDef {
+  const def = sceneDef(id)
+  const variant = def.variants?.find((v) => holds(v.when, answers))
+  if (!variant) return def
+  return {
+    ...def,
+    copy: { ...def.copy, ...variant.copy },
+    variant: variant.id,
+    emphasis: variant.emphasis ?? def.emphasis,
+    detail: variant.detail ?? def.detail,
+  }
 }
 
 /* ── Answered? ──────────────────────────────────────────────────────────── */
@@ -110,8 +152,12 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
       return a.goals.length > 0
     case 'about':
       return a.age !== null && a.sex !== null
-    case 'training':
-      return a.week !== null && a.week.length === 7
+    case 'training': {
+      if (a.week === null || a.week.length !== 7) return false
+      // Performance adds the detail question — but only if they train at all.
+      const needsDetail = resolveSceneDef('training', a).detail && a.week.some((d) => d !== 'rest')
+      return !needsDetail || a.intensity !== null
+    }
     case 'energy':
       return a.energy !== null
     case 'sleep':
@@ -154,7 +200,7 @@ function fillBlank(id: SceneId, answers: ConsultAnswers): ConsultAnswers {
 export const NUDGES: Record<SceneId, string> = {
   goals: 'Pick at least one goal.',
   about: 'Pick your age and one option below.',
-  training: 'Tap the days you train, or No training right now.',
+  training: 'Tap the days you train (or No training right now), then how hard they feel.',
   energy: 'Fill the battery to where you usually are.',
   sleep: 'Set your window, then how well you sleep.',
   daylight: 'Move the sun to how often you get outside.',
@@ -168,7 +214,14 @@ export const NUDGES: Record<SceneId, string> = {
 
 /* ── State ──────────────────────────────────────────────────────────────── */
 
-export type Phase = 'scenes' | 'analysis' | 'stop' | 'done'
+/**
+ * intro    — the route choice (speed run or deep charge), before scene one
+ * scenes   — collecting
+ * analysis — everything's in, the stack is being worked out
+ * stop     — the circuit check ended the consult (a signpost, no products)
+ * done     — handed over to the results page
+ */
+export type Phase = 'intro' | 'scenes' | 'analysis' | 'stop' | 'done'
 
 export interface FlowState {
   consultId: string
@@ -194,6 +247,8 @@ export type FlowAction =
   | { type: 'restore'; state: FlowState }
   | { type: 'reset'; consultId: string; now: number }
   | { type: 'phase'; phase: Phase }
+  /** The choice on the intro screen. */
+  | { type: 'route'; route: Route }
 
 export function newConsultId(): string {
   const bytes =
@@ -203,6 +258,10 @@ export function newConsultId(): string {
   return 'c_' + Array.from(bytes, (b) => b.toString(36).padStart(2, '0')).join('').slice(0, 12)
 }
 
+/**
+ * A fresh consult. It opens on the route choice unless a route is already
+ * known (the workshop, tests, a deep link), in which case it opens on scene one.
+ */
 export function initialFlow(consultId: string, now: number, answers: Partial<ConsultAnswers> = {}): FlowState {
   const merged = { ...EMPTY_ANSWERS, ...answers }
   return {
@@ -213,7 +272,7 @@ export function initialFlow(consultId: string, now: number, answers: Partial<Con
     answers: merged,
     direction: 'forward',
     returnTo: null,
-    phase: 'scenes',
+    phase: merged.route ? 'scenes' : 'intro',
     startedAt: now,
     updatedAt: now,
   }
@@ -256,8 +315,17 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       return { ...state, history: [...state.history, state.sceneId], sceneId: next, direction: 'forward' }
     }
 
+    case 'route': {
+      const answers = { ...state.answers, route: action.route }
+      return { ...state, answers, phase: 'scenes', sceneId: visibleScenes(answers)[0], direction: 'forward' }
+    }
+
     case 'back': {
       if (state.phase === 'stop') return { ...state, phase: 'scenes', direction: 'back' }
+      if (state.phase === 'scenes' && state.history.length === 0 && state.answers.route) {
+        // Back from scene one returns to the route choice.
+        return { ...state, phase: 'intro', direction: 'back' }
+      }
       const history = [...state.history]
       const visible = visibleScenes(state.answers)
       // Skip anything an edit has since branched away.
@@ -336,7 +404,7 @@ export interface SectionProgress {
 export function sectionProgress(state: FlowState): SectionProgress[] {
   const order = visibleScenes(state.answers)
   const here = order.indexOf(state.sceneId)
-  const finished = state.phase !== 'scenes'
+  const finished = state.phase !== 'scenes' && state.phase !== 'intro'
   return SECTIONS.map((section) => {
     const scenes = order.filter((id) => sceneDef(id).section === section.id)
     if (scenes.length === 0) return { id: section.id, label: section.label, fill: 1 }

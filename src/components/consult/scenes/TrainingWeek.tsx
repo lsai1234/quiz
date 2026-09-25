@@ -1,11 +1,11 @@
 'use client'
 
 import type { CSSProperties } from 'react'
-import { DAY_LABEL } from '@/lib/consult/summary'
-import type { DayType } from '@/lib/consult/types'
+import { DAY_LABEL, INTENSITY_LABEL } from '@/lib/consult/summary'
+import type { DayType, Intensity } from '@/lib/consult/types'
 import { haptic, stateTransition } from '@/lib/consult/motion'
 import { Glyph, type GlyphName } from '../Glyph'
-import { Chip } from '../controls'
+import { Chip, Segmented } from '../controls'
 import type { SceneProps } from './registry'
 
 /**
@@ -65,7 +65,9 @@ const LOOK: Record<DayType, { icon: GlyphName; style: CSSProperties; label: stri
   },
 }
 
-export function TrainingWeek({ answers, onAnswer, onInteract }: SceneProps) {
+const INTENSITIES: Intensity[] = ['easy', 'steady', 'hard']
+
+export function TrainingWeek({ scene, answers, onAnswer, onInteract }: SceneProps) {
   const week = answers.week ?? REST_WEEK
   const answered = answers.week !== null
   const allRest = answered && week.every((d) => d === 'rest')
@@ -144,6 +146,21 @@ export function TrainingWeek({ answers, onAnswer, onInteract }: SceneProps) {
       </div>
 
       <Chip label="No training right now" selected={allRest} onToggle={() => onAnswer({ week: allRest ? null : REST_WEEK })} />
+
+      {/* The performance detail (C12): how hard the sessions are, once there are some. */}
+      {scene.detail && answered && !allRest && (
+        <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
+          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+            How hard do most sessions feel?
+          </p>
+          <Segmented
+            label="How hard do most sessions feel?"
+            options={INTENSITIES.map((i) => ({ value: i, label: INTENSITY_LABEL[i] }))}
+            value={answers.intensity}
+            onChange={(i) => onAnswer({ intensity: i })}
+          />
+        </div>
+      )}
     </div>
   )
 }

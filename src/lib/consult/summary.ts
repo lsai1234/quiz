@@ -13,6 +13,7 @@ import type {
   Daylight,
   DayType,
   Food,
+  Intensity,
   SceneId,
   Sex,
   ShelfItem,
@@ -48,6 +49,12 @@ export const DAY_LABEL: Record<DayType, string> = {
   gym: 'Gym',
   cardio: 'Cardio',
   sport: 'Sport',
+}
+
+export const INTENSITY_LABEL: Record<Intensity, string> = {
+  easy: 'Easy',
+  steady: 'Steady',
+  hard: 'Flat out',
 }
 
 export const QUALITY_LABEL: Record<SleepQuality, string> = {
@@ -127,7 +134,8 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
         .map((t) => [t, a.week!.filter((d) => d === t).length] as const)
         .filter(([, c]) => c > 0)
         .map(([t, c]) => `${c} ${DAY_LABEL[t].toLowerCase()}`)
-      return `${n} a week · ${counts.join(', ')}`
+      const effort = a.intensity ? ` · ${INTENSITY_LABEL[a.intensity].toLowerCase()}` : ''
+      return `${n} a week · ${counts.join(', ')}${effort}`
     }
     case 'energy':
       return a.energy === null ? '' : `${a.energy} / 10`

@@ -13,7 +13,7 @@ import {
 } from '../flow'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../types'
 
-const start = () => initialFlow('c_test', 0)
+const start = () => initialFlow('c_test', 0, { route: 'deep' })
 
 /** Answer every scene with its first scripted option, driving Next each time. */
 function runToEnd(state: FlowState = start()): FlowState {
@@ -103,8 +103,10 @@ describe('Back', () => {
     expect(s.answers.goals).toEqual(['energy', 'sleep'])
   })
 
-  it('does nothing on the first scene', () => {
-    expect(flowReducer(start(), { type: 'back' }).sceneId).toBe('goals')
+  it('returns to the route choice from the first scene', () => {
+    const s = flowReducer(start(), { type: 'back' })
+    expect(s.phase).toBe('intro')
+    expect(s.direction).toBe('back')
   })
 })
 
@@ -112,7 +114,7 @@ describe('editing from the review', () => {
   it('returns to the review with everything else intact', () => {
     const atReview = (() => {
       let s = start()
-      while (s.sceneId !== 'review') {
+      for (let guard = 0; guard < 20 && s.sceneId !== 'review'; guard++) {
         const def = SCENES.find((d) => d.id === s.sceneId)!
         s = flowReducer(s, { type: 'answer', patch: applyPlaceholder(def.placeholder!.options[0], s.answers) })
         s = flowReducer(s, { type: 'next' })
@@ -168,7 +170,7 @@ describe('branching', () => {
 
 describe('answered?', () => {
   it('reads a body map left blank as "all good" once you move on', () => {
-    let s = initialFlow('c', 0)
+    let s = initialFlow('c', 0, { route: 'deep' })
     s = { ...s, sceneId: 'body' }
     expect(isAnswered('body', s.answers)).toBe(true)
     expect(s.answers.body).toBeNull()
@@ -178,7 +180,7 @@ describe('answered?', () => {
   })
 
   it('keeps sore spots that were tapped', () => {
-    let s: FlowState = { ...initialFlow('c', 0), sceneId: 'body' }
+    let s: FlowState = { ...initialFlow('c', 0, { route: 'deep' }), sceneId: 'body' }
     s = flowReducer(s, { type: 'answer', patch: { body: ['knees'] } })
     s = flowReducer(s, { type: 'next' })
     expect(s.answers.body).toEqual(['knees'])

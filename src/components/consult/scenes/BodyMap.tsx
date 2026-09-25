@@ -43,7 +43,10 @@ export function toggleSpot(body: BodySpot[] | null, spot: BodySpot): BodySpot[] 
   return current.includes(spot) ? current.filter((s) => s !== spot) : [...current, spot]
 }
 
-export function BodyMap({ answers, onAnswer, comfort }: SceneProps) {
+export function BodyMap({ scene, answers, onAnswer, comfort }: SceneProps) {
+  // Emphasised for healthy ageing and older bands (C12): the unpicked spots are
+  // drawn solid rather than dashed, so every joint reads as something to check.
+  const idle = scene.emphasis ? 'solid var(--amp-accent-line)' : 'dashed var(--amp-edge-strong)'
   const body = answers.body ?? []
 
   function toggle(spot: BodySpot) {
@@ -68,7 +71,7 @@ export function BodyMap({ answers, onAnswer, comfort }: SceneProps) {
   return (
     <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)' }}>
       {!comfort && (
-        <div aria-hidden className="relative" style={{ width: 'min(100%, calc(var(--amp-target) * 5))', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
+        <div aria-hidden data-emphasis={scene.emphasis ? 'true' : undefined} className="relative" style={{ width: 'min(100%, calc(var(--amp-target) * 5))', aspectRatio: `${VIEW_W} / ${VIEW_H}` }}>
           <Figure />
           {SPOTS.flatMap((spot) =>
             MARKS[spot].map(([x, y], i) => {
@@ -95,7 +98,7 @@ export function BodyMap({ answers, onAnswer, comfort }: SceneProps) {
                       width: '70%',
                       height: '70%',
                       borderRadius: 'var(--amp-radius-pill)',
-                      border: `calc(var(--amp-hairline) * 2) ${on ? 'solid var(--amp-caution)' : 'dashed var(--amp-edge-strong)'}`,
+                      border: `calc(var(--amp-hairline) * 2) ${on ? 'solid var(--amp-caution)' : idle}`,
                       background: on ? 'var(--amp-caution-fill)' : 'transparent',
                       boxShadow: on ? '0 0 22px -2px var(--amp-caution-glow)' : 'none',
                       transition: stateTransition('border-color', 'background-color', 'box-shadow'),
