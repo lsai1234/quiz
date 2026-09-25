@@ -437,6 +437,16 @@ describe('live PowerBody adapter', () => {
       expect(found).toMatchObject({ reference: 'ord_1', status: 'processing', trackingNumber: 'TRK1' })
     })
 
+    it('finds an order by a Snowflake increment id', async () => {
+      const { client } = fakeClient({
+        'dropshipping.getOrders': () => [
+          { order_id: 'ord_9', powerbody_order_id: '1617903166077829123', status: 'processing' },
+        ],
+      })
+      const found = await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getOrder('1617903166077829123')
+      expect(found).toMatchObject({ supplierOrderId: '1617903166077829123', reference: 'ord_9' })
+    })
+
     it('returns null when the order is unknown', async () => {
       const { client } = fakeClient({ 'dropshipping.getOrders': () => [] })
       expect(await createPowerBodyProvider({ client, endConfirmWaitsMs: [0, 0, 0] }).getOrder('nope')).toBeNull()

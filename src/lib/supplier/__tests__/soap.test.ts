@@ -1,4 +1,4 @@
-import { createSoapClient, PowerBodySoapError } from '@/lib/supplier/powerbody/soap'
+import { createSoapClient, PowerBodySoapError, __soapInternals } from '@/lib/supplier/powerbody/soap'
 
 const URL = 'https://www.powerbody.co.uk/api/soap/'
 
@@ -193,6 +193,52 @@ describe('PowerBody SOAP client', () => {
     await client().call('dropshipping.getComments')
     const body = fetchMock.mock.calls[1][1].body as string
     expect(body).toContain('<args xsi:type="xsd:string"></args>')
+  })
+
+  describe('Snowflake order numbers', () => {
+    // PowerBody's order numbers are becoming 18–20 digit Snowflake IDs, past
+    // the 16 digits a JS number holds exactly.
+    const SNOWFLAKE = '1617903166077829123'
+
+    it('keeps an unquoted Snowflake id exact in a JSON reply', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(
+          ok(callResponse(`{"api_response":"SUCCESS","powerbody_order_id":${SNOWFLAKE},"status":"holded"}`)),
+        )
+      const reply = await client().call<{ powerbody_order_id: unknown }>('dropshipping.createOrder', {})
+      expect(reply.powerbody_order_id).toBe(SNOWFLAKE)
+    })
+
+    it('keeps a 20-digit id exact inside an array reply', async () => {
+      fetchMock
+        .mockResolvedValueOnce(ok(loginResponse()))
+        .mockResolvedValueOnce(ok(callResponse(`[{"order_id":"ord_1","powerbody_order_id":18446744073709551615}]`)))
+      const rows = await client().call<{ powerbody_order_id: unknown }[]>('dropshipping.getOrders', {})
+      expect(rows[0].powerbody_order_id).toBe('18446744073709551615')
+    })
+
+    it('keeps a bare scalar Snowflake id exact', async () => {
+      fetchMock.mockResolvedValueOnce(ok(loginResponse())).mockResolvedValueOnce(ok(callResponse(SNOWFLAKE)))
+      expect(await client().call('dropshipping.createOrder', {})).toBe(SNOWFLAKE)
+    })
+
+    it('leaves ordinary numbers and strings alone', () => {
+      const { parseJsonKeepingBigInts } = __soapInternals
+      expect(
+        parseJsonKeepingBigInts(
+          `{"qty":5,"price":12.99,"neg":-3,"exp":1e3,"max":9007199254740991,"quoted":"${SNOWFLAKE}","text":"a \\"99999999999999999999\\" b"}`,
+        ),
+      ).toEqual({
+        qty: 5,
+        price: 12.99,
+        neg: -3,
+        exp: 1000,
+        max: 9007199254740991,
+        quoted: SNOWFLAKE,
+        text: 'a "99999999999999999999" b',
+      })
+    })
   })
 
   describe('rate limiting', () => {

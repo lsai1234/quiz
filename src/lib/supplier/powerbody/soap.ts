@@ -192,6 +192,47 @@ function extractTag(xml: string, name: string): string | null {
   return cdata ? cdata[1] : decodeXml(raw)
 }
 
+// ─── JSON ──────────────────────────────────────────────────────────────────────
+
+/**
+ * `JSON.parse` that keeps integers too big for a JS number as strings.
+ *
+ * PowerBody's order numbers (Magento `increment_id`) are Snowflake IDs — 18–20
+ * digits, past `Number.MAX_SAFE_INTEGER` (16). Plain `JSON.parse` would turn an
+ * unquoted `1617903166077829123` into `1617903166077829000`: a different order,
+ * silently. Every id we read is handled as a string already, so quoting the big
+ * ones before parsing is all it takes. Fractions and safe integers are left
+ * alone; only characters outside string literals are ever touched.
+ */
+function parseJsonKeepingBigInts(text: string): unknown {
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const ch = text[i]
+    if (ch === '"') {
+      // Copy the string literal whole, escapes included.
+      let j = i + 1
+      while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1
+      out += text.slice(i, j + 1)
+      i = j + 1
+      continue
+    }
+    if (ch === '-' || (ch >= '0' && ch <= '9')) {
+      const match = /^-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/.exec(text.slice(i))
+      if (match) {
+        const token = match[0]
+        const isInteger = /^-?\d+$/.test(token)
+        out += isInteger && !Number.isSafeInteger(Number(token)) ? `"${token}"` : token
+        i += token.length
+        continue
+      }
+    }
+    out += ch
+    i++
+  }
+  return JSON.parse(out)
+}
+
 /** A SOAP fault, if the response carries one. */
 function readFault(xml: string): PowerBodySoapError | null {
   if (!/<(?:[A-Za-z0-9_.-]+:)?Fault\b/.test(xml)) return null
@@ -385,7 +426,7 @@ export function createSoapClient(config: PowerBodySoapConfig): PowerBodySoapClie
     const trimmed = raw.trim()
     if (trimmed === '') return null as T
     try {
-      return JSON.parse(trimmed) as T
+      return parseJsonKeepingBigInts(trimmed) as T
     } catch {
       // Some methods answer with a bare scalar rather than JSON — hand it back
       // as-is rather than failing the call.
@@ -426,4 +467,4 @@ export function createSoapClient(config: PowerBodySoapConfig): PowerBodySoapClie
 }
 
 /** Exposed for tests — the XML helpers are the fiddly part worth pinning down. */
-export const __soapInternals = { escapeXml, decodeXml, extractTag, readFault, envelope, createLimiter }
+export const __soapInternals = { escapeXml, decodeXml, extractTag, readFault, envelope, createLimiter, parseJsonKeepingBigInts }
