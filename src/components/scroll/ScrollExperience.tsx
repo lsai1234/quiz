@@ -47,7 +47,7 @@ export function ScrollExperience() {
    * at for seconds before tapping Start — so it is always settled before Act 2
    * mounts. Until it resolves, and forever if it never does, the answer is v1.
    */
-  const { arm } = useQuizArmState()
+  const { arm, heroOffer } = useQuizArmState()
 
   const useV2 = arm === 'v2'
 
@@ -142,8 +142,14 @@ export function ScrollExperience() {
       <div key={animKey} className={TRANSITIONS[act]}>
         {act === 1 && (
           <Act1Hero
-            onEnterQuiz={() => { setConsult(false); goTo(2) }}
+            onEnterQuiz={() => {
+              // A quiz stack carries no consult exclusions from an earlier run.
+              useQuizStore.getState().setConsultExclusions(null)
+              setConsult(false)
+              goTo(2)
+            }}
             onEnterConsult={() => { setConsult(true); goTo(2) }}
+            offer={heroOffer}
             reducedMotion={reducedMotion}
           />
         )}

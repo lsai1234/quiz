@@ -10,6 +10,7 @@ import type { StackBlueprint } from '@/lib/stack-blueprint'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { UsageLevel } from '@/lib/stack-blueprint/pricing'
 import { MOCK_PRODUCTS } from './mock-products'
+import type { ConsultExclusions } from './consult/exclusions'
 
 export type PlanType = 'oneoff' | 'subscription'
 
@@ -85,6 +86,14 @@ interface QuizStore {
   toggleProduct: (product: Product) => void
   setCatalogue: (products: Product[], source: 'mock' | 'real') => void
   setStackBlueprint: (blueprint: StackBlueprint) => void
+  /**
+   * What the Amp Consult's circuit check ruled out, for a stack that came from
+   * the consult (build H9). The results page draws its extras and swaps
+   * through it and shows the pharmacist note. Null for a quiz stack. Held in
+   * memory only, like the blueprint it belongs to.
+   */
+  consultExclusions: ConsultExclusions | null
+  setConsultExclusions: (exclusions: ConsultExclusions | null) => void
   reset: () => void
 }
 
@@ -112,6 +121,7 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   deepDiveStatus: 'idle',
   deepDiveKey: null,
   interview: null,
+  consultExclusions: null,
 
   setDeepDive: (s) =>
     set((prev) => ({
@@ -148,6 +158,7 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
   setCatalogue: (products, source) => set({ catalogue: products, catalogueSource: source }),
   setStackBlueprint: (blueprint) => set({ stackBlueprint: blueprint }),
   setCatalogueProducts: (products) => set({ catalogueProducts: products }),
+  setConsultExclusions: (consultExclusions) => set({ consultExclusions }),
 
   toggleProduct: (product) =>
     set((s) => {
@@ -159,7 +170,7 @@ export const useQuizStore = create<QuizStore>()(persist((set) => ({
       }
     }),
 
-  reset: () => set({ step: 0, interview: null, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null }),
+  reset: () => set({ step: 0, interview: null, answers: defaultAnswers, identity: null, selectedProducts: [], planType: 'oneoff', subscriptionUsage: {}, subscriptionCustomised: false, revealedIntroDiscount: null, aiReasons: {}, stackPersonalised: false, stackReady: false, deepDiveQuestions: null, deepDiveStatus: 'idle', deepDiveKey: null, consultExclusions: null }),
 }), {
   // Persist just the in-progress answers + step so a refresh no longer wipes the
   // quiz (audit §5.3 / drop-off risk #3). Heavy/transient state (catalogue,

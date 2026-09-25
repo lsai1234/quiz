@@ -40,6 +40,8 @@ import { SubscriptionJourney, type ChangePolicySelection } from './SubscriptionJ
 import { CheckoutSuccess } from './CheckoutSuccess'
 import { receiptItemsFromSlots } from '@/lib/receipt/build'
 import { ProductSwapModal } from './ProductSwapModal'
+import { ConsultNote } from './ConsultNote'
+import { withoutExcluded } from '@/lib/consult/exclusions'
 import { UpgradesCard } from './UpgradesCard'
 import { defaultVariantId } from '@/lib/catalogue/variants'
 import { AccountGate } from '@/components/auth/AccountGate'
@@ -212,7 +214,7 @@ export function StackReviewPage() {
   const {
     stackBlueprint, setStackBlueprint, planType, setPlanType, answers, setAnswer,
     stackLevel, setStackLevel, subscriptionUsage, setSubscriptionUsage, subscriptionCustomised, setSubscriptionCustomised,
-    revealedIntroDiscount, setRevealedIntroDiscount, identity,
+    revealedIntroDiscount, setRevealedIntroDiscount, identity, consultExclusions,
   } = useQuizStore()
   const [journeyOpen, setJourneyOpen] = useState(false)
   const [shareOpen, setShareOpen] = useState(false)
@@ -644,7 +646,14 @@ export function StackReviewPage() {
   // unavailable pick, so offering another unavailable product sends them round
   // the same loop. The slot's current product is added back by
   // `swapAlternatives` below, so it stays visible in its own list.
-  const offerableProducts = useMemo(() => inStockOnly(products), [products])
+  //
+  // A stack from the Amp Consult also carries what its circuit check ruled
+  // out, and nothing ruled out there can come back in here (H9): omega-3 is not
+  // an extra for somebody on blood thinners.
+  const offerableProducts = useMemo(
+    () => withoutExcluded(inStockOnly(products), consultExclusions),
+    [products, consultExclusions],
+  )
 
   // Booster candidates: isBoosterEligible, not already in stack, ordered by
   // goal overlap with blueprint then recommendationPriority
@@ -766,6 +775,8 @@ export function StackReviewPage() {
             </p>
           </div>
         )}
+
+        {consultExclusions && <ConsultNote exclusions={consultExclusions} />}
 
         {/* Value-first depth selector — choose Essentials / Balanced / Complete,
             each filled to its own monthly price band, so value comes first. */}

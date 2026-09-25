@@ -12,11 +12,17 @@ import Link from 'next/link'
 import { useQuizStore } from '@/lib/store'
 import { QuizIcon } from '@/components/quiz/QuizIcon'
 import type { QuizTrack } from '@/lib/types'
+import type { HeroOffer } from '@/lib/experiments/consult'
 
 interface Props {
   onEnterQuiz: () => void
   /** The Amp Consult — the third way in. Omitted, the option isn't shown. */
   onEnterConsult?: () => void
+  /**
+   * Which front door(s) this visitor gets (H11): the quiz tracks, the consult,
+   * or both. Set from the hub without a deploy; `both` by default.
+   */
+  offer?: HeroOffer
   reducedMotion: boolean
 }
 
@@ -43,7 +49,9 @@ function CHRGDIcon({ size = 26 }: { size?: number }) {
   )
 }
 
-export function Act1Hero({ onEnterQuiz, onEnterConsult, reducedMotion }: Props) {
+export function Act1Hero({ onEnterQuiz, onEnterConsult, offer = 'both', reducedMotion }: Props) {
+  const showQuiz = offer !== 'consult-only' || !onEnterConsult
+  const showConsult = offer !== 'quiz-only' && Boolean(onEnterConsult)
   const setAnswer = useQuizStore((s) => s.setAnswer)
   const setGoals = useQuizStore((s) => s.setGoals)
   function start(track: QuizTrack) {
@@ -102,10 +110,10 @@ export function Act1Hero({ onEnterQuiz, onEnterConsult, reducedMotion }: Props) 
 
         {/* First question — the quiz starts right here */}
         <p className="text-[11px] font-bold tracking-[0.25em] uppercase mt-9 mb-3" style={{ color: ACCENT, fontFamily: 'var(--font-display)' }}>
-          What’s your goal?
+          {showQuiz ? 'What’s your goal?' : 'Start with Amp'}
         </p>
         <div className="w-full flex flex-col gap-3">
-          {TRACKS.map((t) => (
+          {showQuiz && TRACKS.map((t) => (
             <button
               key={t.id}
               onClick={() => start(t.id)}
@@ -121,7 +129,7 @@ export function Act1Hero({ onEnterQuiz, onEnterConsult, reducedMotion }: Props) 
               </svg>
             </button>
           ))}
-          {onEnterConsult && (
+          {showConsult && (
             <button
               onClick={onEnterConsult}
               data-testid="enter-consult"

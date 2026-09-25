@@ -1,8 +1,9 @@
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import {
-  getDataSourceSetting, getPortalPricingOverrides, getQuizExperiment, syncPortalRuntime,
+  getConsultRollout, getDataSourceSetting, getPortalPricingOverrides, getQuizExperiment, syncPortalRuntime,
 } from '@/lib/portal/store'
+import { CONSULT_ARM_COOKIE, heroOfferFor, parseConsultArm } from '@/lib/experiments/consult'
 import { getPaymentSource } from '@/lib/payments'
 import { armFor, parseArm, parseBucket, ARM_COOKIE, BUCKET_COOKIE } from '@/lib/experiments/assignment'
 
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   await syncPortalRuntime()
-  const [jar, experiment] = await Promise.all([cookies(), getQuizExperiment()])
+  const [jar, experiment, consultRollout] = await Promise.all([cookies(), getQuizExperiment(), getConsultRollout()])
 
   /**
    * Which quiz this visitor gets.
@@ -50,5 +51,15 @@ export async function GET() {
      */
     quizAiSteer: experiment.aiSteer,
     quizBudget: experiment.budget,
+    /**
+     * What the hero offers this visitor: the quiz, the Amp Consult, or both
+     * (H11). Only the outcome, never the mode or the split — same reasoning as
+     * the quiz arm above.
+     */
+    heroOffer: heroOfferFor(
+      parseBucket(jar.get(BUCKET_COOKIE)?.value),
+      consultRollout,
+      parseConsultArm(jar.get(CONSULT_ARM_COOKIE)?.value),
+    ),
   })
 }

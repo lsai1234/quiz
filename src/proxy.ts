@@ -1,3 +1,4 @@
+import { CONSULT_ARM_COOKIE, parseConsultArm } from '@/lib/experiments/consult'
 import { NextResponse, type NextRequest } from 'next/server'
 import {
   ARM_COOKIE, BUCKET_COOKIE, mintBucket, parseArm, parseBucket,
@@ -74,6 +75,18 @@ export function proxy(req: NextRequest) {
   const pinned = parseArm(req.nextUrl.searchParams.get('quizArm'))
   if (pinned) {
     response.cookies.set(ARM_COOKIE, pinned, {
+      maxAge: NINETY_DAYS_SECONDS,
+      path: '/',
+      sameSite: 'lax',
+      httpOnly: false,
+    })
+  }
+
+  // `?consultArm=consult|quiz` pins the hero's front door (H11), for QA and
+  // founder review, the same way `?quizArm=` pins the quiz.
+  const consultPinned = parseConsultArm(req.nextUrl.searchParams.get('consultArm'))
+  if (consultPinned) {
+    response.cookies.set(CONSULT_ARM_COOKIE, consultPinned, {
       maxAge: NINETY_DAYS_SECONDS,
       path: '/',
       sameSite: 'lax',

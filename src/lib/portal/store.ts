@@ -14,6 +14,7 @@
  * (see resolve.ts and the API routes).
  */
 
+import { DEFAULT_CONSULT_ROLLOUT, normaliseConsultRollout, type ConsultRollout } from '@/lib/experiments/consult'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import type { DataSourceMode } from '@/lib/data-source'
 import { getDataSourceMode, setDataSourceOverride } from '@/lib/data-source'
@@ -70,6 +71,7 @@ interface PersistedSettings {
   /** Which quiz customers get, and how the adaptive one behaves. See
    *  `lib/experiments/assignment.ts`. Absent = off, everyone gets v1. */
   quizExperiment?: QuizExperimentConfig
+  consultRollout?: ConsultRollout
 }
 
 const EMPTY_PRODUCTS: PersistedProducts = { overrides: {}, removedIds: [], imported: [], topProductIds: [] }
@@ -142,6 +144,18 @@ export async function getQuizExperiment(): Promise<QuizExperimentConfig> {
 }
 export async function setQuizExperiment(config: QuizExperimentConfig): Promise<void> {
   await saveSettings({ quizExperiment: normaliseExperiment(config) })
+}
+
+// ── Amp Consult rollout (H11) ──
+// Whether the hero offers the consult, alongside the quiz, instead of it, or
+// as one side of an A/B split. Normalised on the way out as well as in, like
+// the quiz experiment, so a bad row can't switch anything on.
+export async function getConsultRollout(): Promise<ConsultRollout> {
+  const settings = await loadSettings()
+  return normaliseConsultRollout(settings.consultRollout ?? DEFAULT_CONSULT_ROLLOUT)
+}
+export async function setConsultRollout(rollout: ConsultRollout): Promise<void> {
+  await saveSettings({ consultRollout: normaliseConsultRollout(rollout) })
 }
 
 // ── Supplier (PowerBody) ──

@@ -249,14 +249,6 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
       excluded.push({ what: product.id, why: why[hit] ?? 'ruled out by your circuit check' })
       continue
     }
-    if (outcome.excludeMedicationFlagged && product.contraindications?.includes('medication')) {
-      excluded.push({ what: product.id, why: 'it can interact with prescription medicines' })
-      continue
-    }
-    if (outcome.excludeShellfishFlagged && ingredients.has('shellfish')) {
-      excluded.push({ what: product.id, why: 'it’s made from shellfish' })
-      continue
-    }
     if (plantBased && !product.dietaryTags.includes('vegan')) {
       excluded.push({ what: product.id, why: 'it isn’t vegan and your plate is fully plant-based' })
       continue

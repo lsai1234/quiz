@@ -52,7 +52,7 @@ export interface HandoffPayload {
 
 const GOALS: ConsultGoal[] = ['performance', 'energy', 'sleep', 'focus', 'ageing', 'allround']
 const INGREDIENTS: Ingredient[] = [
-  'caffeine', 'stimulant', 'vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'st-johns-wort', 'hormone-active', 'shellfish',
+  'caffeine', 'stimulant', 'vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'st-johns-wort', 'hormone-active', 'shellfish', 'rx-interaction',
 ]
 
 export function buildHandoff(opts: {

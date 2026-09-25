@@ -1,4 +1,5 @@
 import { QuizExperimentSettings } from '@/components/portal/QuizExperimentSettings'
+import { ConsultRolloutSettings } from '@/components/portal/ConsultRolloutSettings'
 import { SettingsDetail, sectionBySlug } from '@/components/portal/SettingsNav'
 
 const SECTION = sectionBySlug('quiz')!
@@ -20,7 +21,10 @@ export default function QuizExperimentSettingsPage() {
           <code>?quizArm=v2</code> to any page URL to see the new quiz yourself without switching it
           on for customers.
         </p>
-        <QuizExperimentSettings />
+        <div style={{ display: 'grid', gap: 'var(--space-6)' }}>
+          <ConsultRolloutSettings />
+          <QuizExperimentSettings />
+        </div>
       </section>
     </SettingsDetail>
   )

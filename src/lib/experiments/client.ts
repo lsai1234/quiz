@@ -16,6 +16,7 @@
 import { useSyncExternalStore } from 'react'
 import type { QuizArm, QuizExperimentConfig } from './assignment'
 import { DEFAULT_QUIZ_EXPERIMENT } from './assignment'
+import type { HeroOffer } from './consult'
 
 interface ArmState {
   arm: QuizArm
@@ -24,6 +25,8 @@ interface ArmState {
   /** The parts of the experiment config the client legitimately needs. */
   aiSteer: boolean
   budget: QuizExperimentConfig['budget']
+  /** What the hero offers (H11). `both` until the server says otherwise — the rollout's default. */
+  heroOffer: HeroOffer
 }
 
 let state: ArmState = {
@@ -31,6 +34,7 @@ let state: ArmState = {
   resolved: false,
   aiSteer: DEFAULT_QUIZ_EXPERIMENT.aiSteer,
   budget: DEFAULT_QUIZ_EXPERIMENT.budget,
+  heroOffer: 'both',
 }
 
 const listeners = new Set<() => void>()
@@ -64,6 +68,7 @@ const SERVER_SNAPSHOT: ArmState = {
   resolved: false,
   aiSteer: DEFAULT_QUIZ_EXPERIMENT.aiSteer,
   budget: DEFAULT_QUIZ_EXPERIMENT.budget,
+  heroOffer: 'both',
 }
 
 export function useQuizArmState(): ArmState {

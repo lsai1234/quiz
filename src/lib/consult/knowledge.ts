@@ -121,6 +121,7 @@ export function ingredientsOf(p: Pick<CatalogueProduct, 'swapGroup' | 'title' | 
   for (const [re, i] of TITLE_INGREDIENTS) if (re.test(p.title)) out.add(i)
   for (const [re, i] of TITLE_CLEARS) if (re.test(p.title)) out.delete(i)
   if (p.contraindications?.includes('shellfish')) out.add('shellfish')
+  if (p.contraindications?.includes('medication')) out.add('rx-interaction')
   return out
 }
 

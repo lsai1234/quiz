@@ -33,6 +33,8 @@ export type Ingredient =
   | 'st-johns-wort'
   | 'hormone-active'
   | 'shellfish'
+  /** Anything the catalogue flags as interaction-prone with prescription medicine. */
+  | 'rx-interaction'
 
 export type StopReason = 'pregnancy' | 'kidney-liver' | 'declined'
 
@@ -42,9 +44,6 @@ export type CircuitOutcome =
       kind: 'go'
       /** Ingredient families that must not appear anywhere in the stack — or in extras (H9). */
       exclude: Ingredient[]
-      /** Products carrying the quiz's own `medication` contraindication go too. */
-      excludeMedicationFlagged: boolean
-      excludeShellfishFlagged: boolean
       /** "Check with a pharmacist before starting" travels with the stack. */
       pharmacistNote: boolean
       /** Why each family is out, in the member's terms. */
@@ -53,12 +52,12 @@ export type CircuitOutcome =
 
 const FILTERS: Partial<Record<CircuitFlag, { exclude: Ingredient[]; why: string; pharmacist: boolean }>> = {
   'blood-thinners': {
-    exclude: ['vitamin-k', 'fish-oil', 'ginkgo', 'turmeric'],
+    exclude: ['vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'rx-interaction'],
     why: 'it can interact with blood thinners',
     pharmacist: true,
   },
   'other-prescription': {
-    exclude: ['st-johns-wort', 'ginkgo', 'hormone-active'],
+    exclude: ['st-johns-wort', 'ginkgo', 'hormone-active', 'rx-interaction'],
     why: 'it can interact with prescription medicines',
     pharmacist: true,
   },
@@ -96,8 +95,6 @@ export function circuitOutcome(a: Pick<ConsultAnswers, 'circuit' | 'healthConsen
   return {
     kind: 'go',
     exclude: [...exclude].sort(),
-    excludeMedicationFlagged: flags.includes('other-prescription') || flags.includes('blood-thinners'),
-    excludeShellfishFlagged: flags.includes('shellfish'),
     pharmacistNote,
     reasons,
   }

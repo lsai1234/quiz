@@ -70,5 +70,10 @@ export function applyToResultsPage(bundle: ResultsBundle): void {
   store.setStackBlueprint(bundle.blueprint)
   store.setStackLevel('performance')
   store.setAiStackMeta(bundle.payload.reasons, false)
+  store.setConsultExclusions({
+    consultId: bundle.payload.consult_id,
+    excluded: bundle.payload.excluded,
+    pharmacistNote: bundle.payload.flags.pharmacist_note,
+  })
   store.setStackReady(true)
 }

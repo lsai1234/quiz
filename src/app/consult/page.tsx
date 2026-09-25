@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { ConsultPage } from '@/components/consult/ConsultPage'
 
 /**
@@ -14,5 +15,11 @@ export const metadata: Metadata = {
 }
 
 export default function Page() {
-  return <ConsultPage />
+  // The page reads `?review=1`, and a search param read has to sit under a
+  // Suspense boundary for the rest of the route to stay static.
+  return (
+    <Suspense>
+      <ConsultPage />
+    </Suspense>
+  )
 }

@@ -50,7 +50,7 @@ describe('H3 circuit outcomes', () => {
 
   it('filters for blood thinners, with a pharmacist note', () => {
     const o = circuitOutcome({ circuit: { flags: ['blood-thinners'], none: false }, healthConsent: CONSENT })
-    expect(o).toMatchObject({ kind: 'go', exclude: ['fish-oil', 'ginkgo', 'turmeric', 'vitamin-k'], pharmacistNote: true })
+    expect(o).toMatchObject({ kind: 'go', exclude: ['fish-oil', 'ginkgo', 'rx-interaction', 'turmeric', 'vitamin-k'], pharmacistNote: true })
   })
 
   it('filters stimulants for a heart condition, without a pharmacist note', () => {

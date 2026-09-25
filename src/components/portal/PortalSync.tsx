@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { setDataSourceOverride, type DataSourceMode } from '@/lib/data-source'
 import { setPricingOverrides } from '@/lib/stack-blueprint/pricing'
 import { setQuizArm } from '@/lib/experiments/client'
+import { isHeroOffer } from '@/lib/experiments/consult'
 import type { QuizArm, QuizExperimentConfig } from '@/lib/experiments/assignment'
 
 /**
@@ -27,6 +28,7 @@ export function PortalSync() {
         quizArm?: QuizArm
         quizAiSteer?: boolean
         quizBudget?: QuizExperimentConfig['budget']
+        heroOffer?: unknown
       }) => {
         if (data.dataSourceMode) setDataSourceOverride(data.dataSourceMode)
         if (data.pricingOverrides) setPricingOverrides(data.pricingOverrides)
@@ -35,6 +37,7 @@ export function PortalSync() {
             arm: data.quizArm,
             ...(typeof data.quizAiSteer === 'boolean' ? { aiSteer: data.quizAiSteer } : {}),
             ...(data.quizBudget ? { budget: data.quizBudget } : {}),
+            ...(isHeroOffer(data.heroOffer) ? { heroOffer: data.heroOffer } : {}),
           })
         }
       })

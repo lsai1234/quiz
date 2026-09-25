@@ -18,6 +18,7 @@ import { DURATION } from '@/lib/consult/motion'
 import { reactionTo } from '@/lib/consult/reactions'
 import { STOP_COPY, circuitOutcome } from '@/lib/consult/circuit'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
+import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult/session'
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
 import { ConsultRoot } from './ConsultRoot'
@@ -52,13 +53,21 @@ interface Props {
   initial?: FlowState
   /** Where the catalogue comes from. Defaults to the shop's. */
   loadProducts?: () => Promise<CatalogueProduct[]>
+  /**
+   * "Change my answers" from the results page (H10): open the last finished
+   * consult on its review screen instead of starting a new one.
+   */
+  reopen?: boolean
 }
 
-export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProducts }: Props) {
+export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProducts, reopen }: Props) {
   const persist = !initial
-  const [state, dispatch] = useReducer(flowReducer, undefined, () => initial ?? initialFlow(newConsultId(), Date.now()))
+  const [reopened] = useState(() => (reopen ? finishedConsult() : null))
+  const [state, dispatch] = useReducer(flowReducer, undefined, () =>
+    initial ?? (reopened ? reopenAtReview(reopened) : initialFlow(newConsultId(), Date.now())),
+  )
   /** `checking` until the saved consult has been read; `offer` while the resume prompt is up. */
-  const [boot, setBoot] = useState<'checking' | 'offer' | 'ready'>(persist ? 'checking' : 'ready')
+  const [boot, setBoot] = useState<'checking' | 'offer' | 'ready'>(persist && !reopened ? 'checking' : 'ready')
   const [offered, setOffered] = useState<FlowState | null>(null)
   const [watching, setWatching] = useState<number | null>(null)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -66,7 +75,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
 
   // Read the save once, on mount. Same tab → straight back in. Otherwise ask.
   useEffect(() => {
-    if (!persist) return
+    if (!persist || reopened) return
     const saved = loadConsult()
     if (isResumable(saved)) {
       if (isSameSession(saved.consultId)) {
@@ -79,7 +88,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     } else {
       setBoot('ready')
     }
-  }, [persist])
+  }, [persist, reopened])
 
   // Save after every change, once we know we aren't about to overwrite a save
   // the visitor hasn't decided about yet.
@@ -175,6 +184,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           onBack={() => dispatch({ type: 'jump', sceneId: 'review' })}
           onDone={(bundle) => {
             dispatch({ type: 'phase', phase: 'done' })
+            rememberFinished(state)
             onHandoff?.(bundle)
           }}
         />
