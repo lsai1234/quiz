@@ -123,7 +123,8 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
     case 'food':
       return a.plate !== null && a.plate.length > 0
     case 'body':
-      return a.body !== null
+      // "Leave it blank if you're all good": blank is an answer. See BLANK_MEANS.
+      return true
     case 'shelf':
       return a.shelf !== null
     case 'review':
@@ -131,6 +132,22 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
     case 'circuit':
       return a.circuit !== null && (a.circuit.none || a.circuit.flags.length > 0)
   }
+}
+
+/**
+ * Scenes where moving on without touching anything is itself an answer, and
+ * what it records. The body map says "leave it blank if you're all good", so
+ * Next on an untouched body map records no sore spots rather than nothing.
+ */
+export const BLANK_MEANS: Partial<Record<SceneId, Partial<ConsultAnswers>>> = {
+  body: { body: [] },
+}
+
+function fillBlank(id: SceneId, answers: ConsultAnswers): ConsultAnswers {
+  const blank = BLANK_MEANS[id]
+  if (!blank) return answers
+  const untouched = (Object.keys(blank) as (keyof ConsultAnswers)[]).every((k) => answers[k] === null)
+  return untouched ? { ...answers, ...blank } : answers
 }
 
 /** What Next says when it isn't ready yet. */
@@ -143,7 +160,7 @@ export const NUDGES: Record<SceneId, string> = {
   daylight: 'Move the sun to how often you get outside.',
   caffeine: 'Add your drinks, or tap None.',
   food: 'Tap at least one food.',
-  body: 'Tap any sore spots, or All good.',
+  body: '',
   shelf: 'Pick what you take, or Nothing yet.',
   review: '',
   circuit: 'Tick any that apply, or None of these.',
@@ -224,6 +241,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     case 'next': {
       if (state.phase !== 'scenes') return state
       if (!isAnswered(state.sceneId, state.answers)) return state
+      state = { ...state, answers: fillBlank(state.sceneId, state.answers) }
       if (state.returnTo && state.returnTo !== state.sceneId) {
         return {
           ...state,

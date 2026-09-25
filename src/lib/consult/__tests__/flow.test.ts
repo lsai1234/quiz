@@ -167,9 +167,21 @@ describe('branching', () => {
 })
 
 describe('answered?', () => {
-  it('tells "nothing sore" apart from "not asked yet"', () => {
-    expect(isAnswered('body', { ...EMPTY_ANSWERS, body: null })).toBe(false)
-    expect(isAnswered('body', { ...EMPTY_ANSWERS, body: [] })).toBe(true)
+  it('reads a body map left blank as "all good" once you move on', () => {
+    let s = initialFlow('c', 0)
+    s = { ...s, sceneId: 'body' }
+    expect(isAnswered('body', s.answers)).toBe(true)
+    expect(s.answers.body).toBeNull()
+    s = flowReducer(s, { type: 'next' })
+    expect(s.sceneId).toBe('shelf')
+    expect(s.answers.body).toEqual([])
+  })
+
+  it('keeps sore spots that were tapped', () => {
+    let s: FlowState = { ...initialFlow('c', 0), sceneId: 'body' }
+    s = flowReducer(s, { type: 'answer', patch: { body: ['knees'] } })
+    s = flowReducer(s, { type: 'next' })
+    expect(s.answers.body).toEqual(['knees'])
   })
 
   it('never reads an empty circuit check as "none of these"', () => {

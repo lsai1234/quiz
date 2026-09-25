@@ -11,6 +11,9 @@ import { TrainingWeek } from './TrainingWeek'
 import { ChargeDial } from './ChargeDial'
 import { SleepWindow } from './SleepWindow'
 import { SunArc } from './SunArc'
+import { CupCounter } from './CupCounter'
+import { PlatePicker } from './PlatePicker'
+import { BodyMap } from './BodyMap'
 
 /**
  * The scene registry (build C1).
@@ -56,6 +59,9 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'charge-dial': { component: ChargeDial, writes: ['energy'] },
   'sleep-window': { component: SleepWindow, writes: ['sleep'] },
   'sun-arc': { component: SunArc, writes: ['daylight'] },
+  'cup-counter': { component: CupCounter, writes: ['caffeine'] },
+  'plate-picker': { component: PlatePicker, writes: ['plate'] },
+  'body-map': { component: BodyMap, writes: ['body'] },
   review: { component: Review, writes: [] },
 }
 

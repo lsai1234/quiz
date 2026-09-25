@@ -39,6 +39,14 @@ export function answerCurrentScene(): void {
     case 'sun-arc':
       fireEvent.click(screen.getByRole('radio', { name: 'Hardly ever' }))
       return
+    case 'cup-counter':
+      fireEvent.click(screen.getByRole('button', { name: 'None' }))
+      return
+    case 'plate-picker':
+      fireEvent.click(screen.getByRole('button', { name: /^Oily fish/ }))
+      return
+    case 'body-map':
+      return
     case 'review':
       return
   }
