@@ -15,6 +15,8 @@ import type { QuizTrack } from '@/lib/types'
 
 interface Props {
   onEnterQuiz: () => void
+  /** The Amp Consult — the third way in. Omitted, the option isn't shown. */
+  onEnterConsult?: () => void
   reducedMotion: boolean
 }
 
@@ -41,7 +43,7 @@ function CHRGDIcon({ size = 26 }: { size?: number }) {
   )
 }
 
-export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
+export function Act1Hero({ onEnterQuiz, onEnterConsult, reducedMotion }: Props) {
   const setAnswer = useQuizStore((s) => s.setAnswer)
   const setGoals = useQuizStore((s) => s.setGoals)
   function start(track: QuizTrack) {
@@ -119,6 +121,25 @@ export function Act1Hero({ onEnterQuiz, reducedMotion }: Props) {
               </svg>
             </button>
           ))}
+          {onEnterConsult && (
+            <button
+              onClick={onEnterConsult}
+              data-testid="enter-consult"
+              className="group w-full flex items-center gap-4 px-5 py-5 rounded-xl border border-[#00D4FF]/30 bg-[#00D4FF]/[0.04] text-left transition-all duration-200 hover:border-[#00D4FF]/60 hover:bg-[#00D4FF]/[0.07] active:scale-[0.99] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#00D4FF]/40"
+            >
+              <QuizIcon name="bolt" size={22} className="shrink-0 text-[#00D4FF]" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 text-[15px] font-medium" style={{ fontFamily: 'var(--font-display)' }}>
+                  The Amp Consult
+                  <span className="text-[10px] font-bold tracking-[0.18em] uppercase px-1.5 py-0.5 rounded bg-[#00D4FF] text-[#0A0A0A]">New</span>
+                </div>
+                <div className="text-[13px] mt-1 text-white/40 leading-snug">Tap, drag and spin through a charge-up with Amp</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" className="text-white/25 flex-shrink-0 transition-transform duration-200 group-hover:translate-x-0.5">
+                <path d="M8 4L14 10L8 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Trust row (honest cues; real social proof can slot in here later) */}

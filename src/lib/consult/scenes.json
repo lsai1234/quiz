@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "sections": [
+    { "id": "you", "label": "You" },
+    { "id": "move", "label": "Move" },
+    { "id": "rest", "label": "Rest" },
+    { "id": "fuel", "label": "Fuel" },
+    { "id": "body", "label": "Body" },
+    { "id": "check", "label": "Check" }
+  ],
+  "scenes": [
+    {
+      "id": "goals",
+      "section": "you",
+      "label": "Goals",
+      "interaction": "goal-tiles",
+      "speedRun": true,
+      "copy": {
+        "question": "What are you after?",
+        "hint": "Pick up to three. The order you tap them sets the priority."
+      },
+      "placeholder": {
+        "multi": true,
+        "options": [
+          { "label": "Performance", "toggle": ["goals", "performance"] },
+          { "label": "Energy", "toggle": ["goals", "energy"] },
+          { "label": "Sleep & recovery", "toggle": ["goals", "sleep"] },
+          { "label": "Focus", "toggle": ["goals", "focus"] },
+          { "label": "Healthy ageing", "toggle": ["goals", "ageing"] },
+          { "label": "All-round health", "toggle": ["goals", "allround"] }
+        ]
+      }
+    },
+    {
+      "id": "about",
+      "section": "you",
+      "label": "About you",
+      "interaction": "age-wheel",
+      "speedRun": true,
+      "copy": {
+        "question": "A bit about you",
+        "hint": "Spin to your age, then pick one below."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "18–24", "set": { "age": "18-24", "sex": "unsaid" } },
+          { "label": "25–34", "set": { "age": "25-34", "sex": "unsaid" } },
+          { "label": "35–44", "set": { "age": "35-44", "sex": "unsaid" } },
+          { "label": "45–54", "set": { "age": "45-54", "sex": "unsaid" } },
+          { "label": "55–64", "set": { "age": "55-64", "sex": "unsaid" } },
+          { "label": "65+", "set": { "age": "65-plus", "sex": "unsaid" } }
+        ]
+      }
+    },
+    {
+      "id": "training",
+      "section": "move",
+      "label": "Training",
+      "interaction": "training-week",
+      "speedRun": true,
+      "copy": {
+        "question": "Map your training week",
+        "hint": "Tap a day to cycle through rest, gym, cardio and sport."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "Mostly resting", "set": { "week": ["rest", "rest", "rest", "rest", "rest", "rest", "rest"] } },
+          { "label": "Two gym days", "set": { "week": ["gym", "rest", "rest", "gym", "rest", "rest", "rest"] } },
+          { "label": "Four mixed sessions", "set": { "week": ["gym", "cardio", "rest", "gym", "rest", "sport", "rest"] } },
+          { "label": "Six days on", "set": { "week": ["gym", "cardio", "gym", "cardio", "gym", "sport", "rest"] } }
+        ]
+      }
+    },
+    {
+      "id": "energy",
+      "section": "move",
+      "label": "Energy",
+      "interaction": "charge-dial",
+      "speedRun": true,
+      "copy": {
+        "question": "How's your energy most afternoons?",
+        "hint": "Drag to fill the battery."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "Pretty flat", "set": { "energy": 3 } },
+          { "label": "Middling", "set": { "energy": 5 } },
+          { "label": "Charged", "set": { "energy": 8 } }
+        ]
+      }
+    },
+    {
+      "id": "sleep",
+      "section": "rest",
+      "label": "Sleep",
+      "interaction": "sleep-window",
+      "speedRun": true,
+      "copy": {
+        "question": "Set your sleep window",
+        "hint": "Drag bedtime and wake-up to a normal night."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "Short and broken", "set": { "sleep": { "bed": 1410, "wake": 360, "quality": "broken" } } },
+          { "label": "About seven, OK", "set": { "sleep": { "bed": 1380, "wake": 390, "quality": "ok" } } },
+          { "label": "Eight or more, restful", "set": { "sleep": { "bed": 1350, "wake": 420, "quality": "restful" } } }
+        ]
+      }
+    },
+    {
+      "id": "daylight",
+      "section": "rest",
+      "label": "Daylight",
+      "interaction": "sun-arc",
+      "speedRun": false,
+      "copy": {
+        "question": "How often do you get daylight?",
+        "hint": "Drag the sun across the sky. Twenty minutes outside counts."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "Hardly ever", "set": { "daylight": "hardly" } },
+          { "label": "Some days", "set": { "daylight": "some" } },
+          { "label": "Most days", "set": { "daylight": "most" } },
+          { "label": "Every day", "set": { "daylight": "daily" } }
+        ]
+      }
+    },
+    {
+      "id": "caffeine",
+      "section": "fuel",
+      "label": "Caffeine",
+      "interaction": "cup-counter",
+      "speedRun": true,
+      "copy": {
+        "question": "Coffee, tea, energy drinks?",
+        "hint": "Tap to stack what you have on a normal day."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "None", "set": { "caffeine": { "coffee": 0, "tea": 0, "energy": 0 } } },
+          { "label": "A couple of coffees", "set": { "caffeine": { "coffee": 2, "tea": 0, "energy": 0 } } },
+          { "label": "Four or more", "set": { "caffeine": { "coffee": 3, "tea": 0, "energy": 1 } } }
+        ]
+      }
+    },
+    {
+      "id": "food",
+      "section": "fuel",
+      "label": "Food",
+      "interaction": "plate-picker",
+      "speedRun": false,
+      "copy": {
+        "question": "What's on your plate most weeks?",
+        "hint": "Tap everything you eat at least once a week."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "Mixed, with oily fish", "set": { "plate": ["oily-fish", "poultry", "eggs", "dairy", "greens", "fruit", "wholegrains"] } },
+          { "label": "Mixed, no fish", "set": { "plate": ["red-meat", "poultry", "eggs", "dairy", "fruit"] } },
+          { "label": "Fully plant-based", "set": { "plate": ["beans", "greens", "fruit", "nuts", "wholegrains"] } }
+        ]
+      }
+    },
+    {
+      "id": "body",
+      "section": "body",
+      "label": "Body",
+      "interaction": "body-map",
+      "speedRun": false,
+      "copy": {
+        "question": "Anywhere feel stiff or sore?",
+        "hint": "Tap the spots. Leave it blank if you're all good."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "All good", "set": { "body": [] } },
+          { "label": "Knees and lower back", "set": { "body": ["knees", "lower-back"] } },
+          { "label": "Neck and shoulders", "set": { "body": ["neck", "shoulders"] } }
+        ]
+      }
+    },
+    {
+      "id": "shelf",
+      "section": "body",
+      "label": "Current stack",
+      "interaction": "shelf-check",
+      "speedRun": true,
+      "copy": {
+        "question": "Already taking anything?",
+        "hint": "So nothing gets doubled up."
+      },
+      "placeholder": {
+        "options": [
+          { "label": "Nothing yet", "set": { "shelf": [] } },
+          { "label": "A multivitamin", "set": { "shelf": ["multivitamin"] } },
+          { "label": "Creatine and protein", "set": { "shelf": ["creatine", "protein"] } }
+        ]
+      }
+    },
+    {
+      "id": "review",
+      "section": "check",
+      "label": "Review",
+      "interaction": "review",
+      "speedRun": true,
+      "copy": {
+        "question": "Here's what I've got",
+        "hint": "Tap anything to change it. Nothing's been decided yet.",
+        "next": "Looks right"
+      }
+    },
+    {
+      "id": "circuit",
+      "section": "check",
+      "label": "Circuit check",
+      "interaction": "circuit-check",
+      "speedRun": true,
+      "mode": "calm",
+      "copy": {
+        "question": "Circuit check",
+        "hint": "A few safety questions, so I only suggest things that suit you. Tick any that apply.",
+        "next": "Continue"
+      },
+      "placeholder": {
+        "options": [
+          { "label": "None of these", "set": { "circuit": { "flags": [], "none": true } } },
+          { "label": "Blood-thinning medicine", "set": { "circuit": { "flags": ["blood-thinners"], "none": false } } },
+          { "label": "Pregnant, breastfeeding or trying", "set": { "circuit": { "flags": ["pregnancy"], "none": false } } }
+        ]
+      }
+    }
+  ]
+}

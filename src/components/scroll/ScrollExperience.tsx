@@ -10,6 +10,7 @@ import { QuizV2 } from '@/components/quiz/v2/QuizV2'
 import { Act3Analysis } from './Act3Analysis'
 import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
+import { AmpConsult } from '@/components/consult/AmpConsult'
 
 type Act = 1 | 2 | 3 | 4 | 5
 
@@ -25,6 +26,12 @@ const TRANSITIONS: Record<Act, string> = {
 
 export function ScrollExperience() {
   const [act, setAct] = useState<Act>(1)
+  /**
+   * The third way in from the hero: the Amp Consult. It takes Act 2's place —
+   * the same hero before it, the same analysis and reveal after it once the
+   * handoff (level 3 of the consult build) is wired.
+   */
+  const [consult, setConsult] = useState(false)
   const [animKey, setAnimKey] = useState(0)
   const [reducedMotion, setReducedMotion] = useState(false)
   // Resume-prompt state. `hydrated` flips once the persisted store has been
@@ -104,7 +111,7 @@ export function ScrollExperience() {
               Pick up where you left off?
             </p>
             <button
-              onClick={() => { setResumeDismissed(true); goTo(2) }}
+              onClick={() => { setResumeDismissed(true); setConsult(false); goTo(2) }}
               className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-[#0A0A0A] bg-[#00D4FF] active:scale-95"
             >
               Resume
@@ -119,8 +126,15 @@ export function ScrollExperience() {
         </div>
       )}
       <div key={animKey} className={TRANSITIONS[act]}>
-        {act === 1 && <Act1Hero onEnterQuiz={() => goTo(2)} reducedMotion={reducedMotion} />}
-        {act === 2 && (useV2
+        {act === 1 && (
+          <Act1Hero
+            onEnterQuiz={() => { setConsult(false); goTo(2) }}
+            onEnterConsult={() => { setConsult(true); goTo(2) }}
+            reducedMotion={reducedMotion}
+          />
+        )}
+        {act === 2 && consult && <AmpConsult onExit={() => { setConsult(false); goTo(1) }} />}
+        {act === 2 && !consult && (useV2
           ? <QuizV2 onComplete={() => goTo(3)} reducedMotion={reducedMotion} />
           : <Act2Quiz onComplete={() => goTo(3)} reducedMotion={reducedMotion} />)}
         {act === 3 && <Act3Analysis onComplete={() => goTo(4)} reducedMotion={reducedMotion} />}
