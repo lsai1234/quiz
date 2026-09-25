@@ -62,7 +62,12 @@ export type ShelfItem =
   | 'magnesium'
   | 'collagen'
 
-export type CircuitFlag = 'pregnancy' | 'blood-thinners' | 'other-prescription' | 'heart' | 'kidney-liver'
+/**
+ * The circuit check's questions. `shellfish` isn't in the build plan's list; it
+ * is here because the catalogue carries shellfish-derived products (krill oil,
+ * glucosamine) and the quiz's own safety screen already asks it.
+ */
+export type CircuitFlag = 'pregnancy' | 'blood-thinners' | 'other-prescription' | 'heart' | 'kidney-liver' | 'shellfish'
 
 /** Speed run (fewer scenes, about a minute) or deep charge (everything). */
 export type Route = 'speed' | 'deep'

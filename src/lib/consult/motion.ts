@@ -127,6 +127,13 @@ export function springTransition(...properties: string[]): string {
     .join(', ')
 }
 
+/** The long, one-off growth of the charge-up (the profile, the battery). */
+export function chargeTransition(...properties: string[]): string {
+  return properties
+    .map((p) => `${p} var(--amp-duration-charge) var(--amp-spring)`)
+    .join(', ')
+}
+
 export type HapticKind = 'tick' | 'select' | 'charge'
 
 const HAPTIC_PATTERN: Record<HapticKind, number | number[]> = {

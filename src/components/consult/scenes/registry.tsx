@@ -42,6 +42,8 @@ export interface SceneProps {
   onEdit: (scene: SceneId) => void
   /** A touch or drag happening now — Amp leans towards it. -1 left … 1 right. */
   onInteract?: (lean: number) => void
+  /** The circuit check only: "I'd rather not answer these". */
+  onDecline?: () => void
 }
 
 export interface SceneEntry {

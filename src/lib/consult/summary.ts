@@ -108,6 +108,7 @@ export const CIRCUIT_LABEL: Record<CircuitFlag, string> = {
   'other-prescription': 'Other prescription medicine',
   heart: 'Heart condition or high blood pressure',
   'kidney-liver': 'Kidney or liver condition',
+  shellfish: 'Shellfish allergy',
 }
 
 export function clock(minutes: number): string {

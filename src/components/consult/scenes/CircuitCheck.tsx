@@ -29,7 +29,7 @@ import type { SceneProps } from './registry'
  * on clears the others, turning any other on clears it.
  */
 
-export const CIRCUIT_FLAGS: CircuitFlag[] = ['pregnancy', 'blood-thinners', 'other-prescription', 'heart', 'kidney-liver']
+export const CIRCUIT_FLAGS: CircuitFlag[] = ['pregnancy', 'blood-thinners', 'other-prescription', 'heart', 'kidney-liver', 'shellfish']
 
 const EMPTY: CircuitAnswer = { flags: [], none: false }
 
@@ -43,7 +43,7 @@ export function toggleNone(answer: CircuitAnswer | null): CircuitAnswer {
   return answer?.none ? EMPTY : { flags: [], none: true }
 }
 
-export function CircuitCheck({ answers, onAnswer }: SceneProps) {
+export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
   const consented = Boolean(answers.healthConsent?.accepted)
   const circuit = answers.circuit
   const [asking, setAsking] = useState(false)
@@ -136,6 +136,17 @@ export function CircuitCheck({ answers, onAnswer }: SceneProps) {
           <Switch label="None of these" on={Boolean(circuit?.none)} inert={!consented} onToggle={() => guard(() => onAnswer({ circuit: toggleNone(circuit) }))} />
         </li>
       </ul>
+
+      {onDecline && (
+        <button
+          type="button"
+          onClick={onDecline}
+          className="self-center underline"
+          style={{ minHeight: 'var(--amp-target)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', textUnderlineOffset: 'var(--amp-space-1)' }}
+        >
+          I’d rather not answer these
+        </button>
+      )}
     </div>
   )
 }

@@ -16,6 +16,7 @@ import {
 } from '@/lib/consult/flow'
 import { DURATION } from '@/lib/consult/motion'
 import { reactionTo } from '@/lib/consult/reactions'
+import { STOP_COPY, circuitOutcome } from '@/lib/consult/circuit'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
@@ -139,6 +140,22 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
     )
   }
 
+  if (state.phase === 'stop') {
+    const outcome = circuitOutcome(state.answers)
+    return (
+      <ConsultRoot mode="calm" comfort={state.answers.comfort}>
+        <SceneStage sceneKey="stop" direction={state.direction} headingRef={headingRef}>
+          <StopScreen
+            reason={outcome.kind === 'stop' ? outcome.reason : 'declined'}
+            headingRef={headingRef}
+            onChange={() => dispatch({ type: 'jump', sceneId: 'circuit' })}
+            onExit={onExit}
+          />
+        </SceneStage>
+      </ConsultRoot>
+    )
+  }
+
   if (state.phase !== 'scenes') {
     return (
       <ConsultRoot>
@@ -202,10 +219,90 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
             order={order}
             onEdit={editFromReview}
             onInteract={interact}
+            onDecline={scene.id === 'circuit' ? () => dispatch({ type: 'decline' }) : undefined}
           />
         </SceneShell>
       </SceneStage>
     </ConsultRoot>
+  )
+}
+
+/**
+ * Stop & signpost (build H3).
+ *
+ * A warm dead end. The circuit check said this consult shouldn't go on to a
+ * stack, so it doesn't: no analysis, no results page, no products. It says
+ * why in plain words, points to the person who can help, and lets them go back
+ * and change an answer in case a switch was tapped by mistake.
+ */
+function StopScreen({
+  reason,
+  headingRef,
+  onChange,
+  onExit,
+}: {
+  reason: keyof typeof STOP_COPY
+  headingRef: React.Ref<HTMLHeadingElement>
+  onChange: () => void
+  onExit?: () => void
+}) {
+  const copy = STOP_COPY[reason]
+  return (
+    <div
+      className="mx-auto flex flex-col"
+      style={{
+        maxWidth: 'var(--amp-column)',
+        minHeight: 'var(--app-height, 100dvh)',
+        padding: 'max(var(--amp-space-4), env(safe-area-inset-top)) var(--amp-gutter) max(var(--amp-space-5), env(safe-area-inset-bottom))',
+        gap: 'var(--amp-space-4)',
+      }}
+    >
+      <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)', paddingTop: 'var(--amp-space-3)' }}>
+        Circuit check · paused
+      </p>
+      <div className="flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
+        <Amp state="calm" />
+      </div>
+      <h1
+        ref={headingRef}
+        tabIndex={-1}
+        className="uppercase"
+        style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', lineHeight: 'var(--amp-leading-question)', outline: 'none' }}
+      >
+        {copy.title}
+      </h1>
+      <div className="flex flex-1 flex-col justify-center">
+        <div
+          role="status"
+          style={{
+            padding: 'var(--amp-space-5)',
+            borderRadius: 'var(--amp-radius-panel)',
+            border: 'var(--amp-hairline) solid var(--amp-caution-line)',
+            background: 'var(--amp-caution-fill)',
+            fontSize: 'var(--amp-text-lead)',
+            lineHeight: 'var(--amp-leading-body)',
+          }}
+        >
+          <p>{copy.body}</p>
+          <p style={{ marginTop: 'var(--amp-space-3)' }}>{copy.who}</p>
+        </div>
+      </div>
+      <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
+        {reason === 'declined' ? (
+          <a
+            href="/shop"
+            className="amp-press flex items-center justify-center"
+            style={{ minHeight: 'calc(var(--amp-target) + var(--amp-space-1))', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-edge-strong)', fontWeight: 'var(--amp-weight-bold)', color: 'var(--amp-ink)' }}
+          >
+            Browse the shop
+          </a>
+        ) : null}
+        <QuietLink icon="back" onClick={onChange}>
+          {reason === 'declined' ? 'Back to the circuit check' : 'I tapped something by mistake'}
+        </QuietLink>
+        {onExit && <QuietLink onClick={onExit}>Back to the start</QuietLink>}
+      </div>
+    </div>
   )
 }
 

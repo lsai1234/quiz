@@ -5,6 +5,7 @@ import { SceneShell } from '../SceneShell'
 import { ChargeMeter, type MeterSection } from '../ChargeMeter'
 import { NextButton, QuietLink } from '../controls'
 import { Amp, type AmpState } from '../Amp'
+import { ChargeProfileChart } from '../ChargeProfileChart'
 
 /**
  * The workshop's stories: each renders one piece of the consult on its own,
@@ -100,4 +101,13 @@ export const STORIES: Story[] = [
   { id: 'shell', title: 'Scene shell', render: () => <ShellStory /> },
   { id: 'meter', title: 'Charge meter', render: () => <MeterStory /> },
   { id: 'amp', title: 'Amp', render: () => <AmpStory /> },
+  {
+    id: 'profile',
+    title: 'Charge profile',
+    render: () => (
+      <div style={{ padding: 'var(--amp-space-10) var(--amp-gutter)' }}>
+        <ChargeProfileChart profile={{ training: 100, energy: 40, sleep: 52, daylight: 15, nutrition: 50, recovery: 68 }} />
+      </div>
+    ),
+  },
 ]

@@ -12,6 +12,7 @@
  */
 
 import SCRIPT from './scenes.json'
+import { circuitOutcome } from './circuit'
 import {
   EMPTY_ANSWERS,
   type ConsultAnswers,
@@ -249,6 +250,8 @@ export type FlowAction =
   | { type: 'phase'; phase: Phase }
   /** The choice on the intro screen. */
   | { type: 'route'; route: Route }
+  /** "I'd rather not answer these" on the circuit check: a stop, with nothing kept. */
+  | { type: 'decline' }
 
 export function newConsultId(): string {
   const bytes =
@@ -310,6 +313,10 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           direction: 'forward',
         }
       }
+      // The circuit check is the only scene that can end the consult (H3).
+      if (state.sceneId === 'circuit' && circuitOutcome(state.answers).kind === 'stop') {
+        return { ...state, phase: 'stop', direction: 'forward' }
+      }
       const next = sceneAfter(state.sceneId, state.answers)
       if (!next) return { ...state, phase: 'analysis', direction: 'forward' }
       return { ...state, history: [...state.history, state.sceneId], sceneId: next, direction: 'forward' }
@@ -319,6 +326,14 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       const answers = { ...state.answers, route: action.route }
       return { ...state, answers, phase: 'scenes', sceneId: visibleScenes(answers)[0], direction: 'forward' }
     }
+
+    case 'decline':
+      return {
+        ...state,
+        answers: { ...state.answers, circuit: null, healthConsent: null },
+        phase: 'stop',
+        direction: 'forward',
+      }
 
     case 'back': {
       if (state.phase === 'stop') return { ...state, phase: 'scenes', direction: 'back' }

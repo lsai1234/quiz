@@ -36,7 +36,9 @@ export function SceneStage({ sceneKey, direction, headingRef, children }: Props)
   useEffect(() => {
     if (arrived.current === sceneKey) return
     arrived.current = sceneKey
-    window.scrollTo({ top: 0 })
+    // Assigning scrollTop rather than calling scrollTo: same effect, and it
+    // exists everywhere the consult runs, test DOMs included.
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0
     headingRef.current?.focus({ preventScroll: true })
   }, [sceneKey, headingRef])
 

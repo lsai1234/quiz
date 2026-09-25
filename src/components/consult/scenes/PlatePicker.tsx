@@ -5,6 +5,7 @@ import type { Food } from '@/lib/consult/types'
 import { haptic, stateTransition } from '@/lib/consult/motion'
 import { Glyph, type GlyphName } from '../Glyph'
 import { Hint } from '../controls'
+import { readPlate } from '@/lib/consult/plate'
 import type { SceneProps } from './registry'
 
 /**
@@ -31,20 +32,7 @@ export const FOODS: { id: Food; icon: GlyphName }[] = [
   { id: 'wholegrains', icon: 'grain' },
 ]
 
-const ANIMAL: Food[] = ['oily-fish', 'red-meat', 'poultry', 'eggs', 'dairy']
-
-export interface PlateRead {
-  plantBased: boolean
-  noOilyFish: boolean
-}
-
-/** What the plate says, for the scene's read-back and the stack engine. */
-export function readPlate(plate: Food[]): PlateRead {
-  return {
-    plantBased: plate.length > 0 && !plate.some((f) => ANIMAL.includes(f)),
-    noOilyFish: plate.length > 0 && !plate.includes('oily-fish'),
-  }
-}
+export { readPlate, type PlateRead } from '@/lib/consult/plate'
 
 export function PlatePicker({ answers, onAnswer, comfort }: SceneProps) {
   const plate = answers.plate ?? []
