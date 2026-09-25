@@ -9,6 +9,8 @@
    surfaces; see its header for why it lives alongside tokens.css rather than
    replacing it. */
 @import "./storefront.css";
+/* The Amp Consult token set. Scoped to `.amp-consult`; see its header. */
+@import "./consult.css";
 
 @theme inline {
   --color-bg: #09090b;

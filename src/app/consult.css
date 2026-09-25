@@ -1,0 +1,273 @@
+/**
+ * The Amp Consult token set (build S1).
+ *
+ * The consult is its own surface: darker, glassier and more electric than the
+ * quiz it sits beside, and calmer on demand. Every colour, surface, glow,
+ * radius, space and type size its scenes use is decided here and read through
+ * `var()`. Nothing under `src/components/consult` may carry a colour of its own
+ * — `consult-tokens.test.ts` fails the build if one does.
+ *
+ * ── Why scoped, not `:root` ────────────────────────────────────────────────
+ * Two token sets already share the root (`tokens.css` for the hubs,
+ * `storefront.css` for the shop) and they already collide on `--accent`. This
+ * one lives on `.amp-consult`, every name carries an `--amp-` prefix, and
+ * nothing outside the consult can see it.
+ *
+ * ── Roles that change with the mode ─────────────────────────────────────────
+ * `--amp-accent` is what actions and progress are painted with. It is volt
+ * everywhere except the circuit check, where `[data-mode='calm']` swaps it for
+ * the softer calm tone and turns the glow down. Components paint with the
+ * role, never with volt directly, so the safety screens change character
+ * without a single component knowing which mode it is in.
+ *
+ * ── Motion is not here ──────────────────────────────────────────────────────
+ * Durations and the spring curve are set inline on the consult root from
+ * `lib/consult/motion.ts` (build S3), so every animation pulls from one file.
+ * The keyframes below only reference those variables.
+ */
+
+.amp-consult {
+  /* ══ Colour ═══════════════════════════════════════════════════════════════
+     Cyan is for actions and progress. Warm colours only appear when they carry
+     meaning: sun on the daylight scene, caution on sore spots and pharmacist
+     notes, go on sport days and confirmations. */
+  --amp-ground: #05090b;
+  --amp-volt: #3fdcff;
+  --amp-calm: #a6f0ff;
+  --amp-ink: #e7f3f6;
+  --amp-sun: #ffc45a;
+  --amp-caution: #ffb547;
+  --amp-go: #5fd68f;
+
+  /* The two quieter ink tiers. Measured against the glass composited over the
+     ground — the plane the words actually sit on — not the flat ground. */
+  --amp-ink-2: #b4c6cb;
+  --amp-ink-3: #8ea3aa;
+  /* Text on a volt fill (the Next button, a picked tile's badge). */
+  --amp-ink-on-accent: #031419;
+
+  /* ══ Tints ════════════════════════════════════════════════════════════════
+     Three strengths, the same three the hub system uses: a 12% fill, a 35%
+     line and a 45% glow. A fourth strength is how the hubs ended up with
+     sixteen. */
+  --amp-volt-fill: rgba(63, 220, 255, 0.12);
+  --amp-volt-line: rgba(63, 220, 255, 0.35);
+  --amp-volt-glow: rgba(63, 220, 255, 0.45);
+  --amp-calm-fill: rgba(166, 240, 255, 0.12);
+  --amp-calm-line: rgba(166, 240, 255, 0.35);
+  --amp-calm-glow: rgba(166, 240, 255, 0.45);
+  --amp-sun-fill: rgba(255, 196, 90, 0.12);
+  --amp-sun-line: rgba(255, 196, 90, 0.35);
+  --amp-sun-glow: rgba(255, 196, 90, 0.45);
+  --amp-caution-fill: rgba(255, 181, 71, 0.12);
+  --amp-caution-line: rgba(255, 181, 71, 0.35);
+  --amp-caution-glow: rgba(255, 181, 71, 0.45);
+  --amp-go-fill: rgba(95, 214, 143, 0.12);
+  --amp-go-line: rgba(95, 214, 143, 0.35);
+  --amp-go-glow: rgba(95, 214, 143, 0.45);
+
+  /* ══ Surfaces ═════════════════════════════════════════════════════════════
+     Glass: a teal-black sheet at 62% with a 14px blur. Used on the scene's
+     panels and cards. The solid fallback is the same colour, opaque, for rows
+     inside anything that scrolls — thirty blurred rows is thirty backdrop
+     filters recompositing per frame. */
+  --amp-glass: rgba(18, 36, 42, 0.62);
+  --amp-glass-solid: #0d1a1e;
+  --amp-glass-raised: rgba(26, 50, 58, 0.72);
+  --amp-glass-blur: 14px;
+  --amp-glass-saturate: 1.4;
+  --amp-scrim: rgba(2, 5, 6, 0.72);
+
+  --amp-edge: rgba(231, 243, 246, 0.08);
+  --amp-edge-strong: rgba(231, 243, 246, 0.16);
+  --amp-edge-top: rgba(231, 243, 246, 0.14);
+
+  /* ══ Glow ═════════════════════════════════════════════════════════════════
+     Shapes only; the colour comes from `--amp-glow-tone`, set by whoever wants
+     one. */
+  --amp-glow-tone: var(--amp-accent-glow);
+  --amp-glow-soft: 0 0 18px -4px var(--amp-glow-tone);
+  --amp-glow: 0 0 28px -6px var(--amp-glow-tone);
+  --amp-glow-strong: 0 0 48px -4px var(--amp-glow-tone);
+  --amp-bloom-alpha: 0.16;
+
+  /* ══ Roles ════════════════════════════════════════════════════════════════
+     What components paint with. See the header. */
+  --amp-accent: var(--amp-volt);
+  --amp-accent-fill: var(--amp-volt-fill);
+  --amp-accent-line: var(--amp-volt-line);
+  --amp-accent-glow: var(--amp-volt-glow);
+
+  /* ══ Type ═════════════════════════════════════════════════════════════════
+     Big Shoulders Display for the question, IBM Plex Sans for the words, IBM
+     Plex Mono for the data line — the pairing the share cards already use.
+     The face variables are set by `components/consult/fonts.ts`. */
+  --amp-font-display: var(--amp-face-display), 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --amp-font-body: var(--amp-face-body), 'IBM Plex Sans', system-ui, sans-serif;
+  --amp-font-mono: var(--amp-face-mono), 'IBM Plex Mono', ui-monospace, monospace;
+
+  --amp-text-question: clamp(2.125rem, 9.5vw, 3rem);
+  --amp-text-hero: clamp(3rem, 16vw, 4.5rem);
+  --amp-text-title: 1.375rem;
+  --amp-text-lead: 1.0625rem;
+  --amp-text-body: 0.9375rem;
+  --amp-text-meta: 0.8125rem;
+  --amp-text-data: 0.6875rem;
+
+  --amp-leading-question: 0.94;
+  --amp-leading-body: 1.5;
+  --amp-leading-tight: 1.2;
+  --amp-tracking-question: 0.005em;
+  --amp-tracking-data: 0.16em;
+
+  --amp-weight-regular: 400;
+  --amp-weight-medium: 500;
+  --amp-weight-bold: 600;
+  --amp-weight-heavy: 800;
+
+  /* ══ Shape & space ════════════════════════════════════════════════════════ */
+  --amp-radius-chip: 10px;
+  --amp-radius-tile: 16px;
+  --amp-radius-panel: 22px;
+  --amp-radius-pill: 999px;
+
+  --amp-space-1: 4px;
+  --amp-space-2: 8px;
+  --amp-space-3: 12px;
+  --amp-space-4: 16px;
+  --amp-space-5: 20px;
+  --amp-space-6: 24px;
+  --amp-space-8: 32px;
+  --amp-space-10: 40px;
+  --amp-gutter: 20px;
+  --amp-column: 30rem;
+
+  /* The smallest thing anyone has to hit, and the size it grows to in comfort
+     mode. */
+  --amp-target: 48px;
+  --amp-hairline: 1px;
+  --amp-focus: 0 0 0 2px var(--amp-ground), 0 0 0 4px var(--amp-accent);
+
+  background: var(--amp-ground);
+  color: var(--amp-ink);
+  font-family: var(--amp-font-body);
+  font-size: var(--amp-text-body);
+  line-height: var(--amp-leading-body);
+}
+
+/* The circuit check. Quieter, plainer, no jokes: the accent softens and the
+   glow comes most of the way down. */
+.amp-consult[data-mode='calm'] {
+  --amp-accent: var(--amp-calm);
+  --amp-accent-fill: var(--amp-calm-fill);
+  --amp-accent-line: var(--amp-calm-line);
+  --amp-accent-glow: var(--amp-calm-glow);
+  --amp-bloom-alpha: 0.05;
+}
+
+/* Comfort mode (C14): bigger type, bigger targets. The scene decides what to
+   swap; this only moves the scale. */
+.amp-consult[data-comfort='true'] {
+  --amp-target: 64px;
+  --amp-text-question: clamp(2.375rem, 11vw, 3.25rem);
+  --amp-text-body: 1.0625rem;
+  --amp-text-meta: 0.9375rem;
+  --amp-text-data: 0.8125rem;
+}
+
+/* ══ Motion ══════════════════════════════════════════════════════════════════
+   Keyframes only. Timing comes from the variables `motion.ts` sets. */
+
+@keyframes amp-scene-in-forward {
+  from { opacity: 0; transform: translate3d(14%, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes amp-scene-in-back {
+  from { opacity: 0; transform: translate3d(-14%, 0, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes amp-rise {
+  from { opacity: 0; transform: translate3d(0, 12px, 0); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes amp-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes amp-breathe {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.04); filter: brightness(1.12); }
+}
+
+@keyframes amp-flicker {
+  0%, 100% { opacity: 1; }
+  12% { opacity: 0.55; }
+  18% { opacity: 1; }
+  47% { opacity: 0.7; }
+  52% { opacity: 1; }
+}
+
+@keyframes amp-burst {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 var(--amp-accent-glow); }
+  40% { transform: scale(1.18); }
+  100% { transform: scale(1); box-shadow: 0 0 0 28px transparent; }
+}
+
+@keyframes amp-scan {
+  from { transform: translate3d(0, -110%, 0); }
+  to { transform: translate3d(0, 110%, 0); }
+}
+
+.amp-anim-scene-forward {
+  animation: amp-scene-in-forward var(--amp-duration-scene) var(--amp-spring) both;
+}
+
+.amp-anim-scene-back {
+  animation: amp-scene-in-back var(--amp-duration-scene) var(--amp-spring) both;
+}
+
+.amp-anim-rise {
+  animation: amp-rise var(--amp-duration-enter) var(--amp-spring) both;
+}
+
+.amp-anim-fade {
+  animation: amp-fade var(--amp-duration-enter) var(--amp-ease-out) both;
+}
+
+/* Tap feedback: a short press, no bounce back. */
+.amp-press {
+  transition:
+    transform var(--amp-duration-tap) var(--amp-ease-out),
+    background-color var(--amp-duration-state) var(--amp-ease-out),
+    border-color var(--amp-duration-state) var(--amp-ease-out),
+    box-shadow var(--amp-duration-state) var(--amp-ease-out),
+    color var(--amp-duration-state) var(--amp-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.amp-press:active:not(:disabled) {
+  transform: scale(var(--amp-press-scale));
+}
+
+.amp-consult :focus-visible {
+  outline: none;
+  box-shadow: var(--amp-focus);
+}
+
+/* The OS setting wins even before React has read it. */
+@media (prefers-reduced-motion: reduce) {
+  .amp-consult .amp-anim-scene-forward,
+  .amp-consult .amp-anim-scene-back,
+  .amp-consult .amp-anim-rise,
+  .amp-consult .amp-anim-fade {
+    animation: none;
+  }
+
+  .amp-consult .amp-press:active:not(:disabled) {
+    transform: none;
+  }
+}
