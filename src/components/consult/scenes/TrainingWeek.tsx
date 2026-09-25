@@ -67,7 +67,7 @@ const LOOK: Record<DayType, { icon: GlyphName; style: CSSProperties; label: stri
 
 const INTENSITIES: Intensity[] = ['easy', 'steady', 'hard']
 
-export function TrainingWeek({ scene, answers, onAnswer, onInteract }: SceneProps) {
+export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort }: SceneProps) {
   const week = answers.week ?? REST_WEEK
   const answered = answers.week !== null
   const allRest = answered && week.every((d) => d === 'rest')
@@ -78,6 +78,50 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract }: SceneProp
     haptic('tick')
     onInteract?.((i - 3) / 3)
     onAnswer({ week: next })
+  }
+
+  // The performance detail (C12): how hard the sessions are, once there are
+  // some. The same block in both layouts.
+  const detail = scene.detail && answered && !allRest ? (
+    <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
+          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+            How hard do most sessions feel?
+          </p>
+          <Segmented
+            label="How hard do most sessions feel?"
+            options={INTENSITIES.map((i) => ({ value: i, label: INTENSITY_LABEL[i] }))}
+            value={answers.intensity}
+            onChange={(i) => onAnswer({ intensity: i })}
+          />
+        </div>
+  ) : null
+
+  // Comfort mode (C14): no cycling to learn. Each day is a row with its four
+  // choices laid out.
+  if (comfort) {
+    return (
+      <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
+        {DAYS.map((name, i) => (
+          <div key={name} className="flex flex-col" style={{ gap: 'var(--amp-space-1)' }}>
+            <span style={{ fontWeight: 'var(--amp-weight-medium)' }}>{name}</span>
+            <Segmented
+              label={name}
+              options={CYCLE.map((d) => ({ value: d, label: DAY_LABEL[d] }))}
+              value={answered ? week[i] : null}
+              onChange={(d) => {
+                const next = [...week]
+                next[i] = d
+                onAnswer({ week: next })
+              }}
+            />
+          </div>
+        ))}
+        <p aria-live="polite" className="text-center uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-title)' }}>
+          {answered ? weekSummary(week) : ''}
+        </p>
+        {detail}
+      </div>
+    )
   }
 
   return (
@@ -91,7 +135,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract }: SceneProp
               type="button"
               onClick={() => tap(i)}
               aria-label={`${DAYS[i]}: ${DAY_LABEL[day]}. Tap to change.`}
-              className="amp-press flex flex-col items-center justify-between"
+              className="amp-press amp-day flex flex-col items-center justify-between"
               style={{
                 ...look.style,
                 minHeight: 'calc(var(--amp-target) * 2.4)',
@@ -106,7 +150,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract }: SceneProp
               <Glyph name={look.icon} size={20} />
               <span
                 aria-hidden
-                className="uppercase"
+                className="amp-day-label uppercase"
                 style={{
                   fontFamily: 'var(--amp-font-mono)',
                   fontSize: 'calc(var(--amp-text-data) * 0.85)',
@@ -147,20 +191,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract }: SceneProp
 
       <Chip label="No training right now" selected={allRest} onToggle={() => onAnswer({ week: allRest ? null : REST_WEEK })} />
 
-      {/* The performance detail (C12): how hard the sessions are, once there are some. */}
-      {scene.detail && answered && !allRest && (
-        <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
-          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
-            How hard do most sessions feel?
-          </p>
-          <Segmented
-            label="How hard do most sessions feel?"
-            options={INTENSITIES.map((i) => ({ value: i, label: INTENSITY_LABEL[i] }))}
-            value={answers.intensity}
-            onChange={(i) => onAnswer({ intensity: i })}
-          />
-        </div>
-      )}
+      {detail}
     </div>
   )
 }

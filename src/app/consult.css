@@ -187,6 +187,19 @@
   display: none;
 }
 
+/* A training-week day tile. Its type label ("CARDIO") needs about 2.4rem; when
+   the tile is narrower — large text on a phone — the label goes and the icon
+   and colour carry it. Measured in rem so it tracks the text size. */
+.amp-day {
+  container-type: inline-size;
+}
+
+@container (max-width: 2.4rem) {
+  .amp-day-label {
+    display: none;
+  }
+}
+
 /* ══ Motion ══════════════════════════════════════════════════════════════════
    Keyframes only. Timing comes from the variables `motion.ts` sets. */
 

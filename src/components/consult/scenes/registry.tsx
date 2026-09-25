@@ -15,6 +15,7 @@ import { CupCounter } from './CupCounter'
 import { PlatePicker } from './PlatePicker'
 import { BodyMap } from './BodyMap'
 import { ShelfCheck } from './ShelfCheck'
+import { CircuitCheck } from './CircuitCheck'
 
 /**
  * The scene registry (build C1).
@@ -64,6 +65,7 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'plate-picker': { component: PlatePicker, writes: ['plate'] },
   'body-map': { component: BodyMap, writes: ['body'] },
   'shelf-check': { component: ShelfCheck, writes: ['shelf'] },
+  'circuit-check': { component: CircuitCheck, writes: ['circuit', 'healthConsent'] },
   review: { component: Review, writes: [] },
 }
 

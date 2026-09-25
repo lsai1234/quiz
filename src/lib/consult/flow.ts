@@ -176,7 +176,7 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
     case 'review':
       return true
     case 'circuit':
-      return a.circuit !== null && (a.circuit.none || a.circuit.flags.length > 0)
+      return Boolean(a.healthConsent?.accepted) && a.circuit !== null && (a.circuit.none || a.circuit.flags.length > 0)
   }
 }
 
@@ -209,7 +209,7 @@ export const NUDGES: Record<SceneId, string> = {
   body: '',
   shelf: 'Pick what you take, or Nothing yet.',
   review: '',
-  circuit: 'Tick any that apply, or None of these.',
+  circuit: 'Tick the line at the top, then any that apply, or None of these.',
 }
 
 /* ── State ──────────────────────────────────────────────────────────────── */

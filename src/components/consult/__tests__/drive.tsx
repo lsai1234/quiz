@@ -61,6 +61,10 @@ export function answerCurrentScene(): void {
       return
     case 'body-map':
       return
+    case 'circuit-check':
+      fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
+      fireEvent.click(screen.getByRole('switch', { name: 'None of these' }))
+      return
     case 'review':
       return
   }

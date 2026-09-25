@@ -1,3 +1,5 @@
+import type { HealthDataConsent } from '@/lib/types'
+
 /**
  * The Amp Consult's answer model.
  *
@@ -106,8 +108,16 @@ export interface ConsultAnswers {
   body: BodySpot[] | null
   shelf: ShelfItem[] | null
   circuit: CircuitAnswer | null
+  /**
+   * Explicit consent to use the circuit check's answers (Article 9). The
+   * check's toggles are inert until this is given, and it is the same notice
+   * and version the quiz's safety screen uses.
+   */
+  healthConsent: HealthDataConsent | null
   /** Comfort mode: bigger type and targets, fiddly widgets swapped for buttons. */
   comfort: boolean
+  /** Whether comfort mode has been offered (so the offer is made once). */
+  comfortOffered: boolean
   /** Free text from "Tell Amp more", per scene. Optional, never required. */
   notes: Partial<Record<SceneId, string>>
 }
@@ -127,6 +137,8 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   body: null,
   shelf: null,
   circuit: null,
+  healthConsent: null,
   comfort: false,
+  comfortOffered: false,
   notes: {},
 }

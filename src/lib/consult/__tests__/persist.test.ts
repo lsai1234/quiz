@@ -39,16 +39,17 @@ describe('saving the consult', () => {
   it('never writes the circuit check answers to the device', () => {
     const state = flowReducer(advancedTo('circuit'), {
       type: 'answer',
-      patch: { circuit: { flags: ['blood-thinners'], none: false } },
+      patch: { circuit: { flags: ['blood-thinners'], none: false }, healthConsent: { accepted: true as const, version: 'test', at: '2026-09-25T00:00:00Z' } },
     })
     saveConsult(state)
     expect(localStorage.getItem(CONSULT_STORAGE_KEY)).not.toMatch(/blood-thinners/)
+    expect(loadConsult()?.answers.healthConsent).toBeNull()
     expect(loadConsult()?.answers.circuit).toBeNull()
   })
 
   it('resumes a finished consult on the circuit check, which is asked again', () => {
     let s = advancedTo('circuit')
-    s = flowReducer(s, { type: 'answer', patch: { circuit: { flags: [], none: true } } })
+    s = flowReducer(s, { type: 'answer', patch: { circuit: { flags: [], none: true }, healthConsent: { accepted: true as const, version: 'test', at: '2026-09-25T00:00:00Z' } } })
     s = flowReducer(s, { type: 'next' })
     expect(s.phase).toBe('analysis')
     const stored = forStorage(s)

@@ -28,12 +28,16 @@ export function ConsultRoot({ children, mode = 'charge', comfort = false, fullSc
   const reduced = useReducedMotion()
   return (
     <div
-      className={`amp-consult relative isolate overflow-hidden ${consultFontVars} ${className ?? ''}`}
+      className={`amp-consult relative isolate ${consultFontVars} ${className ?? ''}`}
       data-mode={mode}
       data-comfort={comfort ? 'true' : 'false'}
       data-reduced-motion={reduced ? 'true' : 'false'}
       style={{
         ...motionVars(reduced),
+        // `clip`, not `hidden`: a hidden overflow can still be scrolled by
+        // script, and focusing something wider than the screen then slides
+        // the whole scene sideways. A clipped one can't move.
+        overflowX: 'clip',
         minHeight: fullScreen ? 'var(--app-height, 100dvh)' : undefined,
       }}
     >

@@ -13,6 +13,8 @@ import {
 } from '../flow'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../types'
 
+const CONSENT = { accepted: true as const, version: 'test', at: '2026-09-25T00:00:00Z' }
+
 const start = () => initialFlow('c_test', 0, { route: 'deep' })
 
 /** Answer every scene with its first scripted option, driving Next each time. */
@@ -22,6 +24,7 @@ function runToEnd(state: FlowState = start()): FlowState {
     const def = SCENES.find((d) => d.id === s.sceneId)!
     const option = def.placeholder?.options[0]
     if (option) s = flowReducer(s, { type: 'answer', patch: applyPlaceholder(option, s.answers) })
+    if (s.sceneId === 'circuit') s = flowReducer(s, { type: 'answer', patch: { healthConsent: CONSENT } })
     s = flowReducer(s, { type: 'next' })
   }
   return s
@@ -187,8 +190,13 @@ describe('answered?', () => {
   })
 
   it('never reads an empty circuit check as "none of these"', () => {
-    expect(isAnswered('circuit', { ...EMPTY_ANSWERS, circuit: { flags: [], none: false } })).toBe(false)
-    expect(isAnswered('circuit', { ...EMPTY_ANSWERS, circuit: { flags: [], none: true } })).toBe(true)
+    const consented = { ...EMPTY_ANSWERS, healthConsent: CONSENT }
+    expect(isAnswered('circuit', { ...consented, circuit: { flags: [], none: false } })).toBe(false)
+    expect(isAnswered('circuit', { ...consented, circuit: { flags: [], none: true } })).toBe(true)
+  })
+
+  it('will not pass the circuit check without explicit consent', () => {
+    expect(isAnswered('circuit', { ...EMPTY_ANSWERS, circuit: { flags: [], none: true } })).toBe(false)
   })
 })
 

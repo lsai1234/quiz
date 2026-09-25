@@ -56,7 +56,8 @@ function session(): Storage | null {
 
 /** The state as it is written to disk: without the circuit check's answers. */
 export function forStorage(state: FlowState): FlowState {
-  const answers = { ...state.answers, circuit: null }
+  // The consent goes with the answers it covered: both are asked again.
+  const answers = { ...state.answers, circuit: null, healthConsent: null }
   // If they were on the circuit check or past it, resume on the circuit check.
   const past = state.sceneId === 'circuit' || state.phase !== 'scenes'
   return {

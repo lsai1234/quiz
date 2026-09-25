@@ -179,8 +179,21 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
               {nextLabel}
             </NextButton>
           }
-          footer={mode === 'calm' ? undefined : <QuietLink icon="spark">Tell Amp more</QuietLink>}
+          footer={
+            <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
+              {mode !== 'calm' && <QuietLink icon="spark">Tell Amp more</QuietLink>}
+              <QuietLink icon="comfort" aria-pressed={state.answers.comfort} onClick={() => answer({ comfort: !state.answers.comfort, comfortOffered: true })}>
+                {state.answers.comfort ? 'Standard size' : 'Bigger text'}
+              </QuietLink>
+            </div>
+          }
         >
+          {offerComfort(state.answers, state.sceneId) && (
+            <ComfortOffer
+              onYes={() => answer({ comfort: true, comfortOffered: true })}
+              onNo={() => answer({ comfortOffered: true })}
+            />
+          )}
           <SceneRenderer
             scene={scene}
             answers={state.answers}
@@ -193,6 +206,42 @@ export function AmpConsult({ onExit, onComplete, initial }: Props) {
         </SceneShell>
       </SceneStage>
     </ConsultRoot>
+  )
+}
+
+/**
+ * Comfort mode is offered, once, to people who picked healthy ageing or an
+ * older age band (C14) — from the scene after "about you", so it arrives as
+ * soon as we know. Anyone can switch it on or off from the footer.
+ */
+export function offerComfort(a: ConsultAnswers, scene: SceneId): boolean {
+  if (a.comfort || a.comfortOffered || scene === 'goals' || scene === 'about' || scene === 'circuit') return false
+  return a.goals.includes('ageing') || a.age === '55-64' || a.age === '65-plus'
+}
+
+function ComfortOffer({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
+  return (
+    <div
+      role="region"
+      aria-label="Comfort mode"
+      className="flex flex-col amp-anim-rise"
+      style={{
+        gap: 'var(--amp-space-3)',
+        marginBottom: 'var(--amp-space-5)',
+        padding: 'var(--amp-space-4)',
+        borderRadius: 'var(--amp-radius-tile)',
+        border: 'var(--amp-hairline) solid var(--amp-accent-line)',
+        background: 'var(--amp-accent-fill)',
+      }}
+    >
+      <p style={{ fontSize: 'var(--amp-text-body)' }}>
+        Want bigger text and buttons, and no fiddly dragging? Same questions, gentler pace.
+      </p>
+      <div className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
+        <Tile kind="toggle" layout="row" icon="comfort" label="Yes, comfort mode" selected={false} onSelect={onYes} />
+        <QuietLink onClick={onNo}>No thanks</QuietLink>
+      </div>
+    </div>
   )
 }
 

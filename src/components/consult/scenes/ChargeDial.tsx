@@ -3,6 +3,7 @@
 import { useCallback, type KeyboardEvent } from 'react'
 import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
 import { useDrag, type DragPoint } from '../useDrag'
+import { Glyph } from '../Glyph'
 import type { SceneProps } from './registry'
 
 /**
@@ -29,7 +30,7 @@ export function levelAt(x: number): number {
   return Math.min(ENERGY_MAX, Math.max(ENERGY_MIN, Math.ceil(x * ENERGY_MAX)))
 }
 
-export function ChargeDial({ answers, onAnswer, onInteract }: SceneProps) {
+export function ChargeDial({ answers, onAnswer, onInteract, comfort }: SceneProps) {
   const level = answers.energy
 
   const set = useCallback(
@@ -70,6 +71,36 @@ export function ChargeDial({ answers, onAnswer, onInteract }: SceneProps) {
   }
 
   const fill = level ? level / ENERGY_MAX : 0
+
+  // Comfort mode (C14): no dragging — a big number between two big buttons.
+  if (comfort) {
+    const step = (delta: number, label: string, icon: 'minus' | 'plus') => (
+      <button
+        type="button"
+        aria-label={label}
+        onClick={() => set((level ?? (delta > 0 ? 4 : 6)) + delta)}
+        className="amp-press flex items-center justify-center"
+        style={{ width: 'calc(var(--amp-target) * 1.25)', height: 'calc(var(--amp-target) * 1.25)', borderRadius: 'var(--amp-radius-pill)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', color: 'var(--amp-accent)' }}
+      >
+        <Glyph name={icon} size={28} />
+      </button>
+    )
+    return (
+      <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-4)' }}>
+        <div className="flex items-center" style={{ gap: 'var(--amp-space-6)' }}>
+          {step(-1, 'Less energy', 'minus')}
+          <p aria-live="polite" className="flex flex-col items-center">
+            <span style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-hero)', lineHeight: 1 }}>{level ?? '–'}</span>
+            <span style={{ color: 'var(--amp-ink-2)' }}>out of 10</span>
+          </p>
+          {step(1, 'More energy', 'plus')}
+        </div>
+        <p className="uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-title)', color: level ? 'var(--amp-calm)' : 'var(--amp-ink-3)' }}>
+          {level ? energyWord(level) : 'Tap to set'}
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-4)' }}>

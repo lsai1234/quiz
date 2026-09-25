@@ -5,6 +5,7 @@ import { DAYLIGHT_LABEL } from '@/lib/consult/summary'
 import type { Daylight } from '@/lib/consult/types'
 import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
 import { useDrag, type DragPoint } from '../useDrag'
+import { Tile } from '../controls'
 import type { SceneProps } from './registry'
 
 /**
@@ -52,7 +53,7 @@ export function stepNearest(x: number, y: number): number {
   return best
 }
 
-export function SunArc({ answers, onAnswer, onInteract }: SceneProps) {
+export function SunArc({ answers, onAnswer, onInteract, comfort }: SceneProps) {
   const current = answers.daylight
   const step = current ? DAYLIGHT_STEPS.indexOf(current) : 0
 
@@ -88,6 +89,17 @@ export function SunArc({ answers, onAnswer, onInteract }: SceneProps) {
     if (!(e.key in map)) return
     e.preventDefault()
     set(map[e.key])
+  }
+
+  // Comfort mode (C14): the four steps as big buttons, no dragging.
+  if (comfort) {
+    return (
+      <div role="radiogroup" aria-label="Daylight" className="grid grid-cols-1" style={{ gap: 'var(--amp-space-2)' }}>
+        {DAYLIGHT_STEPS.map((d, i) => (
+          <Tile key={d} kind="radio" layout="row" tone="sun" icon="sun" label={DAYLIGHT_LABEL[d]} selected={d === current} onSelect={() => set(i)} />
+        ))}
+      </div>
+    )
   }
 
   const sun = sunPosition(step)

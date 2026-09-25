@@ -46,7 +46,7 @@ export function readPlate(plate: Food[]): PlateRead {
   }
 }
 
-export function PlatePicker({ answers, onAnswer }: SceneProps) {
+export function PlatePicker({ answers, onAnswer, comfort }: SceneProps) {
   const plate = answers.plate ?? []
 
   function toggle(food: Food) {
@@ -59,7 +59,7 @@ export function PlatePicker({ answers, onAnswer }: SceneProps) {
 
   return (
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-4)' }}>
-      <div role="group" aria-label="Foods you eat most weeks" className="grid grid-cols-4" style={{ gap: 'var(--amp-space-2)' }}>
+      <div role="group" aria-label="Foods you eat most weeks" className={`grid ${comfort ? 'grid-cols-2' : 'grid-cols-4'}`} style={{ gap: 'var(--amp-space-2)' }}>
         {FOODS.map((f) => {
           const on = plate.includes(f.id)
           return (
@@ -71,7 +71,7 @@ export function PlatePicker({ answers, onAnswer }: SceneProps) {
               className="amp-press relative flex flex-col items-center justify-center text-center"
               style={{
                 gap: 'var(--amp-space-2)',
-                aspectRatio: '1 / 1.05',
+                aspectRatio: comfort ? undefined : '1 / 1.05',
                 minHeight: 'var(--amp-target)',
                 padding: 'var(--amp-space-2) var(--amp-space-1)',
                 borderRadius: 'var(--amp-radius-tile)',

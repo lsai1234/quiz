@@ -6,6 +6,7 @@ import { sleepHours } from '@/lib/consult/reactions'
 import type { SleepAnswer, SleepQuality } from '@/lib/consult/types'
 import { haptic, springTransition } from '@/lib/consult/motion'
 import { Segmented } from '../controls'
+import { Glyph } from '../Glyph'
 import { useDrag, type DragPoint } from '../useDrag'
 import type { SceneProps } from './registry'
 
@@ -28,7 +29,8 @@ export const TRACK_SPAN = 16 * 60
 export const STEP = 15
 export const MIN_GAP = 60
 const DEFAULT: SleepAnswer = { bed: 23 * 60, wake: 7 * 60, quality: null }
-const TICKS = [20, 23, 2, 5, 8, 11]
+/** Three ticks, not six: at large text sizes six clock labels don't fit a phone. */
+const TICKS = [20, 4, 12]
 
 /** Clock minutes → position along the bar, in minutes from 20:00. */
 export function toTrack(minutes: number): number {
@@ -61,7 +63,7 @@ export function moveHandle(window: SleepAnswer, which: 'bed' | 'wake', t: number
 
 const QUALITIES: SleepQuality[] = ['restful', 'ok', 'broken']
 
-export function SleepWindow({ answers, onAnswer, onInteract }: SceneProps) {
+export function SleepWindow({ answers, onAnswer, onInteract, comfort }: SceneProps) {
   const value = answers.sleep ?? DEFAULT
   const answered = answers.sleep !== null
   const grabbed = useRef<'bed' | 'wake'>('bed')
@@ -105,6 +107,52 @@ export function SleepWindow({ answers, onAnswer, onInteract }: SceneProps) {
   }
 
   const hours = sleepHours(value)
+
+  const quality = (
+    <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)' }}>
+      <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+        How well do you sleep?
+      </p>
+      <Segmented
+        label="How well do you sleep?"
+        options={QUALITIES.map((q) => ({ value: q, label: QUALITY_LABEL[q] }))}
+        value={value.quality}
+        onChange={(q) => onAnswer({ sleep: { ...value, quality: q } })}
+      />
+    </div>
+  )
+
+  // Comfort mode (C14): no drag. Two big steppers, half an hour a press.
+  if (comfort) {
+    const row = (which: 'bed' | 'wake', label: string) => {
+      const t = which === 'bed' ? bedT : wakeT
+      return (
+        <div
+          className="flex flex-wrap items-center justify-between"
+          style={{ gap: 'var(--amp-space-2) var(--amp-space-3)', padding: 'var(--amp-space-3) var(--amp-space-4)', borderRadius: 'var(--amp-radius-tile)', background: 'var(--amp-glass-solid)', border: 'var(--amp-hairline) solid var(--amp-edge)' }}
+        >
+          <span style={{ fontWeight: 'var(--amp-weight-medium)' }}>{label}</span>
+          <span className="flex flex-1 items-center justify-end" style={{ gap: 'var(--amp-space-3)' }}>
+            <BigStep label={`${label} earlier`} icon="minus" onClick={() => write(moveHandle(value, which, t - 30))} />
+            <span style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-lead)', minWidth: 'calc(var(--amp-space-10) + var(--amp-space-6))', textAlign: 'center' }}>
+              {clock(which === 'bed' ? value.bed : value.wake)}
+            </span>
+            <BigStep label={`${label} later`} icon="plus" onClick={() => write(moveHandle(value, which, t + 30))} />
+          </span>
+        </div>
+      )
+    }
+    return (
+      <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
+        <p aria-live="polite" className="text-center" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)' }}>
+          {hours} hours
+        </p>
+        {row('bed', 'Bedtime')}
+        {row('wake', 'Wake-up')}
+        {quality}
+      </div>
+    )
+  }
   const pct = (t: number) => `${(t / TRACK_SPAN) * 100}%`
   const move = dragging ? 'none' : springTransition('left', 'right')
 
@@ -212,17 +260,21 @@ export function SleepWindow({ answers, onAnswer, onInteract }: SceneProps) {
         ))}
       </div>
 
-      <div className="flex flex-col" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)' }}>
-        <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
-          How well do you sleep?
-        </p>
-        <Segmented
-          label="How well do you sleep?"
-          options={QUALITIES.map((q) => ({ value: q, label: QUALITY_LABEL[q] }))}
-          value={value.quality}
-          onChange={(q) => onAnswer({ sleep: { ...value, quality: q } })}
-        />
-      </div>
+      {quality}
     </div>
+  )
+}
+
+function BigStep({ label, icon, onClick }: { label: string; icon: 'plus' | 'minus'; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      className="amp-press flex items-center justify-center"
+      style={{ width: 'var(--amp-target)', height: 'var(--amp-target)', borderRadius: 'var(--amp-radius-pill)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', color: 'var(--amp-accent)' }}
+    >
+      <Glyph name={icon} size={20} />
+    </button>
   )
 }

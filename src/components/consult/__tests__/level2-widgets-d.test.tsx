@@ -140,6 +140,7 @@ describe('C13 speed run or deep charge', () => {
       const opt = def.placeholder?.options[0]
       if (opt?.set) s = flowReducer(s, { type: 'answer', patch: opt.set })
       if (opt?.toggle) s = flowReducer(s, { type: 'answer', patch: { goals: ['energy'] } })
+      if (s.sceneId === 'circuit') s = flowReducer(s, { type: 'answer', patch: { healthConsent: { accepted: true as const, version: 'test', at: '2026-09-25T00:00:00Z' } } })
       s = flowReducer(s, { type: 'next' })
     }
     expect(seen.slice(-2)).toEqual(['review', 'circuit'])
