@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuizStore, hasQuizProgress } from '@/lib/store'
 import { STACK_RETURN_HASH } from '@/lib/shop/stack-handoff'
 import { useQuizArmState } from '@/lib/experiments/client'
@@ -10,8 +10,14 @@ import { QuizV2 } from '@/components/quiz/v2/QuizV2'
 import { Act3Analysis } from './Act3Analysis'
 import { Act4Reveal } from './Act4Reveal'
 import { Act5Bundle } from './Act5Bundle'
-import { AmpConsult } from '@/components/consult/AmpConsult'
+import dynamic from 'next/dynamic'
 import { hasActiveConsultSession } from '@/lib/consult/persist'
+
+/**
+ * Loaded only when someone actually opens it, so the home page carries none of
+ * the consult's code while it isn't offered (the default).
+ */
+const AmpConsult = dynamic(() => import('@/components/consult/AmpConsult').then((m) => m.AmpConsult), { ssr: false })
 
 type Act = 1 | 2 | 3 | 4 | 5
 
@@ -47,7 +53,7 @@ export function ScrollExperience() {
    * at for seconds before tapping Start — so it is always settled before Act 2
    * mounts. Until it resolves, and forever if it never does, the answer is v1.
    */
-  const { arm, heroOffer } = useQuizArmState()
+  const { arm, heroOffer, resolved } = useQuizArmState()
 
   const useV2 = arm === 'v2'
 
@@ -80,19 +86,6 @@ export function ScrollExperience() {
       offering to pick the quiz up, which is the right failure: a reveal drawn
       from an empty blueprint would be a page of nothing.
     */
-    /*
-      A refresh mid-consult goes straight back into it. The consult reads its
-      own save and lands on the same scene; this only has to skip the hero.
-      Same tab only — someone returning another day gets the hero, and the
-      consult offers to resume once they choose it.
-    */
-    if (window.location.hash !== STACK_RETURN_HASH && hasActiveConsultSession()) {
-      setConsult(true)
-      setAct(2)
-      setAnimKey((k) => k + 1)
-      return
-    }
-
     if (window.location.hash === STACK_RETURN_HASH) {
       window.history.replaceState(null, '', window.location.pathname + window.location.search)
       if (useQuizStore.getState().stackBlueprint) {
@@ -101,6 +94,24 @@ export function ScrollExperience() {
       }
     }
   }, [])
+
+  /*
+    A refresh mid-consult goes straight back into it — but only once the
+    server has said the consult is live on this page. While the rollout is off
+    (the default) the home page never opens it, whatever is saved: the consult
+    is founders-only at /quizv2 until then. Same tab only — someone returning
+    another day gets the hero, and the consult offers to resume once chosen.
+  */
+  const resumedConsult = useRef(false)
+  useEffect(() => {
+    if (resumedConsult.current || !resolved || heroOffer === 'quiz-only' || act !== 1) return
+    resumedConsult.current = true
+    if (window.location.hash !== STACK_RETURN_HASH && hasActiveConsultSession()) {
+      setConsult(true)
+      setAct(2)
+      setAnimKey((k) => k + 1)
+    }
+  }, [resolved, heroOffer, act])
 
   function goTo(next: Act) {
     setAct(next)

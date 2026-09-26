@@ -25,7 +25,7 @@ interface ArmState {
   /** The parts of the experiment config the client legitimately needs. */
   aiSteer: boolean
   budget: QuizExperimentConfig['budget']
-  /** What the hero offers (H11). `both` until the server says otherwise — the rollout's default. */
+  /** What the hero offers (H11). Quiz only until the server says otherwise, so a slow or failed config never flashes the consult. */
   heroOffer: HeroOffer
   /** Whether the consult's words come from the AI layer. Off until the server says on. */
   consultAi: boolean
@@ -36,7 +36,7 @@ let state: ArmState = {
   resolved: false,
   aiSteer: DEFAULT_QUIZ_EXPERIMENT.aiSteer,
   budget: DEFAULT_QUIZ_EXPERIMENT.budget,
-  heroOffer: 'both',
+  heroOffer: 'quiz-only',
   consultAi: false,
 }
 
@@ -71,7 +71,7 @@ const SERVER_SNAPSHOT: ArmState = {
   resolved: false,
   aiSteer: DEFAULT_QUIZ_EXPERIMENT.aiSteer,
   budget: DEFAULT_QUIZ_EXPERIMENT.budget,
-  heroOffer: 'both',
+  heroOffer: 'quiz-only',
   consultAi: false,
 }
 

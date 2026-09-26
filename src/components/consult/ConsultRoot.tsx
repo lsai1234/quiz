@@ -4,6 +4,9 @@ import type { ReactNode } from 'react'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 import { motionVars, stateTransition } from '@/lib/consult/motion'
 import { consultFontVars } from './fonts'
+// The consult's token set, scoped to `.amp-consult`. Imported here, not in
+// globals.css, so only pages that draw the consult load it.
+import '@/app/consult.css'
 
 /**
  * The surface every consult screen sits on.

@@ -107,8 +107,15 @@ describe('H11 the hero honours the rollout', () => {
   const hero = (offer: 'quiz-only' | 'both' | 'consult-only') =>
     render(<Act1Hero onEnterQuiz={jest.fn()} onEnterConsult={jest.fn()} offer={offer} reducedMotion />)
 
-  it('offers both by default', () => {
+  it('offers the quiz only by default, as the home page did before the consult', () => {
     render(<Act1Hero onEnterQuiz={jest.fn()} onEnterConsult={jest.fn()} reducedMotion />)
+    expect(screen.getByText('Everyday wellness')).toBeInTheDocument()
+    expect(screen.queryByTestId('enter-consult')).toBeNull()
+    expect(screen.getByText('What’s your goal?')).toBeInTheDocument()
+  })
+
+  it('offers both when the rollout says so', () => {
+    hero('both')
     expect(screen.getByText('Everyday wellness')).toBeInTheDocument()
     expect(screen.getByTestId('enter-consult')).toBeInTheDocument()
   })
