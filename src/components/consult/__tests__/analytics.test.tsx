@@ -44,7 +44,7 @@ describe('H12 consult instrumentation', () => {
   it('reports a circuit check stop by kind only', () => {
     render(<AmpConsult />)
     chooseRoute()
-    for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
+    for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
     fireEvent.click(screen.getByRole('switch', { name: 'Kidney or liver condition' }))
     pressNext()

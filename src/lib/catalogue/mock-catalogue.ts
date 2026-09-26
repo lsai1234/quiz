@@ -257,6 +257,41 @@ const RAW_MOCK_CATALOGUE: CatalogueProduct[] = [
     warnings: [],
   },
 
+  // ─── GUT SLOT: fibre ──────────────────────────────────────────────────────────
+  // A sample fibre product, so the Amp Consult's fibre rule (plan v4) has
+  // something to pick in dev and tests. The real ones come from suppliers.
+
+  {
+    id: 'chrgd-psyllium-fibre',
+    title: 'CHRGD Psyllium Husk Fibre',
+    handle: 'chrgd-psyllium-fibre',
+    description: 'Unflavoured psyllium husk powder. Stir into water or a shake to add fibre to your day.',
+    imageUrl: null,
+    brand: 'CHRGD',
+    category: 'Gut Health',
+    stackSlots: ['gut'],
+    goals: ['health'],
+    dietaryTags: ['vegan', 'vegetarian', 'gluten-free', 'dairy-free'],
+    formats: ['powder'],
+    variants: [
+      { id: 'chrgd-psyllium-300g', title: 'Unflavoured / 300g', flavour: 'Unflavoured', size: '300g', price: 12.99, compareAtPrice: null, available: true },
+    ],
+    basePrice: 12.99,
+    compareAtPrice: null,
+    subscriptionEligible: true,
+    subscriptionProductId: null,
+    isSubscriptionOnly: false,
+    servings: 30,
+    swapGroup: 'fibre',
+    recommendationPriority: 5,
+    marginPriority: 5,
+    isCoreEligible: true,
+    isBoosterEligible: true,
+    hasStimulants: false,
+    shortReason: 'Adds fibre to your day in one scoop.',
+    warnings: [],
+  },
+
   // ─── RECOVERY SLOT ───────────────────────────────────────────────────────────
 
   {

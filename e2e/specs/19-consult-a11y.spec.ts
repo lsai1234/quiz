@@ -201,6 +201,36 @@ test.describe('consult accessibility (U7)', () => {
     expect(seen.length).toBeGreaterThanOrEqual(10)
   })
 
+  test('weight loss with a jab: the card opens, the safety check takes it from there, review shows it', async ({ page }) => {
+    await page.getByRole('radio', { name: /^Deep charge/ }).click()
+    await tabTo(page, /^Weight loss/)
+    await page.keyboard.press('Space')
+    await tabTo(page, /weight-loss injections or tablets/)
+    await page.keyboard.press('Space')
+    await expect(page.getByRole('switch', { name: /weight-loss injections or tablets/ })).toHaveAttribute('aria-checked', 'true')
+    await audit(page, 'weight loss card, open')
+    await nextByKeyboard(page)
+    for (let i = 0; i < 12; i++) {
+      if (await page.getByRole('switch', { name: 'None of these' }).count()) break
+      await answerByKeyboard(page)
+      await nextByKeyboard(page)
+    }
+    // The circuit check: consent, then the medication switch arrives on.
+    await page.getByRole('checkbox', { name: /^Use my answers here/ }).click()
+    const meds = page.getByRole('switch', { name: /^Weight-loss medication/ })
+    await expect(meds).toHaveAttribute('aria-checked', 'true')
+    await expect(meds).toContainText('You mentioned this on the first screen.')
+    await page.getByRole('checkbox', { name: /^Use this to tailor my recommendations/ }).click()
+    await page.getByRole('button', { name: /^Nausea/ }).click()
+    await audit(page, 'circuit check with weight-loss medication')
+    await page.getByRole('button', { name: 'Continue' }).click()
+    await expect(heading(page)).toHaveText(/what I've got/i)
+    await expect(page.getByRole('button', { name: /^Circuit check: Weight-loss medication · since starting: nausea/ })).toBeVisible()
+    await page.getByRole('button', { name: 'Looks right' }).click()
+    await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByText(/Tell whoever prescribes your weight-loss medication/)).toBeVisible()
+  })
+
   test('is founders-only: signed out, /quizv2 is the sign-in and /consult leads there', async ({ browser }) => {
     const page = await (await browser.newContext()).newPage()
     await page.goto('/consult')

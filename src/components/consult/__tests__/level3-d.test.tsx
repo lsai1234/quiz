@@ -41,9 +41,11 @@ describe('H9 exclusions carry into extras', () => {
     jest.useFakeTimers()
     render(<AmpConsult loadProducts={async () => MOCK_CATALOGUE} />)
     chooseRoute()
-    for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
+    for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     fireEvent.click(screen.getByRole('checkbox', { name: /^Use my answers here/ }))
     fireEvent.click(screen.getByRole('switch', { name: 'Blood-thinning medicine' }))
+    pressNext()
+    // Then the review, which is last now.
     pressNext()
     await act(async () => {
       await Promise.resolve()
@@ -81,13 +83,11 @@ describe('H10 change my answers', () => {
     render(<AmpConsult reopen loadProducts={async () => MOCK_CATALOGUE} onHandoff={onHandoff} />)
     expect(heading()).toHaveTextContent("Here's what I've got")
     const cards = screen.getAllByRole('button', { name: /\. Change$/ })
-    expect(cards).toHaveLength(10)
+    expect(cards).toHaveLength(11)
     expect(cards.every((c) => !/not answered/.test(c.getAttribute('aria-label') ?? ''))).toBe(true)
-
-    pressNext()
-    // The circuit check kept its answers for this session.
-    expect(heading()).toHaveTextContent('Circuit check')
-    expect(screen.getByRole('switch', { name: 'None of these' })).toHaveAttribute('aria-checked', 'true')
+    // The circuit check kept its answers for this session, so the review can
+    // go straight on: it's the last screen now.
+    expect(screen.getByRole('button', { name: /^Circuit check: None of these apply/ })).toBeInTheDocument()
     pressNext()
     await act(async () => {
       await Promise.resolve()

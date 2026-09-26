@@ -63,7 +63,9 @@ function Review({ order, answers, onEdit }: SceneProps) {
 
 /** What each interaction type is drawn with. Unregistered types fall back to the scripted placeholder. */
 export const SCENE_REGISTRY: Record<string, SceneEntry> = {
-  'goal-tiles': { component: GoalTiles, writes: ['goals'] },
+  // Goals also writes the circuit check's weight-loss medication switch, set
+  // from the Weight loss card and confirmed, with consent, on the circuit check.
+  'goal-tiles': { component: GoalTiles, writes: ['goals', 'circuit'] },
   'age-wheel': { component: AgeWheel, writes: ['age', 'sex'] },
   'training-week': { component: TrainingWeek, writes: ['week', 'intensity'] },
   'charge-dial': { component: ChargeDial, writes: ['energy'] },
@@ -73,7 +75,7 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'plate-picker': { component: PlatePicker, writes: ['plate'] },
   'body-map': { component: BodyMap, writes: ['body'] },
   'shelf-check': { component: ShelfCheck, writes: ['shelf'] },
-  'circuit-check': { component: CircuitCheck, writes: ['circuit', 'healthConsent'] },
+  'circuit-check': { component: CircuitCheck, writes: ['circuit', 'healthConsent', 'tailorConsent', 'symptoms'] },
   review: { component: Review, writes: [] },
 }
 

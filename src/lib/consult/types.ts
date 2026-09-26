@@ -25,7 +25,7 @@ export type SceneId =
 
 export type SectionId = 'you' | 'move' | 'rest' | 'fuel' | 'body' | 'check'
 
-export type ConsultGoal = 'performance' | 'energy' | 'sleep' | 'focus' | 'ageing' | 'allround'
+export type ConsultGoal = 'performance' | 'energy' | 'sleep' | 'focus' | 'ageing' | 'allround' | 'weight'
 
 /** `under-18` exists only to stop the consult: CHRGD is for adults (the 18+ gate, V5). */
 export type AgeBand = 'under-18' | '18-24' | '25-34' | '35-44' | '45-54' | '55-64' | '65-plus'
@@ -68,7 +68,13 @@ export type ShelfItem =
  * is here because the catalogue carries shellfish-derived products (krill oil,
  * glucosamine) and the quiz's own safety screen already asks it.
  */
-export type CircuitFlag = 'pregnancy' | 'blood-thinners' | 'other-prescription' | 'heart' | 'kidney-liver' | 'shellfish'
+export type CircuitFlag = 'pregnancy' | 'blood-thinners' | 'other-prescription' | 'heart' | 'kidney-liver' | 'shellfish' | 'weight-meds'
+
+/**
+ * What someone on weight-loss medication has noticed since starting it. Only
+ * asked, and only used, with the tailoring consent (`tailorConsent`).
+ */
+export type WeightSymptom = 'low-appetite' | 'nausea' | 'constipation' | 'tiredness'
 
 /** Speed run (fewer scenes, about a minute) or deep charge (everything). */
 export type Route = 'speed' | 'deep'
@@ -120,6 +126,14 @@ export interface ConsultAnswers {
    * and version the quiz's safety screen uses.
    */
   healthConsent: HealthDataConsent | null
+  /**
+   * A second, separate opt-in on the circuit check: use weight-loss
+   * medication to *add* to the stack, not only to keep things out. Health
+   * data like the circuit answers: never saved to the device, never sent to AI.
+   */
+  tailorConsent: HealthDataConsent | null
+  /** Symptoms since starting weight-loss medication. `[]` is "None of these". Same handling as the above. */
+  symptoms: WeightSymptom[] | null
   /** Comfort mode: bigger type and targets, fiddly widgets swapped for buttons. */
   comfort: boolean
   /** Whether comfort mode has been offered (so the offer is made once). */
@@ -144,6 +158,8 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   shelf: null,
   circuit: null,
   healthConsent: null,
+  tailorConsent: null,
+  symptoms: null,
   comfort: false,
   comfortOffered: false,
   notes: {},

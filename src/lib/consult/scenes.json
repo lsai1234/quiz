@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "sections": [
     {
       "id": "you",
@@ -90,7 +90,8 @@
         "sleep",
         "focus",
         "ageing",
-        "allround"
+        "allround",
+        "weight"
       ]
     },
     {
@@ -586,18 +587,6 @@
       }
     },
     {
-      "id": "review",
-      "section": "check",
-      "label": "Review",
-      "interaction": "review",
-      "speedRun": true,
-      "copy": {
-        "question": "Here's what I've got",
-        "hint": "Tap anything to change it. Nothing's been decided yet.",
-        "next": "Looks right"
-      }
-    },
-    {
       "id": "circuit",
       "section": "check",
       "label": "Circuit check",
@@ -643,6 +632,18 @@
             }
           }
         ]
+      }
+    },
+    {
+      "id": "review",
+      "section": "check",
+      "label": "Review",
+      "interaction": "review",
+      "speedRun": true,
+      "copy": {
+        "question": "Here's what I've got",
+        "hint": "Tap anything to change it. Nothing's been decided yet.",
+        "next": "Looks right"
       }
     }
   ]

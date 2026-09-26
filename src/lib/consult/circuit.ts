@@ -33,6 +33,8 @@ export type Ingredient =
   | 'st-johns-wort'
   | 'hormone-active'
   | 'shellfish'
+  /** Fat burners, as a kind: kept out for anyone on weight-loss medication. */
+  | 'fat-burner'
   /** Anything the catalogue flags as interaction-prone with prescription medicine. */
   | 'rx-interaction'
 
@@ -70,6 +72,14 @@ const FILTERS: Partial<Record<CircuitFlag, { exclude: Ingredient[]; why: string;
     exclude: ['shellfish'],
     why: 'it’s made from shellfish',
     pharmacist: false,
+  },
+  // Weight-loss medication (plan v4, A4): food intake is already low, and
+  // these add side-effect risk for no real benefit. A keep-out rule, so it
+  // needs only the circuit check's own consent, not the tailoring one.
+  'weight-meds': {
+    exclude: ['fat-burner', 'stimulant'],
+    why: 'your food intake is already lower, and these add side effects for no real benefit',
+    pharmacist: true,
   },
 }
 

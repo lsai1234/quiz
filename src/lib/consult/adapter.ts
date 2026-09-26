@@ -49,6 +49,7 @@ export const GOAL_TO_QUIZ: Record<ConsultGoal, Goal> = {
   focus: 'focus',
   ageing: 'health',
   allround: 'health',
+  weight: 'cutting',
 }
 
 const AGE_TO_QUIZ: Record<AgeBand, AgeBracket> = {
@@ -180,6 +181,7 @@ const IDENTITY: Record<ConsultGoal, { name: string; archetype: string; lead: str
   focus: { name: 'Clear Signal', archetype: 'The Sharp Mind', lead: 'built to keep you switched on' },
   ageing: { name: 'Long Game', archetype: 'The Long-Haul Mover', lead: 'built to keep you moving well for years' },
   allround: { name: 'Full Circuit', archetype: 'The All-Rounder', lead: 'built to cover the basics properly' },
+  weight: { name: 'Lean Line', archetype: 'The Steady Cutter', lead: 'built to keep you strong and full while you lose fat' },
 }
 
 /** The identity card, by rules: the top goal names it, the profile describes it. */

@@ -193,8 +193,13 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
       return a.shelf !== null
     case 'review':
       return true
-    case 'circuit':
-      return Boolean(a.healthConsent?.accepted) && a.circuit !== null && (a.circuit.none || a.circuit.flags.length > 0)
+    case 'circuit': {
+      if (!a.healthConsent?.accepted || a.circuit === null || !(a.circuit.none || a.circuit.flags.length > 0)) return false
+      // With the tailoring opt-in, the symptom picker is part of the answer
+      // ("None of these" counts); without it, the symptoms aren't asked.
+      if (a.circuit.flags.includes('weight-meds') && a.tailorConsent?.accepted) return a.symptoms !== null
+      return true
+    }
   }
 }
 
@@ -323,6 +328,17 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
       if (state.phase !== 'scenes') return state
       if (!isAnswered(state.sceneId, state.answers)) return state
       state = { ...state, answers: fillBlank(state.sceneId, state.answers) }
+      // The stops come first, before any "back to review": an edit made from
+      // the review that ought to stop the consult still stops it.
+      // The 18+ gate (V5): an under-18 answer ends the consult at "about you",
+      // before a single health question.
+      if (state.sceneId === 'about' && state.answers.age === 'under-18') {
+        return { ...state, phase: 'stop', direction: 'forward', returnTo: null }
+      }
+      // The circuit check is the only other scene that can end the consult (H3).
+      if (state.sceneId === 'circuit' && circuitOutcome(state.answers).kind === 'stop') {
+        return { ...state, phase: 'stop', direction: 'forward', returnTo: null }
+      }
       if (state.returnTo && state.returnTo !== state.sceneId) {
         return {
           ...state,
@@ -332,16 +348,12 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
           direction: 'forward',
         }
       }
-      // The 18+ gate (V5): an under-18 answer ends the consult at "about you",
-      // before a single health question.
-      if (state.sceneId === 'about' && state.answers.age === 'under-18') {
-        return { ...state, phase: 'stop', direction: 'forward' }
-      }
-      // The circuit check is the only other scene that can end the consult (H3).
-      if (state.sceneId === 'circuit' && circuitOutcome(state.answers).kind === 'stop') {
-        return { ...state, phase: 'stop', direction: 'forward' }
-      }
       const next = sceneAfter(state.sceneId, state.answers)
+      // Nothing is decided without the circuit check. Its answers are never
+      // saved, so a review reopened after a reload goes back through it.
+      if (!next && !isAnswered('circuit', state.answers)) {
+        return { ...state, history: [...state.history, state.sceneId], sceneId: 'circuit', returnTo: 'review', direction: 'forward' }
+      }
       if (!next) return { ...state, phase: 'analysis', direction: 'forward' }
       return { ...state, history: [...state.history, state.sceneId], sceneId: next, direction: 'forward' }
     }
@@ -357,7 +369,7 @@ export function flowReducer(state: FlowState, action: FlowAction): FlowState {
     case 'decline':
       return {
         ...state,
-        answers: { ...state.answers, circuit: null, healthConsent: null },
+        answers: { ...state.answers, circuit: null, healthConsent: null, tailorConsent: null, symptoms: null },
         phase: 'stop',
         direction: 'forward',
       }

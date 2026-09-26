@@ -30,9 +30,9 @@ function Harness({ id, start = {}, comfort = false, spy }: { id: string; start?:
 describe('C2 goal tiles', () => {
   const tile = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) })
 
-  it('offers six goals', () => {
+  it('offers seven goals', () => {
     render(<Harness id="goals" />)
-    expect(screen.getByRole('group', { name: 'Goals, up to three' }).querySelectorAll('button[aria-pressed]')).toHaveLength(6)
+    expect(screen.getByRole('group', { name: 'Goals, up to three' }).querySelectorAll('button[aria-pressed]')).toHaveLength(7)
   })
 
   it('numbers goals in the order tapped', () => {

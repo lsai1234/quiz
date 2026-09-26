@@ -28,10 +28,13 @@ describe('the scene registry', () => {
     }
   })
 
-  it('never lets two scenes write the same answer', () => {
+  it('never lets two scenes write the same answer, bar the one documented exception', () => {
     const owners = new Map<string, string>()
     for (const scene of SCENES) {
       for (const key of resolveScene(scene).writes) {
+        // The Weight loss card sets the circuit check's medication switch,
+        // which the circuit check then confirms with consent (plan v4, D1).
+        if (scene.id === 'goals' && key === 'circuit') continue
         expect({ key, owner: owners.get(key) ?? scene.id }).toEqual({ key, owner: scene.id })
         owners.set(key, scene.id)
       }

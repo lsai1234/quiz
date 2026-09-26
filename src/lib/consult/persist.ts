@@ -57,12 +57,15 @@ function session(): Storage | null {
 /** The state as it is written to disk: without the circuit check's answers. */
 export function forStorage(state: FlowState): FlowState {
   // The consent goes with the answers it covered: both are asked again.
-  const answers = { ...state.answers, circuit: null, healthConsent: null }
+  // Weight-loss medication, its tailoring consent and symptoms are circuit answers too.
+  const answers = { ...state.answers, circuit: null, healthConsent: null, tailorConsent: null, symptoms: null }
   // A finished consult stays finished (H10 reopens its review). Otherwise, if
   // they were on the circuit check or past it, resume on the circuit check.
   if (state.phase === 'done') return { ...state, answers }
   if (state.phase === 'stop' && state.sceneId !== 'circuit') return { ...state, answers, phase: 'scenes' }
-  const past = state.sceneId === 'circuit' || (state.phase !== 'scenes' && state.phase !== 'intro')
+  // The review now comes after the circuit check (plan v4), so a review saved
+  // without the check's answers resumes on the check, not past it.
+  const past = state.sceneId === 'circuit' || state.sceneId === 'review' || (state.phase !== 'scenes' && state.phase !== 'intro')
   return {
     ...state,
     answers,

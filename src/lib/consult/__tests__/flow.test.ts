@@ -31,10 +31,10 @@ function runToEnd(state: FlowState = start()): FlowState {
 }
 
 describe('the script', () => {
-  it('has the twelve scenes of the plan, in order', () => {
+  it('has the twelve scenes of the plan, the safety check before the review (plan v4)', () => {
     expect(SCENES.map((s) => s.id)).toEqual([
       'goals', 'about', 'training', 'energy', 'sleep', 'daylight',
-      'caffeine', 'food', 'body', 'shelf', 'review', 'circuit',
+      'caffeine', 'food', 'body', 'shelf', 'circuit', 'review',
     ])
   })
 
@@ -64,11 +64,30 @@ describe('a full run on scripts', () => {
     expect(end.history).toEqual(SCENES.map((s) => s.id).slice(0, -1))
   })
 
-  it('passes through the review and the circuit check before anything is decided', () => {
+  it('passes through the circuit check and then the review before anything is decided', () => {
     const end = runToEnd()
-    expect(end.history).toContain('review')
-    expect(end.history[end.history.length - 1]).toBe('review')
+    expect(end.phase).toBe('analysis')
+    expect(end.history.slice(-1)).toEqual(['circuit'])
+    expect(end.sceneId).toBe('review')
     expect(end.answers.circuit).not.toBeNull()
+  })
+
+  it('stops an edit made from the review that ought to stop, rather than returning to it', () => {
+    let s = runToEnd()
+    s = { ...s, phase: 'scenes', sceneId: 'review' }
+    s = flowReducer(s, { type: 'jump', sceneId: 'circuit', returnTo: 'review' })
+    s = flowReducer(s, { type: 'answer', patch: { circuit: { flags: ['pregnancy'], none: false } } })
+    s = flowReducer(s, { type: 'next' })
+    expect(s.phase).toBe('stop')
+  })
+
+  it('never analyses without the circuit check: a review with none goes back through it', () => {
+    let s = runToEnd()
+    s = { ...s, phase: 'scenes', sceneId: 'review', answers: { ...s.answers, circuit: null, healthConsent: null } }
+    s = flowReducer(s, { type: 'next' })
+    expect(s.phase).toBe('scenes')
+    expect(s.sceneId).toBe('circuit')
+    expect(s.returnTo).toBe('review')
   })
 
   it('fills the battery to 100% at the end', () => {

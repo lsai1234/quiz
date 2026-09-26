@@ -17,6 +17,7 @@ const GOAL_WORDS: Record<ConsultGoal, string> = {
   focus: 'focus',
   ageing: 'healthy ageing',
   allround: 'all-round health',
+  weight: 'weight loss',
 }
 
 const AGE_WORDS: Record<AgeBand, string> = {

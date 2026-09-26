@@ -18,6 +18,7 @@ import type {
   Sex,
   ShelfItem,
   SleepQuality,
+  WeightSymptom,
 } from './types'
 
 export const GOAL_LABEL: Record<ConsultGoal, string> = {
@@ -27,6 +28,7 @@ export const GOAL_LABEL: Record<ConsultGoal, string> = {
   focus: 'Focus',
   ageing: 'Healthy ageing',
   allround: 'All-round health',
+  weight: 'Weight loss',
 }
 
 export const AGE_LABEL: Record<AgeBand, string> = {
@@ -123,6 +125,14 @@ export const CIRCUIT_LABEL: Record<CircuitFlag, string> = {
   heart: 'Heart condition or high blood pressure',
   'kidney-liver': 'Kidney or liver condition',
   shellfish: 'Shellfish allergy',
+  'weight-meds': 'Weight-loss medication (injections or tablets)',
+}
+
+export const SYMPTOM_LABEL: Record<WeightSymptom, string> = {
+  'low-appetite': 'Low appetite',
+  nausea: 'Nausea',
+  constipation: 'Constipation',
+  tiredness: 'Tiredness',
 }
 
 export function clock(minutes: number): string {
@@ -186,8 +196,12 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
       return a.shelf.length === 0 ? 'Nothing yet' : list(a.shelf.map((s) => SHELF_LABEL[s]))
     case 'review':
       return ''
-    case 'circuit':
+    case 'circuit': {
       if (!a.circuit) return ''
-      return a.circuit.none ? 'None of these' : list(a.circuit.flags.map((f) => CIRCUIT_LABEL[f]))
+      if (a.circuit.none) return 'None of these apply'
+      const flags = a.circuit.flags.map((f) => (f === 'weight-meds' ? 'Weight-loss medication' : CIRCUIT_LABEL[f]))
+      const feeling = a.tailorConsent?.accepted && a.symptoms?.length ? ` · since starting: ${a.symptoms.map((s) => SYMPTOM_LABEL[s].toLowerCase()).join(', ')}` : ''
+      return list(flags) + feeling
+    }
   }
 }

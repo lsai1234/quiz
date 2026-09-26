@@ -54,6 +54,10 @@ export const GLOSSARY = {
     title: 'The circuit check',
     body: 'A few fixed safety questions before anything is suggested. They rule products out, never in, and nothing from them is ever sent to AI. Some answers mean a stack isn’t right, and it says so.',
   },
+  weight: {
+    title: 'Weight loss',
+    body: 'Losing fat while keeping your strength, with or without a weight-loss jab. If you use injections or tablets you can say so, and it stays private: it’s confirmed in the safety check and never sent to AI.',
+  },
   'oily-fish': {
     title: 'Oily fish',
     body: 'Salmon, mackerel, sardines, trout, herring and fresh tuna. Tinned tuna doesn’t count here. The plate is asked about so the stack fills gaps rather than doubling up on what you already eat.',

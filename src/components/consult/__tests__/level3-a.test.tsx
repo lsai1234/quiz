@@ -108,15 +108,18 @@ describe('H1 review screen', () => {
   function toReview() {
     render(<AmpConsult />)
     chooseRoute()
-    for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
+    // Ten scenes, then the circuit check, then the review (plan v4).
+    for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
     expect(heading()).toHaveTextContent("Here's what I've got")
   }
 
   it('shows every answer as a tappable card, before anything is decided', () => {
     toReview()
     expect(screen.getByText("Tap anything to change it. Nothing's been decided yet.")).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /\. Change$/ })).toHaveLength(10)
+    expect(screen.getAllByRole('button', { name: /\. Change$/ })).toHaveLength(11)
     expect(screen.getByRole('button', { name: /^Goals: 1\. Performance\. Change$/ })).toBeInTheDocument()
+    // The safety answers are on the review now it comes last.
+    expect(screen.getByRole('button', { name: /^Circuit check: None of these apply\. Change$/ })).toBeInTheDocument()
   })
 
   it('edits one answer and comes back with everything else intact', () => {
@@ -174,17 +177,17 @@ describe('H2 circuit check', () => {
   it('runs in calm mode, with Amp calm and no "Tell Amp more"', () => {
     const { container } = render(<AmpConsult />)
     chooseRoute()
-    for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
+    for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     expect(heading()).toHaveTextContent('Circuit check')
     expect(container.querySelector('.amp-consult')).toHaveAttribute('data-mode', 'calm')
     expect(screen.getByRole('img', { name: 'Amp, calm' })).toBeInTheDocument()
     expect(screen.queryByText('Tell Amp more')).toBeNull()
   })
 
-  it('is part of every consult, on both routes', () => {
+  it('is part of every consult, on both routes, just before the review', () => {
     for (const route of ['speed', 'deep'] as const) {
       const order = SCENES.filter((s) => route === 'deep' || s.speedRun).map((s) => s.id)
-      expect(order[order.length - 1]).toBe('circuit')
+      expect(order.slice(-2)).toEqual(['circuit', 'review'])
     }
   })
 })

@@ -70,7 +70,7 @@ describe('V6 lost-signal fallback', () => {
   it('asks for the first scene’s words while the route choice is on screen', async () => {
     setQuizArm({ arm: 'v1', consultAi: true })
     global.fetch = jest.fn(async (u: RequestInfo | URL, init?: RequestInit) =>
-      reply(String(u) === '/api/consult/copy' && JSON.parse(String(init?.body)).sceneId === 'goals' ? { copy: { question: 'What are you chasing?', hint: 'Up to three.', labels: { performance: 'Lift more', energy: 'Last all day', sleep: 'Wake up ready', focus: 'Stay sharp', ageing: 'Keep moving well', allround: 'A bit of everything' } } } : { fallback: true }),
+      reply(String(u) === '/api/consult/copy' && JSON.parse(String(init?.body)).sceneId === 'goals' ? { copy: { question: 'What are you chasing?', hint: 'Up to three.', labels: { performance: 'Lift more', energy: 'Last all day', sleep: 'Wake up ready', focus: 'Stay sharp', ageing: 'Keep moving well', allround: 'A bit of everything', weight: 'Lose fat, keep strong' } } } : { fallback: true }),
     ) as typeof fetch
     render(<AmpConsult />)
     await settle()
@@ -117,7 +117,7 @@ describe('V7 what’s this?', () => {
   it('sits on every goal tile', () => {
     render(<AmpConsult />)
     chooseRoute()
-    expect(screen.getAllByRole('button', { name: /^What’s / })).toHaveLength(6)
+    expect(screen.getAllByRole('button', { name: /^What’s / })).toHaveLength(7)
   })
 
   it('keeps every approved entry clear of claims and products', () => {

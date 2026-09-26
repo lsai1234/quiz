@@ -17,7 +17,9 @@ interface Props {
 }
 
 export function ReviewScene({ scenes, answers, onEdit }: Props) {
-  const reviewable = scenes.filter((id) => id !== 'review' && id !== 'circuit')
+  // The safety check comes before the review (plan v4), so its answers are
+  // here too, and editing them goes back through the check itself.
+  const reviewable = scenes.filter((id) => id !== 'review')
   return (
     <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
       {reviewable.map((id) => {

@@ -62,6 +62,7 @@ export type GlyphName =
   | 'info'
   | 'spark'
   | 'mic'
+  | 'scale'
   | 'speaker'
   | 'camera'
   | 'comfort'
@@ -276,6 +277,13 @@ const PATHS: Record<GlyphName, ReactNode> = {
     <>
       <rect x="9" y="3" width="6" height="11" rx="3" />
       <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+    </>
+  ),
+  scale: (
+    <>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+      <path d="M7.5 10a4.5 4.5 0 0 1 9 0" />
+      <path d="m12 10 1.8-2.2" />
     </>
   ),
   speaker: (

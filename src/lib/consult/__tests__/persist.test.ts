@@ -51,6 +51,8 @@ describe('saving the consult', () => {
     let s = advancedTo('circuit')
     s = flowReducer(s, { type: 'answer', patch: { circuit: { flags: [], none: true }, healthConsent: { accepted: true as const, version: 'test', at: '2026-09-25T00:00:00Z' } } })
     s = flowReducer(s, { type: 'next' })
+    expect(s.sceneId).toBe('review')
+    s = flowReducer(s, { type: 'next' })
     expect(s.phase).toBe('analysis')
     const stored = forStorage(s)
     expect(stored.phase).toBe('scenes')

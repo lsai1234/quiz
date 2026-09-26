@@ -53,6 +53,11 @@ function check(p: Persona, e: Expectation): string[] {
   if (e.includesGroup && !products.some((x) => e.includesGroup!.includes(x.swapGroup))) failures.push(`missing one of ${e.includesGroup.join('/')}`)
   for (const g of e.excludesGroup ?? []) if (products.some((x) => x.swapGroup === g)) failures.push(`includes ${g}`)
   if (e.veganOnly) for (const x of products) if (!x.dietaryTags.includes('vegan')) failures.push(`not vegan: ${x.id}`)
+  for (const groups of e.essentialsInclude ?? []) {
+    const essentials = payload.tiers.essentials.map((id) => byId.get(id)!)
+    if (!essentials.some((x) => groups.includes(x.swapGroup))) failures.push(`Essentials missing one of ${groups.join('/')}`)
+  }
+  if (e.tailored !== undefined && payload.flags.tailored !== e.tailored) failures.push(`tailored should be ${e.tailored}`)
   if (e.maxCaffeineSources !== undefined) {
     const n = products.filter((x) => ingredientsOf(x).has('caffeine')).length
     if (n > e.maxCaffeineSources) failures.push(`${n} caffeine sources`)
@@ -61,9 +66,9 @@ function check(p: Persona, e: Expectation): string[] {
 }
 
 describe('the persona suite', () => {
-  it('has 25 personas', () => {
-    expect(PERSONAS).toHaveLength(25)
-    expect(new Set(PERSONAS.map((p) => p.id)).size).toBe(25)
+  it('has 31 personas: the plan’s 25 and six for weight loss', () => {
+    expect(PERSONAS).toHaveLength(31)
+    expect(new Set(PERSONAS.map((p) => p.id)).size).toBe(31)
   })
 
   describe.each(PERSONAS.map((p) => [p.id, p.who, p] as const))('%s %s', (_id, _who, p) => {

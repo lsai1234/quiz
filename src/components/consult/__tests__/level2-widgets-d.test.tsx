@@ -132,7 +132,7 @@ describe('C13 speed run or deep charge', () => {
     expect(visibleScenes({ ...EMPTY_ANSWERS, route: 'speed' }).length * 5).toBeLessThan(60)
   })
 
-  it('still passes through the review and the circuit check on a speed run', () => {
+  it('still passes through the circuit check and the review on a speed run', () => {
     let s = flowReducer(initialFlow('c', 0), { type: 'route', route: 'speed' })
     const seen: string[] = []
     for (let guard = 0; guard < 20 && s.phase === 'scenes'; guard++) {
@@ -144,7 +144,7 @@ describe('C13 speed run or deep charge', () => {
       if (s.sceneId === 'circuit') s = flowReducer(s, { type: 'answer', patch: { healthConsent: { accepted: true as const, version: 'test', at: '2026-09-25T00:00:00Z' } } })
       s = flowReducer(s, { type: 'next' })
     }
-    expect(seen.slice(-2)).toEqual(['review', 'circuit'])
+    expect(seen.slice(-2)).toEqual(['circuit', 'review'])
     expect(s.phase).toBe('analysis')
   })
 

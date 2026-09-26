@@ -11,7 +11,7 @@ beforeEach(() => {
 function toCircuit() {
   render(<AmpConsult onExit={jest.fn()} />)
   chooseRoute()
-  for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
+  for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
   expect(heading()).toHaveTextContent('Circuit check')
 }
 

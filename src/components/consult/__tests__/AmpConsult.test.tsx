@@ -67,7 +67,7 @@ describe('AmpConsult', () => {
 
   it('switches to calm mode for the circuit check', () => {
     const { container } = render(<AmpConsult />)
-    for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
+    for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     expect(heading()).toHaveTextContent('Circuit check')
     expect(container.querySelector('.amp-consult')).toHaveAttribute('data-mode', 'calm')
     expect(screen.queryByText('Tell Amp more')).toBeNull()
@@ -139,7 +139,7 @@ describe('Amp', () => {
 
   it('goes calm for the circuit check', () => {
     render(<AmpConsult />)
-    for (let i = 0; i < 11; i++) pickFirstOptionAndNext()
+    for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     expect(screen.getByRole('img', { name: 'Amp, calm' })).toBeInTheDocument()
   })
 

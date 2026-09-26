@@ -46,16 +46,20 @@ export interface HandoffPayload {
   profile: ChargeProfile
   tiers: { essentials: string[]; standard: string[]; complete: string[] }
   excluded: Ingredient[]
-  flags: { pharmacist_note: boolean }
+  /**
+   * `tailored`: the stack was shaped by weight-loss medication, with its own
+   * opt-in. Only the fact, never the medication or symptoms themselves.
+   */
+  flags: { pharmacist_note: boolean; tailored: boolean }
   reasons: Record<string, string>
   /** Register claim IDs per SKU in Complete: the only claim wording anything may show (see `claims.ts`). */
   claims: Record<string, string[]>
   notes: string[]
 }
 
-const GOALS: ConsultGoal[] = ['performance', 'energy', 'sleep', 'focus', 'ageing', 'allround']
+const GOALS: ConsultGoal[] = ['performance', 'energy', 'sleep', 'focus', 'ageing', 'allround', 'weight']
 const INGREDIENTS: Ingredient[] = [
-  'caffeine', 'stimulant', 'vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'st-johns-wort', 'hormone-active', 'shellfish', 'rx-interaction',
+  'caffeine', 'stimulant', 'vitamin-k', 'fish-oil', 'ginkgo', 'turmeric', 'st-johns-wort', 'hormone-active', 'shellfish', 'fat-burner', 'rx-interaction',
 ]
 
 export function buildHandoff(opts: {
@@ -81,7 +85,7 @@ export function buildHandoff(opts: {
       complete: [...engine.tiers.complete],
     },
     excluded: [...engine.excludedIngredients],
-    flags: { pharmacist_note: engine.flags.pharmacistNote },
+    flags: { pharmacist_note: engine.flags.pharmacistNote, tailored: engine.flags.tailored },
     reasons: Object.fromEntries(engine.ranked.map((r) => [r.id, r.reason])),
     claims: Object.fromEntries(engine.ranked.map((r) => [r.id, [...r.claims]])),
     notes: [...engine.notes],
@@ -136,6 +140,7 @@ export function validateHandoff(value: unknown): Validation {
 
   if (!isStringArray(v.excluded) || !v.excluded.every((i) => INGREDIENTS.includes(i as Ingredient))) errors.push('excluded must list known ingredient families')
   if (!v.flags || typeof v.flags.pharmacist_note !== 'boolean') errors.push('flags.pharmacist_note must be a boolean')
+  if (v.flags && typeof v.flags.tailored !== 'boolean') errors.push('flags.tailored must be a boolean')
   if (!v.reasons || typeof v.reasons !== 'object') errors.push('reasons is missing')
   if (!v.claims || typeof v.claims !== 'object') errors.push('claims is missing')
   else {

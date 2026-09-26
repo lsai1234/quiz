@@ -409,3 +409,59 @@ export function Hint({ children, tone }: { children: ReactNode; tone?: Tone }) {
     </p>
   )
 }
+
+/* ── Switch ─────────────────────────────────────────────────────────────── */
+
+/** A big plain switch row. `inert` looks off-limits but still takes the tap, to explain itself. */
+export function Switch({ label, sub, on, inert = false, onToggle }: { label: string; sub?: string; on: boolean; inert?: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-disabled={inert || undefined}
+      onClick={onToggle}
+      className="flex w-full items-center justify-between text-left"
+      style={{
+        gap: 'var(--amp-space-3)',
+        minHeight: 'calc(var(--amp-target) + var(--amp-space-2))',
+        padding: 'var(--amp-space-2) var(--amp-space-4)',
+        borderRadius: 'var(--amp-radius-tile)',
+        border: `var(--amp-hairline) solid ${on ? 'var(--amp-accent)' : 'var(--amp-edge)'}`,
+        background: 'var(--amp-glass-solid)',
+        color: 'var(--amp-ink)',
+        opacity: inert ? 0.5 : 1,
+        fontSize: 'var(--amp-text-body)',
+        transition: stateTransition('border-color', 'opacity'),
+      }}
+    >
+      <span className="flex min-w-0 flex-col">
+        <span>{label}</span>
+        {sub && <span style={{ marginTop: 'var(--amp-space-1)', fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-tight)', color: 'var(--amp-ink-2)' }}>{sub}</span>}
+      </span>
+      <span
+        aria-hidden
+        className="relative shrink-0"
+        style={{
+          width: 'calc(var(--amp-space-10) + var(--amp-space-2))',
+          height: 'var(--amp-space-6)',
+          borderRadius: 'var(--amp-radius-pill)',
+          background: on ? 'var(--amp-accent)' : 'var(--amp-edge-strong)',
+          transition: stateTransition('background-color'),
+        }}
+      >
+        <span
+          className="absolute top-1/2 -translate-y-1/2"
+          style={{
+            left: on ? 'calc(100% - var(--amp-space-5) - var(--amp-hairline) * 2)' : 'calc(var(--amp-hairline) * 2)',
+            width: 'var(--amp-space-5)',
+            height: 'var(--amp-space-5)',
+            borderRadius: 'var(--amp-radius-pill)',
+            background: on ? 'var(--amp-ground)' : 'var(--amp-ink-3)',
+            transition: stateTransition('left', 'background-color'),
+          }}
+        />
+      </span>
+    </button>
+  )
+}

@@ -44,7 +44,7 @@ import { readPlate } from './plate'
 import { GOAL_LABEL, SHELF_LABEL } from './summary'
 import type { ConsultAnswers, ConsultGoal } from './types'
 
-export const ENGINE_VERSION = 'engine-2'
+export const ENGINE_VERSION = 'engine-3'
 
 /** Caffeinated drinks a day at which nothing with caffeine goes in the stack. */
 export const CAFFEINE_CEILING = 4
@@ -87,13 +87,55 @@ export interface EngineResult {
   excluded: ExcludedEntry[]
   /** Lines for the handoff screen: what was kept out and skipped. */
   notes: string[]
-  flags: { pharmacistNote: boolean }
+  flags: { pharmacistNote: boolean; tailored: boolean }
   needs: Needs
   /** Goals nothing in the stack meets. */
   unmetGoals: ConsultGoal[]
 }
 
 /* ── 1. Needs ───────────────────────────────────────────────────────────── */
+
+/** On weight-loss medication, and opted in to having it shape the stack. */
+export function isTailored(a: Pick<ConsultAnswers, 'circuit' | 'tailorConsent'>): boolean {
+  return Boolean(a.circuit?.flags.includes('weight-meds') && a.tailorConsent?.accepted)
+}
+
+/**
+ * Needs that take the first places in Essentials, in this order, for someone
+ * tailored on weight-loss medication: protein and a multivitamin, then the
+ * product for the symptom that matters most.
+ */
+export interface Pin {
+  need: NeedId
+  /** Kinds tried first, in order, before anything else meeting the need. */
+  prefer: string[]
+}
+
+export function pinnedNeeds(a: ConsultAnswers): Pin[] {
+  if (!isTailored(a)) return []
+  const symptoms = a.symptoms ?? []
+  const gentle = symptoms.includes('nausea') || symptoms.includes('low-appetite')
+  const pins: Pin[] = [
+    // Nausea or a small appetite: clear whey (or a bar) before a milky shake.
+    { need: 'protein', prefer: gentle ? ['protein-clear', 'protein-bar', 'protein-plant'] : [] },
+    { need: 'basics', prefer: ['multivitamin'] },
+  ]
+  if (symptoms.includes('constipation')) pins.push({ need: 'gut', prefer: ['fibre'] })
+  if (symptoms.includes('nausea')) pins.push({ need: 'hydration', prefer: ['electrolytes'] })
+  return pins
+}
+
+/**
+ * Protein that suits a queasy stomach or a small appetite: clear whey over a
+ * milky shake, and never a mass gainer. Returns why a kind is out, or null.
+ */
+function proteinOut(a: ConsultAnswers, group: string): string | null {
+  if (!isTailored(a)) return null
+  const symptoms = a.symptoms ?? []
+  if (symptoms.includes('nausea') && (group === 'protein-whey' || group === 'protein-mass')) return 'clear whey sits easier than a milky shake when you feel queasy'
+  if (symptoms.includes('low-appetite') && group === 'protein-mass') return 'a mass gainer is too much when your appetite is low'
+  return null
+}
 
 export function scoreNeeds(a: ConsultAnswers): Needs {
   const needs = Object.fromEntries(NEEDS.map((n) => [n, { total: 0, sources: [] }])) as unknown as Needs
@@ -126,6 +168,18 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
   if (a.intensity === 'hard' && sessions > 0) {
     add('recovery', 1, 'Most sessions are flat out')
     add('hydration', 1, 'Most sessions are flat out')
+  }
+
+  // Weight-loss medication, with the tailoring opt-in (plan v4, A4). The
+  // reasons never name the medication: they're kept with the stack.
+  if (isTailored(a)) {
+    add('protein', 8, 'To keep your protein up while you’re eating less')
+    add('basics', 6, 'To cover the basics while you’re eating less')
+    const symptoms = a.symptoms ?? []
+    if (symptoms.includes('constipation')) add('gut', 6, 'To help keep things moving')
+    if (symptoms.includes('nausea')) add('hydration', 5, 'To keep your fluids and salts up when you feel queasy')
+    if (symptoms.includes('tiredness')) add('b12-iron', 4, 'For the tiredness you mentioned')
+    if (sessions >= 3) add('strength', 4, `You train ${sessions} times a week`)
   }
 
   // Energy.
@@ -257,6 +311,11 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
       excluded.push({ what: product.id, why: 'it isn’t vegan and your plate is fully plant-based' })
       continue
     }
+    const unsuited = proteinOut(a, product.swapGroup)
+    if (unsuited) {
+      excluded.push({ what: product.id, why: unsuited })
+      continue
+    }
     const covered = shelf.find((s) => SHELF_COVERS[s].includes(product.swapGroup))
     if (covered) {
       excluded.push({ what: product.id, why: `you already take ${SHELF_LABEL[covered].toLowerCase()}` })
@@ -272,7 +331,22 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
   const picked: Candidate[] = []
   const families = new Set<string>()
   let caffeineSources = shelfCaffeine ? 1 : 0
+
+  // Pinned needs first (weight-loss medication): the best product for each,
+  // in order, so they lead Essentials. Nothing pinned is caffeinated.
+  for (const { need, prefer } of pinnedNeeds(a)) {
+    const free = (c: Candidate) => !picked.some((p) => p.product.id === c.product.id) && !families.has(familyOf(c.product)) && !c.ingredients.has('caffeine')
+    const meets = (c: Candidate) => c.need === need || (kindOf(c.product)?.meets[need] ?? 0) >= 0.5
+    const best =
+      prefer.map((group) => candidates.find((c) => free(c) && c.product.swapGroup === group)).find(Boolean) ??
+      candidates.find((c) => free(c) && meets(c))
+    if (!best) continue
+    families.add(familyOf(best.product))
+    picked.push({ ...best, need, reason: needs[need].sources.slice().sort((x, y) => y.weight - x.weight)[0]?.why ?? best.reason })
+  }
+
   for (const c of candidates) {
+    if (picked.some((p) => p.product.id === c.product.id)) continue
     const family = familyOf(c.product)
     if (families.has(family)) continue
     if (c.ingredients.has('caffeine')) {
@@ -325,6 +399,11 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
   if (outcome.pharmacistNote) {
     notes.push('Pharmacist note travels with the stack: check before starting, as you take prescription medicine.')
   }
+  if (a.circuit?.flags.includes('weight-meds')) {
+    // Plan v4, A4: both need pharmacist sign-off before launch.
+    notes.push('Tell whoever prescribes your weight-loss medication about any supplements you start.')
+    notes.push('If yours are tablets, take them exactly as your prescriber says, apart from supplements.')
+  }
 
   const unmetGoals = a.goals.filter((goal) => {
     const wanted = Object.keys(GOAL_NEEDS[goal]) as NeedId[]
@@ -338,7 +417,7 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     excludedIngredients,
     excluded,
     notes,
-    flags: { pharmacistNote: outcome.pharmacistNote },
+    flags: { pharmacistNote: outcome.pharmacistNote, tailored: isTailored(a) },
     needs,
     unmetGoals,
   }

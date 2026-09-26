@@ -30,13 +30,18 @@ export function finishedConsult(): FlowState | null {
   return saved && saved.phase === 'done' ? saved : null
 }
 
-/** A finished consult, reopened on its review screen with every answer in place. */
+/**
+ * A finished consult, reopened on its review screen with every answer in
+ * place. Reloaded from the device, it has no circuit-check answers (they're
+ * never saved), so it opens on the check instead, which returns to review.
+ */
 export function reopenAtReview(state: FlowState): FlowState {
+  const checked = Boolean(state.answers.healthConsent?.accepted && state.answers.circuit)
   return {
     ...state,
     phase: 'scenes',
-    sceneId: 'review',
-    returnTo: null,
+    sceneId: checked ? 'review' : 'circuit',
+    returnTo: checked ? null : 'review',
     direction: 'back',
     history: state.history.filter((s) => s !== 'review' && s !== 'circuit'),
   }

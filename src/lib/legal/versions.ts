@@ -27,6 +27,13 @@ export const PRIVACY_VERSION = '2026-08-30'
 export const HEALTH_DATA_VERSION = '2026-08-30'
 
 /**
+ * The Amp Consult's second opt-in on weight-loss medication: "Use this to
+ * tailor my recommendations". Separate from the notice above, which covers
+ * keeping products out; this covers adding them because of the medication.
+ */
+export const TAILOR_CONSENT_VERSION = '2026-09-26'
+
+/**
  * The first terms version that discloses the cancel settlement — the balance a
  * member settles on goods already sent them when they cancel early.
  *

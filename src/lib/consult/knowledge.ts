@@ -84,7 +84,7 @@ export const KINDS: Partial<Record<SwapGroup, Kind>> = {
   'energy-gel': { meets: { hydration: 0.3, energy: 0.3 } },
   menopause: { meets: {}, contains: ['hormone-active'] },
   // Never recommended by the consult: nothing it asks about calls for them.
-  'fat-burner': { meets: {}, contains: ['caffeine', 'stimulant'] },
+  'fat-burner': { meets: {}, contains: ['caffeine', 'stimulant', 'fat-burner'] },
   accessory: { meets: {} },
   general: { meets: {} },
 }
@@ -139,6 +139,9 @@ export const GOAL_NEEDS: Record<ConsultGoal, Partial<Record<NeedId, number>>> = 
   focus: { focus: 2, omega: 1.25, stress: 0.5, sleep: 0.5 },
   ageing: { joints: 2, collagen: 1.25, omega: 1.25, 'low-sun': 1.25, basics: 0.5 },
   allround: { basics: 2, omega: 1.25, 'low-sun': 0.5, gut: 0.5, immunity: 0.5 },
+  // Losing fat: protein to keep muscle while eating less, fibre to stay full.
+  // Never fat burners (plan v4, D5) — they meet no need, so they never score.
+  weight: { protein: 2, gut: 1.25, basics: 0.75 },
 }
 
 /** Goal 1 counts ×3, goal 2 ×2, goal 3 ×1. */
