@@ -23,7 +23,8 @@ import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
 import { TrackerSheet } from './TrackerSheet'
-import { toSpeech, useReadAloud } from './useReadAloud'
+import { voiceSupported } from './HoldToTalk'
+import { primeSpeech, toSpeech, useReadAloud } from './useReadAloud'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
@@ -66,9 +67,14 @@ interface Props {
    * consult on its review screen instead of starting a new one.
    */
   reopen?: boolean
+  /**
+   * Force the AI layer on or off, overriding the hub's switch. The founder
+   * preview at /quizv2 sets it from whether the server has an OpenAI key.
+   */
+  ai?: boolean
 }
 
-export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProducts, reopen }: Props) {
+export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProducts, reopen, ai }: Props) {
   const persist = !initial
   const [reopened] = useState(() => (reopen ? finishedConsult() : null))
   const [state, dispatch] = useReducer(flowReducer, undefined, () =>
@@ -84,6 +90,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   /** An upload is being read (U1/U2), and whether the tracker sheet is open. */
   const [reading, setReading] = useState(false)
   const [tracking, setTracking] = useState(false)
+  /** Whether this browser can record, so the link can say "type or talk" (U3). After mount: the server can't know. */
+  const [canTalk, setCanTalk] = useState(false)
+  useEffect(() => setCanTalk(voiceSupported()), [])
   /** Amp's micro-reaction to the last answer (U6), numbered so a repeat plays again. */
   const [ampReaction, setAmpReaction] = useState<{ name: AmpReaction; id: number; scene: SceneId } | null>(null)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -124,8 +133,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
 
   // Amp's words (V1/V2): only when switched on in the hub, and never for a
   // fixed-state run (the workshop, tests).
-  const { consultAi } = useQuizArmState()
-  const { words, aiDown } = useAiCopy(state, consultAi && persist)
+  const { consultAi: hubAi } = useQuizArmState()
+  // The founder preview decides for itself (it's on whenever the server has a
+  // key); everywhere else follows the hub's switch.
+  const consultAi = ai ?? hubAi
+  const { words, unavailable: aiUnavailable } = useAiCopy(state, consultAi && persist)
 
   // Read aloud (U4): comfort mode reads each question out. A hook, so it's
   // worked out before the early returns below.
@@ -154,7 +166,10 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     )
   }
 
-  const scene = words(resolveSceneDef(state.sceneId, state.answers))
+  // Only once the scene is actually showing: words() fixes a scene's wording
+  // for the visit, and the route choice comes before the first scene.
+  const baseScene = resolveSceneDef(state.sceneId, state.answers)
+  const scene = state.phase === 'scenes' ? words(baseScene) : baseScene
   const order = visibleScenes(state.answers)
   const index = order.indexOf(state.sceneId) + 1
   const previous = state.history[state.history.length - 1]
@@ -233,7 +248,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
 
   const mode = scene.mode ?? 'charge'
   const ampState: AmpState = mode === 'calm' ? 'calm' : reading ? 'reading' : thinking ? 'thinking' : watching !== null ? 'watching' : 'idle'
-  const aiOn = consultAi && !aiDown
+  // Slow wording never hides these: they have fallbacks of their own. Only a
+  // server with no AI configured does.
+  const aiOn = consultAi && !aiUnavailable
   // The tracker read (U2) fills the week and the sleep window, so it's offered
   // where those are asked — on the long route only; a speed run has no time for uploads.
   const offerTracker = aiOn && state.answers.route === 'deep' && (state.sceneId === 'training' || state.sceneId === 'sleep')
@@ -264,8 +281,8 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
               {/* Only with the AI layer on: with it off there's nobody to read it (V6). */}
               {mode !== 'calm' && aiOn && (
-                <QuietLink icon="spark" onClick={() => setTelling(true)}>
-                  Tell Amp more
+                <QuietLink icon={canTalk ? 'mic' : 'spark'} onClick={() => setTelling(true)}>
+                  {canTalk ? 'Tell Amp more · type or talk' : 'Tell Amp more'}
                 </QuietLink>
               )}
               {offerTracker && (
@@ -277,6 +294,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
                 icon="comfort"
                 aria-pressed={state.answers.comfort}
                 onClick={() => {
+                  if (!state.answers.comfort) primeSpeech()
                   consultFunnel.comfort({ on: !state.answers.comfort, via: 'toggle' })
                   answer({ comfort: !state.answers.comfort, comfortOffered: true })
                 }}
@@ -294,6 +312,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           {offerComfort(state.answers, state.sceneId) && (
             <ComfortOffer
               onYes={() => {
+                primeSpeech()
                 consultFunnel.comfort({ on: true, via: 'offer' })
                 answer({ comfort: true, comfortOffered: true })
               }}

@@ -1,4 +1,5 @@
 import { MonitoringPage } from '@/components/portal/MonitoringPage'
+import { ConsultOversight } from '@/components/portal/ConsultOversight'
 
 /**
  * Monitoring — is anything broken on the customer-facing surfaces?
@@ -35,6 +36,9 @@ export default function Monitoring() {
         nothing throws for — a webhook that stopped arriving, a job that stopped running.
       </p>
       <MonitoringPage />
+      <section id="consult" style={{ marginTop: 'var(--space-8)' }}>
+        <ConsultOversight />
+      </section>
     </div>
   )
 }

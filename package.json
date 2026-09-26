@@ -14,6 +14,8 @@
     "test:coverage": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js --coverage",
     "eval:scan": "node scripts/scan-eval.mjs",
     "budget:consult": "node scripts/consult-budget.mjs",
+    "check:consult-ai": "node scripts/consult-ai-check.mjs",
+    "fake-openai": "node scripts/fake-openai.mjs",
     "test:personas": "node --experimental-vm-modules --max-old-space-size=4096 node_modules/jest/bin/jest.js src/lib/consult/__tests__/persona-suite src/lib/consult/ai/__tests__/redteam",
     "e2e": "playwright test --config e2e/playwright.config.ts",
     "e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",

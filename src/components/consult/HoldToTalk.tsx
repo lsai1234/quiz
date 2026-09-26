@@ -88,6 +88,9 @@ export function HoldToTalk({ onText, onBlocked, onMessage, onBusy, send = transc
     if (!Ctx) return
     try {
       const ctx = new Ctx()
+      // iPhone starts an audio context suspended when it isn't created inside
+      // the tap itself (this one waits on the mic permission first).
+      if (ctx.state === 'suspended') void ctx.resume().catch(() => undefined)
       const analyser = ctx.createAnalyser()
       analyser.fftSize = 512
       ctx.createMediaStreamSource(s).connect(analyser)
@@ -212,6 +215,9 @@ export function HoldToTalk({ onText, onBlocked, onMessage, onBusy, send = transc
           boxShadow: listening ? 'var(--amp-glow)' : 'none',
           touchAction: 'none',
           userSelect: 'none',
+          // No "copy / look up" callout on a long press: holding is the point.
+          WebkitTouchCallout: 'none',
+          WebkitUserSelect: 'none',
           transition: stateTransition('background-color', 'box-shadow', 'color'),
         }}
       >

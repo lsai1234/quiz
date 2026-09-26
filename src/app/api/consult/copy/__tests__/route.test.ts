@@ -5,6 +5,7 @@ const create = jest.fn()
 jest.mock('openai', () => jest.fn().mockImplementation(() => ({ chat: { completions: { create } } })))
 
 import { POST } from '../route'
+import { COPY_BUDGET_MS } from '@/lib/consult/ai/copy'
 
 const call = (body: unknown) => POST(new Request('http://x/api/consult/copy', { method: 'POST', body: JSON.stringify(body) }))
 const reply = (content: unknown) => ({ choices: [{ message: { content: JSON.stringify(content) } }] })
@@ -33,7 +34,7 @@ describe('/api/consult/copy', () => {
     const [params, opts] = create.mock.calls[0]
     expect(params.model).toMatch(/\d{4}-\d{2}-\d{2}$/)
     expect(params.response_format.json_schema.strict).toBe(true)
-    expect(opts.timeout).toBeLessThan(1500)
+    expect(opts.timeout).toBeLessThan(COPY_BUDGET_MS)
   })
 
   it('falls back when the model goes off-message', async () => {

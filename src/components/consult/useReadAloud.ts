@@ -52,6 +52,22 @@ export function speak(text: string): void {
   synth.speak(u)
 }
 
+let primed = false
+
+/**
+ * iPhone only lets a page start speaking from inside a tap; after the first
+ * utterance it can speak whenever. Comfort mode is switched on by a tap but
+ * the question is read after the screen updates, outside it — so the tap
+ * itself says nothing, silently, to unlock the voice.
+ */
+export function primeSpeech(): void {
+  if (primed || !speechSupported()) return
+  primed = true
+  const u = new SpeechSynthesisUtterance(' ')
+  u.volume = 0
+  window.speechSynthesis.speak(u)
+}
+
 export function hush(): void {
   if (speechSupported()) window.speechSynthesis.cancel()
 }

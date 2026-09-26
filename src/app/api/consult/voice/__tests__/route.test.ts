@@ -42,6 +42,22 @@ describe('/api/consult/voice', () => {
     expect(transcribe).not.toHaveBeenCalled()
   })
 
+  it('falls back to whisper-1 once when the pinned model is refused', async () => {
+    transcribe
+      .mockRejectedValueOnce(Object.assign(new Error('The model `gpt-4o-mini-transcribe-2025-12-15` does not exist'), { status: 404 }))
+      .mockResolvedValueOnce({ text: 'two coffees' })
+    expect(await (await call(clip())).json()).toEqual({ text: 'two coffees' })
+    expect(transcribe.mock.calls.map(([a]) => a.model)).toEqual([VOICE_MODEL, 'whisper-1'])
+  })
+
+  it('does not retry a failure that isn’t about the model', async () => {
+    const log = jest.spyOn(console, 'error').mockImplementation(() => undefined)
+    transcribe.mockRejectedValueOnce(Object.assign(new Error('Invalid file format'), { status: 400 }))
+    expect(await (await call(clip())).json()).toEqual({ fallback: true })
+    expect(transcribe).toHaveBeenCalledTimes(1)
+    log.mockRestore()
+  })
+
   it('says unavailable without a key', async () => {
     delete process.env.OPENAI_API_KEY
     expect(await (await call(clip())).json()).toEqual({ unavailable: true })

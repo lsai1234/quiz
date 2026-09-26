@@ -1,6 +1,6 @@
 import { SCENES, resolveSceneDef } from '../../flow'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../../types'
-import { COPY_BUDGET_MS, COPY_MODEL, LIMITS, NEVER_AI, buildCopyPrompt, copySchema, isClean, summariseForCopy, validateSceneCopy } from '../copy'
+import { COPY_BUDGET_MS, COPY_MODEL, COPY_TARGET_MS, LIMITS, NEVER_AI, buildCopyPrompt, copySchema, isClean, summariseForCopy, validateSceneCopy } from '../copy'
 
 const goals = SCENES.find((s) => s.id === 'goals')!
 const energy = SCENES.find((s) => s.id === 'energy')!
@@ -25,9 +25,11 @@ const everything: ConsultAnswers = {
 }
 
 describe('V1 the plumbing', () => {
-  it('pins a dated model and a 1.5s budget', () => {
+  it('pins a dated model, targets 1.5s, and waits long enough not to waste real replies', () => {
     expect(COPY_MODEL).toMatch(/\d{4}-\d{2}-\d{2}$/)
-    expect(COPY_BUDGET_MS).toBeLessThanOrEqual(1500)
+    expect(COPY_TARGET_MS).toBe(1500)
+    expect(COPY_BUDGET_MS).toBeGreaterThan(COPY_TARGET_MS)
+    expect(COPY_BUDGET_MS).toBeLessThanOrEqual(5000)
   })
 
   it('asks for exactly the scene’s schema, strict', () => {

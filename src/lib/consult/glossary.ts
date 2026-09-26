@@ -54,6 +54,26 @@ export const GLOSSARY = {
     title: 'The circuit check',
     body: 'A few fixed safety questions before anything is suggested. They rule products out, never in, and nothing from them is ever sent to AI. Some answers mean a stack isn’t right, and it says so.',
   },
+  'oily-fish': {
+    title: 'Oily fish',
+    body: 'Salmon, mackerel, sardines, trout, herring and fresh tuna. Tinned tuna doesn’t count here. The plate is asked about so the stack fills gaps rather than doubling up on what you already eat.',
+  },
+  'energy-drinks': {
+    title: 'What counts as a cup',
+    body: 'A mug of coffee, a cup of tea, or a can of energy drink each count as one. Decaf and herbal teas don’t. It’s asked so the stack never adds caffeine on top of plenty.',
+  },
+  'pre-workout': {
+    title: 'Pre-workout',
+    body: 'A powder or shot taken before training, usually with caffeine in it. Telling Amp you take one means nothing else with caffeine is suggested.',
+  },
+  'sleep-quality': {
+    title: 'How you sleep',
+    body: 'Great is waking up rested most days. OK is fine but not brilliant. Restless is waking in the night or rarely feeling rested. It’s about a normal week, not your best night.',
+  },
+  'stiff-spots': {
+    title: 'Stiff or sore spots',
+    body: 'Anywhere that often feels stiff or achy after training or first thing in the morning. It isn’t a diagnosis, and anything sharp, new or worsening is one for your GP.',
+  },
   'comfort-mode': {
     title: 'Comfort mode',
     body: 'Bigger text, bigger buttons and no dragging. The questions are the same; only the way you answer them changes.',

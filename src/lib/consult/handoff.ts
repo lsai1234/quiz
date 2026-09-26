@@ -27,6 +27,7 @@
  * downstream needs to know.
  */
 
+import { CLAIMS } from './claims'
 import type { EngineResult } from './engine'
 import { ENGINE_VERSION } from './engine'
 import type { Ingredient } from './circuit'
@@ -47,6 +48,8 @@ export interface HandoffPayload {
   excluded: Ingredient[]
   flags: { pharmacist_note: boolean }
   reasons: Record<string, string>
+  /** Register claim IDs per SKU in Complete: the only claim wording anything may show (see `claims.ts`). */
+  claims: Record<string, string[]>
   notes: string[]
 }
 
@@ -80,6 +83,7 @@ export function buildHandoff(opts: {
     excluded: [...engine.excludedIngredients],
     flags: { pharmacist_note: engine.flags.pharmacistNote },
     reasons: Object.fromEntries(engine.ranked.map((r) => [r.id, r.reason])),
+    claims: Object.fromEntries(engine.ranked.map((r) => [r.id, [...r.claims]])),
     notes: [...engine.notes],
   }
 }
@@ -133,6 +137,13 @@ export function validateHandoff(value: unknown): Validation {
   if (!isStringArray(v.excluded) || !v.excluded.every((i) => INGREDIENTS.includes(i as Ingredient))) errors.push('excluded must list known ingredient families')
   if (!v.flags || typeof v.flags.pharmacist_note !== 'boolean') errors.push('flags.pharmacist_note must be a boolean')
   if (!v.reasons || typeof v.reasons !== 'object') errors.push('reasons is missing')
+  if (!v.claims || typeof v.claims !== 'object') errors.push('claims is missing')
+  else {
+    for (const [sku, ids] of Object.entries(v.claims)) {
+      if (!isStringArray(ids)) errors.push(`claims for ${sku} must be a list`)
+      else for (const id of ids) if (!(id in CLAIMS)) errors.push(`unknown claim ${id} for ${sku}`)
+    }
+  }
   if (!isStringArray(v.notes)) errors.push('notes must be a list of strings')
 
   return errors.length ? { ok: false, errors } : { ok: true, payload: v as HandoffPayload }

@@ -18,8 +18,19 @@ import type { ConsultAnswers, SceneId } from '../types'
 
 /** Pinned: a dated snapshot, so a model update can't change the consult's voice under it. */
 export const COPY_MODEL = 'gpt-4.1-mini-2025-04-14'
-/** The client gives up here; the server gives up a little before. */
-export const COPY_BUDGET_MS = 1500
+/**
+ * The plan's target for one scene's words (V1): under 1.5s. The hub's AI log
+ * reports against it.
+ */
+export const COPY_TARGET_MS = 1500
+/**
+ * How long the words are actually waited for. Longer than the target on
+ * purpose: they're asked for while the person is still on the scene before,
+ * and only used if they're in hand when the scene appears, so a slow reply
+ * costs nothing — while cutting it off at 1.5s threw most real replies away.
+ * The client gives up here; the server gives up a little before.
+ */
+export const COPY_BUDGET_MS = 4500
 
 export const LIMITS = { question: 48, hint: 120, label: 40, react: 48 } as const
 

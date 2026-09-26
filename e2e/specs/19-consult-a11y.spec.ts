@@ -201,4 +201,13 @@ test.describe('consult accessibility (U7)', () => {
     await expect(page.getByLabel(/email/i)).toBeVisible()
     await expect(page.getByRole('radio', { name: /^Deep charge/ })).toHaveCount(0)
   })
+
+  test('tells founders what is on: with no OpenAI key, the AI features are off and say why', async ({ page }) => {
+    await expect(page.getByText(/Founder preview · AI off/)).toBeVisible()
+    await page.getByRole('button', { name: 'What’s on' }).click()
+    await expect(page.getByRole('dialog', { name: 'Founder preview' })).toContainText('the server has no OPENAI_API_KEY')
+    await page.getByRole('button', { name: /Test the AI now/ }).click()
+    await expect(page.getByText(/No OPENAI_API_KEY on the server/)).toBeVisible()
+    await audit(page, 'founder preview panel')
+  })
 })

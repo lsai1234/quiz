@@ -40,7 +40,9 @@ describe('V6 lost-signal fallback', () => {
     expect(onHandoff).toHaveBeenCalled()
   })
 
-  it(`stops asking after ${BREAKER} misses in a row, and "Tell Amp more" steps aside`, async () => {
+  it(`stops asking for words after ${BREAKER} misses in a row, but keeps "Tell Amp more"`, async () => {
+    // Slow or failed wording is the wording's problem. "Tell Amp more", voice
+    // and uploads have fallbacks of their own, so they stay.
     setQuizArm({ arm: 'v1', consultAi: true })
     global.fetch = jest.fn(async () => reply({ fallback: true })) as typeof fetch
     render(<AmpConsult />)
@@ -50,8 +52,31 @@ describe('V6 lost-signal fallback', () => {
       await settle()
     }
     expect(copyCalls()).toBe(BREAKER)
-    expect(screen.queryByText('Tell Amp more')).toBeNull()
+    expect(screen.getByRole('button', { name: /^Tell Amp more/ })).toBeInTheDocument()
     expect(heading()).toBeInTheDocument()
+  })
+
+  it('takes every AI feature away when the server has no AI configured', async () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    global.fetch = jest.fn(async () => reply({ unavailable: true })) as typeof fetch
+    render(<AmpConsult />)
+    await settle()
+    chooseRoute()
+    await settle()
+    expect(copyCalls()).toBe(1)
+    expect(screen.queryByRole('button', { name: /^Tell Amp more/ })).toBeNull()
+  })
+
+  it('asks for the first scene’s words while the route choice is on screen', async () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    global.fetch = jest.fn(async (u: RequestInfo | URL, init?: RequestInit) =>
+      reply(String(u) === '/api/consult/copy' && JSON.parse(String(init?.body)).sceneId === 'goals' ? { copy: { question: 'What are you chasing?', hint: 'Up to three.', labels: { performance: 'Lift more', energy: 'Last all day', sleep: 'Wake up ready', focus: 'Stay sharp', ageing: 'Keep moving well', allround: 'A bit of everything' } } } : { fallback: true }),
+    ) as typeof fetch
+    render(<AmpConsult />)
+    await settle()
+    chooseRoute()
+    expect(heading()).toHaveTextContent('What are you chasing?')
+    expect(screen.getByText('Lift more')).toBeInTheDocument()
   })
 })
 

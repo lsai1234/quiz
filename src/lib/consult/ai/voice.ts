@@ -14,6 +14,16 @@
 
 /** Pinned: a model change is a prompt change (see `personas.ts`). */
 export const VOICE_MODEL = 'gpt-4o-mini-transcribe-2025-12-15'
+/** Used once when the pinned model is refused (not enabled, or retired). */
+export const VOICE_FALLBACK_MODEL = 'whisper-1'
+
+/** An API error about the model itself (not found, not allowed), as opposed to the clip or the network. */
+export function isModelProblem(err: unknown): boolean {
+  const e = err as { status?: number; code?: string; message?: string } | null
+  if (!e) return false
+  if (e.code === 'model_not_found') return true
+  return (e.status === 400 || e.status === 403 || e.status === 404) && /model/i.test(e.message ?? '')
+}
 
 /** Longest hold, in seconds. Fifteen seconds is a couple of sentences — plenty for a detail. */
 export const MAX_SECONDS = 15

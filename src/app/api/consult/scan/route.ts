@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auditRoute } from '@/lib/consult/ai/auditRoute'
 import OpenAI from 'openai'
 import { COPY_MODEL } from '@/lib/consult/ai/copy'
 import { rateLimiter } from '@/lib/consult/ai/guard'
@@ -30,7 +31,7 @@ export const dynamic = 'force-dynamic'
 
 const overLimit = rateLimiter(10, 60_000)
 
-export async function POST(req: Request) {
+async function handle(req: Request) {
   if (overLimit()) return NextResponse.json({ fallback: true }, { status: 429 })
   let body: { kind?: unknown; app?: unknown; image?: unknown }
   try {
@@ -75,3 +76,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ fallback: true })
   }
 }
+
+export const POST = auditRoute('scan', COPY_MODEL, handle)

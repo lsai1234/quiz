@@ -16,6 +16,8 @@ import { PlatePicker } from './PlatePicker'
 import { BodyMap } from './BodyMap'
 import { ShelfCheck } from './ShelfCheck'
 import { CircuitCheck } from './CircuitCheck'
+import { WhatsThis } from '../WhatsThis'
+import type { GlossaryKey } from '@/lib/consult/glossary'
 
 /**
  * The scene registry (build C1).
@@ -109,9 +111,32 @@ export function structuredPatch(entry: SceneEntry, patch: Partial<ConsultAnswers
   return out
 }
 
+/**
+ * "What's this?" (V7) for scenes whose element doesn't carry its own: the term
+ * people ask about on that screen. Goals, training and daylight place theirs
+ * inside the element, next to what it explains.
+ */
+export const SCENE_TERMS: Partial<Record<SceneId, GlossaryKey>> = {
+  sleep: 'sleep-quality',
+  caffeine: 'energy-drinks',
+  food: 'oily-fish',
+  body: 'stiff-spots',
+  shelf: 'pre-workout',
+}
+
 /** The one renderer: scene definition in, the right interactive element out. */
 export function SceneRenderer(props: SceneProps) {
   const entry = resolveScene(props.scene)
   const Component = entry.component
-  return <Component {...props} onAnswer={(patch) => props.onAnswer(structuredPatch(entry, patch))} />
+  const term = SCENE_TERMS[props.scene.id]
+  return (
+    <>
+      {term && (
+        <div className="flex justify-end" style={{ marginBottom: 'var(--amp-space-2)' }}>
+          <WhatsThis term={term} questions={props.ai} />
+        </div>
+      )}
+      <Component {...props} onAnswer={(patch) => props.onAnswer(structuredPatch(entry, patch))} />
+    </>
+  )
 }

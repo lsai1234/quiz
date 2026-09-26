@@ -49,3 +49,27 @@ export async function kvDelete(key: string): Promise<void> {
   const db = await getEngine()
   await db.run('DELETE FROM kv WHERE key = ?', [key])
 }
+
+/**
+ * Every row whose key starts with `prefix`, parsed, newest first. For small,
+ * bounded sets only (the consult viewer's thirty days of payloads), not a
+ * general query tool.
+ */
+export async function kvListPrefix<T>(prefix: string, limit = 500): Promise<{ key: string; value: T }[]> {
+  const db = await getEngine()
+  // Escape LIKE's wildcards so the prefix is taken literally.
+  const pattern = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+  const rows = await db.all<{ key: string; value: string }>(
+    "SELECT key, value FROM kv WHERE key LIKE ? ESCAPE '\\' ORDER BY updated_at DESC LIMIT ?",
+    [pattern, limit],
+  )
+  const out: { key: string; value: T }[] = []
+  for (const r of rows) {
+    try {
+      out.push({ key: r.key, value: JSON.parse(r.value) as T })
+    } catch {
+      // Skip a row that no longer parses.
+    }
+  }
+  return out
+}

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auditRoute } from '@/lib/consult/ai/auditRoute'
 import OpenAI from 'openai'
 import { GLOSSARY, type GlossaryKey } from '@/lib/consult/glossary'
 import { COPY_MODEL } from '@/lib/consult/ai/copy'
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic'
 
 const overLimit = rateLimiter(30, 60_000)
 
-export async function POST(req: Request) {
+async function handle(req: Request) {
   if (overLimit()) return NextResponse.json({ answer: null }, { status: 429 })
   let body: { key?: unknown; question?: unknown }
   try {
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
         max_tokens: 200,
         temperature: 0.2,
       },
-      { timeout: 2500, maxRetries: 0 },
+      { timeout: 8000, maxRetries: 0 },
     )
     const raw = completion.choices[0]?.message?.content?.trim()
     return NextResponse.json({ answer: raw ? validateExplain(JSON.parse(raw)) : null })
@@ -52,3 +53,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ answer: null })
   }
 }
+
+export const POST = auditRoute('explain', COPY_MODEL, handle)

@@ -25,6 +25,7 @@
 
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { inStockOnly } from '@/lib/catalogue/filters'
+import { claimsFor } from './claims'
 import { getPricingConfig } from '@/lib/stack-blueprint/pricing'
 import { circuitOutcome, type Ingredient } from './circuit'
 import {
@@ -66,6 +67,8 @@ export interface RankedProduct {
   need: NeedId
   /** Why, restating an answer. Never a health claim. */
   reason: string
+  /** Register claim IDs its kind may carry (see `claims.ts`). */
+  claims: string[]
 }
 
 export interface ExcludedEntry {
@@ -298,6 +301,7 @@ export function runStackEngine(a: ConsultAnswers, catalogue: CatalogueProduct[])
     score: c.score,
     need: c.need,
     reason: c.reason,
+    claims: claimsFor(c.product.swapGroup),
   }))
 
   // Notes for the handoff screen, in the member's terms: what was kept out or

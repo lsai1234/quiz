@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auditRoute } from '@/lib/consult/ai/auditRoute'
 import OpenAI from 'openai'
 import { SCENES, resolveSceneDef } from '@/lib/consult/flow'
 import {
@@ -36,7 +37,7 @@ const overLimit = rateLimiter(120, 60_000)
 
 export const dynamic = 'force-dynamic'
 
-const SERVER_BUDGET_MS = COPY_BUDGET_MS - 100
+const SERVER_BUDGET_MS = COPY_BUDGET_MS - 300
 const FALLBACK = { fallback: true }
 const UNAVAILABLE = { unavailable: true }
 
@@ -64,7 +65,7 @@ function answersFrom(raw: unknown): ConsultAnswers {
   } as ConsultAnswers
 }
 
-export async function POST(req: Request) {
+async function handle(req: Request) {
   if (overLimit()) return NextResponse.json(FALLBACK, { status: 429 })
   let body: { sceneId?: unknown; answers?: unknown; previous?: unknown }
   try {
@@ -107,3 +108,5 @@ export async function POST(req: Request) {
     return NextResponse.json(FALLBACK)
   }
 }
+
+export const POST = auditRoute('copy', COPY_MODEL, handle)

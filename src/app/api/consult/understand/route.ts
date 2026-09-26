@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { auditRoute } from '@/lib/consult/ai/auditRoute'
 import OpenAI from 'openai'
 import { SCENES, resolveSceneDef } from '@/lib/consult/flow'
 import { COPY_MODEL, NEVER_AI } from '@/lib/consult/ai/copy'
@@ -23,7 +24,7 @@ import { EMPTY_ANSWERS, type SceneId } from '@/lib/consult/types'
 
 export const dynamic = 'force-dynamic'
 
-const BUDGET_MS = 2500
+const BUDGET_MS = 8000
 const overLimit = rateLimiter(30, 60_000)
 const KNOWN = new Set<string>(SCENES.map((s) => s.id))
 
@@ -32,7 +33,7 @@ function getClient(): OpenAI | null {
   return apiKey ? new OpenAI({ apiKey }) : null
 }
 
-export async function POST(req: Request) {
+async function handle(req: Request) {
   if (overLimit()) return NextResponse.json({ held: 'busy' }, { status: 429 })
   let body: { sceneId?: unknown; text?: unknown }
   try {
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
   if (!client) return NextResponse.json({ unavailable: true })
 
   try {
-    const mod = await client.moderations.create({ model: 'omni-moderation-latest', input: text }, { timeout: 1200, maxRetries: 0 })
+    const mod = await client.moderations.create({ model: 'omni-moderation-latest', input: text }, { timeout: 4000, maxRetries: 0 })
     if (mod.results?.some((r) => r.flagged)) return NextResponse.json({ held: 'moderated' })
 
     const scene = resolveSceneDef(sceneId as SceneId, EMPTY_ANSWERS)
@@ -79,3 +80,5 @@ export async function POST(req: Request) {
     return NextResponse.json({ fallback: true })
   }
 }
+
+export const POST = auditRoute('understand', COPY_MODEL, handle)

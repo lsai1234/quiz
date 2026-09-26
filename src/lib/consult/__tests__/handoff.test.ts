@@ -1,3 +1,4 @@
+import { CLAIMS } from '../claims'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { planTiers } from '@/lib/stack-blueprint/tier-plan'
 import { identityFor, toBlueprint, toQuizAnswers } from '../adapter'
@@ -43,7 +44,7 @@ describe('H7 handoff payload', () => {
     const p = payload()
     expect(p.version).toBe(HANDOFF_VERSION)
     expect(Object.keys(p).sort()).toEqual(
-      ['consult_id', 'created_at', 'engine', 'excluded', 'flags', 'goals', 'notes', 'profile', 'reasons', 'route', 'tiers', 'version'].sort(),
+      ['claims', 'consult_id', 'created_at', 'engine', 'excluded', 'flags', 'goals', 'notes', 'profile', 'reasons', 'route', 'tiers', 'version'].sort(),
     )
     expect(p.flags.pharmacist_note).toBe(true)
     expect(p.excluded).toEqual(expect.arrayContaining(['fish-oil', 'vitamin-k']))
@@ -51,6 +52,16 @@ describe('H7 handoff payload', () => {
 
   it('validates against its schema on every consult', () => {
     expect(validateHandoff(payload()).ok).toBe(true)
+  })
+
+  it('carries only register claim IDs, and refuses one it doesn’t know', () => {
+    const p = payload()
+    for (const id of p.tiers.complete) expect(Object.keys(p.claims)).toContain(id)
+    for (const ids of Object.values(p.claims)) for (const id of ids) expect(CLAIMS[id]).toBeDefined()
+    const sku = p.tiers.complete[0]
+    const bad = validateHandoff({ ...p, claims: { ...p.claims, [sku]: ['boosts-immunity'] } })
+    expect(bad.ok).toBe(false)
+    if (!bad.ok) expect(bad.errors).toContain(`unknown claim boosts-immunity for ${sku}`)
   })
 
   it.each([
