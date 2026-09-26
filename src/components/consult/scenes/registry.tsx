@@ -1,5 +1,7 @@
 'use client'
 
+import { AimTiles } from './AimTiles'
+import { ChangesPicker } from './ChangesPicker'
 import type { ComponentType } from 'react'
 import type { SceneDef } from '@/lib/consult/flow'
 import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
@@ -68,6 +70,8 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   'goal-tiles': { component: GoalTiles, writes: ['goals', 'circuit'] },
   'age-wheel': { component: AgeWheel, writes: ['age', 'sex'] },
   'training-week': { component: TrainingWeek, writes: ['training', 'intensity'] },
+  'aim-tiles': { component: AimTiles, writes: ['aim'] },
+  'changes-picker': { component: ChangesPicker, writes: ['changes'] },
   'charge-dial': { component: ChargeDial, writes: ['energy'] },
   'sleep-window': { component: SleepWindow, writes: ['sleep'] },
   'sun-arc': { component: SunArc, writes: ['daylight'] },
@@ -84,12 +88,14 @@ const PLACEHOLDER_WRITES: Record<SceneId, (keyof ConsultAnswers)[]> = {
   goals: ['goals'],
   about: ['age', 'sex'],
   training: ['training'],
+  aim: ['aim'],
   energy: ['energy'],
   sleep: ['sleep'],
   daylight: ['daylight'],
   caffeine: ['caffeine'],
   food: ['plate'],
   body: ['body'],
+  changes: ['changes'],
   shelf: ['shelf'],
   review: [],
   circuit: ['circuit'],

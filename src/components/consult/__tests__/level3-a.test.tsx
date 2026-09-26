@@ -117,7 +117,7 @@ describe('H1 review screen', () => {
   it('shows every answer as a tappable card, before anything is decided', () => {
     toReview()
     expect(screen.getByText("Tap anything to change it. Nothing's been decided yet.")).toBeInTheDocument()
-    expect(screen.getAllByRole('button', { name: /\. Change$/ })).toHaveLength(11)
+    expect(screen.getAllByRole('button', { name: /\. Change$/ })).toHaveLength(12)
     expect(screen.getByRole('button', { name: /^Goals: 1\. Performance\. Change$/ })).toBeInTheDocument()
     // The safety answers are on the review now it comes last.
     expect(screen.getByRole('button', { name: /^Circuit check: None of these apply\. Change$/ })).toBeInTheDocument()

@@ -11,8 +11,10 @@ export function heading(): HTMLElement {
   return screen.getByRole('heading', { level: 1 })
 }
 
+/** The scene on screen, by its question — its own, or a journey's wording of it. */
 export function currentScene() {
-  return SCENES.find((s) => s.copy.question === heading().textContent)
+  const q = heading().textContent
+  return SCENES.find((s) => s.copy.question === q || s.variants?.some((v) => v.copy?.question === q))
 }
 
 export const ROUTE_QUESTION = 'How much time have you got?'
@@ -65,6 +67,11 @@ export function answerCurrentScene(): void {
     case 'plate-picker':
       fireEvent.click(screen.getByRole('button', { name: /^Oily fish/ }))
       return
+    case 'aim-tiles':
+      fireEvent.click(screen.getByRole('radio', { name: /^Build muscle/ }))
+      return
+    case 'changes-picker':
+      return
     case 'body-map':
       return
     case 'circuit-check':
@@ -83,8 +90,19 @@ export function pressNext(): void {
   fireEvent.click(next)
 }
 
+/**
+ * One scene per call — except that the driver answers as a young builder
+ * (Performance, 18–24), whose consult adds "What are you training for?"
+ * after training. It's answered in the same call, so a count of calls still
+ * lands on the same scene for every journey. The journey tests drive it on
+ * its own.
+ */
 export function pickFirstOptionAndNext(): void {
   chooseRoute()
   answerCurrentScene()
   pressNext()
+  if (currentScene()?.id === 'aim') {
+    answerCurrentScene()
+    pressNext()
+  }
 }

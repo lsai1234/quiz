@@ -1,5 +1,6 @@
 'use client'
 
+import { journeyOf, type Journey } from '@/lib/consult/journey'
 import { useState, type CSSProperties } from 'react'
 import { DAY_LABEL, INTENSITY_LABEL } from '@/lib/consult/summary'
 import type { Intensity } from '@/lib/consult/types'
@@ -59,11 +60,11 @@ export function switchMode(t: TrainingAnswer | null, mode: TrainingAnswer['mode'
 }
 
 /** The week in words, for the live line under the tiles. */
-export function trainingSummary(t: TrainingAnswer): string {
+export function trainingSummary(t: TrainingAnswer, names: Record<Activity, string> = DAY_LABEL): string {
   const n = sessionsPerWeek(t)
   if (n === 0) return 'No training right now'
   const by = countsByType(t)
-  const parts = ACTIVITIES.filter((a) => by[a] > 0).map((a) => `${sessionsLabel(by[a])} ${DAY_LABEL[a]}`)
+  const parts = ACTIVITIES.filter((a) => by[a] > 0).map((a) => `${sessionsLabel(by[a])} ${names[a]}`)
   const lead = t.mode === 'average' ? `About ${sessionsLabel(n)} a week` : `${sessionsLabel(n)} ${n === 1 ? 'session' : 'sessions'}`
   return [lead, ...parts].join(' · ')
 }
@@ -98,7 +99,22 @@ const LOOK: Record<Activity | 'rest', { icon: GlyphName; style: CSSProperties; l
 
 const INTENSITIES: Intensity[] = ['easy', 'steady', 'hard']
 
-const dayWords = (d: Activity[]) => (d.length === 0 ? 'Rest' : d.map((a) => DAY_LABEL[a]).join(' and '))
+/**
+ * What the activities are called, by journey (batch 5). Short words fit a day
+ * tile; the chips have room to say what counts. For an active ager a walk,
+ * a swim or an afternoon in the garden is the week's activity, and calling it
+ * "cardio" and "sport" would say this consult isn't for them.
+ */
+export function activityWords(journey: Journey): { short: Record<Activity, string>; long: Record<Activity, string> } {
+  if (journey === 'ager')
+    return {
+      short: { gym: 'Gym', cardio: 'Walk', sport: 'Active' },
+      long: { gym: 'Gym or a class', cardio: 'Walk, swim or cycle', sport: 'Gardening, golf, dancing' },
+    }
+  if (journey === 'weight')
+    return { short: DAY_LABEL, long: { gym: 'Gym or a class', cardio: 'Walk, run or cycle', sport: 'Sport' } }
+  return { short: DAY_LABEL, long: DAY_LABEL }
+}
 
 export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai }: SceneProps) {
   const t = answers.training
@@ -108,6 +124,8 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
   const restWeek = answered && sessionsPerWeek(t) === 0
   // The day being set, in "same most weeks". Nothing is chosen until tapped.
   const [editing, setEditing] = useState<number | null>(null)
+  const words = activityWords(journeyOf(answers))
+  const dayWords = (d: Activity[]) => (d.length === 0 ? 'Rest' : d.map((a) => words.short[a]).join(' and '))
 
   const write = (next: TrainingAnswer | null) => onAnswer({ training: next })
 
@@ -176,7 +194,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
         color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
       }}
     >
-      {answered ? trainingSummary(t) : mode === 'days' ? 'Tap a day to start' : 'Set a typical week'}
+      {answered ? trainingSummary(t, words.short) : mode === 'days' ? 'Tap a day to start' : 'Set a typical week'}
     </p>
   )
 
@@ -213,19 +231,19 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
             >
               <span className="flex items-center" style={{ gap: 'var(--amp-space-2)', color: LOOK[a].label === 'var(--amp-ink-on-accent)' ? 'var(--amp-volt)' : LOOK[a].label }}>
                 <Glyph name={LOOK[a].icon} size={20} />
-                <span style={{ color: 'var(--amp-ink)', fontWeight: 'var(--amp-weight-medium)' }}>{DAY_LABEL[a]}</span>
+                <span style={{ color: 'var(--amp-ink)', fontWeight: 'var(--amp-weight-medium)' }}>{words.long[a]}</span>
               </span>
               <span className="flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
-                <StepButton label={`Fewer ${DAY_LABEL[a].toLowerCase()} sessions`} icon="minus" onClick={() => step(a, -1)} disabled={avg[a] <= 0} />
+                <StepButton label={`Fewer ${words.short[a].toLowerCase()} sessions`} icon="minus" onClick={() => step(a, -1)} disabled={avg[a] <= 0} />
                 <span
                   aria-live="polite"
-                  aria-label={`${sessionsLabel(avg[a])} ${DAY_LABEL[a].toLowerCase()} a week`}
+                  aria-label={`${sessionsLabel(avg[a])} ${words.short[a].toLowerCase()} a week`}
                   className="text-center"
                   style={{ minWidth: 'var(--amp-space-10)', fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-title)' }}
                 >
                   {sessionsLabel(avg[a])}
                 </span>
-                <StepButton label={`More ${DAY_LABEL[a].toLowerCase()} sessions`} icon="plus" onClick={() => step(a, 1)} disabled={avg[a] >= MAX_A_WEEK} />
+                <StepButton label={`More ${words.short[a].toLowerCase()} sessions`} icon="plus" onClick={() => step(a, 1)} disabled={avg[a] >= MAX_A_WEEK} />
               </span>
             </li>
           ))}
@@ -249,7 +267,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
         </p>
         <div role="group" aria-label={`${DAYS[editing]}: what you do`} className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
           {ACTIVITIES.map((a) => (
-            <Chip key={a} label={DAY_LABEL[a]} icon={LOOK[a].icon} selected={days[editing].includes(a)} onToggle={() => toggle(editing, a)} />
+            <Chip key={a} label={words.long[a]} icon={LOOK[a].icon} selected={days[editing].includes(a)} onToggle={() => toggle(editing, a)} />
           ))}
         </div>
       </div>
@@ -265,7 +283,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
             <span style={{ fontWeight: 'var(--amp-weight-medium)' }}>{name}</span>
             <div role="group" aria-label={name} className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
               {ACTIVITIES.map((a) => (
-                <Chip key={a} label={DAY_LABEL[a]} icon={LOOK[a].icon} selected={days[i].includes(a)} onToggle={() => toggle(i, a)} />
+                <Chip key={a} label={words.long[a]} icon={LOOK[a].icon} selected={days[i].includes(a)} onToggle={() => toggle(i, a)} />
               ))}
             </div>
           </div>
@@ -317,7 +335,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
                   color: look.label,
                 }}
               >
-                {day.length > 1 ? `+${day.length - 1}` : DAY_LABEL[day[0] ?? 'rest']}
+                {day.length > 1 ? `+${day.length - 1}` : day[0] ? words.short[day[0]] : DAY_LABEL.rest}
               </span>
             </button>
           )

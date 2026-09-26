@@ -82,13 +82,20 @@ async function answerByKeyboard(page: Page) {
   } else if (/about you/i.test(h)) {
     if (await page.getByRole('listbox', { name: 'Age band' }).count()) {
       await tabTo(page, /^Age band/)
-      for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowDown')
+      // Home is "Under 18"; two down is 25–34.
+      await page.keyboard.press('Home')
+      for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowDown')
     } else {
       // Comfort mode: the bands are a radio group.
       await pickRadio(page, /^(Under 18|18–24|25–34)/, /^25–34/)
     }
     await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
-  } else if (/training/i.test(h)) {
+  } else if (/niggling|joints|harder than/i.test(h)) {
+    // The body map and "what's got harder": blank is an answer.
+  } else if (/training for/i.test(h)) {
+    // Builders only: what the training is for.
+    await pickRadio(page, /^(Build muscle|Get stronger|Play my sport|Go further)/, /^Build muscle/)
+  } else if (/training|active is a normal week|moving/i.test(h)) {
     if (await page.getByRole('group', { name: 'Monday' }).count()) {
       // Comfort mode: each day is its own row of choices; Monday's come first.
       await tabTo(page, /^Gym/)
@@ -140,7 +147,7 @@ async function answerByKeyboard(page: Page) {
     await tabTo(page, /^None of these$/)
     await page.keyboard.press('Space')
   }
-  // Anything else (body map, review) is fine as it stands.
+  // Anything else (body map, "what's got harder", review) is fine blank.
 }
 
 test.describe('consult accessibility (U7)', () => {
@@ -174,6 +181,9 @@ test.describe('consult accessibility (U7)', () => {
       await nextByKeyboard(page)
     }
     expect(seen.length).toBeGreaterThanOrEqual(10)
+    // Performance at 25–34 is a builder's consult (batch 5).
+    expect(seen).toEqual(expect.arrayContaining(['What’s your training split?', 'What are you training for?']))
+    expect(seen).not.toContain('Anything harder than it used to be?')
     await expect(page.getByRole('button', { name: 'See my stacks' })).toBeVisible({ timeout: 20_000 })
     await audit(page, 'fully charged')
     await tabTo(page, /^See my stacks$/)
@@ -203,6 +213,9 @@ test.describe('consult accessibility (U7)', () => {
       await nextByKeyboard(page)
     }
     expect(seen.length).toBeGreaterThanOrEqual(10)
+    // Healthy ageing at 65+ is a different consult, not just bigger text.
+    expect(seen).toEqual(expect.arrayContaining(['How active is a normal week?', 'Anything harder than it used to be?']))
+    expect(seen).not.toContain('What are you training for?')
   })
 
   test('weight loss with a jab: the card opens, the safety check takes it from there, review shows it', async ({ page }) => {

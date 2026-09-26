@@ -31,10 +31,10 @@ function runToEnd(state: FlowState = start()): FlowState {
 }
 
 describe('the script', () => {
-  it('has the twelve scenes of the plan, the safety check before the review (plan v4)', () => {
+  it('has the plan’s twelve scenes and two journeys’ own, the safety check before the review (plan v4)', () => {
     expect(SCENES.map((s) => s.id)).toEqual([
-      'goals', 'about', 'training', 'energy', 'sleep', 'daylight',
-      'caffeine', 'food', 'body', 'shelf', 'circuit', 'review',
+      'goals', 'about', 'training', 'aim', 'energy', 'sleep', 'daylight',
+      'caffeine', 'food', 'body', 'changes', 'shelf', 'circuit', 'review',
     ])
   })
 
@@ -61,7 +61,7 @@ describe('a full run on scripts', () => {
   it('works end to end and finishes in analysis', () => {
     const end = runToEnd()
     expect(end.phase).toBe('analysis')
-    expect(end.history).toEqual(SCENES.map((s) => s.id).slice(0, -1))
+    expect(end.history).toEqual(visibleScenes(end.answers).slice(0, -1))
   })
 
   it('passes through the circuit check and then the review before anything is decided', () => {

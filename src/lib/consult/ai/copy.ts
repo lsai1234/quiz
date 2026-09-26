@@ -39,7 +39,7 @@ export const LIMITS = { question: 48, hint: 120, label: 40, react: 48 } as const
  * or the circuit check: a reaction to those would be a reaction to health.
  * Those keep their scripted lines.
  */
-export const REACT_SAFE: SceneId[] = ['goals', 'about', 'training', 'energy', 'sleep', 'daylight', 'caffeine', 'food']
+export const REACT_SAFE: SceneId[] = ['goals', 'about', 'training', 'aim', 'energy', 'sleep', 'daylight', 'caffeine', 'food']
 
 /** Scenes the model never words: the review is a list of answers, the circuit check is fixed. */
 export const NEVER_AI: SceneId[] = ['review', 'circuit']

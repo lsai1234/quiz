@@ -23,6 +23,7 @@
  * Rules decide; nothing here calls an AI.
  */
 
+import { journeyOf } from './journey'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { inStockOnly } from '@/lib/catalogue/filters'
 import { claimsFor } from './claims'
@@ -169,6 +170,45 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
   if (a.intensity === 'hard' && sessions > 0) {
     add('recovery', 1, 'Most sessions are flat out')
     add('hydration', 1, 'Most sessions are flat out')
+  }
+
+  // What the training is for (builders only, batch 5). Ignored if the goals
+  // or age have since changed and the question no longer applies.
+  const journey = journeyOf(a)
+  if (journey === 'builder' && a.aim) {
+    if (a.aim === 'muscle') {
+      add('protein', 3, 'You’re training to build muscle')
+      add('strength', 2, 'You’re training to build muscle')
+    } else if (a.aim === 'strength') {
+      add('strength', 3, 'You’re training to get stronger')
+      add('protein', 1, 'You’re training to get stronger')
+    } else if (a.aim === 'sport') {
+      add('recovery', 2, 'You’re training for your sport')
+      add('hydration', 1, 'You’re training for your sport')
+    } else {
+      add('hydration', 2, 'You’re training to go further')
+      add('recovery', 1, 'You’re training to go further')
+      add('energy', 1, 'You’re training to go further')
+    }
+  }
+
+  // What's got harder lately (active agers only, batch 5).
+  if (journey === 'ager' && a.changes) {
+    const changes = a.changes
+    if (changes.includes('getting-about')) add('joints', 3, 'Getting about is harder than it was')
+    if (changes.includes('strength')) {
+      add('protein', 2, 'Keeping your strength up')
+      add('strength', 1, 'Keeping your strength up')
+    }
+    if (changes.includes('staying-sharp')) {
+      add('focus', 2, 'Staying sharp matters to you')
+      add('omega', 1, 'Staying sharp matters to you')
+    }
+    if (changes.includes('energy')) {
+      add('energy', 2, 'Your energy flags through the day')
+      add('b12-iron', 1, 'Your energy flags through the day')
+    }
+    if (changes.includes('sleeping-through')) add('sleep', 2, 'You’re waking in the night')
   }
 
   // Weight-loss medication, with the tailoring opt-in (plan v4, A4). The

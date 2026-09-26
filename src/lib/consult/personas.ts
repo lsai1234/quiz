@@ -204,6 +204,23 @@ export const PERSONAS: Persona[] = [
     answers: base({ goals: ['weight'], training: trainingDays(['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest']) }),
     expect: [{ safety: true, excludesGroup: ['fat-burner'] }, { includesGroup: ['protein-whey', 'protein-plant', 'protein-clear'] }, { tailored: false }],
   },
+
+  // ── Journeys (batch 5): a 20-year-old building muscle and a 70-year-old
+  // keeping going answer different questions, and it shows in the stack ──
+  {
+    id: 'p32', who: '21, building muscle, four gym days',
+    answers: base({ goals: ['performance'], age: '18-24', sex: 'male', aim: 'muscle', training: trainingDays(['gym', 'gym', 'rest', 'gym', 'gym', 'rest', 'rest']), intensity: 'hard' }),
+    expect: [{ safety: true }, { includesGroup: ['protein-whey', 'protein-plant', 'protein-mass'] }, { includesGroup: ['creatine'] }],
+  },
+  {
+    id: 'p33', who: '70, walks daily, stairs and names getting harder',
+    answers: base({
+      goals: ['ageing'], age: '65-plus', sex: 'female', comfort: true,
+      training: trainingDays(['cardio', 'cardio', 'cardio', 'cardio', 'cardio', 'sport', 'rest']),
+      changes: ['getting-about', 'staying-sharp'], body: ['knees'],
+    }),
+    expect: [{ safety: true }, { includesGroup: ['vitamin-d', 'collagen', 'multivitamin'] }, { excludesGroup: ['protein-mass', 'pre-workout-stim'] }],
+  },
 ]
 
 /**
@@ -212,4 +229,4 @@ export const PERSONAS: Persona[] = [
  */
 // 2026-09-26: re-run after adding the Weight loss goal (plan v4), which adds it
 // to the goal list in the prompts. All 31 personas pass.
-export const APPROVED_FINGERPRINT = '39d5989e'
+export const APPROVED_FINGERPRINT = '15d6b2dd'

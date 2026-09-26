@@ -322,7 +322,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
         >
           {comfortNote === state.sceneId && (
             <div className="amp-anim-rise" style={{ marginBottom: 'var(--amp-space-4)' }}>
-              <Hint>I’ve made everything a little bigger and simpler. “Standard size” at the bottom puts it back.</Hint>
+              <Hint>I’ve made everything a little bigger. “Standard size” undoes it.</Hint>
             </div>
           )}
           {note && <AmpNoted note={note} onChange={() => setTelling(true)} />}

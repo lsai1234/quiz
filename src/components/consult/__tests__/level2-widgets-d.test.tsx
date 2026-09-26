@@ -109,7 +109,9 @@ describe('C12 branching', () => {
   })
 
   it('branches the deep charge the same way', () => {
-    expect(visibleScenes({ ...perf, route: 'deep' })).toHaveLength(12)
+    // A performance goal makes a builder (batch 5): "What are you training for?" joins.
+    expect(visibleScenes({ ...perf, route: 'deep' })).toHaveLength(13)
+    expect(visibleScenes({ ...perf, route: 'deep' })).toContain('aim')
     expect(resolveSceneDef('training', { ...perf, route: 'deep' }).detail).toBe(true)
   })
 })
@@ -155,7 +157,10 @@ describe('C13 speed run or deep charge', () => {
     chooseRoute('Speed run')
     const total = visibleScenes({ ...EMPTY_ANSWERS, route: 'speed' }).length
     expect(screen.getByText(`1/${total} · Goals`)).toBeInTheDocument()
-    for (let i = 0; i < total; i++) pickFirstOptionAndNext()
+    // The driver answers as a young builder: their speed run adds the body map
+    // (niggles from training) and the aim, which the driver answers with training.
+    const builder = visibleScenes({ ...EMPTY_ANSWERS, route: 'speed', goals: ['performance'], age: '18-24' })
+    for (let i = 0; i < builder.length - 1; i++) pickFirstOptionAndNext()
     expect(heading()).toHaveTextContent('Your charge profile')
   })
 })

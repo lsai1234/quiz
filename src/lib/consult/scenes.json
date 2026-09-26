@@ -286,6 +286,61 @@
       },
       "variants": [
         {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "copy": {
+            "question": "What’s your training split?",
+            "hint": "Tap a day, then what you do. Two sessions in a day is fine. Then how hard most sessions feel.",
+            "comfortHint": "For each day, tap what you do. Then how hard most sessions feel."
+          },
+          "detail": true,
+          "tell": {
+            "lead": true,
+            "prompt": "Quicker to say your split? Tell Amp.",
+            "example": "e.g. Push, pull, legs twice a week, and five-a-side on Sundays"
+          }
+        },
+        {
+          "id": "ager",
+          "when": {
+            "journey": [
+              "ager"
+            ]
+          },
+          "copy": {
+            "question": "How active is a normal week?",
+            "hint": "Walks, swimming, gardening and classes all count. Tap a day, then what you do.",
+            "comfortHint": "For each day, tap what you do. Walks and gardening count."
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Easier to say it? Tell Amp what a normal week looks like.",
+            "example": "e.g. I walk the dog every morning and swim on Wednesdays"
+          }
+        },
+        {
+          "id": "weight",
+          "when": {
+            "journey": [
+              "weight"
+            ]
+          },
+          "copy": {
+            "question": "How much are you moving at the moment?",
+            "hint": "Walks count. Tap a day, then what you do. Starting from nothing is fine.",
+            "comfortHint": "For each day, tap what you do. Walks count."
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Easier to say it? Tell Amp how you’re moving.",
+            "example": "e.g. Walking most lunchtimes, and I’ve just started the gym"
+          }
+        },
+        {
           "id": "performance",
           "when": {
             "answer": "goals",
@@ -298,6 +353,49 @@
           }
         }
       ]
+    },
+    {
+      "id": "aim",
+      "section": "move",
+      "label": "Aim",
+      "interaction": "aim-tiles",
+      "speedRun": true,
+      "when": {
+        "journey": [
+          "builder"
+        ]
+      },
+      "copy": {
+        "question": "What are you training for?",
+        "hint": "Pick the main one. It decides what I put first."
+      },
+      "tell": {
+        "lead": false,
+        "prompt": "Something more specific? Tell Amp.",
+        "example": "e.g. A marathon in April, without losing muscle"
+      },
+      "placeholder": {
+        "options": [
+          {
+            "label": "Build muscle",
+            "set": {
+              "aim": "muscle"
+            }
+          },
+          {
+            "label": "Get stronger",
+            "set": {
+              "aim": "strength"
+            }
+          },
+          {
+            "label": "Go further",
+            "set": {
+              "aim": "endurance"
+            }
+          }
+        ]
+      }
     },
     {
       "id": "energy",
@@ -336,7 +434,59 @@
             }
           }
         ]
-      }
+      },
+      "variants": [
+        {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "copy": {
+            "hint": "Drag to how you usually feel by the afternoon, or before an evening session."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Flat before sessions? Tell Amp when it dips.",
+            "example": "e.g. Fine in the morning, flat before evening sessions"
+          }
+        },
+        {
+          "id": "ager",
+          "when": {
+            "journey": [
+              "ager"
+            ]
+          },
+          "copy": {
+            "question": "How’s your energy through the day?",
+            "hint": "Drag to how you usually feel by mid-afternoon.",
+            "comfortHint": "Tap to how you usually feel by mid-afternoon."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Up and down? Tell Amp how your days go.",
+            "example": "e.g. Fine in the morning, but I need a sit-down after lunch"
+          }
+        },
+        {
+          "id": "weight",
+          "when": {
+            "journey": [
+              "weight"
+            ]
+          },
+          "copy": {
+            "hint": "Eating less can take it out of you. Drag to how you usually feel."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Up and down? Tell Amp when it dips.",
+            "example": "e.g. Tired on the days after my injection"
+          }
+        }
+      ]
     },
     {
       "id": "sleep",
@@ -389,6 +539,36 @@
         ]
       },
       "variants": [
+        {
+          "id": "ager",
+          "when": {
+            "journey": [
+              "ager"
+            ]
+          },
+          "copy": {
+            "hint": "Drag to a normal night. Waking once or twice is common: tell Amp if it’s more.",
+            "comfortHint": "Set a normal night. Waking once or twice is common."
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Up in the night? Tell Amp how your nights really go.",
+            "example": "e.g. Bed by ten, but I’m up twice most nights"
+          }
+        },
+        {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Early gym or late sessions? Tell Amp.",
+            "example": "e.g. 6am gym, so I’m in bed by ten on weekdays"
+          }
+        },
         {
           "id": "sleep-goal",
           "when": {
@@ -495,7 +675,42 @@
             }
           }
         ]
-      }
+      },
+      "variants": [
+        {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "copy": {
+            "question": "Coffee, tea, energy drinks, pre-workout?",
+            "hint": "Tap to stack what you have on a normal day. A pre-workout counts as an energy drink."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Pre-workout, gym days only? Tell Amp.",
+            "example": "e.g. A pre-workout on gym days and two coffees"
+          }
+        },
+        {
+          "id": "ager",
+          "when": {
+            "journey": [
+              "ager"
+            ]
+          },
+          "copy": {
+            "hint": "Tea counts. Tap to stack what you have on a normal day."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Mostly decaf? Tell Amp what you drink.",
+            "example": "e.g. Tea with breakfast and a decaf after lunch"
+          }
+        }
+      ]
     },
     {
       "id": "food",
@@ -553,7 +768,59 @@
             }
           }
         ]
-      }
+      },
+      "variants": [
+        {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "copy": {
+            "hint": "Protein matters most for you. Tap every food you eat at least once a week."
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Tell Amp what a normal day of eating looks like.",
+            "example": "e.g. Eggs for breakfast, chicken and rice twice, a shake after the gym"
+          }
+        },
+        {
+          "id": "weight",
+          "when": {
+            "journey": [
+              "weight"
+            ]
+          },
+          "copy": {
+            "question": "What are you eating most weeks?",
+            "hint": "Smaller portions are fine. Tap what you eat, not how much.",
+            "comfortHint": "Tap what you eat most weeks, not how much."
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Appetite changed? Tell Amp what meals look like now.",
+            "example": "e.g. Smaller meals now: mostly soup, eggs and yoghurt"
+          }
+        },
+        {
+          "id": "ager",
+          "when": {
+            "journey": [
+              "ager"
+            ]
+          },
+          "copy": {
+            "hint": "Tap everything you eat at least once a week. Tinned fish counts."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "Doesn’t fit neatly? Tell Amp what you eat.",
+            "example": "e.g. Porridge every morning and fish on Fridays"
+          }
+        }
+      ]
     },
     {
       "id": "body",
@@ -601,19 +868,45 @@
       "speedRunWhen": {
         "any": [
           {
-            "answer": "goals",
-            "includes": "ageing"
+            "any": [
+              {
+                "answer": "goals",
+                "includes": "ageing"
+              },
+              {
+                "answer": "age",
+                "in": [
+                  "55-64",
+                  "65-plus"
+                ]
+              }
+            ]
           },
           {
-            "answer": "age",
-            "in": [
-              "55-64",
-              "65-plus"
+            "journey": [
+              "builder"
             ]
           }
         ]
       },
       "variants": [
+        {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "copy": {
+            "question": "Anything niggling from training?",
+            "hint": "Tap the sore spots. Leave it blank if you’re all good."
+          },
+          "tell": {
+            "lead": false,
+            "prompt": "An old injury? Tell Amp.",
+            "example": "e.g. Shoulder’s been sore since bench last month"
+          }
+        },
         {
           "id": "ageing",
           "when": {
@@ -635,9 +928,62 @@
           "copy": {
             "question": "Which joints need looking after?",
             "hint": "Tap any that feel stiff or sore. Leave it blank if they're all good."
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Easier to explain? Tell Amp what’s stiff, and when.",
+            "example": "e.g. Knees ache on the stairs, better once I get going"
           }
         }
       ]
+    },
+    {
+      "id": "changes",
+      "section": "body",
+      "label": "Lately",
+      "interaction": "changes-picker",
+      "speedRun": true,
+      "when": {
+        "journey": [
+          "ager"
+        ]
+      },
+      "copy": {
+        "question": "Anything harder than it used to be?",
+        "hint": "Tap any that apply. Leave it blank if nothing’s changed."
+      },
+      "tell": {
+        "lead": false,
+        "prompt": "Something else? Tell Amp in your own words.",
+        "example": "e.g. I get puffed out on hills now"
+      },
+      "placeholder": {
+        "options": [
+          {
+            "label": "Nothing’s changed",
+            "set": {
+              "changes": []
+            }
+          },
+          {
+            "label": "Getting about",
+            "set": {
+              "changes": [
+                "getting-about"
+              ]
+            }
+          },
+          {
+            "label": "Staying sharp and sleeping through",
+            "set": {
+              "changes": [
+                "staying-sharp",
+                "sleeping-through"
+              ]
+            }
+          }
+        ]
+      }
     },
     {
       "id": "shelf",
@@ -680,7 +1026,48 @@
             }
           }
         ]
-      }
+      },
+      "variants": [
+        {
+          "id": "builder",
+          "when": {
+            "journey": [
+              "builder"
+            ]
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Got a cupboard of tubs? Just tell Amp what’s in it.",
+            "example": "e.g. Whey after the gym, creatine, and a pre-workout"
+          }
+        },
+        {
+          "id": "ager",
+          "when": {
+            "journey": [
+              "ager"
+            ]
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Easier to say it? Tell Amp what you already take.",
+            "example": "e.g. Cod liver oil, vitamin D in winter, and glucosamine"
+          }
+        },
+        {
+          "id": "weight",
+          "when": {
+            "journey": [
+              "weight"
+            ]
+          },
+          "tell": {
+            "lead": true,
+            "prompt": "Easier to say it? Tell Amp what you already take.",
+            "example": "e.g. A multivitamin, and a fibre drink since starting"
+          }
+        }
+      ]
     },
     {
       "id": "circuit",

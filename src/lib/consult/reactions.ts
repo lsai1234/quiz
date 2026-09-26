@@ -71,6 +71,10 @@ function fromWidget(scene: SceneId, a: ConsultAnswers): string {
       if (n <= 4) return `${said} a week, solid.`
       return `${said} a week. Serious.`
     }
+    case 'aim':
+      return a.aim === 'muscle' ? 'Building. Got it.' : a.aim === 'strength' ? 'Stronger it is.' : a.aim === 'sport' ? 'Match fit. Noted.' : a.aim ? 'Going the distance. Noted.' : ''
+    case 'changes':
+      return a.changes === null ? '' : a.changes.length === 0 ? 'Nothing’s changed. Great.' : 'Thanks. That helps a lot.'
     case 'energy':
       return a.energy === null ? '' : `Energy ${a.energy}/10. Noted.`
     case 'sleep': {

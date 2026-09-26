@@ -58,7 +58,7 @@ describe('H6 analysis & charge-up', () => {
     expect(screen.getByRole('img', { name: /Your charge profile/ })).toBeInTheDocument()
     const steps = () => screen.getByRole('list', { name: 'Analysis steps' }).querySelectorAll('li')
     expect(steps()).toHaveLength(4)
-    expect(screen.getByText(/Reading 11 answers/)).toBeInTheDocument()
+    expect(screen.getByText(/Reading 12 answers/)).toBeInTheDocument()
     act(() => {
       jest.advanceTimersByTime(DURATION.chargeUp)
     })

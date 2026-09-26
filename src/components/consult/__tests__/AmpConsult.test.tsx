@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { AmpConsult } from '../AmpConsult'
-import { SCENES } from '@/lib/consult/flow'
+import { SCENES, resolveSceneDef, visibleScenes } from '@/lib/consult/flow'
+import { EMPTY_ANSWERS } from '@/lib/consult/types'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { chooseRoute, heading, pickFirstOptionAndNext } from './drive'
 
@@ -27,7 +28,10 @@ describe('AmpConsult', () => {
       seen.push(heading().textContent ?? '')
       pickFirstOptionAndNext()
     }
-    expect(seen).toEqual(SCENES.map((s) => s.copy.question))
+    // As the driver's young builder sees it: a builder's wording, the aim
+    // answered along with training, and no "what's got harder" (that's for over-55s).
+    const builder = { ...EMPTY_ANSWERS, route: 'deep' as const, goals: ['performance' as const], age: '18-24' as const }
+    expect(seen).toEqual(visibleScenes(builder).filter((id) => id !== 'aim').map((id) => resolveSceneDef(id, builder).copy.question))
     expect(onComplete).toHaveBeenCalledTimes(1)
     expect(heading()).toHaveTextContent('Your charge profile')
   })
@@ -79,11 +83,11 @@ describe('save & resume', () => {
     const first = render(<AmpConsult />)
     pickFirstOptionAndNext()
     pickFirstOptionAndNext()
-    expect(heading()).toHaveTextContent('What does your training look like?')
+    expect(heading()).toHaveTextContent('What’s your training split?')
     first.unmount()
 
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('What does your training look like?')
+    expect(heading()).toHaveTextContent('What’s your training split?')
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('option', { name: '18–24' })).toHaveAttribute('aria-selected', 'true')
   })

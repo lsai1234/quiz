@@ -15,12 +15,14 @@ export type SceneId =
   | 'goals'
   | 'about'
   | 'training'
+  | 'aim'
   | 'energy'
   | 'sleep'
   | 'daylight'
   | 'caffeine'
   | 'food'
   | 'body'
+  | 'changes'
   | 'shelf'
   | 'review'
   | 'circuit'
@@ -81,6 +83,12 @@ export type WeightSymptom = 'low-appetite' | 'nausea' | 'constipation' | 'tiredn
 /** Speed run (fewer scenes, about a minute) or deep charge (everything). */
 export type Route = 'speed' | 'deep'
 
+/** What a builder is training for (the builder journey's own question). */
+export type TrainingAim = 'muscle' | 'strength' | 'sport' | 'endurance'
+
+/** What's got harder lately (the active-ager journey's own question). `[]` is "Nothing's changed". */
+export type AgeingChange = 'getting-about' | 'strength' | 'staying-sharp' | 'energy' | 'sleeping-through'
+
 /** How hard most sessions feel. Asked on the training week for performance goals. */
 export type Intensity = 'easy' | 'steady' | 'hard'
 
@@ -113,6 +121,10 @@ export interface ConsultAnswers {
   training: TrainingAnswer | null
   /** Only asked when performance is a goal (the training week's detail). */
   intensity: Intensity | null
+  /** Builders only: what the training is for. */
+  aim: TrainingAim | null
+  /** Active agers only: what's got harder lately. */
+  changes: AgeingChange[] | null
   /** Afternoon energy, 1–10. */
   energy: number | null
   sleep: SleepAnswer | null
@@ -151,6 +163,8 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   sex: null,
   training: null,
   intensity: null,
+  aim: null,
+  changes: null,
   energy: null,
   sleep: null,
   daylight: null,

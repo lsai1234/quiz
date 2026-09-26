@@ -14,9 +14,11 @@
 import type { SceneDef } from '../flow'
 import { countsByType, sessionsLabel, trainingAverage, type Activity } from '../training'
 import { isClean } from './copy'
-import { BODY_LABEL, DAYLIGHT_LABEL, FOOD_LABEL, GOAL_LABEL, INTENSITY_LABEL, QUALITY_LABEL, SHELF_LABEL, AGE_LABEL, clock } from '../summary'
+import { AIM_LABEL, CHANGE_LABEL, BODY_LABEL, DAYLIGHT_LABEL, FOOD_LABEL, GOAL_LABEL, INTENSITY_LABEL, QUALITY_LABEL, SHELF_LABEL, AGE_LABEL, clock } from '../summary'
 import type {
   AgeBand,
+  AgeingChange,
+  TrainingAim,
   BodySpot,
   ConsultAnswers,
   ConsultGoal,
@@ -31,7 +33,7 @@ import type {
 export const PICK_KINDS = [
   'goal', 'age', 'energy', 'sleep-quality', 'bedtime', 'waketime', 'daylight',
   'coffee', 'tea', 'energy-drink', 'food', 'sore', 'shelf', 'intensity',
-  'gym-sessions', 'cardio-sessions', 'sport-sessions', 'note',
+  'gym-sessions', 'cardio-sessions', 'sport-sessions', 'aim', 'change', 'note',
 ] as const
 export type PickKind = (typeof PICK_KINDS)[number]
 
@@ -53,6 +55,8 @@ const FOODS = Object.keys(FOOD_LABEL) as Food[]
 const SPOTS = Object.keys(BODY_LABEL) as BodySpot[]
 const SHELF = Object.keys(SHELF_LABEL) as ShelfItem[]
 const INTENSITIES = Object.keys(INTENSITY_LABEL) as Intensity[]
+const AIMS = Object.keys(AIM_LABEL) as TrainingAim[]
+const CHANGES = Object.keys(CHANGE_LABEL) as AgeingChange[]
 
 const count = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 8 ? Number(v) : null)
 /** Sessions a week of one kind: 0–14, halves allowed ("every other week" is 0.5). */
@@ -83,6 +87,8 @@ function valid(kind: PickKind, value: string): boolean {
     case 'gym-sessions':
     case 'cardio-sessions':
     case 'sport-sessions': return sessions(value) !== null
+    case 'aim': return AIMS.includes(value as TrainingAim)
+    case 'change': return CHANGES.includes(value as AgeingChange)
     case 'note': return value.trim().length > 0 && value.length <= MAX_LABEL && isClean(value)
   }
 }
@@ -111,6 +117,8 @@ export function labelFor(kind: PickKind, value: string): string {
       const what = { gym: 'Gym', cardio: 'Cardio', sport: 'Sport' }[SESSION_KIND[kind]!]
       return `${what} ${sessionsLabel(n)}× a week`
     }
+    case 'aim': return `Training to: ${AIM_LABEL[value as TrainingAim].toLowerCase()}`
+    case 'change': return `Harder lately: ${CHANGE_LABEL[value as AgeingChange].toLowerCase()}`
     case 'note': return value
   }
 }
@@ -163,6 +171,8 @@ export function pickToPatch(pick: Pick, a: ConsultAnswers, scene: SceneId): Part
     case 'cardio-sessions':
     case 'sport-sessions':
       return { training: trainingAverage({ ...countsByType(a.training), [SESSION_KIND[pick.kind]!]: sessions(pick.value)! }) }
+    case 'aim': return { aim: pick.value as TrainingAim }
+    case 'change': return { changes: add(a.changes, pick.value as AgeingChange) }
     case 'note': {
       const prior = a.notes[scene]
       return { notes: { ...a.notes, [scene]: prior ? `${prior}; ${pick.label}` : pick.label } }
@@ -206,6 +216,8 @@ Return up to ${MAX_PICKS} picks. Each pick is a kind and a value from these, exa
 - shelf (already taken): ${SHELF.join(', ')}
 - intensity (how hard training feels): ${INTENSITIES.join(', ')}
 - gym-sessions, cardio-sessions, sport-sessions: sessions of that kind in a typical week, 0–14, halves allowed (weights and classes are gym; runs, rides and swims are cardio; team and racket games are sport). Average it when weeks vary.
+- aim (what their training is for): ${AIMS.join(', ')}
+- change (an everyday thing that's got harder with age): ${CHANGES.join(', ')}
 - note: a short plain fact that fits none of these (at most ${MAX_LABEL} characters)
 The label is a short card title (at most ${MAX_LABEL} characters), e.g. "Night shifts · 3 a week".
 

@@ -11,6 +11,7 @@
  * until the review and the circuit check are both done.
  */
 
+import { journeyOf, type Journey } from './journey'
 import SCRIPT from './scenes.json'
 import { circuitOutcome } from './circuit'
 import { sessionsPerWeek } from './training'
@@ -39,6 +40,8 @@ export type Condition =
   | { all: Condition[] }
   | { any: Condition[] }
   | { not: Condition }
+  /** Whose consult this is (batch 5): see journey.ts. */
+  | { journey: Journey[] }
 
 export interface PlaceholderOption {
   label: string
@@ -151,6 +154,7 @@ export function holds(condition: Condition | undefined, answers: ConsultAnswers)
   if ('all' in condition) return condition.all.every((c) => holds(c, answers))
   if ('any' in condition) return condition.any.some((c) => holds(c, answers))
   if ('not' in condition) return !holds(condition.not, answers)
+  if ('journey' in condition) return condition.journey.includes(journeyOf(answers))
   const value = answers[condition.answer] as unknown
   if ('equals' in condition) return value === condition.equals
   if ('includes' in condition) return Array.isArray(value) && value.includes(condition.includes)
@@ -166,19 +170,21 @@ export function visibleScenes(answers: ConsultAnswers): SceneId[] {
   }).map((s) => s.id)
 }
 
-/** A scene as this person sees it: its first matching variant merged in. */
+/**
+ * A scene as this person sees it. Every matching variant is merged in, the
+ * earlier ones winning: a journey's variant (batch 5) sets the voice and
+ * where "Tell Amp" sits, and a goal's variant still adds what it knows (a
+ * sleep goal's hint, performance's detail question) where the journey's
+ * doesn't say. `variant` names the first match.
+ */
 export function resolveSceneDef(id: SceneId, answers: ConsultAnswers): SceneDef {
   const def = sceneDef(id)
-  const variant = def.variants?.find((v) => holds(v.when, answers))
-  if (!variant) return def
-  return {
-    ...def,
-    copy: { ...def.copy, ...variant.copy },
-    variant: variant.id,
-    emphasis: variant.emphasis ?? def.emphasis,
-    detail: variant.detail ?? def.detail,
-    tell: def.tell && variant.tell ? { ...def.tell, ...variant.tell } : def.tell,
-  }
+  const matches = (def.variants ?? []).filter((v) => holds(v.when, answers))
+  if (matches.length === 0) return def
+  const pick = <K extends 'emphasis' | 'detail'>(k: K) => matches.find((v) => v[k] !== undefined)?.[k] ?? def[k]
+  const copy = matches.reduceRight<SceneCopy>((c, v) => ({ ...c, ...v.copy }), def.copy)
+  const tell = def.tell && matches.reduceRight<SceneTell>((t, v) => ({ ...t, ...v.tell }), def.tell)
+  return { ...def, copy, variant: matches[0].id, emphasis: pick('emphasis'), detail: pick('detail'), tell }
 }
 
 /* ── Answered? ──────────────────────────────────────────────────────────── */
@@ -189,7 +195,7 @@ export function resolveSceneDef(id: SceneId, answers: ConsultAnswers): SceneDef 
  * tap the widget as well would ignore what they said. Not goals, age or the
  * circuit check: the rules can't do without those.
  */
-export const NOTE_ANSWERS: SceneId[] = ['training', 'energy', 'sleep', 'daylight', 'caffeine', 'food', 'body', 'shelf']
+export const NOTE_ANSWERS: SceneId[] = ['training', 'aim', 'energy', 'sleep', 'daylight', 'caffeine', 'food', 'body', 'changes', 'shelf']
 
 /** Whether a scene has what it needs for Next. Review is always ready. */
 export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
@@ -216,8 +222,11 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
     case 'food':
       return a.plate !== null && a.plate.length > 0
     case 'body':
+    case 'changes':
       // "Leave it blank if you're all good": blank is an answer. See BLANK_MEANS.
       return true
+    case 'aim':
+      return a.aim !== null
     case 'shelf':
       return a.shelf !== null
     case 'review':
@@ -239,6 +248,7 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
  */
 export const BLANK_MEANS: Partial<Record<SceneId, Partial<ConsultAnswers>>> = {
   body: { body: [] },
+  changes: { changes: [] },
 }
 
 function fillBlank(id: SceneId, answers: ConsultAnswers): ConsultAnswers {
@@ -253,12 +263,14 @@ export const NUDGES: Record<SceneId, string> = {
   goals: 'Pick at least one goal.',
   about: 'Pick your age and one option below.',
   training: 'Tap the days you train (or No training right now), then how hard they feel.',
+  aim: 'Pick the main thing you’re training for.',
   energy: 'Fill the battery to where you usually are.',
   sleep: 'Set your window, then how well you sleep.',
   daylight: 'Move the sun to how often you get outside.',
   caffeine: 'Add your drinks, or tap None.',
   food: 'Tap at least one food.',
   body: '',
+  changes: '',
   shelf: 'Pick what you take, or Nothing yet.',
   review: '',
   circuit: 'Tick the line at the top, then any that apply, or None of these.',

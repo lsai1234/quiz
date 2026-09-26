@@ -10,7 +10,7 @@ describe('the scene registry', () => {
   })
 
   it('falls back to the scripted placeholder for a scene not built yet', () => {
-    const unbuilt = { ...SCENES[3], interaction: 'not-built-yet' }
+    const unbuilt = { ...SCENES.find((s) => s.id === 'energy')!, interaction: 'not-built-yet' }
     expect(SCENE_REGISTRY['not-built-yet']).toBeUndefined()
     expect(resolveScene(unbuilt).component).toBe(PlaceholderScene)
     expect(resolveScene(unbuilt).writes).toEqual(['energy'])

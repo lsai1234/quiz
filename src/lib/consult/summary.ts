@@ -6,6 +6,8 @@
 import { caffeineCount, sleepHours } from './reactions'
 import { ACTIVITIES, countsByType, sessionsLabel, sessionsPerWeek } from './training'
 import type {
+  AgeingChange,
+  TrainingAim,
   AgeBand,
   BodySpot,
   CircuitFlag,
@@ -100,6 +102,21 @@ export const FOOD_LABEL: Record<Food, string> = {
   wholegrains: 'Wholegrains',
 }
 
+export const AIM_LABEL: Record<TrainingAim, string> = {
+  muscle: 'Build muscle',
+  strength: 'Get stronger',
+  sport: 'Play my sport better',
+  endurance: 'Go further',
+}
+
+export const CHANGE_LABEL: Record<AgeingChange, string> = {
+  'getting-about': 'Getting about',
+  strength: 'Keeping strong',
+  'staying-sharp': 'Staying sharp',
+  energy: 'Energy through the day',
+  'sleeping-through': 'Sleeping through',
+}
+
 export const BODY_LABEL: Record<BodySpot, string> = {
   neck: 'Neck',
   shoulders: 'Shoulders',
@@ -162,6 +179,11 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
       const lead = a.training.mode === 'average' ? `About ${sessionsLabel(n)} a week, it varies` : `${sessionsLabel(n)} a week`
       return `${lead} · ${counts.join(', ')}${effort}`
     }
+    case 'aim':
+      return a.aim ? AIM_LABEL[a.aim] : ''
+    case 'changes':
+      if (a.changes === null) return ''
+      return a.changes.length === 0 ? 'Nothing’s changed' : list(a.changes.map((c) => CHANGE_LABEL[c]))
     case 'energy':
       return a.energy === null ? '' : `${a.energy} / 10`
     case 'sleep':
