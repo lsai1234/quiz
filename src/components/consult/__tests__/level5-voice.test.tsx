@@ -6,7 +6,7 @@ import { AmpConsult } from '../AmpConsult'
 import { BLOCKED, HoldToTalk } from '../HoldToTalk'
 import { TellAmpMore } from '../TellAmpMore'
 import { READ_ALOUD_KEY, toSpeech } from '../useReadAloud'
-import { initialFlow, type FlowState } from '@/lib/consult/flow'
+import { hintFor, initialFlow, type FlowState } from '@/lib/consult/flow'
 
 /* ── A fake microphone ─────────────────────────────────────────────────── */
 
@@ -170,7 +170,8 @@ describe('U4 read aloud', () => {
   it('reads the question and hint aloud in comfort mode', () => {
     render(<AmpConsult initial={at('energy', { comfort: true, comfortOffered: true })} />)
     const scene = SCENES.find((s) => s.id === 'energy')!
-    expect(spoken).toEqual([toSpeech(scene.copy.question, scene.copy.hint)])
+    expect(spoken).toEqual([toSpeech(scene.copy.question, hintFor(scene.copy, true))])
+    expect(spoken[0]).toMatch(/minus and plus/)
     expect(spoken[0]).not.toMatch(/[?!.]\./)
     expect(screen.getByRole('button', { name: 'Reading aloud' })).toHaveAttribute('aria-pressed', 'true')
   })

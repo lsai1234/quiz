@@ -175,5 +175,23 @@ export const AMP_ANIMATION: Record<AmpState, string | undefined> = {
   charged: 'amp-burst var(--amp-duration-scene) var(--amp-spring) both',
 }
 
+/**
+ * Micro-reactions (U6): short one-shots on top of whatever state Amp is in,
+ * each set off by an answer — never by a clock. See `ampReactionTo` in
+ * `reactions.ts` for what triggers which. Each ends on its own animationend,
+ * so there's no timer to tidy up either.
+ *
+ *   flex   a day set to gym: a quick flex
+ *   sun    the daylight answer moves: a warm glow, as if he's caught the sun
+ *   burst  the charge dial hits full: a burst of light
+ */
+export type AmpReaction = 'flex' | 'sun' | 'burst'
+
+export const AMP_REACTION: Record<AmpReaction, string> = {
+  flex: 'amp-flex var(--amp-duration-scene) var(--amp-spring) 1',
+  sun: 'amp-sun calc(var(--amp-duration-scene) * 1.5) var(--amp-ease-out) 1',
+  burst: 'amp-full var(--amp-duration-scene) var(--amp-spring) 1',
+}
+
 /** The scan line across Amp while he reads an upload. */
 export const AMP_SCAN = 'amp-scan var(--amp-duration-charge) linear infinite'

@@ -121,7 +121,7 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
               </span>
               <span style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>{consent}</span>
             </button>
-            <input id={inputId} ref={input} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => void onFile(e.target.files?.[0])} />
+            <input id={inputId} ref={input} type="file" accept="image/*" capture="environment" className="sr-only" aria-label={`${title}: photo`} tabIndex={-1} onChange={(e) => void onFile(e.target.files?.[0])} />
             <NextButton ready={agreed && ready} nudge={ready ? 'Tick the line above first.' : 'Pick your app first.'} onClick={() => input.current?.click()}>
               <span className="inline-flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
                 <Glyph name="camera" size={20} /> Take or choose a photo

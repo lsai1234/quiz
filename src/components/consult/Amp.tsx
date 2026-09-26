@@ -20,7 +20,7 @@
 import dynamic from 'next/dynamic'
 import { useEffect, useState } from 'react'
 import { ampRiveEnabled } from '@/lib/consult/ampRive'
-import { AMP_ANIMATION, AMP_SCAN, springTransition, stateTransition, type AmpState } from '@/lib/consult/motion'
+import { AMP_ANIMATION, AMP_REACTION, AMP_SCAN, springTransition, stateTransition, type AmpReaction, type AmpState } from '@/lib/consult/motion'
 import { useReducedMotion } from '@/hooks/useReducedMotion'
 
 const AmpRive = dynamic(() => import('./AmpRive'), { ssr: false })
@@ -50,7 +50,11 @@ interface Props {
   size?: 'sm' | 'md' | 'lg'
   /** For "watching": which way to lean, -1 (left) to 1 (right). */
   lean?: number
+  /** A micro-reaction to play once (U6). A new `id` plays it again. */
+  reaction?: { name: AmpReaction; id: number } | null
 }
+
+const REACTION_NAMES = new Set(['amp-flex', 'amp-sun', 'amp-full'])
 
 const SIZE = {
   sm: 'var(--amp-space-6)',
@@ -58,9 +62,12 @@ const SIZE = {
   lg: 'calc(var(--amp-space-10) * 2)',
 } as const
 
-export function Amp({ state, size = 'sm', lean = 0 }: Props) {
+export function Amp({ state, size = 'sm', lean = 0, reaction = null }: Props) {
   const upgrade = useRiveUpgrade()
   const [rive, setRive] = useState(false)
+  // A reaction plays until its own animation ends — no timer.
+  const [ended, setEnded] = useState<number | null>(null)
+  const playing = reaction && reaction.id !== ended ? reaction : null
   // Once Rive has drawn, it is the whole character: the ring and bolt step aside.
   const lit = state === 'charged' && !rive
   const quiet = state === 'calm' && !rive
@@ -70,6 +77,10 @@ export function Amp({ state, size = 'sm', lean = 0 }: Props) {
       aria-label={`Amp, ${state}`}
       data-amp-state={state}
       data-amp-drawn={rive ? 'rive' : 'css'}
+      data-amp-reaction={playing?.name}
+      onAnimationEnd={(e) => {
+        if (playing && REACTION_NAMES.has(e.animationName)) setEnded(playing.id)
+      }}
       className="relative inline-flex shrink-0 items-center justify-center overflow-hidden"
       style={{
         width: SIZE[size],
@@ -86,10 +97,30 @@ export function Amp({ state, size = 'sm', lean = 0 }: Props) {
         transition: `${springTransition('transform')}, ${stateTransition('background-color', 'box-shadow')}`,
       }}
     >
-      <svg viewBox="0 0 24 24" width="58%" height="58%" aria-hidden fill="currentColor" style={{ opacity: rive ? 0 : 1, transition: stateTransition('opacity') }}>
+      {!rive && playing && playing.name !== 'flex' && (
+        <span
+          key={playing.id}
+          aria-hidden
+          className="absolute inset-0"
+          style={{
+            borderRadius: 'var(--amp-radius-pill)',
+            background: `radial-gradient(circle, ${playing.name === 'sun' ? 'var(--amp-sun-glow)' : 'var(--amp-accent-glow)'}, transparent 70%)`,
+            animation: AMP_REACTION[playing.name],
+          }}
+        />
+      )}
+      <svg
+        key={playing?.name === 'flex' ? playing.id : 'still'}
+        viewBox="0 0 24 24"
+        width="58%"
+        height="58%"
+        aria-hidden
+        fill="currentColor"
+        style={{ opacity: rive ? 0 : 1, transition: stateTransition('opacity'), animation: playing?.name === 'flex' ? AMP_REACTION.flex : undefined }}
+      >
         <path d="M13 2 5 13h6l-1 9 8-11h-6l1-9Z" />
       </svg>
-      {upgrade && <AmpRive state={state} lean={lean} ready={rive} onReady={() => setRive(true)} />}
+      {upgrade && <AmpRive state={state} lean={lean} reaction={reaction} ready={rive} onReady={() => setRive(true)} />}
       {state === 'reading' && !rive && (
         <span
           aria-hidden

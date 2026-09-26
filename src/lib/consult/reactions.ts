@@ -7,6 +7,7 @@
  * doses or results.
  */
 
+import type { AmpReaction } from './motion'
 import type { AgeBand, ConsultAnswers, ConsultGoal, SceneId } from './types'
 
 const GOAL_WORDS: Record<ConsultGoal, string> = {
@@ -104,4 +105,19 @@ function capitalise(s: string): string {
 /** Quarter hours read naturally as decimals: 7, 7.25, 7.5. */
 function formatHours(h: number): string {
   return String(h)
+}
+
+/**
+ * Amp's micro-reaction to an answer as it's given (build U6), or null. Read
+ * off what changed — the answer before and the patch — so it can only ever
+ * follow something the person just did.
+ */
+export function ampReactionTo(before: ConsultAnswers, patch: Partial<ConsultAnswers>): AmpReaction | null {
+  if (patch.week) {
+    const gym = (w: ConsultAnswers['week']) => (w ?? []).filter((d) => d === 'gym').length
+    if (gym(patch.week) > gym(before.week)) return 'flex'
+  }
+  if (patch.energy === 10 && before.energy !== 10) return 'burst'
+  if (patch.daylight && patch.daylight !== before.daylight) return 'sun'
+  return null
 }

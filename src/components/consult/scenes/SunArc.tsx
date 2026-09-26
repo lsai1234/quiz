@@ -5,7 +5,7 @@ import { DAYLIGHT_LABEL } from '@/lib/consult/summary'
 import type { Daylight } from '@/lib/consult/types'
 import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
 import { useDrag, type DragPoint } from '../useDrag'
-import { Tile } from '../controls'
+import { Tile, radioArrows } from '../controls'
 import { WhatsThis } from '../WhatsThis'
 import type { SceneProps } from './registry'
 
@@ -95,7 +95,7 @@ export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProp
   // Comfort mode (C14): the four steps as big buttons, no dragging.
   if (comfort) {
     return (
-      <div role="radiogroup" aria-label="Daylight" className="grid grid-cols-1" style={{ gap: 'var(--amp-space-2)' }}>
+      <div role="radiogroup" aria-label="Daylight" onKeyDown={radioArrows} className="grid grid-cols-1" style={{ gap: 'var(--amp-space-2)' }}>
         {DAYLIGHT_STEPS.map((d, i) => (
           <Tile key={d} kind="radio" layout="row" tone="sun" icon="sun" label={DAYLIGHT_LABEL[d]} selected={d === current} onSelect={() => set(i)} />
         ))}
@@ -172,7 +172,7 @@ export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProp
         {current ? DAYLIGHT_LABEL[current] : 'Drag the sun'}
       </p>
 
-      <div role="radiogroup" aria-label="Daylight steps" className="grid w-full grid-cols-4" style={{ gap: 'var(--amp-space-2)' }}>
+      <div role="radiogroup" aria-label="Daylight steps" onKeyDown={radioArrows} className="grid w-full grid-cols-4" style={{ gap: 'var(--amp-space-2)' }}>
         {DAYLIGHT_STEPS.map((d, i) => {
           const lit = current !== null && i <= step
           return (

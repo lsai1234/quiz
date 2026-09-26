@@ -1,4 +1,4 @@
-import type { AmpState } from './motion'
+import type { AmpReaction, AmpState } from './motion'
 
 /**
  * Amp in Rive (build U5): the contract between the code and the animation file.
@@ -11,7 +11,9 @@ import type { AmpState } from './motion'
  *   State machine  "Amp"
  *   Inputs         state   number  0 idle · 1 watching · 2 thinking · 3 reading · 4 calm · 5 charged
  *                  lean    number  -100 (left) … 100 (right), for watching
- *                  (U6 adds its reaction triggers here)
+ *                  flex    trigger  a day set to gym          (U6)
+ *                  sun     trigger  the daylight answer moves  (U6)
+ *                  burst   trigger  the charge dial hits full  (U6)
  *
  * The file lives at `public/consult/amp.riv` and must be under 150KB (a test
  * checks). It's switched on with NEXT_PUBLIC_AMP_RIVE=1 once it's in.
@@ -28,7 +30,10 @@ export const AMP_RIVE = {
   artboard: 'Amp',
   stateMachine: 'Amp',
   inputs: { state: 'state', lean: 'lean' },
+  triggers: { flex: 'flex', sun: 'sun', burst: 'burst' },
 } as const
+
+export type AmpRiveTriggers = Record<AmpReaction, string>
 
 export const AMP_STATE_CODE: Record<AmpState, number> = {
   idle: 0,

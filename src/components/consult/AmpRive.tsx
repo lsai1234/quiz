@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react'
 import { AMP_RIVE, AMP_STATE_CODE } from '@/lib/consult/ampRive'
-import { stateTransition, type AmpState } from '@/lib/consult/motion'
+import { stateTransition, type AmpReaction, type AmpState } from '@/lib/consult/motion'
 
 /**
  * The Rive layer over the CSS Amp (build U5). Loaded on demand by `Amp`, so
@@ -31,11 +31,12 @@ function loadRuntime(): Promise<Runtime> {
 interface Props {
   state: AmpState
   lean: number
+  reaction: { name: AmpReaction; id: number } | null
   ready: boolean
   onReady: () => void
 }
 
-export default function AmpRive({ state, lean, ready, onReady }: Props) {
+export default function AmpRive({ state, lean, reaction, ready, onReady }: Props) {
   const canvas = useRef<HTMLCanvasElement>(null)
   const inputs = useRef<Map<string, Input>>(new Map())
   const latest = useRef({ state, lean })
@@ -75,6 +76,11 @@ export default function AmpRive({ state, lean, ready, onReady }: Props) {
   useEffect(() => {
     apply(inputs.current, state, lean)
   }, [state, lean])
+
+  // U6: each reaction is a trigger input of the same name.
+  useEffect(() => {
+    if (reaction) inputs.current.get(AMP_RIVE.triggers[reaction.name])?.fire()
+  }, [reaction])
 
   return (
     <canvas

@@ -4,7 +4,7 @@ import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { AGE_LABEL, SEX_LABEL } from '@/lib/consult/summary'
 import type { AgeBand, Sex } from '@/lib/consult/types'
 import { DURATION, haptic, stateTransition } from '@/lib/consult/motion'
-import { Hint, Segmented, Tile } from '../controls'
+import { Hint, Segmented, Tile, radioArrows } from '../controls'
 import type { SceneProps } from './registry'
 
 /**
@@ -113,7 +113,7 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
   if (comfort) {
     return (
       <div className="flex flex-col" style={{ gap: 'var(--amp-space-5)' }}>
-        <div role="radiogroup" aria-label="Age band" className="grid grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
+        <div role="radiogroup" aria-label="Age band" onKeyDown={radioArrows} className="grid grid-cols-2" style={{ gap: 'var(--amp-space-2)' }}>
           {AGE_BANDS.map((b) => (
             <Tile key={b} kind="radio" layout="row" label={AGE_LABEL[b]} selected={b === current} onSelect={() => onAnswer({ age: b, sex: answers.sex })} />
           ))}

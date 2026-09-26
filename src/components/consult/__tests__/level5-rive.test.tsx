@@ -8,7 +8,8 @@ jest.mock('../AmpRive', () => {
   const { useEffect } = jest.requireActual('react')
   return {
     __esModule: true,
-    default: function Stub({ onReady, ready }: { onReady: () => void; ready: boolean }) {
+    default: function Stub({ onReady, ready, reaction }: { onReady: () => void; ready: boolean; reaction: unknown }) {
+      ;(globalThis as unknown as { lastReaction: unknown }).lastReaction = reaction
       useEffect(() => {
         const t = setTimeout(onReady, 0)
         return () => clearTimeout(t)
@@ -72,6 +73,15 @@ describe('U5 Amp in Rive: the handover', () => {
     expect(container.querySelector('canvas')).toHaveStyle({ opacity: '1' })
     expect(container.querySelector('svg')).toHaveStyle({ opacity: '0' })
     expect(amp).toHaveAttribute('aria-label', 'Amp, thinking')
+  })
+
+  it('hands each reaction to Rive, whose file fires the trigger of the same name', async () => {
+    process.env.NEXT_PUBLIC_AMP_RIVE = '1'
+    const { rerender, container } = render(<Amp state="idle" />)
+    await waitFor(() => expect(container.querySelector('[data-amp-drawn]')).toHaveAttribute('data-amp-drawn', 'rive'))
+    rerender(<Amp state="idle" reaction={{ name: 'flex', id: 1 }} />)
+    expect((globalThis as unknown as { lastReaction: unknown }).lastReaction).toEqual({ name: 'flex', id: 1 })
+    expect(AMP_RIVE.triggers).toEqual({ flex: 'flex', sun: 'sun', burst: 'burst' })
   })
 
   it('stays with the still CSS Amp under reduced motion', async () => {

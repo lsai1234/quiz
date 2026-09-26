@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from 'react'
 import {
   NUDGES,
   firstSceneIn,
+  hintFor,
   flowReducer,
   initialFlow,
   isAnswered,
@@ -14,8 +15,8 @@ import {
   visibleScenes,
   type FlowState,
 } from '@/lib/consult/flow'
-import { DURATION } from '@/lib/consult/motion'
-import { reactionTo } from '@/lib/consult/reactions'
+import { DURATION, type AmpReaction } from '@/lib/consult/motion'
+import { ampReactionTo, reactionTo } from '@/lib/consult/reactions'
 import { STOP_COPY, stopReason } from '@/lib/consult/circuit'
 import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } from '@/lib/consult/persist'
 import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult/session'
@@ -26,7 +27,7 @@ import { toSpeech, useReadAloud } from './useReadAloud'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
-import { NextButton, QuietLink, Tile } from './controls'
+import { NextButton, QuietLink, Tile, radioArrows } from './controls'
 import { SceneRenderer } from './scenes/registry'
 import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
@@ -83,6 +84,8 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   /** An upload is being read (U1/U2), and whether the tracker sheet is open. */
   const [reading, setReading] = useState(false)
   const [tracking, setTracking] = useState(false)
+  /** Amp's micro-reaction to the last answer (U6), numbered so a repeat plays again. */
+  const [ampReaction, setAmpReaction] = useState<{ name: AmpReaction; id: number; scene: SceneId } | null>(null)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
@@ -109,6 +112,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     if (persist && boot === 'ready') saveConsult({ ...state, updatedAt: Date.now() })
   }, [state, boot, persist])
 
+  // Leaving a scene ends its reaction, so coming back doesn't replay it.
+  useEffect(() => setAmpReaction(null), [state.sceneId])
+
   useEffect(() => () => {
     if (watchTimer.current) clearTimeout(watchTimer.current)
   }, [])
@@ -125,7 +131,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // worked out before the early returns below.
   const onScene = boot === 'ready' && state.phase === 'scenes'
   const shown = onScene ? words(resolveSceneDef(state.sceneId, state.answers)).copy : null
-  const aloud = useReadAloud(onScene ? state.sceneId : state.phase, shown ? toSpeech(shown.question, shown.hint) : '', onScene && state.answers.comfort)
+  const aloud = useReadAloud(onScene ? state.sceneId : state.phase, shown ? toSpeech(shown.question, hintFor(shown, state.answers.comfort)) : '', onScene && state.answers.comfort)
 
   if (boot === 'checking') return <ConsultRoot>{null}</ConsultRoot>
 
@@ -162,6 +168,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     watchTimer.current = setTimeout(() => setWatching(null), DURATION.watch)
   }
   const answer = (patch: Partial<ConsultAnswers>) => {
+    // Never in calm mode: the circuit check stays still.
+    const r = scene.mode === 'calm' ? null : ampReactionTo(state.answers, patch)
+    if (r) setAmpReaction((was) => ({ name: r, id: (was?.id ?? 0) + 1, scene: state.sceneId }))
     dispatch({ type: 'answer', patch })
     noteInteraction()
     interact(0)
@@ -241,10 +250,10 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           currentSectionId={scene.section}
           onJump={jumpToSection}
           onBack={state.history.length > 0 || onExit ? back : undefined}
-          amp={<Amp state={ampState} lean={watching ?? 0} />}
+          amp={<Amp state={ampState} lean={watching ?? 0} reaction={mode === 'calm' || ampReaction?.scene !== state.sceneId ? null : ampReaction} />}
           reaction={reaction}
           question={scene.copy.question}
-          hint={scene.copy.hint}
+          hint={hintFor(scene.copy, state.answers.comfort)}
           headingRef={headingRef}
           action={
             <NextButton ready={ready} nudge={NUDGES[state.sceneId]} resetKey={state.sceneId} onClick={next}>
@@ -488,7 +497,7 @@ function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) =>
         <p style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-meta)' }}>
           Nothing gets decided until I&apos;ve got the full picture and you&apos;ve checked it.
         </p>
-        <div role="radiogroup" aria-label="Route" className="flex flex-col" style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-2)' }}>
+        <div role="radiogroup" aria-label="Route" onKeyDown={(e) => radioArrows(e, false)} className="flex flex-col" style={{ gap: 'var(--amp-space-3)', marginTop: 'var(--amp-space-2)' }}>
           <Tile kind="radio" layout="row" icon="bolt" label="Speed run" sub="About a minute · the essentials" selected={false} onSelect={() => onPick('speed')} />
           <Tile kind="radio" layout="row" icon="battery" label="Deep charge" sub="A few minutes · the full picture" selected={false} onSelect={() => onPick('deep')} />
         </div>

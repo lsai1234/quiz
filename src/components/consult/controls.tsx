@@ -177,6 +177,23 @@ interface SegmentedProps<T extends string> {
   onChange: (value: T) => void
 }
 
+/**
+ * Arrow keys for a radiogroup of tiles (U7): move to the next or previous
+ * radio, as the ARIA pattern expects. `select` picks it as it goes, which is
+ * right for an answer; a choice that navigates away (the route) only moves focus.
+ */
+export function radioArrows(e: KeyboardEvent<HTMLElement>, select = true) {
+  const delta = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0
+  if (!delta) return
+  const radios = [...e.currentTarget.querySelectorAll<HTMLElement>('[role="radio"]')]
+  const i = radios.indexOf(document.activeElement as HTMLElement)
+  if (i === -1) return
+  e.preventDefault()
+  const next = radios[(i + delta + radios.length) % radios.length]
+  next.focus()
+  if (select) next.click()
+}
+
 /** A single choice, a word or two long, as a row. A real radiogroup: arrows move. */
 export function Segmented<T extends string>({ label, options, value, onChange }: SegmentedProps<T>) {
   const refs = useRef<(HTMLButtonElement | null)[]>([])

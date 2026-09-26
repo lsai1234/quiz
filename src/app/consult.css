@@ -242,6 +242,24 @@
   100% { transform: scale(1); box-shadow: 0 0 0 28px transparent; }
 }
 
+/* Micro-reactions (U6): one-shot, each started by something the person did. */
+@keyframes amp-flex {
+  0%, 100% { transform: scale(1) rotate(0); }
+  25% { transform: scale(1.22) rotate(-10deg); }
+  55% { transform: scale(1.14) rotate(8deg); }
+  80% { transform: scale(1.06) rotate(-3deg); }
+}
+
+@keyframes amp-sun {
+  0%, 100% { opacity: 0; }
+  35% { opacity: 1; }
+}
+
+@keyframes amp-full {
+  0%, 100% { transform: scale(1); opacity: 0; }
+  30% { transform: scale(1.3); opacity: 1; }
+}
+
 @keyframes amp-scan {
   from { transform: translate3d(0, -110%, 0); }
   to { transform: translate3d(0, 110%, 0); }

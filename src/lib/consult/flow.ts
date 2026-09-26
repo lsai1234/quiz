@@ -50,11 +50,18 @@ export interface PlaceholderOption {
 export interface SceneCopy {
   question: string
   hint?: string
+  /** The hint in comfort mode, where drags and wheels become buttons (C14). */
+  comfortHint?: string
   next?: string
   /** AI-written option sub-lines, by key (V2). Never set by the script. */
   labels?: Record<string, string>
   /** Amp's AI-written reaction to the answer before this scene (V4). */
   react?: string
+}
+
+/** The hint to show: comfort mode's own where the layout differs. */
+export function hintFor(copy: SceneCopy, comfort: boolean): string | undefined {
+  return (comfort && copy.comfortHint) || copy.hint
 }
 
 /**
