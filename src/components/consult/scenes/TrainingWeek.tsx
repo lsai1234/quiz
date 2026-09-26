@@ -6,6 +6,7 @@ import type { DayType, Intensity } from '@/lib/consult/types'
 import { haptic, stateTransition } from '@/lib/consult/motion'
 import { Glyph, type GlyphName } from '../Glyph'
 import { Chip, Segmented } from '../controls'
+import { WhatsThis } from '../WhatsThis'
 import type { SceneProps } from './registry'
 
 /**
@@ -67,7 +68,7 @@ const LOOK: Record<DayType, { icon: GlyphName; style: CSSProperties; label: stri
 
 const INTENSITIES: Intensity[] = ['easy', 'steady', 'hard']
 
-export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort }: SceneProps) {
+export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai }: SceneProps) {
   const week = answers.week ?? REST_WEEK
   const answered = answers.week !== null
   const allRest = answered && week.every((d) => d === 'rest')
@@ -84,9 +85,12 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort }: 
   // some. The same block in both layouts.
   const detail = scene.detail && answered && !allRest ? (
     <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
-          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
-            How hard do most sessions feel?
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+              How hard do most sessions feel?
+            </p>
+            <WhatsThis term="intensity" questions={ai} />
+          </div>
           <Segmented
             label="How hard do most sessions feel?"
             options={INTENSITIES.map((i) => ({ value: i, label: INTENSITY_LABEL[i] }))}

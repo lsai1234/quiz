@@ -114,7 +114,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // Amp's words (V1/V2): only when switched on in the hub, and never for a
   // fixed-state run (the workshop, tests).
   const { consultAi } = useQuizArmState()
-  const { words } = useAiCopy(state, consultAi && persist)
+  const { words, aiDown } = useAiCopy(state, consultAi && persist)
 
   if (boot === 'checking') return <ConsultRoot>{null}</ConsultRoot>
 
@@ -239,7 +239,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           footer={
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
               {/* Only with the AI layer on: with it off there's nobody to read it (V6). */}
-              {mode !== 'calm' && consultAi && (
+              {mode !== 'calm' && consultAi && !aiDown && (
                 <QuietLink icon="spark" onClick={() => setTelling(true)}>
                   Tell Amp more
                 </QuietLink>
@@ -275,6 +275,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             onEdit={editFromReview}
             onInteract={interact}
             onDecline={scene.id === 'circuit' ? () => dispatch({ type: 'decline' }) : undefined}
+            ai={consultAi && !aiDown}
           />
         </SceneShell>
       </SceneStage>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { loadCatalogue } from '@/lib/catalogue/load'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { DURATION, chargeTransition, haptic, stateTransition } from '@/lib/consult/motion'
-import { chargeProfile } from '@/lib/consult/profile'
+import { chargeProfile, profileInWords } from '@/lib/consult/profile'
 import { EmptyStackError, applyToResultsPage, prepareResults, type ResultsBundle } from '@/lib/consult/results'
 import { saveHandoffLocally, saveHandoffRemotely } from '@/lib/consult/handoff'
 import { visibleScenes, type FlowState } from '@/lib/consult/flow'
@@ -145,6 +145,11 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
       </h1>
 
       {!full && <ChargeProfileChart profile={chargeProfile(state.answers)} />}
+      {!full && profileInWords(state.answers) && (
+        <p className="text-center" style={{ color: 'var(--amp-ink-2)', fontSize: 'var(--amp-text-lead)' }}>
+          {profileInWords(state.answers)}
+        </p>
+      )}
 
       {!full && (
         <ol className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label="Analysis steps">

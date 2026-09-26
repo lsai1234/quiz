@@ -44,6 +44,8 @@ export interface SceneProps {
   onInteract?: (lean: number) => void
   /** The circuit check only: "I'd rather not answer these". */
   onDecline?: () => void
+  /** The AI layer is on and answering: "What's this?" takes follow-up questions (V7). */
+  ai?: boolean
 }
 
 export interface SceneEntry {

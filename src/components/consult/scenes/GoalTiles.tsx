@@ -5,6 +5,7 @@ import type { ConsultGoal } from '@/lib/consult/types'
 import { GOAL_LABEL } from '@/lib/consult/summary'
 import { Glyph, type GlyphName } from '../Glyph'
 import { Hint, Tile } from '../controls'
+import { WhatsThis } from '../WhatsThis'
 import type { SceneProps } from './registry'
 
 /**
@@ -46,7 +47,7 @@ export function promoteGoal(goals: ConsultGoal[], goal: ConsultGoal): ConsultGoa
   return next
 }
 
-export function GoalTiles({ scene, answers, onAnswer }: SceneProps) {
+export function GoalTiles({ scene, answers, onAnswer, ai }: SceneProps) {
   const goals = answers.goals
   const [full, setFull] = useState(false)
 
@@ -62,15 +63,20 @@ export function GoalTiles({ scene, answers, onAnswer }: SceneProps) {
         {GOALS.map((g) => {
           const rank = goals.indexOf(g.id)
           return (
-            <Tile
-              key={g.id}
-              icon={g.icon}
-              label={GOAL_LABEL[g.id]}
-              sub={scene.copy.labels?.[g.id] ?? g.sub}
-              selected={rank >= 0}
-              badge={rank >= 0 ? rank + 1 : undefined}
-              onSelect={() => tap(g.id)}
-            />
+            <div key={g.id} className="relative">
+              <Tile
+                icon={g.icon}
+                label={GOAL_LABEL[g.id]}
+                sub={scene.copy.labels?.[g.id] ?? g.sub}
+                selected={rank >= 0}
+                badge={rank >= 0 ? rank + 1 : undefined}
+                onSelect={() => tap(g.id)}
+              />
+              {/* A sibling of the tile, not inside it: a button can't hold a button. */}
+              <span className="absolute" style={{ right: 'var(--amp-space-1)', bottom: 'var(--amp-space-1)' }}>
+                <WhatsThis term={g.id} questions={ai} />
+              </span>
+            </div>
           )
         })}
       </div>

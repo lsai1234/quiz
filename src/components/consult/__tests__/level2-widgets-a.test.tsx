@@ -32,7 +32,7 @@ describe('C2 goal tiles', () => {
 
   it('offers six goals', () => {
     render(<Harness id="goals" />)
-    expect(screen.getByRole('group', { name: 'Goals, up to three' }).querySelectorAll('button')).toHaveLength(6)
+    expect(screen.getByRole('group', { name: 'Goals, up to three' }).querySelectorAll('button[aria-pressed]')).toHaveLength(6)
   })
 
   it('numbers goals in the order tapped', () => {

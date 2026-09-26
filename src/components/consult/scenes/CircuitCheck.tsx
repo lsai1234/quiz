@@ -6,6 +6,7 @@ import { CIRCUIT_LABEL } from '@/lib/consult/summary'
 import type { CircuitAnswer, CircuitFlag } from '@/lib/consult/types'
 import { stateTransition } from '@/lib/consult/motion'
 import { Glyph } from '../Glyph'
+import { WhatsThis } from '../WhatsThis'
 import type { SceneProps } from './registry'
 
 /**
@@ -58,6 +59,10 @@ export function CircuitCheck({ answers, onAnswer, onDecline }: SceneProps) {
 
   return (
     <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
+      {/* What the check is for — approved words only, never a question box. */}
+      <span className="self-end" style={{ marginTop: 'calc(var(--amp-space-3) * -1)' }}>
+        <WhatsThis term="circuit-check" />
+      </span>
       {/* Consent. */}
       <div
         style={{

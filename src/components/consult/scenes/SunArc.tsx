@@ -6,6 +6,7 @@ import type { Daylight } from '@/lib/consult/types'
 import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
 import { useDrag, type DragPoint } from '../useDrag'
 import { Tile } from '../controls'
+import { WhatsThis } from '../WhatsThis'
 import type { SceneProps } from './registry'
 
 /**
@@ -53,7 +54,7 @@ export function stepNearest(x: number, y: number): number {
   return best
 }
 
-export function SunArc({ answers, onAnswer, onInteract, comfort }: SceneProps) {
+export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProps) {
   const current = answers.daylight
   const step = current ? DAYLIGHT_STEPS.indexOf(current) : 0
 
@@ -154,6 +155,9 @@ export function SunArc({ answers, onAnswer, onInteract, comfort }: SceneProps) {
         </svg>
       </div>
 
+      <span className="self-end" style={{ marginTop: 'calc(var(--amp-space-3) * -1)' }}>
+        <WhatsThis term="daylight" questions={ai} />
+      </span>
       <p
         aria-hidden
         className="uppercase"

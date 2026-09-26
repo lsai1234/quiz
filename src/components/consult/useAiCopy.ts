@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { COPY_BUDGET_MS, NEVER_AI, summariseForCopy, validateSceneCopy, type AiSceneCopy } from '@/lib/consult/ai/copy'
 import { isAnswered, resolveSceneDef, sceneAfter, type FlowState, type SceneDef } from '@/lib/consult/flow'
 import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
@@ -14,7 +14,15 @@ import type { ConsultAnswers, SceneId } from '@/lib/consult/types'
  * they were in hand the moment it appeared; words that arrive late are kept
  * for next time, never swapped in under someone's eyes. Anything slow, failed
  * or invalid leaves the scripted copy, with no visible break.
+ *
+ * Lost signal (V6): after `BREAKER` misses in a row the hook stops asking for
+ * the rest of the visit — a down or slow service costs nothing more, and the
+ * consult carries on in its scripted words. `aiDown` tells the screen so
+ * "Tell Amp more" can step aside too.
  */
+
+/** Consecutive misses before the consult stops asking. */
+export const BREAKER = 3
 
 const key = (scene: SceneId, answers: ConsultAnswers) => `${scene}|${summariseForCopy(answers)}`
 
@@ -41,13 +49,15 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
   const cache = useRef(new Map<string, AiSceneCopy | null>())
   const inflight = useRef(new Set<string>())
   const visit = useRef<{ sceneId: SceneId | null; copy: AiSceneCopy | null }>({ sceneId: null, copy: null })
+  const misses = useRef(0)
+  const [aiDown, setAiDown] = useState(false)
 
   const ready = state.phase === 'scenes' && isAnswered(state.sceneId, state.answers)
   const next = ready ? sceneAfter(state.sceneId, state.answers) : null
   const summary = summariseForCopy(state.answers)
 
   useEffect(() => {
-    if (!enabled || !next || NEVER_AI.includes(next)) return
+    if (!enabled || aiDown || !next || NEVER_AI.includes(next)) return
     const k = key(next, state.answers)
     if (cache.current.has(k) || inflight.current.has(k)) return
     inflight.current.add(k)
@@ -56,10 +66,12 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
     void fetcher(scene, state.answers, state.sceneId).then((copy) => {
       inflight.current.delete(k)
       cache.current.set(k, copy)
+      misses.current = copy ? 0 : misses.current + 1
+      if (misses.current >= BREAKER) setAiDown(true)
     })
     // `summary` stands in for the answers: it's all the words depend on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, next, summary, fetcher])
+  }, [enabled, aiDown, next, summary, fetcher])
 
   /** The scene as shown this visit: its AI words if they were ready when it appeared. */
   const words = useCallback(
@@ -74,5 +86,5 @@ export function useAiCopy(state: FlowState, enabled: boolean, fetcher = fetchSce
     [enabled, state.answers],
   )
 
-  return { words }
+  return { words, aiDown }
 }
