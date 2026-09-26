@@ -58,7 +58,7 @@ describe('H9 exclusions carry into extras', () => {
 describe('H10 change my answers', () => {
   it('links from the results page back to the review', () => {
     render(<ConsultNote exclusions={{ consultId: 'c_x00001', excluded: [], pharmacistNote: false }} />)
-    expect(screen.getByRole('link', { name: 'Change my answers' })).toHaveAttribute('href', '/consult?review=1')
+    expect(screen.getByRole('link', { name: 'Change my answers' })).toHaveAttribute('href', '/quizv2?review=1')
     expect(screen.queryByRole('note')).toBeNull()
   })
 

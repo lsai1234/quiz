@@ -68,7 +68,7 @@ test('v1: the CTA stays in frame as the window shrinks', async ({ page }) => {
 })
 
 test('v2: the CTA stays in frame as the window shrinks', async ({ page }) => {
-  await page.goto('/quizv2')
+  await page.goto('/?quizArm=v2')
   const track = page.getByRole('button', { name: /Performance \+ wellness/ })
   await expect(track).toBeVisible()
   await expect
@@ -91,7 +91,7 @@ test('the shell is the right height before React has attached', async ({ page })
   // measurement waited for it, that is how long the button would spend hidden.
   await page.route('**/_next/static/chunks/**', (route) => route.abort())
   await page.setViewportSize({ width: 390, height: 600 })
-  await page.goto('/quizv2', { waitUntil: 'domcontentloaded' }).catch(() => {})
+  await page.goto('/?quizArm=v2', { waitUntil: 'domcontentloaded' }).catch(() => {})
 
   const measured = await page.evaluate(() => ({
     inner: window.innerHeight,
@@ -104,7 +104,7 @@ test('the on-screen keyboard does not collapse the shell', async ({ page }) => {
   // `visualViewport` shrinks when the keyboard opens. Sizing to it would fold
   // the about-you screen into the strip above the keyboard mid-answer, so the
   // measurement deliberately ignores it.
-  await page.goto('/quizv2')
+  await page.goto('/?quizArm=v2')
   const before = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim())
   await page.evaluate(() => window.visualViewport?.dispatchEvent(new Event('resize')))

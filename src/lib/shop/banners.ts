@@ -126,7 +126,7 @@ export function validateCopy(input: ShopBannerInput, place: Placement): string |
     return 'Describe the picture. It is what a screen reader announces, and what shows if the image fails.'
   }
   if (input.alt.length > MAX_ALT) return `Descriptions are ${MAX_ALT} characters at most.`
-  if (!isSafeHref(input.href)) return 'The link has to be a path on this site, like /shop or /quizv2.'
+  if (!isSafeHref(input.href)) return 'The link has to be a path on this site, like /shop or /bundles.'
   return null
 }
 

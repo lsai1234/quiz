@@ -338,7 +338,7 @@ function PlacementCard({
 
           <Input
             label="Links to"
-            hint="A path on this site, like /shop or /quizv2"
+            hint="A path on this site, like /shop or /bundles"
             value={draft.href}
             onChange={(e) => setDraft((d) => ({ ...d, href: e.target.value }))}
           />

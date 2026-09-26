@@ -83,7 +83,8 @@ export function proxy(req: NextRequest) {
   }
 
   // `?consultArm=consult|quiz` pins the hero's front door (H11), for QA and
-  // founder review, the same way `?quizArm=` pins the quiz.
+  // founder review, the same way `?quizArm=` pins the quiz. It has no effect
+  // while the rollout is off: then the consult is only at /quizv2, signed in.
   const consultPinned = parseConsultArm(req.nextUrl.searchParams.get('consultArm'))
   if (consultPinned) {
     response.cookies.set(CONSULT_ARM_COOKIE, consultPinned, {

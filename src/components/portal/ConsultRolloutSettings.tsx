@@ -77,7 +77,8 @@ export function ConsultRolloutSettings() {
         <Heading title="The Amp Consult">
           What the first screen offers. <strong>Option</strong> shows the consult beside the two quiz tracks.{' '}
           <strong>Split</strong> shows each visitor one door — the consult or the quiz — so the two can be compared.
-          Add <code>?consultArm=consult</code> or <code>?consultArm=quiz</code> to a URL to see either yourself.
+          <strong>Off</strong> keeps it founders-only: open <a href="/quizv2">/quizv2</a> while signed in.
+          Once it&apos;s live, add <code>?consultArm=consult</code> or <code>?consultArm=quiz</code> to a URL to see either door yourself.
         </Heading>
         <Segmented
           label="What the first screen offers"

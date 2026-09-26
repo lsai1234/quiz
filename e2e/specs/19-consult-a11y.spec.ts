@@ -1,12 +1,14 @@
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'fs'
 import path from 'path'
+import { founderSessionViaApi } from '../support/accounts'
 
 /**
  * The consult's accessibility pass (build U7), in a real browser.
  *
  *   1. axe on every screen, standard size and comfort, colour contrast
  *      included — the one rule jsdom can't run (see level5-a11y.test.tsx).
+ *   3. Signed out, /quizv2 shows the founder sign-in and none of the consult.
  *   2. The whole consult, start to handoff, with the keyboard only: every
  *      control reached with Tab and worked with Space, Enter or the arrows.
  */
@@ -139,12 +141,14 @@ async function answerByKeyboard(page: Page) {
 
 test.describe('consult accessibility (U7)', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/consult')
+    // The consult is founders-only, at /quizv2.
+    await founderSessionViaApi(page)
+    await page.goto('/quizv2')
     await page.evaluate(() => {
       localStorage.clear()
       sessionStorage.clear()
     })
-    await page.goto('/consult')
+    await page.goto('/quizv2')
     await expect(page.getByRole('radio', { name: /^Deep charge/ })).toBeVisible()
   })
 
@@ -170,7 +174,7 @@ test.describe('consult accessibility (U7)', () => {
     await audit(page, 'fully charged')
     await tabTo(page, /^See my stacks$/)
     await page.keyboard.press('Enter')
-    await expect(page).not.toHaveURL(/\/consult$/)
+    await expect(page).not.toHaveURL(/\/quizv2$/)
   })
 
   test('comfort mode passes axe on every screen too', async ({ page }) => {
@@ -188,5 +192,13 @@ test.describe('consult accessibility (U7)', () => {
       await nextByKeyboard(page)
     }
     expect(seen.length).toBeGreaterThanOrEqual(10)
+  })
+
+  test('is founders-only: signed out, /quizv2 is the sign-in and /consult leads there', async ({ browser }) => {
+    const page = await (await browser.newContext()).newPage()
+    await page.goto('/consult')
+    await expect(page).toHaveURL(/\/quizv2$/)
+    await expect(page.getByLabel(/email/i)).toBeVisible()
+    await expect(page.getByRole('radio', { name: /^Deep charge/ })).toHaveCount(0)
   })
 })

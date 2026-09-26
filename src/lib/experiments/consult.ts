@@ -44,7 +44,7 @@ export interface ConsultRollout {
   ai: boolean
 }
 
-export const DEFAULT_CONSULT_ROLLOUT: ConsultRollout = { mode: 'option', split: 50, ai: false }
+export const DEFAULT_CONSULT_ROLLOUT: ConsultRollout = { mode: 'off', split: 50, ai: false }
 
 /** Cookie pinning the consult arm outright, set from `?consultArm=`. */
 export const CONSULT_ARM_COOKIE = 'chrgd_consult_arm'
@@ -52,11 +52,12 @@ export const CONSULT_ARM_COOKIE = 'chrgd_consult_arm'
 const clampSplit = (n: number) => Math.max(0, Math.min(100, Math.round(n)))
 
 export function heroOfferFor(bucket: number | null, rollout: ConsultRollout, pinned?: ConsultArm | null): HeroOffer {
+  // Off means off, pin or no pin: while the consult is founders-only it is
+  // reached at /quizv2 behind the sign-in, never from the public home page.
+  if (rollout.mode === 'off') return 'quiz-only'
   if (pinned === 'consult') return 'consult-only'
   if (pinned === 'quiz') return 'quiz-only'
   switch (rollout.mode) {
-    case 'off':
-      return 'quiz-only'
     case 'option':
       return 'both'
     case 'all':

@@ -1,25 +1,10 @@
-import type { Metadata } from 'next'
-import { Suspense } from 'react'
-import { ConsultPage } from '@/components/consult/ConsultPage'
+import { redirect } from 'next/navigation'
 
 /**
- * The Amp Consult on its own URL.
- *
- * Customers reach it from the third option on the hero at `/`. This is the
- * direct entrance for review and testing, kept out of the index like
- * `/quizv2` so it doesn't compete with the home page in search.
+ * The consult's old address. It now lives at `/quizv2`, behind the founder
+ * sign-in; this keeps old links (and "Change my answers") working.
  */
-export const metadata: Metadata = {
-  title: 'The Amp Consult · CHRGD',
-  robots: { index: false, follow: false },
-}
-
-export default function Page() {
-  // The page reads `?review=1`, and a search param read has to sit under a
-  // Suspense boundary for the rest of the route to stay static.
-  return (
-    <Suspense>
-      <ConsultPage />
-    </Suspense>
-  )
+export default async function Page({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const review = (await searchParams).review
+  redirect(review ? '/quizv2?review=1' : '/quizv2')
 }

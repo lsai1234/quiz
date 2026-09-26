@@ -7,9 +7,9 @@ import {
 } from '../consult'
 
 describe('H11 consult rollout', () => {
-  it('defaults to the consult as a third option', () => {
-    expect(DEFAULT_CONSULT_ROLLOUT.mode).toBe('option')
-    expect(heroOfferFor(10, DEFAULT_CONSULT_ROLLOUT)).toBe('both')
+  it('defaults to off: customers see the quiz only, founders use /quizv2', () => {
+    expect(DEFAULT_CONSULT_ROLLOUT.mode).toBe('off')
+    expect(heroOfferFor(10, DEFAULT_CONSULT_ROLLOUT)).toBe('quiz-only')
   })
 
   it('switches without a deploy: off, option and all apply to everyone', () => {
@@ -41,9 +41,13 @@ describe('H11 consult rollout', () => {
     expect(heroOfferFor(null, { mode: 'split', split: 100, ai: false })).toBe('quiz-only')
   })
 
-  it('lets a pin win over every mode', () => {
-    expect(heroOfferFor(0, { mode: 'off', split: 0, ai: false }, 'consult')).toBe('consult-only')
+  it('lets a pin win over every live mode', () => {
+    expect(heroOfferFor(0, { mode: 'option', split: 0, ai: false }, 'consult')).toBe('consult-only')
     expect(heroOfferFor(99, { mode: 'all', split: 100, ai: false }, 'quiz')).toBe('quiz-only')
+  })
+
+  it('never lets a pin open the consult to the public while it is off', () => {
+    expect(heroOfferFor(0, { mode: 'off', split: 0, ai: false }, 'consult')).toBe('quiz-only')
   })
 
   it('keeps the AI layer off unless switched on', () => {
@@ -54,7 +58,7 @@ describe('H11 consult rollout', () => {
 
   it('normalises a bad stored setting rather than breaking the hero', () => {
     expect(normaliseConsultRollout(null)).toEqual(DEFAULT_CONSULT_ROLLOUT)
-    expect(normaliseConsultRollout({ mode: 'everything', split: 400, ai: false })).toEqual({ mode: 'option', split: 100, ai: false })
+    expect(normaliseConsultRollout({ mode: 'everything', split: 400, ai: false })).toEqual({ mode: 'off', split: 100, ai: false })
     expect(parseConsultArm('nope')).toBeNull()
     expect(consultArmFor('consult-only')).toBe('consult')
   })

@@ -1,19 +1,36 @@
 import type { Metadata } from 'next'
-import { QuizV2Experience } from '@/components/quiz/v2/QuizV2Experience'
+import { Suspense } from 'react'
+import { ConsultPage } from '@/components/consult/ConsultPage'
+import { PortalLogin } from '@/components/portal/PortalLogin'
+import { founderAuthMode } from '@/lib/portal/auth'
+import { isPortalAuthed } from '@/lib/portal/guard'
 
 /**
- * The adaptive interview, on its own URL.
+ * The Amp Consult, for founders only.
  *
- * Not linked from anywhere on the customer site — which customers see is
- * decided by the experiment on `/`. This is the review and testing entrance,
- * and it is deliberately not indexed: a second URL serving the same quiz would
- * split the site's own search results against itself.
+ * `/quizv2` used to serve the adaptive interview on its own; it now serves the
+ * consult, behind the same sign-in as the founder hub. Signed out, it shows the
+ * founder login and nothing else — none of the consult's code is sent. The
+ * adaptive interview itself is untouched and still reachable where customers
+ * get it, on `/` (pin it with `/?quizArm=v2`).
+ *
+ * Whether customers see the consult on `/` is a separate switch, in the hub
+ * (Settings → Quiz), and it is off by default.
  */
 export const metadata: Metadata = {
-  title: 'Build your stack · CHRGD',
+  title: 'The Amp Consult · CHRGD',
   robots: { index: false, follow: false },
 }
 
-export default function QuizV2Page() {
-  return <QuizV2Experience />
+export const dynamic = 'force-dynamic'
+
+export default async function QuizV2Page() {
+  if (!(await isPortalAuthed())) return <PortalLogin mode={founderAuthMode()} />
+  // The page reads `?review=1`, and a search param read has to sit under a
+  // Suspense boundary.
+  return (
+    <Suspense>
+      <ConsultPage />
+    </Suspense>
+  )
 }

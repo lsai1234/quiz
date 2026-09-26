@@ -33,7 +33,7 @@ export function ConsultNote({ exclusions }: { exclusions: ConsultExclusions }) {
         </div>
       )}
       <Link
-        href="/consult?review=1"
+        href="/quizv2?review=1"
         className="self-start text-xs underline underline-offset-4"
         style={{ color: 'var(--color-muted)' }}
       >

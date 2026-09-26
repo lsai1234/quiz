@@ -49,7 +49,7 @@ async function answerOne(page: Page, prefer?: string): Promise<string> {
 
 /** Open v2 and choose goals. */
 async function startV2(page: Page, goal = 'More energy') {
-  await page.goto('/quizv2')
+  await page.goto('/?quizArm=v2')
   const track = page.getByRole('button', { name: /Performance \+ wellness/ })
   await expect(track).toBeVisible()
   // The page is server-rendered, so the button is clickable a moment before
