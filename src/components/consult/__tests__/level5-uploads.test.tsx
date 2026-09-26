@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { trainingAverage } from '@/lib/consult/training'
 import { useState } from 'react'
 import { SCENES } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS, type ConsultAnswers, type ShelfItem } from '@/lib/consult/types'
@@ -102,12 +103,13 @@ describe('U1 shelf scan', () => {
 })
 
 describe('U2 tracker read', () => {
-  const read = { bed: 23 * 60, wake: 6 * 60 + 30, quality: null, week: ['gym', 'rest', 'gym', 'rest', 'cardio', 'rest', 'rest'] as ConsultAnswers['week'] }
+  // A month: 8 gym and 4 cardio sessions over 4 weeks.
+  const read = { bed: 23 * 60, wake: 6 * 60 + 30, quality: null, weeks: 4, workouts: { gym: 8, cardio: 4, sport: 0 } }
 
-  it('fills only the confirmed answers, keeping a sleep quality already given', () => {
+  it('fills only the confirmed answers, as an average a week, keeping a sleep quality already given', () => {
     const answers = { ...EMPTY_ANSWERS, sleep: { bed: 0, wake: 480, quality: 'broken' as const } }
     expect(trackerPatch(read, ['sleep'], answers)).toEqual({ sleep: { bed: 1380, wake: 390, quality: 'broken' } })
-    expect(trackerPatch(read, ['week'], answers)).toEqual({ week: read.week })
+    expect(trackerPatch(read, ['training'], answers)).toEqual({ training: trainingAverage({ gym: 2, cardio: 1 }) })
   })
 
   function mockScan(body: unknown) {
@@ -151,17 +153,43 @@ describe('U2 tracker read', () => {
     tick()
     expect(screen.getByRole('button', { name: /Take or choose a photo/ })).toHaveAttribute('aria-disabled', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'Oura' }))
-    expect(screen.getByText(/Screenshot this: Sleep → the Trends view/)).toBeInTheDocument()
+    // A month, not last week.
+    expect(screen.getByText(/Screenshot this: Sleep trends set to Month/)).toBeInTheDocument()
+    expect(screen.getByText(/one week can be unusual/)).toBeInTheDocument()
     await upload()
     expect(document.querySelector('[data-amp-state="reading"]')).not.toBeNull()
     const body = JSON.parse(String((global.fetch as jest.Mock).mock.calls.find(([u]) => u === '/api/consult/scan')[1].body))
     expect(body).toMatchObject({ kind: 'tracker', app: 'oura' })
-    await act(async () => release({ read: { ...read, bed: 1380, wake: 390 } }))
-    expect(screen.getByText('Sleep 23:00 → 06:30')).toBeInTheDocument()
-    expect(screen.getByText('3 workouts this week')).toBeInTheDocument()
+    await act(async () => release({ read }))
+    expect(screen.getByText('Sleep about 23:00 → 06:30')).toBeInTheDocument()
+    expect(screen.getByText('About 3 workouts a week, over 4 weeks: 2 gym, 1 cardio')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Use these' }))
     expect(document.querySelector('[data-amp-state="reading"]')).toBeNull()
-    expect(screen.getByRole('button', { name: /^Wednesday/ })).toHaveAccessibleName('Wednesday: Gym. Tap to change.')
-    expect(screen.getByRole('button', { name: /^Friday/ })).toHaveAccessibleName('Friday: Cardio. Tap to change.')
+    // Training fills "It varies", as an average.
+    expect(screen.getByRole('radio', { name: 'It varies' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('About 3 a week · 2 Gym · 1 Cardio')).toBeInTheDocument()
+  })
+
+  it('won’t use a single week unless it was a normal one, and combines another screenshot', async () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    const replies = [
+      { read: { bed: null, wake: null, quality: null, weeks: 1, workouts: { gym: 5, cardio: 0, sport: 0 } } },
+      { read: { bed: null, wake: null, quality: null, weeks: 3, workouts: { gym: 3, cardio: 3, sport: 0 } } },
+    ]
+    global.fetch = jest.fn(async (url: RequestInfo | URL) => ({ ok: true, json: async () => (String(url) === '/api/consult/scan' ? replies.shift() : { fallback: true }) }) as unknown as Response) as typeof fetch
+    render(<AmpConsult />)
+    toTraining()
+    fireEvent.click(screen.getByRole('button', { name: 'Fill from my tracker' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Whoop' }))
+    tick()
+    await upload()
+    expect(screen.getByText('About 5 workouts in that week: 5 gym')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'That was a normal week for me' })).toHaveAttribute('aria-checked', 'false')
+    // Another screenshot: four weeks together, averaged.
+    await upload()
+    expect(screen.getByText('About 3 workouts a week, over 4 weeks: 2 gym, 1 cardio')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox', { name: 'That was a normal week for me' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Use these' }))
+    expect(screen.getByText('About 3 a week · 2 Gym · 1 Cardio')).toBeInTheDocument()
   })
 })

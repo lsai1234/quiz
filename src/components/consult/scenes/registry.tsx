@@ -67,7 +67,7 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
   // from the Weight loss card and confirmed, with consent, on the circuit check.
   'goal-tiles': { component: GoalTiles, writes: ['goals', 'circuit'] },
   'age-wheel': { component: AgeWheel, writes: ['age', 'sex'] },
-  'training-week': { component: TrainingWeek, writes: ['week', 'intensity'] },
+  'training-week': { component: TrainingWeek, writes: ['training', 'intensity'] },
   'charge-dial': { component: ChargeDial, writes: ['energy'] },
   'sleep-window': { component: SleepWindow, writes: ['sleep'] },
   'sun-arc': { component: SunArc, writes: ['daylight'] },
@@ -83,7 +83,7 @@ export const SCENE_REGISTRY: Record<string, SceneEntry> = {
 const PLACEHOLDER_WRITES: Record<SceneId, (keyof ConsultAnswers)[]> = {
   goals: ['goals'],
   about: ['age', 'sex'],
-  training: ['week'],
+  training: ['training'],
   energy: ['energy'],
   sleep: ['sleep'],
   daylight: ['daylight'],

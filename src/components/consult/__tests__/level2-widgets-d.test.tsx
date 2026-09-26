@@ -1,4 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { setDay } from './drive'
+import { trainingDays } from '@/lib/consult/training'
 import { useState } from 'react'
 import { SCENES, flowReducer, initialFlow, isAnswered, resolveSceneDef, visibleScenes } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
@@ -77,14 +79,14 @@ describe('C12 branching', () => {
     const spy = jest.fn()
     render(<Harness id="training" start={{ goals: ['performance'] }} spy={spy} />)
     expect(screen.queryByRole('radiogroup', { name: 'How hard do most sessions feel?' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
-    expect(isAnswered('training', { ...perf, week: ['gym', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest'] })).toBe(false)
+    setDay('Monday', 'Gym')
+    expect(isAnswered('training', { ...perf, training: trainingDays(['gym', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest']) })).toBe(false)
     fireEvent.click(screen.getByRole('radio', { name: 'Flat out' }))
     expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ intensity: 'hard' }))
   })
 
   it("doesn't ask how hard a rest week is", () => {
-    expect(isAnswered('training', { ...perf, week: Array(7).fill('rest') })).toBe(true)
+    expect(isAnswered('training', { ...perf, training: trainingDays(Array(7).fill('rest')) })).toBe(true)
   })
 
   it('emphasises the body map for healthy ageing and older bands', () => {

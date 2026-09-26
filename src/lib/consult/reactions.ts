@@ -8,6 +8,7 @@
  */
 
 import type { AmpReaction } from './motion'
+import { countsByType, sessionsPerWeek } from './training'
 import type { AgeBand, ConsultAnswers, ConsultGoal, SceneId } from './types'
 
 const GOAL_WORDS: Record<ConsultGoal, string> = {
@@ -30,9 +31,7 @@ const AGE_WORDS: Record<AgeBand, string> = {
   '65-plus': '65+',
 }
 
-export function sessionsPerWeek(week: ConsultAnswers['week']): number {
-  return (week ?? []).filter((d) => d !== 'rest').length
-}
+export { sessionsPerWeek } from './training'
 
 export function sleepHours(sleep: ConsultAnswers['sleep']): number {
   if (!sleep) return 0
@@ -54,11 +53,14 @@ export function reactionTo(scene: SceneId, a: ConsultAnswers): string {
     case 'about':
       return a.age ? `${AGE_WORDS[a.age]}. Noted.` : ''
     case 'training': {
-      const n = sessionsPerWeek(a.week)
+      const n = Math.round(sessionsPerWeek(a.training))
       if (n === 0) return 'A rest-heavy week. Fair.'
-      if (n <= 2) return `${n === 1 ? 'One session' : 'Two sessions'} a week. Good start.`
-      if (n <= 4) return `${WORDS[n]} a week, solid.`
-      return `${WORDS[n]} a week. Serious.`
+      const count = n === 1 ? 'one session' : n === 2 ? 'two sessions' : (WORDS[n] ?? String(n)).toLowerCase()
+      // "It varies" is an average, so Amp says "about".
+      const said = a.training?.mode === 'average' ? `About ${count}` : capitalise(count)
+      if (n <= 2) return `${said} a week. Good start.`
+      if (n <= 4) return `${said} a week, solid.`
+      return `${said} a week. Serious.`
     }
     case 'energy':
       return a.energy === null ? '' : `Energy ${a.energy}/10. Noted.`
@@ -114,10 +116,7 @@ function formatHours(h: number): string {
  * follow something the person just did.
  */
 export function ampReactionTo(before: ConsultAnswers, patch: Partial<ConsultAnswers>): AmpReaction | null {
-  if (patch.week) {
-    const gym = (w: ConsultAnswers['week']) => (w ?? []).filter((d) => d === 'gym').length
-    if (gym(patch.week) > gym(before.week)) return 'flex'
-  }
+  if (patch.training && countsByType(patch.training).gym > countsByType(before.training).gym) return 'flex'
   if (patch.energy === 10 && before.energy !== 10) return 'burst'
   if (patch.daylight && patch.daylight !== before.daylight) return 'sun'
   return null

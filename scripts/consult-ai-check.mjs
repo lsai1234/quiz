@@ -115,7 +115,7 @@ await c1.setFiles(PHOTO)
 await p.getByRole('button', { name: 'Use these' }).waitFor({ timeout: 20000 })
 log('tracker cards:', await p.locator('li span.flex-1').allInnerTexts())
 await p.getByRole('button', { name: 'Use these' }).click()
-log('week now:', await p.getByText(/sessions ·/).textContent())
+log('training now:', await p.getByText(/a week ·/).textContent())
 await p.getByRole('radio', { name: 'Steady' }).click()
 await next()
 

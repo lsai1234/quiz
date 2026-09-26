@@ -13,6 +13,7 @@
 
 import SCRIPT from './scenes.json'
 import { circuitOutcome } from './circuit'
+import { sessionsPerWeek } from './training'
 import { pickToPatch, type Pick } from './ai/understand'
 import {
   EMPTY_ANSWERS,
@@ -171,9 +172,9 @@ export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
     case 'about':
       return a.age !== null && a.sex !== null
     case 'training': {
-      if (a.week === null || a.week.length !== 7) return false
+      if (a.training === null) return false
       // Performance adds the detail question — but only if they train at all.
-      const needsDetail = resolveSceneDef('training', a).detail && a.week.some((d) => d !== 'rest')
+      const needsDetail = resolveSceneDef('training', a).detail && sessionsPerWeek(a.training) > 0
       return !needsDetail || a.intensity !== null
     }
     case 'energy':

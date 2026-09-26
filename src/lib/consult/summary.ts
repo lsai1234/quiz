@@ -3,7 +3,8 @@
  * reads an answer back. Restates what was said — no interpretation.
  */
 
-import { caffeineCount, sessionsPerWeek, sleepHours } from './reactions'
+import { caffeineCount, sleepHours } from './reactions'
+import { ACTIVITIES, countsByType, sessionsLabel, sessionsPerWeek } from './training'
 import type {
   AgeBand,
   BodySpot,
@@ -152,15 +153,14 @@ export function summarise(scene: SceneId, a: ConsultAnswers): string {
     case 'about':
       return [a.age && AGE_LABEL[a.age], a.sex && SEX_LABEL[a.sex]].filter(Boolean).join(' · ')
     case 'training': {
-      if (!a.week) return ''
-      const n = sessionsPerWeek(a.week)
-      if (n === 0) return 'All rest days'
-      const counts = (['gym', 'cardio', 'sport'] as const)
-        .map((t) => [t, a.week!.filter((d) => d === t).length] as const)
-        .filter(([, c]) => c > 0)
-        .map(([t, c]) => `${c} ${DAY_LABEL[t].toLowerCase()}`)
+      if (!a.training) return ''
+      const n = sessionsPerWeek(a.training)
+      if (n === 0) return 'No training right now'
+      const by = countsByType(a.training)
+      const counts = ACTIVITIES.filter((t) => by[t] > 0).map((t) => `${sessionsLabel(by[t])} ${DAY_LABEL[t].toLowerCase()}`)
       const effort = a.intensity ? ` · ${INTENSITY_LABEL[a.intensity].toLowerCase()}` : ''
-      return `${n} a week · ${counts.join(', ')}${effort}`
+      const lead = a.training.mode === 'average' ? `About ${sessionsLabel(n)} a week, it varies` : `${sessionsLabel(n)} a week`
+      return `${lead} · ${counts.join(', ')}${effort}`
     }
     case 'energy':
       return a.energy === null ? '' : `${a.energy} / 10`

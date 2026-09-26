@@ -88,13 +88,17 @@ async function answerByKeyboard(page: Page) {
       await pickRadio(page, /^(Under 18|18–24|25–34)/, /^25–34/)
     }
     await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
-  } else if (/training week/i.test(h)) {
-    if (await page.getByRole('radiogroup', { name: 'Monday' }).count()) {
-      // Comfort mode: each day is its own row of choices.
-      await pickRadio(page, /^(Rest|Gym|Cardio|Sport)$/, /^Gym$/)
+  } else if (/training/i.test(h)) {
+    if (await page.getByRole('group', { name: 'Monday' }).count()) {
+      // Comfort mode: each day is its own row of choices; Monday's come first.
+      await tabTo(page, /^Gym/)
+      await page.keyboard.press('Space')
     } else {
-      await tabTo(page, /^Monday/)
+      // Tap a day, then what's done on it.
+      await tabTo(page, /^Monday:/)
       await page.keyboard.press('Enter')
+      await tabTo(page, /^Gym/)
+      await page.keyboard.press('Space')
     }
     if (await page.getByRole('radiogroup', { name: 'How hard do most sessions feel?' }).count()) {
       await pickRadio(page, /^(Easy|Steady|Hard)/, /^Steady/)

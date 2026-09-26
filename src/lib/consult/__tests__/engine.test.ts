@@ -1,4 +1,5 @@
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
+import { trainingDays } from '@/lib/consult/training'
 import type { CatalogueProduct } from '@/lib/catalogue/types'
 import { circuitOutcome } from '../circuit'
 import { CAFFEINE_CEILING, runStackEngine, scoreNeeds } from '../engine'
@@ -17,7 +18,7 @@ function persona(over: Partial<ConsultAnswers> = {}): ConsultAnswers {
     goals: ['performance', 'sleep'],
     age: '35-44',
     sex: 'male',
-    week: ['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'sport'],
+    training: trainingDays(['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'sport']),
     intensity: 'steady',
     energy: 4,
     sleep: { bed: 23 * 60, wake: 6 * 60, quality: 'broken' },
@@ -123,8 +124,8 @@ describe('H4 stack engine', () => {
   })
 
   it('adds to protein for two or more gym days', () => {
-    const two = scoreNeeds(persona({ goals: ['focus'], week: ['gym', 'rest', 'gym', 'rest', 'rest', 'rest', 'rest'] }))
-    const none = scoreNeeds(persona({ goals: ['focus'], week: Array(7).fill('rest') }))
+    const two = scoreNeeds(persona({ goals: ['focus'], training: trainingDays(['gym', 'rest', 'gym', 'rest', 'rest', 'rest', 'rest']) }))
+    const none = scoreNeeds(persona({ goals: ['focus'], training: trainingDays(Array(7).fill('rest')) }))
     expect(two.protein.total).toBeGreaterThan(none.protein.total)
   })
 
@@ -208,7 +209,7 @@ describe('H5 charge profile', () => {
 
   it('keeps every score between 0 and 100', () => {
     const extremes = [
-      persona({ week: Array(7).fill('gym'), intensity: 'hard' }),
+      persona({ training: trainingDays(Array(7).fill('gym')), intensity: 'hard' }),
       persona({ body: ['neck', 'shoulders', 'lower-back', 'hips', 'knees'] }),
       persona({ energy: 1, sleep: { bed: 2 * 60, wake: 5 * 60, quality: 'broken' } }),
       { ...EMPTY_ANSWERS },

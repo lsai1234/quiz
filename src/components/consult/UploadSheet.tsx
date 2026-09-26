@@ -19,6 +19,8 @@ import { NextButton, QuietLink } from './controls'
 export interface UploadCard {
   key: string
   label: string
+  /** Only used once this is ticked (a tracker week that might not be typical). */
+  confirm?: string
 }
 
 interface Props {
@@ -34,14 +36,21 @@ interface Props {
   onReading: (reading: boolean) => void
   /** Injectable for tests: jsdom has no canvas. */
   shrink?: (file: File) => Promise<string>
+  /**
+   * Take more than one image (the tracker's weeks). Each new image is read and
+   * `read` returns the cards for everything so far.
+   */
+  more?: string
 }
 
-export function UploadSheet({ title, children, ready = true, consent, read, onConfirm, onClose, onReading, shrink = downscale }: Props) {
+export function UploadSheet({ title, children, ready = true, consent, read, onConfirm, onClose, onReading, shrink = downscale, more }: Props) {
   const [agreed, setAgreed] = useState(false)
   const [image, setImage] = useState<string | null>(null)
   const [reading, setReading] = useState(false)
   const [cards, setCards] = useState<UploadCard[] | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+  const [ticked, setTicked] = useState<Set<string>>(new Set())
+  const [count, setCount] = useState(0)
   const input = useRef<HTMLInputElement>(null)
   const inputId = useId()
 
@@ -60,6 +69,7 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
       if (!found) return setMessage('I couldn’t read that one. Try a clearer photo, or answer on screen as normal.')
       if (found.length === 0) return setMessage('I couldn’t find anything I recognise in that. You can answer on screen as normal.')
       setCards(found)
+      setCount((n) => n + 1)
     } catch {
       setReading(false)
       onReading(false)
@@ -102,6 +112,21 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
 
         {!cards && children}
 
+        <input
+          id={inputId}
+          ref={input}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="sr-only"
+          aria-label={`${title}: photo`}
+          tabIndex={-1}
+          onChange={(e) => {
+            void onFile(e.target.files?.[0])
+            // Let the same file be picked again.
+            e.target.value = ''
+          }}
+        />
         {!image && (
           <>
             <button type="button" role="checkbox" aria-checked={agreed} onClick={() => setAgreed(!agreed)} className="flex items-start text-left" style={{ gap: 'var(--amp-space-3)', minHeight: 'var(--amp-target)' }}>
@@ -121,7 +146,6 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
               </span>
               <span style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>{consent}</span>
             </button>
-            <input id={inputId} ref={input} type="file" accept="image/*" capture="environment" className="sr-only" aria-label={`${title}: photo`} tabIndex={-1} onChange={(e) => void onFile(e.target.files?.[0])} />
             <NextButton ready={agreed && ready} nudge={ready ? 'Tick the line above first.' : 'Pick your app first.'} onClick={() => input.current?.click()}>
               <span className="inline-flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
                 <Glyph name="camera" size={20} /> Take or choose a photo
@@ -162,7 +186,42 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
                   className="flex items-center"
                   style={{ gap: 'var(--amp-space-2)', padding: 'var(--amp-space-2) var(--amp-space-2) var(--amp-space-2) var(--amp-space-4)', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', background: 'var(--amp-accent-fill)' }}
                 >
-                  <span className="flex-1">{c.label}</span>
+                  <span className="flex flex-1 flex-col" style={{ gap: 'var(--amp-space-1)' }}>
+                    <span>{c.label}</span>
+                    {c.confirm && (
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={ticked.has(c.key)}
+                        onClick={() =>
+                          setTicked((t) => {
+                            const next = new Set(t)
+                            if (next.has(c.key)) next.delete(c.key)
+                            else next.add(c.key)
+                            return next
+                          })
+                        }
+                        className="flex items-center text-left"
+                        style={{ gap: 'var(--amp-space-2)', minHeight: 'var(--amp-space-8)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}
+                      >
+                        <span
+                          aria-hidden
+                          className="flex shrink-0 items-center justify-center"
+                          style={{
+                            width: 'var(--amp-space-5)',
+                            height: 'var(--amp-space-5)',
+                            borderRadius: 'var(--amp-space-1)',
+                            border: `var(--amp-hairline) solid ${ticked.has(c.key) ? 'var(--amp-accent)' : 'var(--amp-ink-3)'}`,
+                            background: ticked.has(c.key) ? 'var(--amp-accent)' : 'transparent',
+                            color: 'var(--amp-ink-on-accent)',
+                          }}
+                        >
+                          {ticked.has(c.key) && <Glyph name="check" size={12} />}
+                        </span>
+                        {c.confirm}
+                      </button>
+                    )}
+                  </span>
                   <button
                     type="button"
                     aria-label={`Remove ${c.label}`}
@@ -175,14 +234,25 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
                 </li>
               ))}
             </ul>
+            {cards.some((c) => c.confirm && !ticked.has(c.key)) && (
+              <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
+                One week can be unusual. Tick it if it was a normal one{more ? ', or add another week' : ''} — otherwise it won’t be used.
+              </p>
+            )}
             <NextButton
               onClick={() => {
-                onConfirm(cards.map((c) => c.key))
+                onConfirm(cards.filter((c) => !c.confirm || ticked.has(c.key)).map((c) => c.key))
                 onClose()
               }}
             >
               Use these
             </NextButton>
+            {more && (
+              <QuietLink icon="plus" onClick={() => input.current?.click()}>
+                {more}
+                {count > 0 ? ` (${count} so far)` : ''}
+              </QuietLink>
+            )}
           </>
         )}
 

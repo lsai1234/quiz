@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { fireEvent, screen, within } from '@testing-library/react'
 import { SCENES } from '@/lib/consult/flow'
 
 /**
@@ -22,6 +22,12 @@ export function chooseRoute(route: 'Deep charge' | 'Speed run' = 'Deep charge'):
   if (heading().textContent === ROUTE_QUESTION) fireEvent.click(screen.getByRole('radio', { name: new RegExp(`^${route}`) }))
 }
 
+/** "Same most weeks": tap a day, then what's done on it. */
+export function setDay(day: string, activity: 'Gym' | 'Cardio' | 'Sport' = 'Gym'): void {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${day}:`) }))
+  fireEvent.click(within(screen.getByRole('group', { name: `${day}: what you do` })).getByRole('button', { name: new RegExp(`^${activity}`) }))
+}
+
 export function answerCurrentScene(): void {
   if (heading().textContent === ROUTE_QUESTION) return chooseRoute()
   const scene = currentScene()
@@ -35,7 +41,7 @@ export function answerCurrentScene(): void {
       fireEvent.click(screen.getByRole('radio', { name: 'Prefer not to say' }))
       return
     case 'training-week':
-      fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
+      setDay('Monday', 'Gym')
       if (screen.queryByRole('radiogroup', { name: 'How hard do most sessions feel?' })) {
         fireEvent.click(screen.getByRole('radio', { name: 'Steady' }))
       }

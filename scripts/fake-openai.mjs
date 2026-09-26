@@ -106,7 +106,7 @@ const server = http.createServer(async (req, res) => {
           return send(200, completion({ items: ['creatine', 'omega-3', 'vitamin-d'] }))
         case 'amp_tracker':
           if (FAIL.has('scan')) return fail('scan')
-          return send(200, completion({ bedtime: '23:15', waketime: '06:45', quality: 'ok', week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'sport', 'rest'] }))
+          return send(200, completion({ bedtime: '23:15', waketime: '06:45', quality: 'ok', weeks: 4, workouts: { gym: 8, cardio: 4, sport: 2 } }))
         default:
           return send(400, { error: { message: `fake-openai: no reply for schema ${name}` } })
       }

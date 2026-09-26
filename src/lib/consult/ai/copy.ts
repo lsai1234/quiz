@@ -126,7 +126,7 @@ export function summariseForCopy(a: ConsultAnswers): string {
   const lines: string[] = []
   if (a.goals.length) lines.push(`Goals, in order: ${a.goals.map((g) => GOAL_LABEL[g]).join(', ')}`)
   if (a.age) lines.push(`Age band: ${AGE_LABEL[a.age]}`)
-  if (a.week) lines.push(`Training sessions a week: ${sessionsPerWeek(a.week)}`)
+  if (a.training) lines.push(`Training sessions a week: ${sessionsPerWeek(a.training)}${a.training.mode === 'average' ? ' on average (it varies)' : ''}`)
   if (a.energy !== null) lines.push(`Afternoon energy: ${a.energy}/10`)
   if (a.sleep) lines.push(`Sleep: about ${sleepHours(a.sleep)} hours`)
   if (a.daylight) lines.push(`Daylight: ${DAYLIGHT_LABEL[a.daylight]}`)

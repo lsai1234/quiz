@@ -18,6 +18,7 @@
 
 import type { Ingredient, StopReason } from './circuit'
 import { EMPTY_ANSWERS, type ConsultAnswers, type WeightSymptom } from './types'
+import { trainingDays } from './training'
 
 export interface Expectation {
   /** A safety expectation: failing it blocks the release. */
@@ -54,7 +55,7 @@ function base(over: Partial<ConsultAnswers>): ConsultAnswers {
     goals: ['allround'],
     age: '25-34',
     sex: 'unsaid',
-    week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest'],
+    training: trainingDays(['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest']),
     intensity: 'steady',
     energy: 6,
     sleep: { bed: 23 * 60, wake: 7 * 60, quality: 'ok' },
@@ -158,18 +159,18 @@ export const PERSONAS: Persona[] = [
   },
 
   // ── Quality: the stack answers the brief ──
-  { id: 'p19', who: 'Gym five days, performance first', answers: base({ goals: ['performance'], week: ['gym', 'gym', 'rest', 'gym', 'gym', 'gym', 'rest'], intensity: 'hard' }), expect: [{ includesGroup: ['protein-whey', 'protein-plant', 'protein-clear'] }, { includesGroup: ['creatine'] }] },
+  { id: 'p19', who: 'Gym five days, performance first', answers: base({ goals: ['performance'], training: trainingDays(['gym', 'gym', 'rest', 'gym', 'gym', 'gym', 'rest']), intensity: 'hard' }), expect: [{ includesGroup: ['protein-whey', 'protein-plant', 'protein-clear'] }, { includesGroup: ['creatine'] }] },
   { id: 'p20', who: 'Never sees daylight', answers: base({ goals: ['allround'], daylight: 'hardly' }), expect: [{ includesGroup: ['vitamin-d'] }] },
   { id: 'p21', who: 'No oily fish, focus', answers: base({ goals: ['focus'], plate: ['poultry', 'eggs', 'fruit'] }), expect: [{ includesGroup: ['omega-3'] }] },
-  { id: 'p22', who: 'Endurance runner', answers: base({ goals: ['performance'], week: ['cardio', 'cardio', 'rest', 'cardio', 'sport', 'cardio', 'rest'] }), expect: [{ includesGroup: ['electrolytes'] }] },
+  { id: 'p22', who: 'Endurance runner', answers: base({ goals: ['performance'], training: trainingDays(['cardio', 'cardio', 'rest', 'cardio', 'sport', 'cardio', 'rest']) }), expect: [{ includesGroup: ['electrolytes'] }] },
   { id: 'p23', who: 'Stiff everywhere, healthy ageing', answers: base({ goals: ['ageing'], age: '55-64', body: ['neck', 'shoulders', 'lower-back', 'hips', 'knees'] }), expect: [{ includesGroup: ['collagen', 'joint-support', 'omega-3'] }] },
   { id: 'p24', who: 'Speed run, minimum answers', answers: base({ route: 'speed', goals: ['energy'], daylight: null, plate: null, body: null }), expect: [{ includesGroup: ['multivitamin', 'vitamin-b', 'vitamin-d', 'magnesium'] }] },
-  { id: 'p25', who: 'Rest week, all-round', answers: base({ goals: ['allround'], week: Array(7).fill('rest'), intensity: null }), expect: [{ includesGroup: ['multivitamin'] }] },
+  { id: 'p25', who: 'Rest week, all-round', answers: base({ goals: ['allround'], training: trainingDays(Array(7).fill('rest')), intensity: null }), expect: [{ includesGroup: ['multivitamin'] }] },
 
   // ── Weight loss and weight-loss medication (plan v4, A4) ──
   {
     id: 'p26', who: 'On a jab, feeling sick',
-    answers: base({ goals: ['weight'], week: Array(7).fill('rest'), intensity: null, ...jab('nausea') }),
+    answers: base({ goals: ['weight'], training: trainingDays(Array(7).fill('rest')), intensity: null, ...jab('nausea') }),
     expect: [
       { safety: true, neverContains: ['fat-burner', 'stimulant'], pharmacistNote: true, excludesGroup: ['protein-whey', 'protein-mass'] },
       { essentialsInclude: [['protein-clear', 'protein-plant'], ['multivitamin'], ['electrolytes']], tailored: true },
@@ -177,7 +178,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: 'p27', who: 'On a jab, constipated',
-    answers: base({ goals: ['weight'], week: Array(7).fill('rest'), intensity: null, ...jab('constipation') }),
+    answers: base({ goals: ['weight'], training: trainingDays(Array(7).fill('rest')), intensity: null, ...jab('constipation') }),
     expect: [
       { safety: true, neverContains: ['fat-burner', 'stimulant'] },
       { essentialsInclude: [['protein-whey', 'protein-plant', 'protein-clear'], ['multivitamin'], ['fibre']] },
@@ -185,7 +186,7 @@ export const PERSONAS: Persona[] = [
   },
   {
     id: 'p28', who: 'On a jab, training four times a week',
-    answers: base({ goals: ['weight', 'performance'], week: ['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'rest'], ...jab() }),
+    answers: base({ goals: ['weight', 'performance'], training: trainingDays(['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'rest']), ...jab() }),
     expect: [
       { safety: true, neverContains: ['fat-burner', 'stimulant'] },
       { includesGroup: ['creatine'] },
@@ -200,7 +201,7 @@ export const PERSONAS: Persona[] = [
   { id: 'p30', who: 'On a jab and pregnant', answers: base({ goals: ['weight'], ...circuit('weight-meds', 'pregnancy') }), expect: [{ safety: true, stops: 'pregnancy' }] },
   {
     id: 'p31', who: 'Losing weight, no jab',
-    answers: base({ goals: ['weight'], week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest'] }),
+    answers: base({ goals: ['weight'], training: trainingDays(['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest']) }),
     expect: [{ safety: true, excludesGroup: ['fat-burner'] }, { includesGroup: ['protein-whey', 'protein-plant', 'protein-clear'] }, { tailored: false }],
   },
 ]

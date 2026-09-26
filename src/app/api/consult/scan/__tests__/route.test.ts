@@ -25,13 +25,12 @@ describe('/api/consult/scan', () => {
     expect(req.response_format.json_schema.strict).toBe(true)
   })
 
-  it('reads a tracker into times and a week, nothing else', async () => {
-    create.mockResolvedValue(
-      reply({ bedtime: '23:15', waketime: '06:45', quality: 'ok', week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'sport', 'rest'], hrv: 40 }),
-    )
+  it('reads a tracker into times and workouts over the weeks shown, nothing else', async () => {
+    create.mockResolvedValue(reply({ bedtime: '23:15', waketime: '06:45', quality: 'ok', weeks: 4, workouts: { gym: 10, cardio: 4, sport: 2 }, hrv: 40 }))
     const json = await (await call({ kind: 'tracker', app: 'whoop', image: IMAGE })).json()
-    expect(json).toEqual({ read: { bed: 23 * 60 + 15, wake: 6 * 60 + 45, quality: 'ok', week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'sport', 'rest'] } })
+    expect(json).toEqual({ read: { bed: 23 * 60 + 15, wake: 6 * 60 + 45, quality: 'ok', weeks: 4, workouts: { gym: 10, cardio: 4, sport: 2 } } })
     expect(create.mock.calls[0][0].messages[0].content).toMatch(/Whoop/)
+    expect(create.mock.calls[0][0].messages[0].content).toMatch(/whole period/)
   })
 
   it('refuses anything that is not a small image, without calling the model', async () => {

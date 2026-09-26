@@ -79,11 +79,11 @@ describe('save & resume', () => {
     const first = render(<AmpConsult />)
     pickFirstOptionAndNext()
     pickFirstOptionAndNext()
-    expect(heading()).toHaveTextContent('Map your training week')
+    expect(heading()).toHaveTextContent('What does your training look like?')
     first.unmount()
 
     render(<AmpConsult />)
-    expect(heading()).toHaveTextContent('Map your training week')
+    expect(heading()).toHaveTextContent('What does your training look like?')
     fireEvent.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('option', { name: '18–24' })).toHaveAttribute('aria-selected', 'true')
   })

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { trainingDays } from '@/lib/consult/training'
 import { setQuizArm, resetQuizArm } from '@/lib/experiments/client'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { DURATION } from '@/lib/consult/motion'
@@ -132,7 +133,7 @@ describe('V8 profile in Amp’s words', () => {
     expect(
       profileInWords({
         ...EMPTY_ANSWERS,
-        week: ['gym', 'gym', 'cardio', 'rest', 'gym', 'sport', 'rest'],
+        training: trainingDays(['gym', 'gym', 'cardio', 'rest', 'gym', 'sport', 'rest']),
         intensity: 'hard',
         sleep: { bed: 1410, wake: 360, quality: 'ok' },
         daylight: 'hardly',
@@ -148,7 +149,7 @@ describe('V8 profile in Amp’s words', () => {
   it('never mentions health, products or results', () => {
     const line = profileInWords({
       ...EMPTY_ANSWERS,
-      week: Array(7).fill('rest'),
+      training: trainingDays(Array(7).fill('rest')),
       energy: 1,
       sleep: { bed: 120, wake: 300, quality: 'broken' },
       daylight: 'hardly',

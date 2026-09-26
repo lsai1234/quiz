@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { trainingDays } from '@/lib/consult/training'
 import { MOCK_CATALOGUE } from '@/lib/catalogue/mock-catalogue'
 import { DURATION } from '@/lib/consult/motion'
 import { initialFlow, type FlowState } from '@/lib/consult/flow'
@@ -14,7 +15,7 @@ const answers: ConsultAnswers = {
   goals: ['performance', 'sleep'],
   age: '35-44',
   sex: 'male',
-  week: ['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'sport'],
+  training: trainingDays(['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'sport']),
   intensity: 'steady',
   energy: 4,
   sleep: { bed: 1380, wake: 360, quality: 'broken' },

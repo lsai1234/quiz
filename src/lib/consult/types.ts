@@ -1,5 +1,7 @@
 import type { HealthDataConsent } from '@/lib/types'
 
+import type { TrainingAnswer } from './training'
+
 /**
  * The Amp Consult's answer model.
  *
@@ -107,8 +109,8 @@ export interface ConsultAnswers {
   goals: ConsultGoal[]
   age: AgeBand | null
   sex: Sex | null
-  /** Monday first; seven entries once answered. */
-  week: DayType[] | null
+  /** The training answer: a usual week day by day, or an average when it varies. See `training.ts`. */
+  training: TrainingAnswer | null
   /** Only asked when performance is a goal (the training week's detail). */
   intensity: Intensity | null
   /** Afternoon energy, 1–10. */
@@ -147,7 +149,7 @@ export const EMPTY_ANSWERS: ConsultAnswers = {
   goals: [],
   age: null,
   sex: null,
-  week: null,
+  training: null,
   intensity: null,
   energy: null,
   sleep: null,

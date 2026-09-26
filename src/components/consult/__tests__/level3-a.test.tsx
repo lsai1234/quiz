@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
+import { trainingDays } from '@/lib/consult/training'
 import { useState } from 'react'
 import { SCENES, resolveSceneDef } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
@@ -92,15 +93,15 @@ describe('C14 comfort mode', () => {
   })
 
   it('keeps the performance detail in comfort mode', () => {
-    render(<Harness id="training" comfort start={{ goals: ['performance'], week: ['gym', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest'] }} />)
+    render(<Harness id="training" comfort start={{ goals: ['performance'], training: trainingDays(['gym', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest']) }} />)
     expect(screen.getByRole('radiogroup', { name: 'How hard do most sessions feel?' })).toBeInTheDocument()
   })
 
-  it('lays the training week out as one row per day', () => {
+  it('lays the training week out as one row per day, more than one thing allowed', () => {
     const spy = jest.fn()
     render(<Harness id="training" comfort spy={spy} />)
-    fireEvent.click(screen.getAllByRole('radiogroup', { name: 'Wednesday' })[0].querySelectorAll('[role="radio"]')[1])
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ week: ['rest', 'rest', 'gym', 'rest', 'rest', 'rest', 'rest'] }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Wednesday' })).getByRole('button', { name: /^Gym/ }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ training: trainingDays(['rest', 'rest', 'gym', 'rest', 'rest', 'rest', 'rest']) }))
   })
 })
 

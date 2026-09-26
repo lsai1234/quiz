@@ -1,8 +1,18 @@
 'use client'
 
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { DAY_LABEL, INTENSITY_LABEL } from '@/lib/consult/summary'
-import type { DayType, Intensity } from '@/lib/consult/types'
+import type { Intensity } from '@/lib/consult/types'
+import {
+  ACTIVITIES,
+  NO_SESSIONS,
+  REST_DAYS,
+  countsByType,
+  sessionsLabel,
+  sessionsPerWeek,
+  type Activity,
+  type TrainingAnswer,
+} from '@/lib/consult/training'
 import { haptic, stateTransition } from '@/lib/consult/motion'
 import { Glyph, type GlyphName } from '../Glyph'
 import { Chip, Segmented } from '../controls'
@@ -10,35 +20,55 @@ import { WhatsThis } from '../WhatsThis'
 import type { SceneProps } from './registry'
 
 /**
- * The training week (build C4).
+ * The training week (build C4, reworked in plan v4).
  *
- * Seven day tiles. Each tap cycles rest → gym → cardio → sport → rest, and a
- * live summary counts the week as you go. Sessions, type and spread in a few
- * taps — a whole week in well under ten seconds.
+ * Two ways in, because weeks aren't all the same:
+ *
+ *   Same most weeks  Seven day tiles. Tap a day, then what you do on it —
+ *                    gym, cardio, sport, or more than one (gym in the
+ *                    morning, five-a-side at night).
+ *   It varies        No fixed days: roughly how many sessions of each kind in
+ *                    a typical week, thinking back over the last month.
  *
  * Gym is volt, cardio calm, sport go; rest is the plain glass. "No training
- * right now" answers the scene as seven rest days without tapping any.
+ * right now" answers the scene without tapping anything else.
  */
 
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const
-export const CYCLE: DayType[] = ['rest', 'gym', 'cardio', 'sport']
-const REST_WEEK: DayType[] = ['rest', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest']
 
-export function cycleDay(day: DayType): DayType {
-  return CYCLE[(CYCLE.indexOf(day) + 1) % CYCLE.length]
+const MAX_A_WEEK = 14
+
+/** Add or remove one activity on one day. */
+export function toggleActivity(t: TrainingAnswer | null, day: number, activity: Activity): TrainingAnswer {
+  const base: TrainingAnswer = t ?? { mode: 'days', days: REST_DAYS.map(() => []), average: { ...NO_SESSIONS } }
+  const days = base.days.map((d, i) => {
+    if (i !== day) return d
+    const next = d.includes(activity) ? d.filter((a) => a !== activity) : [...d, activity]
+    return ACTIVITIES.filter((a) => next.includes(a))
+  })
+  return { ...base, mode: 'days', days }
 }
 
-export function weekSummary(week: DayType[]): string {
-  const n = week.filter((d) => d !== 'rest').length
-  if (n === 0) return 'Rest week'
-  const parts = (['gym', 'cardio', 'sport'] as const)
-    .map((t) => [t, week.filter((d) => d === t).length] as const)
-    .filter(([, c]) => c > 0)
-    .map(([t, c]) => `${c} ${DAY_LABEL[t]}`)
-  return [`${n} ${n === 1 ? 'session' : 'sessions'}`, ...parts].join(' · ')
+/** Switch between "same most weeks" and "it varies", carrying the count across. */
+export function switchMode(t: TrainingAnswer | null, mode: TrainingAnswer['mode']): TrainingAnswer | null {
+  if (!t) return mode === 'days' ? null : { mode, days: REST_DAYS.map(() => []), average: { ...NO_SESSIONS } }
+  if (t.mode === mode) return t
+  // Days → average: start the counters from the week they tapped in.
+  if (mode === 'average') return { ...t, mode, average: countsByType(t) }
+  return { ...t, mode }
 }
 
-const LOOK: Record<DayType, { icon: GlyphName; style: CSSProperties; label: string }> = {
+/** The week in words, for the live line under the tiles. */
+export function trainingSummary(t: TrainingAnswer): string {
+  const n = sessionsPerWeek(t)
+  if (n === 0) return 'No training right now'
+  const by = countsByType(t)
+  const parts = ACTIVITIES.filter((a) => by[a] > 0).map((a) => `${sessionsLabel(by[a])} ${DAY_LABEL[a]}`)
+  const lead = t.mode === 'average' ? `About ${sessionsLabel(n)} a week` : `${sessionsLabel(n)} ${n === 1 ? 'session' : 'sessions'}`
+  return [lead, ...parts].join(' · ')
+}
+
+const LOOK: Record<Activity | 'rest', { icon: GlyphName; style: CSSProperties; label: string }> = {
   rest: {
     icon: 'minus',
     label: 'var(--amp-ink-3)',
@@ -68,87 +98,211 @@ const LOOK: Record<DayType, { icon: GlyphName; style: CSSProperties; label: stri
 
 const INTENSITIES: Intensity[] = ['easy', 'steady', 'hard']
 
-export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai }: SceneProps) {
-  const week = answers.week ?? REST_WEEK
-  const answered = answers.week !== null
-  const allRest = answered && week.every((d) => d === 'rest')
+const dayWords = (d: Activity[]) => (d.length === 0 ? 'Rest' : d.map((a) => DAY_LABEL[a]).join(' and '))
 
-  function tap(i: number) {
-    const next = [...week]
-    next[i] = cycleDay(week[i])
+export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai }: SceneProps) {
+  const t = answers.training
+  const mode = t?.mode ?? 'days'
+  const days = t?.days ?? REST_DAYS
+  const answered = t !== null
+  const restWeek = answered && sessionsPerWeek(t) === 0
+  // The day being set, in "same most weeks". Nothing is chosen until tapped.
+  const [editing, setEditing] = useState<number | null>(null)
+
+  const write = (next: TrainingAnswer | null) => onAnswer({ training: next })
+
+  function pickDay(i: number) {
     haptic('tick')
     onInteract?.((i - 3) / 3)
-    onAnswer({ week: next })
+    setEditing(i)
   }
 
-  // The performance detail (C12): how hard the sessions are, once there are
-  // some. The same block in both layouts.
-  const detail = scene.detail && answered && !allRest ? (
-    <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
-          <div className="flex items-center justify-between">
-            <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
-              How hard do most sessions feel?
-            </p>
-            <WhatsThis term="intensity" questions={ai} />
-          </div>
-          <Segmented
-            label="How hard do most sessions feel?"
-            options={INTENSITIES.map((i) => ({ value: i, label: INTENSITY_LABEL[i] }))}
-            value={answers.intensity}
-            onChange={(i) => onAnswer({ intensity: i })}
-          />
-        </div>
-  ) : null
+  function toggle(i: number, a: Activity) {
+    haptic('tick')
+    write(toggleActivity(t, i, a))
+  }
 
-  // Comfort mode (C14): no cycling to learn. Each day is a row with its four
-  // choices laid out.
+  function step(a: Activity, delta: number) {
+    const base = t && t.mode === 'average' ? t : switchMode(t, 'average')!
+    const value = Math.max(0, Math.min(MAX_A_WEEK, base.average[a] + delta))
+    haptic('tick')
+    write({ ...base, average: { ...base.average, [a]: value } })
+  }
+
+  const modeSwitch = (
+    <Segmented
+      label="Is your training the same most weeks?"
+      options={[
+        { value: 'days', label: 'Same most weeks' },
+        { value: 'average', label: 'It varies' },
+      ]}
+      value={mode}
+      onChange={(m) => {
+        setEditing(null)
+        write(switchMode(t, m))
+      }}
+    />
+  )
+
+  // The performance detail (C12): how hard the sessions are, once there are
+  // some. The same block in every layout.
+  const detail =
+    scene.detail && answered && !restWeek ? (
+      <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
+        <div className="flex items-center justify-between">
+          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+            How hard do most sessions feel?
+          </p>
+          <WhatsThis term="intensity" questions={ai} />
+        </div>
+        <Segmented
+          label="How hard do most sessions feel?"
+          options={INTENSITIES.map((i) => ({ value: i, label: INTENSITY_LABEL[i] }))}
+          value={answers.intensity}
+          onChange={(i) => onAnswer({ intensity: i })}
+        />
+      </div>
+    ) : null
+
+  const summary = (
+    <p
+      aria-live="polite"
+      className="text-center uppercase"
+      style={{
+        fontFamily: 'var(--amp-font-display)',
+        fontWeight: 'var(--amp-weight-heavy)',
+        fontSize: 'var(--amp-text-title)',
+        lineHeight: 'var(--amp-leading-tight)',
+        color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
+      }}
+    >
+      {answered ? trainingSummary(t) : mode === 'days' ? 'Tap a day to start' : 'Set a typical week'}
+    </p>
+  )
+
+  const noTraining = (
+    <Chip
+      label="No training right now"
+      selected={restWeek}
+      onToggle={() => {
+        setEditing(null)
+        write(restWeek ? null : { mode: 'days', days: REST_DAYS.map(() => []), average: { ...NO_SESSIONS } })
+      }}
+    />
+  )
+
+  /* ── It varies: sessions a week, on average ─────────────────────────── */
+  if (mode === 'average') {
+    const avg = t?.average ?? NO_SESSIONS
+    return (
+      <div className="flex w-full flex-col" style={{ gap: 'var(--amp-space-4)' }}>
+        {modeSwitch}
+        <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>Think back over the last month: about how many a week, on average?</p>
+        <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }} aria-label="Sessions in a typical week">
+          {ACTIVITIES.map((a) => (
+            <li
+              key={a}
+              className="flex items-center justify-between"
+              style={{
+                gap: 'var(--amp-space-3)',
+                padding: 'var(--amp-space-2) var(--amp-space-3)',
+                borderRadius: 'var(--amp-radius-tile)',
+                border: 'var(--amp-hairline) solid var(--amp-edge)',
+                background: 'var(--amp-glass-solid)',
+              }}
+            >
+              <span className="flex items-center" style={{ gap: 'var(--amp-space-2)', color: LOOK[a].label === 'var(--amp-ink-on-accent)' ? 'var(--amp-volt)' : LOOK[a].label }}>
+                <Glyph name={LOOK[a].icon} size={20} />
+                <span style={{ color: 'var(--amp-ink)', fontWeight: 'var(--amp-weight-medium)' }}>{DAY_LABEL[a]}</span>
+              </span>
+              <span className="flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
+                <StepButton label={`Fewer ${DAY_LABEL[a].toLowerCase()} sessions`} icon="minus" onClick={() => step(a, -1)} disabled={avg[a] <= 0} />
+                <span
+                  aria-live="polite"
+                  aria-label={`${sessionsLabel(avg[a])} ${DAY_LABEL[a].toLowerCase()} a week`}
+                  className="text-center"
+                  style={{ minWidth: 'var(--amp-space-10)', fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-title)' }}
+                >
+                  {sessionsLabel(avg[a])}
+                </span>
+                <StepButton label={`More ${DAY_LABEL[a].toLowerCase()} sessions`} icon="plus" onClick={() => step(a, 1)} disabled={avg[a] >= MAX_A_WEEK} />
+              </span>
+            </li>
+          ))}
+        </ul>
+        {summary}
+        <div className="flex justify-center">{noTraining}</div>
+        {detail}
+      </div>
+    )
+  }
+
+  /* ── Same most weeks: day by day ─────────────────────────────────────── */
+  const editor =
+    editing !== null ? (
+      <div
+        className="amp-anim-rise flex w-full flex-col"
+        style={{ gap: 'var(--amp-space-2)', padding: 'var(--amp-space-3)', borderRadius: 'var(--amp-radius-tile)', border: 'var(--amp-hairline) solid var(--amp-accent-line)', background: 'var(--amp-glass-solid)' }}
+      >
+        <p style={{ fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
+          <strong style={{ color: 'var(--amp-ink)' }}>{DAYS[editing]}</strong>: tap all that apply
+        </p>
+        <div role="group" aria-label={`${DAYS[editing]}: what you do`} className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
+          {ACTIVITIES.map((a) => (
+            <Chip key={a} label={DAY_LABEL[a]} icon={LOOK[a].icon} selected={days[editing].includes(a)} onToggle={() => toggle(editing, a)} />
+          ))}
+        </div>
+      </div>
+    ) : null
+
+  // Comfort mode (C14): every day laid out as a row of big choices.
   if (comfort) {
     return (
       <div className="flex flex-col" style={{ gap: 'var(--amp-space-3)' }}>
+        {modeSwitch}
         {DAYS.map((name, i) => (
           <div key={name} className="flex flex-col" style={{ gap: 'var(--amp-space-1)' }}>
             <span style={{ fontWeight: 'var(--amp-weight-medium)' }}>{name}</span>
-            <Segmented
-              label={name}
-              options={CYCLE.map((d) => ({ value: d, label: DAY_LABEL[d] }))}
-              value={answered ? week[i] : null}
-              onChange={(d) => {
-                const next = [...week]
-                next[i] = d
-                onAnswer({ week: next })
-              }}
-            />
+            <div role="group" aria-label={name} className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
+              {ACTIVITIES.map((a) => (
+                <Chip key={a} label={DAY_LABEL[a]} icon={LOOK[a].icon} selected={days[i].includes(a)} onToggle={() => toggle(i, a)} />
+              ))}
+            </div>
           </div>
         ))}
-        <p aria-live="polite" className="text-center uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-title)' }}>
-          {answered ? weekSummary(week) : ''}
-        </p>
+        {summary}
+        <div className="flex justify-center">{noTraining}</div>
         {detail}
       </div>
     )
   }
 
   return (
-    <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-5)' }}>
+    <div className="flex flex-col items-center" style={{ gap: 'var(--amp-space-4)' }}>
+      {modeSwitch}
       <div role="group" aria-label="Your training week" className="grid w-full grid-cols-7" style={{ gap: 'var(--amp-space-1)' }}>
-        {week.map((day, i) => {
-          const look = LOOK[day]
+        {days.map((day, i) => {
+          const look = LOOK[day[0] ?? 'rest']
+          const on = editing === i
           return (
             <button
               key={DAYS[i]}
               type="button"
-              onClick={() => tap(i)}
-              aria-label={`${DAYS[i]}: ${DAY_LABEL[day]}. Tap to change.`}
-              className="amp-press amp-day flex flex-col items-center justify-between"
+              onClick={() => pickDay(i)}
+              aria-label={`${DAYS[i]}: ${dayWords(day)}. Tap to change.`}
+              aria-pressed={on}
+              className="amp-press amp-day relative flex flex-col items-center justify-between"
               style={{
                 ...look.style,
-                minHeight: 'calc(var(--amp-target) * 2.4)',
-                padding: 'var(--amp-space-3) 0',
+                minHeight: 'calc(var(--amp-target) * 2)',
+                padding: 'var(--amp-space-2) 0',
                 borderRadius: 'var(--amp-radius-tile)',
+                outline: on ? 'calc(var(--amp-hairline) * 2) solid var(--amp-accent)' : 'none',
+                outlineOffset: 'calc(var(--amp-hairline) * 2)',
                 transition: stateTransition('background-color', 'border-color', 'color', 'box-shadow'),
               }}
             >
-              <span aria-hidden style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', color: day === 'gym' ? 'var(--amp-ink-on-accent)' : 'var(--amp-ink-2)' }}>
+              <span aria-hidden style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', color: day[0] === 'gym' ? 'var(--amp-ink-on-accent)' : 'var(--amp-ink-2)' }}>
                 {DAYS[i][0]}
               </span>
               <Glyph name={look.icon} size={20} />
@@ -163,39 +317,38 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
                   color: look.label,
                 }}
               >
-                {DAY_LABEL[day]}
+                {day.length > 1 ? `+${day.length - 1}` : DAY_LABEL[day[0] ?? 'rest']}
               </span>
             </button>
           )
         })}
       </div>
-
-      <p
-        aria-live="polite"
-        className="text-center uppercase"
-        style={{
-          fontFamily: 'var(--amp-font-display)',
-          fontWeight: 'var(--amp-weight-heavy)',
-          fontSize: 'var(--amp-text-title)',
-          lineHeight: 'var(--amp-leading-tight)',
-          color: answered ? 'var(--amp-ink)' : 'var(--amp-ink-3)',
-        }}
-      >
-        {answered ? weekSummary(week) : 'Tap the days you train'}
-      </p>
-
-      <div aria-hidden className="flex items-center" style={{ gap: 'var(--amp-space-4)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)' }}>
-        {(['gym', 'cardio', 'sport'] as const).map((t) => (
-          <span key={t} className="inline-flex items-center" style={{ gap: 'var(--amp-space-1)' }}>
-            <span style={{ width: 'var(--amp-space-3)', height: 'var(--amp-space-3)', borderRadius: 'var(--amp-space-1)', background: t === 'gym' ? 'var(--amp-volt)' : t === 'cardio' ? 'var(--amp-calm)' : 'var(--amp-go)' }} />
-            {DAY_LABEL[t]}
-          </span>
-        ))}
-      </div>
-
-      <Chip label="No training right now" selected={allRest} onToggle={() => onAnswer({ week: allRest ? null : REST_WEEK })} />
-
+      {editor}
+      {summary}
+      {noTraining}
       {detail}
     </div>
+  )
+}
+
+function StepButton({ label, icon, onClick, disabled }: { label: string; icon: 'minus' | 'plus'; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+      className="amp-press flex items-center justify-center"
+      style={{
+        width: 'var(--amp-target)',
+        height: 'var(--amp-target)',
+        borderRadius: 'var(--amp-radius-pill)',
+        border: 'var(--amp-hairline) solid var(--amp-accent-line)',
+        color: 'var(--amp-accent)',
+        opacity: disabled ? 0.35 : 1,
+      }}
+    >
+      <Glyph name={icon} size={18} />
+    </button>
   )
 }

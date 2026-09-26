@@ -5,6 +5,7 @@
  * open to the internet, so what matters is what it refuses.
  */
 import { GET, POST } from '../route'
+import { trainingDays } from '@/lib/consult/training'
 import { buildHandoff } from '@/lib/consult/handoff'
 import { runStackEngine } from '@/lib/consult/engine'
 import { chargeProfile } from '@/lib/consult/profile'
@@ -17,7 +18,7 @@ const answers: ConsultAnswers = {
   goals: ['focus', 'allround'],
   age: '25-34',
   sex: 'female',
-  week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest'],
+  training: trainingDays(['gym', 'rest', 'cardio', 'rest', 'gym', 'rest', 'rest']),
   energy: 6,
   sleep: { bed: 1380, wake: 420, quality: 'ok' },
   daylight: 'some',

@@ -1,4 +1,5 @@
 import { act, fireEvent, render } from '@testing-library/react'
+import { trainingDays } from '@/lib/consult/training'
 import axe from 'axe-core'
 import { SCENES, initialFlow, type FlowState } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS, type ConsultAnswers, type SceneId } from '@/lib/consult/types'
@@ -26,7 +27,7 @@ const ANSWERED: Partial<ConsultAnswers> = {
   goals: ['performance', 'sleep', 'ageing'],
   age: '35-44',
   sex: 'female',
-  week: ['gym', 'rest', 'cardio', 'rest', 'gym', 'sport', 'rest'],
+  training: trainingDays(['gym', 'rest', 'cardio', 'rest', 'gym', 'sport', 'rest']),
   intensity: 'steady',
   energy: 6,
   sleep: { bed: 23 * 60, wake: 7 * 60, quality: 'ok' },

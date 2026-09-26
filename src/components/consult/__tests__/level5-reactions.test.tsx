@@ -1,4 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { setDay } from './drive'
+import { trainingDays } from '@/lib/consult/training'
 import { initialFlow, type FlowState } from '@/lib/consult/flow'
 import { ampReactionTo } from '@/lib/consult/reactions'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
@@ -9,12 +11,12 @@ beforeEach(() => {
   sessionStorage.clear()
 })
 
-const REST = Array(7).fill('rest') as ConsultAnswers['week']
+const REST: ('rest' | 'gym' | 'cardio' | 'sport')[] = Array(7).fill('rest')
 
 describe('U6 what sets a reaction off', () => {
   it('flexes when a day becomes a gym day, and only then', () => {
-    expect(ampReactionTo({ ...EMPTY_ANSWERS, week: REST }, { week: ['gym', ...REST!.slice(1)] })).toBe('flex')
-    expect(ampReactionTo({ ...EMPTY_ANSWERS, week: ['gym', ...REST!.slice(1)] }, { week: ['cardio', ...REST!.slice(1)] })).toBeNull()
+    expect(ampReactionTo({ ...EMPTY_ANSWERS, training: trainingDays(REST) }, { training: trainingDays(['gym', ...REST.slice(1)]) })).toBe('flex')
+    expect(ampReactionTo({ ...EMPTY_ANSWERS, training: trainingDays(['gym', ...REST.slice(1)]) }, { training: trainingDays(['cardio', ...REST.slice(1)]) })).toBeNull()
   })
 
   it('bursts when the charge dial reaches full, not while it stays there', () => {
@@ -50,7 +52,7 @@ describe('U6 Amp reacting in the consult', () => {
 
   it('flexes on a gym day and settles when the flex has played — no timer', () => {
     render(<AmpConsult initial={at('training')} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
+    setDay('Monday')
     expect(amp()).toHaveAttribute('data-amp-reaction', 'flex')
     animationEnd('amp-breathe')
     expect(amp()).toHaveAttribute('data-amp-reaction', 'flex')
@@ -60,9 +62,9 @@ describe('U6 Amp reacting in the consult', () => {
 
   it('plays again on the next gym day', () => {
     render(<AmpConsult initial={at('training')} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
+    setDay('Monday')
     animationEnd('amp-flex')
-    fireEvent.click(screen.getByRole('button', { name: /^Tuesday/ }))
+    setDay('Tuesday')
     expect(amp()).toHaveAttribute('data-amp-reaction', 'flex')
   })
 
@@ -74,13 +76,13 @@ describe('U6 Amp reacting in the consult', () => {
 
   it('doesn’t carry a reaction on to the next scene', () => {
     render(<AmpConsult initial={at('training')} />)
-    fireEvent.click(screen.getByRole('button', { name: /^Monday/ }))
+    setDay('Monday')
     fireEvent.click(screen.getByRole('button', { name: /^(Next|Looks right|Continue)$/ }))
     expect(amp()).not.toHaveAttribute('data-amp-reaction')
   })
 
   it('stays calm in the circuit check', () => {
-    render(<AmpConsult initial={at('circuit', { week: REST })} />)
+    render(<AmpConsult initial={at('circuit', { training: trainingDays(REST) })} />)
     expect(amp()).toHaveAttribute('data-amp-state', 'calm')
     for (const box of screen.queryAllByRole('checkbox')) fireEvent.click(box)
     expect(amp()).not.toHaveAttribute('data-amp-reaction')

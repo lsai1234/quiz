@@ -33,7 +33,7 @@ const QUALITY_FACTOR: Record<SleepQuality, number> = { restful: 1, ok: 0.85, bro
 const clamp = (n: number) => Math.round(Math.max(0, Math.min(100, n)))
 
 export function chargeProfile(a: ConsultAnswers): ChargeProfile {
-  const sessions = sessionsPerWeek(a.week)
+  const sessions = sessionsPerWeek(a.training)
   // Five sessions is full marks; effort adds a little on top of the count.
   const effort = a.intensity === 'hard' ? 10 : a.intensity === 'steady' ? 5 : 0
   const training = sessions === 0 ? 0 : sessions * 20 + effort
@@ -84,8 +84,8 @@ export function chargeProfile(a: ConsultAnswers): ChargeProfile {
  */
 export function profileInWords(a: ConsultAnswers): string {
   const phrases: { text: string; weight: number }[] = []
-  const sessions = sessionsPerWeek(a.week)
-  if (a.week) {
+  const sessions = sessionsPerWeek(a.training)
+  if (a.training) {
     if (sessions >= 5) phrases.push({ text: a.intensity === 'easy' ? 'train most days' : 'train hard', weight: 3 })
     else if (sessions >= 3) phrases.push({ text: 'train regularly', weight: 2 })
     else if (sessions >= 1) phrases.push({ text: 'train now and then', weight: 1 })

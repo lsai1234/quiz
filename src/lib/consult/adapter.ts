@@ -38,6 +38,7 @@ import type { HandoffPayload } from './handoff'
 import { PROFILE_AREAS, PROFILE_LABEL } from './profile'
 import { caffeineCount, sessionsPerWeek } from './reactions'
 import { SHELF_LABEL } from './summary'
+import { countsByType } from './training'
 import type { AgeBand, ConsultAnswers, ConsultGoal, Sex } from './types'
 
 /* ── Answers ────────────────────────────────────────────────────────────── */
@@ -90,11 +91,11 @@ function dietLevel(plate: ConsultAnswers['plate']): DietLevel | null {
 /** The consult's answers as the results page reads them. No health answers cross. */
 export function toQuizAnswers(a: ConsultAnswers): QuizAnswers {
   const goals = [...new Set(a.goals.map((g) => GOAL_TO_QUIZ[g]))]
-  const week = a.week ?? []
+  const counts = countsByType(a.training)
   const types = new Set<TrainingType>()
-  if (week.includes('gym')) types.add('strength')
-  if (week.includes('cardio')) types.add('cardio')
-  if (week.includes('sport')) types.add('sport')
+  if (counts.gym > 0) types.add('strength')
+  if (counts.cardio > 0) types.add('cardio')
+  if (counts.sport > 0) types.add('sport')
   return {
     ...defaultAnswers,
     track: a.goals.includes('performance') ? 'performance' : 'wellbeing',
@@ -102,7 +103,7 @@ export function toQuizAnswers(a: ConsultAnswers): QuizAnswers {
     primaryGoal: goals[0] ?? null,
     ageBracket: a.age ? AGE_TO_QUIZ[a.age] : null,
     gender: a.sex ? SEX_TO_QUIZ[a.sex] : null,
-    trainingFrequency: frequency(sessionsPerWeek(a.week)),
+    trainingFrequency: frequency(Math.round(sessionsPerWeek(a.training))),
     trainingType: [...types],
     caffeineLevel: a.caffeine ? caffeineLevel(caffeineCount(a.caffeine)) : null,
     diet: dietLevel(a.plate),

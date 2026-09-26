@@ -49,13 +49,22 @@ function getClient(): OpenAI | null {
 const KNOWN_SCENES = new Set<string>(SCENES.map((s) => s.id))
 
 /** Only the answer fields the summary reads, re-typed. Anything else is dropped. */
+/** Only a well-formed training answer gets through; anything else is treated as unanswered. */
+function validTraining(raw: unknown): ConsultAnswers['training'] {
+  const t = raw as ConsultAnswers['training']
+  if (!t || (t.mode !== 'days' && t.mode !== 'average')) return null
+  const okDays = Array.isArray(t.days) && t.days.length === 7 && t.days.every((d) => Array.isArray(d) && d.every((x) => x === 'gym' || x === 'cardio' || x === 'sport'))
+  const okAvg = t.average && ['gym', 'cardio', 'sport'].every((k) => typeof (t.average as Record<string, unknown>)[k] === 'number')
+  return okDays && okAvg ? t : null
+}
+
 function answersFrom(raw: unknown): ConsultAnswers {
   const r = (raw && typeof raw === 'object' ? raw : {}) as Partial<ConsultAnswers>
   return {
     ...EMPTY_ANSWERS,
     goals: Array.isArray(r.goals) ? r.goals.filter((g) => typeof g === 'string').slice(0, 3) : [],
     age: typeof r.age === 'string' ? r.age : null,
-    week: Array.isArray(r.week) && r.week.length === 7 ? r.week : null,
+    training: validTraining(r.training),
     energy: typeof r.energy === 'number' ? r.energy : null,
     sleep: r.sleep && typeof r.sleep === 'object' ? r.sleep : null,
     caffeine: r.caffeine && typeof r.caffeine === 'object' ? r.caffeine : null,

@@ -159,66 +159,122 @@
       "interaction": "training-week",
       "speedRun": true,
       "copy": {
-        "question": "Map your training week",
-        "hint": "Tap a day to cycle through rest, gym, cardio and sport.",
-        "comfortHint": "For each day, tap rest, gym, cardio or sport."
+        "question": "What does your training look like?",
+        "hint": "Tap a day, then what you do on it. Two things in a day is fine. Weeks all different? Choose “It varies”.",
+        "comfortHint": "For each day, tap what you do. Weeks all different? Choose “It varies”."
       },
       "placeholder": {
         "options": [
           {
             "label": "Mostly resting",
             "set": {
-              "week": [
-                "rest",
-                "rest",
-                "rest",
-                "rest",
-                "rest",
-                "rest",
-                "rest"
-              ]
+              "training": {
+                "mode": "days",
+                "days": [
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  [],
+                  []
+                ],
+                "average": {
+                  "gym": 0,
+                  "cardio": 0,
+                  "sport": 0
+                }
+              }
             }
           },
           {
             "label": "Two gym days",
             "set": {
-              "week": [
-                "gym",
-                "rest",
-                "rest",
-                "gym",
-                "rest",
-                "rest",
-                "rest"
-              ]
+              "training": {
+                "mode": "days",
+                "days": [
+                  [
+                    "gym"
+                  ],
+                  [],
+                  [],
+                  [
+                    "gym"
+                  ],
+                  [],
+                  [],
+                  []
+                ],
+                "average": {
+                  "gym": 0,
+                  "cardio": 0,
+                  "sport": 0
+                }
+              }
             }
           },
           {
             "label": "Four mixed sessions",
             "set": {
-              "week": [
-                "gym",
-                "cardio",
-                "rest",
-                "gym",
-                "rest",
-                "sport",
-                "rest"
-              ]
+              "training": {
+                "mode": "days",
+                "days": [
+                  [
+                    "gym"
+                  ],
+                  [
+                    "cardio"
+                  ],
+                  [],
+                  [
+                    "gym"
+                  ],
+                  [],
+                  [
+                    "sport"
+                  ],
+                  []
+                ],
+                "average": {
+                  "gym": 0,
+                  "cardio": 0,
+                  "sport": 0
+                }
+              }
             }
           },
           {
             "label": "Six days on",
             "set": {
-              "week": [
-                "gym",
-                "cardio",
-                "gym",
-                "cardio",
-                "gym",
-                "sport",
-                "rest"
-              ]
+              "training": {
+                "mode": "days",
+                "days": [
+                  [
+                    "gym"
+                  ],
+                  [
+                    "cardio"
+                  ],
+                  [
+                    "gym"
+                  ],
+                  [
+                    "cardio"
+                  ],
+                  [
+                    "gym"
+                  ],
+                  [
+                    "sport"
+                  ],
+                  []
+                ],
+                "average": {
+                  "gym": 0,
+                  "cardio": 0,
+                  "sport": 0
+                }
+              }
             }
           }
         ]
@@ -232,8 +288,8 @@
           },
           "detail": true,
           "copy": {
-            "hint": "Tap a day to cycle through rest, gym, cardio and sport. Then how hard most sessions feel.",
-            "comfortHint": "For each day, tap rest, gym, cardio or sport. Then how hard most sessions feel."
+            "hint": "Tap a day, then what you do on it. Then how hard most sessions feel.",
+            "comfortHint": "For each day, tap what you do. Then how hard most sessions feel."
           }
         }
       ]

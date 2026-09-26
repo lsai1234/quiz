@@ -39,7 +39,8 @@ import {
   kindOf,
   type NeedId,
 } from './knowledge'
-import { caffeineCount, sessionsPerWeek, sleepHours } from './reactions'
+import { caffeineCount, sleepHours } from './reactions'
+import { countsByType, sessionsPerWeek } from './training'
 import { readPlate } from './plate'
 import { GOAL_LABEL, SHELF_LABEL } from './summary'
 import type { ConsultAnswers, ConsultGoal } from './types'
@@ -152,10 +153,10 @@ export function scoreNeeds(a: ConsultAnswers): Needs {
   })
 
   // Training.
-  const week = a.week ?? []
-  const gym = week.filter((d) => d === 'gym').length
-  const endurance = week.filter((d) => d === 'cardio' || d === 'sport').length
-  const sessions = sessionsPerWeek(a.week)
+  const by = countsByType(a.training)
+  const gym = by.gym
+  const endurance = by.cardio + by.sport
+  const sessions = sessionsPerWeek(a.training)
   if (gym >= 2) {
     add('protein', 2 + (gym - 2), `You're in the gym ${gym} days a week`)
     add('strength', gym >= 3 ? 2 : 1, `You're in the gym ${gym} days a week`)

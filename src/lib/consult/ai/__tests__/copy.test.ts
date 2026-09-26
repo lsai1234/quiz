@@ -1,4 +1,5 @@
 import { SCENES, resolveSceneDef } from '../../flow'
+import { trainingDays } from '@/lib/consult/training'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '../../types'
 import { COPY_BUDGET_MS, COPY_MODEL, COPY_TARGET_MS, LIMITS, NEVER_AI, buildCopyPrompt, copySchema, isClean, summariseForCopy, validateSceneCopy } from '../copy'
 
@@ -11,7 +12,7 @@ const everything: ConsultAnswers = {
   goals: ['performance', 'sleep'],
   age: '35-44',
   sex: 'female',
-  week: ['gym', 'rest', 'gym', 'rest', 'rest', 'rest', 'rest'],
+  training: trainingDays(['gym', 'rest', 'gym', 'rest', 'rest', 'rest', 'rest']),
   energy: 3,
   sleep: { bed: 1380, wake: 360, quality: 'broken' },
   daylight: 'hardly',

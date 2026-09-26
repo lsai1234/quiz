@@ -1,11 +1,13 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import { trainingAverage, trainingDays } from '@/lib/consult/training'
 import { useState } from 'react'
 import { SCENES } from '@/lib/consult/flow'
 import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { SceneRenderer } from '../scenes/registry'
 import { GoalTiles, promoteGoal, toggleGoal } from '../scenes/GoalTiles'
 import { AGE_BANDS } from '../scenes/AgeWheel'
-import { cycleDay, weekSummary } from '../scenes/TrainingWeek'
+import { trainingSummary } from '../scenes/TrainingWeek'
+import { setDay } from './drive'
 
 /** Renders one scene with live answers, as the consult would. */
 function Harness({ id, start = {}, comfort = false, spy }: { id: string; start?: Partial<ConsultAnswers>; comfort?: boolean; spy?: (a: ConsultAnswers) => void }) {
@@ -129,47 +131,50 @@ describe('C3 age wheel', () => {
 })
 
 describe('C4 training week', () => {
-  const day = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) })
+  const day = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}:`) })
 
-  it('cycles rest → gym → cardio → sport → rest', () => {
-    expect(['rest', 'gym', 'cardio', 'sport'].map((d) => cycleDay(d as never))).toEqual(['gym', 'cardio', 'sport', 'rest'])
-  })
-
-  it('shows seven days, and a live summary as you tap', () => {
+  it('shows seven days, and a live summary as you set them', () => {
     render(<Harness id="training" />)
     expect(screen.getByRole('group', { name: 'Your training week' }).querySelectorAll('button')).toHaveLength(7)
-    fireEvent.click(day('Monday'))
-    fireEvent.click(day('Wednesday'))
-    fireEvent.click(day('Saturday'))
-    fireEvent.click(day('Saturday'))
-    fireEvent.click(day('Saturday'))
+    setDay('Monday', 'Gym')
+    setDay('Wednesday', 'Gym')
+    setDay('Saturday', 'Sport')
     expect(screen.getByText('3 sessions · 2 Gym · 1 Sport')).toBeInTheDocument()
     expect(day('Saturday')).toHaveAccessibleName('Saturday: Sport. Tap to change.')
   })
 
-  it('captures a full week in a handful of taps', () => {
+  it('takes more than one thing on a day: gym in the morning, sport at night', () => {
     const spy = jest.fn()
     render(<Harness id="training" spy={spy} />)
-    // Mon gym, Tue cardio, Thu gym, Sat sport: seven taps.
-    fireEvent.click(day('Monday'))
-    fireEvent.click(day('Tuesday'))
-    fireEvent.click(day('Tuesday'))
-    fireEvent.click(day('Thursday'))
-    for (let i = 0; i < 3; i++) fireEvent.click(day('Saturday'))
-    expect(spy).toHaveBeenLastCalledWith(
-      expect.objectContaining({ week: ['gym', 'cardio', 'rest', 'gym', 'rest', 'sport', 'rest'] }),
-    )
+    setDay('Tuesday', 'Gym')
+    setDay('Tuesday', 'Sport')
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ training: expect.objectContaining({ mode: 'days', days: [[], ['gym', 'sport'], [], [], [], [], []] }) }))
+    expect(day('Tuesday')).toHaveAccessibleName('Tuesday: Gym and Sport. Tap to change.')
+    expect(screen.getByText('2 sessions · 1 Gym · 1 Sport')).toBeInTheDocument()
   })
 
   it('answers a rest week without tapping every day', () => {
     const spy = jest.fn()
     render(<Harness id="training" spy={spy} />)
     fireEvent.click(screen.getByRole('button', { name: 'No training right now' }))
-    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ week: Array(7).fill('rest') }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ training: trainingDays(Array(7).fill('rest')) }))
+  })
+
+  it('takes an average when weeks vary, starting from the days already set', () => {
+    const spy = jest.fn()
+    render(<Harness id="training" spy={spy} />)
+    setDay('Monday', 'Gym')
+    setDay('Thursday', 'Gym')
+    fireEvent.click(screen.getByRole('radio', { name: 'It varies' }))
+    expect(screen.queryByRole('group', { name: 'Your training week' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'More cardio sessions' }))
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ training: expect.objectContaining({ mode: 'average', average: { gym: 2, cardio: 1, sport: 0 } }) }))
+    expect(screen.getByText('About 3 a week · 2 Gym · 1 Cardio')).toBeInTheDocument()
   })
 
   it('summarises a week in words', () => {
-    expect(weekSummary(['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'sport'])).toBe('5 sessions · 3 Gym · 1 Cardio · 1 Sport')
-    expect(weekSummary(Array(7).fill('rest'))).toBe('Rest week')
+    expect(trainingSummary(trainingDays(['gym', 'rest', 'gym', 'rest', 'gym', 'cardio', 'sport']))).toBe('5 sessions · 3 Gym · 1 Cardio · 1 Sport')
+    expect(trainingSummary(trainingDays(Array(7).fill('rest')))).toBe('No training right now')
+    expect(trainingSummary(trainingAverage({ gym: 2.5, sport: 1 }))).toBe('About 3.5 a week · 2.5 Gym · 1 Sport')
   })
 })
