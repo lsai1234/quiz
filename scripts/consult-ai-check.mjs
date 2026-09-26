@@ -75,38 +75,44 @@ await p.waitForTimeout(500)
 log('goals heading:', await h1(), '| a label:', await p.getByText(/^AI: performance/).count())
 await shot('02-goals-ai')
 
-// 4. Tell Amp more: typed.
+// 4. Goals and about: no "Tell Amp" on either.
 await p.getByRole('button', { name: /^Performance/ }).click()
-await p.getByRole('button', { name: /^Tell Amp more/ }).click()
-await p.getByRole('textbox').fill('I have three coffees a day and sore knees')
-await p.getByRole('button', { name: 'Send to Amp' }).click()
-await p.getByText('Amp picked up').waitFor({ timeout: 15000 })
-log('picked up:', await p.getByRole('dialog').locator('li span.flex-1').allInnerTexts())
-await shot('03-tell-more')
-await p.getByRole('button', { name: /^Add (all|it)$/ }).click()
-
-// 5. Voice: hold the mic.
-await p.getByRole('button', { name: /^Tell Amp more/ }).click()
-const mic = p.getByRole('button', { name: /Hold to talk/ })
-const box = await mic.boundingBox()
-await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-await p.mouse.down()
-await p.waitForTimeout(1500)
-log('listening:', await p.getByRole('button', { name: /Listening/ }).count(), '| waveform bars:', await p.locator('[data-waveform] > span').count())
-await shot('04-voice-listening')
-await p.mouse.up()
-await p.waitForFunction(() => document.querySelector('textarea')?.value.length > 0, null, { timeout: 15000 })
-log('voice text in box:', await p.getByRole('textbox').inputValue())
-await shot('05-voice-text')
-await p.keyboard.press('Escape')
-
+log('tell on goals:', await p.getByRole('button', { name: /Tell Amp/ }).count())
 await next() // goals → about
 log('about heading (AI-worded + reaction):', await h1(), '|', await p.locator('p').filter({ hasText: /Nice one/ }).count() ? 'reaction shown' : 'no reaction')
 await p.getByRole('option', { name: '35–44' }).click()
 await p.getByRole('radio', { name: 'Male', exact: true }).click()
 await next()
 
-// 6. Tracker read on training.
+// 5. Training leads with "Tell Amp": typed.
+const lead = p.getByRole('button', { name: /Tell Amp how your weeks usually go/ })
+log('training lead card:', await lead.count())
+await shot('03-training-lead')
+await lead.click()
+await p.getByRole('textbox').fill('gym monday and thursday, football tuesdays')
+await p.getByRole('button', { name: 'Send to Amp' }).click()
+await p.getByText('Amp picked up').waitFor({ timeout: 15000 })
+log('picked up:', await p.getByRole('dialog').locator('li span.flex-1').allInnerTexts())
+await shot('04-tell-more')
+await p.getByRole('button', { name: /^Add (all|it)$/ }).click()
+log('training from words:', await p.getByText(/a week ·/).textContent())
+
+// 6. Voice: hold the mic.
+await p.getByRole('button', { name: /Tell Amp how your weeks usually go/ }).click()
+const mic = p.getByRole('button', { name: /Hold to talk/ })
+const box = await mic.boundingBox()
+await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+await p.mouse.down()
+await p.waitForTimeout(1500)
+log('listening:', await p.getByRole('button', { name: /Listening/ }).count(), '| waveform bars:', await p.locator('[data-waveform] > span').count())
+await shot('05-voice-listening')
+await p.mouse.up()
+await p.waitForFunction(() => document.querySelector('textarea')?.value.length > 0, null, { timeout: 15000 })
+log('voice text in box:', await p.getByRole('textbox').inputValue())
+await shot('06-voice-text')
+await p.keyboard.press('Escape')
+
+// 7. Tracker read on training.
 await p.getByRole('button', { name: 'Fill from my tracker' }).click()
 await p.getByRole('button', { name: 'Whoop' }).click()
 await p.getByRole('checkbox').click()
@@ -158,13 +164,14 @@ log('shelf pressed:', await p.locator('[aria-pressed="true"]').allInnerTexts())
 // it's covered by the unit tests rather than by this run, which answers as a
 // 35-year-old.)
 
-// finish: review → circuit → analysis → handoff
-await next()
-await p.waitForTimeout(400)
+// finish: circuit → review → analysis → handoff
 await next()
 await p.waitForTimeout(400)
 await p.getByRole('checkbox').first().click()
 await p.getByRole('switch', { name: 'None of these' }).click()
+await next()
+await p.waitForTimeout(400)
+log('review shows:', await h1())
 await next()
 await p.getByRole('button', { name: 'See my stacks' }).waitFor({ timeout: 20000 })
 log('fully charged:', await h1())

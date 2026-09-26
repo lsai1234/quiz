@@ -70,7 +70,7 @@ describe('AmpConsult', () => {
     for (let i = 0; i < 10; i++) pickFirstOptionAndNext()
     expect(heading()).toHaveTextContent('Circuit check')
     expect(container.querySelector('.amp-consult')).toHaveAttribute('data-mode', 'calm')
-    expect(screen.queryByText('Tell Amp more')).toBeNull()
+    expect(screen.queryByText(/Tell Amp/)).toBeNull()
   })
 })
 

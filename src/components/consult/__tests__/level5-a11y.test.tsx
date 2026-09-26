@@ -82,6 +82,16 @@ describe('U7 axe, the rest', () => {
     expect(await audit(container)).toEqual([])
   })
 
+  it('"Tell Amp" in the scene: leading, under the widget, and what Amp noted', async () => {
+    for (const [id, notes] of [['training', {}], ['energy', {}], ['sleep', { sleep: 'Night shifts twice a week' }]] as const) {
+      const { container, unmount } = render(<AmpConsult ai initial={at(id, { ...ANSWERED, notes })} />)
+      await act(async () => undefined)
+      expect(container.textContent).toMatch(/Tell Amp|Amp noted/)
+      expect(await audit(container)).toEqual([])
+      unmount()
+    }
+  })
+
   it('"Tell Amp more", with the mic', async () => {
     const { container } = render(<TellAmpMore scene={SCENES[2]} onAdd={jest.fn()} onClose={jest.fn()} onThinking={jest.fn()} voice />)
     expect(await audit(container)).toEqual([])

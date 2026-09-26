@@ -1,5 +1,6 @@
 import { EMPTY_ANSWERS } from '../../types'
-import { SCENES, flowReducer, initialFlow } from '../../flow'
+import { NOTE_ANSWERS, SCENES, flowReducer, initialFlow, isAnswered } from '../../flow'
+import { trainingAverage, trainingDays } from '../../training'
 import { MAX_PICKS, labelFor, pickToPatch, validatePicks } from '../understand'
 import { REACT_SAFE, validateSceneCopy } from '../copy'
 
@@ -47,6 +48,38 @@ describe('V3 tell Amp more: picks', () => {
     s = flowReducer(s, { type: 'pick', pick: { kind: 'food', value: 'eggs', label: '' } })
     s = flowReducer(s, { type: 'pick', pick: { kind: 'food', value: 'fruit', label: '' } })
     expect(s.answers.plate).toEqual(['eggs', 'fruit'])
+  })
+})
+
+describe('batch 4: said, not tapped', () => {
+  it('turns sessions a week into the training answer, keeping the rest of the week', () => {
+    const [gym, sport, bad] = validatePicks({
+      picks: [
+        { kind: 'gym-sessions', value: '2.5', label: '' },
+        { kind: 'sport-sessions', value: '1', label: 'Football on Tuesdays' },
+        { kind: 'cardio-sessions', value: '20', label: '' },
+      ],
+    })
+    expect(bad).toBeUndefined()
+    expect(gym.label).toBe('Gym 2.5× a week')
+    const a = { ...EMPTY_ANSWERS, training: trainingDays(['cardio', 'rest', 'rest', 'rest', 'rest', 'rest', 'rest']) }
+    expect(pickToPatch(gym, a, 'training')).toEqual({ training: trainingAverage({ gym: 2.5, cardio: 1 }) })
+    expect(pickToPatch(sport, EMPTY_ANSWERS, 'training')).toEqual({ training: trainingAverage({ sport: 1 }) })
+  })
+
+  it('lets a note answer a scene on its own — but never goals, age or the circuit check', () => {
+    const noted = (id: string) => ({ ...EMPTY_ANSWERS, notes: { [id]: 'Shift work · changes weekly' } })
+    for (const id of NOTE_ANSWERS) expect(isAnswered(id, noted(id))).toBe(true)
+    for (const id of ['goals', 'about', 'circuit'] as const) expect(isAnswered(id, noted(id))).toBe(false)
+  })
+
+  it('gives every scene that takes a note its own prompt and example', () => {
+    for (const id of NOTE_ANSWERS) {
+      const tell = SCENES.find((s) => s.id === id)!.tell
+      expect(tell?.prompt).toMatch(/tell Amp/i)
+      expect(tell?.example).toMatch(/^e\.g\. /)
+    }
+    for (const id of ['goals', 'about', 'circuit', 'review']) expect(SCENES.find((s) => s.id === id)!.tell).toBeUndefined()
   })
 })
 

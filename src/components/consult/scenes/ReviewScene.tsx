@@ -24,7 +24,9 @@ export function ReviewScene({ scenes, answers, onEdit }: Props) {
     <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>
       {reviewable.map((id) => {
         const def = sceneDef(id)
-        const value = summarise(id, answers)
+        const note = answers.notes[id]
+        // A note can be the whole answer (batch 4): say it back either way.
+        const value = [summarise(id, answers), note && `Told Amp: ${note}`].filter(Boolean).join(' · ')
         return (
           <li key={id}>
             <button

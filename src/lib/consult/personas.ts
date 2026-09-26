@@ -212,4 +212,4 @@ export const PERSONAS: Persona[] = [
  */
 // 2026-09-26: re-run after adding the Weight loss goal (plan v4), which adds it
 // to the goal list in the prompts. All 31 personas pass.
-export const APPROVED_FINGERPRINT = '6347541f'
+export const APPROVED_FINGERPRINT = '39d5989e'

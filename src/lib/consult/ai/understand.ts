@@ -12,6 +12,7 @@
  */
 
 import type { SceneDef } from '../flow'
+import { countsByType, sessionsLabel, trainingAverage, type Activity } from '../training'
 import { isClean } from './copy'
 import { BODY_LABEL, DAYLIGHT_LABEL, FOOD_LABEL, GOAL_LABEL, INTENSITY_LABEL, QUALITY_LABEL, SHELF_LABEL, AGE_LABEL, clock } from '../summary'
 import type {
@@ -29,7 +30,8 @@ import type {
 
 export const PICK_KINDS = [
   'goal', 'age', 'energy', 'sleep-quality', 'bedtime', 'waketime', 'daylight',
-  'coffee', 'tea', 'energy-drink', 'food', 'sore', 'shelf', 'intensity', 'note',
+  'coffee', 'tea', 'energy-drink', 'food', 'sore', 'shelf', 'intensity',
+  'gym-sessions', 'cardio-sessions', 'sport-sessions', 'note',
 ] as const
 export type PickKind = (typeof PICK_KINDS)[number]
 
@@ -53,6 +55,9 @@ const SHELF = Object.keys(SHELF_LABEL) as ShelfItem[]
 const INTENSITIES = Object.keys(INTENSITY_LABEL) as Intensity[]
 
 const count = (v: string) => (/^\d{1,2}$/.test(v) && Number(v) <= 8 ? Number(v) : null)
+/** Sessions a week of one kind: 0–14, halves allowed ("every other week" is 0.5). */
+const sessions = (v: string) => (/^\d{1,2}(\.5)?$/.test(v) && Number(v) <= 14 ? Number(v) : null)
+const SESSION_KIND: Partial<Record<PickKind, Activity>> = { 'gym-sessions': 'gym', 'cardio-sessions': 'cardio', 'sport-sessions': 'sport' }
 const time = (v: string) => {
   const m = /^([01]?\d|2[0-3]):([0-5]\d)$/.exec(v)
   return m ? Number(m[1]) * 60 + Number(m[2]) : null
@@ -75,6 +80,9 @@ function valid(kind: PickKind, value: string): boolean {
     case 'sore': return SPOTS.includes(value as BodySpot)
     case 'shelf': return SHELF.includes(value as ShelfItem)
     case 'intensity': return INTENSITIES.includes(value as Intensity)
+    case 'gym-sessions':
+    case 'cardio-sessions':
+    case 'sport-sessions': return sessions(value) !== null
     case 'note': return value.trim().length > 0 && value.length <= MAX_LABEL && isClean(value)
   }
 }
@@ -96,6 +104,13 @@ export function labelFor(kind: PickKind, value: string): string {
     case 'sore': return `Sore ${BODY_LABEL[value as BodySpot].toLowerCase()}`
     case 'shelf': return `Already takes ${SHELF_LABEL[value as ShelfItem].toLowerCase()}`
     case 'intensity': return `Sessions: ${INTENSITY_LABEL[value as Intensity].toLowerCase()}`
+    case 'gym-sessions':
+    case 'cardio-sessions':
+    case 'sport-sessions': {
+      const n = sessions(value)!
+      const what = { gym: 'Gym', cardio: 'Cardio', sport: 'Sport' }[SESSION_KIND[kind]!]
+      return `${what} ${sessionsLabel(n)}× a week`
+    }
     case 'note': return value
   }
 }
@@ -142,6 +157,12 @@ export function pickToPatch(pick: Pick, a: ConsultAnswers, scene: SceneId): Part
     case 'sore': return { body: add(a.body, pick.value as BodySpot) }
     case 'shelf': return { shelf: add(a.shelf, pick.value as ShelfItem) }
     case 'intensity': return { intensity: pick.value as Intensity }
+    // Said, not tapped: a count a week, so it lands as "It varies", keeping
+    // whatever else the week already held.
+    case 'gym-sessions':
+    case 'cardio-sessions':
+    case 'sport-sessions':
+      return { training: trainingAverage({ ...countsByType(a.training), [SESSION_KIND[pick.kind]!]: sessions(pick.value)! }) }
     case 'note': {
       const prior = a.notes[scene]
       return { notes: { ...a.notes, [scene]: prior ? `${prior}; ${pick.label}` : pick.label } }
@@ -184,6 +205,7 @@ Return up to ${MAX_PICKS} picks. Each pick is a kind and a value from these, exa
 - sore (stiff or sore spot): ${SPOTS.join(', ')}
 - shelf (already taken): ${SHELF.join(', ')}
 - intensity (how hard training feels): ${INTENSITIES.join(', ')}
+- gym-sessions, cardio-sessions, sport-sessions: sessions of that kind in a typical week, 0–14, halves allowed (weights and classes are gym; runs, rides and swims are cardio; team and racket games are sport). Average it when weeks vary.
 - note: a short plain fact that fits none of these (at most ${MAX_LABEL} characters)
 The label is a short card title (at most ${MAX_LABEL} characters), e.g. "Night shifts · 3 a week".
 

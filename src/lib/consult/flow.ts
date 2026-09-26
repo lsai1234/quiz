@@ -77,6 +77,22 @@ export interface SceneVariant {
   copy?: Partial<SceneCopy>
   emphasis?: boolean
   detail?: boolean
+  tell?: Partial<SceneTell>
+}
+
+/**
+ * "Tell Amp more", placed in the scene (plan v4 batch 4) rather than as one
+ * link at the foot of every screen. Where talking is easier than tapping — a
+ * training week that changes, shifts, a cupboard of tubs — it leads the
+ * screen; elsewhere it sits under the widget for what doesn't fit.
+ */
+export interface SceneTell {
+  /** Offered first, above the widget, as the better way to answer. */
+  lead: boolean
+  /** The invitation, in Amp's voice. */
+  prompt: string
+  /** What someone might say here: the box's placeholder. */
+  example: string
 }
 
 export interface SceneDef {
@@ -95,6 +111,8 @@ export interface SceneDef {
   /** `calm` for the circuit check. */
   mode?: 'charge' | 'calm'
   copy: SceneCopy
+  /** Absent: no "Tell Amp more" on this scene (goals, about, the circuit check, review). */
+  tell?: SceneTell
   variants?: SceneVariant[]
   /** Set on a resolved scene: which variant applied. */
   variant?: string
@@ -159,13 +177,23 @@ export function resolveSceneDef(id: SceneId, answers: ConsultAnswers): SceneDef 
     variant: variant.id,
     emphasis: variant.emphasis ?? def.emphasis,
     detail: variant.detail ?? def.detail,
+    tell: def.tell && variant.tell ? { ...def.tell, ...variant.tell } : def.tell,
   }
 }
 
 /* ── Answered? ──────────────────────────────────────────────────────────── */
 
+/**
+ * Scenes a "Tell Amp more" note can answer on its own. Explaining is sometimes
+ * the better answer — "shift work, it changes every week" — and making someone
+ * tap the widget as well would ignore what they said. Not goals, age or the
+ * circuit check: the rules can't do without those.
+ */
+export const NOTE_ANSWERS: SceneId[] = ['training', 'energy', 'sleep', 'daylight', 'caffeine', 'food', 'body', 'shelf']
+
 /** Whether a scene has what it needs for Next. Review is always ready. */
 export function isAnswered(id: SceneId, a: ConsultAnswers): boolean {
+  if (NOTE_ANSWERS.includes(id) && a.notes[id]) return true
   switch (id) {
     case 'goals':
       return a.goals.length > 0

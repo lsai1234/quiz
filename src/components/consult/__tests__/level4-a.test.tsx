@@ -45,28 +45,78 @@ describe('V3 tell Amp more', () => {
     expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ label: 'Night shifts · 3 a week' }))
   })
 
-  it('is offered only with the AI layer on, and never on the circuit check', () => {
-    render(<AmpConsult />)
+  const toTraining = () => {
     chooseRoute()
-    expect(screen.queryByText('Tell Amp more')).toBeNull()
-  })
-
-  it('applies added picks to the answers', async () => {
-    setQuizArm({ arm: 'v1', consultAi: true })
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
+    pressNext()
+    fireEvent.click(screen.getByRole('option', { name: '25–34' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Male' }))
+    pressNext()
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'training')!.copy.question)
+  }
+  const understandReplies = (picks: unknown[]) => {
     global.fetch = jest.fn(async (url: RequestInfo | URL) =>
-      String(url) === '/api/consult/understand'
-        ? reply({ picks: [{ kind: 'goal', value: 'focus', label: 'Goal: Focus' }] })
-        : reply({ fallback: true }),
+      String(url) === '/api/consult/understand' ? reply({ picks }) : reply({ fallback: true }),
     ) as typeof fetch
-    render(<AmpConsult />)
-    chooseRoute()
-    fireEvent.click(screen.getByRole('button', { name: 'Tell Amp more' }))
-    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'mostly want to concentrate better' } })
+  }
+  const say = async (text: string) => {
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: text } })
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Send to Amp' }))
     })
+  }
+
+  it('is offered only with the AI layer on', () => {
+    render(<AmpConsult />)
+    toTraining()
+    expect(screen.queryByText(/Tell Amp/)).toBeNull()
+  })
+
+  it('lives in the scene, in its own words: leading where talking is easier, under the widget elsewhere', () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    understandReplies([])
+    render(<AmpConsult />)
+    toTraining()
+    // Training leads with it, and says what someone might tell it.
+    const lead = screen.getByRole('button', { name: /Tell Amp how your weeks usually go/ })
+    expect(lead).toHaveTextContent('football on Tuesdays')
+    expect(screen.getByText('Or set it below')).toBeInTheDocument()
+    fireEvent.click(lead)
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', expect.stringContaining('football on Tuesdays'))
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    // Energy: a quiet line under the dial.
+    fireEvent.click(screen.getByRole('button', { name: 'No training right now' }))
+    pressNext()
+    expect(screen.getByRole('button', { name: /Tell Amp when it dips/ })).toBeInTheDocument()
+    expect(screen.queryByText('Or set it below')).toBeNull()
+  })
+
+  it('fills the training week from what was said, as sessions a week', async () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    understandReplies([
+      { kind: 'gym-sessions', value: '2', label: 'Gym twice a week' },
+      { kind: 'sport-sessions', value: '1', label: 'Football on Tuesdays' },
+    ])
+    render(<AmpConsult />)
+    toTraining()
+    fireEvent.click(screen.getByRole('button', { name: /Tell Amp how your weeks usually go/ }))
+    await say('gym monday and thursday, football tuesdays')
+    fireEvent.click(screen.getByRole('button', { name: 'Add all' }))
+    expect(screen.getByRole('radio', { name: 'It varies' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('About 3 a week · 2 Gym · 1 Sport')).toBeInTheDocument()
+  })
+
+  it('takes an explanation as the answer: no need to tap the widget as well', async () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    understandReplies([{ kind: 'note', value: 'Shift work', label: 'Shift work · changes every week' }])
+    render(<AmpConsult />)
+    toTraining()
+    fireEvent.click(screen.getByRole('button', { name: /Tell Amp how your weeks usually go/ }))
+    await say('shift work, honestly it changes every week')
     fireEvent.click(screen.getByRole('button', { name: 'Add it' }))
-    expect(screen.getByRole('button', { name: /^Focus/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('Shift work · changes every week')
+    pressNext()
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'energy')!.copy.question)
   })
 })
 

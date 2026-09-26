@@ -182,7 +182,7 @@ describe('H2 circuit check', () => {
     expect(heading()).toHaveTextContent('Circuit check')
     expect(container.querySelector('.amp-consult')).toHaveAttribute('data-mode', 'calm')
     expect(screen.getByRole('img', { name: 'Amp, calm' })).toBeInTheDocument()
-    expect(screen.queryByText('Tell Amp more')).toBeNull()
+    expect(screen.queryByText(/Tell Amp/)).toBeNull()
   })
 
   it('is part of every consult, on both routes, just before the review', () => {

@@ -53,9 +53,11 @@ interface Props {
   transcribe?: Transcribe
   /** Whether to offer the mic at all. Defaults to what the browser supports. */
   voice?: boolean
+  /** What someone might say on this screen (the scene's own example). */
+  example?: string
 }
 
-export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understand, transcribe, voice }: Props) {
+export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understand, transcribe, voice, example }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [picks, setPicks] = useState<Pick[] | null>(null)
@@ -129,7 +131,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
         </div>
 
         <label className="sr-only" htmlFor="amp-tell-more">
-          Anything else about {scene.label.toLowerCase()}?
+          {scene.tell?.prompt ?? `Anything else about ${scene.label.toLowerCase()}?`}
         </label>
         <textarea
           id="amp-tell-more"
@@ -138,7 +140,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
           maxLength={MAX_TEXT + 20}
           rows={3}
           onChange={(e) => setText(e.target.value)}
-          placeholder="e.g. I work nights three times a week"
+          placeholder={example ?? 'e.g. I work nights three times a week'}
           className="w-full"
           style={{
             marginTop: 'var(--amp-space-2)',

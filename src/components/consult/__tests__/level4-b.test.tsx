@@ -53,7 +53,7 @@ describe('V6 lost-signal fallback', () => {
       await settle()
     }
     expect(copyCalls()).toBe(BREAKER)
-    expect(screen.getByRole('button', { name: /^Tell Amp more/ })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Tell Amp/ }).length).toBeGreaterThan(0)
     expect(heading()).toBeInTheDocument()
   })
 
@@ -65,7 +65,8 @@ describe('V6 lost-signal fallback', () => {
     chooseRoute()
     await settle()
     expect(copyCalls()).toBe(1)
-    expect(screen.queryByRole('button', { name: /^Tell Amp more/ })).toBeNull()
+    for (let i = 0; i < 3; i++) pickFirstOptionAndNext()
+    expect(screen.queryByRole('button', { name: /Tell Amp/ })).toBeNull()
   })
 
   it('asks for the first scene’s words while the route choice is on screen', async () => {

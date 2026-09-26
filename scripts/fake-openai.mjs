@@ -58,6 +58,12 @@ function picks(text) {
   if (/night/.test(t)) out.push({ kind: 'note', value: 'night shifts', label: 'Works night shifts' })
   if (/fish/.test(t)) out.push({ kind: 'food', value: 'oily-fish', label: 'Eats oily fish' })
   if (/knee/.test(t)) out.push({ kind: 'sore', value: 'knees', label: 'Sore knees' })
+  // Training, said: "gym monday and thursday, football tuesdays".
+  const days = (part) => (part.match(/monday|tuesday|wednesday|thursday|friday|saturday|sunday/g) ?? []).length || 1
+  for (const part of t.split(/,| and then /)) {
+    if (/gym|weights/.test(part)) out.push({ kind: 'gym-sessions', value: String(days(part)), label: `Gym ${days(part)}× a week` })
+    if (/football|tennis|netball|rugby/.test(part)) out.push({ kind: 'sport-sessions', value: String(days(part)), label: `Sport ${days(part)}× a week` })
+  }
   if (!out.length) out.push({ kind: 'note', value: text.slice(0, 40), label: text.slice(0, 40) })
   return { picks: out }
 }

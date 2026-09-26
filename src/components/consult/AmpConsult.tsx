@@ -34,6 +34,7 @@ import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
 import { useAiCopy } from './useAiCopy'
 import { TellAmpMore } from './TellAmpMore'
+import { AmpNoted, TellInline, TellLead } from './SceneTell'
 import { useQuizArmState } from '@/lib/experiments/client'
 import { consultFunnel } from '@/lib/analytics/consult'
 import type { ResultsBundle } from '@/lib/consult/results'
@@ -268,6 +269,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // The tracker read (U2) fills the week and the sleep window, so it's offered
   // where those are asked — on the long route only; a speed run has no time for uploads.
   const offerTracker = aiOn && state.answers.route === 'deep' && (state.sceneId === 'training' || state.sceneId === 'sleep')
+  // "Tell Amp more" lives in the scene now, in its own words (batch 4). Only
+  // with the AI layer on: with it off there's nobody to read it (V6).
+  const tell = mode !== 'calm' && aiOn ? scene.tell : undefined
+  const note = tell ? state.answers.notes[state.sceneId] : undefined
+  const tracker = offerTracker ? () => setTracking(true) : undefined
   const nextLabel = state.returnTo ? 'Back to review' : scene.copy.next ?? 'Next'
 
   return (
@@ -293,17 +299,6 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           }
           footer={
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
-              {/* Only with the AI layer on: with it off there's nobody to read it (V6). */}
-              {mode !== 'calm' && aiOn && (
-                <QuietLink icon={canTalk ? 'mic' : 'spark'} onClick={() => setTelling(true)}>
-                  {canTalk ? 'Tell Amp more · type or talk' : 'Tell Amp more'}
-                </QuietLink>
-              )}
-              {offerTracker && (
-                <QuietLink icon="camera" onClick={() => setTracking(true)}>
-                  Fill from my tracker
-                </QuietLink>
-              )}
               {/* Never advertised: comfort mode switches itself on when it
                   suits (see autoComfort), and this is only the way back. */}
               {state.answers.comfort && (
@@ -330,6 +325,8 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
               <Hint>I’ve made everything a little bigger and simpler. “Standard size” at the bottom puts it back.</Hint>
             </div>
           )}
+          {note && <AmpNoted note={note} onChange={() => setTelling(true)} />}
+          {tell?.lead && !note && <TellLead tell={tell} canTalk={canTalk} onOpen={() => setTelling(true)} tracker={tracker} />}
           <SceneRenderer
             scene={scene}
             answers={state.answers}
@@ -342,6 +339,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             ai={aiOn}
             onReading={setReading}
           />
+          {tell && (!tell.lead || note) && <TellInline tell={tell} canTalk={canTalk} onOpen={() => setTelling(true)} tracker={note ? tracker : undefined} />}
         </SceneShell>
       </SceneStage>
       {tracking && (
@@ -363,6 +361,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
       {telling && (
         <TellAmpMore
           scene={scene}
+          example={scene.tell?.example}
           onThinking={setThinking}
           onClose={() => {
             setTelling(false)

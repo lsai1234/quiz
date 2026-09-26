@@ -163,6 +163,11 @@
         "hint": "Tap a day, then what you do on it. Two things in a day is fine. Weeks all different? Choose “It varies”.",
         "comfortHint": "For each day, tap what you do. Weeks all different? Choose “It varies”."
       },
+      "tell": {
+        "lead": true,
+        "prompt": "Easier to say it? Tell Amp how your weeks usually go.",
+        "example": "e.g. Gym Monday and Thursday, football on Tuesdays, and a run most weekends"
+      },
       "placeholder": {
         "options": [
           {
@@ -305,6 +310,11 @@
         "hint": "Drag to fill the battery.",
         "comfortHint": "Use the minus and plus buttons to set how charged you feel."
       },
+      "tell": {
+        "lead": false,
+        "prompt": "Energy all over the place? Tell Amp when it dips.",
+        "example": "e.g. Fine till 3pm, then I crash — worse on night shifts"
+      },
       "placeholder": {
         "options": [
           {
@@ -338,6 +348,11 @@
         "question": "Set your sleep window",
         "hint": "Drag bedtime and wake-up to a normal night.",
         "comfortHint": "Use the buttons to set bedtime and wake-up for a normal night."
+      },
+      "tell": {
+        "lead": true,
+        "prompt": "Shifts, a newborn, weekends different? Tell Amp how your nights really go.",
+        "example": "e.g. I work nights twice a week, so my sleep moves around"
       },
       "placeholder": {
         "options": [
@@ -398,6 +413,11 @@
         "hint": "Twenty minutes or more at a time, in an ordinary week: a walk, the school run, working outdoors. Drag the sun.",
         "comfortHint": "Twenty minutes or more at a time, in an ordinary week: a walk, the school run, working outdoors. Pick the closest."
       },
+      "tell": {
+        "lead": false,
+        "prompt": "Doesn't fit neatly? Tell Amp about your days.",
+        "example": "e.g. Office all week, but I walk the dog every morning"
+      },
       "placeholder": {
         "options": [
           {
@@ -436,6 +456,11 @@
       "copy": {
         "question": "Coffee, tea, energy drinks?",
         "hint": "Tap to stack what you have on a normal day."
+      },
+      "tell": {
+        "lead": false,
+        "prompt": "Doesn't fit neatly? Tell Amp what you drink.",
+        "example": "e.g. Two coffees, and a pre-workout on gym days"
       },
       "placeholder": {
         "options": [
@@ -481,6 +506,11 @@
       "copy": {
         "question": "What's on your plate most weeks?",
         "hint": "Tap everything you eat at least once a week."
+      },
+      "tell": {
+        "lead": true,
+        "prompt": "Quicker to say it? Tell Amp what a normal week of food looks like.",
+        "example": "e.g. Mostly chicken and rice, fish on Fridays, not much fruit"
       },
       "placeholder": {
         "options": [
@@ -534,6 +564,11 @@
       "copy": {
         "question": "Anywhere feel stiff or sore?",
         "hint": "Tap the spots. Leave it blank if you're all good."
+      },
+      "tell": {
+        "lead": false,
+        "prompt": "Something else niggling? Tell Amp.",
+        "example": "e.g. My knees ache after football"
       },
       "placeholder": {
         "options": [
@@ -613,6 +648,11 @@
       "copy": {
         "question": "Already taking anything?",
         "hint": "So nothing gets doubled up."
+      },
+      "tell": {
+        "lead": true,
+        "prompt": "Got a cupboard of tubs? Just tell Amp what's in it.",
+        "example": "e.g. Whey after the gym, creatine, and a vitamin D in winter"
       },
       "placeholder": {
         "options": [

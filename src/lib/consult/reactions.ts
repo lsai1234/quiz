@@ -43,8 +43,16 @@ export function caffeineCount(c: ConsultAnswers['caffeine']): number {
   return c ? c.coffee + c.tea + c.energy : 0
 }
 
-/** Amp's line about the answer to `scene`. Empty when there's nothing to say. */
+/**
+ * Amp's line about the answer to `scene`. Empty when there's nothing to say.
+ * A scene answered in words (a "Tell Amp more" note, batch 4) gets a line that
+ * says it was heard, never one read off an empty widget.
+ */
 export function reactionTo(scene: SceneId, a: ConsultAnswers): string {
+  return fromWidget(scene, a) || (a.notes[scene] ? 'Heard you. That helps.' : '')
+}
+
+function fromWidget(scene: SceneId, a: ConsultAnswers): string {
   switch (scene) {
     case 'goals': {
       if (a.goals.length === 0) return ''
@@ -53,6 +61,7 @@ export function reactionTo(scene: SceneId, a: ConsultAnswers): string {
     case 'about':
       return a.age ? `${AGE_WORDS[a.age]}. Noted.` : ''
     case 'training': {
+      if (!a.training) return ''
       const n = Math.round(sessionsPerWeek(a.training))
       if (n === 0) return 'A rest-heavy week. Fair.'
       const count = n === 1 ? 'one session' : n === 2 ? 'two sessions' : (WORDS[n] ?? String(n)).toLowerCase()
