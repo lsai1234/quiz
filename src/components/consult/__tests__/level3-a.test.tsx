@@ -5,7 +5,7 @@ import { EMPTY_ANSWERS, type ConsultAnswers } from '@/lib/consult/types'
 import { HEALTH_DATA_VERSION } from '@/lib/legal/versions'
 import { SceneRenderer } from '../scenes/registry'
 import { toggleFlag, toggleNone } from '../scenes/CircuitCheck'
-import { AmpConsult, offerComfort } from '../AmpConsult'
+import { AmpConsult, autoComfort } from '../AmpConsult'
 import { chooseRoute, heading, pickFirstOptionAndNext, pressNext } from './drive'
 
 function Harness({ id, start = {}, comfort = false, spy }: { id: string; start?: Partial<ConsultAnswers>; comfort?: boolean; spy?: (a: ConsultAnswers) => void }) {
@@ -32,37 +32,38 @@ beforeEach(() => {
 })
 
 describe('C14 comfort mode', () => {
-  it('is offered for healthy ageing and older age bands, once, after "about you"', () => {
-    const ageing = { ...EMPTY_ANSWERS, goals: ['ageing' as const] }
-    expect(offerComfort(ageing, 'about')).toBe(false)
-    expect(offerComfort(ageing, 'training')).toBe(true)
-    expect(offerComfort({ ...EMPTY_ANSWERS, age: '65-plus' }, 'training')).toBe(true)
-    expect(offerComfort({ ...EMPTY_ANSWERS, age: '25-34' }, 'training')).toBe(false)
-    expect(offerComfort({ ...ageing, comfortOffered: true }, 'training')).toBe(false)
-    expect(offerComfort({ ...ageing, comfort: true }, 'training')).toBe(false)
+  it('switches itself on for 65 and over, and 55 to 64 with healthy ageing, and no one else', () => {
+    expect(autoComfort({ ...EMPTY_ANSWERS, age: '65-plus' })).toBe(true)
+    expect(autoComfort({ ...EMPTY_ANSWERS, age: '55-64', goals: ['ageing'] })).toBe(true)
+    expect(autoComfort({ ...EMPTY_ANSWERS, age: '55-64', goals: ['performance'] })).toBe(false)
+    expect(autoComfort({ ...EMPTY_ANSWERS, age: '25-34', goals: ['ageing'] })).toBe(false)
   })
 
-  it('switches on from the offer and lifts the whole surface', () => {
+  it('lifts the whole surface after the age answer, says so once, and can be put back', () => {
     const { container } = render(<AmpConsult />)
     chooseRoute()
     fireEvent.click(screen.getByRole('button', { name: /^Healthy ageing/ }))
     pressNext()
+    expect(screen.queryByRole('button', { name: 'Bigger text' })).toBeNull()
     fireEvent.click(screen.getByRole('option', { name: '55–64' }))
+    expect(container.querySelector('.amp-consult')).toHaveAttribute('data-comfort', 'true')
     fireEvent.click(screen.getByRole('radio', { name: 'Female' }))
     pressNext()
-    expect(screen.getByRole('region', { name: 'Comfort mode' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /^Yes, comfort mode/ }))
-    expect(container.querySelector('.amp-consult')).toHaveAttribute('data-comfort', 'true')
-    expect(screen.queryByRole('region', { name: 'Comfort mode' })).toBeNull()
-  })
-
-  it('can be switched on and off by anyone from the footer', () => {
-    const { container } = render(<AmpConsult />)
-    chooseRoute()
-    fireEvent.click(screen.getByRole('button', { name: 'Bigger text' }))
-    expect(container.querySelector('.amp-consult')).toHaveAttribute('data-comfort', 'true')
+    expect(screen.getByText(/made everything a little bigger/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Standard size' }))
     expect(container.querySelector('.amp-consult')).toHaveAttribute('data-comfort', 'false')
+  })
+
+  it('isn’t advertised to anyone else', () => {
+    render(<AmpConsult />)
+    chooseRoute()
+    fireEvent.click(screen.getByRole('button', { name: /^Performance/ }))
+    pressNext()
+    fireEvent.click(screen.getByRole('option', { name: '25–34' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Male' }))
+    pressNext()
+    expect(screen.queryByRole('button', { name: /Bigger text|Standard size/ })).toBeNull()
+    expect(screen.queryByText(/made everything a little bigger/)).toBeNull()
   })
 
   it.each(['about', 'body'])('swaps the fiddly %s widget for big buttons', (id) => {

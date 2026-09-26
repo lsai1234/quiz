@@ -24,11 +24,11 @@ import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/ty
 import { Amp, type AmpState } from './Amp'
 import { TrackerSheet } from './TrackerSheet'
 import { voiceSupported } from './HoldToTalk'
-import { primeSpeech, toSpeech, useReadAloud } from './useReadAloud'
+import { toSpeech, useReadAloud } from './useReadAloud'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
-import { NextButton, QuietLink, Tile, radioArrows } from './controls'
+import { Hint, NextButton, QuietLink, Tile, radioArrows } from './controls'
 import { SceneRenderer } from './scenes/registry'
 import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
@@ -90,6 +90,13 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   /** An upload is being read (U1/U2), and whether the tracker sheet is open. */
   const [reading, setReading] = useState(false)
   const [tracking, setTracking] = useState(false)
+  /** Where to say comfort mode just switched itself on: the scene after the age answer. */
+  const [comfortNote, setComfortNote] = useState<SceneId | 'pending' | null>(null)
+  useEffect(() => {
+    setComfortNote((n) => (n === 'pending' ? state.sceneId : null))
+    // Only on arrival at a new scene.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.sceneId])
   /** Whether this browser can record, so the link can say "type or talk" (U3). After mount: the server can't know. */
   const [canTalk, setCanTalk] = useState(false)
   useEffect(() => setCanTalk(voiceSupported()), [])
@@ -182,7 +189,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     if (watchTimer.current) clearTimeout(watchTimer.current)
     watchTimer.current = setTimeout(() => setWatching(null), DURATION.watch)
   }
-  const answer = (patch: Partial<ConsultAnswers>) => {
+  const answer = (given: Partial<ConsultAnswers>) => {
+    let patch = given
+    // The age answer decides comfort mode, once: after that it's theirs.
+    if (patch.age && !state.answers.comfortOffered && !state.answers.comfort && autoComfort({ ...state.answers, ...patch })) {
+      patch = { ...patch, comfort: true, comfortOffered: true }
+      consultFunnel.comfort({ on: true, via: 'auto' })
+      setComfortNote('pending')
+    }
     // Never in calm mode: the circuit check stays still.
     const r = scene.mode === 'calm' ? null : ampReactionTo(state.answers, patch)
     if (r) setAmpReaction((was) => ({ name: r, id: (was?.id ?? 0) + 1, scene: state.sceneId }))
@@ -290,17 +304,19 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
                   Fill from my tracker
                 </QuietLink>
               )}
-              <QuietLink
-                icon="comfort"
-                aria-pressed={state.answers.comfort}
-                onClick={() => {
-                  if (!state.answers.comfort) primeSpeech()
-                  consultFunnel.comfort({ on: !state.answers.comfort, via: 'toggle' })
-                  answer({ comfort: !state.answers.comfort, comfortOffered: true })
-                }}
-              >
-                {state.answers.comfort ? 'Standard size' : 'Bigger text'}
-              </QuietLink>
+              {/* Never advertised: comfort mode switches itself on when it
+                  suits (see autoComfort), and this is only the way back. */}
+              {state.answers.comfort && (
+                <QuietLink
+                  icon="comfort"
+                  onClick={() => {
+                    consultFunnel.comfort({ on: false, via: 'toggle' })
+                    answer({ comfort: false, comfortOffered: true })
+                  }}
+                >
+                  Standard size
+                </QuietLink>
+              )}
               {aloud.available && (
                 <QuietLink icon="speaker" aria-pressed={aloud.on} onClick={aloud.toggle}>
                   {aloud.on ? 'Reading aloud' : 'Read aloud'}
@@ -309,15 +325,10 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             </div>
           }
         >
-          {offerComfort(state.answers, state.sceneId) && (
-            <ComfortOffer
-              onYes={() => {
-                primeSpeech()
-                consultFunnel.comfort({ on: true, via: 'offer' })
-                answer({ comfort: true, comfortOffered: true })
-              }}
-              onNo={() => answer({ comfortOffered: true })}
-            />
+          {comfortNote === state.sceneId && (
+            <div className="amp-anim-rise" style={{ marginBottom: 'var(--amp-space-4)' }}>
+              <Hint>I’ve made everything a little bigger and simpler. “Standard size” at the bottom puts it back.</Hint>
+            </div>
           )}
           <SceneRenderer
             scene={scene}
@@ -392,7 +403,7 @@ function StopScreen({
       className="mx-auto flex flex-col"
       style={{
         maxWidth: 'var(--amp-column)',
-        minHeight: 'var(--app-height, 100dvh)',
+        minHeight: 'calc(var(--app-height, 100dvh) - var(--amp-chrome-top, 0px))',
         padding: 'max(var(--amp-space-4), env(safe-area-inset-top)) var(--amp-gutter) max(var(--amp-space-5), env(safe-area-inset-bottom))',
         gap: 'var(--amp-space-4)',
       }}
@@ -451,35 +462,14 @@ function StopScreen({
  * older age band (C14) — from the scene after "about you", so it arrives as
  * soon as we know. Anyone can switch it on or off from the footer.
  */
-export function offerComfort(a: ConsultAnswers, scene: SceneId): boolean {
-  if (a.comfort || a.comfortOffered || scene === 'goals' || scene === 'about' || scene === 'circuit') return false
-  return a.goals.includes('ageing') || a.age === '55-64' || a.age === '65-plus'
-}
-
-function ComfortOffer({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
-  return (
-    <div
-      role="region"
-      aria-label="Comfort mode"
-      className="flex flex-col amp-anim-rise"
-      style={{
-        gap: 'var(--amp-space-3)',
-        marginBottom: 'var(--amp-space-5)',
-        padding: 'var(--amp-space-4)',
-        borderRadius: 'var(--amp-radius-tile)',
-        border: 'var(--amp-hairline) solid var(--amp-accent-line)',
-        background: 'var(--amp-accent-fill)',
-      }}
-    >
-      <p style={{ fontSize: 'var(--amp-text-body)' }}>
-        Want bigger text and buttons, and no fiddly dragging? Same questions, gentler pace.
-      </p>
-      <div className="flex flex-wrap" style={{ gap: 'var(--amp-space-2)' }}>
-        <Tile kind="toggle" layout="row" icon="comfort" label="Yes, comfort mode" selected={false} onSelect={onYes} />
-        <QuietLink onClick={onNo}>No thanks</QuietLink>
-      </div>
-    </div>
-  )
+/**
+ * Comfort mode switches itself on when it suits (C14): 65 and over, or 55 to
+ * 64 with healthy ageing as a goal. It isn't offered to anyone else — the
+ * type already follows the phone's own text size — and it can always be
+ * turned off with "Standard size".
+ */
+export function autoComfort(a: ConsultAnswers): boolean {
+  return a.age === '65-plus' || (a.age === '55-64' && a.goals.includes('ageing'))
 }
 
 /**
@@ -492,7 +482,7 @@ function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) =>
       className="mx-auto flex flex-col"
       style={{
         maxWidth: 'var(--amp-column)',
-        minHeight: 'var(--app-height, 100dvh)',
+        minHeight: 'calc(var(--app-height, 100dvh) - var(--amp-chrome-top, 0px))',
         padding: 'max(var(--amp-space-4), env(safe-area-inset-top)) var(--amp-gutter) max(var(--amp-space-5), env(safe-area-inset-bottom))',
         gap: 'var(--amp-space-4)',
       }}
@@ -530,7 +520,7 @@ function ResumePrompt({ saved, onResume, onFresh }: { saved: FlowState; onResume
   return (
     <div
       className="mx-auto flex flex-col justify-center"
-      style={{ maxWidth: 'var(--amp-column)', minHeight: 'var(--app-height, 100dvh)', padding: 'var(--amp-space-8) var(--amp-gutter)', gap: 'var(--amp-space-4)' }}
+      style={{ maxWidth: 'var(--amp-column)', minHeight: 'calc(var(--app-height, 100dvh) - var(--amp-chrome-top, 0px))', padding: 'var(--amp-space-8) var(--amp-gutter)', gap: 'var(--amp-space-4)' }}
     >
       <Amp state="idle" size="md" />
       <h1 className="uppercase" style={{ fontFamily: 'var(--amp-font-display)', fontWeight: 'var(--amp-weight-heavy)', fontSize: 'var(--amp-text-question)', lineHeight: 'var(--amp-leading-question)' }}>

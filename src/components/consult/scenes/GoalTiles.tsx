@@ -47,7 +47,7 @@ export function promoteGoal(goals: ConsultGoal[], goal: ConsultGoal): ConsultGoa
   return next
 }
 
-export function GoalTiles({ scene, answers, onAnswer, ai }: SceneProps) {
+export function GoalTiles({ scene, answers, onAnswer, ai, comfort }: SceneProps) {
   const goals = answers.goals
   const [full, setFull] = useState(false)
 
@@ -71,6 +71,8 @@ export function GoalTiles({ scene, answers, onAnswer, ai }: SceneProps) {
                 selected={rank >= 0}
                 badge={rank >= 0 ? rank + 1 : undefined}
                 onSelect={() => tap(g.id)}
+                layout={comfort ? 'stack' : 'compact'}
+                clearCorner
               />
               {/* A sibling of the tile, not inside it: a button can't hold a button. */}
               <span className="absolute" style={{ right: 'var(--amp-space-1)', bottom: 'var(--amp-space-1)' }}>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, type KeyboardEvent } from 'react'
-import { DAYLIGHT_LABEL } from '@/lib/consult/summary'
+import { DAYLIGHT_EXAMPLE, DAYLIGHT_LABEL } from '@/lib/consult/summary'
 import type { Daylight } from '@/lib/consult/types'
 import { haptic, springTransition, stateTransition } from '@/lib/consult/motion'
 import { useDrag, type DragPoint } from '../useDrag'
@@ -97,7 +97,7 @@ export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProp
     return (
       <div role="radiogroup" aria-label="Daylight" onKeyDown={radioArrows} className="grid grid-cols-1" style={{ gap: 'var(--amp-space-2)' }}>
         {DAYLIGHT_STEPS.map((d, i) => (
-          <Tile key={d} kind="radio" layout="row" tone="sun" icon="sun" label={DAYLIGHT_LABEL[d]} selected={d === current} onSelect={() => set(i)} />
+          <Tile key={d} kind="radio" layout="row" tone="sun" icon="sun" label={DAYLIGHT_LABEL[d]} sub={DAYLIGHT_EXAMPLE[d]} selected={d === current} onSelect={() => set(i)} />
         ))}
       </div>
     )
@@ -171,6 +171,9 @@ export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProp
       >
         {current ? DAYLIGHT_LABEL[current] : 'Drag the sun'}
       </p>
+      <p aria-live="polite" style={{ marginTop: 'calc(var(--amp-space-2) * -1)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-2)', minHeight: '1.3em' }}>
+        {current ? DAYLIGHT_EXAMPLE[current] : 'Twenty minutes or more outside counts. Through a window doesn’t.'}
+      </p>
 
       <div role="radiogroup" aria-label="Daylight steps" onKeyDown={radioArrows} className="grid w-full grid-cols-4" style={{ gap: 'var(--amp-space-2)' }}>
         {DAYLIGHT_STEPS.map((d, i) => {
@@ -181,7 +184,7 @@ export function SunArc({ answers, onAnswer, onInteract, comfort, ai }: SceneProp
               type="button"
               role="radio"
               aria-checked={d === current}
-              aria-label={DAYLIGHT_LABEL[d]}
+              aria-label={`${DAYLIGHT_LABEL[d]}: ${DAYLIGHT_EXAMPLE[d]}`}
               onClick={() => set(i)}
               className="amp-press flex items-center"
               style={{ minHeight: 'var(--amp-target)' }}

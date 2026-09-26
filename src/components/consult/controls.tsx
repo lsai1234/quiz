@@ -42,8 +42,14 @@ interface TileProps {
   tone?: Tone
   /** `radio` inside a single-choice group; `toggle` for pick-several. */
   kind?: 'radio' | 'toggle'
-  /** Row: icon beside the words. Stack: icon above them. */
-  layout?: 'row' | 'stack'
+  /**
+   * Row: icon beside the words. Stack: icon above them. Compact: icon beside
+   * the title with the sub-line under both — a stack's content at two thirds
+   * of the height, for grids that have to fit a phone.
+   */
+  layout?: 'row' | 'stack' | 'compact'
+  /** Keep the bottom-right corner clear for a sibling "What's this?" button. */
+  clearCorner?: boolean
 }
 
 export function Tile({
@@ -57,8 +63,33 @@ export function Tile({
   tone = 'accent',
   kind = 'toggle',
   layout = 'stack',
+  clearCorner = false,
 }: TileProps) {
   const t = TONE[tone]
+  const glyph = icon && (
+    <span className="shrink-0" style={{ color: selected ? t.ink : 'var(--amp-ink-2)', transition: stateTransition('color') }}>
+      <Glyph name={icon} size={layout === 'compact' ? 18 : 22} />
+    </span>
+  )
+  const title = (
+    <span style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-body)', lineHeight: 'var(--amp-leading-tight)' }}>
+      {label}
+    </span>
+  )
+  const subLine = sub && (
+    <span
+      style={{
+        marginTop: 'var(--amp-space-1)',
+        // Only the sub-line gives way to the corner button: the title keeps the full width.
+        paddingRight: clearCorner ? 'var(--amp-space-5)' : undefined,
+        fontSize: 'var(--amp-text-meta)',
+        lineHeight: 'var(--amp-leading-tight)',
+        color: 'var(--amp-ink-2)',
+      }}
+    >
+      {sub}
+    </span>
+  )
   return (
     <button
       type="button"
@@ -70,10 +101,10 @@ export function Tile({
         haptic('select')
         onSelect()
       }}
-      className={`amp-press relative flex w-full text-left ${layout === 'row' ? 'flex-row items-center' : 'flex-col items-start'}`}
+      className={`amp-press relative flex h-full w-full text-left ${layout === 'row' ? 'flex-row items-center' : 'flex-col items-start'}`}
       style={{
         gap: layout === 'row' ? 'var(--amp-space-3)' : 'var(--amp-space-2)',
-        minHeight: layout === 'row' ? 'var(--amp-target)' : 'calc(var(--amp-target) * 2)',
+        minHeight: layout === 'row' ? 'var(--amp-target)' : layout === 'compact' ? 'calc(var(--amp-target) * 1.4)' : 'calc(var(--amp-target) * 2)',
         padding: 'var(--amp-space-3) var(--amp-space-4)',
         borderRadius: 'var(--amp-radius-tile)',
         border: `var(--amp-hairline) solid ${selected ? t.line : 'var(--amp-edge)'}`,
@@ -85,21 +116,23 @@ export function Tile({
         cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
-      {icon && (
-        <span style={{ color: selected ? t.ink : 'var(--amp-ink-2)', transition: stateTransition('color') }}>
-          <Glyph name={icon} size={22} />
-        </span>
-      )}
-      <span className="flex min-w-0 flex-col">
-        <span style={{ fontWeight: 'var(--amp-weight-bold)', fontSize: 'var(--amp-text-body)', lineHeight: 'var(--amp-leading-tight)' }}>
-          {label}
-        </span>
-        {sub && (
-          <span style={{ marginTop: 'var(--amp-space-1)', fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-tight)', color: 'var(--amp-ink-2)' }}>
-            {sub}
+      {layout === 'compact' ? (
+        <span className="flex min-w-0 flex-col">
+          <span className="flex items-center" style={{ gap: 'var(--amp-space-2)', paddingRight: badge !== undefined && badge !== null ? 'var(--amp-space-5)' : undefined }}>
+            {glyph}
+            {title}
           </span>
-        )}
-      </span>
+          {subLine}
+        </span>
+      ) : (
+        <>
+          {glyph}
+          <span className="flex min-w-0 flex-col">
+            {title}
+            {subLine}
+          </span>
+        </>
+      )}
       {badge !== undefined && badge !== null && (
         <span
           aria-hidden

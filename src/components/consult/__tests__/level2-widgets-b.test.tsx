@@ -182,9 +182,11 @@ describe('C7 sun arc', () => {
 
   it('can be tapped by step instead of dragged', () => {
     render(<Harness id="daylight" />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Most days' }))
-    expect(screen.getByRole('radio', { name: 'Most days' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('slider', { name: 'Daylight' })).toHaveAttribute('aria-valuetext', 'Most days')
+    fireEvent.click(screen.getByRole('radio', { name: /^3–5 days a week/ }))
+    expect(screen.getByRole('radio', { name: /^3–5 days a week/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('slider', { name: 'Daylight' })).toHaveAttribute('aria-valuetext', '3–5 days a week')
+    // Days a week, with an ordinary example, not "most days".
+    expect(screen.getByText('Out most weekdays: a walk, the school run')).toBeInTheDocument()
   })
 
   it('is not answered until touched', () => {

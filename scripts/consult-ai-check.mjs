@@ -136,9 +136,8 @@ await next()
 // through to the shelf
 for (let i = 0; i < 6; i++) {
   if (await p.getByRole('button', { name: 'Scan my shelf instead' }).count()) break
-  if (await p.getByRole('region', { name: 'Comfort mode' }).count()) await p.getByRole('button', { name: 'No thanks' }).click()
   if (await p.getByRole('button', { name: 'None', exact: true }).count()) await p.getByRole('button', { name: 'None', exact: true }).click()
-  else if (await p.getByRole('radio', { name: 'Most days' }).count()) await p.getByRole('radio', { name: 'Most days' }).click()
+  else if (await p.getByRole('radio', { name: /^3–5 days/ }).count()) await p.getByRole('radio', { name: /^3–5 days/ }).click()
   else if (await p.getByRole('slider', { name: 'Daylight' }).count()) await p.getByRole('slider', { name: 'Daylight' }).press('End')
   else if (await p.getByRole('button', { name: /^Eggs/ }).count()) await p.getByRole('button', { name: /^Eggs/ }).click()
   await next().catch(() => {})
@@ -155,10 +154,9 @@ await shot('07-shelf-cards')
 await p.getByRole('button', { name: 'Use these' }).click()
 log('shelf pressed:', await p.locator('[aria-pressed="true"]').allInnerTexts())
 
-// 8. Read aloud in comfort mode.
-await p.getByRole('button', { name: 'Bigger text' }).click()
-await p.waitForTimeout(500)
-log('spoken on comfort:', await p.evaluate(() => window.__spoken.filter((t) => t.trim())))
+// (Read aloud needs comfort mode, which switches itself on for 65 and over;
+// it's covered by the unit tests rather than by this run, which answers as a
+// 35-year-old.)
 
 // finish: review → circuit → analysis → handoff
 await next()

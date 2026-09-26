@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { consultFontVars } from './fonts'
 import { Glyph } from './Glyph'
 import { NextButton, QuietLink } from './controls'
@@ -40,6 +40,23 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
   const [support, setSupport] = useState<{ voice: boolean; speech: boolean } | null>(null)
   const [health, setHealth] = useState<Health | null>(null)
   const [testing, setTesting] = useState(false)
+
+  // The consult below fills the screen less this strip, so it doesn't start
+  // one strip's height taller than the phone.
+  const strip = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const el = strip.current
+    if (!el) return
+    const root = document.documentElement
+    const set = () => root.style.setProperty('--amp-chrome-top', `${el.offsetHeight}px`)
+    set()
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(set) : null
+    ro?.observe(el)
+    return () => {
+      ro?.disconnect()
+      root.style.removeProperty('--amp-chrome-top')
+    }
+  }, [])
 
   // Read in the browser, after mount: what this device can do.
   useEffect(() => setSupport({ voice: voiceSupported(), speech: speechSupported() }), [])
@@ -82,6 +99,7 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
     <div className={`amp-consult ${consultFontVars}`}>
       {/* A strip at the top, in the page's flow: it can never sit on top of a control. */}
       <div
+        ref={strip}
         className="flex items-center justify-between"
         style={{
           gap: 'var(--amp-space-2)',

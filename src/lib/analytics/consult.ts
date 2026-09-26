@@ -25,7 +25,7 @@ export const consultFunnel = {
   sceneBack(p: { from: SceneId; to: SceneId; via: 'back' | 'jump' }) {
     track('consult_scene_back', { from: p.from, to: p.to, via: p.via })
   },
-  comfort(p: { on: boolean; via: 'offer' | 'toggle' }) {
+  comfort(p: { on: boolean; via: 'auto' | 'offer' | 'toggle' }) {
     track('consult_comfort', { on: p.on, via: p.via })
   },
   stop(p: { reason: StopReason }) {

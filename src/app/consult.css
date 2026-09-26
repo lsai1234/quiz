@@ -170,6 +170,25 @@
 
 /* Comfort mode (C14): bigger type, bigger targets. The scene decides what to
    swap; this only moves the scale. */
+/* The space between the shell's bands (top bar, question, interaction). */
+.amp-consult {
+  --amp-shell-gap: var(--amp-space-6);
+  --amp-shell-lead: var(--amp-space-5);
+  --amp-wheel-rows: 5;
+}
+
+/* Shorter phones (and any phone with the browser's bars showing): tighter
+   bands and a smaller question, so a scene fits without scrolling where it
+   can. Comfort mode keeps its size: legibility wins there. */
+@media (max-height: 820px) {
+  .amp-consult:not([data-comfort='true']) {
+    --amp-shell-gap: var(--amp-space-4);
+    --amp-shell-lead: var(--amp-space-3);
+    --amp-text-question: clamp(1.875rem, 8.5vw, 2.5rem);
+    --amp-wheel-rows: 3;
+  }
+}
+
 .amp-consult[data-comfort='true'] {
   --amp-target: 64px;
   --amp-text-question: clamp(2.375rem, 11vw, 3.25rem);

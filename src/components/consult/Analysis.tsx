@@ -277,7 +277,7 @@ function Frame({ children }: { children: React.ReactNode }) {
       className="mx-auto flex flex-col justify-center"
       style={{
         maxWidth: 'var(--amp-column)',
-        minHeight: 'var(--app-height, 100dvh)',
+        minHeight: 'calc(var(--app-height, 100dvh) - var(--amp-chrome-top, 0px))',
         padding: 'max(var(--amp-space-6), env(safe-area-inset-top)) var(--amp-gutter) max(var(--amp-space-6), env(safe-area-inset-bottom))',
         gap: 'var(--amp-space-5)',
       }}

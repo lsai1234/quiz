@@ -337,26 +337,26 @@
       "interaction": "sun-arc",
       "speedRun": false,
       "copy": {
-        "question": "How often do you get daylight?",
-        "hint": "Drag the sun across the sky. Twenty minutes outside counts.",
-        "comfortHint": "Pick the one closest to a normal day. Twenty minutes outside counts."
+        "question": "How often are you outside in daylight?",
+        "hint": "Twenty minutes or more at a time, in an ordinary week: a walk, the school run, working outdoors. Drag the sun.",
+        "comfortHint": "Twenty minutes or more at a time, in an ordinary week: a walk, the school run, working outdoors. Pick the closest."
       },
       "placeholder": {
         "options": [
           {
-            "label": "Hardly ever",
+            "label": "Rarely",
             "set": {
               "daylight": "hardly"
             }
           },
           {
-            "label": "Some days",
+            "label": "1–2 days a week",
             "set": {
               "daylight": "some"
             }
           },
           {
-            "label": "Most days",
+            "label": "3–5 days a week",
             "set": {
               "daylight": "most"
             }

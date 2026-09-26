@@ -47,8 +47,8 @@ export const GLOSSARY = {
     body: 'Easy is chatting pace. Steady is working but comfortable. Flat out is hard to talk through. It helps size the recovery side of a stack.',
   },
   daylight: {
-    title: 'Why daylight?',
-    body: 'Time outside in daylight is one of the things the stack engine weighs. Twenty minutes or so outdoors counts; through a window doesn’t.',
+    title: 'What counts as daylight?',
+    body: 'Being outdoors in daylight for twenty minutes or more at a time, with your face and arms uncovered: a walk, the school run, a lunch break outside, working outdoors. Through a window or in the car doesn’t count. It’s one of the things the stack engine weighs.',
   },
   'circuit-check': {
     title: 'The circuit check',

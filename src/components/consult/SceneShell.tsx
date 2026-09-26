@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode, Ref } from 'react'
+import { useEffect, useState, type ReactNode, type Ref } from 'react'
 import { ChargeMeter, chargePercent, type MeterSection } from './ChargeMeter'
 import { Glyph } from './Glyph'
 
@@ -73,13 +73,15 @@ export function SceneShell({
   headingId,
 }: SceneShellProps) {
   const percent = chargePercent(meter)
+  const moreBelow = useMoreBelow()
 
   return (
     <div
       className="mx-auto flex w-full flex-col"
       style={{
         maxWidth: 'var(--amp-column)',
-        minHeight: 'var(--app-height, 100dvh)',
+        // Less anything drawn above the consult (the founder preview strip).
+        minHeight: 'calc(var(--app-height, 100dvh) - var(--amp-chrome-top, 0px))',
         paddingLeft: 'max(var(--amp-gutter), env(safe-area-inset-left))',
         paddingRight: 'max(var(--amp-gutter), env(safe-area-inset-right))',
       }}
@@ -135,10 +137,12 @@ export function SceneShell({
       </header>
 
       {/* ── Amp, the reaction, the question ─────────────────────────────── */}
-      <div style={{ paddingTop: 'var(--amp-space-5)' }}>
-        <div className="flex items-center" style={{ gap: 'var(--amp-space-2)', minHeight: 'var(--amp-space-6)' }}>
-          {amp}
-          {reaction && (
+      <div style={{ paddingTop: 'var(--amp-shell-lead)' }}>
+        {/* Amp gets a line of his own only when he has something to say; on a
+            scene with no reaction yet he sits beside the hint instead. */}
+        {reaction && (
+          <div className="flex items-center" style={{ gap: 'var(--amp-space-2)', minHeight: 'var(--amp-space-6)', marginBottom: 'var(--amp-space-3)' }}>
+            {amp}
             <p
               aria-live="polite"
               className="uppercase"
@@ -151,8 +155,8 @@ export function SceneShell({
             >
               {reaction}
             </p>
-          )}
-        </div>
+          </div>
+        )}
 
         <h1
           ref={headingRef}
@@ -160,7 +164,6 @@ export function SceneShell({
           tabIndex={-1}
           className="uppercase"
           style={{
-            marginTop: 'var(--amp-space-3)',
             fontFamily: 'var(--amp-font-display)',
             fontWeight: 'var(--amp-weight-heavy)',
             fontSize: 'var(--amp-text-question)',
@@ -172,24 +175,20 @@ export function SceneShell({
         >
           {question}
         </h1>
-        {hint && (
-          <p
-            style={{
-              marginTop: 'var(--amp-space-3)',
-              fontSize: 'var(--amp-text-meta)',
-              lineHeight: 'var(--amp-leading-body)',
-              color: 'var(--amp-ink-2)',
-            }}
-          >
-            {hint}
-          </p>
+        {(hint || (!reaction && amp)) && (
+          <div className="flex items-start" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-3)' }}>
+            {!reaction && amp}
+            {hint && (
+              <p style={{ fontSize: 'var(--amp-text-meta)', lineHeight: 'var(--amp-leading-body)', color: 'var(--amp-ink-2)', paddingTop: 'var(--amp-hairline)' }}>{hint}</p>
+            )}
+          </div>
         )}
       </div>
 
       {/* ── The interaction ─────────────────────────────────────────────── */}
       <div
         className="flex flex-1 flex-col justify-center"
-        style={{ paddingTop: 'var(--amp-space-6)', paddingBottom: 'var(--amp-space-6)' }}
+        style={{ paddingTop: 'var(--amp-shell-gap)', paddingBottom: 'var(--amp-shell-gap)' }}
       >
         {children}
       </div>
@@ -205,10 +204,59 @@ export function SceneShell({
             background: 'linear-gradient(to top, var(--amp-ground) 70%, transparent)',
           }}
         >
+          {moreBelow && (
+            <button
+              type="button"
+              onClick={() => window.scrollBy({ top: Math.round(window.innerHeight * 0.6), behavior: 'smooth' })}
+              className="amp-press amp-anim-fade inline-flex items-center self-center uppercase"
+              style={{
+                gap: 'var(--amp-space-1)',
+                minHeight: 'var(--amp-space-8)',
+                padding: '0 var(--amp-space-3)',
+                borderRadius: 'var(--amp-radius-pill)',
+                border: 'var(--amp-hairline) solid var(--amp-accent-line)',
+                background: 'var(--amp-glass-solid)',
+                color: 'var(--amp-accent)',
+                fontFamily: 'var(--amp-font-mono)',
+                fontSize: 'var(--amp-text-data)',
+                letterSpacing: 'var(--amp-tracking-data)',
+              }}
+            >
+              More below
+              <span aria-hidden style={{ display: 'inline-flex', transform: 'rotate(90deg)' }}>
+                <Glyph name="next" size={14} />
+              </span>
+            </button>
+          )}
           {action}
           {footer && <div className="flex justify-center">{footer}</div>}
         </footer>
       )}
     </div>
   )
+}
+
+/**
+ * Whether the scene carries on below the fold. The action bar sits on top of
+ * the scroll, so without a cue the last row of a tall scene just looks like
+ * the end. Re-checked on scroll, resize, and whenever the page changes size
+ * (a card expanding, a sheet of chips appearing).
+ */
+function useMoreBelow(): boolean {
+  const [more, setMore] = useState(false)
+  useEffect(() => {
+    const el = document.scrollingElement ?? document.documentElement
+    const check = () => setMore(el.scrollHeight - (el.scrollTop + window.innerHeight) > 32)
+    check()
+    window.addEventListener('scroll', check, { passive: true })
+    window.addEventListener('resize', check)
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(check) : null
+    ro?.observe(document.body)
+    return () => {
+      window.removeEventListener('scroll', check)
+      window.removeEventListener('resize', check)
+      ro?.disconnect()
+    }
+  }, [])
+  return more
 }

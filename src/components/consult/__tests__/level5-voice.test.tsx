@@ -167,8 +167,10 @@ describe('U4 read aloud', () => {
     answers: { ...EMPTY_ANSWERS, route: 'deep', goals: ['energy'], ...answers },
   })
 
-  it('reads the question and hint aloud in comfort mode', () => {
+  it('is offered in comfort mode, stays quiet until tapped, then reads the question and hint', () => {
     render(<AmpConsult initial={at('energy', { comfort: true, comfortOffered: true })} />)
+    expect(spoken).toEqual([])
+    fireEvent.click(screen.getByRole('button', { name: 'Read aloud' }))
     const scene = SCENES.find((s) => s.id === 'energy')!
     expect(spoken).toEqual([toSpeech(scene.copy.question, hintFor(scene.copy, true))])
     expect(spoken[0]).toMatch(/minus and plus/)
@@ -187,19 +189,21 @@ describe('U4 read aloud', () => {
     expect(screen.queryByRole('button', { name: /Read(ing)? aloud/ })).toBeNull()
   })
 
-  it('turns off with one tap, and stays off for the session', () => {
+  it('once on, stays on for the session; off with one tap', () => {
     const { unmount } = render(<AmpConsult initial={at('energy', { comfort: true, comfortOffered: true })} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Reading aloud' }))
-    expect(cancel).toHaveBeenCalled()
-    expect(sessionStorage.getItem(READ_ALOUD_KEY)).toBe('off')
+    fireEvent.click(screen.getByRole('button', { name: 'Read aloud' }))
+    expect(sessionStorage.getItem(READ_ALOUD_KEY)).toBe('on')
     unmount()
     spoken = []
     render(<AmpConsult initial={at('sleep', { comfort: true, comfortOffered: true })} />)
-    expect(spoken).toEqual([])
-    expect(screen.getByRole('button', { name: 'Read aloud' })).toHaveAttribute('aria-pressed', 'false')
+    expect(spoken).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Reading aloud' }))
+    expect(cancel).toHaveBeenCalled()
+    expect(sessionStorage.getItem(READ_ALOUD_KEY)).toBe('off')
   })
 
   it('stops talking when the scene changes', () => {
+    sessionStorage.setItem(READ_ALOUD_KEY, 'on')
     render(<AmpConsult initial={at('energy', { comfort: true, comfortOffered: true, energy: 5 })} />)
     fireEvent.click(screen.getByRole('button', { name: /^(Next|Looks right|Continue)$/ }))
     expect(cancel).toHaveBeenCalled()

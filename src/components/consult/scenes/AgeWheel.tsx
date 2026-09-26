@@ -4,7 +4,7 @@ import { useEffect, useRef, type KeyboardEvent } from 'react'
 import { AGE_LABEL, SEX_LABEL } from '@/lib/consult/summary'
 import type { AgeBand, Sex } from '@/lib/consult/types'
 import { DURATION, haptic, stateTransition } from '@/lib/consult/motion'
-import { Hint, Segmented, Tile, radioArrows } from '../controls'
+import { Segmented, Tile, radioArrows } from '../controls'
 import type { SceneProps } from './registry'
 
 /**
@@ -28,7 +28,8 @@ const SEXES: Sex[] = ['female', 'male', 'unsaid']
 const START = AGE_BANDS.indexOf('25-34')
 
 /** Rows visible in the drum; the middle one is the frame. */
-const VISIBLE = 5
+/** Rows on show: five, or three on a shorter phone (`--amp-wheel-rows`, consult.css). */
+const VISIBLE = 'var(--amp-wheel-rows)'
 
 export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps) {
   const drum = useRef<HTMLDivElement>(null)
@@ -131,7 +132,7 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
           aria-hidden
           className="pointer-events-none absolute inset-x-0"
           style={{
-            top: `calc(var(--amp-target) * ${(VISIBLE - 1) / 2})`,
+            top: `calc(var(--amp-target) * (${VISIBLE} - 1) / 2)`,
             height: 'var(--amp-target)',
             marginLeft: 'var(--amp-space-8)',
             marginRight: 'var(--amp-space-8)',
@@ -157,8 +158,8 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
           className="amp-no-scrollbar relative h-full overflow-y-scroll"
           style={{
             scrollSnapType: 'y mandatory',
-            paddingTop: `calc(var(--amp-target) * ${(VISIBLE - 1) / 2})`,
-            paddingBottom: `calc(var(--amp-target) * ${(VISIBLE - 1) / 2})`,
+            paddingTop: `calc(var(--amp-target) * (${VISIBLE} - 1) / 2)`,
+            paddingBottom: `calc(var(--amp-target) * (${VISIBLE} - 1) / 2)`,
             maskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
             WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 30%, black 70%, transparent)',
             borderRadius: 'var(--amp-radius-tile)',
@@ -193,7 +194,6 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
           })}
         </div>
       </div>
-      {!current && <Hint>Spin or tap to your age</Hint>}
       {sex}
     </div>
   )

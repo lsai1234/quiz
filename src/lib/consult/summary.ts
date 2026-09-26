@@ -64,11 +64,24 @@ export const QUALITY_LABEL: Record<SleepQuality, string> = {
   broken: 'Restless',
 }
 
+/**
+ * How often they're outside in daylight for twenty minutes or more. Days a
+ * week, not "some" or "most": the same answer should mean the same thing to
+ * everyone who gives it.
+ */
 export const DAYLIGHT_LABEL: Record<Daylight, string> = {
-  hardly: 'Hardly ever',
-  some: 'Some days',
-  most: 'Most days',
+  hardly: 'Rarely',
+  some: '1–2 days a week',
+  most: '3–5 days a week',
   daily: 'Every day',
+}
+
+/** What each step looks like in an ordinary week, so people can place themselves. */
+export const DAYLIGHT_EXAMPLE: Record<Daylight, string> = {
+  hardly: 'Home, car, office. Mostly indoors',
+  some: 'A weekend walk, the odd sunny lunch',
+  most: 'Out most weekdays: a walk, the school run',
+  daily: 'Outdoors every day, or work outside',
 }
 
 export const FOOD_LABEL: Record<Food, string> = {

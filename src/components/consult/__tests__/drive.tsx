@@ -51,7 +51,7 @@ export function answerCurrentScene(): void {
       fireEvent.click(screen.getByRole('radio', { name: 'OK' }))
       return
     case 'sun-arc':
-      fireEvent.click(screen.getByRole('radio', { name: 'Hardly ever' }))
+      fireEvent.click(screen.getByRole('radio', { name: /^Rarely/ }))
       return
     case 'cup-counter':
       fireEvent.click(screen.getByRole('button', { name: 'None' }))

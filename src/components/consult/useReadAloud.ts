@@ -1,14 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 /**
  * Read aloud (build U4): in comfort mode Amp reads each question out, using
  * the device's own voice — nothing leaves the browser.
  *
- * On by default once comfort mode is on, with a toggle beside it. The choice
- * is remembered for the session (sessionStorage): turning it off on one
- * screen keeps it off on the next, and a new visit starts fresh.
+ * Offered as a toggle in comfort mode, off until tapped. The choice is
+ * remembered for the session (sessionStorage): turning it on on one screen
+ * keeps it on for the next, and a new visit starts fresh.
  */
 
 export const READ_ALOUD_KEY = 'amp-read-aloud'
@@ -17,11 +17,16 @@ export function speechSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined'
 }
 
+/**
+ * Off until someone turns it on: comfort mode now switches itself on, and a
+ * page that starts talking unasked is a surprise. Once on, it stays on for
+ * the session.
+ */
 function remembered(): boolean {
   try {
-    return sessionStorage.getItem(READ_ALOUD_KEY) !== 'off'
+    return sessionStorage.getItem(READ_ALOUD_KEY) === 'on'
   } catch {
-    return true
+    return false
   }
 }
 
@@ -81,27 +86,32 @@ export function useReadAloud(sceneKey: string, text: string, comfort: boolean) {
   const [on, setOn] = useState(remembered)
   const active = supported && comfort && on
 
+  // The tap that turns it on speaks straight away (iPhone only lets speech
+  // start inside a tap), so the effect it triggers mustn't say it again.
+  const spokeInTap = useRef(false)
+
   useEffect(() => {
     if (!active) return
-    speak(text)
+    if (spokeInTap.current) spokeInTap.current = false
+    else speak(text)
     return hush
     // Once per scene: new words for the same scene (the AI's) don't restart it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, sceneKey])
 
   const toggle = useCallback(() => {
-    setOn((was) => {
-      const next = !was
-      try {
-        sessionStorage.setItem(READ_ALOUD_KEY, next ? 'on' : 'off')
-      } catch {
-        // Private mode: the setting lasts this screen only.
-      }
-      if (next) speak(text)
-      else hush()
-      return next
-    })
-  }, [text])
+    const next = !on
+    try {
+      sessionStorage.setItem(READ_ALOUD_KEY, next ? 'on' : 'off')
+    } catch {
+      // Private mode: the setting lasts this screen only.
+    }
+    if (next) {
+      spokeInTap.current = true
+      speak(text)
+    } else hush()
+    setOn(next)
+  }, [on, text])
 
   return { available: supported && comfort, on, toggle }
 }

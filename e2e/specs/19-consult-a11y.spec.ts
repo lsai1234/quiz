@@ -119,7 +119,7 @@ async function answerByKeyboard(page: Page) {
       await tabTo(page, /^Daylight/)
       await page.keyboard.press('End')
     } else {
-      await pickRadio(page, /^(Hardly ever|Some days|Most days|Every day)/, /^Most days/)
+      await pickRadio(page, /^(Rarely|1–2 days|3–5 days|Every day)/, /^3–5 days/)
     }
   } else if (/caffeine|coffee|cups|drink/i.test(h)) {
     await tabTo(page, /^None$/)
@@ -178,8 +178,15 @@ test.describe('consult accessibility (U7)', () => {
   })
 
   test('comfort mode passes axe on every screen too', async ({ page }) => {
+    // Comfort mode isn't offered: it switches itself on for 65 and over.
     await page.getByRole('radio', { name: /^Deep charge/ }).click()
-    await page.getByRole('button', { name: 'Bigger text' }).click()
+    await page.getByRole('button', { name: /^Healthy ageing/ }).click()
+    await nextByKeyboard(page)
+    await page.getByRole('listbox', { name: 'Age band' }).focus()
+    await page.keyboard.press('End')
+    await expect(page.locator('.amp-consult[data-comfort="true"]')).toHaveCount(1)
+    await pickRadio(page, /^(Female|Male|Prefer not)/, /^Prefer not/)
+    await nextByKeyboard(page)
     const seen: string[] = []
     for (let i = 0; i < 16; i++) {
       const h = (await heading(page).textContent()) ?? ''

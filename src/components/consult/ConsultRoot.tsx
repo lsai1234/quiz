@@ -41,7 +41,7 @@ export function ConsultRoot({ children, mode = 'charge', comfort = false, fullSc
         // script, and focusing something wider than the screen then slides
         // the whole scene sideways. A clipped one can't move.
         overflowX: 'clip',
-        minHeight: fullScreen ? 'var(--app-height, 100dvh)' : undefined,
+        minHeight: fullScreen ? 'calc(var(--app-height, 100dvh) - var(--amp-chrome-top, 0px))' : undefined,
       }}
     >
       <Bloom />
