@@ -7,6 +7,7 @@ import { validatePicks, type Pick } from '@/lib/consult/ai/understand'
 import { stateTransition } from '@/lib/consult/motion'
 import { Glyph } from './Glyph'
 import { NextButton, QuietLink } from './controls'
+import { HoldToTalk, voiceSupported, type Transcribe } from './HoldToTalk'
 
 /**
  * "Tell Amp more" (build V3).
@@ -18,6 +19,9 @@ import { NextButton, QuietLink } from './controls'
  *
  * Health details never leave the device: the medical screen runs here, before
  * any request, and again on the server.
+ *
+ * Or say it (U3): hold the mic and what's said lands in the box as text, to
+ * check before sending. No mic, or a blocked one, and it's typing as before.
  */
 
 type Understand = (scene: SceneDef, text: string) => Promise<{ picks?: Pick[]; held?: string; unavailable?: boolean; fallback?: boolean }>
@@ -45,14 +49,20 @@ interface Props {
   /** Amp flickers while the text is being read. */
   onThinking: (thinking: boolean) => void
   send?: Understand
+  /** Speech to text (U3). Injectable for tests. */
+  transcribe?: Transcribe
+  /** Whether to offer the mic at all. Defaults to what the browser supports. */
+  voice?: boolean
 }
 
-export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understand }: Props) {
+export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understand, transcribe, voice }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [picks, setPicks] = useState<Pick[] | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const box = useRef<HTMLTextAreaElement>(null)
+  const [mic, setMic] = useState(() => voice ?? voiceSupported())
+  const [hearing, setHearing] = useState(false)
 
   useEffect(() => {
     box.current?.focus()
@@ -141,8 +151,31 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
             resize: 'none',
           }}
         />
+        {mic && (
+          <div style={{ marginTop: 'var(--amp-space-2)' }}>
+            <HoldToTalk
+              send={transcribe}
+              onBusy={(b) => {
+                setHearing(b)
+                onThinking(b)
+              }}
+              onMessage={setMessage}
+              onBlocked={() => {
+                setMic(false)
+                box.current?.focus()
+              }}
+              onText={(said) => {
+                setPicks(null)
+                setText((t) => (t.trim() ? `${t.trim()} ${said}` : said).slice(0, MAX_TEXT))
+                box.current?.focus()
+              }}
+            />
+          </div>
+        )}
         <p style={{ marginTop: 'var(--amp-space-1)', fontSize: 'var(--amp-text-meta)', color: 'var(--amp-ink-3)' }}>
-          Leave out medical details — the circuit check covers those, and they’re never sent to AI.
+          {mic
+            ? 'Leave out medical details — the circuit check covers those. Typed, they never leave your phone; said aloud, they’re dropped as soon as they’re heard, never used or kept.'
+            : 'Leave out medical details — the circuit check covers those, and they’re never sent to AI.'}
         </p>
 
         <div aria-live="polite">
@@ -207,7 +240,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
               Add it
             </NextButton>
           ) : (
-            <NextButton ready={!busy && text.trim().length > 0} nudge="Type something first." onClick={() => void submit()}>
+            <NextButton ready={!busy && !hearing && text.trim().length > 0} nudge="Type something first." onClick={() => void submit()}>
               {busy ? 'Amp is reading…' : 'Send to Amp'}
             </NextButton>
           )}

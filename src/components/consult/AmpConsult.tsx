@@ -22,6 +22,7 @@ import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
 import { TrackerSheet } from './TrackerSheet'
+import { toSpeech, useReadAloud } from './useReadAloud'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
@@ -119,6 +120,12 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   // fixed-state run (the workshop, tests).
   const { consultAi } = useQuizArmState()
   const { words, aiDown } = useAiCopy(state, consultAi && persist)
+
+  // Read aloud (U4): comfort mode reads each question out. A hook, so it's
+  // worked out before the early returns below.
+  const onScene = boot === 'ready' && state.phase === 'scenes'
+  const shown = onScene ? words(resolveSceneDef(state.sceneId, state.answers)).copy : null
+  const aloud = useReadAloud(onScene ? state.sceneId : state.phase, shown ? toSpeech(shown.question, shown.hint) : '', onScene && state.answers.comfort)
 
   if (boot === 'checking') return <ConsultRoot>{null}</ConsultRoot>
 
@@ -267,6 +274,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
               >
                 {state.answers.comfort ? 'Standard size' : 'Bigger text'}
               </QuietLink>
+              {aloud.available && (
+                <QuietLink icon="speaker" aria-pressed={aloud.on} onClick={aloud.toggle}>
+                  {aloud.on ? 'Reading aloud' : 'Read aloud'}
+                </QuietLink>
+              )}
             </div>
           }
         >
