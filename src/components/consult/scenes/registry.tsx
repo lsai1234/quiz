@@ -46,6 +46,8 @@ export interface SceneProps {
   onDecline?: () => void
   /** The AI layer is on and answering: "What's this?" takes follow-up questions (V7). */
   ai?: boolean
+  /** An upload is being read (U1): Amp shows it's reading. */
+  onReading?: (reading: boolean) => void
 }
 
 export interface SceneEntry {

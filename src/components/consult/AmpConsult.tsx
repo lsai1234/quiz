@@ -21,6 +21,7 @@ import { clearConsult, isResumable, isSameSession, loadConsult, saveConsult } fr
 import { finishedConsult, reopenAtReview, rememberFinished } from '@/lib/consult/session'
 import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/types'
 import { Amp, type AmpState } from './Amp'
+import { TrackerSheet } from './TrackerSheet'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
@@ -78,6 +79,9 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   /** "Tell Amp more" is open (V3), and whether Amp is reading what was typed. */
   const [telling, setTelling] = useState(false)
   const [thinking, setThinking] = useState(false)
+  /** An upload is being read (U1/U2), and whether the tracker sheet is open. */
+  const [reading, setReading] = useState(false)
+  const [tracking, setTracking] = useState(false)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const headingRef = useRef<HTMLHeadingElement>(null)
 
@@ -212,7 +216,11 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }
 
   const mode = scene.mode ?? 'charge'
-  const ampState: AmpState = mode === 'calm' ? 'calm' : thinking ? 'thinking' : watching !== null ? 'watching' : 'idle'
+  const ampState: AmpState = mode === 'calm' ? 'calm' : reading ? 'reading' : thinking ? 'thinking' : watching !== null ? 'watching' : 'idle'
+  const aiOn = consultAi && !aiDown
+  // The tracker read (U2) fills the week and the sleep window, so it's offered
+  // where those are asked — on the long route only; a speed run has no time for uploads.
+  const offerTracker = aiOn && state.answers.route === 'deep' && (state.sceneId === 'training' || state.sceneId === 'sleep')
   const nextLabel = state.returnTo ? 'Back to review' : scene.copy.next ?? 'Next'
 
   return (
@@ -239,9 +247,14 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
           footer={
             <div className="flex flex-wrap items-center justify-center" style={{ gap: 'var(--amp-space-2)' }}>
               {/* Only with the AI layer on: with it off there's nobody to read it (V6). */}
-              {mode !== 'calm' && consultAi && !aiDown && (
+              {mode !== 'calm' && aiOn && (
                 <QuietLink icon="spark" onClick={() => setTelling(true)}>
                   Tell Amp more
+                </QuietLink>
+              )}
+              {offerTracker && (
+                <QuietLink icon="camera" onClick={() => setTracking(true)}>
+                  Fill from my tracker
                 </QuietLink>
               )}
               <QuietLink
@@ -275,10 +288,27 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             onEdit={editFromReview}
             onInteract={interact}
             onDecline={scene.id === 'circuit' ? () => dispatch({ type: 'decline' }) : undefined}
-            ai={consultAi && !aiDown}
+            ai={aiOn}
+            onReading={setReading}
           />
         </SceneShell>
       </SceneStage>
+      {tracking && (
+        <TrackerSheet
+          answers={state.answers}
+          onReading={setReading}
+          onClose={() => {
+            setTracking(false)
+            setReading(false)
+          }}
+          onFill={(patch) => {
+            // Straight to the flow, not through the scene's registry filter:
+            // one screenshot answers two scenes, and the person confirmed both.
+            dispatch({ type: 'answer', patch })
+            noteInteraction()
+          }}
+        />
+      )}
       {telling && (
         <TellAmpMore
           scene={scene}
