@@ -5,6 +5,7 @@ import { consultFontVars } from './fonts'
 import { Glyph } from './Glyph'
 import { NextButton, QuietLink } from './controls'
 import { voiceSupported } from './HoldToTalk'
+import { CONSULT_FEATURES } from '@/lib/consult/features'
 import { speechSupported } from './useReadAloud'
 
 /**
@@ -81,15 +82,23 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
   const rows: { label: string; tone: Tone; note: string }[] = [
     { label: 'AI layer', tone: aiConfigured ? 'on' : 'off', note: aiNote },
     { label: 'Amp’s words', tone: aiConfigured ? 'on' : 'off', note: 'Questions, hints, the goal sub-lines and Amp’s reaction line are written for each person. Scripted words show whenever the AI is slow.' },
-    { label: 'Tell Amp more', tone: aiConfigured ? 'on' : 'off', note: 'The link under each question (not on the review or safety screens). Type or talk; what Amp picks up comes back as cards to add.' },
+    { label: 'Tell Amp more', tone: aiConfigured ? 'on' : 'off', note: `The link under each question (not on the review or safety screens). ${CONSULT_FEATURES.voice ? 'Type or talk' : 'Typing only for now'}; what Amp picks up comes back as cards to add.` },
     {
       label: 'Voice',
-      tone: aiConfigured && support?.voice ? 'on' : 'off',
-      note: !aiConfigured ? 'Needs the AI layer.' : support && !support.voice ? 'This browser can’t record audio.' : 'Inside “Tell Amp more”: hold the mic, talk, let go.',
+      tone: CONSULT_FEATURES.voice && aiConfigured && support?.voice ? 'on' : 'off',
+      note: !CONSULT_FEATURES.voice ? 'Switched off for now: “Tell Amp” is typing only.' : !aiConfigured ? 'Needs the AI layer.' : support && !support.voice ? 'This browser can’t record audio.' : 'Inside “Tell Amp more”: hold the mic, talk, let go.',
     },
     { label: 'Read aloud', tone: support?.speech ? 'info' : 'off', note: support && !support.speech ? 'This browser has no speech voice.' : 'Tap “Bigger text” (comfort mode) and each question is read out. Turn it off with “Reading aloud”.' },
-    { label: 'Shelf scan', tone: aiConfigured ? 'on' : 'off', note: '“Scan my shelf instead” on the “Already taking anything?” screen.' },
-    { label: 'Tracker read', tone: aiConfigured ? 'on' : 'off', note: '“Fill from my tracker” on the training and sleep screens, on the Deep charge route.' },
+    {
+      label: 'Shelf scan',
+      tone: CONSULT_FEATURES.uploads && aiConfigured ? 'on' : 'off',
+      note: CONSULT_FEATURES.uploads ? '“Scan my shelf instead” on the “Already taking anything?” screen.' : 'Switched off for now: no photo uploads.',
+    },
+    {
+      label: 'Tracker read',
+      tone: CONSULT_FEATURES.uploads && aiConfigured ? 'on' : 'off',
+      note: CONSULT_FEATURES.uploads ? '“Fill from my tracker” on the training and sleep screens, on the Deep charge route.' : 'Switched off for now: no screenshots from wearables.',
+    },
     { label: 'What’s this?', tone: 'info', note: 'The ⓘ on options. With the AI on it also takes a follow-up question.' },
     { label: 'Animated Amp', tone: rive ? 'on' : 'off', note: rive ? 'Rive file loaded.' : 'Waiting for the Rive file (public/consult/amp.riv) and NEXT_PUBLIC_AMP_RIVE=1. Until then Amp is the drawn version.' },
     { label: 'Customers', tone: 'info', note: 'The public home page follows Founder hub → Settings → Quiz, which is off by default.' },

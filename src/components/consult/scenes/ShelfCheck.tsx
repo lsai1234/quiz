@@ -6,6 +6,7 @@ import type { ShelfItem } from '@/lib/consult/types'
 import { Chip, Hint, QuietLink } from '../controls'
 import { UploadSheet, type UploadCard } from '../UploadSheet'
 import { scanShelf } from '../scanRequest'
+import { CONSULT_FEATURES } from '@/lib/consult/features'
 import type { SceneProps } from './registry'
 
 /**
@@ -65,7 +66,7 @@ export function ShelfCheck({ answers, onAnswer, ai, onReading, scan = scanShelf 
         ))}
         <Chip label="Nothing yet" selected={nothing} onToggle={() => onAnswer({ shelf: nothing ? null : [] })} />
       </div>
-      {ai && (
+      {ai && CONSULT_FEATURES.uploads && (
         <div>
           <QuietLink icon="camera" onClick={() => setScanning(true)}>
             Scan my shelf instead

@@ -8,6 +8,7 @@ import { stateTransition } from '@/lib/consult/motion'
 import { Glyph } from './Glyph'
 import { NextButton, QuietLink } from './controls'
 import { HoldToTalk, voiceSupported, type Transcribe } from './HoldToTalk'
+import { CONSULT_FEATURES } from '@/lib/consult/features'
 
 /**
  * "Tell Amp more" (build V3).
@@ -63,7 +64,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
   const [picks, setPicks] = useState<Pick[] | null>(null)
   const [message, setMessage] = useState<string | null>(null)
   const box = useRef<HTMLTextAreaElement>(null)
-  const [mic, setMic] = useState(() => voice ?? voiceSupported())
+  const [mic, setMic] = useState(() => voice ?? (CONSULT_FEATURES.voice && voiceSupported()))
   const [hearing, setHearing] = useState(false)
 
   useEffect(() => {

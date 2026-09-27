@@ -28,6 +28,7 @@ import type { ConsultAnswers, Route, SceneId, SectionId } from '@/lib/consult/ty
 import { Amp, type AmpState } from './Amp'
 import { TrackerSheet } from './TrackerSheet'
 import { voiceSupported } from './HoldToTalk'
+import { CONSULT_FEATURES } from '@/lib/consult/features'
 import { toSpeech, useReadAloud } from './useReadAloud'
 import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
@@ -106,7 +107,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   }, [state.sceneId])
   /** Whether this browser can record, so the link can say "type or talk" (U3). After mount: the server can't know. */
   const [canTalk, setCanTalk] = useState(false)
-  useEffect(() => setCanTalk(voiceSupported()), [])
+  useEffect(() => setCanTalk(CONSULT_FEATURES.voice && voiceSupported()), [])
   /** Amp's micro-reaction to the last answer (U6), numbered so a repeat plays again. */
   const [ampReaction, setAmpReaction] = useState<{ name: AmpReaction; id: number; scene: SceneId } | null>(null)
   const watchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -283,7 +284,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const aiOn = consultAi && !aiUnavailable
   // The tracker read (U2) fills the week and the sleep window, so it's offered
   // where those are asked — on the long route only; a speed run has no time for uploads.
-  const offerTracker = aiOn && state.answers.route !== 'speed' && state.answers.route !== null && (state.sceneId === 'training' || state.sceneId === 'sleep')
+  const offerTracker = CONSULT_FEATURES.uploads && aiOn && state.answers.route !== 'speed' && state.answers.route !== null && (state.sceneId === 'training' || state.sceneId === 'sleep')
   // "Tell Amp more" lives in the scene now, in its own words (batch 4). Only
   // with the AI layer on: with it off there's nobody to read it (V6).
   const tell = mode !== 'calm' && aiOn ? scene.tell : undefined

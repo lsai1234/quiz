@@ -1,4 +1,5 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { CONSULT_FEATURES } from '@/lib/consult/features'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { trainingAverage } from '@/lib/consult/training'
 import { useState } from 'react'
 import { SCENES } from '@/lib/consult/flow'
@@ -74,6 +75,14 @@ describe('upload sheet', () => {
 })
 
 describe('U1 shelf scan', () => {
+  // Switched off for now (features.ts); these test the feature itself.
+  beforeEach(() => {
+    CONSULT_FEATURES.uploads = true
+  })
+  afterEach(() => {
+    CONSULT_FEATURES.uploads = false
+  })
+
   function Harness({ ai, scan, start = null }: { ai: boolean; scan?: (i: string) => Promise<ShelfItem[] | null>; start?: ShelfItem[] | null }) {
     const [answers, setAnswers] = useState<ConsultAnswers>({ ...EMPTY_ANSWERS, shelf: start })
     return <ShelfCheck scene={SCENES.find((s) => s.id === 'shelf')!} answers={answers} onAnswer={(p) => setAnswers({ ...answers, ...p })} comfort={false} order={[]} onEdit={() => undefined} ai={ai} scan={scan} />
@@ -103,6 +112,14 @@ describe('U1 shelf scan', () => {
 })
 
 describe('U2 tracker read', () => {
+  // Switched off for now (features.ts); these test the feature itself.
+  beforeEach(() => {
+    CONSULT_FEATURES.uploads = true
+  })
+  afterEach(() => {
+    CONSULT_FEATURES.uploads = false
+  })
+
   // A month: 8 gym and 4 cardio sessions over 4 weeks.
   const read = { bed: 23 * 60, wake: 6 * 60 + 30, quality: null, weeks: 4, workouts: { gym: 8, cardio: 4, sport: 0 } }
 
@@ -191,5 +208,22 @@ describe('U2 tracker read', () => {
     expect(screen.queryByRole('checkbox', { name: 'That was a normal week for me' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Use these' }))
     expect(screen.getByText('About 3 a week · 2 Gym · 1 Cardio')).toBeInTheDocument()
+  })
+})
+
+describe('switched off for now: no photo uploads', () => {
+  it('offers no shelf scan and no tracker read, even with the AI on', () => {
+    setQuizArm({ arm: 'v1', consultAi: true })
+    render(<AmpConsult />)
+    chooseRoute()
+    fireEvent.click(screen.getByRole('button', { name: /^Energy/ }))
+    pressNext()
+    answerCurrentScene()
+    pressNext()
+    expect(heading().textContent).toBe(SCENES.find((s) => s.id === 'training')!.copy.question)
+    expect(screen.queryByRole('button', { name: 'Fill from my tracker' })).toBeNull()
+    cleanup()
+    render(<ShelfCheck scene={SCENES.find((s) => s.id === 'shelf')!} answers={EMPTY_ANSWERS} onAnswer={() => undefined} comfort={false} order={[]} onEdit={() => undefined} ai />)
+    expect(screen.queryByRole('button', { name: 'Scan my shelf instead' })).toBeNull()
   })
 })

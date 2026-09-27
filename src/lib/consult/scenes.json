@@ -169,7 +169,7 @@
       },
       "tell": {
         "lead": true,
-        "prompt": "Easier to say it? Tell Amp how your weeks usually go.",
+        "prompt": "Easier to type it? Tell Amp how your weeks usually go.",
         "example": "e.g. Gym Monday and Thursday, football on Tuesdays, and a run most weekends"
       },
       "placeholder": {
@@ -322,7 +322,7 @@
           },
           "tell": {
             "lead": true,
-            "prompt": "Easier to say it? Tell Amp what a normal week looks like.",
+            "prompt": "Easier to type it? Tell Amp what a normal week looks like.",
             "example": "e.g. I walk the dog every morning and swim on Wednesdays"
           }
         },
@@ -340,7 +340,7 @@
           },
           "tell": {
             "lead": true,
-            "prompt": "Easier to say it? Tell Amp how you’re moving.",
+            "prompt": "Easier to type it? Tell Amp how you’re moving.",
             "example": "e.g. Walking most lunchtimes, and I’ve just started the gym"
           }
         },
@@ -756,7 +756,7 @@
       },
       "tell": {
         "lead": true,
-        "prompt": "Quicker to say it? Tell Amp what a normal week of food looks like.",
+        "prompt": "Quicker to type it? Tell Amp what a normal week of food looks like.",
         "example": "e.g. Mostly chicken and rice, fish on Fridays, not much fruit"
       },
       "placeholder": {
@@ -1096,7 +1096,7 @@
           },
           "tell": {
             "lead": true,
-            "prompt": "Easier to say it? Tell Amp what you already take.",
+            "prompt": "Easier to type it? Tell Amp what you already take.",
             "example": "e.g. Cod liver oil, vitamin D in winter, and glucosamine"
           }
         },
@@ -1109,7 +1109,7 @@
           },
           "tell": {
             "lead": true,
-            "prompt": "Easier to say it? Tell Amp what you already take.",
+            "prompt": "Easier to type it? Tell Amp what you already take.",
             "example": "e.g. A multivitamin, and a fibre drink since starting"
           }
         }

@@ -132,6 +132,13 @@ describe('U3 voice in "Tell Amp more"', () => {
     expect(screen.getByRole('textbox')).toHaveFocus()
   })
 
+  it('is switched off for now: typing only, even where the browser can record', () => {
+    fakeMic()
+    render(<TellAmpMore scene={scene} onAdd={jest.fn()} onClose={jest.fn()} onThinking={jest.fn()} />)
+    expect(screen.queryByRole('button', { name: /Hold to talk/ })).toBeNull()
+    expect(screen.getByRole('textbox')).toBeInTheDocument()
+  })
+
   it('isn’t offered where the browser can’t record', () => {
     delete (global as unknown as { MediaRecorder?: unknown }).MediaRecorder
     render(<TellAmpMore scene={scene} onAdd={jest.fn()} onClose={jest.fn()} onThinking={jest.fn()} />)
