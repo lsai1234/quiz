@@ -51,7 +51,7 @@ export function TellLead({ tell, canTalk, onOpen, tracker }: Props) {
         </span>
         <span
           className="flex shrink-0 flex-col items-center"
-          style={{ gap: 'var(--amp-space-1)', color: 'var(--amp-accent)', fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)' }}
+          style={{ gap: 'var(--amp-space-1)', color: 'var(--amp-accent)', fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)' }}
         >
           <Glyph name={canTalk ? 'mic' : 'spark'} size={20} />
           <span className="uppercase">{canTalk ? 'Talk' : 'Type'}</span>
@@ -68,7 +68,7 @@ export function TellLead({ tell, canTalk, onOpen, tracker }: Props) {
         <span
           className="uppercase"
           aria-hidden="true"
-          style={{ paddingRight: 'var(--amp-space-3)', fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}
+          style={{ paddingRight: 'var(--amp-space-3)', fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}
         >
           Or set it below
         </span>
@@ -114,7 +114,7 @@ export function AmpNoted({ note, onChange }: { note: string; onChange: () => voi
       <span className="flex min-w-0 flex-1 flex-col">
         <span
           className="uppercase"
-          style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}
+          style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}
         >
           Amp noted · that answers this one
         </span>

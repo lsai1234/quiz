@@ -62,7 +62,7 @@ export function CupCounter({ answers, onAnswer }: SceneProps) {
         >
           {total}
         </span>
-        <span className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+        <span className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
           {total === 1 ? 'drink a day' : 'drinks a day'}
         </span>
       </div>
@@ -143,7 +143,7 @@ function Stepper({ label, count, onMinus, onPlus }: { label: string; count: numb
       <span
         aria-live="polite"
         aria-label={`${count} ${label.toLowerCase()}${count === 1 ? '' : 's'}`}
-        style={{ minWidth: 'var(--amp-space-5)', textAlign: 'center', fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-lead)', fontVariantNumeric: 'tabular-nums' }}
+        style={{ minWidth: 'var(--amp-space-5)', textAlign: 'center', fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-lead)', fontVariantNumeric: 'tabular-nums' }}
       >
         {count}
       </span>

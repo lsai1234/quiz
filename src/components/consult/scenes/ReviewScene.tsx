@@ -33,7 +33,7 @@ interface Props {
 const PINPOINT: SceneId[] = ['follow-move', 'follow-rest', 'follow-fuel', 'pinpoint']
 
 const mono = {
-  fontFamily: 'var(--amp-font-mono)',
+  fontFamily: 'var(--amp-font-label)',
   fontSize: 'var(--amp-text-data)',
   letterSpacing: 'var(--amp-tracking-data)',
 } as const
@@ -164,7 +164,7 @@ export function ReviewScene({ scenes, answers, onEdit, onAnswer, onUpgrade, onRe
                 <span
                   className="uppercase"
                   style={{
-                    fontFamily: 'var(--amp-font-mono)',
+                    fontFamily: 'var(--amp-font-label)',
                     fontSize: 'var(--amp-text-data)',
                     letterSpacing: 'var(--amp-tracking-data)',
                     color: 'var(--amp-ink-3)',

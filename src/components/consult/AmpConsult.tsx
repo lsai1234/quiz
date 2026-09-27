@@ -34,7 +34,8 @@ import { ConsultRoot } from './ConsultRoot'
 import { SceneShell } from './SceneShell'
 import { SceneStage } from './SceneStage'
 import { Hint, NextButton, QuietLink, Tile, radioArrows } from './controls'
-import { SceneRenderer } from './scenes/registry'
+import { SceneRenderer, resolveScene } from './scenes/registry'
+import { pickToPatch, type Pick } from '@/lib/consult/ai/understand'
 import { Analysis } from './Analysis'
 import { useConsultAnalytics } from './useConsultAnalytics'
 import { useAiCopy } from './useAiCopy'
@@ -94,6 +95,10 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const [watching, setWatching] = useState<number | null>(null)
   /** "Tell Amp more" is open (V3), and whether Amp is reading what was typed. */
   const [telling, setTelling] = useState(false)
+  /** What a typed answer set, said as Amp's line on that scene. */
+  const [heard, setHeard] = useState<{ scene: SceneId; text: string } | null>(null)
+  /** A typed answer answered this scene: move on after a beat. */
+  const [autoNext, setAutoNext] = useState<SceneId | null>(null)
   const [thinking, setThinking] = useState(false)
   /** An upload is being read (U1/U2), and whether the tracker sheet is open. */
   const [reading, setReading] = useState(false)
@@ -164,6 +169,28 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
   const spoken = pView ? toSpeech(pView.heading, pView.kind === 'probe' ? [pView.text, pView.hint].filter(Boolean).join(' ') : pView.hint) : shown ? toSpeech(shown.question, hintFor(shown, state.answers.comfort)) : ''
   const aloud = useReadAloud(onScene ? `${state.sceneId}:${pKey}` : state.phase, spoken, onScene && state.answers.comfort)
 
+  // The beat, then Next: only while still on that scene and still answered.
+  useEffect(() => {
+    if (!autoNext) return
+    if (autoNext !== state.sceneId || state.phase !== 'scenes' || !isAnswered(state.sceneId, state.answers)) {
+      setAutoNext(null)
+      return
+    }
+    const timer = setTimeout(() => {
+      setAutoNext(null)
+      const after = flowReducer(state, { type: 'next' })
+      dispatch({ type: 'next' })
+      if (after.phase === 'analysis') onComplete?.(after)
+    }, DURATION.heard)
+    return () => clearTimeout(timer)
+    // The scene and its answers are what matter; the rest follows from them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoNext, state.sceneId, state.phase, state.answers])
+  // "Got it" belongs to the scene it was said on, once.
+  useEffect(() => {
+    if (heard && heard.scene !== state.sceneId) setHeard(null)
+  }, [heard, state.sceneId])
+
   if (boot === 'checking') return <ConsultRoot>{null}</ConsultRoot>
 
   if (boot === 'offer' && offered) {
@@ -232,6 +259,28 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
     if (target) dispatch({ type: 'jump', sceneId: target })
   }
   const editFromReview = (id: SceneId) => dispatch({ type: 'jump', sceneId: id, returnTo: 'review' })
+
+  /**
+   * A typed answer, read by Amp: fill it in, say what was set, and if it
+   * answered this question, move on after a beat, the same as a tap would.
+   * Comfort mode never moves on by itself; Back undoes it like any answer.
+   */
+  const applyTyped = (picks: Pick[]) => {
+    let after = state.answers
+    const writes = resolveScene(scene).writes
+    let touched = false
+    for (const pick of picks) {
+      const patch = pickToPatch(pick, after, state.sceneId)
+      if ((Object.keys(patch) as (keyof ConsultAnswers)[]).some((k) => writes.includes(k) || k === 'notes')) touched = true
+      after = { ...after, ...patch }
+      dispatch({ type: 'pick', pick })
+    }
+    noteInteraction()
+    setTelling(false)
+    setThinking(false)
+    setHeard({ scene: state.sceneId, text: `Got it: ${picks.map((p) => p.label).join(' · ')}` })
+    if (touched && isAnswered(state.sceneId, after) && !state.answers.comfort) setAutoNext(state.sceneId)
+  }
 
   if (state.phase === 'intro') {
     return (
@@ -313,7 +362,13 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             )
           }
           // Inside the round, only Pinpoint's own lines: the last core answer's reaction belongs to the intro.
-          reaction={state.sceneId === 'pinpoint' ? pinpointReactionLine('pinpoint', state.answers) ?? (pView?.kind === 'intro' ? reaction : undefined) : reaction}
+          reaction={
+            heard?.scene === state.sceneId
+              ? heard.text
+              : state.sceneId === 'pinpoint'
+                ? pinpointReactionLine('pinpoint', state.answers) ?? (pView?.kind === 'intro' ? reaction : undefined)
+                : reaction
+          }
           align={pView && pView.kind !== 'intro' ? 'start' : 'center'}
           question={pView ? pView.heading : scene.copy.question}
           hint={pView ? pView.hint : hintFor(scene.copy, state.answers.comfort)}
@@ -410,6 +465,7 @@ export function AmpConsult({ onExit, onComplete, onHandoff, initial, loadProduct
             dispatch({ type: 'pick', pick })
             noteInteraction()
           }}
+          onApplied={applyTyped}
         />
       )}
     </ConsultRoot>
@@ -446,7 +502,7 @@ function StopScreen({
         gap: 'var(--amp-space-4)',
       }}
     >
-      <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)', paddingTop: 'var(--amp-space-3)' }}>
+      <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)', paddingTop: 'var(--amp-space-3)' }}>
         {reason === 'under-18' ? 'About you · paused' : 'Circuit check · paused'}
       </p>
       <div className="flex items-center" style={{ gap: 'var(--amp-space-2)' }}>
@@ -532,7 +588,7 @@ function RouteChoice({ onPick, onBack, headingRef }: { onPick: (route: Route) =>
       </div>
       <div className="flex flex-1 flex-col justify-center" style={{ gap: 'var(--amp-space-4)' }}>
         <Amp state="idle" size="md" />
-        <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
+        <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
           I&apos;m Amp. Let&apos;s charge you up.
         </p>
         <h1

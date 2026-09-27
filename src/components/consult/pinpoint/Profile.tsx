@@ -22,7 +22,7 @@ import { PatternMap } from './parts'
  */
 
 const mono = {
-  fontFamily: 'var(--amp-font-mono)',
+  fontFamily: 'var(--amp-font-label)',
   fontSize: 'var(--amp-text-data)',
   letterSpacing: 'var(--amp-tracking-data)',
 } as const

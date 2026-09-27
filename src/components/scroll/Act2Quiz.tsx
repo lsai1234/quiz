@@ -837,7 +837,9 @@ export function Act2Quiz({ onComplete, reducedMotion }: Props) {
     <div
       className="fixed top-0 left-0 right-0 bg-[#0A0A0A] text-white flex flex-col overflow-hidden"
       // Measured, not `100dvh` — see ViewportHeight.
-      style={{ height: 'var(--app-height, 100dvh)' }}
+      // One family for the whole quiz: Space Grotesk, told apart by weight and
+      // size. It sat beside Inter, and two near-identical sans read as a mistake.
+      style={{ height: 'var(--app-height, 100dvh)', fontFamily: 'var(--font-display)' }}
     >
 
       {/* The signature rail — always in frame, climbing as you answer. */}

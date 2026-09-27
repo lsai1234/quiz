@@ -51,7 +51,7 @@ function ShellStory() {
           borderRadius: 'var(--amp-radius-panel)',
           border: 'var(--amp-hairline) dashed var(--amp-edge-strong)',
           color: 'var(--amp-ink-3)',
-          fontFamily: 'var(--amp-font-mono)',
+          fontFamily: 'var(--amp-font-label)',
           fontSize: 'var(--amp-text-data)',
           letterSpacing: 'var(--amp-tracking-data)',
         }}
@@ -88,7 +88,7 @@ function AmpStory() {
       {AMP_STATES.map((state) => (
         <div key={state} className="flex flex-col items-center" style={{ gap: 'var(--amp-space-2)' }}>
           <Amp state={state} size="md" lean={state === 'watching' ? 1 : 0} />
-          <span className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-2)' }}>
+          <span className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-2)' }}>
             {state}
           </span>
         </div>

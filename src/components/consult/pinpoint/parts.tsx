@@ -10,7 +10,7 @@ import { Glyph } from '../Glyph'
 import { NextButton, QuietLink } from '../controls'
 
 const mono = {
-  fontFamily: 'var(--amp-font-mono)',
+  fontFamily: 'var(--amp-font-label)',
   fontSize: 'var(--amp-text-data)',
   letterSpacing: 'var(--amp-tracking-data)',
 } as const

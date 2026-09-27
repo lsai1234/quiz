@@ -115,7 +115,7 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
           padding: 'max(var(--amp-space-1), env(safe-area-inset-top)) var(--amp-gutter) var(--amp-space-1)',
           borderBottom: 'var(--amp-hairline) solid var(--amp-edge)',
           background: 'var(--amp-ground)',
-          fontFamily: 'var(--amp-font-mono)',
+          fontFamily: 'var(--amp-font-label)',
           fontSize: 'var(--amp-text-data)',
           letterSpacing: 'var(--amp-tracking-data-tight)',
           textTransform: 'uppercase',
@@ -152,7 +152,7 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
             }}
           >
             <div className="flex items-center justify-between">
-              <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+              <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
                 Founder preview
               </p>
               <QuietLink icon="close" aria-label="Close" onClick={() => setOpen(false)}>
@@ -171,7 +171,7 @@ export function FounderPreview({ aiConfigured, rive }: Props) {
                       textAlign: 'center',
                       padding: 'var(--amp-hairline) var(--amp-space-2)',
                       borderRadius: 'var(--amp-radius-chip)',
-                      fontFamily: 'var(--amp-font-mono)',
+                      fontFamily: 'var(--amp-font-label)',
                       fontSize: 'var(--amp-text-data)',
                       letterSpacing: 'var(--amp-tracking-data-tight)',
                       background: r.tone === 'on' ? 'var(--amp-go-fill)' : r.tone === 'off' ? 'var(--amp-caution-fill)' : 'var(--amp-accent-fill)',

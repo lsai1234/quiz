@@ -156,7 +156,7 @@ export function GoalTiles({ scene, answers, onAnswer, ai, comfort }: SceneProps)
               <li key={g} className="flex items-center" style={{ gap: 'var(--amp-space-1)' }}>
                 <span
                   style={{
-                    fontFamily: 'var(--amp-font-mono)',
+                    fontFamily: 'var(--amp-font-label)',
                     fontSize: 'var(--amp-text-data)',
                     letterSpacing: 'var(--amp-tracking-data)',
                     color: i === 0 ? 'var(--amp-accent)' : 'var(--amp-ink-2)',

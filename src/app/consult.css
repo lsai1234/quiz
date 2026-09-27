@@ -104,7 +104,10 @@
      The face variables are set by `components/consult/fonts.ts`. */
   --amp-font-display: var(--amp-face-display), 'Big Shoulders Display', 'Arial Narrow', sans-serif;
   --amp-font-body: var(--amp-face-body), 'IBM Plex Sans', system-ui, sans-serif;
-  --amp-font-mono: var(--amp-face-mono), 'IBM Plex Mono', ui-monospace, monospace;
+  /* Two faces, not three: the display face for the question and the big
+     numbers, Plex Sans for everything else. Labels are Plex Sans in small
+     caps, with tabular figures so numbers still line up. */
+  --amp-font-label: var(--amp-font-body);
 
   --amp-text-question: clamp(2.125rem, 9.5vw, 3rem);
   --amp-text-hero: clamp(3rem, 16vw, 4.5rem);
@@ -155,6 +158,7 @@
   color: var(--amp-ink);
   font-family: var(--amp-font-body);
   font-size: var(--amp-text-body);
+  font-variant-numeric: tabular-nums;
   line-height: var(--amp-leading-body);
 }
 
@@ -217,6 +221,11 @@
   .amp-day-label {
     display: none;
   }
+}
+
+/* A control never falls back to the device's own face. */
+.amp-consult :is(button, input, textarea, select) {
+  font-family: inherit;
 }
 
 /* ══ Motion ══════════════════════════════════════════════════════════════════

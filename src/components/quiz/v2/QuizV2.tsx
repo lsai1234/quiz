@@ -692,7 +692,9 @@ export function QuizV2({ onComplete, reducedMotion }: Props) {
       // Measured, not `100dvh` — several in-app browsers resolve dvh against
       // the large viewport and put the Continue button under their own toolbar.
       // See ViewportHeight.
-      style={{ height: 'var(--app-height, 100dvh)' }}
+      // One family for the whole quiz: Space Grotesk, told apart by weight and
+      // size. It sat beside Inter, and two near-identical sans read as a mistake.
+      style={{ height: 'var(--app-height, 100dvh)', fontFamily: 'var(--font-display)' }}
     >
       <ChargeRail charge={charge} surgeKey={surgeKey} reducedMotion={reducedMotion} />
 

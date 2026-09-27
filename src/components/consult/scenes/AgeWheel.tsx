@@ -98,7 +98,7 @@ export function AgeWheel({ answers, onAnswer, comfort, onInteract }: SceneProps)
       <p
         id="amp-sex-label"
         className="uppercase"
-        style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}
+        style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}
       >
         Sex · it changes some nutrient needs
       </p>

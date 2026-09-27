@@ -122,7 +122,7 @@ export function SceneShell({
         <p
           className="min-w-0 flex-1 truncate uppercase"
           style={{
-            fontFamily: 'var(--amp-font-mono)',
+            fontFamily: 'var(--amp-font-label)',
             fontSize: 'var(--amp-text-data)',
             letterSpacing: 'var(--amp-tracking-data-tight)',
             color: 'var(--amp-ink-3)',
@@ -150,7 +150,7 @@ export function SceneShell({
               aria-live="polite"
               className="uppercase"
               style={{
-                fontFamily: 'var(--amp-font-mono)',
+                fontFamily: 'var(--amp-font-label)',
                 fontSize: 'var(--amp-text-data)',
                 letterSpacing: 'var(--amp-tracking-data)',
                 color: 'var(--amp-accent)',
@@ -220,7 +220,7 @@ export function SceneShell({
                 border: 'var(--amp-hairline) solid var(--amp-accent-line)',
                 background: 'var(--amp-glass-solid)',
                 color: 'var(--amp-accent)',
-                fontFamily: 'var(--amp-font-mono)',
+                fontFamily: 'var(--amp-font-label)',
                 fontSize: 'var(--amp-text-data)',
                 letterSpacing: 'var(--amp-tracking-data)',
               }}

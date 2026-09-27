@@ -194,7 +194,7 @@ export function Tile({
             borderRadius: 'var(--amp-radius-pill)',
             background: t.ink,
             color: 'var(--amp-ink-on-accent)',
-            fontFamily: 'var(--amp-font-mono)',
+            fontFamily: 'var(--amp-font-label)',
             fontSize: 'var(--amp-text-meta)',
             fontWeight: 'var(--amp-weight-bold)',
             boxShadow: `0 0 14px -2px ${t.glow}`,
@@ -466,7 +466,7 @@ export function Hint({ children, tone }: { children: ReactNode; tone?: Tone }) {
     <p
       className="text-center uppercase"
       style={{
-        fontFamily: 'var(--amp-font-mono)',
+        fontFamily: 'var(--amp-font-label)',
         fontSize: 'var(--amp-text-data)',
         letterSpacing: 'var(--amp-tracking-data)',
         color: tone ? TONE[tone].ink : 'var(--amp-ink-3)',

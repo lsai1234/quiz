@@ -102,7 +102,7 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
         }}
       >
         <div className="flex items-center justify-between">
-          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
             {title}
           </p>
           <QuietLink icon="close" aria-label="Close" onClick={onClose}>
@@ -176,7 +176,7 @@ export function UploadSheet({ title, children, ready = true, consent, read, onCo
 
         {cards && cards.length > 0 && (
           <>
-            <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+            <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
               Amp found
             </p>
             <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)' }}>

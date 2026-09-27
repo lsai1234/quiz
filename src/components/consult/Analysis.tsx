@@ -144,7 +144,7 @@ export function Analysis({ state, onDone, onBack, loadProducts = defaultLoad }: 
 
   return (
     <Frame>
-      <p className="text-center uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
+      <p className="text-center uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-accent)' }}>
         {full ? 'Handing over to your results' : 'Analysing'}
       </p>
       <h1 className="text-center uppercase" style={titleStyle} aria-live="polite">
@@ -268,7 +268,7 @@ function Handoff({ bundle, state, onOpen }: { bundle: ResultsBundle; state: Flow
           <div key={name} style={{ paddingTop: i ? 'var(--amp-space-3)' : 0, marginTop: i ? 'var(--amp-space-3)' : 0, borderTop: i ? 'var(--amp-hairline) solid var(--amp-edge)' : 'none' }}>
             <p className="flex items-baseline justify-between">
               <span style={{ fontWeight: 'var(--amp-weight-bold)' }}>{name}</span>
-              <span style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-3)' }}>
+              <span style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-3)' }}>
                 {ids.length} products
               </span>
             </p>

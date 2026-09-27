@@ -168,7 +168,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
     scene.detail && answered && !restWeek ? (
       <div className="flex w-full flex-col amp-anim-rise" style={{ gap: 'var(--amp-space-2)' }}>
         <div className="flex items-center justify-between">
-          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
             How hard do most sessions feel?
           </p>
           <WhatsThis term="intensity" questions={ai} />
@@ -320,7 +320,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
                 transition: stateTransition('background-color', 'border-color', 'color', 'box-shadow'),
               }}
             >
-              <span aria-hidden style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', color: day[0] === 'gym' ? 'var(--amp-ink-on-accent)' : 'var(--amp-ink-2)' }}>
+              <span aria-hidden style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', color: day[0] === 'gym' ? 'var(--amp-ink-on-accent)' : 'var(--amp-ink-2)' }}>
                 {DAYS[i][0]}
               </span>
               <Glyph name={look.icon} size={20} />
@@ -328,7 +328,7 @@ export function TrainingWeek({ scene, answers, onAnswer, onInteract, comfort, ai
                 aria-hidden
                 className="amp-day-label uppercase"
                 style={{
-                  fontFamily: 'var(--amp-font-mono)',
+                  fontFamily: 'var(--amp-font-label)',
                   fontSize: 'calc(var(--amp-text-data) * 0.85)',
                   letterSpacing: 'var(--amp-tracking-data-tight)',
                   fontWeight: 'var(--amp-weight-bold)',

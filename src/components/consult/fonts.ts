@@ -4,10 +4,11 @@ import { IBM_Plex_Sans } from 'next/font/google'
 /**
  * The consult's faces (build S2).
  *
- * Big Shoulders Display for the question and IBM Plex Mono for the data line
- * are the share card's own files, vendored in `lib/share-card/fonts`, so the
- * consult and the card it may end on are set in the same type. IBM Plex Sans
- * for body copy is self-hosted by `next/font` at build time.
+ * Two faces. Big Shoulders Display for the question is the share card's own
+ * file, vendored in `lib/share-card/fonts`, so the consult and the card it
+ * may end on share their headline type. IBM Plex Sans for everything else,
+ * labels included, is self-hosted by `next/font` at build time. (A third,
+ * Plex Mono for labels, was dropped: too many faces on one question.)
  *
  * Declared here rather than in the root layout so they are only preloaded on
  * the routes that render the consult. Each one sets a `--amp-face-*` variable,
@@ -23,15 +24,6 @@ const display = localFont({
   display: 'swap',
 })
 
-const mono = localFont({
-  src: [
-    { path: '../../lib/share-card/fonts/IBMPlexMono-400.ttf', weight: '400' },
-    { path: '../../lib/share-card/fonts/IBMPlexMono-500.ttf', weight: '500' },
-  ],
-  variable: '--amp-face-mono',
-  display: 'swap',
-})
-
 const body = IBM_Plex_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600'],
@@ -39,5 +31,5 @@ const body = IBM_Plex_Sans({
   display: 'swap',
 })
 
-/** Class names that define the three face variables. Put them on the consult root. */
-export const consultFontVars = [display.variable, mono.variable, body.variable].join(' ')
+/** Class names that define the two face variables. Put them on the consult root. */
+export const consultFontVars = [display.variable, body.variable].join(' ')

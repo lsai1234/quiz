@@ -26,7 +26,7 @@ const TYPE: [string, string, string, string][] = [
   ['Lead', '--amp-font-body', '--amp-text-lead', 'Tap a day to cycle through rest, gym, cardio and sport.'],
   ['Body', '--amp-font-body', '--amp-text-body', 'Tap a day to cycle through rest, gym, cardio and sport.'],
   ['Meta', '--amp-font-body', '--amp-text-meta', 'Pick up to three. The order you tap sets the priority.'],
-  ['Data', '--amp-font-mono', '--amp-text-data', '4 / 12 · TRAINING · 38%'],
+  ['Data', '--amp-font-label', '--amp-text-data', '4 / 12 · TRAINING · 38%'],
 ]
 const RADII = ['chip', 'tile', 'panel', 'pill'] as const
 const SPACES = [1, 2, 3, 4, 5, 6, 8, 10] as const
@@ -98,7 +98,7 @@ export function ConsultWorkshop() {
                       padding: 'var(--amp-space-2) var(--amp-space-3)',
                       borderRadius: 'var(--amp-radius-chip)',
                       background: `var(--amp-${t}-${k})`,
-                      fontFamily: 'var(--amp-font-mono)',
+                      fontFamily: 'var(--amp-font-label)',
                       fontSize: 'var(--amp-text-data)',
                       color: 'var(--amp-ink)',
                     }}
@@ -139,13 +139,13 @@ export function ConsultWorkshop() {
               <div key={role} className="grid grid-cols-1 sm:grid-cols-[8rem_1fr] items-baseline" style={{ gap: 'var(--amp-space-3)' }}>
                 <DataLine>{role}</DataLine>
                 <p
-                  className={face === '--amp-font-display' || face === '--amp-font-mono' ? 'uppercase' : ''}
+                  className={face === '--amp-font-display' || face === '--amp-font-label' ? 'uppercase' : ''}
                   style={{
                     fontFamily: `var(${face})`,
                     fontSize: `var(${size})`,
                     fontWeight: face === '--amp-font-display' ? 'var(--amp-weight-heavy)' : 'var(--amp-weight-regular)',
                     lineHeight: face === '--amp-font-display' ? 'var(--amp-leading-question)' : 'var(--amp-leading-body)',
-                    letterSpacing: face === '--amp-font-mono' ? 'var(--amp-tracking-data)' : undefined,
+                    letterSpacing: face === '--amp-font-label' ? 'var(--amp-tracking-data)' : undefined,
                   }}
                 >
                   {sample}
@@ -258,7 +258,7 @@ function Swatch({ token }: { token: string }) {
         }}
       />
       <DataLine>{token}</DataLine>
-      <span style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-2)' }}>{value}</span>
+      <span style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-2)' }}>{value}</span>
     </div>
   )
 }
@@ -280,7 +280,7 @@ function DataLine({ children }: { children: ReactNode }) {
     <span
       className="block uppercase"
       style={{
-        fontFamily: 'var(--amp-font-mono)',
+        fontFamily: 'var(--amp-font-label)',
         fontSize: 'var(--amp-text-data)',
         letterSpacing: 'var(--amp-tracking-data)',
         color: 'var(--amp-ink-3)',

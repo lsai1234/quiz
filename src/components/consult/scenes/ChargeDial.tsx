@@ -169,7 +169,7 @@ export function ChargeDial({ answers, onAnswer, onInteract, comfort }: SceneProp
           <div
             aria-hidden
             className="flex justify-between"
-            style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-3)' }}
+            style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', color: 'var(--amp-ink-3)' }}
           >
             <span>Flat</span>
             <span>Buzzing</span>

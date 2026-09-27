@@ -44,6 +44,8 @@ export const DURATION = {
   streak: 700,
   /** The band of light crossing Next once, when it's ready. */
   sheen: 900,
+  /** A typed answer applied: long enough to see what Amp set, then on to the next. */
+  heard: 1400,
 } as const
 
 /** Everything that is not a spring: colour changes and fades. */

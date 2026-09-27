@@ -14,9 +14,10 @@ import { CONSULT_FEATURES } from '@/lib/consult/features'
  * "Tell Amp more" (build V3).
  *
  * An optional box on any scene. What's typed goes to Amp, and what Amp picks
- * up comes back as cards — "Night shifts · 3 a week", "3 coffees a day" — to
- * add or dismiss. Not a chat: there is no reply, only answers to confirm, and
- * nothing changes until Add is tapped. A wrong pick goes with one tap on ✕.
+ * up — "Night shifts · 3 a week", "3 coffees a day" — is handed straight to
+ * `onApplied`: the consult fills it in, says what it set, and moves on if that
+ * answered the question. Without `onApplied` (the workshop), it comes back as
+ * cards to add or dismiss. Not a chat either way: no reply, only answers.
  *
  * Health details never leave the device: the medical screen runs here, before
  * any request, and again on the server.
@@ -52,13 +53,15 @@ interface Props {
   send?: Understand
   /** Speech to text (U3). Injectable for tests. */
   transcribe?: Transcribe
+  /** Take what Amp picked up in one go, rather than as cards to add one by one. */
+  onApplied?: (picks: Pick[]) => void
   /** Whether to offer the mic at all. Defaults to what the browser supports. */
   voice?: boolean
   /** What someone might say on this screen (the scene's own example). */
   example?: string
 }
 
-export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understand, transcribe, voice, example }: Props) {
+export function TellAmpMore({ scene, onAdd, onApplied, onClose, onThinking, send = understand, transcribe, voice, example }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [picks, setPicks] = useState<Pick[] | null>(null)
@@ -88,6 +91,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
     if (res.held === 'too-long') return setMessage(HELD_BACK['too-long'])
     if (res.held) return setMessage('I can’t use that one. Try saying it another way?')
     if (!res.picks) return setMessage('I couldn’t read that just now. You can answer on screen as normal.')
+    if (res.picks.length > 0 && onApplied) return onApplied(res.picks)
     setPicks(res.picks)
     if (res.picks.length === 0) setMessage('Nothing I can add from that — the screen above has it covered.')
   }
@@ -123,7 +127,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
         }}
       >
         <div className="flex items-center justify-between">
-          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+          <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
             Tell Amp more
           </p>
           <QuietLink icon="close" aria-label="Close" onClick={onClose}>
@@ -186,7 +190,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
 
           {picks && picks.length > 0 && (
             <div style={{ marginTop: 'var(--amp-space-4)' }}>
-              <p className="uppercase" style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
+              <p className="uppercase" style={{ fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)', color: 'var(--amp-ink-3)' }}>
                 Amp picked up
               </p>
               <ul className="flex flex-col" style={{ gap: 'var(--amp-space-2)', marginTop: 'var(--amp-space-2)' }}>
@@ -204,7 +208,7 @@ export function TellAmpMore({ scene, onAdd, onClose, onThinking, send = understa
                     }}
                   >
                     <span className="flex-1">{p.label}</span>
-                    <button type="button" onClick={() => addOne(p)} className="amp-press uppercase" style={{ minHeight: 'var(--amp-target)', padding: '0 var(--amp-space-3)', color: 'var(--amp-accent)', fontFamily: 'var(--amp-font-mono)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)' }}>
+                    <button type="button" onClick={() => addOne(p)} className="amp-press uppercase" style={{ minHeight: 'var(--amp-target)', padding: '0 var(--amp-space-3)', color: 'var(--amp-accent)', fontFamily: 'var(--amp-font-label)', fontSize: 'var(--amp-text-data)', letterSpacing: 'var(--amp-tracking-data)' }}>
                       Add
                     </button>
                     <button

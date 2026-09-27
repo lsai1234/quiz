@@ -1,3 +1,4 @@
+import { DURATION } from '@/lib/consult/motion'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { setQuizArm, resetQuizArm } from '@/lib/experiments/client'
 import { SCENES } from '@/lib/consult/flow'
@@ -101,7 +102,6 @@ describe('V3 tell Amp more', () => {
     toTraining()
     fireEvent.click(screen.getByRole('button', { name: /Tell Amp how your weeks usually go/ }))
     await say('gym monday and thursday, football tuesdays')
-    fireEvent.click(screen.getByRole('button', { name: 'Add all' }))
     expect(screen.getByRole('radio', { name: 'It varies' })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByText('About 3 a week · 2 Gym · 1 Sport')).toBeInTheDocument()
   })
@@ -113,10 +113,50 @@ describe('V3 tell Amp more', () => {
     toTraining()
     fireEvent.click(screen.getByRole('button', { name: /Tell Amp how your weeks usually go/ }))
     await say('shift work, honestly it changes every week')
-    fireEvent.click(screen.getByRole('button', { name: 'Add it' }))
     expect(screen.getByRole('status')).toHaveTextContent('Shift work · changes every week')
     pressNext()
     expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'energy')!.copy.question)
+  })
+
+  const toEnergy = () => {
+    toTraining()
+    fireEvent.click(screen.getByRole('button', { name: 'No training right now' }))
+    pressNext()
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'energy')!.copy.question)
+  }
+
+  it('moves on by itself once a typed answer answers the question, saying what it set', async () => {
+    jest.useFakeTimers()
+    setQuizArm({ arm: 'v1', consultAi: true })
+    understandReplies([{ kind: 'energy', value: '3', label: 'Energy 3/10' }])
+    render(<AmpConsult />)
+    toEnergy()
+    fireEvent.click(screen.getByRole('button', { name: /Tell Amp when it dips/ }))
+    await say('pretty flat after lunch, maybe a 3')
+    // Straight in: no cards to add, the sheet has closed, and Amp says what it set.
+    expect(screen.queryByRole('dialog', { name: 'Tell Amp more' })).toBeNull()
+    expect(screen.getByText('Got it: Energy 3/10')).toBeInTheDocument()
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'energy')!.copy.question)
+    act(() => {
+      jest.advanceTimersByTime(DURATION.heard)
+    })
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'sleep')!.copy.question)
+    jest.useRealTimers()
+  })
+
+  it('stays put when what was typed doesn’t answer this question', async () => {
+    jest.useFakeTimers()
+    setQuizArm({ arm: 'v1', consultAi: true })
+    understandReplies([{ kind: 'coffee', value: '3', label: '3 coffees a day' }])
+    render(<AmpConsult />)
+    toEnergy()
+    fireEvent.click(screen.getByRole('button', { name: /Tell Amp when it dips/ }))
+    await say('I have three coffees')
+    act(() => {
+      jest.advanceTimersByTime(DURATION.heard * 2)
+    })
+    expect(heading()).toHaveTextContent(SCENES.find((s) => s.id === 'energy')!.copy.question)
+    jest.useRealTimers()
   })
 })
 

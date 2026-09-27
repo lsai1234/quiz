@@ -28,7 +28,7 @@ import { HunchCard, LeadBars, LeadsSheet, PatternMap, Plain } from './parts'
 const ONE_TAP = new Set(['scenario', 'how-often', 'this-or-that'])
 
 const mono = {
-  fontFamily: 'var(--amp-font-mono)',
+  fontFamily: 'var(--amp-font-label)',
   fontSize: 'var(--amp-text-data)',
   letterSpacing: 'var(--amp-tracking-data)',
 } as const

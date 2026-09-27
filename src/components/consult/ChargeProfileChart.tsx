@@ -80,10 +80,10 @@ export function ChargeProfileChart({ profile, grow = true }: { profile: ChargePr
         const anchor = Math.abs(x - CX) < 4 ? 'middle' : x > CX ? 'start' : 'end'
         return (
           <g key={area} aria-hidden>
-            <text x={x} y={y - 4} textAnchor={anchor} style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 11, letterSpacing: '0.12em', fill: 'var(--amp-ink-3)' }}>
+            <text x={x} y={y - 4} textAnchor={anchor} style={{ fontFamily: 'var(--amp-font-label)', fontSize: 11, letterSpacing: '0.12em', fill: 'var(--amp-ink-3)' }}>
               {PROFILE_LABEL[area].toUpperCase()}
             </text>
-            <text x={x} y={y + 13} textAnchor={anchor} style={{ fontFamily: 'var(--amp-font-mono)', fontSize: 14, fontWeight: 600, fill: 'var(--amp-ink)' }}>
+            <text x={x} y={y + 13} textAnchor={anchor} style={{ fontFamily: 'var(--amp-font-label)', fontSize: 14, fontWeight: 600, fill: 'var(--amp-ink)' }}>
               {profile[area]}
             </text>
           </g>
